@@ -1,0 +1,52 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+<BaseLayout title="Create Task">
+  <section class="card">
+    <h1>Task作成</h1>
+    <form id="create-task-form">
+      <label>Tenant ID</label>
+      <input name="tenant_id" value="default" />
+
+      <label>Project ID</label>
+      <input name="project_id" required />
+
+      <label>Capability</label>
+      <select name="capability">
+        <option value="plan_writer">plan_writer</option>
+        <option value="code_gen">code_gen</option>
+        <option value="code_review">code_review</option>
+      </select>
+
+      <label>Input Ref</label>
+      <textarea name="input_ref" rows="5" placeholder="r2://... or memory://... or plain text" required></textarea>
+
+      <button type="submit">Create Task</button>
+    </form>
+    <pre id="result">未送信</pre>
+  </section>
+
+  <script>
+    const form = document.getElementById("create-task-form") as HTMLFormElement | null;
+    const result = document.getElementById("result") as HTMLPreElement | null;
+
+    if (form && result) form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fd = new FormData(form);
+      const body = {
+        tenant_id: fd.get("tenant_id"),
+        project_id: fd.get("project_id"),
+        capability: fd.get("capability"),
+        input_ref: fd.get("input_ref")
+      };
+
+      const response = await fetch("/api/v1/tasks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const json = await response.json();
+      result.textContent = JSON.stringify(json, null, 2);
+    });
+  </script>
+</BaseLayout>

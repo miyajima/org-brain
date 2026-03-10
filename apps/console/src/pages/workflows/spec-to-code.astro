@@ -1,0 +1,65 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+<BaseLayout title="Spec to Code Workflow">
+  <section class="card">
+    <h1>Spec -> Plan -> Code -> Review</h1>
+    <form id="wf-form">
+      <label>Tenant ID</label>
+      <input name="tenant_id" value="default" />
+
+      <label>Project ID</label>
+      <input name="project_id" required />
+
+      <label>Spec Ref</label>
+      <input name="spec_ref" placeholder="r2://... or memory://..." required />
+
+      <button type="submit">Workflow起動</button>
+    </form>
+
+    <pre id="wf-create-result">未起動</pre>
+  </section>
+
+  <section class="card">
+    <h2>Workflow状態確認</h2>
+    <form id="wf-status-form">
+      <label>Instance ID</label>
+      <input name="instance_id" required />
+      <button type="submit">状態取得</button>
+    </form>
+    <pre id="wf-status-result">未取得</pre>
+  </section>
+
+  <script>
+    const createForm = document.getElementById("wf-form") as HTMLFormElement | null;
+    const createResult = document.getElementById("wf-create-result") as HTMLPreElement | null;
+    const statusForm = document.getElementById("wf-status-form") as HTMLFormElement | null;
+    const statusResult = document.getElementById("wf-status-result") as HTMLPreElement | null;
+
+    if (createForm && createResult) createForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fd = new FormData(createForm);
+      const body = {
+        tenant_id: fd.get("tenant_id"),
+        project_id: fd.get("project_id"),
+        spec_ref: fd.get("spec_ref")
+      };
+      const res = await fetch("/api/v1/workflows/spec-to-code", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+      createResult.textContent = JSON.stringify(json, null, 2);
+    });
+
+    if (statusForm && statusResult) statusForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fd = new FormData(statusForm);
+      const instanceId = fd.get("instance_id");
+      const res = await fetch(`/api/v1/workflows/spec-to-code/${instanceId}`);
+      const json = await res.json();
+      statusResult.textContent = JSON.stringify(json, null, 2);
+    });
+  </script>
+</BaseLayout>

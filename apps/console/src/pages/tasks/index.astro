@@ -1,0 +1,38 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const response = await fetch(new URL("/api/v1/tasks?limit=100", Astro.url));
+const payload: any = response.ok ? await response.json() : { ok: false, data: [] };
+const tasks = payload.ok ? payload.data : [];
+---
+<BaseLayout title="Tasks">
+  <section class="card">
+    <h1>Task一覧</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tenant</th>
+          <th>Project</th>
+          <th>Capability</th>
+          <th>Status</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {tasks.length === 0 ? (
+          <tr><td colspan="6">Taskなし</td></tr>
+        ) : tasks.map((task: any) => (
+          <tr>
+            <td><a href={`/tasks/${task.id}`}>{task.id}</a></td>
+            <td>{task.tenant_id}</td>
+            <td>{task.project_id ?? "-"}</td>
+            <td>{task.capability}</td>
+            <td>{task.status}</td>
+            <td>{new Date(task.updated_at).toLocaleString("ja-JP")}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+</BaseLayout>

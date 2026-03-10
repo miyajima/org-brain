@@ -1,0 +1,17 @@
+{
+  "name": "@org-brain/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@org-brain/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "wrangler": "^4.8.0"
+  }
+}

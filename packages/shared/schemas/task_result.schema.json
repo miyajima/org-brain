@@ -1,0 +1,46 @@
+{
+  "$id": "https://org-brain.local/schemas/task_result.schema.json",
+  "type": "object",
+  "required": ["task_id", "capability", "status"],
+  "properties": {
+    "task_id": { "type": "string" },
+    "capability": {
+      "type": "string",
+      "enum": ["plan_writer", "code_gen", "code_review"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed"]
+    },
+    "output_ref": { "type": "string" },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "wait_event_type": { "type": "string" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "succeeded" } }
+      },
+      "then": {
+        "required": ["output_ref"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "failed" } }
+      },
+      "then": {
+        "required": ["error"]
+      }
+    }
+  ]
+}

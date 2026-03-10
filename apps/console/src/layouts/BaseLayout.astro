@@ -1,0 +1,109 @@
+---
+const { title = "Org Brain Console" } = Astro.props;
+---
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title}</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --panel: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #0f766e;
+        --line: #e5e7eb;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+        background: radial-gradient(circle at top right, #d1fae5 0%, var(--bg) 40%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      nav {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      a.nav-link {
+        text-decoration: none;
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      input, textarea, select, button {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-top: 6px;
+        margin-bottom: 12px;
+        font: inherit;
+      }
+
+      button {
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        border: 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th, td {
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+        padding: 8px;
+        font-size: 14px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      pre {
+        white-space: pre-wrap;
+        background: #f9fafb;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav>
+        <a class="nav-link" href="/">Dashboard</a>
+        <a class="nav-link" href="/tasks/new">Task作成</a>
+        <a class="nav-link" href="/tasks">Task一覧</a>
+        <a class="nav-link" href="/workflows/spec-to-code">Workflow</a>
+      </nav>
+      <slot />
+    </main>
+  </body>
+</html>

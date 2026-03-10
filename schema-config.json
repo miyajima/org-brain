@@ -1,0 +1,273 @@
+{
+  "version": "1.0.0",
+  "globalPrompt": {
+    "basePrompt": "Analyze this PDF document and extract structured information.",
+    "classification": "Classify the document as one of these types:",
+    "guidelines": [
+      "Use null for any missing or unclear information",
+      "Format dates as YYYY-MM-DD",
+      "Include confidence score based on document clarity and completeness",
+      "Provide a clear synopsis summarizing the document purpose",
+      "Extract numerical values accurately (amounts, quantities, etc.)"
+    ]
+  },
+  "documentTypes": {
+    "contract": {
+      "name": "contract",
+      "description": "Legal agreements, service contracts, employment contracts",
+      "enabled": true,
+      "fields": {
+        "contract_number": {
+          "type": "string",
+          "description": "Contract identification number"
+        },
+        "contract_type": {
+          "type": "string",
+          "description": "Type of contract"
+        },
+        "effective_date": {
+          "type": "string",
+          "description": "Contract effective date (YYYY-MM-DD)"
+        },
+        "expiration_date": {
+          "type": "string",
+          "description": "Contract expiration date (YYYY-MM-DD)"
+        },
+        "auto_renewal": {
+          "type": "boolean",
+          "description": "Whether contract auto-renews"
+        },
+        "notice_period_days": {
+          "type": "number",
+          "description": "Notice period in days"
+        },
+        "total_value": {
+          "type": "number",
+          "description": "Total contract value"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code"
+        },
+        "payment_terms": {
+          "type": "string",
+          "description": "Payment terms description"
+        },
+        "governing_law": {
+          "type": "string",
+          "description": "Governing law jurisdiction"
+        },
+        "parties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of contracting parties"
+        }
+      },
+      "prompt": {
+        "extraction": "Extract contract details, parties, dates, values, terms",
+        "guidelines": [
+          "Focus on legal entities and their roles",
+          "Extract monetary values with currency",
+          "Pay attention to renewal and termination clauses"
+        ]
+      }
+    },
+    "invoice": {
+      "name": "invoice",
+      "description": "Bills, invoices, receipts, payment requests",
+      "enabled": true,
+      "fields": {
+        "invoice_number": {
+          "type": "string",
+          "description": "Invoice number"
+        },
+        "invoice_date": {
+          "type": "string",
+          "description": "Invoice date (YYYY-MM-DD)"
+        },
+        "due_date": {
+          "type": "string",
+          "description": "Payment due date (YYYY-MM-DD)"
+        },
+        "supplier_name": {
+          "type": "string",
+          "description": "Supplier/vendor name"
+        },
+        "supplier_address": {
+          "type": "string",
+          "description": "Supplier address"
+        },
+        "customer_name": {
+          "type": "string",
+          "description": "Customer/client name"
+        },
+        "customer_address": {
+          "type": "string",
+          "description": "Customer address"
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Subtotal amount"
+        },
+        "tax_amount": {
+          "type": "number",
+          "description": "Tax amount"
+        },
+        "total_amount": {
+          "type": "number",
+          "description": "Total amount"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code"
+        },
+        "payment_status": {
+          "type": "string",
+          "description": "Payment status"
+        },
+        "payment_method": {
+          "type": "string",
+          "description": "Payment method"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Item description"
+              },
+              "quantity": {
+                "type": "number",
+                "description": "Item quantity"
+              },
+              "unit_price": {
+                "type": "number",
+                "description": "Price per unit"
+              },
+              "total_price": {
+                "type": "number",
+                "description": "Total price for item"
+              }
+            }
+          },
+          "description": "List of invoice line items"
+        }
+      },
+      "prompt": {
+        "extraction": "Extract billing information, line items, amounts, dates",
+        "guidelines": [
+          "Extract all line items with quantities and prices",
+          "Calculate totals and verify against stated amounts",
+          "Identify payment terms and due dates clearly"
+        ]
+      }
+    },
+    "proposal": {
+      "name": "proposal",
+      "description": "Business proposals, project proposals, quotes",
+      "enabled": true,
+      "fields": {
+        "proposal_number": {
+          "type": "string",
+          "description": "Proposal number"
+        },
+        "proposal_date": {
+          "type": "string",
+          "description": "Proposal date (YYYY-MM-DD)"
+        },
+        "client_name": {
+          "type": "string",
+          "description": "Client name"
+        },
+        "project_title": {
+          "type": "string",
+          "description": "Project title"
+        },
+        "total_value": {
+          "type": "number",
+          "description": "Total proposal value"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code"
+        },
+        "validity_period": {
+          "type": "string",
+          "description": "Proposal validity period"
+        },
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of project deliverables"
+        },
+        "timeline": {
+          "type": "string",
+          "description": "Project timeline"
+        }
+      },
+      "prompt": {
+        "extraction": "Extract project details, deliverables, timeline, client info",
+        "guidelines": [
+          "Focus on scope of work and deliverables",
+          "Extract timeline and milestone information",
+          "Identify pricing structure and terms"
+        ]
+      }
+    },
+    "report": {
+      "name": "report",
+      "description": "Research reports, financial reports, analysis documents",
+      "enabled": true,
+      "fields": {
+        "report_title": {
+          "type": "string",
+          "description": "Report title"
+        },
+        "report_date": {
+          "type": "string",
+          "description": "Report date (YYYY-MM-DD)"
+        },
+        "report_type": {
+          "type": "string",
+          "description": "Type of report"
+        },
+        "author": {
+          "type": "string",
+          "description": "Report author"
+        },
+        "period_covered": {
+          "type": "string",
+          "description": "Period covered by report"
+        },
+        "key_findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Key findings from the report"
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Recommendations from the report"
+        }
+      },
+      "prompt": {
+        "extraction": "Extract findings, recommendations, analysis, metadata",
+        "guidelines": [
+          "Summarize key findings and conclusions",
+          "Extract actionable recommendations",
+          "Identify data sources and methodologies"
+        ]
+      }
+    }
+  }
+}

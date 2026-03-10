@@ -1,0 +1,47 @@
+name = "open-brain-cap-runner"
+main = "src/index.ts"
+compatibility_date = "2026-03-03"
+
+[[d1_databases]]
+binding = "OPEN_BRAIN_DB"
+database_name = "open-brain"
+database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
+
+[[r2_buckets]]
+binding = "OPEN_BRAIN_BUCKET"
+bucket_name = "open-brain-bucket"
+
+[[queues.producers]]
+binding = "ORG_BUS_OUT"
+queue = "org-bus"
+
+[[queues.consumers]]
+queue = "cap-plan"
+max_batch_size = 5
+max_batch_timeout = 5
+dead_letter_queue = "cap-plan-dlq"
+max_retries = 5
+
+[[queues.consumers]]
+queue = "cap-code"
+max_batch_size = 5
+max_batch_timeout = 5
+dead_letter_queue = "cap-code-dlq"
+max_retries = 5
+
+[[queues.consumers]]
+queue = "cap-review"
+max_batch_size = 5
+max_batch_timeout = 5
+dead_letter_queue = "cap-review-dlq"
+max_retries = 5
+
+[durable_objects]
+bindings = [
+  { name = "LEASES", class_name = "LeaseDO" },
+  { name = "MAILBOX", class_name = "MailboxDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LeaseDO", "MailboxDO"]

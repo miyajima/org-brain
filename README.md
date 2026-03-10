@@ -1,0 +1,100 @@
+# org-brain
+
+Cloudflare-based org bus MVP with Hono API and Astro console.
+
+## Structure
+- `apps/api-gateway` - Hono API Worker
+- `apps/org-router` - org-bus Queue router Worker
+- `apps/cap-runner` - capability workers + DOs
+- `apps/orchestrator` - Workflow host
+- `apps/mcp` - legacy Remote MCP Worker (kept for compatibility)
+- `apps/console` - Astro Pages console
+- `packages/shared` - shared types/schemas/utils
+- `migrations` - D1 SQL migrations
+
+## Quick Start
+1. `pnpm install`
+2. Configure `wrangler.toml` values (`database_id`, bucket, queues, API keys)
+3. Apply migrations to D1 (`migrations/*.sql`)
+4. Deploy workers/pages in dependency order:
+   - orchestrator
+   - cap-runner
+   - org-router
+   - api-gateway
+   - console
+
+## Commands
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- `pnpm hook:bridge`
+- `pnpm sync:openclaw-memory`
+- `pnpm usage:status`
+
+## Usage Snapshot
+For a current operator view of Org Brain usage, query Cloudflare D1 directly:
+
+```bash
+pnpm usage:status
+pnpm usage:status -- --tenant default --json
+```
+
+The snapshot reports task totals/statuses, active tasks, capability/project breakdowns, memory/thread counts, and recent tasks with JST timestamps.
+
+## OpenClaw Memory Bridge
+Cloudflare D1 is the source of truth. OpenClaw `main.sqlite` remains a local cache/index.
+
+Set env vars and run:
+
+```bash
+export ORGBRAIN_API_BASE="https://<api-gateway-host>"
+export ORGBRAIN_API_KEY="<x-api-key>"
+pnpm sync:openclaw-memory
+```
+
+Optional env vars:
+- `SYNC_DIRECTION=both|import|export` (default: `both`)
+- `OPENCLAW_MEMORY_DB=~/.openclaw/memory/main.sqlite`
+- `OPENCLAW_WORKSPACE=~/clawd`
+- `ORGBRAIN_TENANT_ID=default`
+
+## Agent Hook Bridge
+`pnpm hook:bridge` is the shared upsert bridge used by local agent hooks.
+
+```bash
+export ORGBRAIN_API_BASE="https://open-brain-console.pages.dev/api"
+export ORGBRAIN_API_KEY="via-pages-proxy"
+export ORGBRAIN_TENANT_ID="default"
+
+printf '{"type":"agent-turn-complete","cwd":"/tmp/demo"}' | pnpm hook:bridge codex
+```
+
+The bridge also loads fallback env files from:
+- `~/.config/org-brain/hooks.env`
+- `~/.openclaw/.env`
+- `~/.agents/.env`
+
+When `ORGBRAIN_API_BASE` points at the console proxy (`...pages.dev/api`), the incoming `x-api-key` is ignored and replaced by the Pages secret, so the local `ORGBRAIN_API_KEY` value only needs to be non-empty.
+
+Hook-enabled clients currently wired for Org Brain memory upserts:
+- Codex
+- Claude Code
+- Cursor
+- OpenClaw
+- OpenCode
+
+Antigravity was not wired because no stable user hook entrypoint was confirmed in the installed app/config.
+
+## Remote MCP
+Remote MCP is served directly by `api-gateway` at `/mcp`.
+
+1. Configure `api-gateway` secrets/vars:
+   - `MCP_SERVICE_TOKENS_JSON` (service token JSON with `client_id`, `client_secret`, `principal`, `tenants`)
+   - optional `MCP_TENANT_POLICY_JSON` (principal -> tenant mapping JSON)
+2. Configure your MCP client to send `CF-Access-Client-Id`, `CF-Access-Client-Secret`, and `x-orgbrain-tenant`.
+3. Deploy `api-gateway`.
+
+Optional: if you want browser login later, you can layer Cloudflare Access in front of the hostname and add the corresponding JWT verification settings then.
+
+See [docs/REMOTE_MCP.md](/Users/miya/projects/org-brain/docs/REMOTE_MCP.md) for client config and skill usage.
+See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that wraps the same workflow.

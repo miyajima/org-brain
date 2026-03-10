@@ -1,0 +1,19 @@
+{
+  "$id": "https://org-brain.local/schemas/envelope.schema.json",
+  "type": "object",
+  "required": ["message_id", "tenant_id", "type", "ts", "payload"],
+  "properties": {
+    "message_id": { "type": "string", "minLength": 1 },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "project_id": { "type": "string" },
+    "trace_id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["task.created", "task.result"]
+    },
+    "ts": { "type": "integer" },
+    "idempotency_key": { "type": "string" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": false
+}

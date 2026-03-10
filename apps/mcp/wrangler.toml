@@ -1,0 +1,17 @@
+name = "open-brain-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-03-05"
+compatibility_flags = ["nodejs_compat"]
+
+[[services]]
+binding = "API"
+service = "open-brain-api-gateway"
+
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "OrgBrainMCP" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["OrgBrainMCP"]

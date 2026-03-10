@@ -1,0 +1,42 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const taskId = Astro.params.task_id!;
+const tenantId = Astro.url.searchParams.get("tenant_id") ?? "default";
+
+const [taskResponse, eventResponse] = await Promise.all([
+  fetch(new URL(`/api/v1/tasks/${taskId}?tenant_id=${tenantId}`, Astro.url)),
+  fetch(new URL(`/api/v1/tasks/${taskId}/events?tenant_id=${tenantId}&limit=200`, Astro.url))
+]);
+
+const taskPayload: any = taskResponse.ok ? await taskResponse.json() : { ok: false, data: null };
+const eventPayload: any = eventResponse.ok ? await eventResponse.json() : { ok: false, data: [] };
+const task = taskPayload.ok ? taskPayload.data : null;
+const events = eventPayload.ok ? eventPayload.data : [];
+---
+<BaseLayout title={`Task ${taskId}`}>
+  <section class="card">
+    <h1>Task詳細</h1>
+    {task ? <pre>{JSON.stringify(task, null, 2)}</pre> : <p>Taskが見つかりません。</p>}
+  </section>
+
+  <section class="card">
+    <h2>Event Timeline</h2>
+    <table>
+      <thead>
+        <tr><th>Kind</th><th>At</th><th>Payload</th></tr>
+      </thead>
+      <tbody>
+        {events.length === 0 ? (
+          <tr><td colspan="3">Eventなし</td></tr>
+        ) : events.map((event: any) => (
+          <tr>
+            <td>{event.kind}</td>
+            <td>{new Date(event.created_at).toLocaleString("ja-JP")}</td>
+            <td><pre>{event.payload}</pre></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+</BaseLayout>

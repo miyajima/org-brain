@@ -1,0 +1,21 @@
+{
+  "name": "@org-brain/console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^12.6.6",
+    "astro": "^5.5.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "wrangler": "^4.8.0"
+  }
+}
