@@ -1,6 +1,7 @@
 import { HttpError, workflowStartSchema } from "@org-brain/shared";
 import { Hono } from "hono";
 import { apiKeyAuth, jsonOk } from "./auth";
+import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import { listMemories, upsertMemories } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
@@ -55,6 +56,32 @@ app.post("/v1/memories/upsert", async (c) => {
   const body = await c.req.json<unknown>();
   const result = await upsertMemories(c.env, body);
   return jsonOk(c, result, 201);
+});
+
+app.post("/v1/docs", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await upsertKnowledgeDoc(c.env, body);
+  return jsonOk(c, result, result.created ? 201 : 200);
+});
+
+app.post("/v1/docs/search", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await searchKnowledgeDocs(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.get("/v1/docs/:slug{.+}/context", async (c) => {
+  const slug = c.req.param("slug");
+  const tenantId = c.req.query("tenant_id") ?? "default";
+  const result = await getKnowledgeDocContext(c.env, tenantId, slug);
+  return jsonOk(c, result);
+});
+
+app.get("/v1/docs/:slug{.+}", async (c) => {
+  const slug = c.req.param("slug");
+  const tenantId = c.req.query("tenant_id") ?? "default";
+  const result = await getKnowledgeDoc(c.env, tenantId, slug);
+  return jsonOk(c, result);
 });
 
 app.post("/v1/workflows/spec-to-code", async (c) => {

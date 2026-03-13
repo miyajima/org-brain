@@ -34,6 +34,44 @@ Cloudflare-based org bus MVP with Hono API and Astro console.
 - `pnpm metrics:replay`
 - `pnpm metrics:rollup`
 
+## Knowledge Docs
+Org Brain now includes a docs layer for interlinked markdown knowledge docs. This is a navigation and retrieval interface for humans and agents, not the system of record.
+
+- D1 tables: `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`
+- R2 stores long-form markdown bodies
+- Required frontmatter: `id`, `title`, `scope`, `kind`, `tags`, `stability`, `updated_at`
+- Supported scopes: `org`, `department`, `project`, `capability`, `workflow`, `policy`
+
+API surface:
+- `POST /v1/docs`
+- `GET /v1/docs/:slug`
+- `POST /v1/docs/search`
+- `GET /v1/docs/:slug/context`
+
+Storage rules:
+- Short docs stay inline in D1 and are fully indexed
+- Long docs store full markdown in R2 and keep only excerpt + metadata in D1
+- `[[slug]]` wiki links are extracted on save and resolved into `knowledge_links`
+
+Progressive disclosure:
+- Start from MOC docs such as `ORG` or `capabilities/_index`
+- Read summaries before full markdown
+- Use `/v1/docs/:slug/context` or `loadContext()` for bounded 1-hop expansion
+
+Template utility:
+
+```ts
+import { generateMocTemplates } from "@org-brain/shared";
+
+const templates = generateMocTemplates({
+  updatedAt: "2026-03-13",
+  departmentSlugs: ["engineering", "support"],
+  projectSlugs: ["project-x"]
+});
+```
+
+Each template returns a `slug`, repo-style docs `path`, and rendered markdown for initial MOC scaffolding.
+
 ## Usage Snapshot
 For a current operator view of Org Brain usage, query Cloudflare D1 directly:
 

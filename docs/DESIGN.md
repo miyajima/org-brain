@@ -22,6 +22,9 @@
 - `retrieval_daily_metrics`: daily retrieval/service rollups for long-term effectiveness reporting
 - Capability runtime memory retrieval uses FTS5 lexical matching ranked by `bm25(memories_fts)` with `created_at` as a tie-breaker
 - `threads`: review-oriented conversation/thread capture
+- `knowledge_docs`: knowledge doc metadata, structured frontmatter JSON, inline body or R2 ref
+- `knowledge_links`: resolved inter-doc graph (`references`, `related`, `parent`, `child`)
+- `knowledge_docs_fts`: doc lookup index across title / summary / tags / body excerpt
 
 ## Control Plane
 - `LeaseDO`: tenant+capability concurrency gate and duplicate execution prevention
@@ -59,6 +62,19 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 - Import path: OpenClaw chunks -> `POST /v1/memories/upsert` -> D1
 - Export path: D1 (`source=org-brain`) -> `memory/org-brain-sync.md` -> `openclaw memory index`
 - Sync entrypoint: `scripts/sync-openclaw-memory.mjs`
+
+## Knowledge Docs Layer
+- API ingress: `POST /v1/docs` parses YAML frontmatter, extracts wiki links, decides inline-vs-R2 storage, then updates D1 + FTS
+- Inline docs: `body_text` stores the full markdown body for direct retrieval and FTS
+- Long docs: markdown full text is stored in R2 under `tenants/<tenant>/knowledge-docs/<doc-id>/content.md`, while D1 keeps summary, frontmatter, tags, and body excerpt for FTS
+- Link rebuild: every doc save triggers tenant-scoped reconstruction of `knowledge_links` so unresolved `[[slug]]` references become resolved once the target doc exists
+- Structural links: parent/child edges are synthesized from slug hierarchy (`ORG`, `capabilities/_index`, `projects/<slug>/_index`, `departments/<slug>/_index`)
+
+## Progressive Disclosure Retrieval
+- `GET /v1/docs/:slug/context` is the read-optimized API for agent bootstrap
+- Response shape is summary-only: `current`, `parent_moc`, `related`, `children`, `direct_links`
+- Expansion limits are hard-coded to small values (`related <= 3`, `children <= 3`) to avoid accidental context blow-up
+- `apps/cap-runner/src/capabilities/knowledge-context.ts` provides `loadContext()` with the same policy and only fetches markdown when `includeBody` is explicitly requested
 
 ## Operator Snapshot
 - `skills/org-brain-usage-status/scripts/report-usage-status.mjs` runs Wrangler D1 queries against `open-brain` and formats an operator-facing usage summary.
