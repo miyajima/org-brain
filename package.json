@@ -10,7 +10,10 @@
     "lint": "pnpm -r --if-present lint",
     "hook:bridge": "node ./scripts/hook-memory-bridge.mjs",
     "sync:openclaw-memory": "node ./scripts/sync-openclaw-memory.mjs",
-    "usage:status": "node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs"
+    "usage:status": "node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs",
+    "metrics:report": "node ./scripts/retrieval-metrics-report.mjs",
+    "metrics:replay": "node ./scripts/retrieval-metrics-replay.mjs",
+    "metrics:rollup": "node ./scripts/retrieval-metrics-rollup.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260301.0",

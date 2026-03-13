@@ -30,6 +30,9 @@ Cloudflare-based org bus MVP with Hono API and Astro console.
 - `pnpm hook:bridge`
 - `pnpm sync:openclaw-memory`
 - `pnpm usage:status`
+- `pnpm metrics:report`
+- `pnpm metrics:replay`
+- `pnpm metrics:rollup`
 
 ## Usage Snapshot
 For a current operator view of Org Brain usage, query Cloudflare D1 directly:
@@ -40,6 +43,26 @@ pnpm usage:status -- --tenant default --json
 ```
 
 The snapshot reports task totals/statuses, active tasks, capability/project breakdowns, memory/thread counts, and recent tasks with JST timestamps.
+
+## Retrieval Metrics
+Retrieval telemetry is stored in D1 as `retrieval_events`, with day-level rollups in `retrieval_daily_metrics`.
+
+- `memory.search` task events are appended for per-task drill-down
+- raw retrieval telemetry is retained for 90 days
+- `open-brain-cap-runner` rolls up the previous UTC day and prunes old raw events on a daily cron
+
+Examples:
+
+```bash
+pnpm metrics:report
+pnpm metrics:report -- --tenant default --days 14 --json
+pnpm metrics:replay -- --tenant default --limit 20 --json
+pnpm metrics:rollup -- --day 2026-03-10 --json
+```
+
+`metrics:report` focuses on retrieval hit/fallback/latency plus service success and duration.
+`metrics:replay` compares `legacy_recent_v1` versus `bm25_v1` against the current D1/R2 snapshot without persisting anything.
+`metrics:rollup` recomputes one UTC day idempotently into `retrieval_daily_metrics`.
 
 ## OpenClaw Memory Bridge
 Cloudflare D1 is the source of truth. OpenClaw `main.sqlite` remains a local cache/index.

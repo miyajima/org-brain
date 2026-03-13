@@ -9,6 +9,7 @@ import {
 import { runCapability } from "./capabilities/runtime";
 import { LeaseDO } from "./do/lease";
 import { MailboxDO } from "./do/mailbox";
+import { previousUtcDay, pruneRetrievalEvents, rawRetentionCutoff, rollupRetrievalMetricsForDay } from "./retrieval-metrics";
 import type { CapabilityContext, Env } from "./types";
 
 export { LeaseDO, MailboxDO };
@@ -205,6 +206,12 @@ export default {
         msg.ack();
       }
     }
+  },
+
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    const now = controller.scheduledTime ?? Date.now();
+    await rollupRetrievalMetricsForDay(env.OPEN_BRAIN_DB, previousUtcDay(now), now);
+    await pruneRetrievalEvents(env.OPEN_BRAIN_DB, rawRetentionCutoff(now));
   },
 
   async fetch(): Promise<Response> {

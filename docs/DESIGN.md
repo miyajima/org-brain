@@ -18,6 +18,8 @@
 - `task_events`: append-only audit trail
 - `capabilities`: concurrency and schema catalog
 - `memories` + `memories_fts`: knowledge memory and search index (`source`, `external_key` for bridge sync)
+- `retrieval_events`: raw retrieval telemetry with query text/hash, counts, latency, IDs, and BM25 scores
+- `retrieval_daily_metrics`: daily retrieval/service rollups for long-term effectiveness reporting
 - Capability runtime memory retrieval uses FTS5 lexical matching ranked by `bm25(memories_fts)` with `created_at` as a tie-breaker
 - `threads`: review-oriented conversation/thread capture
 
@@ -38,6 +40,7 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 - Router validates envelope and result payload with Ajv
 - Capability runner retries capacity/input-not-found failures and publishes terminal failed events
 - Task creation idempotency via `tenant_id + idempotency_key`
+- Retrieval telemetry is best-effort: failed writes are swallowed so task execution still completes
 
 ## Security
 - Public API is API-key protected
@@ -60,6 +63,15 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 ## Operator Snapshot
 - `skills/org-brain-usage-status/scripts/report-usage-status.mjs` runs Wrangler D1 queries against `open-brain` and formats an operator-facing usage summary.
 - `pnpm usage:status` is the root alias for the same workflow and defaults to remote D1 with `tenant_id=default`.
+- `scripts/retrieval-metrics-report.mjs` reports retrieval and service effectiveness metrics from raw + rolled-up telemetry.
+- `scripts/retrieval-metrics-replay.mjs` re-evaluates recent inputs with `legacy_recent_v1` and `bm25_v1` against the current D1/R2 snapshot.
+- `scripts/retrieval-metrics-rollup.mjs` backfills one UTC day into `retrieval_daily_metrics`.
+
+## Retrieval Telemetry Flow
+- `runCapability()` calls `memorySearch()` and records a raw row in `retrieval_events` plus `task_events(kind=memory.search)` after each retrieval attempt.
+- BM25 hits are stored as `search_strategy=bm25_v1` with returned memory IDs and `bm25(memories_fts)` scores.
+- Fallback searches are stored as `search_strategy=fallback_recent_v1` with `top_scores_json = null`.
+- `open-brain-cap-runner` runs a daily cron to roll up the previous UTC day and delete raw telemetry older than 90 days.
 
 ## Future Enhancements
 - Fine-grained RBAC beyond principal -> tenant mapping

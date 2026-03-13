@@ -1,10 +1,12 @@
-import { ulid } from "@org-brain/shared";
+import { sha256, ulid } from "@org-brain/shared";
+import { recordRetrievalTelemetry } from "../retrieval-metrics";
 import type { CapabilityContext, CapabilityResult } from "../types";
 
 type MemoryRow = {
   id: string;
   summary: string | null;
   content: string;
+  lexical_score?: number | null;
 };
 
 function buildFtsQuery(raw: string): string | null {
@@ -56,10 +58,25 @@ function outputKey(ctx: CapabilityContext): string {
 }
 
 async function memorySearch(ctx: CapabilityContext, query: string): Promise<MemoryRow[]> {
+  const startedAt = Date.now();
   const ftsQuery = buildFtsQuery(query);
+  let matchedCount = 0;
+  let strategy = "fallback_recent_v1";
+  let rows: MemoryRow[] = [];
+
   if (ftsQuery) {
+    const countRow = await ctx.env.OPEN_BRAIN_DB.prepare(
+      `SELECT COUNT(*) AS matched_count
+       FROM memories_fts
+       WHERE tenant_id = ?
+         AND content MATCH ?`
+    )
+      .bind(ctx.tenantId, ftsQuery)
+      .first<{ matched_count: number }>();
+
+    matchedCount = countRow?.matched_count ?? 0;
     const matched = await ctx.env.OPEN_BRAIN_DB.prepare(
-      `SELECT m.id, m.summary, m.content
+      `SELECT m.id, m.summary, m.content, bm25(memories_fts) AS lexical_score
        FROM memories_fts
        JOIN memories m
          ON m.id = memories_fts.memory_id
@@ -73,21 +90,44 @@ async function memorySearch(ctx: CapabilityContext, query: string): Promise<Memo
       .all<MemoryRow>();
 
     if (matched.results.length > 0) {
-      return matched.results;
+      strategy = "bm25_v1";
+      rows = matched.results;
     }
   }
 
-  const fallback = await ctx.env.OPEN_BRAIN_DB.prepare(
-    `SELECT m.id, m.summary, m.content
-     FROM memories m
-     WHERE m.tenant_id = ?
-     ORDER BY m.created_at DESC
-     LIMIT 5`
-  )
-    .bind(ctx.tenantId)
-    .all<MemoryRow>();
+  if (rows.length === 0) {
+    const fallback = await ctx.env.OPEN_BRAIN_DB.prepare(
+      `SELECT m.id, m.summary, m.content
+       FROM memories m
+       WHERE m.tenant_id = ?
+       ORDER BY m.created_at DESC
+       LIMIT 5`
+    )
+      .bind(ctx.tenantId)
+      .all<MemoryRow>();
 
-  return fallback.results;
+    rows = fallback.results;
+  }
+
+  const telemetry = {
+    tenantId: ctx.tenantId,
+    projectId: ctx.projectId,
+    taskId: ctx.taskId,
+    capability: ctx.capability,
+    searchStrategy: strategy,
+    queryText: query,
+    queryHash: await sha256(query),
+    matchedCount,
+    returnedCount: rows.length,
+    fallbackUsed: strategy !== "bm25_v1",
+    latencyMs: Math.max(0, Date.now() - startedAt),
+    topMemoryIds: rows.map((row) => row.id),
+    topScores: strategy === "bm25_v1" ? rows.map((row) => row.lexical_score ?? null) : null
+  } as const;
+
+  await recordRetrievalTelemetry(ctx.env.OPEN_BRAIN_DB, telemetry);
+
+  return rows;
 }
 
 async function saveMemorySummary(ctx: CapabilityContext, summary: string, tags: string[]): Promise<string> {
