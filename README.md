@@ -130,6 +130,10 @@ export ORGBRAIN_TENANT_ID="default"
 printf '{"type":"agent-turn-complete","cwd":"/tmp/demo"}' | pnpm hook:bridge codex
 ```
 
+The hook bridge now promotes only reusable memories. Generic `agent-turn-complete` chatter is skipped with
+`{"ok":true,"skipped":"low-signal-memory"}` instead of being upserted. Promoted records are distilled into
+`# Reusable Memory` entries with takeaway, evidence, and reuse-rule sections to keep FTS noise low.
+
 The bridge also loads fallback env files from:
 - `~/.config/org-brain/hooks.env`
 - `~/.openclaw/.env`

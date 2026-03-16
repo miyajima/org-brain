@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
 import crypto from "node:crypto";
+import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const ROOT = "/Users/miya/projects/org-brain";
 const DEFAULT_ENV_FILES = [
@@ -12,6 +13,20 @@ const DEFAULT_ENV_FILES = [
   "~/.agents/.env",
   path.join(ROOT, ".env.local"),
   path.join(ROOT, ".env")
+];
+
+const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
+const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
+const POLICY_KEYWORDS = ["always", "never", "must", "方針", "ルール", "前提", "原則", "recommend", "recommended"];
+const RESULT_KEYWORDS = ["成功", "failed", "failure", "succeeded", "success", "通った", "完了", "確認", "restored"];
+const META_ONLY_PATTERNS = [
+  /^必要な作業は終わっています/,
+  /^ほかに進める内容があれば/,
+  /^done\b/i,
+  /^thanks?\b/i,
+  /^ありがとう/,
+  /^よろしく/,
+  /^必要なら/
 ];
 
 function resolveHome(value) {
@@ -124,24 +139,6 @@ function ensureRequiredEnv(key) {
   return value.trim();
 }
 
-function renderList(title, items) {
-  if (!Array.isArray(items) || items.length === 0) return "";
-  const lines = [title];
-  for (const item of items) {
-    if (typeof item !== "string") continue;
-    const trimmed = item.trim();
-    if (!trimmed) continue;
-    lines.push(`- ${clip(trimmed, 600)}`);
-  }
-  return lines.length > 1 ? `${lines.join("\n")}\n` : "";
-}
-
-function renderRawPayload(payloadText, parsed) {
-  const raw = parsed ? JSON.stringify(parsed, null, 2) : payloadText;
-  const body = clip(raw, 12_000);
-  return `## Raw Payload\n\n\`\`\`json\n${body}\n\`\`\`\n`;
-}
-
 function dedupeTags(tags) {
   return [...new Set(tags.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim()))].slice(
     0,
@@ -156,216 +153,284 @@ function buildApiUrl(baseUrl, route) {
   return new URL(normalizedRoute, `${base.origin}${basePath}`);
 }
 
-function buildFallbackRecord(sourceName, payloadText, parsed) {
-  const payloadHash = sha256(payloadText);
-  const eventType = firstString(parsed?.type, parsed?.event?.type, "hook");
-  const createdAt = parseTimestamp(parsed?.timestamp, parsed?.at, parsed?.created_at) ?? Date.now();
-  const cwd = firstString(parsed?.cwd, parsed?.directory, parsed?.worktree, parsed?.context?.workspaceDir);
-  const projectId = basenameOrEmpty(cwd);
-  const summaryBits = [sourceName, eventType, projectId].filter(Boolean);
+function normalizeWhitespace(value) {
+  return firstString(value)
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeForAnalysis(value) {
+  return normalizeWhitespace(value)
+    .replace(/[`*_>#-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsAny(text, keywords) {
+  const lowered = text.toLowerCase();
+  return keywords.some((keyword) => lowered.includes(keyword.toLowerCase()));
+}
+
+function countActionableLines(text) {
+  return normalizeWhitespace(text)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line)).length;
+}
+
+function extractCommands(text) {
+  const commandMatches = normalizeWhitespace(text).match(/`[^`\n]+`/g) ?? [];
+  return [...new Set(commandMatches.map((match) => match.slice(1, -1).trim()).filter(Boolean))].slice(0, 3);
+}
+
+function splitIntoSentences(text) {
+  return normalizeWhitespace(text)
+    .split(/(?<=[。.!?])\s+|\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function extractMeaningfulSentences(text, limit = 3) {
+  const sentences = splitIntoSentences(text);
+  const selected = [];
+  for (const sentence of sentences) {
+    if (sentence.length < 20) continue;
+    selected.push(sentence);
+    if (selected.length >= limit) break;
+  }
+  return selected.length > 0 ? selected : sentences.slice(0, limit);
+}
+
+function chooseTitle(text) {
+  const preferred = splitIntoSentences(text).find(
+    (sentence) => containsAny(sentence, CAUSE_KEYWORDS) || containsAny(sentence, FIX_KEYWORDS)
+  );
+  return clip((preferred || splitIntoSentences(text)[0] || "Reusable memory").replace(/\s+/g, " "), 100);
+}
+
+function chooseCategory(text, signals) {
+  if (signals.hasCauseAndFix) return "diagnosis";
+  if (signals.hasPolicy) return "policy";
+  if (signals.hasCommandAndResult) return "command-result";
+  return "workaround";
+}
+
+function buildReuseRule(text, category, commands) {
+  const sentences = extractMeaningfulSentences(text, 4);
+  const causeSentence =
+    sentences.find((sentence) => containsAny(sentence, CAUSE_KEYWORDS) || containsAny(sentence, POLICY_KEYWORDS)) ||
+    sentences[0] ||
+    "Reuse this only when the same symptom and workspace context match.";
+  const fixSentence =
+    sentences.find((sentence) => containsAny(sentence, FIX_KEYWORDS) || containsAny(sentence, RESULT_KEYWORDS)) ||
+    sentences[1] ||
+    causeSentence;
+
+  if (category === "policy") {
+    return clip(
+      `Apply this as a default rule: ${causeSentence}\nRe-check only if the environment or auth model changed.`,
+      500
+    );
+  }
+
+  if (category === "command-result" && commands.length > 0) {
+    return clip(
+      `When the same symptom appears, run ${commands.map((command) => `\`${command}\``).join(", ")} first.\nTreat the result as confirmed only if the follow-up command succeeds.`,
+      500
+    );
+  }
+
+  if (category === "diagnosis") {
+    return clip(`If the same symptom recurs, assume ${causeSentence}\nApply ${fixSentence}`, 500);
+  }
+
+  return clip(
+    `Reuse this workaround only for the same project pattern.\nValidate with the same check after applying: ${fixSentence}`,
+    500
+  );
+}
+
+function buildPromotedContent(record, category, normalizedText) {
+  const takeaway = extractMeaningfulSentences(record.assistantText || normalizedText, 3).join("\n\n");
+  const evidence = clip(normalizeWhitespace(record.assistantText || normalizedText), 1_200);
+  const commands = extractCommands(record.assistantText || normalizedText);
+  const reuseRule = buildReuseRule(record.assistantText || normalizedText, category, commands);
+
+  return [
+    "# Reusable Memory",
+    "",
+    `- Source: ${record.sourceName}`,
+    `- Event: ${record.eventType || "unknown"}`,
+    `- Project: ${record.projectId}`,
+    `- RecordedAt: ${new Date(record.createdAt).toISOString()}`,
+    "",
+    "## Takeaway",
+    takeaway || "No takeaway extracted.",
+    "",
+    "## Evidence",
+    evidence || "No evidence extracted.",
+    "",
+    "## Reuse Rule",
+    reuseRule
+  ].join("\n");
+}
+
+function buildPromotedSummary(record, normalizedText) {
+  return clip(`${record.projectId} | promoted-memory | ${chooseTitle(normalizedText)}`, 1_000);
+}
+
+export function classifyMemoryRecord(record) {
+  if (!record.projectId) {
+    return { action: "skip", reason: "missing-project" };
+  }
+
+  const assistantText = normalizeWhitespace(record.assistantText);
+  if (!assistantText) {
+    return { action: "skip", reason: "missing-assistant-text" };
+  }
+
+  const normalized = normalizeForAnalysis(assistantText);
+  if (normalized.length < 120) {
+    return { action: "skip", reason: "low-signal-text" };
+  }
+
+  if (META_ONLY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return { action: "skip", reason: "meta-only" };
+  }
+
+  const hasCause = containsAny(normalized, CAUSE_KEYWORDS);
+  const hasFix = containsAny(normalized, FIX_KEYWORDS);
+  const hasPolicy = containsAny(normalized, POLICY_KEYWORDS);
+  const hasCommandAndResult = extractCommands(assistantText).length > 0 && containsAny(normalized, RESULT_KEYWORDS);
+  const signals = {
+    hasCauseAndFix: hasCause && (hasFix || hasCommandAndResult || hasPolicy),
+    hasCommandAndResult,
+    hasPolicy,
+    hasActionableList: countActionableLines(assistantText) >= 2
+  };
+
+  if (!Object.values(signals).some(Boolean)) {
+    return { action: "skip", reason: "low-signal-text" };
+  }
 
   return {
-    createdAt,
-    eventType,
-    projectId: projectId || null,
-    externalKey: `${sourceName}:${payloadHash}`,
-    summary: clip(summaryBits.join(" "), 240) || `${sourceName} hook event`,
-    tags: dedupeTags([sourceName, "hook", eventType, projectId]),
-    content: [
-      "# Hook Event",
-      "",
-      `- Source: ${sourceName}`,
-      `- Event: ${eventType || "unknown"}`,
-      cwd ? `- Cwd: ${cwd}` : "",
-      projectId ? `- Project: ${projectId}` : "",
-      `- RecordedAt: ${new Date(createdAt).toISOString()}`,
-      "",
-      renderRawPayload(payloadText, parsed)
-    ]
-      .filter(Boolean)
-      .join("\n")
+    action: "promote",
+    category: chooseCategory(normalized, signals),
+    normalizedText: normalized,
+    signals
   };
+}
+
+function buildCommonRecord(sourceName, payloadText, parsed, extras = {}) {
+  const createdAt = parseTimestamp(parsed?.timestamp, parsed?.at, parsed?.created_at) ?? Date.now();
+  const cwd = firstString(parsed?.cwd, parsed?.directory, parsed?.worktree, parsed?.context?.workspaceDir, extras.cwd);
+  const projectId = basenameOrEmpty(cwd || extras.cwd);
+  const assistantText = normalizeWhitespace(firstString(extras.assistantText));
+  const userInputs = Array.isArray(extras.userInputs) ? extras.userInputs.map((item) => firstString(item)).filter(Boolean) : [];
+
+  return {
+    sourceName,
+    createdAt,
+    eventType: firstString(extras.eventType, parsed?.type, parsed?.event?.type, "hook"),
+    projectId: projectId || null,
+    externalKey: firstString(extras.externalKey, `${sourceName}:${sha256(payloadText)}`),
+    assistantText,
+    userInputs,
+    metadata: extras.metadata ?? {}
+  };
+}
+
+function buildFallbackRecord(sourceName, payloadText, parsed) {
+  return buildCommonRecord(sourceName, payloadText, parsed, {
+    assistantText: firstString(parsed?.message, parsed?.content, parsed?.summary)
+  });
 }
 
 function buildCodexRecord(payloadText, parsed) {
   const threadId = firstString(parsed?.["thread-id"]);
   const turnId = firstString(parsed?.["turn-id"]);
-  const eventType = firstString(parsed?.type, "agent-turn-complete");
-  const cwd = firstString(parsed?.cwd);
-  const client = firstString(parsed?.client);
-  const projectId = basenameOrEmpty(cwd);
   const inputs = Array.isArray(parsed?.["input-messages"]) ? parsed["input-messages"] : [];
-  const lastAssistant = firstString(parsed?.["last-assistant-message"]);
-  const createdAt = parseTimestamp(parsed?.at, parsed?.timestamp) ?? Date.now();
-  const summaryParts = [projectId, eventType, clip(lastAssistant || inputs[0] || "", 120)].filter(Boolean);
 
-  return {
-    createdAt,
-    eventType,
-    projectId: projectId || null,
+  return buildCommonRecord("codex", payloadText, parsed, {
+    eventType: firstString(parsed?.type, "agent-turn-complete"),
     externalKey: turnId ? `codex:${turnId}` : `codex:${threadId || sha256(payloadText)}`,
-    summary: clip(summaryParts.join(" | "), 240) || "codex hook event",
-    tags: dedupeTags(["codex", "hook", eventType, projectId]),
-    content: [
-      "# Codex Hook Event",
-      "",
-      `- Event: ${eventType}`,
-      client ? `- Client: ${client}` : "",
-      threadId ? `- ThreadId: ${threadId}` : "",
-      turnId ? `- TurnId: ${turnId}` : "",
-      cwd ? `- Cwd: ${cwd}` : "",
-      projectId ? `- Project: ${projectId}` : "",
-      `- RecordedAt: ${new Date(createdAt).toISOString()}`,
-      "",
-      renderList("## User Messages", inputs),
-      lastAssistant ? `## Assistant Message\n\n${clip(lastAssistant, 6_000)}\n` : "",
-      renderRawPayload(payloadText, parsed)
-    ]
-      .filter(Boolean)
-      .join("\n")
-  };
+    assistantText: firstString(parsed?.["last-assistant-message"]),
+    userInputs: inputs,
+    metadata: {
+      client: firstString(parsed?.client),
+      threadId,
+      turnId
+    }
+  });
 }
 
 function buildClaudeRecord(payloadText, parsed) {
   const sessionId = firstString(parsed?.session_id);
-  const eventType = firstString(parsed?.hook_event_name, parsed?.type, "Stop");
-  const cwd = firstString(parsed?.cwd);
-  const transcriptPath = firstString(parsed?.transcript_path);
-  const projectId = basenameOrEmpty(cwd);
-  const lastAssistant = firstString(parsed?.last_assistant_message);
-  const createdAt = parseTimestamp(parsed?.at, parsed?.timestamp) ?? Date.now();
   const payloadHash = sha256(payloadText).slice(0, 16);
-  const summaryParts = [projectId, eventType, clip(lastAssistant, 120)].filter(Boolean);
+  const eventType = firstString(parsed?.hook_event_name, parsed?.type, "Stop");
 
-  return {
-    createdAt,
+  return buildCommonRecord("claude", payloadText, parsed, {
     eventType,
-    projectId: projectId || null,
     externalKey: `claude:${sessionId || payloadHash}:${eventType}:${payloadHash}`,
-    summary: clip(summaryParts.join(" | "), 240) || "claude hook event",
-    tags: dedupeTags(["claude", "hook", eventType, projectId]),
-    content: [
-      "# Claude Code Hook Event",
-      "",
-      `- Event: ${eventType}`,
-      sessionId ? `- SessionId: ${sessionId}` : "",
-      cwd ? `- Cwd: ${cwd}` : "",
-      projectId ? `- Project: ${projectId}` : "",
-      transcriptPath ? `- Transcript: ${transcriptPath}` : "",
-      `- RecordedAt: ${new Date(createdAt).toISOString()}`,
-      "",
-      lastAssistant ? `## Assistant Message\n\n${clip(lastAssistant, 6_000)}\n` : "",
-      renderRawPayload(payloadText, parsed)
-    ]
-      .filter(Boolean)
-      .join("\n")
-  };
+    assistantText: firstString(parsed?.last_assistant_message),
+    metadata: {
+      sessionId,
+      transcriptPath: firstString(parsed?.transcript_path)
+    }
+  });
 }
 
 function buildCursorRecord(payloadText, parsed) {
-  const eventType = firstString(parsed?.type, parsed?.event?.type, "afterAgentResponse");
-  const cwd = firstString(parsed?.cwd, parsed?.directory, parsed?.workspace, parsed?.projectPath);
-  const projectId = basenameOrEmpty(cwd);
-  const assistant = firstString(parsed?.message, parsed?.assistant, parsed?.response, parsed?.content);
-  const createdAt = parseTimestamp(parsed?.at, parsed?.timestamp) ?? Date.now();
-  const payloadHash = sha256(payloadText).slice(0, 16);
-
-  return {
-    createdAt,
-    eventType,
-    projectId: projectId || null,
-    externalKey: `cursor:${payloadHash}`,
-    summary: clip([projectId, eventType, clip(assistant, 120)].filter(Boolean).join(" | "), 240) || "cursor hook event",
-    tags: dedupeTags(["cursor", "hook", eventType, projectId]),
-    content: [
-      "# Cursor Hook Event",
-      "",
-      `- Event: ${eventType}`,
-      cwd ? `- Cwd: ${cwd}` : "",
-      projectId ? `- Project: ${projectId}` : "",
-      `- RecordedAt: ${new Date(createdAt).toISOString()}`,
-      "",
-      assistant ? `## Assistant Message\n\n${clip(assistant, 6_000)}\n` : "",
-      renderRawPayload(payloadText, parsed)
-    ]
-      .filter(Boolean)
-      .join("\n")
-  };
+  return buildCommonRecord("cursor", payloadText, parsed, {
+    eventType: firstString(parsed?.type, parsed?.event?.type, "afterAgentResponse"),
+    externalKey: `cursor:${sha256(payloadText).slice(0, 16)}`,
+    assistantText: firstString(parsed?.message, parsed?.assistant, parsed?.response, parsed?.content),
+    metadata: {}
+  });
 }
 
 function buildOpenClawRecord(payloadText, parsed) {
+  const context = parsed?.context && typeof parsed.context === "object" ? parsed.context : {};
   const type = firstString(parsed?.type, parsed?.event?.type, "message");
   const action = firstString(parsed?.action, parsed?.event?.action);
   const eventType = [type, action].filter(Boolean).join(":") || "openclaw";
-  const context = parsed?.context && typeof parsed.context === "object" ? parsed.context : {};
-  const cwd = firstString(context.workspaceDir, parsed?.workspaceDir);
-  const projectId = basenameOrEmpty(cwd);
   const messageId = firstString(context.messageId);
   const sessionKey = firstString(parsed?.sessionKey, context.sessionId, context.sessionKey);
   const body = firstString(context.bodyForAgent, context.content, context.body, context.transcript);
-  const createdAt = parseTimestamp(parsed?.timestamp, context.timestamp) ?? Date.now();
   const identity = firstString(messageId, sessionKey, sha256(payloadText).slice(0, 16));
 
-  return {
-    createdAt,
+  return buildCommonRecord("openclaw", payloadText, parsed, {
     eventType,
-    projectId: projectId || null,
+    cwd: firstString(context.workspaceDir, parsed?.workspaceDir),
     externalKey: `openclaw:${eventType}:${identity}`.slice(0, 256),
-    summary: clip([projectId, eventType, clip(body, 120)].filter(Boolean).join(" | "), 240) || "openclaw hook event",
-    tags: dedupeTags(["openclaw", "hook", type, action, projectId]),
-    content: [
-      "# OpenClaw Hook Event",
-      "",
-      `- Event: ${eventType}`,
-      sessionKey ? `- SessionKey: ${sessionKey}` : "",
-      messageId ? `- MessageId: ${messageId}` : "",
-      cwd ? `- Workspace: ${cwd}` : "",
-      projectId ? `- Project: ${projectId}` : "",
-      `- RecordedAt: ${new Date(createdAt).toISOString()}`,
-      "",
-      body ? `## Message\n\n${clip(body, 6_000)}\n` : "",
-      renderRawPayload(payloadText, parsed)
-    ]
-      .filter(Boolean)
-      .join("\n")
-  };
+    assistantText: body,
+    metadata: {
+      sessionKey,
+      messageId
+    }
+  });
 }
 
 function buildOpenCodeRecord(payloadText, parsed) {
   const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : parsed;
   const eventType = firstString(event?.type, parsed?.type, "event");
-  const cwd = firstString(parsed?.directory, parsed?.cwd, parsed?.worktree, event?.cwd);
-  const projectId = basenameOrEmpty(cwd);
   const sessionId = firstString(event?.sessionID, event?.sessionId, event?.session?.id);
-  const message = firstString(event?.message?.content, event?.message?.summary, event?.content);
-  const createdAt = parseTimestamp(event?.time?.created, event?.time?.updated, event?.timestamp, parsed?.timestamp) ?? Date.now();
   const identity = firstString(sessionId, event?.id, sha256(payloadText).slice(0, 16));
 
-  return {
-    createdAt,
+  return buildCommonRecord("opencode", payloadText, parsed, {
     eventType,
-    projectId: projectId || null,
+    cwd: firstString(parsed?.directory, parsed?.cwd, parsed?.worktree, event?.cwd),
     externalKey: `opencode:${eventType}:${identity}`.slice(0, 256),
-    summary: clip([projectId, eventType, clip(message, 120)].filter(Boolean).join(" | "), 240) || "opencode hook event",
-    tags: dedupeTags(["opencode", "hook", eventType, projectId]),
-    content: [
-      "# OpenCode Hook Event",
-      "",
-      `- Event: ${eventType}`,
-      sessionId ? `- SessionId: ${sessionId}` : "",
-      cwd ? `- Cwd: ${cwd}` : "",
-      projectId ? `- Project: ${projectId}` : "",
-      `- RecordedAt: ${new Date(createdAt).toISOString()}`,
-      "",
-      message ? `## Message\n\n${clip(message, 6_000)}\n` : "",
-      renderRawPayload(payloadText, parsed)
-    ]
-      .filter(Boolean)
-      .join("\n")
-  };
+    assistantText: firstString(event?.message?.content, event?.message?.summary, event?.content),
+    metadata: {
+      sessionId
+    }
+  });
 }
 
-function normalizeRecord(sourceName, payloadText) {
+export function normalizeRecord(sourceName, payloadText) {
   const parsed = safeJsonParse(payloadText);
   switch (sourceName) {
     case "codex":
@@ -387,6 +452,35 @@ function normalizeRecord(sourceName, payloadText) {
       break;
   }
   return buildFallbackRecord(sourceName, payloadText, parsed);
+}
+
+export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
+  const record = normalizeRecord(sourceName, payloadText);
+  const classification = classifyMemoryRecord(record);
+  if (classification.action === "skip") {
+    return { action: "skip", reason: classification.reason, record };
+  }
+
+  const tags = dedupeTags([
+    sourceName,
+    "hook",
+    "promoted",
+    record.eventType,
+    record.projectId,
+    classification.category
+  ]);
+
+  return {
+    action: "promote",
+    record: {
+      externalKey: record.externalKey,
+      createdAt: record.createdAt,
+      projectId: record.projectId,
+      summary: buildPromotedSummary(record, classification.normalizedText),
+      tags,
+      content: buildPromotedContent(record, classification.category, classification.normalizedText)
+    }
+  };
 }
 
 async function readPayload(argvPayload) {
@@ -427,7 +521,7 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
   return body.data;
 }
 
-async function main() {
+export async function main() {
   const sourceName = firstString(process.argv[2], "unknown");
   const payloadText = await readPayload(process.argv[3]);
   if (!payloadText.trim()) {
@@ -452,21 +546,35 @@ async function main() {
     return;
   }
 
-  const record = normalizeRecord(sourceName, payloadText);
-  const result = await postMemory(apiBase, apiKey, tenantId, sourceName, record);
+  const prepared = prepareMemoryRecordForUpsert(sourceName, payloadText);
+  if (prepared.action === "skip") {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        skipped: "low-signal-memory"
+      })
+    );
+    return;
+  }
+
+  const result = await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
   console.log(
     JSON.stringify({
       ok: true,
       source: sourceName,
       tenant_id: tenantId,
-      external_key: record.externalKey,
+      external_key: prepared.record.externalKey,
       inserted: Number(result?.inserted ?? 0),
       updated: Number(result?.updated ?? 0)
     })
   );
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

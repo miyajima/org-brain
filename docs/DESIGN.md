@@ -54,7 +54,8 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 ## Agent Hook Bridge
 - Hook ingress: local agent hooks/plugins -> `scripts/hook-memory-bridge.mjs` -> `POST /v1/memories/upsert` -> D1
 - Supported local sources: `codex`, `claude`, `cursor`, `openclaw`, `opencode`
-- The bridge normalizes source-specific payloads into `summary`, `tags`, `project_id`, and deterministic `external_key`
+- The bridge normalizes source-specific payloads into deterministic `external_key`, then classifies them as `promote|skip`
+- Promoted hook memories are rewritten into distilled `# Reusable Memory` markdown with takeaway, evidence, and reuse-rule sections
 - Hook execution is best-effort: missing env/config skips ingestion without failing the upstream agent hook
 
 ## OpenClaw Chunk Bridge
