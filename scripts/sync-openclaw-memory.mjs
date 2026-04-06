@@ -87,7 +87,7 @@ function toUpsertItems(rows) {
       external_key: `openclaw:${row.id}`,
       content: String(row.text).slice(0, 20_000),
       summary,
-      tags: ["openclaw", "chunk"],
+      tags: ["openclaw", "chunk", "curated-memory"],
       created_at: typeof row.updated_at === "number" ? row.updated_at : Date.now()
     };
   });

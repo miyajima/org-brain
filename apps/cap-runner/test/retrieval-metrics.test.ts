@@ -3,7 +3,8 @@ import { pruneRetrievalEvents, rawRetentionCutoff, rollupRetrievalMetricsForDay 
 import {
   computeRawRetrievalMetrics,
   countTopMemoryIds,
-  mergeRetrievalMetrics
+  mergeRetrievalMetrics,
+  summarizeReplayComparisons
 } from "../../../scripts/lib/retrieval-metrics-core.mjs";
 import { resolveReplayInput } from "../../../scripts/lib/retrieval-replay-core.mjs";
 
@@ -218,5 +219,48 @@ describe("retrieval metrics helpers", () => {
     expect(inline).toEqual({ input: "plain text", input_source: "inline" });
     expect(memory).toEqual({ input: "memory:mem-1", input_source: "memory" });
     expect(r2).toEqual({ input: "r2:bucket/path.txt", input_source: "r2" });
+  });
+
+  it("summarizes replay comparisons across bm25, rewrite, and hybrid strategies", () => {
+    const summary = summarizeReplayComparisons([
+      {
+        input_source: "inline",
+        bm25_v1: { returned_count: 2, fallback_used: false, memory_ids: ["m1", "m2"] },
+        bm25_rewrite_v1: { returned_count: 3, fallback_used: false, memory_ids: ["m1", "m2", "m3"] },
+        hybrid_memory_docs_v1: { returned_count: 2, fallback_used: true, memory_ids: ["m1", "doc:1"] },
+        overlap_vs_bm25: { bm25_rewrite_v1: 2, hybrid_memory_docs_v1: 1 },
+        changed_vs_bm25: { bm25_rewrite_v1: true, hybrid_memory_docs_v1: true }
+      },
+      {
+        input_source: "memory",
+        bm25_v1: { returned_count: 1, fallback_used: true, memory_ids: [] },
+        bm25_rewrite_v1: { returned_count: 1, fallback_used: false, memory_ids: ["m9"] },
+        hybrid_memory_docs_v1: { returned_count: 1, fallback_used: false, memory_ids: ["doc:2"] },
+        overlap_vs_bm25: { bm25_rewrite_v1: 0, hybrid_memory_docs_v1: 0 },
+        changed_vs_bm25: { bm25_rewrite_v1: true, hybrid_memory_docs_v1: true }
+      }
+    ]);
+
+    expect(summary.total_tasks).toBe(2);
+    expect(summary.input_sources).toEqual({ inline: 1, memory: 1, r2: 0 });
+    expect(summary.strategies.bm25_v1).toMatchObject({
+      task_count: 2,
+      fallback_rate: 0.5,
+      average_returned_count: 1.5,
+      changed_rate_vs_bm25: 0,
+      average_overlap_at_5_vs_bm25: 1
+    });
+    expect(summary.strategies.bm25_rewrite_v1).toMatchObject({
+      task_count: 2,
+      fallback_rate: 0,
+      changed_rate_vs_bm25: 1,
+      average_overlap_at_5_vs_bm25: 1
+    });
+    expect(summary.strategies.hybrid_memory_docs_v1).toMatchObject({
+      task_count: 2,
+      fallback_rate: 0.5,
+      changed_rate_vs_bm25: 1,
+      average_overlap_at_5_vs_bm25: 0.5
+    });
   });
 });

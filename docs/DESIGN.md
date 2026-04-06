@@ -20,7 +20,10 @@
 - `memories` + `memories_fts`: knowledge memory and search index (`source`, `external_key` for bridge sync)
 - `retrieval_events`: raw retrieval telemetry with query text/hash, counts, latency, IDs, and BM25 scores
 - `retrieval_daily_metrics`: daily retrieval/service rollups for long-term effectiveness reporting
-- Capability runtime memory retrieval uses FTS5 lexical matching ranked by `bm25(memories_fts)` with `created_at` as a tie-breaker
+- Capability runtime memory retrieval, `/v1/memories/search`, and `/v1/memories/profile` share one retrieval helper in `packages/shared/src/memory-retrieval.ts`
+- Shared retrieval uses FTS5 lexical matching ranked by `bm25(memories_fts)` with `created_at` as a tie-breaker, optional rewrite variants, and optional `knowledge_docs_fts` fallback
+- Retrieval is tier-aware: `canonical-memory` > `curated-memory` / `promoted-memory` > `memory-digest` > recent raw history
+- Old noisy hook memories are compacted by maintenance into digest rows tagged as `memory-digest`; repeated durable memories are consolidated into `canonical-memory`; rows tagged `compacted` are removed from retrieval/profile flows
 - `threads`: review-oriented conversation/thread capture
 - `knowledge_docs`: knowledge doc metadata, structured frontmatter JSON, inline body or R2 ref
 - `knowledge_links`: resolved inter-doc graph (`references`, `related`, `parent`, `child`)
@@ -43,6 +46,7 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 - Router validates envelope and result payload with Ajv
 - Capability runner retries capacity/input-not-found failures and publishes terminal failed events
 - Task creation idempotency via `tenant_id + idempotency_key`
+- Memory upsert dedupes `external_key` inside one request and resolves existing IDs in batches before applying `memories` + `memories_fts` writes
 - Retrieval telemetry is best-effort: failed writes are swallowed so task execution still completes
 
 ## Security
@@ -61,8 +65,17 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 ## OpenClaw Chunk Bridge
 - `main.sqlite` is treated as local cache/index, not source of truth
 - Import path: OpenClaw chunks -> `POST /v1/memories/upsert` -> D1
+- Imported chunks carry the `curated-memory` tag so retrieval tiers depend on tags instead of source-specific names
 - Export path: D1 (`source=org-brain`) -> `memory/org-brain-sync.md` -> `openclaw memory index`
 - Sync entrypoint: `scripts/sync-openclaw-memory.mjs`
+
+## Memory Search + Profile
+- `POST /v1/memories/search` returns deduped `memory|doc` results with `rewrite_query`, `search_mode`, and optional `include_history`
+- Rewrite mode emits up to 4 lexical variants: full phrase, raw token OR, split token OR, singularized token OR
+- Hybrid mode adds up to 2 `knowledge_docs_fts` results only when deduped lexical memory hits are fewer than 3
+- `POST /v1/memories/profile` returns `durable`, `recent`, and optional `search_results`
+- `durable` is derived from memories older than 24 hours with non-empty summaries, same-project preference, and tag priority `policy > diagnosis > command-result > workaround > untagged`
+- `recent` is derived from non-durable memories from the last 14 days, same-project preference, recency ordering, and summary-level dedupe
 
 ## Knowledge Docs Layer
 - API ingress: `POST /v1/docs` parses YAML frontmatter, extracts wiki links, decides inline-vs-R2 storage, then updates D1 + FTS
@@ -79,16 +92,21 @@ Each step waits via `waitForEvent`, and `org-router` relays `task.result` to wor
 
 ## Operator Snapshot
 - `skills/org-brain-usage-status/scripts/report-usage-status.mjs` runs Wrangler D1 queries against `open-brain` and formats an operator-facing usage summary.
-- `pnpm usage:status` is the root alias for the same workflow and defaults to remote D1 with `tenant_id=default`.
+- `pnpm -s usage:status` is the root alias for the same workflow and defaults to remote D1 with `tenant_id=default`.
+- The usage-status wrapper retries transient Wrangler/D1 query failures before surfacing an error, so one-off remote blips do not fail the whole snapshot.
+- `scripts/seed-knowledge-docs.mjs` seeds the minimal stable MOC/reference docs set through the console/API proxy.
+- `scripts/memory-maintenance.mjs` compacts old raw hook memories into digest rows and removes compacted rows from retrieval by deleting their FTS entries.
+- Maintenance also builds per-project, per-category `canonical-memory` rows so long-term recall can stay compact without relying on raw episodic logs.
 - `scripts/retrieval-metrics-report.mjs` reports retrieval and service effectiveness metrics from raw + rolled-up telemetry.
-- `scripts/retrieval-metrics-replay.mjs` re-evaluates recent inputs with `legacy_recent_v1` and `bm25_v1` against the current D1/R2 snapshot.
+- `scripts/retrieval-metrics-replay.mjs` re-evaluates recent inputs with `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` against the current D1/R2 snapshot.
 - `scripts/retrieval-metrics-rollup.mjs` backfills one UTC day into `retrieval_daily_metrics`.
 
 ## Retrieval Telemetry Flow
-- `runCapability()` calls `memorySearch()` and records a raw row in `retrieval_events` plus `task_events(kind=memory.search)` after each retrieval attempt.
-- BM25 hits are stored as `search_strategy=bm25_v1` with returned memory IDs and `bm25(memories_fts)` scores.
-- Fallback searches are stored as `search_strategy=fallback_recent_v1` with `top_scores_json = null`.
-- `open-brain-cap-runner` runs a daily cron to roll up the previous UTC day and delete raw telemetry older than 90 days.
+- `runCapability()` calls `buildTenantMemoryProfile()` with `rewrite_query=true` and `search_mode=hybrid`, then records a raw row in `retrieval_events` plus `task_events(kind=memory.search)`.
+- Rewrite-only hits are stored as `search_strategy=bm25_rewrite_v1`.
+- Hybrid memory/doc lookups are stored as `search_strategy=hybrid_memory_docs_v1`.
+- Search misses with no lexical/doc results are stored as `search_strategy=fallback_recent_v1`.
+- `open-brain-cap-runner` runs two daily crons: `09:05 JST` for retrieval rollup/prune and `03:30 JST` for memory maintenance/digest compaction.
 
 ## Future Enhancements
 - Fine-grained RBAC beyond principal -> tenant mapping

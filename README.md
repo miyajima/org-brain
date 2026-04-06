@@ -29,10 +29,30 @@ Cloudflare-based org bus MVP with Hono API and Astro console.
 - `pnpm build`
 - `pnpm hook:bridge`
 - `pnpm sync:openclaw-memory`
+- `pnpm docs:seed`
+- `pnpm memories:maintain`
 - `pnpm usage:status`
 - `pnpm metrics:report`
 - `pnpm metrics:replay`
 - `pnpm metrics:rollup`
+
+## Memory Search
+Org Brain now exposes retrieval and profile endpoints on top of the D1 memory source of truth:
+
+- `POST /v1/memories/search`
+- `POST /v1/memories/profile`
+
+`/v1/memories/search` supports:
+- `rewrite_query` for 4-way lexical query expansion
+- `search_mode=memories|hybrid`
+- `include_history` to append recency-ranked memories after lexical/doc hits
+
+`/v1/memories/profile` returns:
+- `durable` for summary-backed memories older than 24 hours
+- `recent` for non-durable memories from the last 14 days
+- `search_results` when `q` is provided
+
+Both endpoints prioritize the current `project_id` when available, dedupe by normalized summary/title, and use the same retrieval helper as cap-runner.
 
 ## Knowledge Docs
 Org Brain now includes a docs layer for interlinked markdown knowledge docs. This is a navigation and retrieval interface for humans and agents, not the system of record.
@@ -58,6 +78,12 @@ Progressive disclosure:
 - Read summaries before full markdown
 - Use `/v1/docs/:slug/context` or `loadContext()` for bounded 1-hop expansion
 
+Seed the minimal stable docs set with:
+
+```bash
+pnpm docs:seed -- --tenant default
+```
+
 Template utility:
 
 ```ts
@@ -76,18 +102,39 @@ Each template returns a `slug`, repo-style docs `path`, and rendered markdown fo
 For a current operator view of Org Brain usage, query Cloudflare D1 directly:
 
 ```bash
-pnpm usage:status
-pnpm usage:status -- --tenant default --json
+pnpm -s usage:status
+pnpm -s usage:status -- --tenant default --json
 ```
 
 The snapshot reports task totals/statuses, active tasks, capability/project breakdowns, memory/thread counts, and recent tasks with JST timestamps.
+
+## Memory Maintenance
+Older raw hook memories can be compacted into digest memories so search/profile calls stay focused on reusable content.
+
+```bash
+pnpm memories:maintain -- --tenant default --apply --remote
+pnpm memories:maintain -- --tenant default --json
+```
+
+Maintenance behavior:
+- consolidates repeated durable memories into `canonical-memory` rows for project/category level long-term recall
+- compacts old non-promoted hook memories into searchable digest rows
+- collapses older exact-summary duplicates by keeping the newest searchable row
+- marks compacted rows with a `compacted` tag and removes them from retrieval/profile queries
+- the same maintenance now runs automatically on Cloudflare every day at `03:30 JST` via `open-brain-cap-runner`
+
+Memory stages:
+- `canonical-memory`: synthesized long-term memory maps, searched first
+- `curated-memory` / `promoted-memory`: reusable durable memories selected by tags, not by source name
+- `memory-digest`: compressed episodic summaries
+- recent raw hook memories: excluded from primary lexical search and used only for recent/history context
 
 ## Retrieval Metrics
 Retrieval telemetry is stored in D1 as `retrieval_events`, with day-level rollups in `retrieval_daily_metrics`.
 
 - `memory.search` task events are appended for per-task drill-down
 - raw retrieval telemetry is retained for 90 days
-- `open-brain-cap-runner` rolls up the previous UTC day and prunes old raw events on a daily cron
+- `open-brain-cap-runner` rolls up the previous UTC day at `09:05 JST`, and runs memory maintenance at `03:30 JST`
 
 Examples:
 
@@ -99,7 +146,7 @@ pnpm metrics:rollup -- --day 2026-03-10 --json
 ```
 
 `metrics:report` focuses on retrieval hit/fallback/latency plus service success and duration.
-`metrics:replay` compares `legacy_recent_v1` versus `bm25_v1` against the current D1/R2 snapshot without persisting anything.
+`metrics:replay` compares `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` against the current D1/R2 snapshot without persisting anything.
 `metrics:rollup` recomputes one UTC day idempotently into `retrieval_daily_metrics`.
 
 ## OpenClaw Memory Bridge
@@ -118,6 +165,8 @@ Optional env vars:
 - `OPENCLAW_MEMORY_DB=~/.openclaw/memory/main.sqlite`
 - `OPENCLAW_WORKSPACE=~/clawd`
 - `ORGBRAIN_TENANT_ID=default`
+
+Imported OpenClaw chunks are tagged with `curated-memory`, so retrieval tiers stay source-agnostic.
 
 ## Agent Hook Bridge
 `pnpm hook:bridge` is the shared upsert bridge used by local agent hooks.
@@ -160,6 +209,12 @@ Remote MCP is served directly by `api-gateway` at `/mcp`.
 3. Deploy `api-gateway`.
 
 Optional: if you want browser login later, you can layer Cloudflare Access in front of the hostname and add the corresponding JWT verification settings then.
+
+Memory tools now include:
+- `orgbrain_memories_list`
+- `orgbrain_memories_upsert`
+- `orgbrain_memories_search`
+- `orgbrain_memories_profile`
 
 See [docs/REMOTE_MCP.md](/Users/miya/projects/org-brain/docs/REMOTE_MCP.md) for client config and skill usage.
 See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that wraps the same workflow.

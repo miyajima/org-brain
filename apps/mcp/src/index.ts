@@ -154,6 +154,64 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
     );
 
     this.server.tool(
+      "orgbrain_memories_search",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        q: z.string().min(1).max(500),
+        limit: z.number().int().min(1).max(20).optional(),
+        rewrite_query: z.boolean().optional(),
+        search_mode: z.enum(["memories", "hybrid"]).optional(),
+        include_history: z.boolean().optional()
+      },
+      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, include_history }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/memories/search", {
+          method: "POST",
+          body: {
+            tenant_id: tenantId,
+            project_id,
+            q,
+            limit,
+            rewrite_query,
+            search_mode,
+            include_history
+          }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memories_profile",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        q: z.string().min(1).max(500).optional(),
+        limit_durable: z.number().int().min(1).max(16).optional(),
+        limit_recent: z.number().int().min(1).max(16).optional(),
+        rewrite_query: z.boolean().optional(),
+        search_mode: z.enum(["memories", "hybrid"]).optional()
+      },
+      async ({ tenant_id, project_id, q, limit_durable, limit_recent, rewrite_query, search_mode }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/memories/profile", {
+          method: "POST",
+          body: {
+            tenant_id: tenantId,
+            project_id,
+            q,
+            limit_durable,
+            limit_recent,
+            rewrite_query,
+            search_mode
+          }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
       "orgbrain_task_create",
       {
         tenant_id: z.string().optional(),

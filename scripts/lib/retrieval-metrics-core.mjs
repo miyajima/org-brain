@@ -230,23 +230,62 @@ export function classifyInputRef(inputRef) {
 }
 
 export function summarizeReplayComparisons(records) {
-  let changed = 0;
-  let exact = 0;
-  let overlapTotal = 0;
   const sourceCounts = { inline: 0, memory: 0, r2: 0 };
+  const baselineKey = "bm25_v1";
+  const comparisonKeys = ["bm25_rewrite_v1", "hybrid_memory_docs_v1"];
+  const strategySummary = Object.fromEntries(
+    [baselineKey, ...comparisonKeys].map((key) => [
+      key,
+      {
+        task_count: 0,
+        fallback_count: 0,
+        returned_total: 0,
+        changed_vs_baseline: 0,
+        overlap_total_at_5: 0
+      }
+    ])
+  );
 
   for (const record of records) {
     sourceCounts[record.input_source] += 1;
-    if (record.changed) changed += 1;
-    if (record.exact_match) exact += 1;
-    overlapTotal += record.overlap_at_5;
+
+    for (const key of [baselineKey, ...comparisonKeys]) {
+      const strategy = record[key];
+      if (!strategy) continue;
+      const entry = strategySummary[key];
+      entry.task_count += 1;
+      entry.returned_total += strategy.returned_count ?? strategy.memory_ids?.length ?? 0;
+      entry.fallback_count += strategy.fallback_used ? 1 : 0;
+    }
+
+    for (const key of comparisonKeys) {
+      const comparison = record[key];
+      const overlap = record.overlap_vs_bm25?.[key] ?? 0;
+      const changed = record.changed_vs_bm25?.[key] ? 1 : 0;
+      if (!comparison) continue;
+      strategySummary[key].changed_vs_baseline += changed;
+      strategySummary[key].overlap_total_at_5 += overlap;
+    }
   }
+
+  const strategies = Object.fromEntries(
+    Object.entries(strategySummary).map(([key, entry]) => [
+      key,
+      {
+        task_count: entry.task_count,
+        fallback_rate: entry.task_count > 0 ? entry.fallback_count / entry.task_count : 0,
+        average_returned_count: entry.task_count > 0 ? entry.returned_total / entry.task_count : 0,
+        changed_rate_vs_bm25:
+          key === baselineKey || entry.task_count === 0 ? 0 : entry.changed_vs_baseline / entry.task_count,
+        average_overlap_at_5_vs_bm25:
+          key === baselineKey || entry.task_count === 0 ? 1 : entry.overlap_total_at_5 / entry.task_count
+      }
+    ])
+  );
 
   return {
     total_tasks: records.length,
-    changed_tasks: changed,
-    exact_match_rate: records.length > 0 ? exact / records.length : 0,
-    average_overlap_at_5: records.length > 0 ? overlapTotal / records.length : 0,
-    input_sources: sourceCounts
+    input_sources: sourceCounts,
+    strategies
   };
 }

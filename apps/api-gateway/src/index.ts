@@ -2,7 +2,7 @@ import { HttpError, workflowStartSchema } from "@org-brain/shared";
 import { Hono } from "hono";
 import { apiKeyAuth, jsonOk } from "./auth";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
-import { listMemories, upsertMemories } from "./memory-service";
+import { getMemoryProfile, listMemories, searchMemories, upsertMemories } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
 import type { Env } from "./types";
@@ -56,6 +56,18 @@ app.post("/v1/memories/upsert", async (c) => {
   const body = await c.req.json<unknown>();
   const result = await upsertMemories(c.env, body);
   return jsonOk(c, result, 201);
+});
+
+app.post("/v1/memories/search", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await searchMemories(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/memories/profile", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await getMemoryProfile(c.env, body);
+  return jsonOk(c, result);
 });
 
 app.post("/v1/docs", async (c) => {

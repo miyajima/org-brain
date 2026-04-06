@@ -9,10 +9,14 @@ import {
 import { runCapability } from "./capabilities/runtime";
 import { LeaseDO } from "./do/lease";
 import { MailboxDO } from "./do/mailbox";
+import { runScheduledMemoryMaintenance } from "./memory-maintenance";
 import { previousUtcDay, pruneRetrievalEvents, rawRetentionCutoff, rollupRetrievalMetricsForDay } from "./retrieval-metrics";
 import type { CapabilityContext, Env } from "./types";
 
 export { LeaseDO, MailboxDO };
+
+const METRICS_CRON = "5 0 * * *";
+const MEMORY_MAINTENANCE_CRON = "30 18 * * *";
 
 async function getCapabilityLimit(env: Env, tenantId: string, capability: CapabilityName): Promise<number> {
   const row = await env.OPEN_BRAIN_DB.prepare(
@@ -210,8 +214,17 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const now = controller.scheduledTime ?? Date.now();
-    await rollupRetrievalMetricsForDay(env.OPEN_BRAIN_DB, previousUtcDay(now), now);
-    await pruneRetrievalEvents(env.OPEN_BRAIN_DB, rawRetentionCutoff(now));
+    const cron = controller.cron ?? METRICS_CRON;
+
+    if (cron === METRICS_CRON) {
+      await rollupRetrievalMetricsForDay(env.OPEN_BRAIN_DB, previousUtcDay(now), now);
+      await pruneRetrievalEvents(env.OPEN_BRAIN_DB, rawRetentionCutoff(now));
+      return;
+    }
+
+    if (cron === MEMORY_MAINTENANCE_CRON) {
+      await runScheduledMemoryMaintenance(env.OPEN_BRAIN_DB, now);
+    }
   },
 
   async fetch(): Promise<Response> {

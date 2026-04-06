@@ -47,4 +47,4 @@ tag = "v1"
 new_sqlite_classes = ["LeaseDO", "MailboxDO"]
 
 [triggers]
-crons = ["5 0 * * *"]
+crons = ["5 0 * * *", "30 18 * * *"]

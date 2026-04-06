@@ -1,25 +1,6 @@
-import { sha256, ulid } from "@org-brain/shared";
+import { buildTenantMemoryProfile, sha256, ulid, type MemoryProfileResponse } from "@org-brain/shared";
 import { recordRetrievalTelemetry } from "../retrieval-metrics";
 import type { CapabilityContext, CapabilityResult } from "../types";
-
-type MemoryRow = {
-  id: string;
-  summary: string | null;
-  content: string;
-  lexical_score?: number | null;
-};
-
-function buildFtsQuery(raw: string): string | null {
-  const tokens = raw
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
-    .slice(0, 6)
-    .map((token) => `"${token.replace(/"/g, '""')}"*`);
-
-  if (tokens.length === 0) return null;
-  return tokens.join(" OR ");
-}
 
 async function loadInput(ctx: CapabilityContext): Promise<string> {
   const ref = ctx.inputRef;
@@ -57,77 +38,36 @@ function outputKey(ctx: CapabilityContext): string {
   return `${base}/review.md`;
 }
 
-async function memorySearch(ctx: CapabilityContext, query: string): Promise<MemoryRow[]> {
+async function loadMemoryProfile(ctx: CapabilityContext, query: string): Promise<MemoryProfileResponse> {
   const startedAt = Date.now();
-  const ftsQuery = buildFtsQuery(query);
-  let matchedCount = 0;
-  let strategy = "fallback_recent_v1";
-  let rows: MemoryRow[] = [];
+  const profile = await buildTenantMemoryProfile(ctx.env.OPEN_BRAIN_DB, {
+    tenantId: ctx.tenantId,
+    projectId: ctx.projectId ?? null,
+    q: query,
+    limitDurable: 8,
+    limitRecent: 8,
+    rewriteQuery: true,
+    searchMode: "hybrid"
+  });
 
-  if (ftsQuery) {
-    const countRow = await ctx.env.OPEN_BRAIN_DB.prepare(
-      `SELECT COUNT(*) AS matched_count
-       FROM memories_fts
-       WHERE tenant_id = ?
-         AND content MATCH ?`
-    )
-      .bind(ctx.tenantId, ftsQuery)
-      .first<{ matched_count: number }>();
-
-    matchedCount = countRow?.matched_count ?? 0;
-    const matched = await ctx.env.OPEN_BRAIN_DB.prepare(
-      `SELECT m.id, m.summary, m.content, bm25(memories_fts) AS lexical_score
-       FROM memories_fts
-       JOIN memories m
-         ON m.id = memories_fts.memory_id
-        AND m.tenant_id = memories_fts.tenant_id
-       WHERE memories_fts.tenant_id = ?
-         AND memories_fts.content MATCH ?
-       ORDER BY bm25(memories_fts) ASC, m.created_at DESC
-       LIMIT 5`
-    )
-      .bind(ctx.tenantId, ftsQuery)
-      .all<MemoryRow>();
-
-    if (matched.results.length > 0) {
-      strategy = "bm25_v1";
-      rows = matched.results;
-    }
-  }
-
-  if (rows.length === 0) {
-    const fallback = await ctx.env.OPEN_BRAIN_DB.prepare(
-      `SELECT m.id, m.summary, m.content
-       FROM memories m
-       WHERE m.tenant_id = ?
-       ORDER BY m.created_at DESC
-       LIMIT 5`
-    )
-      .bind(ctx.tenantId)
-      .all<MemoryRow>();
-
-    rows = fallback.results;
-  }
-
-  const telemetry = {
+  const searchMeta = profile.meta.search;
+  await recordRetrievalTelemetry(ctx.env.OPEN_BRAIN_DB, {
     tenantId: ctx.tenantId,
     projectId: ctx.projectId,
     taskId: ctx.taskId,
     capability: ctx.capability,
-    searchStrategy: strategy,
+    searchStrategy: searchMeta?.search_strategy ?? "fallback_recent_v1",
     queryText: query,
     queryHash: await sha256(query),
-    matchedCount,
-    returnedCount: rows.length,
-    fallbackUsed: strategy !== "bm25_v1",
+    matchedCount: searchMeta?.matched_count ?? 0,
+    returnedCount: searchMeta?.returned_count ?? 0,
+    fallbackUsed: searchMeta?.fallback_used ?? true,
     latencyMs: Math.max(0, Date.now() - startedAt),
-    topMemoryIds: rows.map((row) => row.id),
-    topScores: strategy === "bm25_v1" ? rows.map((row) => row.lexical_score ?? null) : null
-  } as const;
+    topMemoryIds: searchMeta?.top_result_ids ?? [],
+    topScores: searchMeta?.top_result_ranks ?? null
+  });
 
-  await recordRetrievalTelemetry(ctx.env.OPEN_BRAIN_DB, telemetry);
-
-  return rows;
+  return profile;
 }
 
 async function saveMemorySummary(ctx: CapabilityContext, summary: string, tags: string[]): Promise<string> {
@@ -180,18 +120,31 @@ async function maybeCreateThread(ctx: CapabilityContext, summary: string): Promi
     .run();
 }
 
+function renderList(items: string[]): string[] {
+  return items.length > 0 ? items.map((item) => `- ${item}`) : ["- none"];
+}
+
+function summarizeProfile(profile: MemoryProfileResponse): string {
+  return [
+    `Durable Context: ${profile.durable.map((item) => item.summary).join(" | ") || "none"}`,
+    `Recent Context: ${profile.recent.map((item) => item.summary).join(" | ") || "none"}`,
+    `Related Search Results: ${profile.search_results.map((item) => item.summary ?? item.id).join(" | ") || "none"}`
+  ].join("\n\n");
+}
+
 export async function runCapability(ctx: CapabilityContext): Promise<CapabilityResult> {
   const input = await loadInput(ctx);
-  const memoryHints = await memorySearch(ctx, input.slice(0, 120));
+  const query = input.slice(0, 120);
+  const memoryProfile = await loadMemoryProfile(ctx, query);
 
   const summary = [
     `Capability: ${ctx.capability}`,
     `InputRef: ${ctx.inputRef}`,
     `InputPreview: ${input.slice(0, 240)}`,
-    `MemoryHints: ${memoryHints.map((m) => m.summary ?? m.id).join(" | ") || "none"}`
+    summarizeProfile(memoryProfile)
   ].join("\n\n");
 
-  const outputBody = renderOutput(ctx.capability, input, memoryHints, summary);
+  const outputBody = renderOutput(ctx.capability, input, memoryProfile, summary);
   const key = outputKey(ctx);
   await ctx.env.OPEN_BRAIN_BUCKET.put(key, outputBody, {
     customMetadata: {
@@ -213,9 +166,13 @@ export async function runCapability(ctx: CapabilityContext): Promise<CapabilityR
 function renderOutput(
   capability: CapabilityContext["capability"],
   input: string,
-  memoryHints: MemoryRow[],
+  memoryProfile: MemoryProfileResponse,
   summary: string
 ): string {
+  const durableLines = renderList(memoryProfile.durable.map((item) => item.summary));
+  const recentLines = renderList(memoryProfile.recent.map((item) => item.summary));
+  const searchLines = renderList(memoryProfile.search_results.map((item) => `[${item.kind}] ${item.summary ?? item.id}`));
+
   if (capability === "plan_writer") {
     return [
       "# Plan",
@@ -223,8 +180,14 @@ function renderOutput(
       "## Input",
       input,
       "",
-      "## Related Memory",
-      ...memoryHints.map((x) => `- ${x.summary ?? x.id}`),
+      "## Durable Context",
+      ...durableLines,
+      "",
+      "## Recent Context",
+      ...recentLines,
+      "",
+      "## Related Search Results",
+      ...searchLines,
       "",
       "## Summary",
       summary
@@ -238,12 +201,18 @@ function renderOutput(
       "index 0000000..1111111",
       "--- /dev/null",
       "+++ b/placeholder.txt",
-      "@@ -0,0 +1,8 @@",
+      "@@ -0,0 +1,14 @@",
       "+Generated patch proposal",
       `+Source: ${input.slice(0, 180)}`,
       "+",
-      "+Context:",
-      ...memoryHints.map((x) => `+ - ${x.summary ?? x.id}`),
+      "+Durable Context:",
+      ...durableLines.map((line) => `+ ${line}`),
+      "+",
+      "+Recent Context:",
+      ...recentLines.map((line) => `+ ${line}`),
+      "+",
+      "+Related Search Results:",
+      ...searchLines.map((line) => `+ ${line}`),
       "+",
       `+Summary: ${summary.slice(0, 180)}`
     ].join("\n");
@@ -258,8 +227,14 @@ function renderOutput(
     "## Findings",
     "- [P2] Placeholder finding: ensure tests cover generated patch semantics.",
     "",
-    "## Memory Hints",
-    ...memoryHints.map((x) => `- ${x.summary ?? x.id}`),
+    "## Durable Context",
+    ...durableLines,
+    "",
+    "## Recent Context",
+    ...recentLines,
+    "",
+    "## Related Search Results",
+    ...searchLines,
     "",
     "## Summary",
     summary

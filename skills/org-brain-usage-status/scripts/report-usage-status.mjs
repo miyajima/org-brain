@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
 import process from "node:process";
 
 const execFileAsync = promisify(execFile);
@@ -130,25 +131,40 @@ async function runQuery(options, sql) {
   if (options.env) args.push("--env", options.env);
   args.push("--json", "--command", sql);
 
-  const { stdout, stderr } = await execFileAsync("pnpm", args, {
-    cwd: apiGatewayDir,
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024
-  });
+  const attempts = 3;
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const { stdout, stderr } = await execFileAsync("pnpm", args, {
+        cwd: apiGatewayDir,
+        encoding: "utf8",
+        maxBuffer: 10 * 1024 * 1024
+      });
 
-  let parsed;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch (error) {
-    const details = stderr?.trim() ? `\n${stderr.trim()}` : "";
-    throw new Error(`Failed to parse wrangler JSON output.${details}\n${stdout}`);
-  }
+      let parsed;
+      try {
+        parsed = JSON.parse(stdout);
+      } catch (error) {
+        const details = stderr?.trim() ? `\n${stderr.trim()}` : "";
+        throw new Error(`Failed to parse wrangler JSON output.${details}\n${stdout}`);
+      }
 
-  const first = Array.isArray(parsed) ? parsed[0] : parsed;
-  if (!first?.success) {
-    throw new Error(`Wrangler query failed: ${JSON.stringify(first)}`);
+      const first = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (!first?.success) {
+        throw new Error(`Wrangler query failed: ${JSON.stringify(first)}`);
+      }
+      return first.results ?? [];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      lastError = new Error(`Attempt ${attempt}/${attempts} failed for D1 query: ${message}`);
+      if (attempt < attempts) {
+        await delay(250 * attempt);
+        continue;
+      }
+      throw lastError;
+    }
   }
-  return first.results ?? [];
+  throw lastError ?? new Error("D1 query failed without a captured error");
 }
 
 function buildQueries(options) {

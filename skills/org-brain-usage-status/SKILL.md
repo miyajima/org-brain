@@ -10,15 +10,15 @@ Use the bundled script instead of ad hoc SQL when checking how Org Brain is bein
 ## Workflow
 
 1. Treat Cloudflare D1 as the source of truth for operational counts.
-2. Run `pnpm usage:status` from the repo root for the default snapshot.
-3. Use `pnpm usage:status -- --tenant <tenant_id>` when the user asks about a non-default tenant.
-4. Use `pnpm usage:status -- --json` when another tool or script will consume the output.
+2. Run `pnpm -s usage:status` from the repo root for the default snapshot.
+3. Use `pnpm -s usage:status -- --tenant <tenant_id>` when the user asks about a non-default tenant.
+4. Use `pnpm -s usage:status -- --json` when another tool or script will consume the output.
 5. Call out active tasks separately from historical totals, and highlight failed tasks if any are present.
 6. Mention the query scope in the report: tenant, database, and `remote|local|preview`.
 
 ## Script
 
-- Default command: `pnpm usage:status`
+- Default command: `pnpm -s usage:status`
 - Direct entrypoint: `node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs`
 - Useful flags:
   - `--tenant <tenant_id>`

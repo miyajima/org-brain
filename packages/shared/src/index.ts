@@ -4,5 +4,6 @@ export * from "./errors";
 export * from "./hash";
 export * from "./ids";
 export * from "./knowledge-docs";
+export * from "./memory-retrieval";
 export * from "./schemas";
 export * from "./types";

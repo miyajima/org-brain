@@ -1,4 +1,13 @@
-import { HttpError, ulid } from "@org-brain/shared";
+import {
+  HttpError,
+  buildTenantMemoryProfile,
+  parseTagsJson,
+  searchTenantMemories,
+  type MemoryProfileResponse,
+  type MemorySearchResponse,
+  type MemorySearchMode
+} from "@org-brain/shared";
+import { ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
 type UpsertMemoryItem = {
@@ -27,6 +36,31 @@ type MemoryRow = {
   created_at: number;
 };
 
+type ExistingMemoryKeyRow = {
+  id: string;
+  external_key: string;
+};
+
+type MemorySearchRequest = {
+  tenant_id?: string;
+  project_id?: string | null;
+  q?: string;
+  limit?: number;
+  rewrite_query?: boolean;
+  search_mode?: MemorySearchMode;
+  include_history?: boolean;
+};
+
+type MemoryProfileRequest = {
+  tenant_id?: string;
+  project_id?: string | null;
+  q?: string;
+  limit_durable?: number;
+  limit_recent?: number;
+  rewrite_query?: boolean;
+  search_mode?: MemorySearchMode;
+};
+
 function parseString(value: unknown, field: string): string {
   if (typeof value !== "string") {
     throw new HttpError(400, "invalid_payload", `${field} must be a string`);
@@ -36,6 +70,40 @@ function parseString(value: unknown, field: string): string {
     throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
   }
   return trimmed;
+}
+
+function parseOptionalString(value: unknown, field: string, maxLength = 256): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new HttpError(400, "invalid_payload", `${field} must be a string`);
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : null;
+}
+
+function parseOptionalBoolean(value: unknown, field: string, fallback = false): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value !== "boolean") {
+    throw new HttpError(400, "invalid_payload", `${field} must be a boolean`);
+  }
+  return value;
+}
+
+function parseOptionalInteger(
+  value: unknown,
+  field: string,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new HttpError(400, "invalid_payload", `${field} must be an integer`);
+  }
+  if (value < min || value > max) {
+    throw new HttpError(400, "invalid_payload", `${field} must be between ${min} and ${max}`);
+  }
+  return value;
 }
 
 function parseTags(raw: unknown): string[] {
@@ -49,6 +117,14 @@ function parseTags(raw: unknown): string[] {
     .filter((x) => x.length > 0)
     .slice(0, 16);
   return [...new Set(tags)];
+}
+
+function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySearchMode): MemorySearchMode {
+  if (value === undefined) return fallback;
+  if (value !== "memories" && value !== "hybrid") {
+    throw new HttpError(400, "invalid_payload", `${field} must be 'memories' or 'hybrid'`);
+  }
+  return value;
 }
 
 function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; items: UpsertMemoryItem[] } {
@@ -92,14 +168,87 @@ function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; i
   return { tenantId, source, items };
 }
 
-function parseTagsJson(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x): x is string => typeof x === "string");
-  } catch {
-    return [];
+function parseSearchRequest(raw: unknown): {
+  tenantId: string;
+  projectId: string | null;
+  q: string;
+  limit: number;
+  rewriteQuery: boolean;
+  searchMode: MemorySearchMode;
+  includeHistory: boolean;
+} {
+  if (!raw || typeof raw !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = raw as MemorySearchRequest;
+  return {
+    tenantId: body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default",
+    projectId: parseOptionalString(body.project_id, "project_id", 128),
+    q: parseString(body.q, "q").slice(0, 500),
+    limit: parseOptionalInteger(body.limit, "limit", 5, 1, 20),
+    rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
+    searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "memories"),
+    includeHistory: parseOptionalBoolean(body.include_history, "include_history", false)
+  };
+}
+
+function parseProfileRequest(raw: unknown): {
+  tenantId: string;
+  projectId: string | null;
+  q?: string;
+  limitDurable: number;
+  limitRecent: number;
+  rewriteQuery: boolean;
+  searchMode: MemorySearchMode;
+} {
+  if (!raw || typeof raw !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = raw as MemoryProfileRequest;
+  const q = typeof body.q === "string" && body.q.trim() ? body.q.trim().slice(0, 500) : undefined;
+  return {
+    tenantId: body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default",
+    projectId: parseOptionalString(body.project_id, "project_id", 128),
+    q,
+    limitDurable: parseOptionalInteger(body.limit_durable, "limit_durable", 8, 1, 16),
+    limitRecent: parseOptionalInteger(body.limit_recent, "limit_recent", 8, 1, 16),
+    rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
+    searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "memories")
+  };
+}
+
+async function loadExistingMemoryIdsByExternalKeys(
+  db: D1Database,
+  tenantId: string,
+  externalKeys: string[]
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+  if (externalKeys.length === 0) return results;
+
+  for (let index = 0; index < externalKeys.length; index += 100) {
+    const chunk = externalKeys.slice(index, index + 100);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const response = await db.prepare(
+      `SELECT id, external_key
+       FROM memories
+       WHERE tenant_id = ?
+         AND external_key IN (${placeholders})`
+    )
+      .bind(tenantId, ...chunk)
+      .all<ExistingMemoryKeyRow>();
+
+    for (const row of response.results) {
+      if (row.external_key) results.set(row.external_key, row.id);
+    }
+  }
+
+  return results;
+}
+
+async function runBatchChunks(db: D1Database, statements: D1PreparedStatement[]): Promise<void> {
+  if (statements.length === 0) return;
+  for (let index = 0; index < statements.length; index += 100) {
+    await db.batch(statements.slice(index, index + 100));
   }
 }
 
@@ -108,72 +257,49 @@ export async function upsertMemories(env: Env, rawBody: unknown) {
   let inserted = 0;
   let updated = 0;
 
-  // Keep the last item for each external key inside one request.
   const dedupedByKey = new Map<string, UpsertMemoryItem>();
   for (const item of items) dedupedByKey.set(item.external_key, item);
 
-  for (const item of dedupedByKey.values()) {
+  const existingByKey = await loadExistingMemoryIdsByExternalKeys(env.OPEN_BRAIN_DB, tenantId, [...dedupedByKey.keys()]);
+  const statements: D1PreparedStatement[] = [];
+
+  for (const [externalKey, item] of dedupedByKey.entries()) {
     const now = Date.now();
     const createdAt = item.created_at ?? now;
     const tagsJson = JSON.stringify(item.tags ?? []);
+    const existingId = existingByKey.get(externalKey);
 
-    const existing = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id FROM memories WHERE tenant_id = ? AND external_key = ?"
-    )
-      .bind(tenantId, item.external_key)
-      .first<{ id: string }>();
-
-    if (existing) {
-      await env.OPEN_BRAIN_DB.batch([
+    if (existingId) {
+      statements.push(
         env.OPEN_BRAIN_DB.prepare(
           "UPDATE memories SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ? WHERE tenant_id = ? AND id = ?"
-        ).bind(
-          item.project_id ?? null,
-          item.content,
-          item.summary ?? null,
-          tagsJson,
-          source,
-          createdAt,
-          tenantId,
-          existing.id
-        ),
-        env.OPEN_BRAIN_DB.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(
-          existing.id,
-          tenantId
-        ),
+        ).bind(item.project_id ?? null, item.content, item.summary ?? null, tagsJson, source, createdAt, tenantId, existingId),
+        env.OPEN_BRAIN_DB.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(existingId, tenantId),
         env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
-          existing.id,
+          existingId,
           tenantId,
           item.content
         )
-      ]);
+      );
       updated += 1;
       continue;
     }
 
     const id = ulid();
-    await env.OPEN_BRAIN_DB.batch([
+    statements.push(
       env.OPEN_BRAIN_DB.prepare(
         "INSERT INTO memories(id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at) VALUES(?,?,?,?,?,?,?,?,?)"
-      ).bind(
-        id,
-        tenantId,
-        item.project_id ?? null,
-        item.content,
-        item.summary ?? null,
-        tagsJson,
-        source,
-        item.external_key,
-        createdAt
-      ),
+      ).bind(id, tenantId, item.project_id ?? null, item.content, item.summary ?? null, tagsJson, source, externalKey, createdAt),
       env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
         id,
         tenantId,
         item.content
       )
-    ]);
+    );
     inserted += 1;
   }
+
+  await runBatchChunks(env.OPEN_BRAIN_DB, statements);
 
   return {
     tenant_id: tenantId,
@@ -213,4 +339,14 @@ export async function listMemories(env: Env, tenantId: string, limit = 100, sour
     external_key: row.external_key,
     created_at: row.created_at
   }));
+}
+
+export async function searchMemories(env: Env, rawBody: unknown): Promise<MemorySearchResponse> {
+  const request = parseSearchRequest(rawBody);
+  return searchTenantMemories(env.OPEN_BRAIN_DB, request);
+}
+
+export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<MemoryProfileResponse> {
+  const request = parseProfileRequest(rawBody);
+  return buildTenantMemoryProfile(env.OPEN_BRAIN_DB, request);
 }
