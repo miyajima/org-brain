@@ -53,23 +53,6 @@ async function routeCreated(env: Env, message: Envelope<TaskCreatedPayload>) {
   }
 }
 
-async function relayToWorkflow(env: Env, message: Envelope<TaskResultPayload>) {
-  if (!message.trace_id || !message.payload.wait_event_type) {
-    return;
-  }
-
-  const instance = await env.WF_SPEC2CODE.get(message.trace_id);
-  await instance.sendEvent({
-    type: message.payload.wait_event_type,
-    payload: {
-      task_id: message.payload.task_id,
-      status: message.payload.status,
-      output_ref: message.payload.output_ref,
-      error: message.payload.error
-    }
-  });
-}
-
 async function handleResult(env: Env, message: Envelope<TaskResultPayload>) {
   if (!validateTaskResultPayload(message.payload)) {
     throw new Error("invalid task.result payload");
@@ -97,8 +80,6 @@ async function handleResult(env: Env, message: Envelope<TaskResultPayload>) {
       error: message.payload.error
     });
   }
-
-  await relayToWorkflow(env, message);
 }
 
 export async function handleEnvelope(env: Env, raw: unknown): Promise<void> {

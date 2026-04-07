@@ -10,8 +10,3 @@ database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
 [[queues.producers]]
 binding = "ORG_BUS_OUT"
 queue = "org-bus"
-
-[[workflows]]
-name = "spec-to-code"
-binding = "WF_SPEC2CODE"
-class_name = "SpecToCodeWorkflow"

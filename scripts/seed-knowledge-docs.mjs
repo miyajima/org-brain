@@ -105,7 +105,6 @@ Start here for the stable maps of contents.
 
 - [[projects/org-brain/_index]]
 - [[capabilities/_index]]
-- [[workflows/_index]]
 - [[policies/_index]]`
       )
     },
@@ -131,28 +130,6 @@ Start here for the stable maps of contents.
 - [[capabilities/memory-retrieval]]
 - [[capabilities/knowledge-docs]]
 - [[capabilities/hook-memory-bridge]]`
-      )
-    },
-    {
-      scope: "workflow",
-      kind: "moc",
-      title: "Workflows",
-      slug: "workflows/_index",
-      markdown: renderMarkdown(
-        {
-          id: "org-brain-workflows-index",
-          title: "Workflows",
-          scope: "workflow",
-          kind: "moc",
-          tags: ["workflow", "navigation"],
-          stability: "stable",
-          updated_at: updatedAt,
-          related: ["ORG"],
-          summary: "Entry point for workflow docs."
-        },
-        `# Workflows
-
-- [[workflows/spec-to-code]]`
       )
     },
     {
@@ -200,7 +177,6 @@ Start here for the stable maps of contents.
 
 - [[projects/org-brain/current-state]]
 - [[capabilities/_index]]
-- [[workflows/_index]]
 - [[policies/_index]]`
       )
     },
@@ -219,7 +195,7 @@ Start here for the stable maps of contents.
           stability: "stable",
           updated_at: updatedAt,
           project: "org-brain",
-          related: ["projects/org-brain/_index", "capabilities/memory-retrieval", "workflows/spec-to-code"],
+          related: ["projects/org-brain/_index", "capabilities/memory-retrieval"],
           summary: "Current topology, storage, and operator commands for Org Brain."
         },
         `# Current State
@@ -231,7 +207,6 @@ Org Brain runs as a Cloudflare-based org bus MVP.
 - API: \`open-brain-api-gateway\`
 - Queue router: \`open-brain-org-router\`
 - Capability runner: \`open-brain-cap-runner\`
-- Workflow host: \`open-brain-orchestrator\`
 - Console: \`open-brain-console\`
 
 ## Source Of Truth
@@ -369,35 +344,6 @@ The shared bridge normalizes local agent hook payloads and upserts reusable memo
 - Upserts go through \`POST /v1/memories/upsert\`.
 
 Operational policy is described in [[policies/memory-operations]].`
-      )
-    },
-    {
-      scope: "workflow",
-      kind: "workflow",
-      title: "Spec To Code Workflow",
-      slug: "workflows/spec-to-code",
-      markdown: renderMarkdown(
-        {
-          id: "workflow-spec-to-code",
-          title: "Spec To Code Workflow",
-          scope: "workflow",
-          kind: "workflow",
-          tags: ["workflow", "spec-to-code", "tasks"],
-          stability: "stable",
-          updated_at: updatedAt,
-          workflow: "spec-to-code",
-          related: ["projects/org-brain/current-state"],
-          summary: "Sequential workflow that runs plan_writer, code_gen, and code_review tasks."
-        },
-        `# Spec To Code Workflow
-
-This workflow runs three tasks in order:
-
-1. \`plan_writer\`
-2. \`code_gen\`
-3. \`code_review\`
-
-Each step waits on a \`task.result\` event before moving to the next stage.`
       )
     },
     {

@@ -269,38 +269,6 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
-      "orgbrain_workflow_spec_to_code_start",
-      {
-        tenant_id: z.string().optional(),
-        project_id: z.string().min(1),
-        spec_ref: z.string().min(1)
-      },
-      async ({ tenant_id, project_id, spec_ref }) => {
-        const tenantId = resolveTenant(tenant_id, this.props);
-        const data = await callOrgBrainApi<unknown>(this.env, "/v1/workflows/spec-to-code", {
-          method: "POST",
-          body: {
-            tenant_id: tenantId,
-            project_id,
-            spec_ref
-          }
-        });
-        return asJsonContent(data);
-      }
-    );
-
-    this.server.tool(
-      "orgbrain_workflow_spec_to_code_status",
-      {
-        instance_id: z.string().min(1)
-      },
-      async ({ instance_id }) => {
-        const route = `/v1/workflows/spec-to-code/${encodeURIComponent(instance_id)}`;
-        const data = await callOrgBrainApi<unknown>(this.env, route);
-        return asJsonContent(data);
-      }
-    );
   }
 }
 

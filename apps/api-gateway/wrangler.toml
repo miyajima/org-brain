@@ -24,9 +24,3 @@ bindings = [
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["OrgBrainMCP"]
-
-[[workflows]]
-name = "spec-to-code"
-binding = "WF_SPEC2CODE"
-class_name = "SpecToCodeWorkflow"
-script_name = "open-brain-orchestrator"

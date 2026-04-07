@@ -1,8 +1,8 @@
-import { HttpError, workflowStartSchema } from "@org-brain/shared";
+import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
 import { apiKeyAuth, jsonOk } from "./auth";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
-import { getMemoryProfile, listMemories, searchMemories, upsertMemories } from "./memory-service";
+import { getMemoryProfile, listMemories, listMemoriesPage, searchMemories, upsertMemories } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
 import type { Env } from "./types";
@@ -47,8 +47,26 @@ app.get("/v1/tasks/:taskId/events", async (c) => {
 app.get("/v1/memories", async (c) => {
   const tenantId = c.req.query("tenant_id") ?? "default";
   const source = c.req.query("source");
+  const projectId = c.req.query("project_id");
   const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
-  const memories = await listMemories(c.env, tenantId, Number.isNaN(limit) ? 100 : limit, source);
+  const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const paginated = c.req.query("paginated") === "1";
+  if (paginated) {
+    const page = await listMemoriesPage(c.env, tenantId, {
+      limit: Number.isNaN(limit) ? 24 : limit,
+      offset: Number.isNaN(offset) ? 0 : offset,
+      source,
+      projectId
+    });
+    return jsonOk(c, page);
+  }
+
+  const memories = await listMemories(c.env, tenantId, {
+    limit: Number.isNaN(limit) ? 100 : limit,
+    offset: Number.isNaN(offset) ? 0 : offset,
+    source,
+    projectId
+  });
   return jsonOk(c, memories);
 });
 
@@ -94,27 +112,6 @@ app.get("/v1/docs/:slug{.+}", async (c) => {
   const tenantId = c.req.query("tenant_id") ?? "default";
   const result = await getKnowledgeDoc(c.env, tenantId, slug);
   return jsonOk(c, result);
-});
-
-app.post("/v1/workflows/spec-to-code", async (c) => {
-  const body = workflowStartSchema.parse(await c.req.json<unknown>());
-  const instance = await c.env.WF_SPEC2CODE.create({
-    id: `${body.project_id}-${Date.now()}`,
-    params: {
-      tenant_id: body.tenant_id ?? "default",
-      project_id: body.project_id,
-      spec_ref: body.spec_ref
-    }
-  });
-
-  return jsonOk(c, { instance_id: instance.id }, 201);
-});
-
-app.get("/v1/workflows/spec-to-code/:instanceId", async (c) => {
-  const instanceId = c.req.param("instanceId");
-  const instance = await c.env.WF_SPEC2CODE.get(instanceId);
-  const status = await instance.status();
-  return jsonOk(c, status);
 });
 
 app.onError((err, c) => {

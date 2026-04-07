@@ -25,9 +25,3 @@ queue = "cap-code"
 [[queues.producers]]
 binding = "CAP_REVIEW_OUT"
 queue = "cap-review"
-
-[[workflows]]
-name = "spec-to-code"
-binding = "WF_SPEC2CODE"
-class_name = "SpecToCodeWorkflow"
-script_name = "open-brain-orchestrator"

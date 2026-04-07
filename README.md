@@ -6,7 +6,6 @@ Cloudflare-based org bus MVP with Hono API and Astro console.
 - `apps/api-gateway` - Hono API Worker
 - `apps/org-router` - org-bus Queue router Worker
 - `apps/cap-runner` - capability workers + DOs
-- `apps/orchestrator` - Workflow host
 - `apps/mcp` - legacy Remote MCP Worker (kept for compatibility)
 - `apps/console` - Astro Pages console
 - `packages/shared` - shared types/schemas/utils
@@ -17,11 +16,32 @@ Cloudflare-based org bus MVP with Hono API and Astro console.
 2. Configure `wrangler.toml` values (`database_id`, bucket, queues, API keys)
 3. Apply migrations to D1 (`migrations/*.sql`)
 4. Deploy workers/pages in dependency order:
-   - orchestrator
    - cap-runner
    - org-router
    - api-gateway
+   - mcp
    - console
+
+## Local Development
+The console can run locally without a Cloudflare service binding by using an API base URL fallback.
+
+1. Copy the example vars files:
+   - `cp apps/api-gateway/.dev.vars.example apps/api-gateway/.dev.vars`
+   - `cp apps/console/.dev.vars.example apps/console/.dev.vars`
+2. Set the same API key in both files:
+   - `apps/api-gateway/.dev.vars` → `API_KEY`
+   - `apps/console/.dev.vars` → `INTERNAL_API_KEY`
+3. Point `apps/console/.dev.vars` at either:
+   - a local API gateway (`API_BASE_URL=http://127.0.0.1:8787`)
+   - or a deployed API gateway host
+4. Start the console with `pnpm -C apps/console dev`
+5. If you want the API gateway local too, prepare the local D1 database once:
+   - `pnpm -C apps/api-gateway wrangler d1 migrations apply open-brain --local -c wrangler.local.toml`
+6. Then run the local gateway in a second terminal:
+   - `pnpm -C apps/api-gateway wrangler dev --port 8787 -c wrangler.local.toml`
+7. Keep the same `API_KEY` value in both apps so the console proxy can authenticate against the API gateway
+
+The console proxy will use the Cloudflare service binding when available and fall back to `API_BASE_URL` when the binding is missing.
 
 ## Commands
 - `pnpm typecheck`
@@ -217,4 +237,4 @@ Memory tools now include:
 - `orgbrain_memories_profile`
 
 See [docs/REMOTE_MCP.md](/Users/miya/projects/org-brain/docs/REMOTE_MCP.md) for client config and skill usage.
-See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that wraps the same workflow.
+See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that reports the same usage snapshot.

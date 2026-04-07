@@ -1,6 +1,6 @@
 ---
 name: org-brain-mcp
-description: "Use OrgBrain Remote MCP tools for memory/task/workflow operations. Prefer MCP over direct API calls or local SQLite access."
+description: "Use OrgBrain Remote MCP tools for memory/task operations. Prefer MCP over direct API calls or local SQLite access."
 metadata:
   {
     "openclaw": {
@@ -12,7 +12,7 @@ metadata:
 
 # OrgBrain MCP Skill
 
-Use this skill when the user asks to read/write OrgBrain memory, create tasks, inspect task events, or run/check spec-to-code workflows.
+Use this skill when the user asks to read/write OrgBrain memory, create tasks, or inspect task events.
 
 ## Rules
 1. Prefer MCP tools over direct HTTP calls.
@@ -28,8 +28,6 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, i
 - Create task: `orgbrain_task_create`
 - Get task: `orgbrain_task_get`
 - Get events: `orgbrain_task_events`
-- Start workflow: `orgbrain_workflow_spec_to_code_start`
-- Check workflow: `orgbrain_workflow_spec_to_code_status`
 
 ## Operational Notes
 - OrgBrain master memory is Cloudflare D1.

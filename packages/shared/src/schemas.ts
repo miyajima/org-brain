@@ -13,12 +13,6 @@ export const createTaskSchema = z.object({
   wait_event_type: z.string().min(1).optional()
 });
 
-export const workflowStartSchema = z.object({
-  tenant_id: z.string().min(1).default("default").optional(),
-  project_id: z.string().min(1),
-  spec_ref: z.string().min(1)
-});
-
 export const leaseAcquireSchema = z.object({
   task_id: z.string().min(1),
   ttl_ms: z.number().int().min(1000).max(60 * 60 * 1000).default(60_000).optional(),

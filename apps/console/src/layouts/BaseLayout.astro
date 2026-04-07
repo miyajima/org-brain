@@ -1,84 +1,246 @@
 ---
 const { title = "Org Brain Console" } = Astro.props;
+const currentPath = Astro.url.pathname;
+
+const isActive = (href: string) => {
+  if (href === "/") return currentPath === "/";
+  if (href === "/tasks") return currentPath === "/tasks" || (currentPath.startsWith("/tasks/") && currentPath !== "/tasks/new");
+  if (href === "/tasks/new") return currentPath === "/tasks/new";
+  return currentPath === href;
+};
 ---
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" href="data:," />
     <title>{title}</title>
     <style>
       :root {
-        --bg: #f4f6f8;
-        --panel: #ffffff;
-        --text: #111827;
-        --muted: #6b7280;
-        --accent: #0f766e;
-        --line: #e5e7eb;
+        --bg: #f5f5f7;
+        --bg-deep: #000000;
+        --surface: #ffffff;
+        --surface-muted: #f5f5f7;
+        --surface-strong: #fffdf8;
+        --text: #1d1d1f;
+        --muted: rgba(0, 0, 0, 0.72);
+        --accent: #0071e3;
+        --accent-strong: #2997ff;
+        --link: #0066cc;
+        --line: rgba(0, 0, 0, 0.08);
+        --line-strong: rgba(0, 0, 0, 0.14);
+        --shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+        --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.08);
+        --warning-surface: #fff7f3;
+        --warning-text: #9a3412;
+        --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
       }
 
       body {
         margin: 0;
         padding: 0;
-        font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
-        background: radial-gradient(circle at top right, #d1fae5 0%, var(--bg) 40%);
+        font-family: var(--font-body);
+        background: var(--bg);
         color: var(--text);
+        min-height: 100vh;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       main {
-        max-width: 980px;
+        max-width: 1180px;
         margin: 0 auto;
-        padding: 20px;
+        padding: 18px 16px 48px;
       }
 
       nav {
+        position: sticky;
+        top: 12px;
+        z-index: 30;
         display: flex;
-        gap: 12px;
-        margin-bottom: 20px;
+        gap: 8px;
+        margin: 12px auto 18px;
+        max-width: 1180px;
         flex-wrap: wrap;
+        align-items: center;
+        padding: 10px 14px;
+        border-radius: 18px;
+        background: rgba(0, 0, 0, 0.82);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+        backdrop-filter: saturate(180%) blur(20px);
+      }
+
+      .brand {
+        margin-right: auto;
+        padding-right: 10px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        white-space: nowrap;
       }
 
       a.nav-link {
         text-decoration: none;
-        color: var(--accent);
-        font-weight: 600;
+        color: rgba(255, 255, 255, 0.84);
+        font-weight: 500;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        padding: 7px 12px;
+        border-radius: 999px;
+        transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+      }
+
+      a.nav-link:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        transform: translateY(-1px);
+      }
+
+      a.nav-link:focus-visible,
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      a.nav-link[aria-current="page"] {
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
       }
 
       .card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 16px;
+        background: var(--surface);
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        border-radius: 18px;
+        padding: 20px;
         margin-bottom: 16px;
+        box-shadow: var(--shadow-soft);
       }
 
-      input, textarea, select, button {
+      h1, h2, h3 {
+        margin: 0;
+        color: var(--text);
+        font-family: var(--font-body);
+        letter-spacing: -0.02em;
+        line-height: 1.12;
+      }
+
+      h1 {
+        font-size: clamp(2.2rem, 4.6vw, 3.5rem);
+        font-weight: 600;
+      }
+
+      h2 {
+        font-size: clamp(1.35rem, 3vw, 2rem);
+        font-weight: 600;
+      }
+
+      h3 {
+        font-size: 1.05rem;
+        font-weight: 600;
+      }
+
+      p {
+        line-height: 1.47;
+      }
+
+      a {
+        color: var(--link);
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      label {
+        display: block;
+        margin: 0 0 6px;
+        color: rgba(29, 29, 31, 0.72);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      input, textarea, select {
         width: 100%;
         box-sizing: border-box;
-        padding: 10px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        margin-top: 6px;
+        padding: 12px 14px;
         margin-bottom: 12px;
         font: inherit;
+        background: #ffffff;
+        color: var(--text);
+        min-height: 48px;
+        border: 1px solid var(--line-strong);
+        border-radius: 11px;
+        transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
       }
 
       button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 8px 18px;
         background: var(--accent);
         color: #fff;
         cursor: pointer;
-        border: 0;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        font: inherit;
+        font-weight: 600;
+        box-shadow: 0 8px 20px rgba(0, 113, 227, 0.18);
+        transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+      }
+
+      button:hover {
+        background: #0a84ff;
+        transform: translateY(-1px);
+      }
+
+      button:active {
+        transform: translateY(0);
+        box-shadow: 0 5px 12px rgba(0, 113, 227, 0.14);
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
+        border-spacing: 0;
       }
 
       th, td {
         text-align: left;
         border-bottom: 1px solid var(--line);
-        padding: 8px;
+        padding: 12px 8px;
         font-size: 14px;
+        vertical-align: top;
+      }
+
+      th {
+        color: rgba(29, 29, 31, 0.66);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       .muted {
@@ -87,23 +249,61 @@ const { title = "Org Brain Console" } = Astro.props;
 
       pre {
         white-space: pre-wrap;
-        background: #f9fafb;
+        background: #f5f5f7;
         border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 10px;
+        border-radius: 14px;
+        padding: 14px;
         font-size: 12px;
+        line-height: 1.5;
+        overflow: auto;
+        margin: 0;
+      }
+
+      code, kbd {
+        font-family: var(--font-mono);
+      }
+
+      .card + .card {
+        margin-top: 16px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      @media (max-width: 720px) {
+        main {
+          padding-inline: 12px;
+        }
+
+        nav {
+          top: 8px;
+          padding: 10px 12px;
+        }
+
+        .brand {
+          margin-right: 0;
+        }
       }
     </style>
   </head>
   <body>
-    <main>
+    <div class="app-shell">
       <nav>
-        <a class="nav-link" href="/">Dashboard</a>
-        <a class="nav-link" href="/tasks/new">Task作成</a>
-        <a class="nav-link" href="/tasks">Task一覧</a>
-        <a class="nav-link" href="/workflows/spec-to-code">Workflow</a>
+        <span class="brand">Org Brain</span>
+        <a class="nav-link" href="/" aria-current={isActive("/") ? "page" : undefined}>Dashboard</a>
+        <a class="nav-link" href="/memories" aria-current={isActive("/memories") ? "page" : undefined}>Memories</a>
+        <a class="nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>Task作成</a>
+        <a class="nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>Task一覧</a>
       </nav>
+      <main>
       <slot />
-    </main>
+      </main>
+    </div>
   </body>
 </html>

@@ -28,15 +28,15 @@ related:
 This capability reviews generated code for correctness and maintainability.
 
 See [[policies/security-handling]]
-See [[workflows/spec-to-code|Spec To Code]]
+See [[capabilities/memory-retrieval|Memory Retrieval]]
 `);
 
     expect(parsed.frontmatter.id).toBe("capability-code-review");
     expect(parsed.frontmatter.tags).toEqual(["review", "quality"]);
-    expect(parsed.wikiLinks).toEqual(["policies/security-handling", "workflows/spec-to-code"]);
+    expect(parsed.wikiLinks).toEqual(["policies/security-handling", "capabilities/memory-retrieval"]);
     expect(parsed.linkTargets).toEqual([
       "policies/security-handling",
-      "workflows/spec-to-code"
+      "capabilities/memory-retrieval"
     ]);
     expect(parsed.summary).toContain("reviews generated code");
   });

@@ -1,4 +1,4 @@
-import { HttpError, workflowStartSchema } from "@org-brain/shared";
+import { HttpError } from "@org-brain/shared";
 import type { Hono } from "hono";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
@@ -53,7 +53,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       },
       async ({ tenant_id, source, limit }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
-        const memories = await listMemories(this.env, tenantId, limit ?? 100, source);
+        const memories = await listMemories(this.env, tenantId, { limit: limit ?? 100, source });
         return toContent(memories);
       }
     );
@@ -190,44 +190,6 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
-      "orgbrain_workflow_spec_to_code_start",
-      {
-        tenant_id: z.string().optional(),
-        project_id: z.string().min(1),
-        spec_ref: z.string().min(1)
-      },
-      async ({ tenant_id, project_id, spec_ref }) => {
-        const tenantId = normalizeTenant(tenant_id, this.props);
-        const validated = workflowStartSchema.parse({
-          tenant_id: tenantId,
-          project_id,
-          spec_ref
-        });
-
-        const instance = await this.env.WF_SPEC2CODE.create({
-          id: `${validated.project_id}-${Date.now()}`,
-          params: {
-            tenant_id: validated.tenant_id ?? "default",
-            project_id: validated.project_id,
-            spec_ref: validated.spec_ref
-          }
-        });
-
-        return toContent({ instance_id: instance.id });
-      }
-    );
-
-    this.server.tool(
-      "orgbrain_workflow_spec_to_code_status",
-      {
-        instance_id: z.string().min(1)
-      },
-      async ({ instance_id }) => {
-        const instance = await this.env.WF_SPEC2CODE.get(instance_id);
-        return toContent(await instance.status());
-      }
-    );
   }
 }
 

@@ -74,7 +74,6 @@ describe("createTask", () => {
       OPEN_BRAIN_DB: db,
       OPEN_BRAIN_BUCKET: {},
       API_KEY: "x",
-      WF_SPEC2CODE: {},
       ORG_BUS_OUT: {
         send: async (payload: unknown) => {
           sent.push(payload);
