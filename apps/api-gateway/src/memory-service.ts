@@ -61,6 +61,39 @@ type MemoryProfileRequest = {
   search_mode?: MemorySearchMode;
 };
 
+type ListMemoriesOptions = {
+  limit?: number;
+  offset?: number;
+  source?: string;
+  projectId?: string | null;
+};
+
+export type MemoryListPage = {
+  tenant_id: string;
+  project_id: string | null;
+  source: string | null;
+  items: Array<{
+    id: string;
+    project_id: string | null;
+    content: string;
+    summary: string | null;
+    tags: string[];
+    source: string;
+    external_key: string | null;
+    created_at: number;
+  }>;
+  meta: {
+    limit: number;
+    offset: number;
+    total: number;
+    has_next: boolean;
+    has_prev: boolean;
+    canonical_count: number;
+    digest_count: number;
+    compacted_count: number;
+  };
+};
+
 function parseString(value: unknown, field: string): string {
   if (typeof value !== "string") {
     throw new HttpError(400, "invalid_payload", `${field} must be a string`);
@@ -252,6 +285,24 @@ async function runBatchChunks(db: D1Database, statements: D1PreparedStatement[])
   }
 }
 
+function buildMemoryListFilterSql(options: { source?: string; projectId?: string | null }) {
+  const clauses: string[] = [];
+  const bindings: unknown[] = [];
+
+  if (typeof options.source === "string" && options.source.trim().length > 0) {
+    clauses.push("source = ?");
+    bindings.push(options.source.trim());
+  }
+
+  if (typeof options.projectId === "string" && options.projectId.trim().length > 0) {
+    clauses.push("project_id = ?");
+    bindings.push(options.projectId.trim());
+  }
+
+  const sql = clauses.length > 0 ? ` AND ${clauses.join(" AND ")}` : "";
+  return { sql, bindings };
+}
+
 export async function upsertMemories(env: Env, rawBody: unknown) {
   const { tenantId, source, items } = parseUpsertRequest(rawBody);
   let inserted = 0;
@@ -309,25 +360,20 @@ export async function upsertMemories(env: Env, rawBody: unknown) {
   };
 }
 
-export async function listMemories(env: Env, tenantId: string, limit = 100, source?: string) {
-  const safeLimit = Math.max(1, Math.min(500, limit));
-  const hasSource = typeof source === "string" && source.trim().length > 0;
-  const sql = hasSource
-    ? `SELECT id, project_id, content, summary, tags_json, source, external_key, created_at
-       FROM memories
-       WHERE tenant_id = ? AND source = ?
-       ORDER BY created_at DESC
-       LIMIT ?`
-    : `SELECT id, project_id, content, summary, tags_json, source, external_key, created_at
-       FROM memories
-       WHERE tenant_id = ?
-       ORDER BY created_at DESC
-       LIMIT ?`;
-
-  const stmt = env.OPEN_BRAIN_DB.prepare(sql);
-  const result = hasSource
-    ? await stmt.bind(tenantId, source?.trim(), safeLimit).all<MemoryRow>()
-    : await stmt.bind(tenantId, safeLimit).all<MemoryRow>();
+export async function listMemories(env: Env, tenantId: string, options: ListMemoriesOptions = {}) {
+  const safeLimit = Math.max(1, Math.min(500, options.limit ?? 100));
+  const safeOffset = Math.max(0, options.offset ?? 0);
+  const filter = buildMemoryListFilterSql({ source: options.source, projectId: options.projectId });
+  const result = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, project_id, content, summary, tags_json, source, external_key, created_at
+     FROM memories
+     WHERE tenant_id = ?${filter.sql}
+     ORDER BY created_at DESC
+     LIMIT ?
+     OFFSET ?`
+  )
+    .bind(tenantId, ...filter.bindings, safeLimit, safeOffset)
+    .all<MemoryRow>();
 
   return result.results.map((row) => ({
     id: row.id,
@@ -339,6 +385,56 @@ export async function listMemories(env: Env, tenantId: string, limit = 100, sour
     external_key: row.external_key,
     created_at: row.created_at
   }));
+}
+
+export async function listMemoriesPage(env: Env, tenantId: string, options: ListMemoriesOptions = {}): Promise<MemoryListPage> {
+  const safeLimit = Math.max(1, Math.min(100, options.limit ?? 24));
+  const safeOffset = Math.max(0, options.offset ?? 0);
+  const filter = buildMemoryListFilterSql({ source: options.source, projectId: options.projectId });
+  const items = await listMemories(env, tenantId, {
+    limit: safeLimit,
+    offset: safeOffset,
+    source: options.source,
+    projectId: options.projectId
+  });
+
+  const countRows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN tags_json LIKE '%"canonical-memory"%' THEN 1 ELSE 0 END) AS canonical_count,
+       SUM(CASE WHEN tags_json LIKE '%"memory-digest"%' THEN 1 ELSE 0 END) AS digest_count,
+       SUM(CASE WHEN tags_json LIKE '%"compacted"%' THEN 1 ELSE 0 END) AS compacted_count
+     FROM memories
+     WHERE tenant_id = ?${filter.sql}`
+  )
+    .bind(tenantId, ...filter.bindings)
+    .all<{
+      total: number | null;
+      canonical_count: number | null;
+      digest_count: number | null;
+      compacted_count: number | null;
+    }>();
+
+  const countResult = countRows.results[0];
+
+  const total = Number(countResult?.total ?? 0);
+
+  return {
+    tenant_id: tenantId,
+    project_id: options.projectId?.trim() || null,
+    source: options.source?.trim() || null,
+    items,
+    meta: {
+      limit: safeLimit,
+      offset: safeOffset,
+      total,
+      has_next: safeOffset + items.length < total,
+      has_prev: safeOffset > 0,
+      canonical_count: Number(countResult?.canonical_count ?? 0),
+      digest_count: Number(countResult?.digest_count ?? 0),
+      compacted_count: Number(countResult?.compacted_count ?? 0)
+    }
+  };
 }
 
 export async function searchMemories(env: Env, rawBody: unknown): Promise<MemorySearchResponse> {

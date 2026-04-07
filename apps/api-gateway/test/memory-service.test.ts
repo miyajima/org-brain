@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getMemoryProfile, listMemories, searchMemories, upsertMemories } from "../src/memory-service";
+import { getMemoryProfile, listMemories, listMemoriesPage, searchMemories, upsertMemories } from "../src/memory-service";
 
 type MemoryRecord = {
   id: string;
@@ -149,20 +149,52 @@ class FakeStatement {
       return { results: rows as T[] };
     }
 
+    if (this.sql.includes("COUNT(*) AS total") && this.sql.includes("FROM memories")) {
+      const tenantId = this.args[0] as string;
+      const hasSource = this.sql.includes("source = ?");
+      const hasProject = this.sql.includes("AND project_id = ?");
+      let cursor = 1;
+      const source = hasSource ? (this.args[cursor++] as string) : null;
+      const projectId = hasProject ? (this.args[cursor] as string) : null;
+      const rows = this.db.memories.filter((memory) => {
+        if (memory.tenant_id !== tenantId) return false;
+        if (source && memory.source !== source) return false;
+        if (projectId && memory.project_id !== projectId) return false;
+        return true;
+      });
+      return {
+        results: [{
+          total: rows.length,
+          canonical_count: rows.filter((memory) => parseTags(memory.tags_json).includes("canonical-memory")).length,
+          digest_count: rows.filter((memory) => parseTags(memory.tags_json).includes("memory-digest")).length,
+          compacted_count: rows.filter((memory) => parseTags(memory.tags_json).includes("compacted")).length
+        }] as T[]
+      };
+    }
+
     if (this.sql.includes("FROM memories") && this.sql.includes("ORDER BY") && !this.sql.includes("FROM memories_fts")) {
       const tenantId = this.args[0] as string;
+      const hasSource = this.sql.includes("source = ?");
       const hasProjectPriority = this.sql.includes("CASE WHEN memories.project_id = ?");
-      const projectId = hasProjectPriority ? (this.args[1] as string) : null;
-      const limit = this.args[this.args.length - 1] as number;
+      const hasProjectFilter = this.sql.includes("AND project_id = ?");
+      const hasOffset = this.sql.includes("OFFSET ?");
+      let cursor = 1;
+      const source = hasSource ? (this.args[cursor++] as string) : null;
+      const projectFilter = hasProjectFilter ? (this.args[cursor++] as string) : null;
+      const projectId = hasProjectPriority ? (this.args[cursor++] as string) : null;
+      const limit = this.args[this.args.length - (hasOffset ? 2 : 1)] as number;
+      const offset = hasOffset ? (this.args[this.args.length - 1] as number) : 0;
       const rows = this.db.memories
         .filter((memory) => memory.tenant_id === tenantId)
+        .filter((memory) => !source || memory.source === source)
+        .filter((memory) => !projectFilter || memory.project_id === projectFilter)
         .sort((left, right) => {
           const projectSort =
             (projectId && left.project_id === projectId ? 0 : 1) - (projectId && right.project_id === projectId ? 0 : 1);
           if (projectSort !== 0) return projectSort;
           return right.created_at - left.created_at;
         })
-        .slice(0, limit);
+        .slice(offset, offset + limit);
       return { results: rows as T[] };
     }
 
@@ -268,7 +300,7 @@ describe("memory-service", () => {
     });
     expect(second).toMatchObject({ inserted: 0, updated: 1 });
 
-    const listed = await listMemories(env, "default", 10, "openclaw");
+    const listed = await listMemories(env, "default", { limit: 10, source: "openclaw" });
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       external_key: "openclaw:c1",
@@ -484,5 +516,57 @@ describe("memory-service", () => {
       limit_recent: 8
     });
     expect(profile.recent.map((item) => item.id)).toContain("raw-1");
+  });
+
+  it("returns paginated memory listing metadata for corpus browsing", async () => {
+    const db = new FakeD1();
+    db.memories = [
+      {
+        id: "m3",
+        tenant_id: "default",
+        project_id: "proj1",
+        content: "third",
+        summary: "third",
+        tags_json: JSON.stringify(["memory-digest"]),
+        source: "claude",
+        external_key: "m3",
+        created_at: 3000
+      },
+      {
+        id: "m2",
+        tenant_id: "default",
+        project_id: "proj1",
+        content: "second",
+        summary: "second",
+        tags_json: JSON.stringify(["canonical-memory"]),
+        source: "claude",
+        external_key: "m2",
+        created_at: 2000
+      },
+      {
+        id: "m1",
+        tenant_id: "default",
+        project_id: "proj2",
+        content: "first",
+        summary: "first",
+        tags_json: JSON.stringify(["compacted"]),
+        source: "codex",
+        external_key: "m1",
+        created_at: 1000
+      }
+    ];
+
+    const env = { OPEN_BRAIN_DB: db } as any;
+    const page = await listMemoriesPage(env, "default", { limit: 2, offset: 0 });
+
+    expect(page.items.map((item) => item.id)).toEqual(["m3", "m2"]);
+    expect(page.meta).toMatchObject({
+      total: 3,
+      has_next: true,
+      has_prev: false,
+      canonical_count: 1,
+      digest_count: 1,
+      compacted_count: 1
+    });
   });
 });
