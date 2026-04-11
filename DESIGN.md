@@ -97,6 +97,8 @@ Filter and search controls:
 - Radius: `11px`
 - Border: subtle and mostly neutral
 - Inputs should feel immediate, not buried in chrome
+- Inputs should never look browser-default; treat text fields as first-class surfaces.
+- Use Tailwind CSS v4 in the console so the shared field treatment is consistent across pages.
 
 ## 7. Layout
 
@@ -109,6 +111,8 @@ Filter and search controls:
 
 - Hero: concise title, one-line framing, and compact status chips.
 - Command bar: dominant query input, visible tenant and project filters, secondary view switches.
+- Search should surface recent memory context before the user types anything.
+- Search should offer suggestion chips or autocomplete derived from actual memory/tag data.
 - Metrics strip: visible rows, canonical rows, digest rows, compacted rows, durable count, recent count.
 - Search results: rank, source, type, title, preview, created date, score.
 - Profile: durable lane and recent lane should feel parallel but distinct.

@@ -11,6 +11,11 @@ type MemoryRecord = {
   source: string;
   external_key: string | null;
   created_at: number;
+  lifecycle_state?: string | null;
+  kind?: string | null;
+  consolidated_at?: number | null;
+  revised_at?: number | null;
+  suppressed_at?: number | null;
 };
 
 type MemoryFtsRecord = {
@@ -48,6 +53,7 @@ class FakeStatement {
       const allowed = new Set(this.args.slice(1).map((value) => String(value)));
       const rows = this.db.memories
         .filter((row) => row.tenant_id === tenantId)
+        .filter((row) => row.lifecycle_state !== "suppressed")
         .filter((row) => !String(row.tags_json ?? "").includes("\"compacted\""))
         .filter((row) => allowed.has(row.source))
         .sort((left, right) => right.created_at - left.created_at);
@@ -80,14 +86,16 @@ class FakeStatement {
         tags_json: (this.args[5] as string | null) ?? null,
         source: String(this.args[6]),
         external_key: (this.args[7] as string | null) ?? null,
-        created_at: Number(this.args[8])
+        created_at: Number(this.args[8]),
+        kind: "episodic",
+        lifecycle_state: "active"
       });
       return { success: true };
     }
 
     if (this.sql.startsWith("UPDATE memories SET project_id = ?")) {
       const row = this.db.memories.find(
-        (memory) => memory.tenant_id === String(this.args[6]) && memory.id === String(this.args[7])
+        (memory) => memory.tenant_id === String(this.args[10]) && memory.id === String(this.args[11])
       );
       if (row) {
         row.project_id = (this.args[0] as string | null) ?? null;
@@ -96,15 +104,24 @@ class FakeStatement {
         row.tags_json = (this.args[3] as string | null) ?? null;
         row.source = String(this.args[4]);
         row.created_at = Number(this.args[5]);
+        row.kind = String(this.args[6]);
+        row.lifecycle_state = String(this.args[7]);
+        row.consolidated_at = Number(this.args[8]);
+        row.revised_at = Number(this.args[9]);
       }
       return { success: true };
     }
 
     if (this.sql.startsWith("UPDATE memories SET tags_json = ?")) {
       const row = this.db.memories.find(
-        (memory) => memory.tenant_id === String(this.args[1]) && memory.id === String(this.args[2])
+        (memory) => memory.tenant_id === String(this.args[4]) && memory.id === String(this.args[5])
       );
-      if (row) row.tags_json = String(this.args[0]);
+      if (row) {
+        row.tags_json = String(this.args[0]);
+        row.lifecycle_state = String(this.args[1]);
+        row.suppressed_at = Number(this.args[2]);
+        row.revised_at = Number(this.args[3]);
+      }
       return { success: true };
     }
 

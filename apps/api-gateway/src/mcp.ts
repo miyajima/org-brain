@@ -6,7 +6,14 @@ import { z } from "zod";
 import { authorizeMcpRequest } from "./mcp-security";
 import { getTask, getTaskEvents, createTask } from "./task-service";
 import type { Env } from "./types";
-import { getMemoryProfile, listMemories, searchMemories, upsertMemories } from "./memory-service";
+import {
+  getMemoryProfile,
+  listMemories,
+  refreshMemoryByRequest,
+  searchMemories,
+  suppressMemoryByRequest,
+  upsertMemories
+} from "./memory-service";
 
 type AgentProps = {
   tenantId: string;
@@ -135,6 +142,46 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           limit_recent,
           rewrite_query,
           search_mode
+        });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memories_refresh",
+      {
+        tenant_id: z.string().optional(),
+        memory_id: z.string().min(1),
+        confidence_delta: z.number().optional()
+      },
+      async ({ tenant_id, memory_id, confidence_delta }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const result = await refreshMemoryByRequest(this.env, {
+          tenant_id: tenantId,
+          memory_id,
+          confidence_delta,
+          actor_type: "principal",
+          actor_id: this.props?.principal ?? null
+        });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memories_suppress",
+      {
+        tenant_id: z.string().optional(),
+        memory_id: z.string().min(1),
+        reason: z.string().min(1).max(500)
+      },
+      async ({ tenant_id, memory_id, reason }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const result = await suppressMemoryByRequest(this.env, {
+          tenant_id: tenantId,
+          memory_id,
+          reason,
+          actor_type: "principal",
+          actor_id: this.props?.principal ?? null
         });
         return toContent(result);
       }

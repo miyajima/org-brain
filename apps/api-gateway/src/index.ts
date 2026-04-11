@@ -2,7 +2,17 @@ import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
 import { apiKeyAuth, jsonOk } from "./auth";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
-import { getMemoryProfile, listMemories, listMemoriesPage, searchMemories, upsertMemories } from "./memory-service";
+import {
+  captureMemories,
+  getMemoryProfile,
+  listMemories,
+  listMemoriesPage,
+  refreshMemoryByRequest,
+  reviseMemoryByRequest,
+  searchMemories,
+  suppressMemoryByRequest,
+  upsertMemories
+} from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
 import type { Env } from "./types";
@@ -74,6 +84,30 @@ app.post("/v1/memories/upsert", async (c) => {
   const body = await c.req.json<unknown>();
   const result = await upsertMemories(c.env, body);
   return jsonOk(c, result, 201);
+});
+
+app.post("/v1/memories/capture", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await captureMemories(c.env, body);
+  return jsonOk(c, result, 201);
+});
+
+app.post("/v1/memories/revise", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await reviseMemoryByRequest(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/memories/refresh", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await refreshMemoryByRequest(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/memories/suppress", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await suppressMemoryByRequest(c.env, body);
+  return jsonOk(c, result);
 });
 
 app.post("/v1/memories/search", async (c) => {

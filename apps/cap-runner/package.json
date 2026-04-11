@@ -12,6 +12,6 @@
     "@org-brain/shared": "workspace:*"
   },
   "devDependencies": {
-    "wrangler": "^4.8.0"
+    "wrangler": "^4.80.0"
   }
 }

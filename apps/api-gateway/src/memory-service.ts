@@ -1,13 +1,19 @@
 import {
   HttpError,
+  MEMORY_KINDS,
+  MEMORY_LIFECYCLE_STATES,
+  MEMORY_SCOPE_TYPES,
   buildTenantMemoryProfile,
   parseTagsJson,
   searchTenantMemories,
   type MemoryProfileResponse,
+  type MemoryKind,
+  type MemoryLifecycleState,
+  type MemoryScopeType,
   type MemorySearchResponse,
   type MemorySearchMode
 } from "@org-brain/shared";
-import { ulid } from "@org-brain/shared";
+import { captureMemoryItems, loadExistingMemoryIdsByExternalKeys, refreshMemory, reviseMemory, runBatchChunks, suppressMemory } from "./memory-lifecycle-service";
 import type { Env } from "./types";
 
 type UpsertMemoryItem = {
@@ -17,6 +23,16 @@ type UpsertMemoryItem = {
   tags?: string[];
   created_at?: number;
   project_id?: string | null;
+  actor_type?: string | null;
+  actor_id?: string | null;
+  kind?: MemoryKind;
+  lifecycle_state?: MemoryLifecycleState;
+  scope_type?: MemoryScopeType;
+  scope_key?: string | null;
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  canonical_key?: string | null;
+  expires_at?: number | null;
 };
 
 type UpsertMemoryRequest = {
@@ -34,11 +50,12 @@ type MemoryRow = {
   source: string;
   external_key: string | null;
   created_at: number;
-};
-
-type ExistingMemoryKeyRow = {
-  id: string;
-  external_key: string;
+  kind?: string | null;
+  lifecycle_state?: string | null;
+  current_version?: number | null;
+  last_accessed_at?: number | null;
+  confidence_score?: number | null;
+  utility_score?: number | null;
 };
 
 type MemorySearchRequest = {
@@ -61,6 +78,42 @@ type MemoryProfileRequest = {
   search_mode?: MemorySearchMode;
 };
 
+type CaptureMemoryRequest = {
+  tenant_id?: string;
+  source?: string;
+  actor_type?: string | null;
+  actor_id?: string | null;
+  items: UpsertMemoryItem[];
+};
+
+type ReviseMemoryRequest = {
+  tenant_id?: string;
+  memory_id?: string;
+  content?: string;
+  summary?: string | null;
+  tags?: string[];
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  actor_type?: string | null;
+  actor_id?: string | null;
+};
+
+type RefreshMemoryRequest = {
+  tenant_id?: string;
+  memory_id?: string;
+  confidence_delta?: number | null;
+  actor_type?: string | null;
+  actor_id?: string | null;
+};
+
+type SuppressMemoryRequest = {
+  tenant_id?: string;
+  memory_id?: string;
+  reason?: string;
+  actor_type?: string | null;
+  actor_id?: string | null;
+};
+
 type ListMemoriesOptions = {
   limit?: number;
   offset?: number;
@@ -81,6 +134,12 @@ export type MemoryListPage = {
     source: string;
     external_key: string | null;
     created_at: number;
+    kind: MemoryKind;
+    lifecycle_state: MemoryLifecycleState;
+    current_version: number;
+    last_accessed_at: number | null;
+    confidence_score: number | null;
+    utility_score: number | null;
   }>;
   meta: {
     limit: number;
@@ -152,6 +211,36 @@ function parseTags(raw: unknown): string[] {
   return [...new Set(tags)];
 }
 
+function parseOptionalActorField(value: unknown, field: string, maxLength: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new HttpError(400, "invalid_payload", `${field} must be a string`);
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : null;
+}
+
+function parseOptionalEnum<T extends readonly string[]>(
+  value: unknown,
+  field: string,
+  allowed: T
+): T[number] | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !allowed.includes(value)) {
+    throw new HttpError(400, "invalid_payload", `${field} must be one of ${allowed.join(", ")}`);
+  }
+  return value as T[number];
+}
+
+function parseOptionalFiniteNumber(value: unknown, field: string): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new HttpError(400, "invalid_payload", `${field} must be a finite number`);
+  }
+  return value;
+}
+
 function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySearchMode): MemorySearchMode {
   if (value === undefined) return fallback;
   if (value !== "memories" && value !== "hybrid") {
@@ -160,13 +249,15 @@ function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySe
   return value;
 }
 
-function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; items: UpsertMemoryItem[] } {
+function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; actorType: string | null; actorId: string | null; items: UpsertMemoryItem[] } {
   if (!raw || typeof raw !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
   const body = raw as UpsertMemoryRequest;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const source = body.source ? parseString(body.source, "source").slice(0, 64) : "openclaw";
+  const actorType = parseOptionalActorField((body as CaptureMemoryRequest).actor_type, "actor_type", 64);
+  const actorId = parseOptionalActorField((body as CaptureMemoryRequest).actor_id, "actor_id", 128);
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HttpError(400, "invalid_payload", "items must be a non-empty array");
   }
@@ -188,17 +279,33 @@ function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; i
     const projectRaw = (item as UpsertMemoryItem).project_id;
     const projectId = typeof projectRaw === "string" ? projectRaw.trim().slice(0, 128) : null;
     const tags = parseTags((item as UpsertMemoryItem).tags);
+    const actorTypeItem = parseOptionalActorField((item as UpsertMemoryItem).actor_type, `items[${i}].actor_type`, 64);
+    const actorIdItem = parseOptionalActorField((item as UpsertMemoryItem).actor_id, `items[${i}].actor_id`, 128);
     return {
       external_key: key,
       content: content.slice(0, 20_000),
       summary,
       created_at: createdAt,
       project_id: projectId,
-      tags
+      tags,
+      actor_type: actorTypeItem ?? actorType,
+      actor_id: actorIdItem ?? actorId,
+      kind: parseOptionalEnum((item as UpsertMemoryItem).kind, `items[${i}].kind`, MEMORY_KINDS),
+      lifecycle_state: parseOptionalEnum(
+        (item as UpsertMemoryItem).lifecycle_state,
+        `items[${i}].lifecycle_state`,
+        MEMORY_LIFECYCLE_STATES
+      ),
+      scope_type: parseOptionalEnum((item as UpsertMemoryItem).scope_type, `items[${i}].scope_type`, MEMORY_SCOPE_TYPES),
+      scope_key: parseOptionalString((item as UpsertMemoryItem).scope_key, `items[${i}].scope_key`, 128),
+      confidence_score: parseOptionalFiniteNumber((item as UpsertMemoryItem).confidence_score, `items[${i}].confidence_score`),
+      utility_score: parseOptionalFiniteNumber((item as UpsertMemoryItem).utility_score, `items[${i}].utility_score`),
+      canonical_key: parseOptionalString((item as UpsertMemoryItem).canonical_key, `items[${i}].canonical_key`, 256),
+      expires_at: parseOptionalFiniteNumber((item as UpsertMemoryItem).expires_at, `items[${i}].expires_at`)
     };
   });
 
-  return { tenantId, source, items };
+  return { tenantId, source, actorType, actorId, items };
 }
 
 function parseSearchRequest(raw: unknown): {
@@ -250,41 +357,6 @@ function parseProfileRequest(raw: unknown): {
   };
 }
 
-async function loadExistingMemoryIdsByExternalKeys(
-  db: D1Database,
-  tenantId: string,
-  externalKeys: string[]
-): Promise<Map<string, string>> {
-  const results = new Map<string, string>();
-  if (externalKeys.length === 0) return results;
-
-  for (let index = 0; index < externalKeys.length; index += 100) {
-    const chunk = externalKeys.slice(index, index + 100);
-    const placeholders = chunk.map(() => "?").join(", ");
-    const response = await db.prepare(
-      `SELECT id, external_key
-       FROM memories
-       WHERE tenant_id = ?
-         AND external_key IN (${placeholders})`
-    )
-      .bind(tenantId, ...chunk)
-      .all<ExistingMemoryKeyRow>();
-
-    for (const row of response.results) {
-      if (row.external_key) results.set(row.external_key, row.id);
-    }
-  }
-
-  return results;
-}
-
-async function runBatchChunks(db: D1Database, statements: D1PreparedStatement[]): Promise<void> {
-  if (statements.length === 0) return;
-  for (let index = 0; index < statements.length; index += 100) {
-    await db.batch(statements.slice(index, index + 100));
-  }
-}
-
 function buildMemoryListFilterSql(options: { source?: string; projectId?: string | null }) {
   const clauses: string[] = [];
   const bindings: unknown[] = [];
@@ -299,65 +371,15 @@ function buildMemoryListFilterSql(options: { source?: string; projectId?: string
     bindings.push(options.projectId.trim());
   }
 
+  clauses.push("(lifecycle_state IS NULL OR lifecycle_state != ?)");
+  bindings.push("suppressed");
   const sql = clauses.length > 0 ? ` AND ${clauses.join(" AND ")}` : "";
   return { sql, bindings };
 }
 
 export async function upsertMemories(env: Env, rawBody: unknown) {
   const { tenantId, source, items } = parseUpsertRequest(rawBody);
-  let inserted = 0;
-  let updated = 0;
-
-  const dedupedByKey = new Map<string, UpsertMemoryItem>();
-  for (const item of items) dedupedByKey.set(item.external_key, item);
-
-  const existingByKey = await loadExistingMemoryIdsByExternalKeys(env.OPEN_BRAIN_DB, tenantId, [...dedupedByKey.keys()]);
-  const statements: D1PreparedStatement[] = [];
-
-  for (const [externalKey, item] of dedupedByKey.entries()) {
-    const now = Date.now();
-    const createdAt = item.created_at ?? now;
-    const tagsJson = JSON.stringify(item.tags ?? []);
-    const existingId = existingByKey.get(externalKey);
-
-    if (existingId) {
-      statements.push(
-        env.OPEN_BRAIN_DB.prepare(
-          "UPDATE memories SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ? WHERE tenant_id = ? AND id = ?"
-        ).bind(item.project_id ?? null, item.content, item.summary ?? null, tagsJson, source, createdAt, tenantId, existingId),
-        env.OPEN_BRAIN_DB.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(existingId, tenantId),
-        env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
-          existingId,
-          tenantId,
-          item.content
-        )
-      );
-      updated += 1;
-      continue;
-    }
-
-    const id = ulid();
-    statements.push(
-      env.OPEN_BRAIN_DB.prepare(
-        "INSERT INTO memories(id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at) VALUES(?,?,?,?,?,?,?,?,?)"
-      ).bind(id, tenantId, item.project_id ?? null, item.content, item.summary ?? null, tagsJson, source, externalKey, createdAt),
-      env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
-        id,
-        tenantId,
-        item.content
-      )
-    );
-    inserted += 1;
-  }
-
-  await runBatchChunks(env.OPEN_BRAIN_DB, statements);
-
-  return {
-    tenant_id: tenantId,
-    source,
-    inserted,
-    updated
-  };
+  return captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
 }
 
 export async function listMemories(env: Env, tenantId: string, options: ListMemoriesOptions = {}) {
@@ -381,9 +403,15 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
     content: row.content,
     summary: row.summary,
     tags: parseTagsJson(row.tags_json),
-    source: row.source,
-    external_key: row.external_key,
-    created_at: row.created_at
+     source: row.source,
+     external_key: row.external_key,
+      created_at: row.created_at,
+      kind: (row.kind as MemoryKind | null) ?? "episodic",
+      lifecycle_state: (row.lifecycle_state as MemoryLifecycleState | null) ?? "active",
+      current_version: Number(row.current_version ?? 1),
+      last_accessed_at: row.last_accessed_at ?? null,
+      confidence_score: row.confidence_score ?? null,
+      utility_score: row.utility_score ?? null
   }));
 }
 
@@ -445,4 +473,67 @@ export async function searchMemories(env: Env, rawBody: unknown): Promise<Memory
 export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<MemoryProfileResponse> {
   const request = parseProfileRequest(rawBody);
   return buildTenantMemoryProfile(env.OPEN_BRAIN_DB, request);
+}
+
+export async function captureMemories(env: Env, rawBody: unknown) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as CaptureMemoryRequest;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const source = body.source ? parseString(body.source, "source").slice(0, 64) : "org-brain";
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    throw new HttpError(400, "invalid_payload", "items must be a non-empty array");
+  }
+  return captureMemoryItems(env, { tenantId, source, items: body.items, operation: "capture" });
+}
+
+export async function reviseMemoryByRequest(env: Env, rawBody: unknown) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as ReviseMemoryRequest;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const memoryId = parseString(body.memory_id, "memory_id");
+  return reviseMemory(env, {
+    tenantId,
+    memoryId,
+    actorType: parseOptionalActorField(body.actor_type, "actor_type", 64),
+    actorId: parseOptionalActorField(body.actor_id, "actor_id", 128),
+    content: typeof body.content === "string" ? body.content.slice(0, 20_000) : undefined,
+    summary: parseOptionalString(body.summary, "summary", 1000),
+    tags: body.tags ? parseTags(body.tags) : undefined,
+    confidenceScore: parseOptionalFiniteNumber(body.confidence_score, "confidence_score"),
+    utilityScore: parseOptionalFiniteNumber(body.utility_score, "utility_score")
+  });
+}
+
+export async function refreshMemoryByRequest(env: Env, rawBody: unknown) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as RefreshMemoryRequest;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  return refreshMemory(env, {
+    tenantId,
+    memoryId: parseString(body.memory_id, "memory_id"),
+    actorType: parseOptionalActorField(body.actor_type, "actor_type", 64),
+    actorId: parseOptionalActorField(body.actor_id, "actor_id", 128),
+    confidenceDelta: parseOptionalFiniteNumber(body.confidence_delta, "confidence_delta")
+  });
+}
+
+export async function suppressMemoryByRequest(env: Env, rawBody: unknown) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as SuppressMemoryRequest;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  return suppressMemory(env, {
+    tenantId,
+    memoryId: parseString(body.memory_id, "memory_id"),
+    reason: parseString(body.reason, "reason").slice(0, 500),
+    actorType: parseOptionalActorField(body.actor_type, "actor_type", 64),
+    actorId: parseOptionalActorField(body.actor_id, "actor_id", 128)
+  });
 }

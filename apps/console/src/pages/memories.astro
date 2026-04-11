@@ -10,6 +10,12 @@ type MemoryRow = {
   source: string;
   external_key: string | null;
   created_at: number;
+  kind: "episodic" | "semantic" | "org_knowledge";
+  lifecycle_state: "active" | "suppressed" | "consolidated" | "promoted";
+  current_version: number;
+  last_accessed_at: number | null;
+  confidence_score: number | null;
+  utility_score: number | null;
 };
 
 type MemorySearchResult = {
@@ -20,6 +26,9 @@ type MemorySearchResult = {
   score: number | null;
   source: string;
   created_at: number;
+  memory_kind?: "episodic" | "semantic" | "org_knowledge";
+  lifecycle_state?: "active" | "suppressed" | "consolidated" | "promoted";
+  current_version?: number;
 };
 
 type MemoryProfileItem = {
@@ -30,6 +39,12 @@ type MemoryProfileItem = {
   source: string;
   created_at: number;
   tags: string[];
+  memory_kind: "episodic" | "semantic" | "org_knowledge";
+  lifecycle_state: "active" | "suppressed" | "consolidated" | "promoted";
+  current_version: number;
+  last_accessed_at: number | null;
+  confidence_score: number | null;
+  utility_score: number | null;
 };
 
 type SearchResponse = {
@@ -95,6 +110,12 @@ type DetailRecord = {
   tags: string[];
   score: number | null;
   content: string;
+  memory_kind: "episodic" | "semantic" | "org_knowledge";
+  lifecycle_state: "active" | "suppressed" | "consolidated" | "promoted";
+  current_version: number;
+  last_accessed_at: number | null;
+  confidence_score: number | null;
+  utility_score: number | null;
 };
 
 const url = Astro.url;
@@ -177,7 +198,13 @@ function buildDetailRecord(
       created_at: row.created_at,
       tags: row.tags,
       score: searchResults.find((item) => item.id === selected)?.score ?? null,
-      content: row.content
+      content: row.content,
+      memory_kind: row.kind,
+      lifecycle_state: row.lifecycle_state,
+      current_version: row.current_version,
+      last_accessed_at: row.last_accessed_at,
+      confidence_score: row.confidence_score,
+      utility_score: row.utility_score
     };
   }
 
@@ -196,7 +223,13 @@ function buildDetailRecord(
       created_at: searchItem.created_at,
       tags: profileItem?.tags ?? [],
       score: searchItem.score,
-      content: searchItem.content_preview
+      content: searchItem.content_preview,
+      memory_kind: profileItem?.memory_kind ?? searchItem.memory_kind ?? "episodic",
+      lifecycle_state: profileItem?.lifecycle_state ?? searchItem.lifecycle_state ?? "active",
+      current_version: profileItem?.current_version ?? searchItem.current_version ?? 1,
+      last_accessed_at: profileItem?.last_accessed_at ?? null,
+      confidence_score: profileItem?.confidence_score ?? null,
+      utility_score: profileItem?.utility_score ?? null
     };
   }
 
@@ -214,11 +247,65 @@ function buildDetailRecord(
       created_at: profileItem.created_at,
       tags: profileItem.tags,
       score: null,
-      content: profileItem.content_preview
+      content: profileItem.content_preview,
+      memory_kind: profileItem.memory_kind,
+      lifecycle_state: profileItem.lifecycle_state,
+      current_version: profileItem.current_version,
+      last_accessed_at: profileItem.last_accessed_at,
+      confidence_score: profileItem.confidence_score,
+      utility_score: profileItem.utility_score
     };
   }
 
   return null;
+}
+
+function addSuggestion(counts: Map<string, number>, raw: string | null | undefined, weight = 1) {
+  const normalized = String(raw ?? "").trim().toLowerCase();
+  if (!normalized) return;
+  if (normalized.length < 3) return;
+
+  const blocked = new Set([
+    "org-bus",
+    "canonical-memory",
+    "memory-digest",
+    "compacted",
+    "plan_writer",
+    "code_gen",
+    "code_review",
+    "hook",
+    "promoted",
+    "maintenance",
+    "memory",
+    "none",
+    "default"
+  ]);
+
+  if (blocked.has(normalized)) return;
+  counts.set(normalized, (counts.get(normalized) ?? 0) + weight);
+}
+
+function extractSearchTerms(value: string | null | undefined): string[] {
+  return (String(value ?? "").toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []).slice(0, 8);
+}
+
+function rowCardClass(selected: boolean): string {
+  return [
+    "group relative overflow-hidden rounded-[24px] border p-4 transition duration-200",
+    "shadow-[0_20px_60px_rgba(0,0,0,0.24)]",
+    selected
+      ? "border-amber-300/45 bg-white/[0.09] ring-1 ring-amber-300/20"
+      : "border-white/8 bg-white/[0.04] hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06]"
+  ].join(" ");
+}
+
+function tabClass(active: boolean): string {
+  return [
+    "inline-flex min-h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold transition duration-200",
+    active
+      ? "border-amber-300/40 bg-amber-300/20 text-amber-50 shadow-[0_12px_40px_rgba(212,175,55,0.18)]"
+      : "border-white/8 bg-white/[0.04] text-zinc-300 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+  ].join(" ");
 }
 
 const listPayload = await fetchApi<MemoryListPage>(
@@ -261,7 +348,6 @@ const searchResults = searchPayload?.ok ? searchPayload.data.results : [];
 const profile = profilePayload?.ok ? profilePayload.data : null;
 const durableRows = profile?.durable ?? [];
 const recentRows = profile?.recent ?? [];
-const detail = buildDetailRecord(selectedId, corpusItems, searchResults, [...durableRows, ...recentRows]);
 const maintenanceRows = corpusItems.filter((item) =>
   item.tags.some((tag) => ["canonical-memory", "memory-digest", "compacted"].includes(tag))
 );
@@ -280,7 +366,44 @@ const maintenanceProjectCounts = maintenanceRows.reduce<Record<string, number>>(
 const maintenanceProjectRows = Object.entries(maintenanceProjectCounts)
   .sort((a, b) => b[1] - a[1])
   .slice(0, 4);
+const recentHighlights = recentRows.slice(0, 3);
+const searchLandingRows = (recentHighlights.length > 0 ? recentHighlights : durableRows.slice(0, 3)).slice(0, 3);
+const searchLandingKind = recentHighlights.length > 0 ? "recent" : "durable";
+const quickPickRows = (recentHighlights.length > 0 ? recentHighlights : durableRows.slice(0, 3)).slice(0, 3);
 
+const suggestionCounts = new Map<string, number>();
+for (const row of recentRows) {
+  for (const tag of row.tags) addSuggestion(suggestionCounts, tag, 3);
+  for (const term of extractSearchTerms(row.summary)) addSuggestion(suggestionCounts, term, 3);
+}
+for (const row of durableRows) {
+  for (const tag of row.tags) addSuggestion(suggestionCounts, tag, 2);
+  for (const term of extractSearchTerms(row.summary)) addSuggestion(suggestionCounts, term, 2);
+}
+for (const row of corpusItems.slice(0, 24)) {
+  for (const tag of row.tags) addSuggestion(suggestionCounts, tag, 1);
+  for (const term of extractSearchTerms(row.summary || row.content)) addSuggestion(suggestionCounts, term, 1);
+}
+for (const seed of ["policy", "diagnosis", "deploy", "maintenance", "command-result", "workaround"]) {
+  addSuggestion(suggestionCounts, seed, 1);
+}
+
+const searchSuggestions = Array.from(suggestionCounts.entries())
+  .sort((left, right) => right[1] - left[1])
+  .map(([term]) => term)
+  .slice(0, 8);
+
+const datalistSuggestions = [
+  ...new Set(
+    [
+      ...searchSuggestions,
+      ...recentRows.map((item) => trimText(item.summary, 80)),
+      ...durableRows.map((item) => trimText(item.summary, 80))
+    ].filter(Boolean)
+  )
+].slice(0, 12);
+
+const detail = buildDetailRecord(selectedId, corpusItems, searchResults, [...durableRows, ...recentRows]);
 const loadErrors = [...new Set([
   listPayload?.ok === false ? listPayload.error?.message ?? "Memory list could not be loaded" : null,
   searchPayload?.ok === false ? searchPayload.error?.message ?? "Memory search could not be loaded" : null,
@@ -295,993 +418,524 @@ const maintenanceTabHref = makeHref({ view: "maintenance", page: String(page), s
 const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
 ---
 <BaseLayout title="Memory Explorer">
-  <section class="memory-shell">
-    <header class="memory-header card">
-      <div class="header-copy">
-        <p class="eyebrow">Memory workspace</p>
-        <h1>Memory Explorer</h1>
-        <p class="lede">検索、durable lanes、maintenance を 1 画面で読む operator workspace です。Apple らしい黒と白のコントラストで、情報の順番を先に見せます。</p>
-      </div>
-      <div class="header-stats">
-        <span><em>{listPage?.meta.total ?? 0}</em> visible</span>
-        <span><em>{listPage?.meta.canonical_count ?? 0}</em> canonical</span>
-        <span><em>{listPage?.meta.digest_count ?? 0}</em> digest</span>
-        <span><em>{listPage?.meta.compacted_count ?? 0}</em> compacted</span>
-        <span><em>{profile?.meta.durable_count ?? 0}</em> durable</span>
-        <span><em>{profile?.meta.recent_count ?? 0}</em> recent</span>
+  <section class="space-y-5">
+    <header class="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(7,7,8,0.96)_0%,rgba(10,10,12,0.92)_100%)] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.36)] sm:p-8">
+      <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+        <div class="space-y-4">
+          <p class="surface-label">Memory workspace</p>
+          <div class="space-y-3">
+            <h1 class="max-w-[11ch] text-5xl font-semibold tracking-[-0.06em] text-white sm:text-6xl xl:text-7xl">Memory Explorer</h1>
+            <p class="max-w-3xl text-base leading-8 text-zinc-300 sm:text-lg">
+              記憶を探す前から最近の流れが見えるようにして、検索の入口自体も強くしました。まずは recent lane と popular searches から入れます。
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2 xl:justify-end">
+          <span class="surface-chip">{listPage?.meta.total ?? 0} visible</span>
+          <span class="surface-chip">{listPage?.meta.canonical_count ?? 0} canonical</span>
+          <span class="surface-chip">{listPage?.meta.digest_count ?? 0} digest</span>
+          <span class="surface-chip">{listPage?.meta.compacted_count ?? 0} compacted</span>
+          <span class="surface-chip">{profile?.meta.recent_count ?? 0} recent</span>
+        </div>
       </div>
     </header>
 
-    <section class="controls card">
-      <div class="tabbar" role="tablist" aria-label="Memory views">
-        <a class={`tab ${view === "search" ? "is-active" : ""}`} href={searchTabHref}>Search</a>
-        <a class={`tab ${view === "profile" ? "is-active" : ""}`} href={profileTabHref}>Profile</a>
-        <a class={`tab ${view === "maintenance" ? "is-active" : ""}`} href={maintenanceTabHref}>Maintenance</a>
+    <section class="rounded-[32px] border border-white/8 bg-white/[0.04] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
+      <div class="flex flex-wrap gap-2">
+        <a class={tabClass(view === "search")} href={searchTabHref}>Search</a>
+        <a class={tabClass(view === "profile")} href={profileTabHref}>Profile</a>
+        <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>Maintenance</a>
       </div>
 
-      <form class="search-form" method="get" action="/memories">
-        <input type="hidden" name="view" value={view} />
-        <input type="hidden" name="page" value="1" />
-        <label class="query-block">
-          <span class="field-label">Search memories</span>
-          <input
-            type="search"
-            name="q"
-            value={query}
-            placeholder="例: policy, maintenance, deploy, diagnosis"
-          />
-        </label>
-        <button type="submit">Search</button>
-      </form>
-
-      <div class="filter-row">
-        <form class="filter-form" method="get" action="/memories">
+      <div class="mt-5 grid gap-4">
+        <form class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_12rem]" method="get" action="/memories">
           <input type="hidden" name="view" value={view} />
-          <input type="hidden" name="q" value={query} />
           <input type="hidden" name="page" value="1" />
-          <label>
-            <span class="field-label">Tenant</span>
-            <input name="tenant_id" value={tenantId} />
+          <label class="relative block">
+            <span class="surface-label">Search memories</span>
+            <svg class="pointer-events-none absolute left-4 top-[3.25rem] h-5 w-5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.5-3.5"></path>
+            </svg>
+            <input
+              class="pl-11"
+              type="search"
+              name="q"
+              value={query}
+              list="memory-search-suggestions"
+              placeholder="policy / diagnosis / deploy / maintenance"
+            />
           </label>
-          <label>
-            <span class="field-label">Project</span>
-            <input name="project_id" value={projectId} placeholder="optional project filter" />
-          </label>
-          <label>
-            <span class="field-label">Search mode</span>
-            <select name="search_mode">
-              <option value="hybrid" selected={searchMode === "hybrid"}>hybrid</option>
-              <option value="memories" selected={searchMode === "memories"}>memories</option>
-            </select>
-          </label>
-          <label>
-            <span class="field-label">Rewrite</span>
-            <select name="rewrite_query">
-              <option value="1" selected={rewriteQuery}>on</option>
-              <option value="0" selected={!rewriteQuery}>off</option>
-            </select>
-          </label>
-          <label>
-            <span class="field-label">Page size</span>
-            <select name="page_size">
-              <option value="10" selected={pageSize === 10}>10</option>
-              <option value="20" selected={pageSize === 20}>20</option>
-              <option value="50" selected={pageSize === 50}>50</option>
-            </select>
-          </label>
-          <button type="submit">Apply</button>
+          <button type="submit">Search memory</button>
         </form>
-        {query && (
-          <a class="secondary-link" href={clearQueryHref}>Clear search</a>
-        )}
+        <datalist id="memory-search-suggestions">
+          {datalistSuggestions.map((term) => <option value={term} />)}
+        </datalist>
+
+        <div class="rounded-[24px] border border-white/8 bg-black/20 p-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="surface-label mr-2">Popular searches</p>
+            {searchSuggestions.map((term) => (
+              <a
+                class="inline-flex min-h-9 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-zinc-200 transition duration-200 hover:-translate-y-0.5 hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-white"
+                href={makeHref({ q: term, selected: "", page: "1" })}
+              >
+                {term}
+              </a>
+            ))}
+            {query && (
+              <a class="inline-flex min-h-9 items-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-sm text-zinc-300 transition duration-200 hover:border-white/20 hover:text-white" href={clearQueryHref}>
+                Clear search
+              </a>
+            )}
+          </div>
+          <p class="mt-3 text-sm leading-7 text-zinc-400">
+            サジェストは recent / durable / corpus のタグと summary から組み立てています。完全一致が思いつかない前提で、先に入口を見せます。
+          </p>
+        </div>
+
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+          <form class="grid gap-4 md:grid-cols-2 xl:grid-cols-5" method="get" action="/memories">
+            <input type="hidden" name="view" value={view} />
+            <input type="hidden" name="q" value={query} />
+            <input type="hidden" name="page" value="1" />
+            <label>
+              <span class="surface-label">Tenant</span>
+              <input name="tenant_id" value={tenantId} />
+            </label>
+            <label>
+              <span class="surface-label">Project</span>
+              <input name="project_id" value={projectId} placeholder="optional project filter" />
+            </label>
+            <label>
+              <span class="surface-label">Search mode</span>
+              <select name="search_mode">
+                <option value="hybrid" selected={searchMode === "hybrid"}>hybrid</option>
+                <option value="memories" selected={searchMode === "memories"}>memories</option>
+              </select>
+            </label>
+            <label>
+              <span class="surface-label">Rewrite query</span>
+              <select name="rewrite_query">
+                <option value="1" selected={rewriteQuery}>on</option>
+                <option value="0" selected={!rewriteQuery}>off</option>
+              </select>
+            </label>
+            <label>
+              <span class="surface-label">Page size</span>
+              <select name="page_size">
+                <option value="10" selected={pageSize === 10}>10</option>
+                <option value="20" selected={pageSize === 20}>20</option>
+                <option value="50" selected={pageSize === 50}>50</option>
+              </select>
+            </label>
+            <button class="md:col-span-2 xl:col-span-5" type="submit">Apply filters</button>
+          </form>
+
+          <div class="rounded-[24px] border border-white/8 bg-black/25 p-4 xl:max-w-xs">
+            <p class="surface-label">Search behavior</p>
+            <p class="mt-2 text-sm leading-7 text-zinc-300">
+              `{includeHistory ? "history on" : "history off"}` で recent context を検索に混ぜます。空検索でも recent lane は先に表示します。
+            </p>
+          </div>
+        </div>
       </div>
     </section>
 
     {loadErrors.length > 0 && (
-      <section class="warning card">
-        <strong>Data fetch warning</strong>
-        <ul>
+      <section class="rounded-[28px] border border-rose-300/25 bg-rose-400/8 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
+        <strong class="block text-sm font-semibold text-rose-100">Data fetch warning</strong>
+        <ul class="mt-3 list-disc space-y-2 pl-5 text-sm leading-7 text-rose-100/80">
           {loadErrors.map((message) => <li>{message}</li>)}
         </ul>
       </section>
     )}
 
-    <div class="workspace">
-      <section class="main-pane card">
-        {view === "search" ? (
-          <>
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">{query ? "Search results" : "Corpus list"}</p>
-                <h2>{query ? "Ranked matches" : "Browse all memories"}</h2>
-                <p class="muted">
-                  {query
-                    ? `検索時は上位一致だけを表示します。query が空のときは corpus 全体をページ送りで閲覧します。`
-                    : `現在は ${listPage?.meta.total ?? 0} 件の corpus をページング表示しています。`}
-                </p>
-              </div>
-              {query && searchPayload?.ok && (
-                <div class="micro-meta">
-                  <span>{searchPayload.data.meta.search_strategy}</span>
-                  <span>{searchPayload.data.meta.returned_count} results</span>
-                  <span>{searchPayload.data.meta.variant_count} variants</span>
-                </div>
-              )}
-            </div>
-
-            {query ? (
-              searchResults.length > 0 ? (
-                <div class="list">
-                  {searchResults.map((item, index) => (
-                    <a class={`list-row ${selectedId === item.id ? "is-selected" : ""}`} href={makeHref({ selected: item.id })}>
-                      <div class="row-rank">{index + 1}</div>
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span>{item.kind}</span>
-                          <span>{item.source}</span>
-                          <span>{formatDate(item.created_at)}</span>
+    <div class="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_22rem] xl:items-start">
+      <section class="space-y-5">
+        <div class="card">
+          {view === "search" ? (
+            <div class="space-y-6">
+              {!query && searchLandingRows.length > 0 && (
+                <section class="space-y-4">
+                  <div class="flex items-end justify-between gap-4">
+                    <div>
+                      <p class="surface-label">{searchLandingKind === "recent" ? "Recent memory lane" : "Durable memory lane"}</p>
+                      <h2 class="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">
+                        {searchLandingKind === "recent" ? "検索しなくても直近 3 件を先に出す" : "Recent が薄いときは durable を先に出す"}
+                      </h2>
+                    </div>
+                    <p class="max-w-xs text-sm leading-7 text-zinc-400">
+                      {searchLandingKind === "recent"
+                        ? "直近の context を最初から見せて、検索前の手がかり不足を減らします。"
+                        : "recent が空でも durable context を入口にして、空画面を避けます。"}
+                    </p>
+                  </div>
+                  <div class="grid gap-4 lg:grid-cols-3">
+                    {searchLandingRows.map((item) => (
+                      <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="surface-label">{searchLandingKind === "recent" ? "Recent" : "Durable"}</span>
+                          <span class="text-xs text-zinc-500">{formatDate(item.created_at)}</span>
                         </div>
-                        <strong>{item.summary || "Untitled result"}</strong>
-                        <p>{item.content_preview}</p>
+                        <div class="mt-3 space-y-2">
+                          <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
+                          <p class="text-sm leading-7 text-zinc-400">{trimText(item.content_preview, 180)}</p>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2 text-xs text-zinc-500">
+                          <span>{item.source}</span>
+                          <span>{item.project_id || "no-project"}</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <section class="space-y-4">
+                <div class="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p class="surface-label">{query ? "Search results" : "Corpus browser"}</p>
+                    <h2 class="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">
+                      {query ? "Ranked matches" : "Search after you skim"}
+                    </h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-7 text-zinc-400">
+                      {query
+                        ? "query があるときは top match を優先表示します。search strategy と variant 数も横で確認できます。"
+                        : "corpus はページングで維持しつつ、最初の視線は recent lane に寄せています。"}
+                    </p>
+                  </div>
+                  {query && searchPayload?.ok && (
+                    <div class="flex flex-wrap gap-2">
+                      <span class="surface-chip">{searchPayload.data.meta.search_strategy}</span>
+                      <span class="surface-chip">{searchPayload.data.meta.returned_count} results</span>
+                      <span class="surface-chip">{searchPayload.data.meta.variant_count} variants</span>
+                    </div>
+                  )}
+                </div>
+
+                {query ? (
+                  searchResults.length > 0 ? (
+                    <div class="space-y-3">
+                      {searchResults.map((item, index) => (
+                        <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
+                          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="flex min-w-0 gap-4">
+                              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/12 font-mono text-sm font-semibold text-amber-100">
+                                {index + 1}
+                              </div>
+                              <div class="min-w-0 space-y-2">
+                                <div class="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                                  <span>{item.kind}</span>
+                                  <span>{item.source}</span>
+                                  <span>{formatDate(item.created_at)}</span>
+                                </div>
+                                <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary || "Untitled result"}</h3>
+                                <p class="text-sm leading-7 text-zinc-400">{item.content_preview}</p>
+                              </div>
+                            </div>
+                            <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-zinc-300">
+                              {item.score === null ? "n/a" : item.score.toFixed(3)}
+                            </div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div class="surface-soft-card">
+                      <strong class="text-base font-semibold text-white">No matches.</strong>
+                      <p class="mt-2 text-sm leading-7 text-zinc-400">query を広げるか、`project` を空にして再検索してください。popular searches からの再検索もすぐできます。</p>
+                      <div class="mt-4 flex flex-wrap gap-2">
+                        {searchSuggestions.slice(0, 4).map((term) => (
+                          <a
+                            class="inline-flex min-h-9 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-sm text-zinc-200 transition duration-200 hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-white"
+                            href={makeHref({ q: term, selected: "", page: "1" })}
+                          >
+                            {term}
+                          </a>
+                        ))}
                       </div>
-                      <div class="row-side">{item.score === null ? "n/a" : item.score.toFixed(3)}</div>
+                    </div>
+                  )
+                ) : corpusItems.length > 0 ? (
+                  <div class="space-y-3">
+                    {corpusItems.map((item) => (
+                      <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div class="flex min-w-0 gap-4">
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] font-mono text-sm font-semibold text-amber-100">
+                              {item.tags.includes("canonical-memory") ? "C" : item.tags.includes("memory-digest") ? "D" : item.tags.includes("compacted") ? "X" : "M"}
+                            </div>
+                            <div class="min-w-0 space-y-2">
+                              <div class="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                                <span>{item.source}</span>
+                                <span>{item.project_id || "no-project"}</span>
+                                <span>{formatDate(item.created_at)}</span>
+                              </div>
+                              <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary || trimText(item.content, 80) || "Untitled memory"}</h3>
+                              <p class="text-sm leading-7 text-zinc-400">{trimText(item.content, 180)}</p>
+                            </div>
+                          </div>
+                          <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-zinc-300">
+                            {item.tags.slice(0, 2).join(" / ") || "-"}
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                    <div class="flex flex-col gap-3 border-t border-white/8 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                      <span class="surface-label">Page {page}</span>
+                      <div class="flex flex-wrap gap-2">
+                        {prevPageHref ? (
+                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={prevPageHref}>Previous</a>
+                        ) : (
+                          <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">Previous</span>
+                        )}
+                        {nextPageHref ? (
+                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={nextPageHref}>Next</a>
+                        ) : (
+                          <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">Next</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div class="surface-soft-card">
+                    <strong class="text-base font-semibold text-white">No memories found.</strong>
+                    <p class="mt-2 text-sm leading-7 text-zinc-400">この tenant / project 条件ではまだ memory がありません。recent lane と search suggestions は profile データから先に埋めています。</p>
+                  </div>
+                )}
+              </section>
+            </div>
+          ) : view === "profile" ? (
+            <div class="grid gap-4 xl:grid-cols-2">
+              <section class="surface-soft-card">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="surface-label">Durable</p>
+                    <h2 class="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Stable lane</h2>
+                  </div>
+                  <span class="surface-chip">{profile?.meta.durable_count ?? 0}</span>
+                </div>
+                <div class="mt-4 space-y-3">
+                  {durableRows.length > 0 ? durableRows.map((item) => (
+                    <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
+                      <h3 class="text-lg font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
+                      <p class="mt-2 text-sm leading-7 text-zinc-400">{item.content_preview}</p>
+                      <span class="mt-3 block text-xs uppercase tracking-[0.16em] text-zinc-500">{item.source} / {formatDate(item.created_at)}</span>
+                    </a>
+                  )) : <div class="surface-soft-card !bg-white/[0.02] text-sm text-zinc-400">No durable rows.</div>}
+                </div>
+              </section>
+
+              <section class="surface-soft-card bg-white/[0.02]">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="surface-label">Recent</p>
+                    <h2 class="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Temporal lane</h2>
+                  </div>
+                  <span class="surface-chip">{profile?.meta.recent_count ?? 0}</span>
+                </div>
+                <div class="mt-4 space-y-3">
+                  {recentRows.length > 0 ? recentRows.map((item) => (
+                    <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
+                      <h3 class="text-lg font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
+                      <p class="mt-2 text-sm leading-7 text-zinc-400">{item.content_preview}</p>
+                      <span class="mt-3 block text-xs uppercase tracking-[0.16em] text-zinc-500">{item.source} / {formatDate(item.created_at)}</span>
+                    </a>
+                  )) : <div class="surface-soft-card !bg-white/[0.02] text-sm text-zinc-400">No recent rows.</div>}
+                </div>
+              </section>
+            </div>
+          ) : (
+            <div class="space-y-5">
+              <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p class="surface-label">Maintenance</p>
+                  <h2 class="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Compaction summary</h2>
+                </div>
+                <p class="max-w-xl text-sm leading-7 text-zinc-400">structural change を先に出します。tag 分布と project footprint も同じ view 内で読めます。</p>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div class="surface-soft-card">
+                  <span class="surface-label">Visible</span>
+                  <strong class="mt-3 block text-4xl font-semibold tracking-[-0.04em] text-white">{listPage?.meta.total ?? 0}</strong>
+                </div>
+                <div class="surface-soft-card">
+                  <span class="surface-label">Canonical</span>
+                  <strong class="mt-3 block text-4xl font-semibold tracking-[-0.04em] text-white">{listPage?.meta.canonical_count ?? 0}</strong>
+                </div>
+                <div class="surface-soft-card">
+                  <span class="surface-label">Digest</span>
+                  <strong class="mt-3 block text-4xl font-semibold tracking-[-0.04em] text-white">{listPage?.meta.digest_count ?? 0}</strong>
+                </div>
+                <div class="surface-soft-card">
+                  <span class="surface-label">Compacted</span>
+                  <strong class="mt-3 block text-4xl font-semibold tracking-[-0.04em] text-white">{listPage?.meta.compacted_count ?? 0}</strong>
+                </div>
+              </div>
+
+              <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                <div class="surface-soft-card">
+                  <p class="surface-label">Tag mix</p>
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    <span class="surface-chip">canonical {maintenanceTagCounts["canonical-memory"] ?? 0}</span>
+                    <span class="surface-chip">digest {maintenanceTagCounts["memory-digest"] ?? 0}</span>
+                    <span class="surface-chip">compacted {maintenanceTagCounts["compacted"] ?? 0}</span>
+                  </div>
+                </div>
+                <div class="surface-soft-card">
+                  <p class="surface-label">Project footprint</p>
+                  <div class="mt-4 space-y-3">
+                    {maintenanceProjectRows.length > 0 ? maintenanceProjectRows.map(([project, count]) => (
+                      <div class="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                        <strong class="text-sm font-semibold text-white">{project}</strong>
+                        <span class="text-xs uppercase tracking-[0.16em] text-zinc-400">{count} rows</span>
+                      </div>
+                    )) : <div class="text-sm text-zinc-400">No project footprint on this page.</div>}
+                  </div>
+                </div>
+              </div>
+
+              {maintenanceRows.length > 0 ? (
+                <div class="space-y-3">
+                  {maintenanceRows.map((item) => (
+                    <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
+                      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="flex min-w-0 gap-4">
+                          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] font-mono text-sm font-semibold text-amber-100">
+                            {item.tags.includes("canonical-memory") ? "C" : item.tags.includes("memory-digest") ? "D" : "X"}
+                          </div>
+                          <div class="min-w-0 space-y-2">
+                            <div class="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                              <span>{item.project_id || "no-project"}</span>
+                              <span>{item.source}</span>
+                              <span>{formatDate(item.created_at)}</span>
+                            </div>
+                            <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary || trimText(item.content, 80) || "Untitled memory"}</h3>
+                            <p class="text-sm leading-7 text-zinc-400">{trimText(item.content, 180)}</p>
+                          </div>
+                        </div>
+                        <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-zinc-300">
+                          {item.tags.filter((tag) => ["canonical-memory", "memory-digest", "compacted"].includes(tag)).join(" / ")}
+                        </div>
+                      </div>
                     </a>
                   ))}
                 </div>
               ) : (
-                <div class="empty-state">
-                  <strong>No matches.</strong>
-                  <p>語句を広げるか、`project` を空にして再検索してください。</p>
-                  <div class="quick-picks">
-                    <a href={clearQueryHref}>Clear query</a>
-                    <a href={profileTabHref}>Profile</a>
-                    <a href={maintenanceTabHref}>Maintenance</a>
-                  </div>
+                <div class="surface-soft-card">
+                  <strong class="text-base font-semibold text-white">No maintenance-tagged rows on this page.</strong>
                 </div>
-              )
-            ) : corpusItems.length > 0 ? (
-              <>
-                <div class="list">
-                  {corpusItems.map((item) => (
-                    <a class={`list-row ${selectedId === item.id ? "is-selected" : ""}`} href={makeHref({ selected: item.id })}>
-                      <div class="row-rank">{item.tags.includes("canonical-memory") ? "C" : item.tags.includes("memory-digest") ? "D" : item.tags.includes("compacted") ? "X" : "M"}</div>
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span>{item.source}</span>
-                          <span>{item.project_id || "no-project"}</span>
-                          <span>{formatDate(item.created_at)}</span>
-                        </div>
-                        <strong>{item.summary || trimText(item.content, 80) || "Untitled memory"}</strong>
-                        <p>{trimText(item.content, 180)}</p>
-                      </div>
-                      <div class="row-side">{item.tags.slice(0, 2).join(" / ") || "-"}</div>
-                    </a>
-                  ))}
-                </div>
-                <div class="pager">
-                  <span>Page {page}</span>
-                  <div class="pager-actions">
-                    {prevPageHref ? <a class="pager-link" href={prevPageHref}>Previous</a> : <span class="pager-link is-disabled">Previous</span>}
-                    {nextPageHref ? <a class="pager-link" href={nextPageHref}>Next</a> : <span class="pager-link is-disabled">Next</span>}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div class="empty-state">
-                <strong>No memories found.</strong>
-                <p>この tenant / project 条件ではまだ memory がありません。</p>
-                <div class="quick-picks">
-                  <a href={profileTabHref}>Profile</a>
-                  <a href={maintenanceTabHref}>Maintenance</a>
-                </div>
-              </div>
-            )}
-          </>
-        ) : view === "profile" ? (
-          <div class="two-pane">
-            <section class="subpane">
-              <div class="section-head compact">
-                <div>
-                  <p class="eyebrow">Durable</p>
-                  <h2>Stable lane</h2>
-                </div>
-                <span class="counter">{profile?.meta.durable_count ?? 0}</span>
-              </div>
-              {durableRows.length > 0 ? (
-                <div class="stack">
-                  {durableRows.map((item) => (
-                    <a class={`stack-row ${selectedId === item.id ? "is-selected" : ""}`} href={makeHref({ selected: item.id })}>
-                      <strong>{item.summary}</strong>
-                      <p>{item.content_preview}</p>
-                      <span>{item.source} / {formatDate(item.created_at)}</span>
-                    </a>
-                  ))}
-                </div>
-              ) : <div class="empty-state"><strong>No durable rows.</strong></div>}
-            </section>
-
-            <section class="subpane">
-              <div class="section-head compact">
-                <div>
-                  <p class="eyebrow">Recent</p>
-                  <h2>Temporal lane</h2>
-                </div>
-                <span class="counter">{profile?.meta.recent_count ?? 0}</span>
-              </div>
-              {recentRows.length > 0 ? (
-                <div class="stack">
-                  {recentRows.map((item) => (
-                    <a class={`stack-row ${selectedId === item.id ? "is-selected" : ""}`} href={makeHref({ selected: item.id })}>
-                      <strong>{item.summary}</strong>
-                      <p>{item.content_preview}</p>
-                      <span>{item.source} / {formatDate(item.created_at)}</span>
-                    </a>
-                  ))}
-                </div>
-              ) : <div class="empty-state"><strong>No recent rows.</strong></div>}
-            </section>
-          </div>
-        ) : (
-          <>
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">Maintenance</p>
-                <h2>Compaction summary</h2>
-                <p class="muted">structural change を先に見せます。maintenance の主要指標、タグ分布、project footprint だけを出します。</p>
-              </div>
+              )}
             </div>
-            <div class="maintenance-grid">
-              <div class="maintenance-metric">
-                <span>Visible</span>
-                <strong>{listPage?.meta.total ?? 0}</strong>
-              </div>
-              <div class="maintenance-metric">
-                <span>Canonical</span>
-                <strong>{listPage?.meta.canonical_count ?? 0}</strong>
-              </div>
-              <div class="maintenance-metric">
-                <span>Digest</span>
-                <strong>{listPage?.meta.digest_count ?? 0}</strong>
-              </div>
-              <div class="maintenance-metric">
-                <span>Compacted</span>
-                <strong>{listPage?.meta.compacted_count ?? 0}</strong>
-              </div>
-            </div>
-            {maintenanceProjectRows.length > 0 && (
-              <div class="maintenance-footprint">
-                <h3>Project footprint</h3>
-                <div class="maintenance-projects">
-                  {maintenanceProjectRows.map(([project, count]) => (
-                    <div class="maintenance-project">
-                      <strong>{project}</strong>
-                      <span>{count} rows</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div class="maintenance-tags">
-              <span>Canonical {maintenanceTagCounts["canonical-memory"] ?? 0}</span>
-              <span>Digest {maintenanceTagCounts["memory-digest"] ?? 0}</span>
-              <span>Compacted {maintenanceTagCounts["compacted"] ?? 0}</span>
-            </div>
-            {maintenanceRows.length > 0 ? (
-              <div class="list">
-                {maintenanceRows.map((item) => (
-                  <a class={`list-row ${selectedId === item.id ? "is-selected" : ""}`} href={makeHref({ selected: item.id })}>
-                    <div class="row-rank">{item.tags.includes("canonical-memory") ? "C" : item.tags.includes("memory-digest") ? "D" : "X"}</div>
-                    <div class="row-main">
-                      <div class="row-meta">
-                        <span>{item.project_id || "no-project"}</span>
-                        <span>{item.source}</span>
-                        <span>{formatDate(item.created_at)}</span>
-                      </div>
-                      <strong>{item.summary || trimText(item.content, 80) || "Untitled memory"}</strong>
-                      <p>{trimText(item.content, 180)}</p>
-                    </div>
-                    <div class="row-side">{item.tags.filter((tag) => ["canonical-memory", "memory-digest", "compacted"].includes(tag)).join(" / ")}</div>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <div class="empty-state">
-                <strong>No maintenance-tagged rows on this page.</strong>
-              </div>
-            )}
-            <div class="pager">
-              <span>Page {page}</span>
-              <div class="pager-actions">
-                {prevPageHref ? <a class="pager-link" href={prevPageHref}>Previous</a> : <span class="pager-link is-disabled">Previous</span>}
-                {nextPageHref ? <a class="pager-link" href={nextPageHref}>Next</a> : <span class="pager-link is-disabled">Next</span>}
-              </div>
-            </div>
-          </>
-        )}
+          )}
+        </div>
       </section>
 
-      <aside class="detail card">
-        <div class="section-head compact">
-          <div>
-            <p class="eyebrow">Selected memory</p>
-            <h2>{detail ? detail.title : "Choose a row"}</h2>
-          </div>
-        </div>
-        {detail ? (
-          <>
-            <dl class="detail-grid">
-              <div><dt>ID</dt><dd>{detail.id}</dd></div>
-              <div><dt>Source</dt><dd>{detail.source}</dd></div>
-              <div><dt>Project</dt><dd>{detail.project_id || "no-project"}</dd></div>
-              <div><dt>Created</dt><dd>{formatDate(detail.created_at)}</dd></div>
-              <div><dt>Score</dt><dd>{detail.score === null ? "n/a" : detail.score.toFixed(3)}</dd></div>
-              <div><dt>External key</dt><dd>{detail.external_key || "n/a"}</dd></div>
-            </dl>
-            {detail.tags.length > 0 && (
-              <div class="tags">
-                {detail.tags.map((tag) => <span>{tag}</span>)}
-              </div>
-            )}
-            <section class="detail-body">
-              <h3>Preview</h3>
-              <p>{detail.preview}</p>
-            </section>
-            {detail.content && detail.content !== detail.preview && (
-              <details class="detail-body">
-                <summary>Raw content</summary>
-                <pre>{detail.content}</pre>
-              </details>
-            )}
-          </>
-        ) : (
-          <div class="empty-state">
-            <strong>まず左の一覧を操作してください。</strong>
-            <p>入力欄で検索するか、query を空にして corpus list をページ送りで見ます。</p>
-            <div class="quick-picks">
-              <a href={searchTabHref}>Search</a>
-              <a href={profileTabHref}>Profile</a>
-              <a href={maintenanceTabHref}>Maintenance</a>
+      <aside class="xl:sticky xl:top-24">
+        <div class="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(16,16,19,0.94)_0%,rgba(10,10,12,0.92)_100%)] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="surface-label">Selected memory</p>
+              <h2 class="mt-2 text-3xl font-semibold tracking-[-0.05em] text-white">{detail ? detail.title : "Pick a row"}</h2>
             </div>
+            {detail?.score !== null && detail?.score !== undefined && (
+              <span class="surface-chip">{detail.score.toFixed(3)}</span>
+            )}
           </div>
-        )}
+
+          {detail ? (
+            <div class="mt-5 space-y-4">
+              <dl class="grid gap-3 sm:grid-cols-2">
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">ID</dt>
+                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{detail.id}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Source</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.source}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Project</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.project_id || "no-project"}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Created</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{formatDate(detail.created_at)}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Kind</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.kind} / {detail.memory_kind}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Lifecycle</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.lifecycle_state}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Version</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">v{detail.current_version}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">External key</dt>
+                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{detail.external_key || "n/a"}</dd>
+                </div>
+              </dl>
+
+              {detail.tags.length > 0 && (
+                <div class="flex flex-wrap gap-2">
+                  {detail.tags.map((tag) => <span class="surface-chip">{tag}</span>)}
+                </div>
+              )}
+
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Last accessed</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.last_accessed_at ? formatDate(detail.last_accessed_at) : "n/a"}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Confidence</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.confidence_score ?? "n/a"}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Utility</dt>
+                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.utility_score ?? "n/a"}</dd>
+                </div>
+              </div>
+
+              <section class="surface-soft-card !rounded-[24px] !p-4">
+                <h3 class="text-base font-semibold text-white">Preview</h3>
+                <p class="mt-3 text-sm leading-7 text-zinc-300">{detail.preview}</p>
+              </section>
+
+              {detail.content && detail.content !== detail.preview && (
+                <details class="surface-soft-card !rounded-[24px] !p-4">
+                  <summary class="cursor-pointer text-sm font-semibold text-white">Raw content</summary>
+                  <pre class="mt-3">{detail.content}</pre>
+                </details>
+              )}
+            </div>
+          ) : (
+            <div class="mt-5 space-y-4">
+              <div class="surface-soft-card !rounded-[24px] !p-4">
+                <strong class="text-base font-semibold text-white">検索前のクイックピック</strong>
+                <p class="mt-2 text-sm leading-7 text-zinc-400">recent lane からすぐ開けるようにしています。検索語が定まっていないときはここから入れます。</p>
+              </div>
+              <div class="space-y-3">
+                {quickPickRows.length > 0 ? quickPickRows.map((item) => (
+                  <a class={rowCardClass(false)} href={makeHref({ selected: item.id })}>
+                    <p class="surface-label">{item.source}</p>
+                    <h3 class="mt-2 text-lg font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
+                    <p class="mt-2 text-sm leading-7 text-zinc-400">{trimText(item.content_preview, 140)}</p>
+                  </a>
+                )) : (
+                  <div class="surface-soft-card !rounded-[24px] !p-4 text-sm text-zinc-400">まだ quick pick に出せる memory がありません。</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </aside>
     </div>
   </section>
-
-  <style>
-    .memory-shell {
-      display: grid;
-      gap: 18px;
-    }
-
-    .memory-header,
-    .controls,
-    .main-pane,
-    .detail,
-    .warning {
-      overflow: hidden;
-      margin-bottom: 0;
-    }
-
-    .memory-header {
-      display: grid;
-      gap: 14px;
-      align-items: end;
-      grid-template-columns: minmax(0, 1fr) auto;
-      padding: 28px 28px 24px;
-      background: #000;
-      color: #fff;
-      border: 0;
-      border-radius: 24px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
-    }
-
-    .eyebrow,
-    .field-label,
-    .micro-meta span,
-    .row-meta span,
-    .header-stats span,
-    .pager span,
-    .counter,
-    .detail-grid dt,
-    .maintenance-metric span,
-    .maintenance-project span {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .eyebrow {
-      color: rgba(255, 255, 255, 0.72);
-      font-weight: 700;
-    }
-
-    .field-label {
-      display: inline-flex;
-      margin: 0;
-      color: rgba(29, 29, 31, 0.64);
-      font-weight: 700;
-    }
-
-    .query-block,
-    .filter-form label {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-      color: inherit;
-      text-transform: none;
-      font-size: inherit;
-      font-weight: inherit;
-      letter-spacing: normal;
-    }
-
-    .memory-header h1 {
-      margin-top: 8px;
-      color: #fff;
-      font-size: clamp(2.4rem, 5vw, 4rem);
-      letter-spacing: -0.04em;
-      line-height: 1.06;
-    }
-
-    .section-head h2,
-    .detail h2,
-    .maintenance-footprint h3,
-    .detail-body h3 {
-      margin: 0;
-      color: var(--text);
-      font-family: var(--font-body);
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      line-height: 1.12;
-    }
-
-    .section-head h2 {
-      margin-top: 4px;
-      font-size: clamp(1.35rem, 2.6vw, 2rem);
-    }
-
-    .lede {
-      margin: 12px 0 0;
-      color: rgba(255, 255, 255, 0.78);
-      line-height: 1.47;
-      max-width: 64ch;
-    }
-
-    .muted,
-    .row-main p,
-    .stack-row p,
-    .detail-body p,
-    .empty-state p,
-    .maintenance-footprint p {
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .header-stats span {
-      display: inline-flex;
-      gap: 6px;
-      align-items: center;
-      min-height: 36px;
-      padding: 0 12px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.12);
-      color: rgba(255, 255, 255, 0.82);
-    }
-
-    .header-stats em {
-      font-style: normal;
-      color: #fff;
-      font-weight: 700;
-    }
-
-    .controls {
-      display: grid;
-      gap: 16px;
-      padding: 20px;
-      background: #fff;
-      border-radius: 24px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
-      border: 1px solid rgba(0, 0, 0, 0.04);
-    }
-
-    .tabbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .tab,
-    .secondary-link,
-    .pager-link,
-    .quick-picks a {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 42px;
-      padding: 0 14px;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      border-radius: 999px;
-      background: #f5f5f7;
-      color: var(--text);
-      text-decoration: none;
-      font-weight: 600;
-      transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
-    }
-
-    .tab.is-active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      box-shadow: 0 8px 18px rgba(0, 113, 227, 0.2);
-    }
-
-    .search-form {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 168px;
-      gap: 12px;
-      align-items: end;
-    }
-
-    .search-form button,
-    .filter-form button {
-      width: 100%;
-    }
-
-    .query-block input,
-    .filter-form input,
-    .filter-form select {
-      min-height: 48px;
-      font-size: 16px;
-      margin-bottom: 0;
-    }
-
-    .filter-row {
-      display: flex;
-      gap: 12px;
-      align-items: end;
-      justify-content: space-between;
-      flex-wrap: wrap;
-    }
-
-    .filter-form {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      flex: 1 1 720px;
-    }
-
-    .warning {
-      padding: 20px;
-      background: var(--warning-surface);
-      border: 1px solid rgba(154, 52, 18, 0.14);
-      border-radius: 20px;
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
-    }
-
-    .warning ul {
-      margin: 10px 0 0;
-      padding-left: 18px;
-      color: var(--warning-text);
-      line-height: 1.6;
-    }
-
-    .workspace {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.82fr);
-      align-items: start;
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: start;
-      margin-bottom: 16px;
-    }
-
-    .section-head.compact {
-      margin-bottom: 12px;
-    }
-
-    .micro-meta {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .micro-meta span {
-      display: inline-flex;
-      align-items: center;
-      min-height: 32px;
-      padding: 0 10px;
-      border-radius: 999px;
-      background: #f5f5f7;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      color: rgba(0, 0, 0, 0.68);
-    }
-
-    .list,
-    .stack,
-    .maintenance-projects {
-      display: grid;
-      gap: 10px;
-    }
-
-    .list-row,
-    .stack-row,
-    .maintenance-metric,
-    .maintenance-project,
-    .empty-state,
-    .detail-grid div,
-    .detail-body {
-      background: #fff;
-      border-radius: 18px;
-      border: 1px solid rgba(0, 0, 0, 0.04);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-    }
-
-    .list-row,
-    .stack-row {
-      position: relative;
-      display: grid;
-      gap: 10px;
-      padding: 16px;
-      text-decoration: none;
-      color: inherit;
-      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
-      overflow: hidden;
-    }
-
-    .list-row::before,
-    .stack-row::before {
-      content: "";
-      position: absolute;
-      inset: 0 auto 0 0;
-      width: 4px;
-      border-radius: 999px 0 0 999px;
-      background: transparent;
-    }
-
-    .list-row {
-      grid-template-columns: 56px minmax(0, 1fr) 120px;
-      align-items: start;
-    }
-
-    .list-row:hover,
-    .stack-row:hover,
-    .tab:hover,
-    .secondary-link:hover,
-    .pager-link:hover,
-    .quick-picks a:hover {
-      transform: translateY(-1px);
-      border-color: rgba(0, 113, 227, 0.24);
-    }
-
-    .list-row.is-selected,
-    .stack-row.is-selected {
-      background: #fff;
-      border-color: rgba(0, 113, 227, 0.24);
-      box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.14), 0 10px 24px rgba(0, 0, 0, 0.08);
-    }
-
-    .list-row.is-selected::before,
-    .stack-row.is-selected::before {
-      background: var(--accent);
-    }
-
-    .row-rank {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 44px;
-      padding: 0 10px;
-      border-radius: 999px;
-      background: #f5f5f7;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      color: var(--accent);
-      font-family: var(--font-mono);
-      font-weight: 700;
-    }
-
-    .list-row.is-selected .row-rank,
-    .stack-row.is-selected .row-rank {
-      background: var(--accent);
-      border-color: transparent;
-      color: #fff;
-    }
-
-    .row-meta {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      color: rgba(0, 0, 0, 0.62);
-    }
-
-    .row-main strong,
-    .stack-row strong,
-    .detail-body h3,
-    .maintenance-footprint h3 {
-      font-size: 1.02rem;
-      margin: 0;
-      color: var(--text);
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-
-    .row-main p,
-    .stack-row p,
-    .detail-body p {
-      margin: 0;
-    }
-
-    .row-side {
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: rgba(0, 0, 0, 0.56);
-      text-align: right;
-    }
-
-    .pager {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .pager-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .pager-link.is-disabled {
-      opacity: 0.45;
-      pointer-events: none;
-    }
-
-    .empty-state {
-      padding: 18px;
-      border: 1px dashed rgba(0, 0, 0, 0.12);
-      box-shadow: none;
-    }
-
-    .empty-state p {
-      margin: 8px 0 0;
-    }
-
-    .quick-picks {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-
-    .quick-picks a {
-      min-height: 36px;
-      padding: 0 12px;
-      font-size: 0.92rem;
-    }
-
-    .two-pane {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .subpane {
-      display: grid;
-      gap: 12px;
-      padding: 18px;
-      border-radius: 20px;
-      background: #fff;
-      border: 1px solid rgba(0, 0, 0, 0.04);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-    }
-
-    .subpane:last-child {
-      background: #f8f8fb;
-    }
-
-    .counter {
-      color: var(--accent);
-      font-weight: 700;
-    }
-
-    .stack-row span,
-    .maintenance-project span {
-      color: rgba(0, 0, 0, 0.56);
-    }
-
-    .maintenance-grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      margin-bottom: 14px;
-    }
-
-    .maintenance-metric,
-    .maintenance-project {
-      display: grid;
-      gap: 10px;
-      padding: 16px;
-    }
-
-    .maintenance-metric span,
-    .maintenance-project span {
-      color: rgba(0, 0, 0, 0.56);
-    }
-
-    .maintenance-metric strong {
-      font-size: 1.5rem;
-      line-height: 1;
-    }
-
-    .maintenance-footprint {
-      display: grid;
-      gap: 10px;
-      margin: 6px 0 14px;
-    }
-
-    .maintenance-projects {
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    }
-
-    .maintenance-project strong {
-      font-size: 1rem;
-    }
-
-    .maintenance-tags {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 4px 0 14px;
-    }
-
-    .maintenance-tags span {
-      display: inline-flex;
-      align-items: center;
-      min-height: 32px;
-      padding: 0 10px;
-      border-radius: 999px;
-      background: #f5f5f7;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      font-family: var(--font-mono);
-      font-size: 0.76rem;
-      color: rgba(0, 0, 0, 0.68);
-    }
-
-    .detail {
-      position: sticky;
-      top: 92px;
-      display: grid;
-      gap: 14px;
-      padding: 20px;
-      background: #fff;
-      border-radius: 24px;
-      border: 1px solid rgba(0, 0, 0, 0.04);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-    }
-
-    .detail-grid {
-      margin: 0;
-      display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .detail-grid div {
-      padding: 12px;
-      box-shadow: none;
-    }
-
-    .detail-grid dt {
-      color: rgba(0, 0, 0, 0.56);
-      margin-bottom: 6px;
-    }
-
-    .detail-grid dd {
-      margin: 0;
-      line-height: 1.55;
-      overflow-wrap: anywhere;
-    }
-
-    .tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .tags span {
-      display: inline-flex;
-      align-items: center;
-      min-height: 32px;
-      padding: 0 10px;
-      border-radius: 999px;
-      background: #f5f5f7;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      font-family: var(--font-mono);
-      font-size: 0.76rem;
-      color: rgba(0, 0, 0, 0.66);
-    }
-
-    .detail-body {
-      display: grid;
-      gap: 10px;
-      padding: 14px;
-      box-shadow: none;
-      background: #f5f5f7;
-    }
-
-    .detail-body summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .detail-body pre {
-      max-height: 320px;
-      overflow: auto;
-    }
-
-    @media (max-width: 1100px) {
-      .workspace,
-      .two-pane {
-        grid-template-columns: 1fr;
-      }
-
-      .detail {
-        position: static;
-        top: auto;
-      }
-    }
-
-    @media (max-width: 820px) {
-      .memory-header,
-      .search-form,
-      .filter-form,
-      .detail-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .memory-header {
-        padding: 24px;
-      }
-
-      .header-stats {
-        justify-content: flex-start;
-      }
-
-      .list-row {
-        grid-template-columns: 1fr;
-      }
-
-      .row-side {
-        text-align: left;
-      }
-
-      .pager {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .search-form button,
-      .filter-form button {
-        width: 100%;
-      }
-    }
-  </style>
 </BaseLayout>

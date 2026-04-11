@@ -2,6 +2,81 @@ import { buildTenantMemoryProfile, sha256, ulid, type MemoryProfileResponse } fr
 import { recordRetrievalTelemetry } from "../retrieval-metrics";
 import type { CapabilityContext, CapabilityResult } from "../types";
 
+async function bestEffortRefreshRetrievedMemories(ctx: CapabilityContext, profile: MemoryProfileResponse): Promise<void> {
+  const ids = profile.search_results
+    .filter((item) => item.kind === "memory")
+    .map((item) => item.id)
+    .slice(0, 5);
+  if (ids.length === 0) return;
+
+  const now = Date.now();
+  const statements: D1PreparedStatement[] = [];
+  for (const memoryId of ids) {
+    const row = await ctx.env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, content, summary, tags_json, source, external_key, project_id, kind, lifecycle_state, scope_type,
+              scope_key, confidence_score, utility_score, canonical_key, current_version, expires_at
+       FROM memories
+       WHERE tenant_id = ? AND id = ?`
+    )
+      .bind(ctx.tenantId, memoryId)
+      .first<{
+        id: string;
+        content: string;
+        summary: string | null;
+        tags_json: string | null;
+        source: string;
+        external_key: string | null;
+        project_id: string | null;
+        kind?: string | null;
+        lifecycle_state?: string | null;
+        scope_type?: string | null;
+        scope_key?: string | null;
+        confidence_score?: number | null;
+        utility_score?: number | null;
+        canonical_key?: string | null;
+        current_version?: number | null;
+        expires_at?: number | null;
+      }>();
+    if (!row) continue;
+
+    const version = Number(row.current_version ?? 1) + 1;
+    statements.push(
+      ctx.env.OPEN_BRAIN_DB.prepare(
+        "UPDATE memories SET current_version = ?, last_accessed_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?"
+      ).bind(version, now, now, ctx.tenantId, memoryId),
+      ctx.env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO memory_versions(
+          id, memory_id, tenant_id, version, operation, content, summary, tags_json, kind, lifecycle_state,
+          scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score, canonical_key, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        ulid(),
+        memoryId,
+        ctx.tenantId,
+        version,
+        "refresh",
+        row.content,
+        row.summary,
+        row.tags_json,
+        row.kind ?? "episodic",
+        row.lifecycle_state ?? "active",
+        row.scope_type ?? (row.project_id ? "project" : "tenant"),
+        row.scope_key ?? row.project_id ?? ctx.tenantId,
+        "system",
+        ctx.capability,
+        row.confidence_score ?? null,
+        row.utility_score ?? null,
+        row.canonical_key ?? null,
+        now
+      )
+    );
+  }
+
+  if (statements.length > 0) {
+    await ctx.env.OPEN_BRAIN_DB.batch(statements).catch(() => undefined);
+  }
+}
+
 async function loadInput(ctx: CapabilityContext): Promise<string> {
   const ref = ctx.inputRef;
 
@@ -66,6 +141,8 @@ async function loadMemoryProfile(ctx: CapabilityContext, query: string): Promise
     topMemoryIds: searchMeta?.top_result_ids ?? [],
     topScores: searchMeta?.top_result_ranks ?? null
   });
+
+  await bestEffortRefreshRetrievedMemories(ctx, profile);
 
   return profile;
 }

@@ -61,6 +61,10 @@ Org Brain now exposes retrieval and profile endpoints on top of the D1 memory so
 
 - `POST /v1/memories/search`
 - `POST /v1/memories/profile`
+- `POST /v1/memories/capture`
+- `POST /v1/memories/revise`
+- `POST /v1/memories/refresh`
+- `POST /v1/memories/suppress`
 
 `/v1/memories/search` supports:
 - `rewrite_query` for 4-way lexical query expansion
@@ -73,6 +77,16 @@ Org Brain now exposes retrieval and profile endpoints on top of the D1 memory so
 - `search_results` when `q` is provided
 
 Both endpoints prioritize the current `project_id` when available, dedupe by normalized summary/title, and use the same retrieval helper as cap-runner.
+
+Lifecycle v2 adds:
+- `kind`: `episodic|semantic|org_knowledge`
+- `lifecycle_state`: `active|suppressed|consolidated|promoted`
+- immutable history in `memory_versions`
+- best-effort refresh of `last_accessed_at` on retrieval
+
+Compatibility:
+- `POST /v1/memories/upsert` remains supported and now maps to the lifecycle capture path.
+- suppressed or expired memories are excluded from normal search/profile results.
 
 ## Knowledge Docs
 Org Brain now includes a docs layer for interlinked markdown knowledge docs. This is a navigation and retrieval interface for humans and agents, not the system of record.
@@ -235,6 +249,8 @@ Memory tools now include:
 - `orgbrain_memories_upsert`
 - `orgbrain_memories_search`
 - `orgbrain_memories_profile`
+- `orgbrain_memories_refresh`
+- `orgbrain_memories_suppress`
 
 See [docs/REMOTE_MCP.md](/Users/miya/projects/org-brain/docs/REMOTE_MCP.md) for client config and skill usage.
 See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that reports the same usage snapshot.

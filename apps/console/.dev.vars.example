@@ -1,0 +1,4 @@
+INTERNAL_API_KEY=dev-org-brain-api-key
+# Optional fallback when the Cloudflare service binding is not available locally.
+# Point this to a local or remote api-gateway host.
+API_BASE_URL=http://127.0.0.1:8787

@@ -1,4 +1,5 @@
 import { buildKnowledgeFtsQuery } from "./knowledge-docs";
+import { normalizeLifecycleState, normalizeMemoryKind, type MemoryKind, type MemoryLifecycleState } from "./memory-lifecycle-types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_DAYS = 14;
@@ -23,6 +24,13 @@ export type StoredMemory = {
   source: string;
   external_key: string | null;
   created_at: number;
+  kind?: string | null;
+  lifecycle_state?: string | null;
+  current_version?: number | null;
+  last_accessed_at?: number | null;
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  expires_at?: number | null;
 };
 
 type MemoryCandidateRow = StoredMemory & {
@@ -52,6 +60,9 @@ export type MemorySearchResult = {
   score: number | null;
   source: string;
   created_at: number;
+  memory_kind?: MemoryKind;
+  lifecycle_state?: MemoryLifecycleState;
+  current_version?: number;
 };
 
 export type MemorySearchMeta = {
@@ -86,6 +97,12 @@ export type MemoryProfileItem = {
   source: string;
   created_at: number;
   tags: string[];
+  memory_kind: MemoryKind;
+  lifecycle_state: MemoryLifecycleState;
+  current_version: number;
+  last_accessed_at: number | null;
+  confidence_score: number | null;
+  utility_score: number | null;
 };
 
 export type MemoryProfileResponse = {
@@ -136,6 +153,9 @@ type SearchCandidate = {
   created_at: number;
   raw_rank: number | null;
   dedupe_key: string;
+  memory_kind?: MemoryKind;
+  lifecycle_state?: MemoryLifecycleState;
+  current_version?: number;
 };
 
 function clipText(value: string | null | undefined, limit = 240): string {
@@ -191,6 +211,12 @@ function memoryTierPriority(tags: string[]): number {
   return 4;
 }
 
+function memoryKindPriority(kind: MemoryKind): number {
+  if (kind === "semantic") return 0;
+  if (kind === "org_knowledge") return 1;
+  return 2;
+}
+
 function projectPriority(targetProjectId: string | null | undefined, candidateProjectId: string | null | undefined): number {
   return targetProjectId && candidateProjectId === targetProjectId ? 0 : 1;
 }
@@ -205,8 +231,11 @@ function compareNullableRanks(left: number | null, right: number | null): number
 function compareMemoryCandidates(projectId: string | null | undefined, left: MemoryCandidateRow, right: MemoryCandidateRow): number {
   const leftTags = parseTagsJson(left.tags_json);
   const rightTags = parseTagsJson(right.tags_json);
+  const leftKind = normalizeMemoryKind(left.kind);
+  const rightKind = normalizeMemoryKind(right.kind);
   return (
     projectPriority(projectId, left.project_id) - projectPriority(projectId, right.project_id) ||
+    memoryKindPriority(leftKind) - memoryKindPriority(rightKind) ||
     memoryTierPriority(leftTags) - memoryTierPriority(rightTags) ||
     compareNullableRanks(left.raw_rank, right.raw_rank) ||
     tagPriority(leftTags) - tagPriority(rightTags) ||
@@ -297,7 +326,9 @@ function bindProjectArgs(projectId: string | null | undefined): unknown[] {
 }
 
 function searchableFilterSql(alias: string): string {
-  return `(${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"compacted"%')`;
+  return `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')
+    AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > unixepoch('now') * 1000)
+    AND (${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"compacted"%')`;
 }
 
 function primaryLexicalFilterSql(alias: string): string {
@@ -314,6 +345,7 @@ async function searchMemoryVariant(
 ): Promise<MemoryCandidateRow[]> {
   const result = await db.prepare(
     `SELECT m.id, m.tenant_id, m.project_id, m.content, m.summary, m.tags_json, m.source, m.external_key, m.created_at,
+            m.kind, m.lifecycle_state, m.current_version, m.last_accessed_at, m.confidence_score, m.utility_score, m.expires_at,
             bm25(memories_fts) AS raw_rank
      FROM memories_fts
      JOIN memories m
@@ -342,7 +374,8 @@ async function loadRecentHistoryRows(
   limit: number
 ): Promise<StoredMemory[]> {
   const result = await db.prepare(
-    `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at
+    `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at,
+            kind, lifecycle_state, current_version, last_accessed_at, confidence_score, utility_score, expires_at
      FROM memories
      WHERE tenant_id = ?
        AND ${searchableFilterSql("memories")}
@@ -394,7 +427,10 @@ function toMemorySearchCandidate(row: MemoryCandidateRow): SearchCandidate {
     source: row.source,
     created_at: row.created_at,
     raw_rank: row.raw_rank,
-    dedupe_key: normalizeDedupeKey(summary || row.content || row.id)
+    dedupe_key: normalizeDedupeKey(summary || row.content || row.id),
+    memory_kind: normalizeMemoryKind(row.kind),
+    lifecycle_state: normalizeLifecycleState(row.lifecycle_state),
+    current_version: Number(row.current_version ?? 1)
   };
 }
 
@@ -420,7 +456,16 @@ function toPublicResult(candidate: SearchCandidate): MemorySearchResult {
     content_preview: candidate.content_preview,
     score: candidate.kind === "memory" || candidate.kind === "doc" ? toPublicScore(candidate.raw_rank) : null,
     source: candidate.source,
-    created_at: candidate.created_at
+    created_at: candidate.created_at,
+    memory_kind: candidate.kind === "memory" ? ((candidate as SearchCandidate & { memory_kind?: MemoryKind }).memory_kind ?? "episodic") : undefined,
+    lifecycle_state:
+      candidate.kind === "memory"
+        ? ((candidate as SearchCandidate & { lifecycle_state?: MemoryLifecycleState }).lifecycle_state ?? "active")
+        : undefined,
+    current_version:
+      candidate.kind === "memory"
+        ? ((candidate as SearchCandidate & { current_version?: number }).current_version ?? 1)
+        : undefined
   };
 }
 
@@ -559,7 +604,13 @@ function toProfileItem(row: StoredMemory): MemoryProfileItem {
     content_preview: buildPreview(row.summary, row.content),
     source: row.source,
     created_at: row.created_at,
-    tags
+    tags,
+    memory_kind: normalizeMemoryKind(row.kind),
+    lifecycle_state: normalizeLifecycleState(row.lifecycle_state),
+    current_version: Number(row.current_version ?? 1),
+    last_accessed_at: row.last_accessed_at ?? null,
+    confidence_score: row.confidence_score ?? null,
+    utility_score: row.utility_score ?? null
   };
 }
 
@@ -587,6 +638,7 @@ export async function buildTenantMemoryProfile(
       const rightTags = parseTagsJson(right.tags_json);
       return (
         projectPriority(projectId, left.project_id) - projectPriority(projectId, right.project_id) ||
+        memoryKindPriority(normalizeMemoryKind(left.kind)) - memoryKindPriority(normalizeMemoryKind(right.kind)) ||
         memoryTierPriority(leftTags) - memoryTierPriority(rightTags) ||
         tagPriority(leftTags) - tagPriority(rightTags) ||
         right.created_at - left.created_at

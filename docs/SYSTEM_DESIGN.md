@@ -10,7 +10,9 @@
 - `tasks`: task state source of truth.
 - `task_events`: append-only audit trail.
 - `capabilities`: concurrency and schema catalog.
-- `memories` / `memories_fts`: knowledge memory and search index.
+- `memories` / `memories_fts`: current memory snapshot and search index.
+- `memory_versions`: immutable lifecycle history for capture/revise/refresh/suppress.
+- `memory_edges`: lightweight lineage graph between memory rows.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
 - `threads`: review-oriented conversation capture.
@@ -21,9 +23,13 @@
 
 ## Memory and Retrieval
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
+- Lifecycle-aware write logic lives in `apps/api-gateway/src/memory-lifecycle-service.ts`.
 - Retrieval is tier-aware: `canonical-memory` > `curated-memory` / `promoted-memory` > `memory-digest` > recent raw history.
+- Lifecycle-aware filtering excludes `suppressed` and expired memories from normal retrieval.
+- `semantic` memories are preferred over `episodic` memories when durable/profile candidates are sorted.
 - Compact rows tagged `compacted` are excluded from retrieval and profile flows.
 - Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows.
+- Retrieval refresh is best-effort: cap-runner updates `last_accessed_at` and appends a `memory_versions` refresh snapshot for top search hits without blocking task execution.
 
 ## Orchestration and Reliability
 - Queue consumers use explicit ack/retry behavior.
@@ -35,6 +41,7 @@
 - Public API is API-key protected.
 - Browser traffic uses the Pages proxy; the service API key never reaches the client.
 - Remote MCP uses worker-validated service token headers with per-token tenant grants.
+- MCP lifecycle mutations store the authenticated service-token `principal` as the memory actor for audit visibility.
 
 ## Operator Workflows
 - `pnpm -s usage:status` reports task and memory usage from D1.

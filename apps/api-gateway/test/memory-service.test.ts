@@ -12,6 +12,14 @@ type MemoryRecord = {
   external_key: string | null;
   created_at: number;
   lexical_score?: number | null;
+  kind?: string | null;
+  lifecycle_state?: string | null;
+  current_version?: number | null;
+  last_accessed_at?: number | null;
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  expires_at?: number | null;
+  revised_at?: number | null;
 };
 
 type KnowledgeDocRecord = {
@@ -85,6 +93,12 @@ class FakeStatement {
       const row = this.db.memories.find((memory) => memory.tenant_id === tenantId && memory.external_key === externalKey);
       return (row ? { id: row.id } : null) as T | null;
     }
+    if (this.sql.includes("FROM memories") && this.sql.includes("WHERE tenant_id = ? AND id = ?")) {
+      const tenantId = this.args[0] as string;
+      const id = this.args[1] as string;
+      const row = this.db.memories.find((memory) => memory.tenant_id === tenantId && memory.id === id);
+      return (row ?? null) as T | null;
+    }
     return null;
   }
 
@@ -141,11 +155,14 @@ class FakeStatement {
     if (this.sql.includes("FROM memories") && this.sql.includes("WHERE tenant_id = ? AND source = ?")) {
       const tenantId = this.args[0] as string;
       const source = this.args[1] as string;
-      const limit = this.args[2] as number;
+      const hasOffset = this.sql.includes("OFFSET ?");
+      const limit = this.args[this.args.length - (hasOffset ? 2 : 1)] as number;
+      const offset = hasOffset ? (this.args[this.args.length - 1] as number) : 0;
       const rows = this.db.memories
         .filter((memory) => memory.tenant_id === tenantId && memory.source === source)
+        .filter((memory) => memory.lifecycle_state !== "suppressed")
         .sort((left, right) => right.created_at - left.created_at)
-        .slice(0, limit);
+        .slice(offset, offset + limit);
       return { results: rows as T[] };
     }
 
@@ -160,6 +177,7 @@ class FakeStatement {
         if (memory.tenant_id !== tenantId) return false;
         if (source && memory.source !== source) return false;
         if (projectId && memory.project_id !== projectId) return false;
+        if (memory.lifecycle_state === "suppressed") return false;
         return true;
       });
       return {
@@ -188,6 +206,7 @@ class FakeStatement {
         .filter((memory) => memory.tenant_id === tenantId)
         .filter((memory) => !source || memory.source === source)
         .filter((memory) => !projectFilter || memory.project_id === projectFilter)
+        .filter((memory) => memory.lifecycle_state !== "suppressed")
         .sort((left, right) => {
           const projectSort =
             (projectId && left.project_id === projectId ? 0 : 1) - (projectId && right.project_id === projectId ? 0 : 1);
@@ -212,29 +231,46 @@ class FakeStatement {
         tags_json: this.args[5] as string | null,
         source: this.args[6] as string,
         external_key: this.args[7] as string | null,
-        created_at: this.args[8] as number
+        created_at: this.args[8] as number,
+        kind: this.args[9] as string | null,
+        lifecycle_state: this.args[10] as string | null,
+        current_version: this.args[19] as number | null,
+        expires_at: this.args[21] as number | null,
+        revised_at: this.args[22] as number | null
       });
       return { success: true };
     }
 
-    if (this.sql.startsWith("UPDATE memories SET")) {
-      const projectId = this.args[0] as string | null;
-      const content = this.args[1] as string;
-      const summary = this.args[2] as string | null;
-      const tagsJson = this.args[3] as string | null;
-      const source = this.args[4] as string;
-      const createdAt = this.args[5] as number;
-      const tenantId = this.args[6] as string;
-      const id = this.args[7] as string;
+    if (this.sql.startsWith("UPDATE memories")) {
+      const tenantId = this.args[this.args.length - 2] as string;
+      const id = this.args[this.args.length - 1] as string;
       const row = this.db.memories.find((memory) => memory.tenant_id === tenantId && memory.id === id);
       if (row) {
-        row.project_id = projectId;
-        row.content = content;
-        row.summary = summary;
-        row.tags_json = tagsJson;
-        row.source = source;
-        row.created_at = createdAt;
+        if (this.args.length >= 22) {
+          row.project_id = this.args[0] as string | null;
+          row.content = this.args[1] as string;
+          row.summary = this.args[2] as string | null;
+          row.tags_json = this.args[3] as string | null;
+          row.source = this.args[4] as string;
+          row.created_at = this.args[5] as number;
+          row.kind = this.args[6] as string | null;
+          row.lifecycle_state = this.args[7] as string | null;
+          row.confidence_score = this.args[12] as number | null;
+          row.utility_score = this.args[13] as number | null;
+          row.current_version = this.args[16] as number | null;
+          row.expires_at = this.args[18] as number | null;
+          row.revised_at = this.args[19] as number | null;
+        } else {
+          row.current_version = this.args[0] as number;
+          row.last_accessed_at = this.args[1] as number;
+          row.revised_at = this.args[2] as number;
+          row.confidence_score = this.args[5] as number | null;
+        }
       }
+      return { success: true };
+    }
+
+    if (this.sql.startsWith("INSERT INTO memory_versions(") || this.sql.startsWith("UPDATE memory_versions SET")) {
       return { success: true };
     }
 

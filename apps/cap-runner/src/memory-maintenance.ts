@@ -28,6 +28,7 @@ type RawMemoryRow = {
   content: string;
   tags_json: string | null;
   created_at: number;
+  lifecycle_state?: string | null;
 };
 
 type PlannedDigest = {
@@ -458,9 +459,10 @@ async function loadMaintenanceTenantIds(db: D1Database): Promise<string[]> {
 
 async function loadMaintenanceRows(db: D1Database, tenantId: string): Promise<RawMemoryRow[]> {
   const result = await db.prepare(
-    `SELECT id, project_id, source, summary, content, tags_json, created_at
+    `SELECT id, project_id, source, summary, content, tags_json, created_at, lifecycle_state
        FROM memories
       WHERE tenant_id = ?
+        AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
         AND (tags_json IS NULL OR tags_json NOT LIKE '%"compacted"%')
         AND source IN (${MAINTENANCE_SOURCE_ALLOWLIST.map(() => "?").join(", ")})
       ORDER BY created_at DESC
@@ -516,8 +518,21 @@ function buildApplyStatements(
     if (existingId) {
       statements.push(
         db.prepare(
-          "UPDATE memories SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ? WHERE tenant_id = ? AND id = ?"
-        ).bind(synthesized.project_id, synthesized.content, synthesized.summary, tagsJson, "org-brain", synthesized.created_at, tenantId, existingId),
+          "UPDATE memories SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ?, kind = ?, lifecycle_state = ?, consolidated_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?"
+        ).bind(
+          synthesized.project_id,
+          synthesized.content,
+          synthesized.summary,
+          tagsJson,
+          "org-brain",
+          synthesized.created_at,
+          "semantic",
+          "active",
+          synthesized.created_at,
+          synthesized.created_at,
+          tenantId,
+          existingId
+        ),
         db.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(existingId, tenantId),
         db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(existingId, tenantId, synthesized.content)
       );
@@ -539,14 +554,20 @@ function buildApplyStatements(
         synthesized.external_key,
         synthesized.created_at
       ),
+      db.prepare(
+        "UPDATE memories SET kind = ?, lifecycle_state = ?, consolidated_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?"
+      ).bind("semantic", "active", synthesized.created_at, synthesized.created_at, tenantId, id),
       db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(id, tenantId, synthesized.content)
     );
   }
 
   for (const compaction of plan.compactions) {
     statements.push(
-      db.prepare("UPDATE memories SET tags_json = ? WHERE tenant_id = ? AND id = ?").bind(
+      db.prepare("UPDATE memories SET tags_json = ?, lifecycle_state = ?, suppressed_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?").bind(
         JSON.stringify(compaction.next_tags),
+        "suppressed",
+        Date.now(),
+        Date.now(),
         tenantId,
         compaction.id
       ),

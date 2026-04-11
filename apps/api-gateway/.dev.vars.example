@@ -1,0 +1,6 @@
+API_KEY=dev-org-brain-api-key
+
+# Optional local development values if you want to exercise MCP or workflows
+# without setting secrets in production.
+# MCP_SERVICE_TOKENS_JSON={"tokens":[]}
+# MCP_TENANT_POLICY_JSON={"default_tenants":["default"]}
