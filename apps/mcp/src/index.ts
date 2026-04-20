@@ -117,6 +117,87 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
     );
 
     this.server.tool(
+      "orgbrain_memories_propose",
+      {
+        tenant_id: z.string().optional(),
+        source: z.string().optional(),
+        actor_type: z.string().optional(),
+        actor_id: z.string().optional(),
+        item: z.object({
+          external_key: z.string().max(256).optional(),
+          content: z.string().min(1).max(20000),
+          summary: z.string().max(1000).optional(),
+          tags: z.array(z.string().min(1).max(64)).max(16).optional(),
+          created_at: z.number().int().optional(),
+          project_id: z.string().max(128).nullable().optional()
+        }),
+        entities: z.array(z.object({
+          name: z.string().min(1).max(128),
+          entity_type: z.enum(["person", "service", "project", "team", "org", "document", "unknown"]).optional(),
+          role: z.enum(["subject", "author", "decision_maker", "reviewer", "mentioned"]).optional(),
+          confidence_score: z.number().optional(),
+          external_ref: z.string().max(256).nullable().optional()
+        })).max(8).optional(),
+        evidence: z.array(z.object({
+          evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "external"]).optional(),
+          evidence_ref: z.string().min(1).max(512),
+          relation: z.enum(["supports", "contradicts", "context_for"]).optional(),
+          note: z.string().max(500).nullable().optional(),
+          weight_score: z.number().optional()
+        })).max(8).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/memories/propose", {
+          method: "POST",
+          body: {
+            tenant_id: tenantId,
+            ...payload
+          }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memories_confirm",
+      {
+        tenant_id: z.string().optional(),
+        confirmation_token: z.string().min(1).max(64),
+        approved: z.boolean(),
+        conclusion: z.string().max(240).optional(),
+        reason_summary: z.string().max(500).optional(),
+        decision_type: z.enum(["adopt", "reject", "prioritize", "diagnose", "workaround", "policy"]).optional(),
+        status: z.string().max(64).optional(),
+        entities: z.array(z.object({
+          name: z.string().min(1).max(128),
+          entity_type: z.enum(["person", "service", "project", "team", "org", "document", "unknown"]).optional(),
+          role: z.enum(["subject", "author", "decision_maker", "reviewer", "mentioned"]).optional(),
+          confidence_score: z.number().optional(),
+          external_ref: z.string().max(256).nullable().optional()
+        })).max(8).optional(),
+        evidence: z.array(z.object({
+          evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "external"]).optional(),
+          evidence_ref: z.string().min(1).max(512),
+          relation: z.enum(["supports", "contradicts", "context_for"]).optional(),
+          note: z.string().max(500).nullable().optional(),
+          weight_score: z.number().optional()
+        })).max(8).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/memories/confirm", {
+          method: "POST",
+          body: {
+            tenant_id: tenantId,
+            ...payload
+          }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
       "orgbrain_memories_upsert",
       {
         tenant_id: z.string().optional(),
@@ -162,9 +243,15 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         limit: z.number().int().min(1).max(20).optional(),
         rewrite_query: z.boolean().optional(),
         search_mode: z.enum(["memories", "hybrid"]).optional(),
-        include_history: z.boolean().optional()
+        include_history: z.boolean().optional(),
+        entity_id: z.string().optional(),
+        entity_role: z.string().optional(),
+        decision_type: z.string().optional(),
+        decision_status: z.string().optional(),
+        confirmation_state: z.string().optional(),
+        reason_text: z.string().max(240).optional()
       },
-      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, include_history }) => {
+      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text }) => {
         const tenantId = resolveTenant(tenant_id, this.props);
         const data = await callOrgBrainApi<unknown>(this.env, "/v1/memories/search", {
           method: "POST",
@@ -175,7 +262,13 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
             limit,
             rewrite_query,
             search_mode,
-            include_history
+            include_history,
+            entity_id,
+            entity_role,
+            decision_type,
+            decision_status,
+            confirmation_state,
+            reason_text
           }
         });
         return asJsonContent(data);

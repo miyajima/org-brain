@@ -62,6 +62,8 @@ Org Brain now exposes retrieval and profile endpoints on top of the D1 memory so
 - `POST /v1/memories/search`
 - `POST /v1/memories/profile`
 - `POST /v1/memories/capture`
+- `POST /v1/memories/propose`
+- `POST /v1/memories/confirm`
 - `POST /v1/memories/revise`
 - `POST /v1/memories/refresh`
 - `POST /v1/memories/suppress`
@@ -70,6 +72,7 @@ Org Brain now exposes retrieval and profile endpoints on top of the D1 memory so
 - `rewrite_query` for 4-way lexical query expansion
 - `search_mode=memories|hybrid`
 - `include_history` to append recency-ranked memories after lexical/doc hits
+- rationale-aware filters: `entity_id`, `entity_role`, `decision_type`, `decision_status`, `confirmation_state`, `reason_text`
 
 `/v1/memories/profile` returns:
 - `durable` for summary-backed memories older than 24 hours
@@ -86,6 +89,7 @@ Lifecycle v2 adds:
 
 Compatibility:
 - `POST /v1/memories/upsert` remains supported and now maps to the lifecycle capture path.
+- Interactive memory saves should use `POST /v1/memories/propose` and `POST /v1/memories/confirm` so the user can verify inferred `結論` and `理由` before persistence.
 - suppressed or expired memories are excluded from normal search/profile results.
 
 ## Knowledge Docs

@@ -14,6 +14,7 @@ import {
   upsertMemories
 } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
+import { confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
 import type { Env } from "./types";
 
@@ -90,6 +91,18 @@ app.post("/v1/memories/capture", async (c) => {
   const body = await c.req.json<unknown>();
   const result = await captureMemories(c.env, body);
   return jsonOk(c, result, 201);
+});
+
+app.post("/v1/memories/propose", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await proposeMemoryWithRationale(c.env, body);
+  return jsonOk(c, result, 201);
+});
+
+app.post("/v1/memories/confirm", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await confirmProposedMemory(c.env, body);
+  return jsonOk(c, result);
 });
 
 app.post("/v1/memories/revise", async (c) => {

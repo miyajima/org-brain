@@ -13,6 +13,9 @@
 - `memories` / `memories_fts`: current memory snapshot and search index.
 - `memory_versions`: immutable lifecycle history for capture/revise/refresh/suppress.
 - `memory_edges`: lightweight lineage graph between memory rows.
+- `entities` / `memory_entities`: searchable subject graph for memories.
+- `decision_rationales` / `decision_evidence`: confirmed conclusion/reason structure plus evidence references.
+- `memory_confirmations`: short-lived propose/confirm state for interactive saves.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
 - `threads`: review-oriented conversation capture.
@@ -23,12 +26,16 @@
 
 ## Memory and Retrieval
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
+- Shared rationale inference heuristics live in `packages/shared/src/rationale-extraction.ts`.
 - Lifecycle-aware write logic lives in `apps/api-gateway/src/memory-lifecycle-service.ts`.
+- Interactive rationale confirmation lives in `apps/api-gateway/src/rationale-service.ts`.
 - Retrieval is tier-aware: `canonical-memory` > `curated-memory` / `promoted-memory` > `memory-digest` > recent raw history.
 - Lifecycle-aware filtering excludes `suppressed` and expired memories from normal retrieval.
 - `semantic` memories are preferred over `episodic` memories when durable/profile candidates are sorted.
 - Compact rows tagged `compacted` are excluded from retrieval and profile flows.
 - Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows.
+- Interactive saves use `propose -> user confirmation -> confirm` and only create `decision_rationales` on confirm.
+- Non-interactive hook ingestion keeps writing promoted memory rows only and does not persist confirmed rationale rows.
 - Retrieval refresh is best-effort: cap-runner updates `last_accessed_at` and appends a `memory_versions` refresh snapshot for top search hits without blocking task execution.
 
 ## Orchestration and Reliability

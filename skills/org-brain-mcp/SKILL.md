@@ -19,11 +19,15 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 2. Never use local `~/.openclaw/memory/main.sqlite` as source of truth.
 3. Use `tenant_id="default"` unless the user explicitly specifies another tenant.
 4. For OpenClaw-derived memory writes, set `source="openclaw"` and stable `external_key`.
-5. When reporting results, include tool names and key IDs (`task_id`, `instance_id`, `external_key`).
-6. Auth must go through the configured `CF-Access-*` service token headers, not static bearer tokens.
+5. For interactive memory saves, do not write directly with `orgbrain_memories_upsert`. Call `orgbrain_memories_propose`, show the inferred `結論` and `理由`, confirm they are correct, and only then call `orgbrain_memories_confirm`.
+6. If the user corrects the inferred conclusion or reason, pass the corrected fields to `orgbrain_memories_confirm` so the stored rationale is marked as corrected.
+7. When reporting results, include tool names and key IDs (`task_id`, `instance_id`, `external_key`, `confirmation_token`, `rationale_id`).
+8. Auth must go through the configured `CF-Access-*` service token headers, not static bearer tokens.
 
 ## Tool Map
 - List memory: `orgbrain_memories_list`
+- Propose memory save: `orgbrain_memories_propose`
+- Confirm memory save: `orgbrain_memories_confirm`
 - Upsert memory: `orgbrain_memories_upsert`
 - Create task: `orgbrain_task_create`
 - Get task: `orgbrain_task_get`
@@ -32,6 +36,7 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 ## Operational Notes
 - OrgBrain master memory is Cloudflare D1.
 - OpenClaw local memory remains cache/index.
+- `orgbrain_memories_upsert` remains for compatibility and non-interactive flows, but interactive assistant flows should use propose/confirm.
 - If MCP returns auth errors, ask for:
   - service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`)
   - optional `x-orgbrain-tenant` header

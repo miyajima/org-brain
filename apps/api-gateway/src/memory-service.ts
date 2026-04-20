@@ -14,6 +14,7 @@ import {
   type MemorySearchMode
 } from "@org-brain/shared";
 import { captureMemoryItems, loadExistingMemoryIdsByExternalKeys, refreshMemory, reviseMemory, runBatchChunks, suppressMemory } from "./memory-lifecycle-service";
+import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import type { Env } from "./types";
 
 type UpsertMemoryItem = {
@@ -467,7 +468,30 @@ export async function listMemoriesPage(env: Env, tenantId: string, options: List
 
 export async function searchMemories(env: Env, rawBody: unknown): Promise<MemorySearchResponse> {
   const request = parseSearchRequest(rawBody);
-  return searchTenantMemories(env.OPEN_BRAIN_DB, request);
+  const widenedLimit = Math.max(request.limit, 20);
+  const base = await searchTenantMemories(env.OPEN_BRAIN_DB, { ...request, limit: widenedLimit });
+  const filters = parseSearchFilters(rawBody);
+  const allowedIds = await filterMemorySearchResults(
+    env,
+    request.tenantId,
+    base.results.filter((item) => item.kind === "memory").map((item) => item.id),
+    filters
+  );
+  const hasFilters = Object.values(filters).some(Boolean);
+  if (!hasFilters) return { ...base, results: base.results.slice(0, request.limit) };
+
+  const filteredResults = base.results.filter((item) => item.kind !== "memory" || allowedIds.has(item.id)).slice(0, request.limit);
+  return {
+    ...base,
+    results: filteredResults,
+    meta: {
+      ...base.meta,
+      matched_count: filteredResults.length,
+      returned_count: filteredResults.length,
+      top_result_ids: filteredResults.map((item) => item.id),
+      top_result_ranks: filteredResults.map((item) => item.score)
+    }
+  };
 }
 
 export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<MemoryProfileResponse> {
