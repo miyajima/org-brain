@@ -69,4 +69,34 @@ describe("hook-memory-bridge promotion", () => {
     expect(record.projectId).toBe("org-brain");
     expect(classifyMemoryRecord(record).action).toBe("skip");
   });
+
+  it("promotes structured project facts from learning-loop payloads", () => {
+    const payload = JSON.stringify({
+      type: "learning-loop",
+      action: "record",
+      context: {
+        workspaceDir: "/Users/miya/projects/org-brain",
+        messageId: "learning-loop:LRN-20260421-001",
+        sessionKey: "learning-loop",
+        bodyForAgent: "Canonical harness project fact."
+      },
+      memory_entry: {
+        id: "LRN-20260421-001",
+        type: "project-fact",
+        tags: "toolchain,command,deploy",
+        trigger: "org-brain workspace command confirmed",
+        action: "use pnpm wrangler deploy from apps/api-gateway",
+        result: "api-gateway deploy succeeds only when run from the worker directory",
+        reuse: "reuse for this workspace until deploy wiring changes",
+        source: "manual"
+      }
+    });
+
+    const prepared = prepareMemoryRecordForUpsert("openclaw", payload);
+    expect(prepared.action).toBe("promote");
+    expect(prepared.record.tags).toContain("project-fact");
+    expect(prepared.record.tags).toContain("toolchain");
+    expect(prepared.record.content).toContain("# Project Fact");
+    expect(prepared.record.content).toContain("## Result");
+  });
 });

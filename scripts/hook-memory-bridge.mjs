@@ -281,6 +281,69 @@ function buildPromotedSummary(record, normalizedText) {
   return clip(`${record.projectId} | promoted-memory | ${chooseTitle(normalizedText)}`, 1_000);
 }
 
+function parseCommaTags(raw) {
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function buildLearningEntryContent(record, entry) {
+  const label = entry.type === "project-fact" ? "Project Fact" : "Learning Entry";
+  return [
+    `# ${label}`,
+    "",
+    `- Source: ${record.sourceName}`,
+    `- Event: ${record.eventType || "unknown"}`,
+    `- Project: ${record.projectId || "(none)"}`,
+    `- RecordedAt: ${new Date(record.createdAt).toISOString()}`,
+    `- EntryType: ${firstString(entry.type, "unknown")}`,
+    "",
+    "## Trigger",
+    firstString(entry.trigger, "No trigger provided."),
+    "",
+    "## Action",
+    firstString(entry.action, "No action provided."),
+    "",
+    "## Result",
+    firstString(entry.result, "No result provided."),
+    "",
+    "## Reuse Rule",
+    firstString(entry.reuse, "Reuse only when the same condition is confirmed.")
+  ].join("\n");
+}
+
+function prepareStructuredLearningEntry(record, parsed) {
+  const entry = parsed?.memory_entry;
+  if (!entry || typeof entry !== "object") return null;
+  const type = firstString(entry.type);
+  if (!["failure", "success", "preference", "project-fact"].includes(type)) return null;
+
+  const tags = dedupeTags([
+    record.sourceName,
+    "hook",
+    "learning-loop",
+    type,
+    record.projectId,
+    ...parseCommaTags(firstString(entry.tags))
+  ]);
+  const summaryBase = firstString(entry.result, entry.action, entry.trigger, "confirmed learning");
+
+  return {
+    action: "promote",
+    record: {
+      externalKey: firstString(record.externalKey, `learning:${sha256(JSON.stringify(entry))}`),
+      createdAt: record.createdAt,
+      projectId: record.projectId,
+      summary: clip(`${record.projectId || "(none)"} | ${type} | ${summaryBase}`, 1_000),
+      tags,
+      content: buildLearningEntryContent(record, entry)
+    }
+  };
+}
+
 export function classifyMemoryRecord(record) {
   if (!record.projectId) {
     return { action: "skip", reason: "missing-project" };
@@ -456,6 +519,11 @@ export function normalizeRecord(sourceName, payloadText) {
 
 export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
   const record = normalizeRecord(sourceName, payloadText);
+  const parsed = safeJsonParse(payloadText);
+  const structured = prepareStructuredLearningEntry(record, parsed);
+  if (structured) {
+    return structured;
+  }
   const classification = classifyMemoryRecord(record);
   if (classification.action === "skip") {
     return { action: "skip", reason: classification.reason, record };
