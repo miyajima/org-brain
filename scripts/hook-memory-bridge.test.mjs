@@ -1,5 +1,13 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { classifyMemoryRecord, normalizeRecord, prepareMemoryRecordForUpsert } from "./hook-memory-bridge.mjs";
+import {
+  classifyMemoryRecord,
+  normalizeRecord,
+  prepareMemoryRecordForUpsert,
+  resolveProjectNameForWorkspace
+} from "./hook-memory-bridge.mjs";
 
 describe("hook-memory-bridge promotion", () => {
   it("skips generic agent-turn-complete messages", () => {
@@ -68,6 +76,56 @@ describe("hook-memory-bridge promotion", () => {
     expect(record.externalKey).toBe("codex:turn-123");
     expect(record.projectId).toBe("org-brain");
     expect(classifyMemoryRecord(record).action).toBe("skip");
+  });
+
+  it("prompts once per workspace and persists the chosen project name", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
+    const file = path.join(dir, "project-names.json");
+    const record = {
+      cwd: "/Users/miya/projects/org-brain",
+      projectId: "org-brain"
+    };
+
+    const selected = await resolveProjectNameForWorkspace(record, {
+      file,
+      prompt: async (cwd, fallback) => {
+        expect(cwd).toBe("/Users/miya/projects/org-brain");
+        expect(fallback).toBe("org-brain");
+        return "client-workspace";
+      }
+    });
+
+    expect(selected).toBe("client-workspace");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    expect(saved["/Users/miya/projects/org-brain"]).toBe("client-workspace");
+
+    const reused = await resolveProjectNameForWorkspace(record, {
+      file,
+      prompt: async () => {
+        throw new Error("prompt should not be called for saved workspaces");
+      }
+    });
+    expect(reused).toBe("client-workspace");
+  });
+
+  it("falls back to basename(cwd) when the first prompt is left blank", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
+    const file = path.join(dir, "project-names.json");
+
+    const selected = await resolveProjectNameForWorkspace(
+      {
+        cwd: "/Users/miya/projects/demo-app",
+        projectId: "demo-app"
+      },
+      {
+        file,
+        prompt: async () => ""
+      }
+    );
+
+    expect(selected).toBe("demo-app");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    expect(saved["/Users/miya/projects/demo-app"]).toBe("demo-app");
   });
 
   it("promotes structured project facts from learning-loop payloads", () => {

@@ -36,6 +36,7 @@
 - Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows.
 - Interactive saves use `propose -> user confirmation -> confirm` and only create `decision_rationales` on confirm.
 - Non-interactive hook ingestion keeps writing promoted memory rows only and does not persist confirmed rationale rows.
+- Hook ingestion derives a default project name from `basename(cwd)` and, on first use per workspace, can confirm and cache a user-provided project name locally for later upserts.
 - Retrieval refresh is best-effort: cap-runner updates `last_accessed_at` and appends a `memory_versions` refresh snapshot for top search hits without blocking task execution.
 
 ## Orchestration and Reliability

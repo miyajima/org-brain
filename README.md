@@ -226,6 +226,8 @@ The bridge also loads fallback env files from:
 - `~/.openclaw/.env`
 - `~/.agents/.env`
 
+On the first reusable-memory upsert for a new workspace, the hook bridge now asks for the project name and defaults to `basename(cwd)`. The selected name is cached per workspace in `~/.config/org-brain/project-names.json` and reused on later runs.
+
 When `ORGBRAIN_API_BASE` points at the console proxy (`...pages.dev/api`), the incoming `x-api-key` is ignored and replaced by the Pages secret, so the local `ORGBRAIN_API_KEY` value only needs to be non-empty.
 
 Hook-enabled clients currently wired for Org Brain memory upserts:

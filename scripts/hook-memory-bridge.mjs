@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import crypto from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import readline from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
 const ROOT = "/Users/miya/projects/org-brain";
@@ -14,6 +16,7 @@ const DEFAULT_ENV_FILES = [
   path.join(ROOT, ".env.local"),
   path.join(ROOT, ".env")
 ];
+const DEFAULT_PROJECT_NAMES_FILE = "~/.config/org-brain/project-names.json";
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
@@ -69,6 +72,11 @@ function basenameOrEmpty(value) {
   const trimmed = value.trim();
   if (!trimmed) return "";
   return path.basename(trimmed).slice(0, 128);
+}
+
+function normalizeProjectName(value, fallback = "") {
+  const trimmed = firstString(value, fallback).slice(0, 128);
+  return trimmed || null;
 }
 
 function parseTimestamp(...values) {
@@ -396,6 +404,7 @@ function buildCommonRecord(sourceName, payloadText, parsed, extras = {}) {
   return {
     sourceName,
     createdAt,
+    cwd: cwd || null,
     eventType: firstString(extras.eventType, parsed?.type, parsed?.event?.type, "hook"),
     projectId: projectId || null,
     externalKey: firstString(extras.externalKey, `${sourceName}:${sha256(payloadText)}`),
@@ -543,12 +552,96 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
     record: {
       externalKey: record.externalKey,
       createdAt: record.createdAt,
+      cwd: record.cwd,
       projectId: record.projectId,
       summary: buildPromotedSummary(record, classification.normalizedText),
       tags,
       content: buildPromotedContent(record, classification.category, classification.normalizedText)
     }
   };
+}
+
+function projectNamesFileFromEnv() {
+  return resolveHome(firstString(process.env.ORGBRAIN_PROJECT_NAMES_FILE, DEFAULT_PROJECT_NAMES_FILE));
+}
+
+async function loadProjectNames(file = projectNamesFileFromEnv()) {
+  try {
+    const raw = await readFile(file, "utf8");
+    const parsed = safeJsonParse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([key, value]) => [firstString(key), normalizeProjectName(value)])
+        .filter(([key, value]) => key && value)
+    );
+  } catch {
+    return {};
+  }
+}
+
+async function saveProjectNames(file, names) {
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify(names, null, 2)}\n`, "utf8");
+}
+
+async function promptForProjectName(cwd, fallbackProjectId, input = process.stdin, output = process.stderr) {
+  if (!input?.isTTY || !output?.isTTY) return fallbackProjectId;
+  const rl = readline.createInterface({ input, output });
+  try {
+    const answer = await rl.question(`Org Brain project name for ${cwd} [${fallbackProjectId}]: `);
+    return normalizeProjectName(answer, fallbackProjectId);
+  } finally {
+    rl.close();
+  }
+}
+
+async function openTtyStreams() {
+  try {
+    const input = createReadStream("/dev/tty");
+    const output = createWriteStream("/dev/tty");
+    return {
+      input,
+      output,
+      close: () => {
+        input.destroy();
+        output.end();
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveProjectNameForWorkspace(record, options = {}) {
+  const cwd = firstString(record?.cwd);
+  const fallbackProjectId = normalizeProjectName(record?.projectId, basenameOrEmpty(cwd));
+  if (!cwd || !fallbackProjectId) return fallbackProjectId;
+
+  const file = options.file ?? projectNamesFileFromEnv();
+  const names = options.names ?? await loadProjectNames(file);
+  const existing = normalizeProjectName(names[cwd]);
+  if (existing) return existing;
+
+  let selected = fallbackProjectId;
+  if (options.prompt !== false) {
+    if (typeof options.prompt === "function") {
+      selected = normalizeProjectName(await options.prompt(cwd, fallbackProjectId), fallbackProjectId);
+    } else {
+      const tty = await openTtyStreams();
+      if (tty) {
+        try {
+          selected = await promptForProjectName(cwd, fallbackProjectId, tty.input, tty.output);
+        } finally {
+          tty.close();
+        }
+      }
+    }
+  }
+
+  names[cwd] = selected;
+  await saveProjectNames(file, names);
+  return selected;
 }
 
 async function readPayload(argvPayload) {
@@ -626,6 +719,8 @@ export async function main() {
     );
     return;
   }
+
+  prepared.record.projectId = await resolveProjectNameForWorkspace(prepared.record);
 
   const result = await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
   console.log(
