@@ -330,6 +330,122 @@ describe("memory maintenance", () => {
     expect(db.memoriesFts.some((row) => row.memory_id === digest?.id)).toBe(true);
   });
 
+  it("normalizes Japanese politeness in synthesized memories without rewriting source rows", async () => {
+    const now = Date.parse("2026-03-30T00:00:00.000Z");
+    const rows: MemoryRecord[] = [
+      {
+        id: "jp-raw-1",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "codex",
+        summary: "jp-proj | agent-turn-complete | 原因は認証不足です。",
+        content: "原因は認証不足です。",
+        tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
+        external_key: "jp-raw-1",
+        created_at: Date.parse("2026-03-18T03:00:00.000Z")
+      },
+      {
+        id: "jp-raw-2",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "codex",
+        summary: "jp-proj | agent-turn-complete | wrangler login を実行しました。",
+        content: "wrangler login を実行しました。",
+        tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
+        external_key: "jp-raw-2",
+        created_at: Date.parse("2026-03-18T02:00:00.000Z")
+      },
+      {
+        id: "jp-raw-3",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "codex",
+        summary: "jp-proj | agent-turn-complete | 再発時は最初に確認してください。",
+        content: "再発時は最初に確認してください。",
+        tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
+        external_key: "jp-raw-3",
+        created_at: Date.parse("2026-03-18T01:00:00.000Z")
+      },
+      {
+        id: "jp-raw-4",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "codex",
+        summary: "jp-proj | agent-turn-complete | 原因は認証不足",
+        content: "原因は認証不足",
+        tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
+        external_key: "jp-raw-4",
+        created_at: Date.parse("2026-03-18T00:00:00.000Z")
+      },
+      {
+        id: "jp-policy-1",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "claude",
+        summary: "jp-proj | promoted-memory | 原因は認証不足です。",
+        content: "原因は認証不足です。",
+        tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
+        external_key: "jp-policy-1",
+        created_at: Date.parse("2026-03-10T00:00:00.000Z")
+      },
+      {
+        id: "jp-policy-2",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "claude",
+        summary: "jp-proj | promoted-memory | wrangler login を実行しました。",
+        content: "wrangler login を実行しました。",
+        tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
+        external_key: "jp-policy-2",
+        created_at: Date.parse("2026-03-09T00:00:00.000Z")
+      },
+      {
+        id: "jp-policy-3",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "claude",
+        summary: "jp-proj | promoted-memory | 再発時は最初に確認してください。",
+        content: "再発時は最初に確認してください。",
+        tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
+        external_key: "jp-policy-3",
+        created_at: Date.parse("2026-03-08T00:00:00.000Z")
+      },
+      {
+        id: "en-policy",
+        tenant_id: "default",
+        project_id: "jp-proj",
+        source: "claude",
+        summary: "jp-proj | promoted-memory | use `wrangler whoami` first",
+        content: "use `wrangler whoami` first",
+        tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
+        external_key: "en-policy",
+        created_at: Date.parse("2026-03-07T00:00:00.000Z")
+      }
+    ];
+
+    const plan = planMemoryMaintenance(rows, { tenantId: "default", now });
+    const digest = plan.digests.find((item) => item.project_id === "jp-proj");
+    const canonical = plan.canonicals.find((item) => item.project_id === "jp-proj");
+
+    expect(digest?.content).toContain("原因は認証不足");
+    expect(digest?.content).toContain("wrangler login を実行");
+    expect(digest?.content).toContain("再発時は最初に確認");
+    expect(digest?.content).not.toContain("です");
+    expect(digest?.content).not.toContain("ます");
+    expect(canonical?.content).toContain("原因は認証不足");
+    expect(canonical?.content).toContain("wrangler login を実行");
+    expect(canonical?.content).toContain("再発時は最初に確認");
+    expect(canonical?.content).toContain("use wrangler whoami first");
+    expect(canonical?.content).not.toContain("です");
+    expect(canonical?.content).not.toContain("ます");
+
+    const db = new FakeD1(rows);
+    await runTenantMemoryMaintenance(db as unknown as D1Database, "default", now);
+
+    expect(db.memories.find((memory) => memory.id === "jp-raw-1")?.summary).toBe("jp-proj | agent-turn-complete | 原因は認証不足です。");
+    expect(db.memories.find((memory) => memory.id === "jp-policy-2")?.summary).toBe("jp-proj | promoted-memory | wrangler login を実行しました。");
+  });
+
   it("can run maintenance across detected tenants", async () => {
     const rows = [
       ...baseRows(),

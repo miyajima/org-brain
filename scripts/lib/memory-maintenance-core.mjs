@@ -19,8 +19,36 @@ function collapseWhitespace(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function stripJapanesePoliteness(value) {
+  const trimmed = collapseWhitespace(value);
+  if (!/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(trimmed)) return trimmed;
+
+  const trailingPunctuation = /[。．.!！?？]+$/u;
+  const withoutPunctuation = trimmed.replace(trailingPunctuation, "");
+  const replacements = [
+    [/(.+?)してください$/u, "$1"],
+    [/(.+?)して下さい$/u, "$1"],
+    [/(.+?)しました$/u, "$1"],
+    [/(.+?)します$/u, "$1"],
+    [/(.+?)でした$/u, "$1"],
+    [/(.+?)ました$/u, "$1"],
+    [/(.+?)です$/u, "$1"],
+    [/(.+?)ます$/u, "$1"]
+  ];
+
+  let normalized = withoutPunctuation;
+  for (const [pattern, replacement] of replacements) {
+    if (pattern.test(normalized)) {
+      normalized = normalized.replace(pattern, replacement);
+      break;
+    }
+  }
+
+  return collapseWhitespace(normalized.replace(trailingPunctuation, ""));
+}
+
 function normalizeSummary(value) {
-  return collapseWhitespace(value)
+  return stripJapanesePoliteness(value)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
@@ -130,7 +158,7 @@ function buildDigestContent(tenantId, row, day, rows, summaries) {
   lines.push("## Representative Summaries");
   lines.push("");
   for (const summary of summaries) {
-    lines.push(`- ${clip(stripMarkdownNoise(summary), 180)}`);
+    lines.push(`- ${clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180)}`);
   }
 
   lines.push("");
@@ -163,7 +191,7 @@ function buildCanonicalContent(tenantId, projectId, category, rows, summaries) {
   lines.push("## Stable Guidance");
   lines.push("");
   for (const summary of summaries.slice(0, CANONICAL_SUMMARY_LIMIT)) {
-    lines.push(`- ${clip(stripMarkdownNoise(summary), 180)}`);
+    lines.push(`- ${clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180)}`);
   }
 
   lines.push("");
@@ -220,7 +248,7 @@ export function planMemoryMaintenance(rows, options = {}) {
   const duplicateCutoff = now - duplicateOlderThanDays * DAY_MS;
   const normalizedRows = rows.map((row) => {
     const tags = parseTagsJson(row.tags_json);
-    const rawSummary = collapseWhitespace(row.summary || row.content || row.id);
+    const rawSummary = stripJapanesePoliteness(row.summary || row.content || row.id);
     return {
       id: row.id,
       project_id: row.project_id ?? null,

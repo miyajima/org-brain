@@ -95,8 +95,36 @@ function collapseWhitespace(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function stripJapanesePoliteness(value: string): string {
+  const trimmed = collapseWhitespace(value);
+  if (!/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(trimmed)) return trimmed;
+
+  const trailingPunctuation = /[。．.!！?？]+$/u;
+  const withoutPunctuation = trimmed.replace(trailingPunctuation, "");
+  const replacements: Array<[RegExp, string]> = [
+    [/(.+?)してください$/u, "$1"],
+    [/(.+?)して下さい$/u, "$1"],
+    [/(.+?)しました$/u, "$1"],
+    [/(.+?)します$/u, "$1"],
+    [/(.+?)でした$/u, "$1"],
+    [/(.+?)ました$/u, "$1"],
+    [/(.+?)です$/u, "$1"],
+    [/(.+?)ます$/u, "$1"]
+  ];
+
+  let normalized = withoutPunctuation;
+  for (const [pattern, replacement] of replacements) {
+    if (pattern.test(normalized)) {
+      normalized = normalized.replace(pattern, replacement);
+      break;
+    }
+  }
+
+  return collapseWhitespace(normalized.replace(trailingPunctuation, ""));
+}
+
 function normalizeSummary(value: string): string {
-  return collapseWhitespace(value)
+  return stripJapanesePoliteness(value)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
@@ -205,7 +233,7 @@ function buildDigestContent(
 
   lines.push("", "## Representative Summaries", "");
   for (const summary of summaries) {
-    lines.push(`- ${clip(stripMarkdownNoise(summary), 180)}`);
+    lines.push(`- ${clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180)}`);
   }
 
   lines.push("", "## Covered Memory IDs", "");
@@ -238,7 +266,7 @@ function buildCanonicalContent(
 
   lines.push("", "## Stable Guidance", "");
   for (const summary of summaries.slice(0, CANONICAL_SUMMARY_LIMIT)) {
-    lines.push(`- ${clip(stripMarkdownNoise(summary), 180)}`);
+    lines.push(`- ${clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180)}`);
   }
 
   lines.push("", "## Supporting Memory IDs", "");
@@ -289,7 +317,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
   const duplicateCutoff = now - DUPLICATE_OLDER_THAN_DAYS * DAY_MS;
   const normalizedRows: NormalizedMemoryRow[] = rows.map((row) => {
     const tags = parseTagsJson(row.tags_json);
-    const rawSummary = collapseWhitespace(row.summary || row.content || row.id);
+    const rawSummary = stripJapanesePoliteness(row.summary || row.content || row.id);
     return {
       id: row.id,
       project_id: row.project_id ?? null,
