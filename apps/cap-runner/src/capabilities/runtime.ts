@@ -2,6 +2,68 @@ import { buildTenantMemoryProfile, sha256, ulid, type MemoryProfileResponse } fr
 import { recordRetrievalTelemetry } from "../retrieval-metrics";
 import type { CapabilityContext, CapabilityResult } from "../types";
 
+function emptyMemoryProfile(ctx: CapabilityContext): MemoryProfileResponse {
+  return {
+    tenant_id: ctx.tenantId,
+    project_id: ctx.projectId ?? null,
+    durable: [],
+    recent: [],
+    search_results: [],
+    meta: {
+      durable_count: 0,
+      recent_count: 0,
+      search: null
+    }
+  };
+}
+
+function estimateTokenCount(value: string): number {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return 0;
+  const roughByChars = Math.ceil(normalized.length / 4);
+  const roughByWords = normalized.split(" ").filter(Boolean).length;
+  return Math.max(1, Math.max(roughByChars, roughByWords));
+}
+
+function clipRawContext(value: string, limit = 1600): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit - 1)}…`;
+}
+
+async function loadMeasurementBaselineContext(ctx: CapabilityContext): Promise<string> {
+  if (ctx.measurement?.variant !== "control") return "";
+
+  try {
+    const result = await ctx.env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, content, source, created_at
+       FROM memories
+       WHERE tenant_id = ?
+         AND (project_id = ? OR project_id IS NULL)
+         AND COALESCE(lifecycle_state, 'active') != 'suppressed'
+       ORDER BY
+         CASE WHEN project_id = ? THEN 0 ELSE 1 END,
+         created_at DESC
+       LIMIT 8`
+    )
+      .bind(ctx.tenantId, ctx.projectId ?? null, ctx.projectId ?? null)
+      .all<{ id: string; content: string; source: string; created_at: number }>();
+
+    const rows = result.results.filter((row) => row.content);
+    if (rows.length === 0) return "";
+
+    return rows
+      .map((row, index) => [
+        `Raw Context ${index + 1}: ${row.id}`,
+        `Source: ${row.source}`,
+        clipRawContext(row.content)
+      ].join("\n"))
+      .join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
 async function bestEffortRefreshRetrievedMemories(ctx: CapabilityContext, profile: MemoryProfileResponse): Promise<void> {
   const ids = profile.search_results
     .filter((item) => item.kind === "memory")
@@ -210,16 +272,20 @@ function summarizeProfile(profile: MemoryProfileResponse): string {
 }
 
 export async function runCapability(ctx: CapabilityContext): Promise<CapabilityResult> {
+  const startedAt = Date.now();
   const input = await loadInput(ctx);
   const query = input.slice(0, 120);
-  const memoryProfile = await loadMemoryProfile(ctx, query);
+  const memoryProfile = ctx.measurement?.memoryEnabled === false ? emptyMemoryProfile(ctx) : await loadMemoryProfile(ctx, query);
+  const baselineContext = await loadMeasurementBaselineContext(ctx);
 
   const summary = [
     `Capability: ${ctx.capability}`,
     `InputRef: ${ctx.inputRef}`,
+    `MemoryEnabled: ${ctx.measurement?.memoryEnabled === false ? "false" : "true"}`,
+    baselineContext ? `BaselineRawContext:\n${baselineContext}` : null,
     `InputPreview: ${input.slice(0, 240)}`,
     summarizeProfile(memoryProfile)
-  ].join("\n\n");
+  ].filter((item): item is string => Boolean(item)).join("\n\n");
 
   const outputBody = renderOutput(ctx.capability, input, memoryProfile, summary);
   const key = outputKey(ctx);
@@ -231,12 +297,23 @@ export async function runCapability(ctx: CapabilityContext): Promise<CapabilityR
     }
   });
 
-  await saveMemorySummary(ctx, summary, [ctx.capability, "org-bus"]);
-  await maybeCreateThread(ctx, summary);
+  if (ctx.measurement?.memoryWriteEnabled !== false) {
+    await saveMemorySummary(ctx, summary, [ctx.capability, "org-bus"]);
+    await maybeCreateThread(ctx, summary);
+  }
+
+  const inputTokens = estimateTokenCount(summary);
+  const outputTokens = estimateTokenCount(outputBody);
 
   return {
     outputRef: `r2://${key}`,
-    summary
+    summary,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    durationMs: Math.max(0, Date.now() - startedAt),
+    retrievalCount: memoryProfile.search_results.length,
+    retrievedIds: memoryProfile.search_results.map((item) => `${item.kind}:${item.id}`)
   };
 }
 

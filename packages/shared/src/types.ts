@@ -18,7 +18,17 @@ export type TaskCreatedPayload = {
   capability: CapabilityName;
   priority: number;
   input_ref: string;
+  constraints?: Record<string, unknown>;
   wait_event_type?: string;
+  measurement?: {
+    run_id: string;
+    session_id?: string;
+    unit: "task" | "session";
+    variant: "control" | "treatment";
+    reference_model: string;
+    memory_enabled: boolean;
+    memory_write_enabled: boolean;
+  };
 };
 
 export type TaskResultPayload = {
@@ -43,4 +53,8 @@ export type CreateTaskInput = {
   idempotency_key?: string;
   trace_id?: string;
   wait_event_type?: string;
+  measurement_mode?: boolean;
+  measurement_session_id?: string;
+  measurement_unit?: "task" | "session";
+  measurement_reference_model?: string;
 };

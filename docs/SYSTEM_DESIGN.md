@@ -17,6 +17,7 @@
 - `decision_rationales` / `decision_evidence`: confirmed conclusion/reason structure plus evidence references.
 - `memory_confirmations`: short-lived propose/confirm state for interactive saves.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
+- `measurement_runs` / `measurement_variants` / `measurement_comparisons`: opt-in memory savings AB measurements.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
 - `threads`: review-oriented conversation capture.
 
@@ -38,6 +39,7 @@
 - Non-interactive hook ingestion keeps writing promoted memory rows only and does not persist confirmed rationale rows.
 - Hook ingestion derives a default project name from `basename(cwd)` and, on first use per workspace, can confirm and cache a user-provided project name locally for later upserts.
 - Retrieval refresh is best-effort: cap-runner updates `last_accessed_at` and appends a `memory_versions` refresh snapshot for top search hits without blocking task execution.
+- Measurement mode is isolated from normal execution. API task creation expands one logical request into raw-context control and compact-memory treatment task variants, cap-runner records estimated token/cost/duration usage per variant, and both variants run with memory writes disabled so measurement does not pollute future recall. Shared `measurement_session_id` values group multiple measured turns into one session report.
 
 ## Orchestration and Reliability
 - Queue consumers use explicit ack/retry behavior.
@@ -55,6 +57,7 @@
 - `pnpm -s usage:status` reports task and memory usage from D1.
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
 - `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
+- `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.
 - `pnpm hook:bridge` and `pnpm sync:openclaw-memory` are the two memory ingress/egress bridges.
 
 ## Console Surfaces

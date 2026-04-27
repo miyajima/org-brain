@@ -14,7 +14,11 @@
     "constraints": { "type": "object" },
     "idempotency_key": { "type": "string" },
     "trace_id": { "type": "string" },
-    "wait_event_type": { "type": "string" }
+    "wait_event_type": { "type": "string" },
+    "measurement_mode": { "type": "boolean" },
+    "measurement_session_id": { "type": "string" },
+    "measurement_unit": { "type": "string", "enum": ["task", "session"] },
+    "measurement_reference_model": { "type": "string" }
   },
   "additionalProperties": false
 }

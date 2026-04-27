@@ -55,6 +55,7 @@ The console proxy will use the Cloudflare service binding when available and fal
 - `pnpm metrics:report`
 - `pnpm metrics:replay`
 - `pnpm metrics:rollup`
+- `pnpm measurement:report`
 
 ## Memory Search
 Org Brain now exposes retrieval and profile endpoints on top of the D1 memory source of truth:
@@ -186,6 +187,44 @@ pnpm metrics:rollup -- --day 2026-03-10 --json
 `metrics:report` focuses on retrieval hit/fallback/latency plus service success and duration.
 `metrics:replay` compares `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` against the current D1/R2 snapshot without persisting anything.
 `metrics:rollup` recomputes one UTC day idempotently into `retrieval_daily_metrics`.
+
+## Measurement Mode
+Memory savings measurement is opt-in. Add `measurement_mode=true` to a task create request to create paired variants from the same input:
+
+- `control`: memory retrieval disabled, with recent raw memory content loaded as a baseline context stand-in
+- `treatment`: memory retrieval enabled, using compact durable/recent/search summaries
+
+Both variants run with memory writes disabled so the measurement does not change future recall. Results are stored in:
+
+- `measurement_runs`
+- `measurement_variants`
+- `measurement_comparisons`
+
+Example task request:
+
+```json
+{
+  "tenant_id": "default",
+  "project_id": "org-brain",
+  "capability": "plan_writer",
+  "input_ref": "Measure this task",
+  "measurement_mode": true,
+  "measurement_session_id": "session-2026-04-27-a",
+  "measurement_unit": "session",
+  "measurement_reference_model": "estimated_tokens_v1"
+}
+```
+
+Report recent measurement runs with:
+
+```bash
+pnpm measurement:report -- --tenant default
+pnpm measurement:report -- --tenant default --session-id session-2026-04-27-a
+pnpm measurement:report -- --tenant default --run-id <measurement_run_id> --json
+```
+
+The current runtime records deterministic `estimated_tokens_v1` values because the bundled capabilities do not call an external LLM directly yet. The schema is ready for provider usage tokens once real model calls are wired in.
+For multi-turn work, pass the same `measurement_session_id` to each measured task and use `--session-id` to report aggregate session savings.
 
 ## OpenClaw Memory Bridge
 Cloudflare D1 is the source of truth. OpenClaw `main.sqlite` remains a local cache/index.

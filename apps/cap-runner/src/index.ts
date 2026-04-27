@@ -117,8 +117,166 @@ function toContext(env: Env, envelope: Envelope<TaskCreatedPayload>): Capability
     projectId: envelope.project_id,
     taskId: envelope.payload.task_id,
     capability: envelope.payload.capability,
-    inputRef: envelope.payload.input_ref
+    inputRef: envelope.payload.input_ref,
+    constraints: envelope.payload.constraints,
+    measurement: envelope.payload.measurement
+      ? {
+          runId: envelope.payload.measurement.run_id,
+          sessionId: envelope.payload.measurement.session_id,
+          unit: envelope.payload.measurement.unit,
+          variant: envelope.payload.measurement.variant,
+          referenceModel: envelope.payload.measurement.reference_model,
+          memoryEnabled: envelope.payload.measurement.memory_enabled,
+          memoryWriteEnabled: envelope.payload.measurement.memory_write_enabled
+        }
+      : undefined
   };
+}
+
+function inputCost(tokens: number): number {
+  return tokens * 0.0000001;
+}
+
+async function recordMeasurementVariant(
+  env: Env,
+  envelope: Envelope<TaskCreatedPayload>,
+  result: Awaited<ReturnType<typeof runCapability>>
+): Promise<void> {
+  const measurement = envelope.payload.measurement;
+  if (!measurement) return;
+
+  const now = Date.now();
+  await env.OPEN_BRAIN_DB.prepare(
+    `UPDATE measurement_variants
+     SET status = ?, output_ref = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?,
+         input_cost_usd = ?, total_cost_usd = ?, duration_ms = ?, retrieval_count = ?,
+         retrieved_ids_json = ?, completed_at = ?
+     WHERE tenant_id = ? AND run_id = ? AND variant = ?`
+  )
+    .bind(
+      "succeeded",
+      result.outputRef,
+      result.inputTokens,
+      result.outputTokens,
+      result.totalTokens,
+      inputCost(result.inputTokens),
+      inputCost(result.totalTokens),
+      result.durationMs,
+      result.retrievalCount,
+      JSON.stringify(result.retrievedIds),
+      now,
+      envelope.tenant_id,
+      measurement.run_id,
+      measurement.variant
+    )
+    .run();
+
+  await maybeRecordMeasurementComparison(env, envelope.tenant_id, measurement.run_id, now);
+}
+
+async function recordMeasurementFailure(
+  env: Env,
+  envelope: Envelope<TaskCreatedPayload>,
+  error: unknown
+): Promise<void> {
+  const measurement = envelope.payload.measurement;
+  if (!measurement) return;
+
+  const now = Date.now();
+  await env.OPEN_BRAIN_DB.prepare(
+    `UPDATE measurement_variants
+     SET status = ?, error_json = ?, completed_at = ?
+     WHERE tenant_id = ? AND run_id = ? AND variant = ? AND status != ?`
+  )
+    .bind(
+      "failed",
+      JSON.stringify({ message: error instanceof Error ? error.message : String(error) }),
+      now,
+      envelope.tenant_id,
+      measurement.run_id,
+      measurement.variant,
+      "succeeded"
+    )
+    .run();
+
+  await maybeRecordMeasurementComparison(env, envelope.tenant_id, measurement.run_id, now);
+}
+
+async function maybeRecordMeasurementComparison(
+  env: Env,
+  tenantId: string,
+  runId: string,
+  now: number
+): Promise<void> {
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT variant, task_id, status, input_tokens, input_cost_usd, total_cost_usd, duration_ms
+     FROM measurement_variants
+     WHERE tenant_id = ? AND run_id = ?`
+  )
+    .bind(tenantId, runId)
+    .all<{
+      variant: "control" | "treatment";
+      task_id: string;
+      status: string;
+      input_tokens: number | null;
+      input_cost_usd: number | null;
+      total_cost_usd: number | null;
+      duration_ms: number | null;
+    }>();
+
+  const control = rows.results.find((row) => row.variant === "control");
+  const treatment = rows.results.find((row) => row.variant === "treatment");
+  if (!control || !treatment || control.status === "created" || treatment.status === "created") return;
+
+  const controlInputTokens = Number(control.input_tokens ?? 0);
+  const treatmentInputTokens = Number(treatment.input_tokens ?? 0);
+  const inputTokensSaved = controlInputTokens - treatmentInputTokens;
+  const inputSavingsRate = controlInputTokens > 0 ? inputTokensSaved / controlInputTokens : 0;
+  const costSavedUsd = Number(control.input_cost_usd ?? 0) - Number(treatment.input_cost_usd ?? 0);
+  const totalCostDeltaUsd = Number(treatment.total_cost_usd ?? 0) - Number(control.total_cost_usd ?? 0);
+  const durationDeltaMs = Number(treatment.duration_ms ?? 0) - Number(control.duration_ms ?? 0);
+  const qualityVerdict =
+    control.status === "succeeded" && treatment.status === "succeeded"
+      ? "same_or_better"
+      : control.status === "succeeded" && treatment.status !== "succeeded"
+        ? "worse"
+        : treatment.status === "succeeded"
+          ? "better"
+          : "both_failed";
+
+  await env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO measurement_comparisons(
+      run_id, tenant_id, control_task_id, treatment_task_id, input_tokens_saved,
+      input_savings_rate, input_cost_saved_usd, total_cost_delta_usd, duration_delta_ms,
+      quality_verdict, quality_passed, created_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(run_id) DO UPDATE SET
+      control_task_id = excluded.control_task_id,
+      treatment_task_id = excluded.treatment_task_id,
+      input_tokens_saved = excluded.input_tokens_saved,
+      input_savings_rate = excluded.input_savings_rate,
+      input_cost_saved_usd = excluded.input_cost_saved_usd,
+      total_cost_delta_usd = excluded.total_cost_delta_usd,
+      duration_delta_ms = excluded.duration_delta_ms,
+      quality_verdict = excluded.quality_verdict,
+      quality_passed = excluded.quality_passed,
+      created_at = excluded.created_at`
+  )
+    .bind(
+      runId,
+      tenantId,
+      control.task_id,
+      treatment.task_id,
+      inputTokensSaved,
+      inputSavingsRate,
+      costSavedUsd,
+      totalCostDeltaUsd,
+      durationDeltaMs,
+      qualityVerdict,
+      qualityVerdict === "same_or_better" || qualityVerdict === "better" ? 1 : 0,
+      now
+    )
+    .run();
 }
 
 async function processMessage(env: Env, raw: unknown): Promise<void> {
@@ -145,6 +303,7 @@ async function processMessage(env: Env, raw: unknown): Promise<void> {
   try {
     await markRunning(env, tenantId, taskId);
     const result = await runCapability(toContext(env, envelope));
+    await recordMeasurementVariant(env, envelope, result);
 
     await publishResult(env, envelope, {
       task_id: taskId,
@@ -160,6 +319,7 @@ async function processMessage(env: Env, raw: unknown): Promise<void> {
       output_ref: result.outputRef
     });
   } catch (error) {
+    await recordMeasurementFailure(env, envelope, error);
     await pushMailbox(env, tenantId, "runner", "task.failed", {
       task_id: taskId,
       capability,

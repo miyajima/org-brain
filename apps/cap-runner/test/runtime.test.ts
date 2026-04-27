@@ -16,6 +16,7 @@ import { runCapability } from "../src/capabilities/runtime";
 
 type MockOptions = {
   failRetrievalInsert?: boolean;
+  baselineRows?: Array<{ id: string; content: string; source: string; created_at: number }>;
 };
 
 function createDbMock(options: MockOptions = {}) {
@@ -35,7 +36,12 @@ function createDbMock(options: MockOptions = {}) {
               }
               return null;
             },
-            all: async () => ({ results: [] }),
+            all: async () => {
+              if (state.sql.includes("FROM memories") && state.sql.includes("ORDER BY")) {
+                return { results: options.baselineRows ?? [] };
+              }
+              return { results: [] };
+            },
             run: async () => {
               if (state.sql.startsWith("INSERT INTO retrieval_events") && options.failRetrievalInsert) {
                 throw new Error("retrieval insert failed");
@@ -281,5 +287,55 @@ describe("runCapability", () => {
     expect(result.outputRef).toContain("task-telemetry-fail/plan.md");
     expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO task_events"))).toBe(true);
     expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(true);
+  });
+
+  it("runs measurement control without retrieval or memory writes", async () => {
+    const db = createDbMock({
+      baselineRows: [
+        {
+          id: "raw-1",
+          content: "Full previous session transcript with detailed implementation notes and command outputs that memory summaries replace.",
+          source: "hook",
+          created_at: 1
+        }
+      ]
+    });
+    const puts: Array<{ key: string; value: string }> = [];
+    const env = {
+      OPEN_BRAIN_DB: db,
+      OPEN_BRAIN_BUCKET: {
+        put: async (key: string, value: string) => {
+          puts.push({ key, value });
+        },
+        get: async () => null
+      }
+    } as any;
+
+    const result = await runCapability({
+      env,
+      tenantId: "default",
+      projectId: "proj1",
+      taskId: "task-control",
+      capability: "plan_writer",
+      inputRef: "spec text",
+      measurement: {
+        runId: "run-1",
+        unit: "task",
+        variant: "control",
+        referenceModel: "estimated_tokens_v1",
+        memoryEnabled: false,
+        memoryWriteEnabled: false
+      }
+    });
+
+    expect(buildTenantMemoryProfileMock).not.toHaveBeenCalled();
+    expect(puts[0]?.value).toContain("MemoryEnabled: false");
+    expect(puts[0]?.value).toContain("BaselineRawContext");
+    expect(puts[0]?.value).toContain("Full previous session transcript");
+    expect(result.inputTokens).toBeGreaterThan(0);
+    expect(result.outputTokens).toBeGreaterThan(0);
+    expect(result.retrievalCount).toBe(0);
+    expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(false);
+    expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO retrieval_events"))).toBe(false);
   });
 });

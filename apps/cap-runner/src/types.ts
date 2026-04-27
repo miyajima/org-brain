@@ -23,11 +23,27 @@ export type CapabilityContext = {
   taskId: string;
   capability: CapabilityName;
   inputRef: string;
+  constraints?: Record<string, unknown>;
+  measurement?: {
+    runId: string;
+    sessionId?: string;
+    unit: "task" | "session";
+    variant: "control" | "treatment";
+    referenceModel: string;
+    memoryEnabled: boolean;
+    memoryWriteEnabled: boolean;
+  };
 };
 
 export type CapabilityResult = {
   outputRef: string;
   summary: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  durationMs: number;
+  retrievalCount: number;
+  retrievedIds: string[];
 };
 
 export type MailboxPushRequest = MailboxEvent;

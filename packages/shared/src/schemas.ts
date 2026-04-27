@@ -10,7 +10,11 @@ export const createTaskSchema = z.object({
   constraints: z.record(z.unknown()).optional(),
   idempotency_key: z.string().min(1).optional(),
   trace_id: z.string().min(1).optional(),
-  wait_event_type: z.string().min(1).optional()
+  wait_event_type: z.string().min(1).optional(),
+  measurement_mode: z.boolean().optional(),
+  measurement_session_id: z.string().min(1).optional(),
+  measurement_unit: z.enum(["task", "session"]).default("task").optional(),
+  measurement_reference_model: z.string().min(1).default("estimated_tokens_v1").optional()
 });
 
 export const leaseAcquireSchema = z.object({
