@@ -58,6 +58,7 @@
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
 - `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
 - `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.
+- Agent final reports can include qualitative memory impact notes when memory avoided source search, web search, or past-context lookup; these notes do not replace D1 retrieval telemetry or measurement-mode comparisons.
 - `pnpm hook:bridge` and `pnpm sync:openclaw-memory` are the two memory ingress/egress bridges.
 
 ## Console Surfaces

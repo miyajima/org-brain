@@ -188,6 +188,17 @@ pnpm metrics:rollup -- --day 2026-03-10 --json
 `metrics:replay` compares `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` against the current D1/R2 snapshot without persisting anything.
 `metrics:rollup` recomputes one UTC day idempotently into `retrieval_daily_metrics`.
 
+For lightweight human-readable impact tracking, agents should add a compact note when Org Brain memory avoids another lookup:
+
+```text
+memory_used: yes
+avoided_lookup: source_search|web_search|past_context|none
+memory_basis: <memory_id or brief memory summary>
+confidence: low|medium|high
+```
+
+Use this self-report only as a qualitative signal. For quantitative evaluation, prefer `retrieval_events.search_count`, hit/fallback rates, referenced memory IDs, and measurement mode comparisons.
+
 ## Measurement Mode
 Memory savings measurement is opt-in. Add `measurement_mode=true` to a task create request to create paired variants from the same input:
 
