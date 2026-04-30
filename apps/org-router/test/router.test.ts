@@ -12,16 +12,12 @@ function createDbMock() {
 }
 
 describe("org-router envelope handling", () => {
-  it("routes task.created by capability", async () => {
+  it("routes task.created to the measurement capability queue", async () => {
     const plan: unknown[] = [];
-    const code: unknown[] = [];
-    const review: unknown[] = [];
 
     const env = {
       OPEN_BRAIN_DB: createDbMock(),
-      CAP_PLAN_OUT: { send: async (m: unknown) => plan.push(m) },
-      CAP_CODE_OUT: { send: async (m: unknown) => code.push(m) },
-      CAP_REVIEW_OUT: { send: async (m: unknown) => review.push(m) }
+      CAP_PLAN_OUT: { send: async (m: unknown) => plan.push(m) }
     } as any;
 
     await handleEnvelope(env, {
@@ -31,14 +27,12 @@ describe("org-router envelope handling", () => {
       ts: Date.now(),
       payload: {
         task_id: "t1",
-        capability: "code_gen",
+        capability: "memory_measurement",
         priority: 0,
         input_ref: "x"
       }
     });
 
-    expect(plan).toHaveLength(0);
-    expect(code).toHaveLength(1);
-    expect(review).toHaveLength(0);
+    expect(plan).toHaveLength(1);
   });
 });

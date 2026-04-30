@@ -95,7 +95,7 @@ describe("runCapability", () => {
     buildTenantMemoryProfileMock.mockResolvedValue(defaultProfile());
   });
 
-  it("writes artifact to R2 and persists memory summary", async () => {
+  it("writes measurement artifact to R2 with retrieved memory context", async () => {
     const db = createDbMock();
     const puts: Array<{ key: string; value: string }> = [];
 
@@ -114,17 +114,17 @@ describe("runCapability", () => {
       tenantId: "default",
       projectId: "proj1",
       taskId: "task1",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       inputRef: "spec text"
     });
 
-    expect(result.outputRef).toContain("r2://tenants/default/projects/proj1/tasks/task1/plan.md");
+    expect(result.outputRef).toContain("r2://tenants/default/projects/proj1/tasks/task1/measurement.md");
     expect(puts).toHaveLength(1);
     expect(puts[0]?.value).toContain("## Durable Context");
     expect(puts[0]?.value).toContain("stable policy");
     expect(puts[0]?.value).toContain("recent debugging work");
     expect(puts[0]?.value).toContain("[memory] matching memory");
-    expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(true);
+    expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(false);
   });
 
   it("records retrieval telemetry using the shared profile search metadata", async () => {
@@ -142,7 +142,7 @@ describe("runCapability", () => {
       tenantId: "default",
       projectId: "proj1",
       taskId: "task-bm25",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       inputRef: "retrieval ranking needs relevant memory hints"
     });
 
@@ -202,7 +202,7 @@ describe("runCapability", () => {
       tenantId: "default",
       projectId: "proj1",
       taskId: "task-hybrid",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       inputRef: "x"
     });
 
@@ -252,7 +252,7 @@ describe("runCapability", () => {
       tenantId: "default",
       projectId: "proj1",
       taskId: "task-fallback",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       inputRef: "x"
     });
 
@@ -280,13 +280,13 @@ describe("runCapability", () => {
       tenantId: "default",
       projectId: "proj1",
       taskId: "task-telemetry-fail",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       inputRef: "retrieval ranking needs relevant memory hints"
     });
 
-    expect(result.outputRef).toContain("task-telemetry-fail/plan.md");
+    expect(result.outputRef).toContain("task-telemetry-fail/measurement.md");
     expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO task_events"))).toBe(true);
-    expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(true);
+    expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(false);
   });
 
   it("runs measurement control without retrieval or memory writes", async () => {
@@ -316,7 +316,7 @@ describe("runCapability", () => {
       tenantId: "default",
       projectId: "proj1",
       taskId: "task-control",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       inputRef: "spec text",
       measurement: {
         runId: "run-1",

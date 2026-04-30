@@ -40,17 +40,7 @@ async function routeCreated(env: Env, message: Envelope<TaskCreatedPayload>) {
     capability: message.payload.capability
   });
 
-  switch (message.payload.capability) {
-    case "plan_writer":
-      await env.CAP_PLAN_OUT.send(message, { contentType: "json" });
-      break;
-    case "code_gen":
-      await env.CAP_CODE_OUT.send(message, { contentType: "json" });
-      break;
-    case "code_review":
-      await env.CAP_REVIEW_OUT.send(message, { contentType: "json" });
-      break;
-  }
+  await env.CAP_PLAN_OUT.send(message, { contentType: "json" });
 }
 
 async function handleResult(env: Env, message: Envelope<TaskResultPayload>) {

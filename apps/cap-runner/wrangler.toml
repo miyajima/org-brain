@@ -22,20 +22,6 @@ max_batch_timeout = 5
 dead_letter_queue = "cap-plan-dlq"
 max_retries = 5
 
-[[queues.consumers]]
-queue = "cap-code"
-max_batch_size = 5
-max_batch_timeout = 5
-dead_letter_queue = "cap-code-dlq"
-max_retries = 5
-
-[[queues.consumers]]
-queue = "cap-review"
-max_batch_size = 5
-max_batch_timeout = 5
-dead_letter_queue = "cap-review-dlq"
-max_retries = 5
-
 [durable_objects]
 bindings = [
   { name = "LEASES", class_name = "LeaseDO" },

@@ -54,7 +54,7 @@
 - MCP lifecycle mutations store the authenticated service-token `principal` as the memory actor for audit visibility.
 
 ## Operator Workflows
-- `pnpm -s usage:status` reports task and memory usage from D1.
+- `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
 - `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
 - `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.
@@ -69,5 +69,5 @@
 - `/memories`: memory explorer and maintenance view
 
 ## Current State
-- The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler.
+- The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
 - The usage-status wrapper retries transient Wrangler/D1 failures before returning a fatal error, so operator snapshots are less sensitive to one-off remote blips.

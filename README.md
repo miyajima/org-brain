@@ -145,7 +145,7 @@ pnpm -s usage:status
 pnpm -s usage:status -- --tenant default --json
 ```
 
-The snapshot reports task totals/statuses, active tasks, capability/project breakdowns, memory/thread counts, and recent tasks with JST timestamps.
+The snapshot reports memory/thread counts and first/last timestamps. Task rows are operational internals and are intentionally excluded.
 
 ## Memory Maintenance
 Older raw hook memories can be compacted into digest memories so search/profile calls stay focused on reusable content.
@@ -217,7 +217,7 @@ Example task request:
 {
   "tenant_id": "default",
   "project_id": "org-brain",
-  "capability": "plan_writer",
+  "capability": "memory_measurement",
   "input_ref": "Measure this task",
   "measurement_mode": true,
   "measurement_session_id": "session-2026-04-27-a",
@@ -309,4 +309,4 @@ Memory tools now include:
 - `orgbrain_memories_suppress`
 
 See [docs/REMOTE_MCP.md](/Users/miya/projects/org-brain/docs/REMOTE_MCP.md) for client config and skill usage.
-See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that reports the same usage snapshot.
+See [skills/org-brain-usage-status/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-usage-status/SKILL.md) for the project skill that reports the same usage snapshot without querying task rows.

@@ -1,6 +1,6 @@
 ---
 name: org-brain-usage-status
-description: Report the current Org Brain usage snapshot from Cloudflare D1. Use when the user asks for 現在の利用状況, 稼働状況, usage snapshot, task activity, D1-backed utilization, recent Org Brain activity, or a tenant-level operational summary.
+description: Report the current Org Brain usage snapshot from Cloudflare D1. Use when the user asks for 現在の利用状況, 稼働状況, usage snapshot, D1-backed utilization, recent Org Brain activity, or a tenant-level operational summary.
 ---
 
 # Org Brain Usage Status
@@ -13,7 +13,7 @@ Use the bundled script instead of ad hoc SQL when checking how Org Brain is bein
 2. Run `pnpm -s usage:status` from the repo root for the default snapshot.
 3. Use `pnpm -s usage:status -- --tenant <tenant_id>` when the user asks about a non-default tenant.
 4. Use `pnpm -s usage:status -- --json` when another tool or script will consume the output.
-5. Call out active tasks separately from historical totals, and highlight failed tasks if any are present.
+5. Do not query or report `tasks`; task records are operational internals and are intentionally excluded from this snapshot.
 6. Mention the query scope in the report: tenant, database, and `remote|local|preview`.
 
 ## Script
@@ -23,18 +23,13 @@ Use the bundled script instead of ad hoc SQL when checking how Org Brain is bein
 - Useful flags:
   - `--tenant <tenant_id>`
   - `--json`
-  - `--recent <n>`
   - `--local`
   - `--preview`
   - `--remote`
 
 ## Report Contents
 
-- Task totals and current active count
-- Status breakdown
-- Capability breakdown
-- Project breakdown
 - Memory and thread counts
-- Recent tasks with JST timestamps
+- First/last memory and thread timestamps
 
 Prefer this workflow over reading console HTML or querying local OpenClaw SQLite caches.

@@ -1,3 +1,6 @@
+DELETE FROM capabilities
+WHERE name IN ('plan_writer', 'code_gen', 'code_review');
+
 INSERT INTO capabilities (
   tenant_id,
   name,
@@ -9,18 +12,17 @@ INSERT INTO capabilities (
   allowed_tools,
   updated_at
 )
-VALUES
-  (
-    'default',
-    'memory_measurement',
-    1,
-    '{"type":"object","required":["input_ref"]}',
-    '{"type":"object","required":["output_ref"]}',
-    2,
-    120000,
-    '["memory.search","r2"]',
-    strftime('%s','now') * 1000
-  )
+VALUES (
+  'default',
+  'memory_measurement',
+  1,
+  '{"type":"object","required":["input_ref"]}',
+  '{"type":"object","required":["output_ref"]}',
+  2,
+  120000,
+  '["memory.search","r2"]',
+  strftime('%s','now') * 1000
+)
 ON CONFLICT(tenant_id, name) DO UPDATE SET
   version = excluded.version,
   input_schema = excluded.input_schema,

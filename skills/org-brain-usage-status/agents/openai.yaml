@@ -1,4 +1,4 @@
 interface:
   display_name: "Org Brain Usage Status"
-  short_description: "Check Org Brain D1 usage and task activity"
+  short_description: "Check Org Brain D1 memory/thread usage"
   default_prompt: "Use $org-brain-usage-status to report the current Org Brain usage snapshot."

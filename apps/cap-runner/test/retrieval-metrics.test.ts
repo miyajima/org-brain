@@ -73,7 +73,7 @@ describe("retrieval metrics helpers", () => {
       [
         {
           tenant_id: "default",
-          capability: "plan_writer",
+          capability: "memory_measurement",
           search_strategy: "bm25_v1",
           task_id: "task1",
           matched_count: 2,
@@ -84,7 +84,7 @@ describe("retrieval metrics helpers", () => {
         },
         {
           tenant_id: "default",
-          capability: "plan_writer",
+          capability: "memory_measurement",
           search_strategy: "bm25_v1",
           task_id: "task2",
           matched_count: 1,
@@ -95,7 +95,7 @@ describe("retrieval metrics helpers", () => {
         },
         {
           tenant_id: "default",
-          capability: "code_review",
+          capability: "memory_measurement",
           search_strategy: "fallback_recent_v1",
           task_id: "task3",
           matched_count: 0,
@@ -121,7 +121,7 @@ describe("retrieval metrics helpers", () => {
     const bm25Insert = db.statements.find(
       (statement) =>
         statement.sql.startsWith("INSERT INTO retrieval_daily_metrics") &&
-        statement.args[2] === "plan_writer" &&
+        statement.args[2] === "memory_measurement" &&
         statement.args[3] === "bm25_v1"
     );
     expect(bm25Insert?.args[4]).toBe(2);
@@ -146,7 +146,7 @@ describe("retrieval metrics helpers", () => {
       [
         {
           tenant_id: "default",
-          capability: "plan_writer",
+          capability: "memory_measurement",
           search_strategy: "bm25_v1",
           task_id: "task1",
           matched_count: 2,
@@ -157,7 +157,7 @@ describe("retrieval metrics helpers", () => {
         },
         {
           tenant_id: "default",
-          capability: "plan_writer",
+          capability: "memory_measurement",
           search_strategy: "bm25_v1",
           task_id: "task2",
           matched_count: 0,
@@ -175,7 +175,7 @@ describe("retrieval metrics helpers", () => {
     const merged = mergeRetrievalMetrics(rawMetrics, [
       {
         tenant_id: "default",
-        capability: "plan_writer",
+        capability: "memory_measurement",
         search_strategy: "bm25_v1",
         search_count: 3,
         task_count: 3,

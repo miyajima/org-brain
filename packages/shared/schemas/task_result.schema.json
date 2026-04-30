@@ -6,7 +6,7 @@
     "task_id": { "type": "string" },
     "capability": {
       "type": "string",
-      "enum": ["plan_writer", "code_gen", "code_review"]
+      "enum": ["memory_measurement"]
     },
     "status": {
       "type": "string",

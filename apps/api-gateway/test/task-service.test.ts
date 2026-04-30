@@ -124,7 +124,7 @@ describe("createTask", () => {
 
     const body = {
       tenant_id: "default",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       input_ref: "spec://abc"
     };
 
@@ -156,7 +156,7 @@ describe("createTask", () => {
     const result = await createTask(env, {
       tenant_id: "default",
       project_id: "proj1",
-      capability: "plan_writer",
+      capability: "memory_measurement",
       input_ref: "spec://abc",
       measurement_mode: true,
       measurement_session_id: "session-1",
