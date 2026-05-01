@@ -7,7 +7,7 @@ const DIGEST_OLDER_THAN_DAYS = 7;
 const CANONICAL_OLDER_THAN_DAYS = 3;
 const CANONICAL_SUMMARY_LIMIT = 8;
 const CANONICAL_GROUP_MIN = 2;
-const CANONICAL_CATEGORY_TAGS = ["policy", "diagnosis", "command-result", "workaround"] as const;
+const CANONICAL_CATEGORY_TAGS = ["project-fact", "policy", "diagnosis", "command-result", "workaround", "success", "failure", "preference"] as const;
 const DUPLICATE_OLDER_THAN_DAYS = 14;
 const MAINTENANCE_SOURCE_ALLOWLIST = ["codex", "claude", "cursor", "openclaw", "opencode"] as const;
 
@@ -92,7 +92,7 @@ export type TenantMaintenanceResult = {
 };
 
 function collapseWhitespace(value: unknown): string {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
 function stripJapanesePoliteness(value: string): string {
@@ -147,6 +147,38 @@ function stripMarkdownNoise(value: string): string {
     .trim();
 }
 
+function isWeakGuidanceLine(value: string): boolean {
+  const normalized = collapseWhitespace(stripMarkdownNoise(value)).normalize("NFKC").replace(/[。．.!！?？]+$/u, "");
+  if (!normalized || normalized.length < 12) return true;
+  return /^(実行結果です|修正しました|実装しました|変更しました|原因は特定して修正|原因は確定して対処済み|コミットまでは完了|はい、まだ|P\d|残り\s*\d+\s*点)/u.test(normalized);
+}
+
+function hasConcreteGuidanceSignal(value: string): boolean {
+  const normalized = collapseWhitespace(value);
+  return (
+    /`[^`\n]+`/.test(value) ||
+    /\b(?:app|apps|scripts|docs|src|spec|test|tests|config|web|engine|backend|frontend)\//i.test(normalized) ||
+    /\b[A-Za-z0-9_-]+\.(?:ts|tsx|js|mjs|rb|erb|astro|md|yml|yaml|json|sql|rs)\b/.test(normalized) ||
+    /\b(?:pnpm|npm|wrangler|git|bundle|rails|cargo|pytest|vitest|rspec|playwright|ffmpeg)\b/i.test(normalized) ||
+    /\b\d+\s*(?:examples|failures|tests|件|rows|PDFs|ms|tokens)\b/i.test(normalized)
+  );
+}
+
+function pickReusableGuidance(row: RawMemoryRow): string {
+  const contentLines = String(row.content ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+    .filter((line) => line && !line.startsWith("#") && !/^(Source|Event|Project|RecordedAt|Tenant|Category|TopTags):/i.test(line));
+  const candidates = [...contentLines, row.summary ?? ""]
+    .map((line) => stripMarkdownNoise(line))
+    .filter((line) => !isWeakGuidanceLine(line));
+  return (
+    candidates.find(hasConcreteGuidanceSignal) ||
+    candidates.find((line) => line.length >= 24) ||
+    stripMarkdownNoise(row.summary || row.content || row.id)
+  );
+}
+
 function utcDay(timestamp: number): string {
   return new Date(timestamp).toISOString().slice(0, 10);
 }
@@ -188,6 +220,7 @@ function canonicalCategory(tags: string[]): string {
 }
 
 function canonicalSourcePriority(row: NormalizedMemoryRow): number {
+  if (row.tags.includes("project-fact")) return 0;
   if (row.tags.includes("promoted")) return 0;
   if (row.tags.includes("curated-memory")) return 1;
   if (row.tags.includes("memory-digest")) return 2;
@@ -207,7 +240,7 @@ function buildDigestSummary(row: NormalizedMemoryRow, day: string, rowCount: num
 }
 
 function buildCanonicalSummary(projectId: string | null, category: string, uniqueCount: number): string {
-  return clip(`${projectId || "(none)"} | canonical-memory | ${category} | ${uniqueCount} stable summaries`, 240);
+  return clip(`${projectId || "(none)"} | ${category} | ${uniqueCount} reusable rules`, 240);
 }
 
 function buildDigestContent(
@@ -277,6 +310,19 @@ function buildCanonicalContent(
   return clip(lines.join("\n"), DIGEST_CONTENT_LIMIT);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCanonicalSearchSummary(projectId: string | null, category: string, summaries: string[]): string {
+  const lead = summaries.find((summary) => summary && !/stable summaries|reusable rules/i.test(summary)) || summaries[0] || "";
+  const projectLabel = projectId || "(none)";
+  const cleaned = stripMarkdownNoise(stripJapanesePoliteness(lead))
+    .replace(new RegExp(`^${escapeRegExp(projectLabel)}\\s*\\|\\s*`, "u"), "")
+    .replace(/^(?:promoted-memory|agent-turn-complete|project-fact)\s*\|\s*/u, "");
+  return clip(`${projectLabel} | ${category} | ${cleaned}`, 240);
+}
+
 function canDigestRow(row: NormalizedMemoryRow, cutoffTimestamp: number): boolean {
   return (
     row.created_at <= cutoffTimestamp &&
@@ -285,6 +331,30 @@ function canDigestRow(row: NormalizedMemoryRow, cutoffTimestamp: number): boolea
     !row.tags.includes("promoted") &&
     !row.tags.includes("compacted")
   );
+}
+
+function hasAnyText(text: string, keywords: string[]): boolean {
+  const lowered = text.toLowerCase();
+  return keywords.some((keyword) => lowered.includes(keyword.toLowerCase()));
+}
+
+function isLowSignalRow(row: RawMemoryRow, tags: string[], rawSummary: string): boolean {
+  const text = collapseWhitespace(`${rawSummary}\n${row.content}`);
+  const title = collapseWhitespace(rawSummary.replace(/^.*\|\s*(?:promoted-memory|agent-turn-complete|project-fact)\s*\|\s*/u, ""));
+  if (tags.includes("canonical-memory") || tags.includes("memory-digest") || tags.includes("compacted")) return true;
+  if (tags.includes("message") || tags.includes("preprocessed") || /heartbeat/i.test(text)) return true;
+  if (tags.includes("project-fact") || /^#\s*Project Fact/im.test(row.content)) return false;
+  if (/^route=inline\/current[- ]agent$/i.test(title) || text.startsWith("route=inline/current-agent")) return true;
+  if (/^(起動|修正|削除|空け|実装完了|修正完了|実行結果です|変更しました|1)$/u.test(title.replace(/[。．.!！?？]+$/u, ""))) return true;
+  if (/^理由[:：]?\s*\d+$/u.test(title)) return true;
+  const hasCauseAndFix =
+    hasAnyText(text, ["原因", "理由", "root cause", "because", "why"]) &&
+    hasAnyText(text, ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution", "対応"]);
+  const hasCommandAndResult =
+    (/`[^`\n]+`/.test(row.content) || hasAnyText(text, ["pnpm", "npm", "wrangler", "git", "bundle", "rails", "cargo", "pytest", "vitest", "rspec"])) &&
+    hasAnyText(text, ["成功", "failed", "failure", "succeeded", "success", "通った", "完了", "確認", "restored", "0 failures"]);
+  if (hasCauseAndFix || hasCommandAndResult) return false;
+  return tags.includes("promoted") || tags.includes("curated-memory") || tags.includes("hook");
 }
 
 function canCanonicalizeRow(row: NormalizedMemoryRow, cutoffTimestamp: number): boolean {
@@ -317,7 +387,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
   const duplicateCutoff = now - DUPLICATE_OLDER_THAN_DAYS * DAY_MS;
   const normalizedRows: NormalizedMemoryRow[] = rows.map((row) => {
     const tags = parseTagsJson(row.tags_json);
-    const rawSummary = stripJapanesePoliteness(row.summary || row.content || row.id);
+    const rawSummary = stripJapanesePoliteness(pickReusableGuidance(row));
     return {
       id: row.id,
       project_id: row.project_id ?? null,
@@ -327,7 +397,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
       summary: clip(rawSummary, 240),
       normalized_summary: normalizeSummary(rawSummary)
     };
-  });
+  }).filter((row, index) => !isLowSignalRow(rows[index], row.tags, row.summary));
 
   const canonicals: PlannedCanonicalMemory[] = [];
   const digests: PlannedDigest[] = [];
@@ -377,8 +447,8 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
       project_id: projectId,
       source: "org-brain",
       created_at: anchor.created_at,
-      tags: addTags(["org-brain", "maintenance", "canonical-memory", "memory-map", category], projectId ? [projectId] : []),
-      summary: buildCanonicalSummary(projectId, category, dedupedSummaries.length),
+      tags: addTags(["org-brain", "maintenance", "canonical-memory", "memory-map", "quality-v2", category], projectId ? [projectId] : []),
+      summary: buildCanonicalSearchSummary(projectId, category, dedupedSummaries),
       content: buildCanonicalContent(tenantId, projectId, category, ordered, dedupedSummaries),
       member_ids: ordered.map((row) => row.id)
     });
@@ -405,7 +475,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
       project_id: anchor.project_id,
       source: "org-brain",
       created_at: anchor.created_at,
-      tags: addTags(["org-brain", "maintenance", "memory-digest", anchor.source], anchor.project_id ? [anchor.project_id] : []),
+      tags: addTags(["org-brain", "maintenance", "memory-digest", "quality-v2", anchor.source], anchor.project_id ? [anchor.project_id] : []),
       summary: buildDigestSummary(anchor, day, ordered.length, dedupedSummaries.length),
       content: buildDigestContent(tenantId, anchor, day, ordered, dedupedSummaries),
       member_ids: ordered.map((item) => item.id)

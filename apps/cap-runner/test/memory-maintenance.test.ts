@@ -184,8 +184,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "codex",
-      summary: "org-brain | agent-turn-complete | implemented memory search endpoint",
-      content: "implemented memory search endpoint",
+      summary: "org-brain | agent-turn-complete | `pnpm test` confirmed memory search endpoint success",
+      content: "`pnpm test` confirmed memory search endpoint success",
       tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "org-brain"]),
       external_key: "raw-1",
       created_at: Date.parse("2026-03-18T03:00:00.000Z")
@@ -195,8 +195,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "codex",
-      summary: "org-brain | agent-turn-complete | implemented memory profile endpoint",
-      content: "implemented memory profile endpoint",
+      summary: "org-brain | agent-turn-complete | `pnpm test` confirmed memory profile endpoint success",
+      content: "`pnpm test` confirmed memory profile endpoint success",
       tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "org-brain"]),
       external_key: "raw-2",
       created_at: Date.parse("2026-03-18T02:00:00.000Z")
@@ -206,8 +206,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "codex",
-      summary: "org-brain | agent-turn-complete | added hybrid fallback",
-      content: "added hybrid fallback",
+      summary: "org-brain | agent-turn-complete | `pnpm test` confirmed hybrid fallback success",
+      content: "`pnpm test` confirmed hybrid fallback success",
       tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "org-brain"]),
       external_key: "raw-3",
       created_at: Date.parse("2026-03-18T01:00:00.000Z")
@@ -217,8 +217,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "codex",
-      summary: "org-brain | agent-turn-complete | added replay metrics comparison",
-      content: "added replay metrics comparison",
+      summary: "org-brain | agent-turn-complete | `pnpm test` confirmed replay metrics comparison success",
+      content: "`pnpm test` confirmed replay metrics comparison success",
       tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "org-brain"]),
       external_key: "raw-4",
       created_at: Date.parse("2026-03-18T00:00:00.000Z")
@@ -228,8 +228,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "codex",
-      summary: "org-brain | promoted-memory | deployment requires cap-runner and api-gateway",
-      content: "deployment requires cap-runner and api-gateway",
+      summary: "org-brain | promoted-memory | 原因は deploy 対象不足で、対応は cap-runner and api-gateway を deploy することです。",
+      content: "原因は deploy 対象不足で、対応は cap-runner and api-gateway を deploy することです。",
       tags_json: JSON.stringify(["codex", "hook", "promoted", "policy", "org-brain"]),
       external_key: "dup-new",
       created_at: Date.parse("2026-03-10T00:00:00.000Z")
@@ -239,8 +239,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "codex",
-      summary: "org-brain | promoted-memory | deployment requires cap-runner and api-gateway",
-      content: "deployment requires cap-runner and api-gateway",
+      summary: "org-brain | promoted-memory | 原因は deploy 対象不足で、対応は cap-runner and api-gateway を deploy することです。",
+      content: "原因は deploy 対象不足で、対応は cap-runner and api-gateway を deploy することです。",
       tags_json: JSON.stringify(["codex", "hook", "promoted", "policy", "org-brain"]),
       external_key: "dup-old",
       created_at: Date.parse("2026-03-01T00:00:00.000Z")
@@ -250,8 +250,8 @@ function baseRows(): MemoryRecord[] {
       tenant_id: "default",
       project_id: "org-brain",
       source: "claude",
-      summary: "org-brain | promoted-memory | use cap-runner cron for memory maintenance",
-      content: "use cap-runner cron for memory maintenance",
+      summary: "org-brain | promoted-memory | 原因は cron 未設定で、対応は cap-runner cron for memory maintenance を使うことです。",
+      content: "原因は cron 未設定で、対応は cap-runner cron for memory maintenance を使うことです。",
       tags_json: JSON.stringify(["curated-memory", "policy", "org-brain"]),
       external_key: "policy-2",
       created_at: Date.parse("2026-03-08T00:00:00.000Z")
@@ -285,7 +285,8 @@ describe("memory maintenance", () => {
     expect(plan.stats.digested_memory_count).toBe(4);
     expect(plan.stats.duplicate_compaction_count).toBe(1);
     expect(plan.canonicals[0]?.external_key).toBe("org-brain:canonical-memory:default:org-brain:policy");
-    expect(plan.canonicals[0]?.summary).toContain("canonical-memory");
+    expect(plan.canonicals[0]?.summary).toContain("org-brain | policy |");
+    expect(plan.canonicals[0]?.summary).not.toContain("stable summaries");
     expect(plan.digests[0]?.external_key).toBe("org-brain:memory-digest:default:org-brain:codex:2026-03-18");
     expect(plan.digests[0]?.summary).toContain("memory-digest");
     expect(
@@ -338,8 +339,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "codex",
-        summary: "jp-proj | agent-turn-complete | 原因は認証不足です。",
-        content: "原因は認証不足です。",
+        summary: "jp-proj | agent-turn-complete | 原因は認証不足で、対応は wrangler login の成功確認です。",
+        content: "原因は認証不足で、対応は wrangler login の成功確認です。",
         tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
         external_key: "jp-raw-1",
         created_at: Date.parse("2026-03-18T03:00:00.000Z")
@@ -349,8 +350,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "codex",
-        summary: "jp-proj | agent-turn-complete | wrangler login を実行しました。",
-        content: "wrangler login を実行しました。",
+        summary: "jp-proj | agent-turn-complete | `wrangler login` を実行して成功を確認しました。",
+        content: "`wrangler login` を実行して成功を確認しました。",
         tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
         external_key: "jp-raw-2",
         created_at: Date.parse("2026-03-18T02:00:00.000Z")
@@ -360,8 +361,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "codex",
-        summary: "jp-proj | agent-turn-complete | 再発時は最初に確認してください。",
-        content: "再発時は最初に確認してください。",
+        summary: "jp-proj | agent-turn-complete | 再発時は `wrangler whoami` の成功確認を先に実行してください。",
+        content: "再発時は `wrangler whoami` の成功確認を先に実行してください。",
         tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
         external_key: "jp-raw-3",
         created_at: Date.parse("2026-03-18T01:00:00.000Z")
@@ -371,8 +372,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "codex",
-        summary: "jp-proj | agent-turn-complete | 原因は認証不足",
-        content: "原因は認証不足",
+        summary: "jp-proj | agent-turn-complete | 原因は認証不足で、対応は OAuth 認証の成功確認です。",
+        content: "原因は認証不足で、対応は OAuth 認証の成功確認です。",
         tags_json: JSON.stringify(["codex", "hook", "agent-turn-complete", "jp-proj"]),
         external_key: "jp-raw-4",
         created_at: Date.parse("2026-03-18T00:00:00.000Z")
@@ -382,8 +383,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "claude",
-        summary: "jp-proj | promoted-memory | 原因は認証不足です。",
-        content: "原因は認証不足です。",
+        summary: "jp-proj | promoted-memory | 原因は認証不足で、対応は wrangler login の成功確認です。",
+        content: "原因は認証不足で、対応は wrangler login の成功確認です。",
         tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
         external_key: "jp-policy-1",
         created_at: Date.parse("2026-03-10T00:00:00.000Z")
@@ -393,8 +394,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "claude",
-        summary: "jp-proj | promoted-memory | wrangler login を実行しました。",
-        content: "wrangler login を実行しました。",
+        summary: "jp-proj | promoted-memory | `wrangler login` を実行して成功を確認しました。",
+        content: "`wrangler login` を実行して成功を確認しました。",
         tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
         external_key: "jp-policy-2",
         created_at: Date.parse("2026-03-09T00:00:00.000Z")
@@ -404,8 +405,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "claude",
-        summary: "jp-proj | promoted-memory | 再発時は最初に確認してください。",
-        content: "再発時は最初に確認してください。",
+        summary: "jp-proj | promoted-memory | 再発時は `wrangler whoami` の成功確認を先に実行してください。",
+        content: "再発時は `wrangler whoami` の成功確認を先に実行してください。",
         tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
         external_key: "jp-policy-3",
         created_at: Date.parse("2026-03-08T00:00:00.000Z")
@@ -415,8 +416,8 @@ describe("memory maintenance", () => {
         tenant_id: "default",
         project_id: "jp-proj",
         source: "claude",
-        summary: "jp-proj | promoted-memory | use `wrangler whoami` first",
-        content: "use `wrangler whoami` first",
+        summary: "jp-proj | promoted-memory | use `wrangler whoami` first and confirm success",
+        content: "use `wrangler whoami` first and confirm success",
         tags_json: JSON.stringify(["promoted", "policy", "jp-proj"]),
         external_key: "en-policy",
         created_at: Date.parse("2026-03-07T00:00:00.000Z")
@@ -429,21 +430,21 @@ describe("memory maintenance", () => {
 
     expect(digest?.content).toContain("原因は認証不足");
     expect(digest?.content).toContain("wrangler login を実行");
-    expect(digest?.content).toContain("再発時は最初に確認");
+    expect(digest?.content).toContain("再発時は wrangler whoami の成功確認を先に実行");
     expect(digest?.content).not.toContain("です");
     expect(digest?.content).not.toContain("ます");
     expect(canonical?.content).toContain("原因は認証不足");
     expect(canonical?.content).toContain("wrangler login を実行");
-    expect(canonical?.content).toContain("再発時は最初に確認");
-    expect(canonical?.content).toContain("use wrangler whoami first");
+    expect(canonical?.content).toContain("再発時は wrangler whoami の成功確認を先に実行");
+    expect(canonical?.content).toContain("use wrangler whoami first and confirm success");
     expect(canonical?.content).not.toContain("です");
     expect(canonical?.content).not.toContain("ます");
 
     const db = new FakeD1(rows);
     await runTenantMemoryMaintenance(db as unknown as D1Database, "default", now);
 
-    expect(db.memories.find((memory) => memory.id === "jp-raw-1")?.summary).toBe("jp-proj | agent-turn-complete | 原因は認証不足です。");
-    expect(db.memories.find((memory) => memory.id === "jp-policy-2")?.summary).toBe("jp-proj | promoted-memory | wrangler login を実行しました。");
+    expect(db.memories.find((memory) => memory.id === "jp-raw-1")?.summary).toBe("jp-proj | agent-turn-complete | 原因は認証不足で、対応は wrangler login の成功確認です。");
+    expect(db.memories.find((memory) => memory.id === "jp-policy-2")?.summary).toBe("jp-proj | promoted-memory | `wrangler login` を実行して成功を確認しました。");
   });
 
   it("can run maintenance across detected tenants", async () => {
@@ -454,8 +455,8 @@ describe("memory maintenance", () => {
         tenant_id: "tenant-b",
         project_id: "proj-b",
         source: "claude",
-        summary: "proj-b | agent-turn-complete | one",
-        content: "one",
+        summary: "proj-b | agent-turn-complete | `pnpm test` one success",
+        content: "`pnpm test` one success",
         tags_json: JSON.stringify(["claude", "hook", "agent-turn-complete", "proj-b"]),
         external_key: "tenant-b-1",
         created_at: Date.parse("2026-03-18T03:00:00.000Z")
@@ -465,8 +466,8 @@ describe("memory maintenance", () => {
         tenant_id: "tenant-b",
         project_id: "proj-b",
         source: "claude",
-        summary: "proj-b | agent-turn-complete | two",
-        content: "two",
+        summary: "proj-b | agent-turn-complete | `pnpm test` two success",
+        content: "`pnpm test` two success",
         tags_json: JSON.stringify(["claude", "hook", "agent-turn-complete", "proj-b"]),
         external_key: "tenant-b-2",
         created_at: Date.parse("2026-03-18T02:00:00.000Z")
@@ -476,8 +477,8 @@ describe("memory maintenance", () => {
         tenant_id: "tenant-b",
         project_id: "proj-b",
         source: "claude",
-        summary: "proj-b | agent-turn-complete | three",
-        content: "three",
+        summary: "proj-b | agent-turn-complete | `pnpm test` three success",
+        content: "`pnpm test` three success",
         tags_json: JSON.stringify(["claude", "hook", "agent-turn-complete", "proj-b"]),
         external_key: "tenant-b-3",
         created_at: Date.parse("2026-03-18T01:00:00.000Z")
@@ -487,8 +488,8 @@ describe("memory maintenance", () => {
         tenant_id: "tenant-b",
         project_id: "proj-b",
         source: "claude",
-        summary: "proj-b | agent-turn-complete | four",
-        content: "four",
+        summary: "proj-b | agent-turn-complete | `pnpm test` four success",
+        content: "`pnpm test` four success",
         tags_json: JSON.stringify(["claude", "hook", "agent-turn-complete", "proj-b"]),
         external_key: "tenant-b-4",
         created_at: Date.parse("2026-03-18T00:00:00.000Z")

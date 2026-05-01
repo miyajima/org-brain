@@ -9,3 +9,4 @@ coverage
 dbx-db/
 *.tsbuildinfo
 .omx/
+tmp/

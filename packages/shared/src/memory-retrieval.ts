@@ -9,6 +9,7 @@ const HISTORY_FETCH_LIMIT_FLOOR = 24;
 const DOC_FETCH_LIMIT = 4;
 const TAG_PRIORITY_ORDER = ["policy", "diagnosis", "command-result", "workaround"] as const;
 const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest"] as const;
+const LOW_SIGNAL_TITLES = new Set(["起動", "修正", "削除", "空け", "実装完了", "修正完了", "実行結果です", "変更しました", "1"]);
 
 export type MemorySearchMode = "memories" | "hybrid";
 export type MemorySearchKind = "memory" | "doc";
@@ -203,6 +204,19 @@ function hasAnyTag(tags: string[], candidates: readonly string[]): boolean {
   return candidates.some((candidate) => tags.includes(candidate));
 }
 
+function isLowSignalMemory(row: StoredMemory): boolean {
+  const tags = parseTagsJson(row.tags_json);
+  const text = collapseWhitespace(`${row.summary ?? ""} ${row.content ?? ""}`);
+  const title = collapseWhitespace((row.summary || row.content || "").replace(/^.*\|\s*(?:promoted-memory|agent-turn-complete|project-fact)\s*\|\s*/u, ""));
+  if (tags.includes("compacted")) return true;
+  if (tags.includes("message") || tags.includes("preprocessed") || /heartbeat/i.test(text)) return true;
+  if (tags.includes("project-fact") || /^#\s*Project Fact/im.test(row.content)) return false;
+  if (/^route=inline\/current[- ]agent$/i.test(title) || text.startsWith("route=inline/current-agent")) return true;
+  if (LOW_SIGNAL_TITLES.has(title.replace(/[。．.!！?？]+$/u, ""))) return true;
+  if (/^理由[:：]?\s*\d+$/u.test(title)) return true;
+  return false;
+}
+
 function memoryTierPriority(tags: string[]): number {
   if (tags.includes("canonical-memory")) return 0;
   if (tags.includes("curated-memory")) return 1;
@@ -385,7 +399,7 @@ async function loadRecentHistoryRows(
     .bind(tenantId, ...bindProjectArgs(projectId), limit)
     .all<StoredMemory>();
 
-  return result.results;
+  return result.results.filter((row) => !isLowSignalMemory(row));
 }
 
 async function searchDocVariant(db: D1Database, tenantId: string, ftsQuery: string, limit: number): Promise<KnowledgeDocCandidateRow[]> {

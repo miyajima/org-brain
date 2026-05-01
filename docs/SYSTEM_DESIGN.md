@@ -34,7 +34,8 @@
 - Lifecycle-aware filtering excludes `suppressed` and expired memories from normal retrieval.
 - `semantic` memories are preferred over `episodic` memories when durable/profile candidates are sorted.
 - Compact rows tagged `compacted` are excluded from retrieval and profile flows.
-- Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows.
+- Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows. `quality-v2` canonical summaries must expose representative reusable guidance instead of count-only labels.
+- Manual memory cleanup can physically remove low-signal memory rows after exporting a JSONL backup. Cleanup deletes associated FTS, lifecycle, edge, entity, and rationale rows, then lets maintenance rebuild `quality-v2` canonical rows from the remaining high-quality memories.
 - Interactive saves use `propose -> user confirmation -> confirm` and only create `decision_rationales` on confirm.
 - Non-interactive hook ingestion keeps writing promoted memory rows only and does not persist confirmed rationale rows.
 - Hook ingestion derives a default project name from `basename(cwd)` and, on first use per workspace, can confirm and cache a user-provided project name locally for later upserts.
@@ -56,6 +57,7 @@
 ## Operator Workflows
 - `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
+- `pnpm memories:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
 - `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
 - `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.
 - Agent final reports can include qualitative memory impact notes when memory avoided source search, web search, or past-context lookup; these notes do not replace D1 retrieval telemetry or measurement-mode comparisons.

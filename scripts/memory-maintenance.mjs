@@ -143,7 +143,11 @@ function buildApplyStatements(tenantId, plan, existingDigestIds) {
              summary = ${sqlString(synthesized.summary)},
              tags_json = ${sqlString(tagsJson)},
              source = ${sqlString("org-brain")},
-             created_at = ${synthesized.created_at}
+             created_at = ${synthesized.created_at},
+             kind = 'semantic',
+             lifecycle_state = 'active',
+             consolidated_at = ${synthesized.created_at},
+             revised_at = ${synthesized.created_at}
          WHERE tenant_id = ${sqlString(tenantId)} AND id = ${sqlString(existingId)};`,
         `DELETE FROM memories_fts WHERE memory_id = ${sqlString(existingId)} AND tenant_id = ${sqlString(tenantId)};`,
         `INSERT INTO memories_fts(memory_id, tenant_id, content)
@@ -154,7 +158,7 @@ function buildApplyStatements(tenantId, plan, existingDigestIds) {
 
     const id = `mem_digest_${synthesized.external_key.replace(/[^A-Za-z0-9_]/g, "_")}`;
     statements.push(
-      `INSERT INTO memories(id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at)
+      `INSERT INTO memories(id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at, kind, lifecycle_state, actor_type, actor_id, consolidated_at, revised_at)
        VALUES(
          ${sqlString(id)},
          ${sqlString(tenantId)},
@@ -164,6 +168,12 @@ function buildApplyStatements(tenantId, plan, existingDigestIds) {
          ${sqlString(tagsJson)},
          ${sqlString("org-brain")},
          ${sqlString(synthesized.external_key)},
+         ${synthesized.created_at},
+         'semantic',
+         'active',
+         'system',
+         'memory-maintenance',
+         ${synthesized.created_at},
          ${synthesized.created_at}
        );`,
         `INSERT INTO memories_fts(memory_id, tenant_id, content)
@@ -174,7 +184,10 @@ function buildApplyStatements(tenantId, plan, existingDigestIds) {
   for (const compaction of plan.compactions) {
     statements.push(
       `UPDATE memories
-       SET tags_json = ${sqlString(JSON.stringify(compaction.next_tags))}
+       SET tags_json = ${sqlString(JSON.stringify(compaction.next_tags))},
+           lifecycle_state = 'suppressed',
+           suppressed_at = ${Date.now()},
+           revised_at = ${Date.now()}
        WHERE tenant_id = ${sqlString(tenantId)} AND id = ${sqlString(compaction.id)};`,
         `DELETE FROM memories_fts
        WHERE memory_id = ${sqlString(compaction.id)} AND tenant_id = ${sqlString(tenantId)};`

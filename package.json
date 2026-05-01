@@ -12,6 +12,7 @@
     "sync:openclaw-memory": "node ./scripts/sync-openclaw-memory.mjs",
     "docs:seed": "node ./scripts/seed-knowledge-docs.mjs",
     "memories:maintain": "node ./scripts/memory-maintenance.mjs",
+    "memories:cleanup": "node ./scripts/memory-cleanup.mjs",
     "usage:status": "node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs",
     "metrics:report": "node ./scripts/retrieval-metrics-report.mjs",
     "metrics:replay": "node ./scripts/retrieval-metrics-replay.mjs",

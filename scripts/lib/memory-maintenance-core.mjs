@@ -1,3 +1,5 @@
+import { classifyMemoryQuality } from "./memory-quality.mjs";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DIGEST_SUMMARY_LIMIT = 6;
 const DIGEST_MEMBER_ID_LIMIT = 12;
@@ -5,7 +7,7 @@ const DIGEST_CONTENT_LIMIT = 3_500;
 const CANONICAL_OLDER_THAN_DAYS = 3;
 const CANONICAL_SUMMARY_LIMIT = 8;
 const CANONICAL_GROUP_MIN = 2;
-const CANONICAL_CATEGORY_TAGS = ["policy", "diagnosis", "command-result", "workaround"];
+const CANONICAL_CATEGORY_TAGS = ["project-fact", "policy", "diagnosis", "command-result", "workaround", "success", "failure", "preference"];
 const TAGS_TO_SKIP_IN_TOPLIST = new Set([
   "hook",
   "promoted",
@@ -16,7 +18,7 @@ const TAGS_TO_SKIP_IN_TOPLIST = new Set([
 ]);
 
 function collapseWhitespace(value) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
 function stripJapanesePoliteness(value) {
@@ -71,6 +73,38 @@ function stripMarkdownNoise(value) {
     .trim();
 }
 
+function isWeakGuidanceLine(value) {
+  const normalized = collapseWhitespace(stripMarkdownNoise(value)).normalize("NFKC").replace(/[。．.!！?？]+$/u, "");
+  if (!normalized || normalized.length < 12) return true;
+  return /^(実行結果です|修正しました|実装しました|変更しました|原因は特定して修正|原因は確定して対処済み|コミットまでは完了|はい、まだ|P\d|残り\s*\d+\s*点)/u.test(normalized);
+}
+
+function hasConcreteGuidanceSignal(value) {
+  const normalized = collapseWhitespace(value);
+  return (
+    /`[^`\n]+`/.test(value) ||
+    /\b(?:app|apps|scripts|docs|src|spec|test|tests|config|web|engine|backend|frontend)\//i.test(normalized) ||
+    /\b[A-Za-z0-9_-]+\.(?:ts|tsx|js|mjs|rb|erb|astro|md|yml|yaml|json|sql|rs)\b/.test(normalized) ||
+    /\b(?:pnpm|npm|wrangler|git|bundle|rails|cargo|pytest|vitest|rspec|playwright|ffmpeg)\b/i.test(normalized) ||
+    /\b\d+\s*(?:examples|failures|tests|件|rows|PDFs|ms|tokens)\b/i.test(normalized)
+  );
+}
+
+function pickReusableGuidance(row) {
+  const contentLines = String(row.content ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+    .filter((line) => line && !line.startsWith("#") && !/^(Source|Event|Project|RecordedAt|Tenant|Category|TopTags):/i.test(line));
+  const candidates = [...contentLines, row.summary ?? ""]
+    .map((line) => stripMarkdownNoise(line))
+    .filter((line) => !isWeakGuidanceLine(line));
+  return (
+    candidates.find(hasConcreteGuidanceSignal) ||
+    candidates.find((line) => line.length >= 24) ||
+    stripMarkdownNoise(row.summary || row.content || row.id)
+  );
+}
+
 function utcDay(timestamp) {
   return new Date(timestamp).toISOString().slice(0, 10);
 }
@@ -112,6 +146,7 @@ function canonicalCategory(tags) {
 }
 
 function canonicalSourcePriority(row) {
+  if (row.tags.includes("project-fact")) return 0;
   if (row.tags.includes("promoted")) return 0;
   if (row.tags.includes("curated-memory")) return 1;
   if (row.tags.includes("memory-digest")) return 2;
@@ -134,7 +169,7 @@ function buildDigestSummary(row, day, rowCount, uniqueCount) {
 }
 
 function buildCanonicalSummary(projectId, category, uniqueCount) {
-  return clip(`${projectId || "(none)"} | canonical-memory | ${category} | ${uniqueCount} stable summaries`, 240);
+  return clip(`${projectId || "(none)"} | ${category} | ${uniqueCount} reusable rules`, 240);
 }
 
 function buildDigestContent(tenantId, row, day, rows, summaries) {
@@ -204,6 +239,14 @@ function buildCanonicalContent(tenantId, projectId, category, rows, summaries) {
   return clip(lines.join("\n"), DIGEST_CONTENT_LIMIT);
 }
 
+function buildCanonicalSearchSummary(projectId, category, summaries) {
+  const lead = summaries.find((summary) => summary && !/stable summaries|reusable rules/i.test(summary)) || summaries[0] || "";
+  const cleaned = stripMarkdownNoise(stripJapanesePoliteness(lead))
+    .replace(new RegExp(`^${(projectId || "\\(none\\)").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\|\\s*`, "u"), "")
+    .replace(/^(?:promoted-memory|agent-turn-complete|project-fact)\s*\|\s*/u, "");
+  return clip(`${projectId || "(none)"} | ${category} | ${cleaned}`, 240);
+}
+
 function canDigestRow(row, cutoffTimestamp) {
   return (
     row.created_at <= cutoffTimestamp &&
@@ -248,7 +291,8 @@ export function planMemoryMaintenance(rows, options = {}) {
   const duplicateCutoff = now - duplicateOlderThanDays * DAY_MS;
   const normalizedRows = rows.map((row) => {
     const tags = parseTagsJson(row.tags_json);
-    const rawSummary = stripJapanesePoliteness(row.summary || row.content || row.id);
+    const rawSummary = stripJapanesePoliteness(pickReusableGuidance(row));
+    const quality = classifyMemoryQuality({ ...row, tags });
     return {
       id: row.id,
       project_id: row.project_id ?? null,
@@ -256,9 +300,10 @@ export function planMemoryMaintenance(rows, options = {}) {
       tags,
       created_at: Number(row.created_at),
       summary: clip(rawSummary, 240),
-      normalized_summary: normalizeSummary(rawSummary)
+      normalized_summary: normalizeSummary(rawSummary),
+      quality
     };
-  });
+  }).filter((row) => row.quality.action !== "delete");
 
   const canonicals = [];
   const digests = [];
@@ -307,8 +352,8 @@ export function planMemoryMaintenance(rows, options = {}) {
       project_id: projectId,
       source: "org-brain",
       created_at: anchor.created_at,
-      tags: addTags(["org-brain", "maintenance", "canonical-memory", "memory-map", category], projectId ? [projectId] : []),
-      summary: buildCanonicalSummary(projectId, category, dedupedSummaries.length),
+      tags: addTags(["org-brain", "maintenance", "canonical-memory", "memory-map", "quality-v2", category], projectId ? [projectId] : []),
+      summary: buildCanonicalSearchSummary(projectId, category, dedupedSummaries),
       content: buildCanonicalContent(tenantId, projectId, category, ordered, dedupedSummaries),
       member_ids: ordered.map((row) => row.id)
     });
@@ -335,7 +380,7 @@ export function planMemoryMaintenance(rows, options = {}) {
       project_id: anchor.project_id,
       source: "org-brain",
       created_at: anchor.created_at,
-      tags: addTags(["org-brain", "maintenance", "memory-digest", anchor.source], anchor.project_id ? [anchor.project_id] : []),
+      tags: addTags(["org-brain", "maintenance", "memory-digest", "quality-v2", anchor.source], anchor.project_id ? [anchor.project_id] : []),
       summary: buildDigestSummary(anchor, day, ordered.length, dedupedSummaries.length),
       content: buildDigestContent(tenantId, anchor, day, ordered, dedupedSummaries),
       member_ids: ordered.map((row) => row.id)

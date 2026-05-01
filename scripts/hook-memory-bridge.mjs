@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { pathToFileURL } from "node:url";
+import { classifyMemoryQuality } from "./lib/memory-quality.mjs";
 
 const ROOT = "/Users/miya/projects/org-brain";
 const DEFAULT_ENV_FILES = [
@@ -334,6 +335,7 @@ function prepareStructuredLearningEntry(record, parsed) {
     "hook",
     "learning-loop",
     type,
+    type === "project-fact" ? "curated-memory" : "",
     record.projectId,
     ...parseCommaTags(firstString(entry.tags))
   ]);
@@ -369,6 +371,15 @@ export function classifyMemoryRecord(record) {
 
   if (META_ONLY_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return { action: "skip", reason: "meta-only" };
+  }
+
+  const quality = classifyMemoryQuality({
+    summary: buildPromotedSummary(record, normalized),
+    content: assistantText,
+    tags: [record.sourceName, "hook", record.eventType, record.projectId].filter(Boolean)
+  });
+  if (quality.action === "delete") {
+    return { action: "skip", reason: quality.reason };
   }
 
   const hasCause = containsAny(normalized, CAUSE_KEYWORDS);

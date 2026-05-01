@@ -153,6 +153,7 @@ describe("hook-memory-bridge promotion", () => {
     const prepared = prepareMemoryRecordForUpsert("openclaw", payload);
     expect(prepared.action).toBe("promote");
     expect(prepared.record.tags).toContain("project-fact");
+    expect(prepared.record.tags).toContain("curated-memory");
     expect(prepared.record.tags).toContain("toolchain");
     expect(prepared.record.content).toContain("# Project Fact");
     expect(prepared.record.content).toContain("## Result");
