@@ -15,6 +15,7 @@ Use the bundled script instead of ad hoc SQL when checking how Org Brain is bein
 4. Use `pnpm -s usage:status -- --json` when another tool or script will consume the output.
 5. Do not query or report `tasks`; task records are operational internals and are intentionally excluded from this snapshot.
 6. Mention the query scope in the report: tenant, database, and `remote|local|preview`.
+7. Report memory stages separately. The default script output includes the latest 3 rows per stage; use `--recent <n>` only when the user asks for a different number.
 
 ## Script
 
@@ -22,6 +23,7 @@ Use the bundled script instead of ad hoc SQL when checking how Org Brain is bein
 - Direct entrypoint: `node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs`
 - Useful flags:
   - `--tenant <tenant_id>`
+  - `--recent <n>`
   - `--json`
   - `--local`
   - `--preview`
@@ -31,5 +33,12 @@ Use the bundled script instead of ad hoc SQL when checking how Org Brain is bein
 
 - Memory and thread counts
 - First/last memory and thread timestamps
+- Memory stage counts and latest rows:
+  - `canonical-memory`
+  - `curated/promoted-memory`
+  - `memory-digest`
+  - `recent-raw`
+  - `compacted`
+  - `suppressed`
 
 Prefer this workflow over reading console HTML or querying local OpenClaw SQLite caches.
