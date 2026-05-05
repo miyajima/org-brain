@@ -54,6 +54,8 @@ type ConfirmMemoryRequest = {
   evidence?: ProposedEvidence[];
 };
 
+type CaptureMemoryWithRationaleRequest = ProposeMemoryRequest;
+
 type StoredConfirmation = {
   id: string;
   tenant_id: string;
@@ -210,6 +212,10 @@ function parseProposeRequest(rawBody: unknown): {
   };
 }
 
+function parseCaptureWithRationaleRequest(rawBody: unknown): ReturnType<typeof parseProposeRequest> {
+  return parseProposeRequest(rawBody as CaptureMemoryWithRationaleRequest);
+}
+
 function parseConfirmRequest(rawBody: unknown): {
   tenantId: string;
   confirmationToken: string;
@@ -338,6 +344,70 @@ async function attachEntitiesAndEvidence(
   await runBatchChunks(env.OPEN_BRAIN_DB, statements);
 }
 
+async function hasRationaleForMemory(env: Env, tenantId: string, memoryId: string): Promise<boolean> {
+  const row = await env.OPEN_BRAIN_DB.prepare("SELECT id FROM decision_rationales WHERE tenant_id = ? AND memory_id = ? LIMIT 1")
+    .bind(tenantId, memoryId)
+    .first<{ id: string }>();
+  return Boolean(row?.id);
+}
+
+async function persistInferredRationale(
+  env: Env,
+  args: {
+    tenantId: string;
+    memoryId: string;
+    projectId: string | null;
+    rationale: ConfirmationPayload["proposed_rationale"];
+    entities: ProposedEntity[];
+    evidence: ProposedEvidence[];
+  }
+): Promise<{ rationale_id: string | null; skipped: boolean; reason?: string }> {
+  if (await hasRationaleForMemory(env, args.tenantId, args.memoryId)) {
+    return { rationale_id: null, skipped: true, reason: "existing_rationale" };
+  }
+
+  const rationaleId = ulid();
+  await env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO decision_rationales(
+      id, tenant_id, memory_id, project_id, decision_type, conclusion, reason_summary, status,
+      confirmation_state, decider_entity_id, confidence_score, created_at, confirmed_at, superseded_by
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  )
+    .bind(
+      rationaleId,
+      args.tenantId,
+      args.memoryId,
+      args.projectId,
+      args.rationale.decision_type,
+      args.rationale.conclusion,
+      args.rationale.reason_summary,
+      "accepted",
+      "inferred_unconfirmed",
+      null,
+      args.rationale.confidence_score ?? null,
+      Date.now(),
+      null,
+      null
+    )
+    .run();
+
+  let deciderEntityId: string | null = null;
+  const decider = args.entities.find((entity) => entity.role === "decision_maker");
+  if (decider) {
+    deciderEntityId = await upsertEntity(env, args.tenantId, decider);
+  }
+  await attachEntitiesAndEvidence(env, {
+    tenantId: args.tenantId,
+    memoryId: args.memoryId,
+    rationaleId,
+    entities: args.entities,
+    evidence: args.evidence,
+    deciderEntityId
+  });
+
+  return { rationale_id: rationaleId, skipped: false };
+}
+
 export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
   const { tenantId, source, actorType, actorId, item, entities, evidence } = parseProposeRequest(rawBody);
   const extracted = extractRationaleProposal({
@@ -369,6 +439,59 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
     },
     proposed_entities: extracted.entities,
     proposed_evidence: extracted.evidence
+  };
+}
+
+export async function captureMemoryWithInferredRationale(env: Env, rawBody: unknown) {
+  const { tenantId, source, actorType, actorId, item, entities, evidence } = parseCaptureWithRationaleRequest(rawBody);
+  const extracted = extractRationaleProposal({
+    content: item.content,
+    summary: item.summary,
+    projectId: item.project_id,
+    entities,
+    evidence
+  });
+
+  const capture = await captureMemoryItems(env, {
+    tenantId,
+    source,
+    items: [
+      {
+        external_key: item.external_key,
+        content: item.content,
+        summary: item.summary,
+        tags: item.tags,
+        created_at: item.created_at,
+        project_id: item.project_id,
+        actor_type: actorType,
+        actor_id: actorId,
+        kind: "semantic",
+        lifecycle_state: "active"
+      }
+    ],
+    operation: "capture"
+  });
+  const memoryId = capture.items[0]?.memory_id;
+  if (!memoryId) throw new HttpError(500, "memory_capture_failed", "Failed to persist memory");
+
+  const rationale = await persistInferredRationale(env, {
+    tenantId,
+    memoryId,
+    projectId: item.project_id,
+    rationale: extracted.rationale,
+    entities: entities.length > 0 ? entities : extracted.entities,
+    evidence: evidence.length > 0 ? evidence : extracted.evidence
+  });
+
+  return {
+    tenant_id: tenantId,
+    source,
+    memory_id: memoryId,
+    capture,
+    rationale_id: rationale.rationale_id,
+    rationale_skipped: rationale.skipped,
+    rationale_skip_reason: rationale.reason ?? null,
+    confirmation_state: rationale.skipped ? null : "inferred_unconfirmed"
   };
 }
 

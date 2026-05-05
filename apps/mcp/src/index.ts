@@ -139,7 +139,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           external_ref: z.string().max(256).nullable().optional()
         })).max(8).optional(),
         evidence: z.array(z.object({
-          evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "external"]).optional(),
+          evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "file", "command", "thread", "external"]).optional(),
           evidence_ref: z.string().min(1).max(512),
           relation: z.enum(["supports", "contradicts", "context_for"]).optional(),
           note: z.string().max(500).nullable().optional(),
@@ -177,7 +177,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           external_ref: z.string().max(256).nullable().optional()
         })).max(8).optional(),
         evidence: z.array(z.object({
-          evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "external"]).optional(),
+          evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "file", "command", "thread", "external"]).optional(),
           evidence_ref: z.string().min(1).max(512),
           relation: z.enum(["supports", "contradicts", "context_for"]).optional(),
           note: z.string().max(500).nullable().optional(),

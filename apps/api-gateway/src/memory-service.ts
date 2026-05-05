@@ -478,10 +478,14 @@ export async function searchMemories(env: Env, rawBody: unknown): Promise<Memory
     filters
   );
   const hasFilters = Object.values(filters).some(Boolean);
-  if (!hasFilters) return { ...base, results: base.results.slice(0, request.limit) };
+  if (!hasFilters) {
+    const response = { ...base, results: base.results.slice(0, request.limit) };
+    await bestEffortRefreshMemoryResults(env, request.tenantId, response.results.map((item) => item.id), "api-memory-search");
+    return response;
+  }
 
   const filteredResults = base.results.filter((item) => item.kind !== "memory" || allowedIds.has(item.id)).slice(0, request.limit);
-  return {
+  const response = {
     ...base,
     results: filteredResults,
     meta: {
@@ -492,11 +496,40 @@ export async function searchMemories(env: Env, rawBody: unknown): Promise<Memory
       top_result_ranks: filteredResults.map((item) => item.score)
     }
   };
+  await bestEffortRefreshMemoryResults(env, request.tenantId, filteredResults.map((item) => item.id), "api-memory-search");
+  return response;
 }
 
 export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<MemoryProfileResponse> {
   const request = parseProfileRequest(rawBody);
-  return buildTenantMemoryProfile(env.OPEN_BRAIN_DB, request);
+  const profile = await buildTenantMemoryProfile(env.OPEN_BRAIN_DB, request);
+  await bestEffortRefreshMemoryResults(
+    env,
+    request.tenantId,
+    [
+      ...profile.durable.map((item) => item.id),
+      ...profile.recent.map((item) => item.id),
+      ...profile.search_results.filter((item) => item.kind === "memory").map((item) => item.id)
+    ],
+    "api-memory-profile"
+  );
+  return profile;
+}
+
+async function bestEffortRefreshMemoryResults(env: Env, tenantId: string, ids: string[], actorId: string): Promise<void> {
+  const uniqueMemoryIds = [...new Set(ids.filter(Boolean))].slice(0, 8);
+  for (const memoryId of uniqueMemoryIds) {
+    try {
+      await refreshMemory(env, {
+        tenantId,
+        memoryId,
+        actorType: "system",
+        actorId
+      });
+    } catch {
+      // Retrieval must remain best-effort; failed refreshes should not break reads.
+    }
+  }
 }
 
 export async function captureMemories(env: Env, rawBody: unknown) {

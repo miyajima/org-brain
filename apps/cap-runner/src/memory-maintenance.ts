@@ -150,6 +150,8 @@ function stripMarkdownNoise(value: string): string {
 function isWeakGuidanceLine(value: string): boolean {
   const normalized = collapseWhitespace(stripMarkdownNoise(value)).normalize("NFKC").replace(/[。．.!！?？]+$/u, "");
   if (!normalized || normalized.length < 12) return true;
+  if (/::git-(?:stage|commit|push|create-branch|create-pr)\{/u.test(value)) return true;
+  if (/^(?:\[path\]\s*)+$/u.test(normalized)) return true;
   return /^(実行結果です|修正しました|実装しました|変更しました|原因は特定して修正|原因は確定して対処済み|コミットまでは完了|はい、まだ|P\d|残り\s*\d+\s*点)/u.test(normalized);
 }
 
@@ -285,6 +287,14 @@ function buildCanonicalContent(
   summaries: string[]
 ): string {
   const tags = topTags(rows);
+  const reusable = summaries
+    .map((summary) => clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180))
+    .filter((summary) => !isWeakGuidanceLine(summary) && hasConcreteGuidanceSignal(summary))
+    .slice(0, CANONICAL_SUMMARY_LIMIT);
+  const caveats = summaries
+    .map((summary) => clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180))
+    .filter((summary) => /(?:失敗|failed|failure|未確認|確認できません|cannot confirm)/i.test(summary))
+    .slice(0, 4);
   const lines = [
     "# Canonical Memory Map",
     "",
@@ -292,19 +302,26 @@ function buildCanonicalContent(
     `- Project: ${projectId || "(none)"}`,
     `- Category: ${category}`,
     `- ConsolidatedCount: ${rows.length}`,
-    `- StableSummaryCount: ${summaries.length}`
+    `- ReusableGuidanceCount: ${reusable.length}`
   ];
 
   if (tags.length > 0) lines.push(`- TopTags: ${tags.join(", ")}`);
 
-  lines.push("", "## Stable Guidance", "");
-  for (const summary of summaries.slice(0, CANONICAL_SUMMARY_LIMIT)) {
-    lines.push(`- ${clip(stripMarkdownNoise(stripJapanesePoliteness(summary)), 180)}`);
+  lines.push("", "## Reusable Guidance", "");
+  for (const summary of reusable) {
+    lines.push(`- ${summary}`);
   }
 
-  lines.push("", "## Supporting Memory IDs", "");
+  lines.push("", "## Evidence Memory IDs", "");
   for (const member of rows.slice(0, DIGEST_MEMBER_ID_LIMIT)) {
     lines.push(`- ${member.id}`);
+  }
+
+  lines.push("", "## Caveats", "");
+  if (caveats.length === 0) {
+    lines.push("- Re-check guidance when project structure, dependencies, or deployment environment changes.");
+  } else {
+    for (const caveat of caveats) lines.push(`- ${caveat}`);
   }
 
   return clip(lines.join("\n"), DIGEST_CONTENT_LIMIT);
@@ -433,6 +450,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
     const seenSummaries = new Set<string>();
     for (const row of ordered) {
       if (!row.normalized_summary || seenSummaries.has(row.normalized_summary)) continue;
+      if (isWeakGuidanceLine(row.summary)) continue;
       seenSummaries.add(row.normalized_summary);
       dedupedSummaries.push(row.summary);
       if (dedupedSummaries.length >= CANONICAL_SUMMARY_LIMIT) break;

@@ -1,6 +1,7 @@
 import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
 import { apiKeyAuth, jsonOk } from "./auth";
+import { createDecisionMemory, enrichContext, searchDecisionMemories } from "./context-engine-service";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import {
   captureMemories,
@@ -14,7 +15,7 @@ import {
   upsertMemories
 } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
-import { confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
+import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
 import type { Env } from "./types";
 
@@ -23,6 +24,7 @@ const app = new Hono<{ Bindings: Env }>();
 mountMcp(app);
 
 app.use("/v1/*", apiKeyAuth);
+app.use("/api/*", apiKeyAuth);
 
 app.post("/v1/tasks", async (c) => {
   const body = await c.req.json<unknown>();
@@ -99,6 +101,12 @@ app.post("/v1/memories/propose", async (c) => {
   return jsonOk(c, result, 201);
 });
 
+app.post("/v1/memories/capture-rationale", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await captureMemoryWithInferredRationale(c.env, body);
+  return jsonOk(c, result, 201);
+});
+
 app.post("/v1/memories/confirm", async (c) => {
   const body = await c.req.json<unknown>();
   const result = await confirmProposedMemory(c.env, body);
@@ -132,6 +140,30 @@ app.post("/v1/memories/search", async (c) => {
 app.post("/v1/memories/profile", async (c) => {
   const body = await c.req.json<unknown>();
   const result = await getMemoryProfile(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/decision-memories", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await createDecisionMemory(c.env, body);
+  return jsonOk(c, result, 201);
+});
+
+app.post("/v1/decision-memories/search", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await searchDecisionMemories(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/context/enrich", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await enrichContext(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.post("/api/context/enrich", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await enrichContext(c.env, body);
   return jsonOk(c, result);
 });
 

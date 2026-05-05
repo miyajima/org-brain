@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { confirmProposedMemory, filterMemorySearchResults, proposeMemoryWithRationale } from "../src/rationale-service";
+import {
+  captureMemoryWithInferredRationale,
+  confirmProposedMemory,
+  filterMemorySearchResults,
+  proposeMemoryWithRationale
+} from "../src/rationale-service";
 
 type MemoryRecord = {
   id: string;
@@ -50,6 +55,10 @@ class FakeStatement {
       const row = this.db.entities.find(
         (item) => item.tenant_id === this.args[0] && item.entity_type === this.args[1] && item.canonical_name === this.args[2]
       );
+      return (row ? { id: row.id } : null) as T | null;
+    }
+    if (this.sql.startsWith("SELECT id FROM decision_rationales WHERE tenant_id = ? AND memory_id = ?")) {
+      const row = this.db.rationales.find((item) => item.tenant_id === this.args[0] && item.memory_id === this.args[1]);
       return (row ? { id: row.id } : null) as T | null;
     }
     if (this.sql.includes("FROM memories") && this.sql.includes("WHERE tenant_id = ? AND id = ?")) {
@@ -266,6 +275,32 @@ describe("rationale service", () => {
     expect(db.memories).toHaveLength(1);
     expect(db.rationales).toHaveLength(1);
     expect(db.memoryEntities).toHaveLength(1);
+  });
+
+  it("captures non-interactive memories with inferred unconfirmed rationale", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as unknown as Parameters<typeof captureMemoryWithInferredRationale>[0];
+    const captured = await captureMemoryWithInferredRationale(env, {
+      tenant_id: "default",
+      source: "openclaw",
+      actor_type: "system",
+      actor_id: "openclaw:turn-1",
+      item: {
+        external_key: "learning:test",
+        content: "## Decision\nUse `wrangler whoami` first.\n\n## Reason\nCloudflare auth often expires.\n\n## Evidence\napps/api-gateway/wrangler.jsonc\nthread:turn-1",
+        summary: "org-brain | project-fact | use wrangler whoami first",
+        tags: ["project-fact", "curated-memory"],
+        project_id: "org-brain"
+      }
+    });
+
+    expect(captured.memory_id).toBeTruthy();
+    expect(captured.confirmation_state).toBe("inferred_unconfirmed");
+    expect(db.memories).toHaveLength(1);
+    expect(db.memories[0]?.actor_id).toBe("openclaw:turn-1");
+    expect(db.rationales).toHaveLength(1);
+    expect(db.rationales[0]?.confirmation_state).toBe("inferred_unconfirmed");
+    expect(db.evidence.length).toBeGreaterThan(0);
   });
 
   it("filters search results by rationale reason text and entity", async () => {

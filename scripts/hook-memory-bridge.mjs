@@ -301,6 +301,10 @@ function parseCommaTags(raw) {
 
 function buildLearningEntryContent(record, entry) {
   const label = entry.type === "project-fact" ? "Project Fact" : "Learning Entry";
+  const actor = buildActorId(record);
+  const decision = firstString(entry.decision, entry.result, entry.action, "No decision provided.");
+  const reason = firstString(entry.reason, entry.trigger, "No reason provided.");
+  const evidence = firstString(entry.evidence, record.externalKey, "No evidence reference provided.");
   return [
     `# ${label}`,
     "",
@@ -309,9 +313,20 @@ function buildLearningEntryContent(record, entry) {
     `- Project: ${record.projectId || "(none)"}`,
     `- RecordedAt: ${new Date(record.createdAt).toISOString()}`,
     `- EntryType: ${firstString(entry.type, "unknown")}`,
+    `- Who: ${actor}`,
+    `- When: ${new Date(record.createdAt).toISOString()}`,
     "",
     "## Trigger",
     firstString(entry.trigger, "No trigger provided."),
+    "",
+    "## Decision",
+    decision,
+    "",
+    "## Reason",
+    reason,
+    "",
+    "## Evidence",
+    evidence,
     "",
     "## Action",
     firstString(entry.action, "No action provided."),
@@ -320,7 +335,10 @@ function buildLearningEntryContent(record, entry) {
     firstString(entry.result, "No result provided."),
     "",
     "## Reuse Rule",
-    firstString(entry.reuse, "Reuse only when the same condition is confirmed.")
+    firstString(entry.reuse, "Reuse only when the same condition is confirmed."),
+    "",
+    "## Validity",
+    firstString(entry.validity, "Valid until the project, toolchain, or external service behavior changes.")
   ].join("\n");
 }
 
@@ -349,9 +367,17 @@ function prepareStructuredLearningEntry(record, parsed) {
       projectId: record.projectId,
       summary: clip(`${record.projectId || "(none)"} | ${type} | ${summaryBase}`, 1_000),
       tags,
-      content: buildLearningEntryContent(record, entry)
+      content: buildLearningEntryContent(record, entry),
+      actorType: "system",
+      actorId: buildActorId(record)
     }
   };
+}
+
+function buildActorId(record) {
+  const metadata = record?.metadata ?? {};
+  const stableId = firstString(metadata.turnId, metadata.threadId, metadata.sessionId, metadata.sessionKey, metadata.messageId);
+  return stableId ? `${record.sourceName}:${stableId}`.slice(0, 128) : firstString(record.sourceName, "unknown").slice(0, 128);
 }
 
 export function classifyMemoryRecord(record) {
@@ -567,7 +593,9 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
       projectId: record.projectId,
       summary: buildPromotedSummary(record, classification.normalizedText),
       tags,
-      content: buildPromotedContent(record, classification.category, classification.normalizedText)
+      content: buildPromotedContent(record, classification.category, classification.normalizedText),
+      actorType: "system",
+      actorId: buildActorId(record)
     }
   };
 }
@@ -664,7 +692,7 @@ async function readPayload(argvPayload) {
 }
 
 async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
-  const res = await fetch(buildApiUrl(apiBase, "/v1/memories/upsert"), {
+  const res = await fetch(buildApiUrl(apiBase, "/v1/memories/capture-rationale"), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -673,22 +701,22 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
     body: JSON.stringify({
       tenant_id: tenantId,
       source: sourceName,
-      items: [
-        {
-          external_key: record.externalKey,
-          content: clip(record.content, 20_000),
-          summary: clip(record.summary, 1_000),
-          tags: record.tags,
-          created_at: record.createdAt,
-          project_id: record.projectId
-        }
-      ]
+      actor_type: record.actorType ?? "system",
+      actor_id: record.actorId ?? sourceName,
+      item: {
+        external_key: record.externalKey,
+        content: clip(record.content, 20_000),
+        summary: clip(record.summary, 1_000),
+        tags: record.tags,
+        created_at: record.createdAt,
+        project_id: record.projectId
+      }
     })
   });
 
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.ok) {
-    throw new Error(`org-brain hook upsert failed (${res.status})`);
+    throw new Error(`org-brain hook capture-rationale failed (${res.status})`);
   }
   return body.data;
 }

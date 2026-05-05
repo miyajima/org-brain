@@ -315,7 +315,9 @@ describe("memory maintenance", () => {
     const digest = db.memories.find((memory) => memory.external_key?.includes("memory-digest"));
     expect(canonical?.source).toBe("org-brain");
     expect(canonical?.tags_json).toContain("\"canonical-memory\"");
-    expect(canonical?.content).toContain("Stable Guidance");
+    expect(canonical?.content).toContain("Reusable Guidance");
+    expect(canonical?.content).toContain("Evidence Memory IDs");
+    expect(canonical?.content).toContain("Caveats");
     expect(digest?.source).toBe("org-brain");
     expect(digest?.tags_json).toContain("\"memory-digest\"");
     expect(digest?.content).toContain("Representative Summaries");
@@ -329,6 +331,62 @@ describe("memory maintenance", () => {
     expect(db.memoriesFts.some((row) => row.memory_id === "dup-old")).toBe(false);
     expect(db.memoriesFts.some((row) => row.memory_id === canonical?.id)).toBe(true);
     expect(db.memoriesFts.some((row) => row.memory_id === digest?.id)).toBe(true);
+  });
+
+  it("keeps canonical guidance focused on reusable implementation signals", () => {
+    const now = Date.parse("2026-03-30T00:00:00.000Z");
+    const rows: MemoryRecord[] = [
+      {
+        id: "good-1",
+        tenant_id: "default",
+        project_id: "proj",
+        source: "codex",
+        summary: "proj | promoted-memory | Run `pnpm test` and confirm success before deploy",
+        content: "Run `pnpm test` and confirm success before deploy",
+        tags_json: JSON.stringify(["promoted", "policy", "proj"]),
+        external_key: "good-1",
+        created_at: Date.parse("2026-03-10T00:00:00.000Z")
+      },
+      {
+        id: "good-2",
+        tenant_id: "default",
+        project_id: "proj",
+        source: "codex",
+        summary: "proj | promoted-memory | Fix API route failure in apps/api-gateway/src/index.ts",
+        content: "原因は API route failure で、対応は apps/api-gateway/src/index.ts を更新することです。",
+        tags_json: JSON.stringify(["promoted", "policy", "proj"]),
+        external_key: "good-2",
+        created_at: Date.parse("2026-03-09T00:00:00.000Z")
+      },
+      {
+        id: "weak-1",
+        tenant_id: "default",
+        project_id: "proj",
+        source: "codex",
+        summary: "proj | promoted-memory | ::git-stage{cwd=\"/tmp\"}",
+        content: "::git-stage{cwd=\"/tmp\"}",
+        tags_json: JSON.stringify(["promoted", "policy", "proj"]),
+        external_key: "weak-1",
+        created_at: Date.parse("2026-03-08T00:00:00.000Z")
+      },
+      {
+        id: "weak-2",
+        tenant_id: "default",
+        project_id: "proj",
+        source: "codex",
+        summary: "proj | promoted-memory | [path] [path]",
+        content: "[path] [path]",
+        tags_json: JSON.stringify(["promoted", "policy", "proj"]),
+        external_key: "weak-2",
+        created_at: Date.parse("2026-03-07T00:00:00.000Z")
+      }
+    ];
+
+    const plan = planMemoryMaintenance(rows, { tenantId: "default", now });
+    expect(plan.canonicals[0]?.content).toContain("Run pnpm test and confirm success before deploy");
+    expect(plan.canonicals[0]?.content).toContain("apps/api-gateway/src/index.ts");
+    expect(plan.canonicals[0]?.content).not.toContain("::git-stage");
+    expect(plan.canonicals[0]?.content).not.toContain("[path] [path]");
   });
 
   it("normalizes Japanese politeness in synthesized memories without rewriting source rows", async () => {

@@ -156,6 +156,11 @@ describe("hook-memory-bridge promotion", () => {
     expect(prepared.record.tags).toContain("curated-memory");
     expect(prepared.record.tags).toContain("toolchain");
     expect(prepared.record.content).toContain("# Project Fact");
+    expect(prepared.record.content).toContain("## Decision");
+    expect(prepared.record.content).toContain("## Reason");
+    expect(prepared.record.content).toContain("## Evidence");
     expect(prepared.record.content).toContain("## Result");
+    expect(prepared.record.content).toContain("## Validity");
+    expect(prepared.record.actorId).toContain("openclaw:");
   });
 });

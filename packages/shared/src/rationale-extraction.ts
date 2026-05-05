@@ -5,7 +5,7 @@ export const RATIONALE_STATUSES = ["proposed", "accepted", "superseded", "reject
 export const CONFIRMATION_STATES = ["inferred_unconfirmed", "user_confirmed", "user_corrected"] as const;
 export const ENTITY_TYPES = ["person", "service", "project", "team", "org", "document", "unknown"] as const;
 export const ENTITY_ROLES = ["subject", "author", "decision_maker", "reviewer", "mentioned"] as const;
-export const EVIDENCE_TYPES = ["memory", "task_event", "artifact", "doc", "external"] as const;
+export const EVIDENCE_TYPES = ["memory", "task_event", "artifact", "doc", "file", "command", "thread", "external"] as const;
 export const EVIDENCE_RELATIONS = ["supports", "contradicts", "context_for"] as const;
 
 export type DecisionType = (typeof DECISION_TYPES)[number];
@@ -60,6 +60,9 @@ const EVIDENCE_PATTERNS: Array<{ type: EvidenceType; regex: RegExp }> = [
   { type: "artifact", regex: /\br2:\/\/[^\s)]+/gi },
   { type: "task_event", regex: /\btask:\/\/[^\s)]+/gi },
   { type: "doc", regex: /\bdoc:\/\/[^\s)]+/gi },
+  { type: "thread", regex: /\bthread[:/][A-Za-z0-9_-]+/gi },
+  { type: "file", regex: /(?:^|\s)(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:ts|tsx|js|mjs|rb|erb|astro|md|yml|yaml|json|jsonc|sql|rs|py|sh)\b/gi },
+  { type: "command", regex: /`[^`\n]+`/g },
   { type: "external", regex: /\bhttps?:\/\/[^\s)]+/gi }
 ];
 
@@ -146,9 +149,11 @@ function extractEvidence(text: string): ProposedEvidence[] {
   const results: ProposedEvidence[] = [];
   for (const { type, regex } of EVIDENCE_PATTERNS) {
     for (const match of text.matchAll(regex)) {
+      const ref = type === "command" ? match[0].slice(1, -1).trim() : collapseWhitespace(match[0]);
+      if (!ref) continue;
       results.push({
         evidence_type: type,
-        evidence_ref: match[0],
+        evidence_ref: ref,
         relation: "supports",
         note: null,
         weight_score: 0.6
