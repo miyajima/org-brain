@@ -325,7 +325,8 @@ function semanticRelevance(memory: DecisionMemory, taskText: string): number {
   if (taskTokens.length === 0) return 0;
   const memoryText = `${memory.title} ${memory.decision} ${memory.rationale} ${memory.constraints.join(" ")} ${memory.knownPitfalls.join(" ")}`;
   const memoryTokens = new Set(tokenize(memoryText));
-  const hits = taskTokens.filter((token) => memoryTokens.has(token)).length;
+  const normalizedMemoryText = memoryText.toLowerCase();
+  const hits = taskTokens.filter((token) => memoryTokens.has(token) || normalizedMemoryText.includes(token)).length;
   return clamp(hits / Math.min(taskTokens.length, 12), 0, 1);
 }
 
@@ -553,8 +554,6 @@ function parseSearchDecisionRequest(rawBody: unknown) {
 }
 
 async function loadDecisionMemories(env: Env, args: { tenantId: string; projectId: string | null; q: string; limit: number }): Promise<DecisionMemory[]> {
-  const like = `%${args.q.replace(/[%_]/g, " ").trim()}%`;
-  const hasQuery = args.q.trim().length > 0;
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, domain, title, decision, rationale,
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json,
@@ -563,13 +562,16 @@ async function loadDecisionMemories(env: Env, args: { tenantId: string; projectI
      FROM decision_memories
      WHERE tenant_id = ?
        AND (? IS NULL OR project_id = ? OR project_id IS NULL)
-       AND (? = 0 OR title LIKE ? OR decision LIKE ? OR rationale LIKE ? OR constraints_json LIKE ? OR known_pitfalls_json LIKE ?)
      ORDER BY updated_at DESC
      LIMIT ?`
   )
-    .bind(args.tenantId, args.projectId, args.projectId, hasQuery ? 1 : 0, like, like, like, like, like, Math.max(args.limit, 20))
+    .bind(args.tenantId, args.projectId, args.projectId, Math.max(args.limit, 64))
     .all<DecisionMemoryRow>();
-  return result.results.map(toDecisionMemory);
+  const memories = result.results.map(toDecisionMemory);
+  const queryTokens = tokenize(args.q);
+  if (queryTokens.length === 0) return memories.slice(0, args.limit);
+  const matched = memories.filter((memory) => semanticRelevance(memory, args.q) > 0);
+  return (matched.length > 0 ? matched : memories).slice(0, args.limit);
 }
 
 function toPublicDecisionContext(item: ScoredDecisionMemory, includeSources: boolean, userId: string | null, agentId: string | null, debugScores: boolean) {

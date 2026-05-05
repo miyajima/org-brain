@@ -52,13 +52,10 @@ class FakeStatement {
     if (this.sql.includes("FROM decision_memories")) {
       const tenantId = String(this.args[0]);
       const projectId = this.args[1] === null ? null : String(this.args[1]);
-      const hasQuery = Number(this.args[3]) === 1;
-      const query = hasQuery ? String(this.args[4]).replace(/%/g, " ") : "";
       const limit = Number(this.args[this.args.length - 1]);
       const rows = this.db.decisionMemories
         .filter((row) => row.tenant_id === tenantId)
         .filter((row) => !projectId || row.project_id === projectId || row.project_id === null)
-        .filter((row) => matchesQuery(row, query))
         .sort((left, right) => right.updated_at - left.updated_at)
         .slice(0, limit);
       return { results: rows as T[] };
