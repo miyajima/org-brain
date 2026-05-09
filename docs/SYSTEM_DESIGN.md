@@ -59,6 +59,7 @@
 
 ## Security
 - Public API is API-key protected.
+- Browser preflight requests for `/v1/*` and `/api/*` are handled before API-key auth, while non-OPTIONS requests still require `x-api-key`.
 - Browser traffic uses the Pages proxy; the service API key never reaches the client.
 - Remote MCP uses worker-validated service token headers with per-token tenant grants.
 - MCP lifecycle mutations store the authenticated service-token `principal` as the memory actor for audit visibility.
