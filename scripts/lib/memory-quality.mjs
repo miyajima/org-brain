@@ -34,8 +34,8 @@ const LOW_INFORMATION_TITLE_PATTERNS = [
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution", "対応"];
-const RESULT_KEYWORDS = ["成功", "failed", "failure", "succeeded", "success", "通った", "完了", "確認", "restored", "0 failures"];
-const COMMAND_WORDS = ["pnpm", "npm", "yarn", "bun", "wrangler", "git", "bundle", "rails", "cargo", "pytest", "vitest", "rspec"];
+const RESULT_KEYWORDS = ["成功", "failed", "failure", "succeeded", "success", "通った", "完了", "確認", "restored", "回復", "freed", "0 failures"];
+const COMMAND_WORDS = ["pnpm", "npm", "yarn", "bun", "wrangler", "git", "bundle", "rails", "cargo", "pytest", "vitest", "rspec", "df", "du"];
 const STRUCTURED_TAGS = ["project-fact", "failure", "success", "preference", "learning-loop"];
 
 export function collapseWhitespace(value) {

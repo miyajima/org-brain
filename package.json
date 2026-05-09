@@ -9,6 +9,7 @@
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "hook:bridge": "node ./scripts/hook-memory-bridge.mjs",
+    "sync:agents-memory": "node ./scripts/sync-agents-memory.mjs",
     "sync:openclaw-memory": "node ./scripts/sync-openclaw-memory.mjs",
     "docs:seed": "node ./scripts/seed-knowledge-docs.mjs",
     "memories:maintain": "node ./scripts/memory-maintenance.mjs",

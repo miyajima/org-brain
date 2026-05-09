@@ -78,6 +78,21 @@ describe("hook-memory-bridge promotion", () => {
     expect(classifyMemoryRecord(record).action).toBe("skip");
   });
 
+  it("respects explicit global project scope from payload", () => {
+    const payload = JSON.stringify({
+      type: "agent-turn-complete",
+      cwd: "/Users/miya/.agents",
+      project_id: null,
+      "last-assistant-message":
+        "原因は、このMacでは再生成可能な大きいローカル成果物が複数の定位置に蓄積することです。対処として `df -h ~` で確認し、Chrome の OptGuideOnDeviceModel、Docker の未使用 image/build cache、Atomic Chat モデルを優先して削除します。結果として空き容量を回復でき、再発時も同じ順序で確認できます。"
+    });
+
+    const prepared = prepareMemoryRecordForUpsert("codex", payload);
+    expect(prepared.action).toBe("promote");
+    expect(prepared.record.projectId).toBeNull();
+    expect(prepared.record.summary).toContain("(global) | promoted-memory");
+  });
+
   it("prompts once per workspace and persists the chosen project name", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
     const file = path.join(dir, "project-names.json");

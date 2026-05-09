@@ -48,7 +48,7 @@ The console proxy will use the Cloudflare service binding when available and fal
 - `pnpm test`
 - `pnpm build`
 - `pnpm hook:bridge`
-- `pnpm sync:openclaw-memory`
+- `pnpm sync:agents-memory`
 - `pnpm docs:seed`
 - `pnpm memories:maintain`
 - `pnpm usage:status`
@@ -237,30 +237,42 @@ pnpm measurement:report -- --tenant default --run-id <measurement_run_id> --json
 The current runtime records deterministic `estimated_tokens_v1` values because the bundled capabilities do not call an external LLM directly yet. The schema is ready for provider usage tokens once real model calls are wired in.
 For multi-turn work, pass the same `measurement_session_id` to each measured task and use `--session-id` to report aggregate session savings.
 
-## OpenClaw Memory Bridge
+## Agent Memory Sync
 Cloudflare D1 is the source of truth. OpenClaw `main.sqlite` remains a local cache/index.
 
 Set env vars and run:
 
 ```bash
 export ORGBRAIN_API_BASE="https://<api-gateway-host>"
+export ORGBRAIN_API_URL="https://<api-gateway-host>"
 export ORGBRAIN_API_KEY="<x-api-key>"
-pnpm sync:openclaw-memory
+pnpm sync:agents-memory
 ```
 
 Optional env vars:
 - `SYNC_DIRECTION=both|import|export` (default: `both`)
 - `OPENCLAW_MEMORY_DB=~/.openclaw/memory/main.sqlite`
-- `OPENCLAW_WORKSPACE=~/clawd`
 - `ORGBRAIN_TENANT_ID=default`
+- `ORGBRAIN_EXPORT_SOURCE=<source>` to export only one source instead of all visible memories
 
 Imported OpenClaw chunks are tagged with `curated-memory`, so retrieval tiers stay source-agnostic.
+
+Export targets are auto-detected under the current home directory and only run when the agent home exists:
+- `~/.openclaw` -> `~/.openclaw/memory/org-brain-sync.md`
+- `~/.codex` -> `~/.codex/memories/org-brain-sync.md`
+- `~/.claude` -> `~/.claude/memories/org-brain-sync.md`
+- `~/.cursor` -> `~/.cursor/memories/org-brain-sync.md`
+- `~/.opencode` -> `~/.opencode/memories/org-brain-sync.md`
+- `~/.hermes` -> `~/.hermes/memories/org-brain-sync.md`
+
+Only OpenClaw currently has an import path from a local SQLite memory cache and an automatic reindex command. The other agents receive markdown exports only.
 
 ## Agent Hook Bridge
 `pnpm hook:bridge` is the shared upsert bridge used by local agent hooks.
 
 ```bash
 export ORGBRAIN_API_BASE="https://open-brain-console.pages.dev/api"
+export ORGBRAIN_API_URL="https://open-brain-console.pages.dev/api"
 export ORGBRAIN_API_KEY="via-pages-proxy"
 export ORGBRAIN_TENANT_ID="default"
 
@@ -278,7 +290,11 @@ The bridge also loads fallback env files from:
 
 On the first reusable-memory upsert for a new workspace, the hook bridge now asks for the project name and defaults to `basename(cwd)`. The selected name is cached per workspace in `~/.config/org-brain/project-names.json` and reused on later runs.
 
-When `ORGBRAIN_API_BASE` points at the console proxy (`...pages.dev/api`), the incoming `x-api-key` is ignored and replaced by the Pages secret, so the local `ORGBRAIN_API_KEY` value only needs to be non-empty.
+`ORGBRAIN_API_URL` is the preferred variable for shell and harness retrieval. `ORGBRAIN_API_BASE` remains a backward-compatible alias for existing bridge scripts.
+
+When the API base points at the console proxy (`...pages.dev/api`), the incoming `x-api-key` is ignored and replaced by the Pages secret, so the local `ORGBRAIN_API_KEY` value only needs to be non-empty.
+
+Harness/bootstrap callers may pass either the host root (`https://...pages.dev`) or the proxied API root (`https://...pages.dev/api`). The harness normalizes both forms before calling `/api/context/enrich`.
 
 Hook-enabled clients currently wired for Org Brain memory upserts:
 - Codex

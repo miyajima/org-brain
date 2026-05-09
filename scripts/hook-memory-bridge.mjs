@@ -22,7 +22,7 @@ const DEFAULT_PROJECT_NAMES_FILE = "~/.config/org-brain/project-names.json";
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
 const POLICY_KEYWORDS = ["always", "never", "must", "方針", "ルール", "前提", "原則", "recommend", "recommended"];
-const RESULT_KEYWORDS = ["成功", "failed", "failure", "succeeded", "success", "通った", "完了", "確認", "restored"];
+const RESULT_KEYWORDS = ["成功", "failed", "failure", "succeeded", "success", "通った", "完了", "確認", "restored", "回復", "freed"];
 const META_ONLY_PATTERNS = [
   /^必要な作業は終わっています/,
   /^ほかに進める内容があれば/,
@@ -73,6 +73,36 @@ function basenameOrEmpty(value) {
   const trimmed = value.trim();
   if (!trimmed) return "";
   return path.basename(trimmed).slice(0, 128);
+}
+
+function parseExplicitProjectId(value) {
+  if (value === undefined) return { provided: false, value: null };
+  if (value === null) return { provided: true, value: null };
+  if (typeof value !== "string") return { provided: false, value: null };
+  const trimmed = value.trim();
+  if (!trimmed) return { provided: true, value: null };
+  if (["null", "(none)", "none", "global", "tenant"].includes(trimmed.toLowerCase())) {
+    return { provided: true, value: null };
+  }
+  return { provided: true, value: basenameOrEmpty(trimmed) || null };
+}
+
+function readExplicitProjectId(parsed, extras = {}) {
+  if (Object.prototype.hasOwnProperty.call(extras, "projectId")) {
+    return extras.projectId;
+  }
+  if (parsed && typeof parsed === "object") {
+    if (Object.prototype.hasOwnProperty.call(parsed, "project_id")) return parsed.project_id;
+    if (Object.prototype.hasOwnProperty.call(parsed, "projectId")) return parsed.projectId;
+    if (
+      parsed.context &&
+      typeof parsed.context === "object" &&
+      Object.prototype.hasOwnProperty.call(parsed.context, "projectId")
+    ) {
+      return parsed.context.projectId;
+    }
+  }
+  return undefined;
 }
 
 function normalizeProjectName(value, fallback = "") {
@@ -272,7 +302,7 @@ function buildPromotedContent(record, category, normalizedText) {
     "",
     `- Source: ${record.sourceName}`,
     `- Event: ${record.eventType || "unknown"}`,
-    `- Project: ${record.projectId}`,
+    `- Project: ${record.projectId || "(global)"}`,
     `- RecordedAt: ${new Date(record.createdAt).toISOString()}`,
     "",
     "## Takeaway",
@@ -287,7 +317,7 @@ function buildPromotedContent(record, category, normalizedText) {
 }
 
 function buildPromotedSummary(record, normalizedText) {
-  return clip(`${record.projectId} | promoted-memory | ${chooseTitle(normalizedText)}`, 1_000);
+  return clip(`${record.projectId || "(global)"} | promoted-memory | ${chooseTitle(normalizedText)}`, 1_000);
 }
 
 function parseCommaTags(raw) {
@@ -364,7 +394,9 @@ function prepareStructuredLearningEntry(record, parsed) {
     record: {
       externalKey: firstString(record.externalKey, `learning:${sha256(JSON.stringify(entry))}`),
       createdAt: record.createdAt,
+      cwd: record.cwd,
       projectId: record.projectId,
+      projectIdExplicit: record.projectIdExplicit,
       summary: clip(`${record.projectId || "(none)"} | ${type} | ${summaryBase}`, 1_000),
       tags,
       content: buildLearningEntryContent(record, entry),
@@ -381,7 +413,7 @@ function buildActorId(record) {
 }
 
 export function classifyMemoryRecord(record) {
-  if (!record.projectId) {
+  if (!record.projectId && !record.projectIdExplicit) {
     return { action: "skip", reason: "missing-project" };
   }
 
@@ -402,7 +434,7 @@ export function classifyMemoryRecord(record) {
   const quality = classifyMemoryQuality({
     summary: buildPromotedSummary(record, normalized),
     content: assistantText,
-    tags: [record.sourceName, "hook", record.eventType, record.projectId].filter(Boolean)
+    tags: [record.sourceName, "hook", record.eventType, record.projectId ?? "global-scope"].filter(Boolean)
   });
   if (quality.action === "delete") {
     return { action: "skip", reason: quality.reason };
@@ -434,7 +466,8 @@ export function classifyMemoryRecord(record) {
 function buildCommonRecord(sourceName, payloadText, parsed, extras = {}) {
   const createdAt = parseTimestamp(parsed?.timestamp, parsed?.at, parsed?.created_at) ?? Date.now();
   const cwd = firstString(parsed?.cwd, parsed?.directory, parsed?.worktree, parsed?.context?.workspaceDir, extras.cwd);
-  const projectId = basenameOrEmpty(cwd || extras.cwd);
+  const explicitProject = parseExplicitProjectId(readExplicitProjectId(parsed, extras));
+  const projectId = explicitProject.provided ? explicitProject.value : basenameOrEmpty(cwd || extras.cwd);
   const assistantText = normalizeWhitespace(firstString(extras.assistantText));
   const userInputs = Array.isArray(extras.userInputs) ? extras.userInputs.map((item) => firstString(item)).filter(Boolean) : [];
 
@@ -444,6 +477,7 @@ function buildCommonRecord(sourceName, payloadText, parsed, extras = {}) {
     cwd: cwd || null,
     eventType: firstString(extras.eventType, parsed?.type, parsed?.event?.type, "hook"),
     projectId: projectId || null,
+    projectIdExplicit: explicitProject.provided,
     externalKey: firstString(extras.externalKey, `${sourceName}:${sha256(payloadText)}`),
     assistantText,
     userInputs,
@@ -580,7 +614,7 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
     "hook",
     "promoted",
     record.eventType,
-    record.projectId,
+    record.projectId ?? "global-scope",
     classification.category
   ]);
 
@@ -591,6 +625,7 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
       createdAt: record.createdAt,
       cwd: record.cwd,
       projectId: record.projectId,
+      projectIdExplicit: record.projectIdExplicit,
       summary: buildPromotedSummary(record, classification.normalizedText),
       tags,
       content: buildPromotedContent(record, classification.category, classification.normalizedText),
@@ -654,6 +689,7 @@ async function openTtyStreams() {
 
 export async function resolveProjectNameForWorkspace(record, options = {}) {
   const cwd = firstString(record?.cwd);
+  if (record?.projectIdExplicit) return record.projectId ?? null;
   const fallbackProjectId = normalizeProjectName(record?.projectId, basenameOrEmpty(cwd));
   if (!cwd || !fallbackProjectId) return fallbackProjectId;
 
@@ -689,6 +725,10 @@ async function readPayload(argvPayload) {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8");
+}
+
+function resolveApiBase() {
+  return ensureRequiredEnv("ORGBRAIN_API_URL") || ensureRequiredEnv("ORGBRAIN_API_BASE");
 }
 
 async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
@@ -731,7 +771,7 @@ export async function main() {
 
   await loadEnvFallbacks();
 
-  const apiBase = ensureRequiredEnv("ORGBRAIN_API_BASE");
+  const apiBase = resolveApiBase();
   const apiKey = ensureRequiredEnv("ORGBRAIN_API_KEY");
   const tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
 
