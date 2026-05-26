@@ -1,3 +1,5 @@
+import { assessMemoryUsefulness } from "@org-brain/shared";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DIGEST_SUMMARY_LIMIT = 6;
 const DIGEST_MEMBER_ID_LIMIT = 12;
@@ -29,6 +31,14 @@ type RawMemoryRow = {
   tags_json: string | null;
   created_at: number;
   lifecycle_state?: string | null;
+  kind?: string | null;
+  scope_type?: string | null;
+  scope_key?: string | null;
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  canonical_key?: string | null;
+  current_version?: number | null;
+  expires_at?: number | null;
 };
 
 type PlannedDigest = {
@@ -60,10 +70,34 @@ type PlannedCompaction = {
   next_tags: string[];
 };
 
+type PlannedQualityUpdate = {
+  id: string;
+  project_id: string | null;
+  source: string;
+  content: string;
+  summary: string;
+  tags_json: string | null;
+  kind: string;
+  lifecycle_state: string;
+  scope_type: string;
+  scope_key: string | null;
+  canonical_key: string | null;
+  current_version: number;
+  confidence_score: number;
+  utility_score: number;
+  expires_at: number | null;
+  reason: string;
+  risky_low_signal: boolean;
+  suppression_candidate: boolean;
+  short_summary_candidate: boolean;
+  artifact_expiry_candidate: boolean;
+};
+
 type MaintenancePlan = {
   canonicals: PlannedCanonicalMemory[];
   digests: PlannedDigest[];
   compactions: PlannedCompaction[];
+  qualityUpdates: PlannedQualityUpdate[];
   stats: {
     scanned_count: number;
     canonical_group_count: number;
@@ -72,6 +106,13 @@ type MaintenancePlan = {
     digested_memory_count: number;
     duplicate_compaction_count: number;
     total_compaction_count: number;
+    quality_update_count: number;
+    quality_missing_score_count: number;
+    quality_expiry_update_count: number;
+    quality_low_signal_count: number;
+    quality_short_summary_candidate_count: number;
+    quality_suppression_candidate_count: number;
+    quality_artifact_expiry_candidate_count: number;
   };
 };
 
@@ -198,6 +239,16 @@ function parseTagsJson(raw: string | null): string[] {
 
 function addTags(existing: string[], extra: string[]): string[] {
   return [...new Set([...existing, ...extra].filter(Boolean))].slice(0, 16);
+}
+
+function nullableNumberEqual(left: number | null | undefined, right: number | null | undefined): boolean {
+  if (left === null || left === undefined) return right === null || right === undefined;
+  if (right === null || right === undefined) return false;
+  return Math.abs(Number(left) - Number(right)) < 0.0005;
+}
+
+function normalizeTextForCompare(value: unknown): string {
+  return collapseWhitespace(value);
 }
 
 function topTags(rows: NormalizedMemoryRow[]): string[] {
@@ -415,6 +466,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
       normalized_summary: normalizeSummary(rawSummary)
     };
   }).filter((row, index) => !isLowSignalRow(rows[index], row.tags, row.summary));
+  const qualityUpdates: PlannedQualityUpdate[] = [];
 
   const canonicals: PlannedCanonicalMemory[] = [];
   const digests: PlannedDigest[] = [];
@@ -422,6 +474,37 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
   const compactedIds = new Set<string>();
   const canonicalGroups = new Map<string, NormalizedMemoryRow[]>();
   const digestGroups = new Map<string, NormalizedMemoryRow[]>();
+
+  for (const row of rows) {
+    const assessment = assessMemoryUsefulness(row);
+    const summaryChanged = normalizeTextForCompare(row.summary) !== normalizeTextForCompare(assessment.summary);
+    const confidenceChanged = !nullableNumberEqual(row.confidence_score, assessment.confidence_score);
+    const utilityChanged = !nullableNumberEqual(row.utility_score, assessment.utility_score);
+    const expiryChanged = !nullableNumberEqual(row.expires_at, assessment.expires_at);
+    if (!summaryChanged && !confidenceChanged && !utilityChanged && !expiryChanged) continue;
+    qualityUpdates.push({
+      id: row.id,
+      project_id: row.project_id ?? null,
+      source: row.source,
+      content: row.content,
+      summary: assessment.summary,
+      tags_json: row.tags_json ?? null,
+      kind: row.kind ?? "episodic",
+      lifecycle_state: row.lifecycle_state ?? "active",
+      scope_type: row.scope_type ?? (row.project_id ? "project" : "tenant"),
+      scope_key: row.scope_key ?? row.project_id ?? null,
+      canonical_key: row.canonical_key ?? null,
+      current_version: Number(row.current_version ?? 1),
+      confidence_score: assessment.confidence_score,
+      utility_score: assessment.utility_score,
+      expires_at: assessment.expires_at,
+      reason: assessment.reason,
+      risky_low_signal: assessment.risky_low_signal,
+      suppression_candidate: assessment.suppression_candidate,
+      short_summary_candidate: assessment.short_summary_candidate,
+      artifact_expiry_candidate: assessment.artifact_expiry_candidate
+    });
+  }
 
   for (const row of normalizedRows) {
     if (canCanonicalizeRow(row, canonicalCutoff)) {
@@ -536,10 +619,13 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
     }
   }
 
+  const activeQualityUpdates = qualityUpdates.filter((item) => !compactedIds.has(item.id));
+
   return {
     canonicals,
     digests,
     compactions,
+    qualityUpdates: activeQualityUpdates,
     stats: {
       scanned_count: normalizedRows.length,
       canonical_group_count: canonicals.length,
@@ -547,7 +633,14 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
       digest_group_count: digests.length,
       digested_memory_count: compactions.filter((item) => item.reason === "digest").length,
       duplicate_compaction_count: compactions.filter((item) => item.reason === "duplicate").length,
-      total_compaction_count: compactions.length
+      total_compaction_count: compactions.length,
+      quality_update_count: activeQualityUpdates.length,
+      quality_missing_score_count: rows.filter((row) => row.utility_score === null || row.utility_score === undefined || row.confidence_score === null || row.confidence_score === undefined).length,
+      quality_expiry_update_count: activeQualityUpdates.filter((item) => item.expires_at !== null).length,
+      quality_low_signal_count: activeQualityUpdates.filter((item) => item.risky_low_signal).length,
+      quality_short_summary_candidate_count: activeQualityUpdates.filter((item) => item.short_summary_candidate).length,
+      quality_suppression_candidate_count: activeQualityUpdates.filter((item) => item.suppression_candidate).length,
+      quality_artifact_expiry_candidate_count: activeQualityUpdates.filter((item) => item.artifact_expiry_candidate).length
     }
   };
 }
@@ -575,7 +668,8 @@ async function loadMaintenanceTenantIds(db: D1Database): Promise<string[]> {
 
 async function loadMaintenanceRows(db: D1Database, tenantId: string): Promise<RawMemoryRow[]> {
   const result = await db.prepare(
-    `SELECT id, project_id, source, summary, content, tags_json, created_at, lifecycle_state
+    `SELECT id, project_id, source, summary, content, tags_json, created_at, lifecycle_state,
+            kind, scope_type, scope_key, confidence_score, utility_score, canonical_key, current_version, expires_at
        FROM memories
       WHERE tenant_id = ?
         AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
@@ -623,7 +717,7 @@ async function runBatchChunks(db: D1Database, statements: D1PreparedStatement[],
 function buildApplyStatements(
   db: D1Database,
   tenantId: string,
-  plan: Pick<MaintenancePlan, "canonicals" | "digests" | "compactions">,
+  plan: Pick<MaintenancePlan, "canonicals" | "digests" | "compactions" | "qualityUpdates">,
   existingDigestIds: Map<string, string>
 ): D1PreparedStatement[] {
   const statements: D1PreparedStatement[] = [];
@@ -631,10 +725,18 @@ function buildApplyStatements(
   for (const synthesized of [...plan.canonicals, ...plan.digests]) {
     const tagsJson = JSON.stringify(synthesized.tags);
     const existingId = existingDigestIds.get(synthesized.external_key);
+    const assessment = assessMemoryUsefulness({
+      project_id: synthesized.project_id,
+      source: synthesized.source,
+      content: synthesized.content,
+      summary: synthesized.summary,
+      tags: synthesized.tags,
+      created_at: synthesized.created_at
+    });
     if (existingId) {
       statements.push(
         db.prepare(
-          "UPDATE memories SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ?, kind = ?, lifecycle_state = ?, consolidated_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?"
+          "UPDATE memories SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ?, kind = ?, lifecycle_state = ?, confidence_score = ?, utility_score = ?, expires_at = ?, consolidated_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?"
         ).bind(
           synthesized.project_id,
           synthesized.content,
@@ -644,13 +746,16 @@ function buildApplyStatements(
           synthesized.created_at,
           "semantic",
           "active",
+          assessment.confidence_score,
+          assessment.utility_score,
+          assessment.expires_at,
           synthesized.created_at,
           synthesized.created_at,
           tenantId,
           existingId
         ),
         db.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(existingId, tenantId),
-        db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(existingId, tenantId, synthesized.content)
+        db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(existingId, tenantId, `${synthesized.summary}\n${synthesized.content}`)
       );
       continue;
     }
@@ -658,7 +763,7 @@ function buildApplyStatements(
     const id = `mem_digest_${synthesized.external_key.replace(/[^A-Za-z0-9_]/g, "_")}`;
     statements.push(
       db.prepare(
-        "INSERT INTO memories(id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO memories(id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at, confidence_score, utility_score, expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
       ).bind(
         id,
         tenantId,
@@ -668,12 +773,53 @@ function buildApplyStatements(
         tagsJson,
         "org-brain",
         synthesized.external_key,
-        synthesized.created_at
+        synthesized.created_at,
+        assessment.confidence_score,
+        assessment.utility_score,
+        assessment.expires_at
       ),
       db.prepare(
         "UPDATE memories SET kind = ?, lifecycle_state = ?, consolidated_at = ?, revised_at = ? WHERE tenant_id = ? AND id = ?"
       ).bind("semantic", "active", synthesized.created_at, synthesized.created_at, tenantId, id),
-      db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(id, tenantId, synthesized.content)
+      db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(id, tenantId, `${synthesized.summary}\n${synthesized.content}`)
+    );
+  }
+
+  for (const update of plan.qualityUpdates) {
+    const nextVersion = update.current_version + 1;
+    statements.push(
+      db.prepare(
+        `UPDATE memories
+            SET summary = ?, confidence_score = ?, utility_score = ?, expires_at = ?, current_version = ?, revised_at = ?
+          WHERE tenant_id = ? AND id = ?`
+      ).bind(update.summary, update.confidence_score, update.utility_score, update.expires_at, nextVersion, Date.now(), tenantId, update.id),
+      db.prepare(
+        `INSERT INTO memory_versions(
+          id, memory_id, tenant_id, version, operation, content, summary, tags_json, kind, lifecycle_state,
+          scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score, canonical_key, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        `quality_maintenance_${update.id}_${nextVersion}`,
+        update.id,
+        tenantId,
+        nextVersion,
+        "quality-maintenance",
+        update.content,
+        update.summary,
+        update.tags_json,
+        update.kind,
+        update.lifecycle_state,
+        update.scope_type,
+        update.scope_key,
+        "system",
+        "memory-maintenance",
+        update.confidence_score,
+        update.utility_score,
+        update.canonical_key,
+        Date.now()
+      ),
+      db.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(update.id, tenantId),
+      db.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(update.id, tenantId, `${update.summary}\n${update.content}`)
     );
   }
 
@@ -702,7 +848,7 @@ export async function runTenantMemoryMaintenance(
   const rows = await loadMaintenanceRows(db, tenantId);
   const plan = planMemoryMaintenance(rows, { tenantId, now });
 
-  if (plan.canonicals.length === 0 && plan.digests.length === 0 && plan.compactions.length === 0) {
+  if (plan.canonicals.length === 0 && plan.digests.length === 0 && plan.compactions.length === 0 && plan.qualityUpdates.length === 0) {
     return { tenant_id: tenantId, applied: false, stats: plan.stats };
   }
 
@@ -715,15 +861,21 @@ export async function runTenantMemoryMaintenance(
   for (const synthesized of [...plan.canonicals, ...plan.digests]) {
     await runBatchChunks(
       db,
-      buildApplyStatements(db, tenantId, { canonicals: [synthesized as PlannedCanonicalMemory], digests: [], compactions: [] }, existingDigestIds),
+      buildApplyStatements(db, tenantId, { canonicals: [synthesized as PlannedCanonicalMemory], digests: [], compactions: [], qualityUpdates: [] }, existingDigestIds),
       10
     );
   }
 
   await runBatchChunks(
     db,
-    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: plan.compactions }, existingDigestIds),
+    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: plan.compactions, qualityUpdates: [] }, existingDigestIds),
     80
+  );
+
+  await runBatchChunks(
+    db,
+    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: [], qualityUpdates: plan.qualityUpdates }, existingDigestIds),
+    40
   );
 
   return { tenant_id: tenantId, applied: true, stats: plan.stats };

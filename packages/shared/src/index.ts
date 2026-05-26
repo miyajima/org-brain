@@ -5,6 +5,7 @@ export * from "./hash";
 export * from "./ids";
 export * from "./knowledge-docs";
 export * from "./memory-lifecycle-types";
+export * from "./memory-quality";
 export * from "./memory-retrieval";
 export * from "./rationale-extraction";
 export * from "./schemas";

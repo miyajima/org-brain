@@ -242,6 +242,23 @@ function compareNullableRanks(left: number | null, right: number | null): number
   return left - right;
 }
 
+function compareNullableScores(left: number | null | undefined, right: number | null | undefined): number {
+  const leftValue = typeof left === "number" && Number.isFinite(left) ? left : null;
+  const rightValue = typeof right === "number" && Number.isFinite(right) ? right : null;
+  if (leftValue === null && rightValue === null) return 0;
+  if (leftValue === null) return 1;
+  if (rightValue === null) return -1;
+  return rightValue - leftValue;
+}
+
+function compareMemoryQuality(left: StoredMemory, right: StoredMemory): number {
+  return (
+    compareNullableScores(left.utility_score, right.utility_score) ||
+    compareNullableScores(left.confidence_score, right.confidence_score) ||
+    compareNullableScores(left.last_accessed_at, right.last_accessed_at)
+  );
+}
+
 function compareMemoryCandidates(projectId: string | null | undefined, left: MemoryCandidateRow, right: MemoryCandidateRow): number {
   const leftTags = parseTagsJson(left.tags_json);
   const rightTags = parseTagsJson(right.tags_json);
@@ -252,6 +269,7 @@ function compareMemoryCandidates(projectId: string | null | undefined, left: Mem
     memoryKindPriority(leftKind) - memoryKindPriority(rightKind) ||
     memoryTierPriority(leftTags) - memoryTierPriority(rightTags) ||
     compareNullableRanks(left.raw_rank, right.raw_rank) ||
+    compareMemoryQuality(left, right) ||
     tagPriority(leftTags) - tagPriority(rightTags) ||
     right.created_at - left.created_at
   );
@@ -654,6 +672,7 @@ export async function buildTenantMemoryProfile(
         projectPriority(projectId, left.project_id) - projectPriority(projectId, right.project_id) ||
         memoryKindPriority(normalizeMemoryKind(left.kind)) - memoryKindPriority(normalizeMemoryKind(right.kind)) ||
         memoryTierPriority(leftTags) - memoryTierPriority(rightTags) ||
+        compareMemoryQuality(left, right) ||
         tagPriority(leftTags) - tagPriority(rightTags) ||
         right.created_at - left.created_at
       );

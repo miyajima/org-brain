@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { pathToFileURL } from "node:url";
-import { classifyMemoryQuality } from "./lib/memory-quality.mjs";
+import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
 
 const ROOT = "/Users/miya/projects/org-brain";
 const DEFAULT_ENV_FILES = [
@@ -317,7 +317,17 @@ function buildPromotedContent(record, category, normalizedText) {
 }
 
 function buildPromotedSummary(record, normalizedText) {
-  return clip(`${record.projectId || "(global)"} | promoted-memory | ${chooseTitle(normalizedText)}`, 1_000);
+  const tags = [record.sourceName, "hook", "promoted", record.eventType, record.projectId ?? "global-scope"].filter(Boolean);
+  return assessMemoryUsefulness(
+    {
+      project_id: record.projectId,
+      summary: `${record.projectId || "(global)"} | promoted-memory | ${chooseTitle(normalizedText)}`,
+      content: record.assistantText || normalizedText,
+      tags,
+      created_at: record.createdAt
+    },
+    { keepProjectFacts: true }
+  ).summary;
 }
 
 function parseCommaTags(raw) {

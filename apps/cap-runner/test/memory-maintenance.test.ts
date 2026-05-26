@@ -16,6 +16,10 @@ type MemoryRecord = {
   consolidated_at?: number | null;
   revised_at?: number | null;
   suppressed_at?: number | null;
+  current_version?: number | null;
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  expires_at?: number | null;
 };
 
 type MemoryFtsRecord = {
@@ -87,6 +91,9 @@ class FakeStatement {
         source: String(this.args[6]),
         external_key: (this.args[7] as string | null) ?? null,
         created_at: Number(this.args[8]),
+        confidence_score: typeof this.args[9] === "number" ? Number(this.args[9]) : null,
+        utility_score: typeof this.args[10] === "number" ? Number(this.args[10]) : null,
+        expires_at: typeof this.args[11] === "number" ? Number(this.args[11]) : null,
         kind: "episodic",
         lifecycle_state: "active"
       });
@@ -95,7 +102,7 @@ class FakeStatement {
 
     if (this.sql.startsWith("UPDATE memories SET project_id = ?")) {
       const row = this.db.memories.find(
-        (memory) => memory.tenant_id === String(this.args[10]) && memory.id === String(this.args[11])
+        (memory) => memory.tenant_id === String(this.args[13]) && memory.id === String(this.args[14])
       );
       if (row) {
         row.project_id = (this.args[0] as string | null) ?? null;
@@ -106,8 +113,26 @@ class FakeStatement {
         row.created_at = Number(this.args[5]);
         row.kind = String(this.args[6]);
         row.lifecycle_state = String(this.args[7]);
-        row.consolidated_at = Number(this.args[8]);
-        row.revised_at = Number(this.args[9]);
+        row.confidence_score = Number(this.args[8]);
+        row.utility_score = Number(this.args[9]);
+        row.expires_at = typeof this.args[10] === "number" ? Number(this.args[10]) : null;
+        row.consolidated_at = Number(this.args[11]);
+        row.revised_at = Number(this.args[12]);
+      }
+      return { success: true };
+    }
+
+    if (this.sql.includes("SET summary = ?") && this.sql.includes("confidence_score = ?")) {
+      const row = this.db.memories.find(
+        (memory) => memory.tenant_id === String(this.args[6]) && memory.id === String(this.args[7])
+      );
+      if (row) {
+        row.summary = String(this.args[0]);
+        row.confidence_score = Number(this.args[1]);
+        row.utility_score = Number(this.args[2]);
+        row.expires_at = typeof this.args[3] === "number" ? Number(this.args[3]) : null;
+        row.current_version = Number(this.args[4]);
+        row.revised_at = Number(this.args[5]);
       }
       return { success: true };
     }
@@ -333,6 +358,38 @@ describe("memory maintenance", () => {
     expect(db.memoriesFts.some((row) => row.memory_id === digest?.id)).toBe(true);
   });
 
+  it("fills quality metadata for maintenance-scanned memories", async () => {
+    const rows: MemoryRecord[] = [
+      {
+        id: "tmp-artifact",
+        tenant_id: "default",
+        project_id: "harness-todo-webapp-new-20260524",
+        source: "codex",
+        summary: "実施しました",
+        content: "Artifact path: /tmp/harness-todo-webapp-new-run-4/log.json",
+        tags_json: JSON.stringify(["codex", "hook", "artifact"]),
+        external_key: "tmp-artifact",
+        created_at: Date.parse("2026-05-24T00:00:00.000Z")
+      }
+    ];
+    const db = new FakeD1(rows);
+
+    const result = await runTenantMemoryMaintenance(
+      db as unknown as D1Database,
+      "default",
+      Date.parse("2026-05-24T12:00:00.000Z")
+    );
+
+    const memory = db.memories.find((row) => row.id === "tmp-artifact");
+    expect(result.stats.quality_missing_score_count).toBe(1);
+    expect(result.stats.quality_update_count).toBe(1);
+    expect(memory?.summary).toContain("harness-todo-webapp-new-20260524 | artifact |");
+    expect(memory?.utility_score).toEqual(expect.any(Number));
+    expect(memory?.confidence_score).toEqual(expect.any(Number));
+    expect(memory?.expires_at).toBe(Date.parse("2026-06-07T00:00:00.000Z"));
+    expect(db.memoriesFts.find((row) => row.memory_id === "tmp-artifact")?.content).toContain("harness-todo-webapp-new-20260524 | artifact |");
+  });
+
   it("keeps canonical guidance focused on reusable implementation signals", () => {
     const now = Date.parse("2026-03-30T00:00:00.000Z");
     const rows: MemoryRecord[] = [
@@ -389,7 +446,7 @@ describe("memory maintenance", () => {
     expect(plan.canonicals[0]?.content).not.toContain("[path] [path]");
   });
 
-  it("normalizes Japanese politeness in synthesized memories without rewriting source rows", async () => {
+  it("normalizes Japanese politeness in synthesized memories and quality-updates active source rows", async () => {
     const now = Date.parse("2026-03-30T00:00:00.000Z");
     const rows: MemoryRecord[] = [
       {
@@ -502,7 +559,7 @@ describe("memory maintenance", () => {
     await runTenantMemoryMaintenance(db as unknown as D1Database, "default", now);
 
     expect(db.memories.find((memory) => memory.id === "jp-raw-1")?.summary).toBe("jp-proj | agent-turn-complete | 原因は認証不足で、対応は wrangler login の成功確認です。");
-    expect(db.memories.find((memory) => memory.id === "jp-policy-2")?.summary).toBe("jp-proj | promoted-memory | `wrangler login` を実行して成功を確認しました。");
+    expect(db.memories.find((memory) => memory.id === "jp-policy-2")?.summary).toContain("jp-proj | policy | wrangler login を実行");
   });
 
   it("can run maintenance across detected tenants", async () => {

@@ -234,6 +234,8 @@ class FakeStatement {
         created_at: this.args[8] as number,
         kind: this.args[9] as string | null,
         lifecycle_state: this.args[10] as string | null,
+        confidence_score: this.args[15] as number | null,
+        utility_score: this.args[16] as number | null,
         current_version: this.args[19] as number | null,
         expires_at: this.args[21] as number | null,
         revised_at: this.args[22] as number | null
@@ -341,8 +343,37 @@ describe("memory-service", () => {
     expect(listed[0]).toMatchObject({
       external_key: "openclaw:c1",
       content: "updated content",
-      summary: "second",
+      summary: "openclaw | general | second",
       source: "openclaw"
+    });
+    expect(listed[0].utility_score).toEqual(expect.any(Number));
+    expect(listed[0].confidence_score).toEqual(expect.any(Number));
+  });
+
+  it("adds quality metadata and short expiry for direct API artifact captures", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as any;
+    await upsertMemories(env, {
+      tenant_id: "default",
+      source: "codex",
+      items: [
+        {
+          external_key: "tmp-artifact",
+          project_id: "harness-todo-webapp-new-20260524",
+          content: "Run artifact saved under /tmp/harness-todo-webapp-new-run-4 with Playwright logs.",
+          summary: "実施しました",
+          tags: ["hook", "artifact"],
+          created_at: Date.parse("2026-05-24T00:00:00.000Z")
+        }
+      ]
+    });
+
+    expect(db.memories[0]).toMatchObject({
+      project_id: "harness-todo-webapp-new-20260524",
+      summary: expect.stringContaining("harness-todo-webapp-new-20260524 | artifact |"),
+      utility_score: expect.any(Number),
+      confidence_score: expect.any(Number),
+      expires_at: Date.parse("2026-06-07T00:00:00.000Z")
     });
   });
 
@@ -552,6 +583,50 @@ describe("memory-service", () => {
       limit_recent: 8
     });
     expect(profile.recent.map((item) => item.id)).toContain("raw-1");
+  });
+
+  it("uses utility and confidence as tie-breakers after project, tier, and BM25 rank", async () => {
+    const db = new FakeD1();
+    const now = Date.now();
+    db.memories = [
+      {
+        id: "low-quality",
+        tenant_id: "default",
+        project_id: "proj1",
+        content: "deploy verification policy",
+        summary: "deploy verification vague",
+        tags_json: JSON.stringify(["policy", "curated-memory"]),
+        source: "codex",
+        external_key: "low-quality",
+        created_at: now,
+        lexical_score: -1,
+        utility_score: 0.25,
+        confidence_score: 0.4
+      },
+      {
+        id: "high-quality",
+        tenant_id: "default",
+        project_id: "proj1",
+        content: "deploy verification policy",
+        summary: "deploy verification with smoke command",
+        tags_json: JSON.stringify(["policy", "curated-memory"]),
+        source: "codex",
+        external_key: "high-quality",
+        created_at: now - 1000,
+        lexical_score: -1,
+        utility_score: 0.9,
+        confidence_score: 0.85
+      }
+    ];
+
+    const env = { OPEN_BRAIN_DB: db } as any;
+    const search = await searchMemories(env, {
+      tenant_id: "default",
+      project_id: "proj1",
+      q: "deploy verification policy"
+    });
+
+    expect(search.results.map((item) => item.id)).toEqual(["high-quality", "low-quality"]);
   });
 
   it("returns paginated memory listing metadata for corpus browsing", async () => {

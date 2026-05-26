@@ -1,17 +1,40 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import process from "node:process";
+import { assessMemoryUsefulness } from "../../../scripts/lib/memory-quality.mjs";
 
 const execFileAsync = promisify(execFile);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const apiGatewayDir = resolve(repoRoot, "apps/api-gateway");
+const projectRootOverrides = new Map([
+  [".agents", "/Users/miya/.agents"],
+  [".codex", "/Users/miya/.codex"],
+  ["org-brain", "/Users/miya/projects/org-brain"]
+]);
+
+function configuredProjectRootOverrides() {
+  const raw = process.env.ORGBRAIN_PROJECT_ROOTS;
+  if (!raw) return new Map();
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return new Map();
+    return new Map(
+      Object.entries(parsed)
+        .filter((entry) => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[0].trim() && entry[1].trim())
+        .map(([key, value]) => [key.trim(), value.trim()])
+    );
+  } catch {
+    return new Map();
+  }
+}
 
 function printHelp() {
   console.log(`Org Brain usage status
@@ -151,6 +174,39 @@ function stageSort(stage) {
   }[stage] ?? 99;
 }
 
+function resolveProjectRoot(projectId) {
+  if (!projectId) return null;
+  const configured = configuredProjectRootOverrides();
+  if (configured.has(projectId)) return configured.get(projectId);
+  if (projectRootOverrides.has(projectId)) return projectRootOverrides.get(projectId);
+  return `/Users/miya/projects/${projectId}`;
+}
+
+async function inspectProjectRepo(projectId) {
+  const root = resolveProjectRoot(projectId);
+  if (!root || !existsSync(root)) {
+    return { root, repo_state: "missing", branch: null, dirty_count: null, docs_count: null };
+  }
+  const docs = ["README.md", "AGENTS.md", "CLAUDE.md", "docs/SPEC.md", "docs/SYSTEM_DESIGN.md", "docs/DESIGN.md"].filter((file) =>
+    existsSync(resolve(root, file))
+  );
+  try {
+    const [{ stdout: branchOut }, { stdout: statusOut }] = await Promise.all([
+      execFileAsync("git", ["-C", root, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8", maxBuffer: 1024 * 1024 }),
+      execFileAsync("git", ["-C", root, "status", "--short"], { encoding: "utf8", maxBuffer: 1024 * 1024 })
+    ]);
+    return {
+      root,
+      repo_state: "git",
+      branch: branchOut.trim(),
+      dirty_count: statusOut.split(/\r?\n/).filter(Boolean).length,
+      docs_count: docs.length
+    };
+  } catch {
+    return { root, repo_state: "non-git", branch: null, dirty_count: null, docs_count: docs.length };
+  }
+}
+
 async function runQuery(options, sql) {
   const args = ["wrangler", "d1", "execute", options.database];
   args.push(`--${options.location}`);
@@ -252,6 +308,24 @@ function buildQueries(options) {
       FROM classified
       GROUP BY stage;
     `,
+    memoryQuality: `
+      SELECT
+        id,
+        project_id,
+        source,
+        summary,
+        content,
+        tags_json,
+        kind,
+        lifecycle_state,
+        created_at,
+        utility_score,
+        confidence_score,
+        last_accessed_at,
+        expires_at
+      FROM memories
+      WHERE tenant_id = ${tenant};
+    `,
     memoryStageLatest: `
       WITH classified AS (
         ${classificationSql}
@@ -288,11 +362,113 @@ function buildQueries(options) {
   };
 }
 
-function buildSnapshot(options, data) {
+async function buildProjectHealth(qualityRows, qualityAssessments) {
+  const byProject = new Map();
+  for (let index = 0; index < qualityRows.length; index += 1) {
+    const row = qualityRows[index];
+    const assessment = qualityAssessments[index];
+    const projectId = row.project_id ?? "(none)";
+    const entry = byProject.get(projectId) ?? {
+      project_id: row.project_id ?? null,
+      total_memories: 0,
+      missing_utility_score: 0,
+      missing_confidence_score: 0,
+      has_expiry: 0,
+      risky_low_signal: 0,
+      short_summary: 0,
+      suppression_candidate: 0,
+      artifact_expiry_candidate: 0,
+      latest_snapshot_at: null,
+      latest_snapshot_at_jst: null,
+      latest_memory_at: null,
+      latest_memory_at_jst: null
+    };
+    entry.total_memories += 1;
+    if (row.utility_score === null || row.utility_score === undefined) entry.missing_utility_score += 1;
+    if (row.confidence_score === null || row.confidence_score === undefined) entry.missing_confidence_score += 1;
+    if (row.expires_at !== null && row.expires_at !== undefined) entry.has_expiry += 1;
+    if (assessment?.risky_low_signal) entry.risky_low_signal += 1;
+    if (String(row.summary ?? "").length < 80) entry.short_summary += 1;
+    if (assessment?.suppression_candidate) entry.suppression_candidate += 1;
+    if (assessment?.artifact_expiry_candidate) entry.artifact_expiry_candidate += 1;
+    const createdAt = normalizeTimestamp(row.created_at);
+    if (createdAt !== null && (entry.latest_memory_at === null || createdAt > entry.latest_memory_at)) {
+      entry.latest_memory_at = createdAt;
+      entry.latest_memory_at_jst = formatJst(createdAt);
+    }
+    const tags = String(row.tags_json ?? "");
+    if (createdAt !== null && tags.includes('"project-current-state"') && (entry.latest_snapshot_at === null || createdAt > entry.latest_snapshot_at)) {
+      entry.latest_snapshot_at = createdAt;
+      entry.latest_snapshot_at_jst = formatJst(createdAt);
+    }
+    byProject.set(projectId, entry);
+  }
+
+  const entries = [...byProject.values()].sort(
+    (left, right) =>
+      right.missing_utility_score + right.missing_confidence_score - (left.missing_utility_score + left.missing_confidence_score) ||
+      right.risky_low_signal - left.risky_low_signal ||
+      right.total_memories - left.total_memories ||
+      String(left.project_id ?? "").localeCompare(String(right.project_id ?? ""))
+  );
+  const repoStates = await Promise.all(entries.map((entry) => inspectProjectRepo(entry.project_id)));
+  const now = Date.now();
+  return entries.map((entry, index) => {
+    const repo = repoStates[index];
+    const mappingWarning =
+      repo.repo_state === "missing" || repo.repo_state === "non-git" || (repo.repo_state === "git" && (repo.dirty_count ?? 0) > 0);
+    return {
+      ...entry,
+      snapshot_age_days: entry.latest_snapshot_at ? Number(((now - entry.latest_snapshot_at) / (24 * 60 * 60 * 1000)).toFixed(1)) : null,
+      mapping_warning: mappingWarning,
+      repo
+    };
+  });
+}
+
+async function buildSnapshot(options, data) {
   const memorySummaryRow = data.memorySummary[0] ?? {};
   const threadSummaryRow = data.threadSummary[0] ?? {};
   const stageRows = data.memoryStages ?? [];
+  const qualityRows = data.memoryQuality ?? [];
   const latestRows = data.memoryStageLatest ?? [];
+  const qualityAssessments = qualityRows.map((row) => assessMemoryUsefulness(row));
+  const projectHealth = await buildProjectHealth(qualityRows, qualityAssessments);
+  const quality = {
+    short_summary_lt80: qualityRows.filter((row) => String(row.summary ?? "").length < 80).length,
+    very_short_summary_lt60: qualityRows.filter((row) => String(row.summary ?? "").length < 60).length,
+    missing_utility_score: qualityRows.filter((row) => row.utility_score === null || row.utility_score === undefined).length,
+    missing_confidence_score: qualityRows.filter((row) => row.confidence_score === null || row.confidence_score === undefined).length,
+    has_utility: qualityRows.filter((row) => row.utility_score !== null && row.utility_score !== undefined).length,
+    has_confidence: qualityRows.filter((row) => row.confidence_score !== null && row.confidence_score !== undefined).length,
+    has_expiry: qualityRows.filter((row) => row.expires_at !== null && row.expires_at !== undefined).length,
+    has_last_accessed: qualityRows.filter((row) => row.last_accessed_at !== null && row.last_accessed_at !== undefined).length,
+    risky_low_signal: qualityAssessments.filter((item) => item.risky_low_signal).length,
+    suppression_candidate: qualityAssessments.filter((item) => item.suppression_candidate).length,
+    artifact_expiry_candidate: qualityAssessments.filter((item) => item.artifact_expiry_candidate).length,
+    avg_utility_score:
+      qualityRows.filter((row) => typeof row.utility_score === "number").length > 0
+        ? Number(
+            (
+              qualityRows
+                .filter((row) => typeof row.utility_score === "number")
+                .reduce((sum, row) => sum + Number(row.utility_score), 0) /
+              qualityRows.filter((row) => typeof row.utility_score === "number").length
+            ).toFixed(3)
+          )
+        : null,
+    avg_confidence_score:
+      qualityRows.filter((row) => typeof row.confidence_score === "number").length > 0
+        ? Number(
+            (
+              qualityRows
+                .filter((row) => typeof row.confidence_score === "number")
+                .reduce((sum, row) => sum + Number(row.confidence_score), 0) /
+              qualityRows.filter((row) => typeof row.confidence_score === "number").length
+            ).toFixed(3)
+          )
+        : null
+  };
   const latestByStage = latestRows.reduce((acc, row) => {
     const stage = String(row.stage);
     acc[stage] ??= [];
@@ -325,6 +501,8 @@ function buildSnapshot(options, data) {
       first_memory_at_jst: formatJst(normalizeTimestamp(memorySummaryRow.first_memory_at)),
       last_memory_at: normalizeTimestamp(memorySummaryRow.last_memory_at),
       last_memory_at_jst: formatJst(normalizeTimestamp(memorySummaryRow.last_memory_at)),
+      quality,
+      project_health: projectHealth,
       stages: stageRows
         .map((row) => ({
           stage: row.stage,
@@ -361,6 +539,29 @@ function printSnapshot(snapshot) {
   console.log(`- distinct_projects: ${memories.distinct_projects}`);
   console.log(`- first_seen: ${memories.first_memory_at_jst ?? "n/a"}`);
   console.log(`- last_seen: ${memories.last_memory_at_jst ?? "n/a"}`);
+  console.log("- quality:");
+  console.log(`  - short_summary_lt80: ${memories.quality.short_summary_lt80}`);
+  console.log(`  - very_short_summary_lt60: ${memories.quality.very_short_summary_lt60}`);
+  console.log(`  - has_utility: ${memories.quality.has_utility} missing=${memories.quality.missing_utility_score}`);
+  console.log(`  - has_confidence: ${memories.quality.has_confidence} missing=${memories.quality.missing_confidence_score}`);
+  console.log(`  - has_expiry: ${memories.quality.has_expiry}`);
+  console.log(`  - has_last_accessed: ${memories.quality.has_last_accessed}`);
+  console.log(`  - risky_low_signal: ${memories.quality.risky_low_signal}`);
+  console.log(`  - suppression_candidate: ${memories.quality.suppression_candidate}`);
+  console.log(`  - artifact_expiry_candidate: ${memories.quality.artifact_expiry_candidate}`);
+  console.log("");
+  console.log("Project health");
+  for (const project of memories.project_health.slice(0, 20)) {
+    const projectLabel = project.project_id ?? "(none)";
+    const repo = project.repo ?? {};
+    const repoBits =
+      repo.repo_state === "git"
+        ? `repo=git branch=${repo.branch ?? "n/a"} dirty=${repo.dirty_count ?? "n/a"} docs=${repo.docs_count ?? 0}`
+        : `repo=${repo.repo_state ?? "unknown"} docs=${repo.docs_count ?? 0}`;
+    console.log(
+      `- ${projectLabel}: total=${project.total_memories} missing_score=${project.missing_utility_score}/${project.missing_confidence_score} expiry=${project.has_expiry} short_summary=${project.short_summary} low_signal=${project.risky_low_signal} suppress=${project.suppression_candidate} artifact_expiry=${project.artifact_expiry_candidate} snapshot_age_days=${project.snapshot_age_days ?? "n/a"} mapping_warning=${project.mapping_warning ? "yes" : "no"} latest=${project.latest_memory_at_jst ?? "n/a"} ${repoBits}`
+    );
+  }
   console.log("");
   console.log("Memory stages");
   for (const stage of memories.stages) {
@@ -395,7 +596,7 @@ async function main() {
     data[key] = await runQuery(options, sql);
   }
 
-  const snapshot = buildSnapshot(options, data);
+  const snapshot = await buildSnapshot(options, data);
   if (options.json) {
     console.log(JSON.stringify(snapshot, null, 2));
     return;

@@ -31,7 +31,7 @@ describe("hook-memory-bridge promotion", () => {
 
     const prepared = prepareMemoryRecordForUpsert("codex", payload);
     expect(prepared.action).toBe("promote");
-    expect(prepared.record.summary).toContain("promoted-memory");
+    expect(prepared.record.summary).toContain("org-brain |");
     expect(prepared.record.tags).toContain("promoted");
     expect(prepared.record.tags).toContain("diagnosis");
     expect(prepared.record.content).toContain("# Reusable Memory");
@@ -50,6 +50,20 @@ describe("hook-memory-bridge promotion", () => {
     const prepared = prepareMemoryRecordForUpsert("codex", payload);
     expect(prepared.action).toBe("promote");
     expect(prepared.record.tags).toContain("command-result");
+  });
+
+  it("uses concrete takeaway details instead of vague Japanese completion titles", () => {
+    const payload = JSON.stringify({
+      type: "agent-turn-complete",
+      cwd: "/Users/miya/projects/omopay",
+      "last-assistant-message":
+        "3件とも修正しました。\n\n- `Payment` に `staff` と `store` の整合性バリデーションを追加しました。\n- `Merchant::DistributionSnapshotBuilder` は finalized 期間を再集計しません。\n- `bundle exec rspec spec/models/payment_spec.rb` を実行し、11 examples, 0 failures でした。"
+    });
+
+    const prepared = prepareMemoryRecordForUpsert("codex", payload);
+    expect(prepared.action).toBe("promote");
+    expect(prepared.record.summary).toContain("omopay | command-result | Payment");
+    expect(prepared.record.summary).not.toContain("3件とも修正しました");
   });
 
   it("skips payloads without project id", () => {
@@ -90,7 +104,7 @@ describe("hook-memory-bridge promotion", () => {
     const prepared = prepareMemoryRecordForUpsert("codex", payload);
     expect(prepared.action).toBe("promote");
     expect(prepared.record.projectId).toBeNull();
-    expect(prepared.record.summary).toContain("(global) | promoted-memory");
+    expect(prepared.record.summary).toContain("(global) | diagnosis");
   });
 
   it("prompts once per workspace and persists the chosen project name", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyMemoryQuality } from "./lib/memory-quality.mjs";
+import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
 
 describe("memory-quality classifier", () => {
   it("deletes route-only and meta-only hook summaries", () => {
@@ -99,5 +99,62 @@ describe("memory-quality classifier", () => {
         tags: ["org-brain", "maintenance", "canonical-memory", "quality-v2"]
       })
     ).toMatchObject({ action: "keep", reason: "quality-v2-rollup" });
+  });
+
+  it("builds useful summaries from vague completion reports", () => {
+    const assessed = assessMemoryUsefulness({
+      project_id: "omopay",
+      summary: "omopay | promoted-memory | 3件とも修正しました。",
+      content:
+        "# Reusable Memory\n\n## Takeaway\n- `Payment` に `staff` と `store` の整合性バリデーションを追加しました。\n- `RBENV_VERSION=3.4.2 bundle exec rspec spec/models/payment_spec.rb` は 11 examples, 0 failures でした。\n\n## Evidence\n3件とも修正しました。",
+      tags: ["codex", "hook", "promoted", "command-result", "omopay"],
+      created_at: 1_000
+    });
+
+    expect(assessed.summary).toContain("omopay | command-result | Payment");
+    expect(assessed.summary).not.toContain("3件とも修正しました");
+    expect(assessed.utility_score).toBeGreaterThanOrEqual(0.6);
+    expect(assessed.confidence_score).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("assigns expiry to temporary local state", () => {
+    const assessed = assessMemoryUsefulness({
+      project_id: "mailaura",
+      summary: "mailaura | promoted-memory | Railsは http://127.0.0.1:3001 で起動中です。",
+      content: "Railsは `http://127.0.0.1:3001` で起動中です。完了したらログインしたと送ってください。",
+      tags: ["codex", "hook", "promoted", "command-result", "mailaura"],
+      created_at: 10_000
+    });
+
+    expect(assessed.expires_at).toBeGreaterThan(10_000);
+    expect(assessed.expires_reason).toBe("session-or-local-state");
+    expect(assessed.utility_score).toBeLessThan(0.6);
+  });
+
+  it("marks low-signal rows as suppression candidates without changing delete classification", () => {
+    const assessed = assessMemoryUsefulness({
+      project_id: "smart-block",
+      summary: "smart-block | promoted-memory | 実施しました。",
+      content: "実施しました。",
+      tags: ["codex", "hook", "promoted", "smart-block"],
+      created_at: 10_000
+    });
+
+    expect(assessed.risky_low_signal).toBe(true);
+    expect(assessed.suppression_candidate).toBe(true);
+    expect(assessed.short_summary_candidate).toBe(true);
+  });
+
+  it("keeps canonical and project current-state memories without expiry", () => {
+    const assessed = assessMemoryUsefulness({
+      project_id: "tetori",
+      summary: "tetori | project-current-state | tetori current-state snapshot",
+      content: "# Project Current-State Snapshot\n\n- RepoState: git\n- DirtyCount: 22\n- UnresolvedRequirements: local dirty files=22",
+      tags: ["org-brain", "maintenance", "canonical-memory", "project-current-state", "project-health", "quality-v2", "tetori"],
+      created_at: 10_000
+    });
+
+    expect(assessed.expires_at).toBeNull();
+    expect(assessed.suppression_candidate).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import {
   MEMORY_LIFECYCLE_STATES,
   MEMORY_OPERATIONS,
   MEMORY_SCOPE_TYPES,
+  assessMemoryUsefulness,
   normalizeLifecycleState,
   normalizeMemoryKind,
   normalizeScopeType,
@@ -78,6 +79,16 @@ function sanitizeTags(raw: string[] | undefined): string[] {
   return [...new Set((raw ?? []).filter((value) => typeof value === "string").map((value) => value.trim()).filter(Boolean))].slice(0, 16);
 }
 
+function parseStoredTags(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? sanitizeTags(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
 function ensureMemoryEnum<T extends readonly string[]>(value: string | undefined, fallback: T[number], allowed: T, field: string): T[number] {
   if (!value) return fallback;
   if (!allowed.includes(value)) {
@@ -124,12 +135,29 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
 } {
   const projectId = typeof item.project_id === "string" && item.project_id.trim() ? item.project_id.trim().slice(0, 128) : null;
   const { scopeType, scopeKey } = deriveScope(tenantId, projectId, item);
+  const tags = sanitizeTags(item.tags);
+  const createdAt = typeof item.created_at === "number" && Number.isFinite(item.created_at) ? Math.floor(item.created_at) : Date.now();
+  const content = item.content.slice(0, 20_000);
+  const assessment = assessMemoryUsefulness({
+    project_id: projectId,
+    source,
+    content,
+    summary: item.summary,
+    tags,
+    created_at: createdAt,
+    utility_score: item.utility_score,
+    confidence_score: item.confidence_score,
+    expires_at: item.expires_at
+  });
+  const confidenceScore = coerceNullableNumber(item.confidence_score, "confidence_score");
+  const utilityScore = coerceNullableNumber(item.utility_score, "utility_score");
+  const expiresAt = coerceNullableNumber(item.expires_at, "expires_at");
   return {
     external_key: typeof item.external_key === "string" && item.external_key.trim() ? item.external_key.trim().slice(0, 256) : null,
-    content: item.content.slice(0, 20_000),
-    summary: item.summary?.trim().slice(0, 1000) || null,
-    tags: sanitizeTags(item.tags),
-    created_at: typeof item.created_at === "number" && Number.isFinite(item.created_at) ? Math.floor(item.created_at) : Date.now(),
+    content,
+    summary: assessment.summary,
+    tags,
+    created_at: createdAt,
     project_id: projectId,
     actor_type: item.actor_type?.trim().slice(0, 64) || "system",
     actor_id: item.actor_id?.trim().slice(0, 128) || source,
@@ -142,10 +170,10 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     ),
     scope_type: scopeType,
     scope_key: scopeKey,
-    confidence_score: coerceNullableNumber(item.confidence_score, "confidence_score") ?? null,
-    utility_score: coerceNullableNumber(item.utility_score, "utility_score") ?? null,
+    confidence_score: confidenceScore ?? assessment.confidence_score,
+    utility_score: utilityScore ?? assessment.utility_score,
     canonical_key: item.canonical_key?.trim().slice(0, 256) || null,
-    expires_at: coerceNullableNumber(item.expires_at, "expires_at") ?? null
+    expires_at: expiresAt ?? assessment.expires_at
   };
 }
 
@@ -349,7 +377,7 @@ async function saveCurrentSnapshot(
     env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
       args.memoryId,
       args.tenantId,
-      snapshot.content
+      `${snapshot.summary}\n${snapshot.content}`
     ),
     buildVersionInsert(env, {
       tenantId: args.tenantId,
@@ -468,7 +496,7 @@ export async function reviseMemory(
     external_key: existing.external_key,
     content: args.content ?? existing.content,
     summary: args.summary ?? existing.summary,
-    tags: args.tags ?? [],
+    tags: args.tags ?? parseStoredTags(existing.tags_json),
     created_at: Date.now(),
     project_id: existing.project_id,
     actor_type: args.actorType ?? existing.actor_type,
@@ -556,7 +584,7 @@ export async function refreshMemory(
         external_key: existing.external_key,
         content: existing.content,
         summary: existing.summary,
-        tags: [],
+        tags: parseStoredTags(existing.tags_json),
         created_at: now,
         project_id: existing.project_id,
         actor_type: args.actorType ?? existing.actor_type,
