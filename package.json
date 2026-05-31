@@ -21,7 +21,8 @@
     "metrics:report": "node ./scripts/retrieval-metrics-report.mjs",
     "metrics:replay": "node ./scripts/retrieval-metrics-replay.mjs",
     "metrics:rollup": "node ./scripts/retrieval-metrics-rollup.mjs",
-    "measurement:report": "node ./scripts/measurement-report.mjs"
+    "measurement:report": "node ./scripts/measurement-report.mjs",
+    "benchmark:tokens": "node ./scripts/memory-token-benchmark.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260405.1",
