@@ -348,9 +348,10 @@ function useTransientIndex(options) {
   return options.benchmarkIndex === "transient-sqlite" || options.benchmarkIndex === "transient-memory";
 }
 
-async function runRetrieval(options, item, transientIndex) {
+async function runRetrieval(options, item) {
   if (useTransientIndex(options)) {
-    return retrieveFromTransientBenchmarkIndex(transientIndex, item, {
+    const itemIndex = buildTransientBenchmarkIndex([item], { chunkCharLimit: Math.max(options.contextCharLimit, 1800) });
+    return retrieveFromTransientBenchmarkIndex(itemIndex, item, {
       strategy: `${options.strategy}:transient_bm25_lite_v1`,
       topK: 5,
       contextCharLimit: options.contextCharLimit
@@ -488,8 +489,8 @@ async function fetchExistingMeasurementRuns(options) {
   }
 }
 
-async function runItem(options, item, apiKey, transientIndex) {
-  const retrieval = await runRetrieval(options, item, transientIndex);
+async function runItem(options, item, apiKey) {
+  const retrieval = await runRetrieval(options, item);
   const fullPrompt = buildFullContextPrompt(item);
   const treatmentPrompt = buildTreatmentPrompt(item, retrieval.contexts);
   const [fullTokenCount, treatmentTokenCount] = await Promise.all([
@@ -585,12 +586,9 @@ async function main() {
   if (!apiKey) options.skipLlm = true;
 
   const existingMeasurementRuns = await fetchExistingMeasurementRuns(options);
-  const transientIndex = useTransientIndex(options)
-    ? buildTransientBenchmarkIndex(items, { chunkCharLimit: Math.max(options.contextCharLimit, 1800) })
-    : null;
   const results = [];
   for (const item of items) {
-    results.push(await runItem(options, item, apiKey, transientIndex));
+    results.push(await runItem(options, item, apiKey));
   }
 
   const summary = summarizeBenchmarkResults(results, existingMeasurementRuns);
