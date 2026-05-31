@@ -61,6 +61,144 @@ export function historyValueToText(value) {
   return String(value);
 }
 
+export function tokenizeBenchmarkText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^a-z0-9一-龠ぁ-んァ-ヶー]+/u)
+    .map((token) => normalizeBenchmarkToken(token.trim()))
+    .filter((token) => token.length >= 2);
+}
+
+function normalizeBenchmarkToken(token) {
+  if (token.length <= 4) return token;
+  if (token.endsWith("ment")) return token.slice(0, -"ment".length);
+  if (token.endsWith("ing")) return token.slice(0, -"ing".length);
+  if (token.endsWith("ed")) return token.slice(0, -"ed".length);
+  if (token.endsWith("s")) return token.slice(0, -1);
+  return token;
+}
+
+function chunkText(text, maxChars = 1800) {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) return [];
+  const paragraphs = normalized.split(/\n{2,}/u).map((part) => part.trim()).filter(Boolean);
+  const chunks = [];
+  let current = "";
+  for (const paragraph of paragraphs.length > 0 ? paragraphs : [normalized]) {
+    if (paragraph.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let index = 0; index < paragraph.length; index += maxChars) {
+        chunks.push(paragraph.slice(index, index + maxChars));
+      }
+      continue;
+    }
+    if (!current) {
+      current = paragraph;
+      continue;
+    }
+    if ((current.length + paragraph.length + 2) <= maxChars) {
+      current = `${current}\n\n${paragraph}`;
+    } else {
+      chunks.push(current);
+      current = paragraph;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+export function createBenchmarkChunks(item, options = {}) {
+  const maxChars = options.chunkCharLimit ?? 1800;
+  return chunkText(item.historyText, maxChars).map((content, index) => ({
+    id: `${item.id}:chunk:${index + 1}`,
+    item_id: item.id,
+    category: item.category,
+    order: index,
+    content
+  }));
+}
+
+export function buildTransientBenchmarkIndex(items, options = {}) {
+  const chunks = items.flatMap((item) => createBenchmarkChunks(item, options));
+  const documentFrequency = new Map();
+  const indexedChunks = chunks.map((chunk) => {
+    const tokens = tokenizeBenchmarkText(chunk.content);
+    const termCounts = new Map();
+    for (const token of tokens) termCounts.set(token, (termCounts.get(token) ?? 0) + 1);
+    for (const token of new Set(tokens)) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+    return {
+      ...chunk,
+      tokens,
+      termCounts,
+      token_count: tokens.length
+    };
+  });
+
+  return {
+    chunks: indexedChunks,
+    documentFrequency,
+    documentCount: indexedChunks.length
+  };
+}
+
+function bm25LiteScore(index, chunk, queryTokens) {
+  if (queryTokens.length === 0 || chunk.token_count === 0) return 0;
+  let score = 0;
+  const averageLength =
+    index.chunks.length > 0
+      ? index.chunks.reduce((sum, item) => sum + item.token_count, 0) / index.chunks.length
+      : 1;
+  const k1 = 1.2;
+  const b = 0.75;
+  for (const token of queryTokens) {
+    const tf = chunk.termCounts.get(token) ?? 0;
+    if (tf === 0) continue;
+    const df = index.documentFrequency.get(token) ?? 0;
+    const idf = Math.log(1 + (index.documentCount - df + 0.5) / (df + 0.5));
+    const denom = tf + k1 * (1 - b + b * (chunk.token_count / Math.max(averageLength, 1)));
+    score += idf * ((tf * (k1 + 1)) / denom);
+  }
+  return score;
+}
+
+export function retrieveFromTransientBenchmarkIndex(index, item, options = {}) {
+  const startedAt = Date.now();
+  const topK = options.topK ?? 5;
+  const contextCharLimit = options.contextCharLimit ?? 1200;
+  const queryTokens = [...new Set(tokenizeBenchmarkText(item.question))];
+  const candidates = index.chunks
+    .map((chunk) => ({
+      chunk,
+      score: bm25LiteScore(index, chunk, queryTokens)
+    }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score || left.chunk.order - right.chunk.order || left.chunk.id.localeCompare(right.chunk.id));
+  const top = candidates.slice(0, topK);
+  const contexts = top.map(({ chunk, score }) => ({
+    kind: "memory",
+    id: chunk.id,
+    project_id: "longmemeval-s",
+    source: "transient-benchmark-index",
+    title: `${chunk.category} ${chunk.id}`,
+    summary: `${chunk.category} ${chunk.id}`,
+    content_preview: chunk.content.length > contextCharLimit ? `${chunk.content.slice(0, contextCharLimit - 3)}...` : chunk.content,
+    score
+  }));
+
+  return {
+    strategy: options.strategy ?? "bm25_lite_v1",
+    matched_count: candidates.length,
+    returned_count: contexts.length,
+    fallback_used: contexts.length === 0,
+    latency_ms: Date.now() - startedAt,
+    contexts
+  };
+}
+
 function unwrapDatasetRows(parsed) {
   if (Array.isArray(parsed)) return parsed;
   if (!parsed || typeof parsed !== "object") return [];
@@ -124,6 +262,22 @@ export function estimateTokens(value) {
   return Math.ceil(text.length / 4);
 }
 
+function normalizeForRecall(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function computeRecallAtK(answer, contexts) {
+  const normalizedAnswer = normalizeForRecall(answer);
+  if (!normalizedAnswer) return null;
+  const found = contexts.some((context) =>
+    normalizeForRecall(`${context.summary ?? ""}\n${context.content_preview ?? ""}\n${context.body_preview ?? ""}`).includes(normalizedAnswer)
+  );
+  return found;
+}
+
 export function computeTokenReduction(fullContextTokens, orgBrainContextTokens) {
   const full = Number.isFinite(Number(fullContextTokens)) ? Number(fullContextTokens) : 0;
   const treatment = Number.isFinite(Number(orgBrainContextTokens)) ? Number(orgBrainContextTokens) : 0;
@@ -182,6 +336,8 @@ export function formatBenchmarkContext(context, index) {
 export function summarizeBenchmarkResults(results, existingMeasurementRuns = []) {
   const judged = results.filter((result) => result.judge?.verdict !== "not_run");
   const passed = judged.filter((result) => result.judge?.passed === true);
+  const recallEligible = results.filter((result) => result.recall_at_5 !== null && result.recall_at_5 !== undefined);
+  const recallPassed = recallEligible.filter((result) => result.recall_at_5 === true);
   const totals = results.reduce(
     (acc, result) => {
       acc.full_context_tokens += Number(result.full_context_tokens ?? 0);
@@ -206,6 +362,9 @@ export function summarizeBenchmarkResults(results, existingMeasurementRuns = [])
     judged_count: judged.length,
     judge_pass_count: passed.length,
     accuracy: judged.length > 0 ? passed.length / judged.length : null,
+    recall_eligible_count: recallEligible.length,
+    recall_at_5_pass_count: recallPassed.length,
+    recall_at_5: recallEligible.length > 0 ? recallPassed.length / recallEligible.length : null,
     ...reduction,
     retrieval_count: totals.retrieval_count,
     retrieval_latency_ms: totals.retrieval_latency_ms,
@@ -229,7 +388,9 @@ export function summarizeCategories(results) {
       full_context_tokens: 0,
       org_brain_context_tokens: 0,
       tokens_saved: 0,
-      fallback_count: 0
+      fallback_count: 0,
+      recall_eligible_count: 0,
+      recall_at_5_pass_count: 0
     };
     entry.item_count += 1;
     entry.full_context_tokens += Number(result.full_context_tokens ?? 0);
@@ -240,6 +401,10 @@ export function summarizeCategories(results) {
       entry.judged_count += 1;
       if (result.judge?.passed === true) entry.judge_pass_count += 1;
     }
+    if (result.recall_at_5 !== null && result.recall_at_5 !== undefined) {
+      entry.recall_eligible_count += 1;
+      if (result.recall_at_5 === true) entry.recall_at_5_pass_count += 1;
+    }
     byCategory.set(key, entry);
   }
 
@@ -247,6 +412,7 @@ export function summarizeCategories(results) {
     .map((entry) => ({
       ...entry,
       accuracy: entry.judged_count > 0 ? entry.judge_pass_count / entry.judged_count : null,
+      recall_at_5: entry.recall_eligible_count > 0 ? entry.recall_at_5_pass_count / entry.recall_eligible_count : null,
       token_reduction_rate:
         entry.full_context_tokens > 0
           ? (entry.full_context_tokens - entry.org_brain_context_tokens) / entry.full_context_tokens

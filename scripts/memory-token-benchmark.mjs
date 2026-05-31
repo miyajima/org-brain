@@ -13,15 +13,19 @@ import {
   TOKEN_ESTIMATE_MODEL,
   buildFullContextPrompt,
   buildTreatmentPrompt,
+  buildTransientBenchmarkIndex,
   collapseWhitespace,
+  computeRecallAtK,
   computeTokenReduction,
   estimateTokens,
   parseLongMemEvalDataset,
+  retrieveFromTransientBenchmarkIndex,
   summarizeBenchmarkResults
 } from "./lib/memory-token-benchmark-core.mjs";
 
 const DEFAULT_DATASET_URL = "https://huggingface.co/datasets/LIXINYI33/longmemeval-s/resolve/main/longmemeval_s_cleaned.json";
 const STRATEGIES = new Set(["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"]);
+const BENCHMARK_INDEXES = new Set(["transient-sqlite", "transient-memory", "production-d1"]);
 
 function printHelp() {
   console.log(`Org Brain token reduction benchmark
@@ -36,14 +40,15 @@ Options:
   --local|--preview|--remote   D1 location (default: remote)
   --env <name>                 Wrangler environment name
   --benchmark <name>           Benchmark name (default: longmemeval-s)
+  --benchmark-index <name>     transient-sqlite|transient-memory|production-d1 (default: transient-sqlite)
   --strategy <name>            bm25_v1|bm25_rewrite_v1|hybrid_memory_docs_v1 (default: hybrid_memory_docs_v1)
   --limit <n>                  Number of benchmark items (default: 500)
   --dataset-path <path>        Local LongMemEval JSON/JSONL dataset
   --dataset-url <url>          Dataset URL when no local path is provided
   --context-char-limit <n>     Characters kept per retrieved context item (default: 1200)
   --judge-provider <name>      Judge provider (default: gemini)
-  --judge-model <name>         Gemini judge model (default: gemini-2.5-flash)
-  --generator-model <name>     Gemini generator model (default: gemini-2.5-flash)
+  --judge-model <name>         Gemini judge model (default: gemini-3.5-flash)
+  --generator-model <name>     Gemini generator model (default: gemini-3.5-flash)
   --skip-llm                   Skip Gemini generation/judging and use token accounting only
   --dry-run                    Alias for --skip-llm
   --json                       Emit machine-readable JSON
@@ -55,14 +60,15 @@ function parseArgs(argv) {
   const options = {
     ...parseLocationArgs(argv),
     benchmark: "longmemeval-s",
+    benchmarkIndex: "transient-sqlite",
     strategy: "hybrid_memory_docs_v1",
     limit: 500,
     datasetPath: undefined,
     datasetUrl: DEFAULT_DATASET_URL,
     contextCharLimit: 1200,
     judgeProvider: "gemini",
-    judgeModel: "gemini-2.5-flash",
-    generatorModel: "gemini-2.5-flash",
+    judgeModel: "gemini-3.5-flash",
+    generatorModel: "gemini-3.5-flash",
     skipLlm: false
   };
 
@@ -94,6 +100,12 @@ function parseArgs(argv) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!value) throw new Error("--benchmark requires a value");
       options.benchmark = value;
+      continue;
+    }
+    if (arg === "--benchmark-index" || arg.startsWith("--benchmark-index=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      if (!BENCHMARK_INDEXES.has(value)) throw new Error(`--benchmark-index must be one of ${[...BENCHMARK_INDEXES].join(", ")}`);
+      options.benchmarkIndex = value;
       continue;
     }
     if (arg === "--strategy" || arg.startsWith("--strategy=")) {
@@ -332,6 +344,21 @@ async function runStrategy(options, queryText) {
   };
 }
 
+function useTransientIndex(options) {
+  return options.benchmarkIndex === "transient-sqlite" || options.benchmarkIndex === "transient-memory";
+}
+
+async function runRetrieval(options, item, transientIndex) {
+  if (useTransientIndex(options)) {
+    return retrieveFromTransientBenchmarkIndex(transientIndex, item, {
+      strategy: `${options.strategy}:transient_bm25_lite_v1`,
+      topK: 5,
+      contextCharLimit: options.contextCharLimit
+    });
+  }
+  return runStrategy(options, item.question);
+}
+
 function geminiKey(env = process.env) {
   return env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "";
 }
@@ -461,8 +488,8 @@ async function fetchExistingMeasurementRuns(options) {
   }
 }
 
-async function runItem(options, item, apiKey) {
-  const retrieval = await runStrategy(options, item.question);
+async function runItem(options, item, apiKey, transientIndex) {
+  const retrieval = await runRetrieval(options, item, transientIndex);
   const fullPrompt = buildFullContextPrompt(item);
   const treatmentPrompt = buildTreatmentPrompt(item, retrieval.contexts);
   const [fullTokenCount, treatmentTokenCount] = await Promise.all([
@@ -491,6 +518,7 @@ async function runItem(options, item, apiKey) {
     retrieval_latency_ms: retrieval.latency_ms,
     fallback_used: retrieval.fallback_used,
     matched_count: retrieval.matched_count,
+    recall_at_5: computeRecallAtK(item.answer, retrieval.contexts),
     retrieved_context_ids: retrieval.contexts.map((context) => context.kind === "doc" ? `doc:${context.id}` : context.id),
     generated_answer: generatedAnswer,
     judge
@@ -506,6 +534,8 @@ function printText(snapshot) {
   console.log("");
   console.log("Summary");
   console.log(`  items=${snapshot.summary.item_count} judged=${snapshot.summary.judged_count} pass=${snapshot.summary.judge_pass_count} accuracy=${accuracy}`);
+  const recallAtFive = snapshot.summary.recall_at_5 === null ? "n/a" : `${(snapshot.summary.recall_at_5 * 100).toFixed(1)}%`;
+  console.log(`  recall@5=${recallAtFive} recall_pass=${snapshot.summary.recall_at_5_pass_count}/${snapshot.summary.recall_eligible_count}`);
   console.log(
     `  full_context_tokens=${snapshot.summary.full_context_tokens} org_brain_context_tokens=${snapshot.summary.org_brain_context_tokens} tokens_saved=${snapshot.summary.tokens_saved} reduction=${(snapshot.summary.token_reduction_rate * 100).toFixed(1)}%`
   );
@@ -516,8 +546,9 @@ function printText(snapshot) {
   console.log("Categories");
   for (const category of snapshot.summary.categories) {
     const categoryAccuracy = category.accuracy === null ? "n/a" : `${(category.accuracy * 100).toFixed(1)}%`;
+    const categoryRecall = category.recall_at_5 === null ? "n/a" : `${(category.recall_at_5 * 100).toFixed(1)}%`;
     console.log(
-      `  ${category.category}: items=${category.item_count} accuracy=${categoryAccuracy} saved=${category.tokens_saved} reduction=${(category.token_reduction_rate * 100).toFixed(1)}% fallback=${category.fallback_count}`
+      `  ${category.category}: items=${category.item_count} accuracy=${categoryAccuracy} recall@5=${categoryRecall} saved=${category.tokens_saved} reduction=${(category.token_reduction_rate * 100).toFixed(1)}% fallback=${category.fallback_count}`
     );
   }
   console.log("");
@@ -554,9 +585,12 @@ async function main() {
   if (!apiKey) options.skipLlm = true;
 
   const existingMeasurementRuns = await fetchExistingMeasurementRuns(options);
+  const transientIndex = useTransientIndex(options)
+    ? buildTransientBenchmarkIndex(items, { chunkCharLimit: Math.max(options.contextCharLimit, 1800) })
+    : null;
   const results = [];
   for (const item of items) {
-    results.push(await runItem(options, item, apiKey));
+    results.push(await runItem(options, item, apiKey, transientIndex));
   }
 
   const summary = summarizeBenchmarkResults(results, existingMeasurementRuns);
@@ -571,6 +605,7 @@ async function main() {
       location: options.location,
       env: options.env ?? null,
       benchmark: options.benchmark,
+      benchmark_index: options.benchmarkIndex,
       strategy: options.strategy,
       limit: options.limit,
       dataset_path: options.datasetPath ?? null,

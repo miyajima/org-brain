@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildFullContextPrompt,
   buildTreatmentPrompt,
+  buildTransientBenchmarkIndex,
+  computeRecallAtK,
   computeTokenReduction,
+  createBenchmarkChunks,
   estimateTokens,
   parseLongMemEvalDataset,
+  retrieveFromTransientBenchmarkIndex,
   summarizeBenchmarkResults
 } from "./lib/memory-token-benchmark-core.mjs";
 
@@ -112,6 +116,32 @@ describe("memory token benchmark helpers", () => {
     expect(treatment).toContain("A compact memory.");
   });
 
+  it("chunks LongMemEval history and retrieves relevant transient contexts", () => {
+    const items = [
+      {
+        id: "q-1",
+        category: "single",
+        question: "Which notebook color did Mia buy?",
+        answer: "blue",
+        historyText: "user: Mia bought a blue notebook.\n\nuser: Alex bought a red pen."
+      },
+      {
+        id: "q-2",
+        category: "single",
+        question: "Where is the receipt?",
+        answer: "Dropbox",
+        historyText: "user: The receipt is stored in Dropbox."
+      }
+    ];
+
+    expect(createBenchmarkChunks(items[0], { chunkCharLimit: 40 })).toHaveLength(2);
+    const index = buildTransientBenchmarkIndex(items, { chunkCharLimit: 80 });
+    const retrieval = retrieveFromTransientBenchmarkIndex(index, items[0], { topK: 5 });
+    expect(retrieval.returned_count).toBeGreaterThan(0);
+    expect(retrieval.contexts[0].content_preview).toContain("blue notebook");
+    expect(computeRecallAtK(items[0].answer, retrieval.contexts)).toBe(true);
+  });
+
   it("summarizes accuracy, token reduction, categories, and fallbacks", () => {
     const summary = summarizeBenchmarkResults(
       [
@@ -123,6 +153,7 @@ describe("memory token benchmark helpers", () => {
           retrieval_count: 2,
           retrieval_latency_ms: 10,
           fallback_used: false,
+          recall_at_5: true,
           judge: { verdict: "pass", passed: true }
         },
         {
@@ -133,6 +164,7 @@ describe("memory token benchmark helpers", () => {
           retrieval_count: 0,
           retrieval_latency_ms: 5,
           fallback_used: true,
+          recall_at_5: false,
           judge: { verdict: "fail", passed: false }
         },
         {
@@ -143,6 +175,7 @@ describe("memory token benchmark helpers", () => {
           retrieval_count: 1,
           retrieval_latency_ms: 15,
           fallback_used: false,
+          recall_at_5: null,
           judge: { verdict: "not_run", passed: null }
         }
       ],
@@ -154,6 +187,9 @@ describe("memory token benchmark helpers", () => {
       judged_count: 2,
       judge_pass_count: 1,
       accuracy: 0.5,
+      recall_eligible_count: 2,
+      recall_at_5_pass_count: 1,
+      recall_at_5: 0.5,
       full_context_tokens: 230,
       org_brain_context_tokens: 95,
       tokens_saved: 135,
@@ -165,7 +201,10 @@ describe("memory token benchmark helpers", () => {
       item_count: 2,
       judged_count: 2,
       judge_pass_count: 1,
-      fallback_count: 1
+      fallback_count: 1,
+      recall_eligible_count: 2,
+      recall_at_5_pass_count: 1,
+      recall_at_5: 0.5
     });
     expect(summary.existing_measurement_runs).toEqual([{ id: "run-1", input_tokens_saved: 2036 }]);
   });
