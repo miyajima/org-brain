@@ -499,6 +499,93 @@ describe("memory token benchmark helpers", () => {
     expect(worksheet.deterministic_confidence).toBe("high");
   });
 
+  it("computes temporal date-difference answers from question and session dates", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "temporal-date-diff",
+        question_type: "temporal-reasoning",
+        question_date: "2023/04/10 (Mon) 10:28",
+        question: "How many days ago did I attend the Maundy Thursday service at the Episcopal Church?",
+        answer: "4 days.",
+        answer_session_ids: ["service-session"],
+        haystack_session_ids: ["distractor-session", "service-session"],
+        haystack_dates: ["2023/04/06 (Thu) 04:49", "2023/04/06 (Thu) 22:22"],
+        haystack_sessions: [
+          [{ role: "user", content: "I attended a gardening workshop at a local nursery recently." }],
+          [{ role: "user", content: "I got to attend the Maundy Thursday service at the Episcopal Church today." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+
+    expect(worksheet.deterministic_answer).toBe("4 days ago");
+    expect(worksheet.deterministic_reason).toBe("temporal-date-diff");
+  });
+
+  it("extracts ordinal answers from assistant numbered lists", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "assistant-ordinal",
+        question_type: "single-session-assistant",
+        question: "What was the 7th job in the list you provided?",
+        answer: "Transcriptionist.",
+        answer_session_ids: ["jobs-session"],
+        haystack_session_ids: ["jobs-session"],
+        haystack_dates: ["2023/05/26"],
+        haystack_sessions: [
+          [
+            { role: "user", content: "Brainstorm work from home jobs for seniors." },
+            { role: "assistant", content: "1. Virtual customer service representative 2. Telehealth professional 3. Remote bookkeeper 4. Virtual tutor 5. Freelance writer 6. Online survey taker 7. Transcriptionist 8. Social media manager" }
+          ]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+
+    expect(worksheet.deterministic_answer).toBe("Transcriptionist");
+    expect(worksheet.deterministic_reason).toBe("assistant-recall-extract");
+  });
+
+  it("uses newer knowledge-update evidence for current values", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "knowledge-latest",
+        question_type: "knowledge-update",
+        question: "How many stars do I need to reach the gold level on my Starbucks Rewards app?",
+        answer: "120",
+        answer_session_ids: ["new-stars"],
+        haystack_session_ids: ["old-stars", "new-stars"],
+        haystack_dates: ["2023/07/11", "2023/07/30"],
+        haystack_sessions: [
+          [{ role: "assistant", content: "To correct myself, you actually need 125 stars to reach the Gold level." }],
+          [{ role: "assistant", content: "Actually, you need 120 stars to reach the Gold level on your Starbucks Rewards app." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+
+    expect(worksheet.deterministic_answer).toBe("120 stars");
+    expect(worksheet.deterministic_reason).toBe("knowledge-update-latest");
+  });
+
   it("prioritizes user-stated preference candidates over assistant suggestions", () => {
     const [item] = parseLongMemEvalDataset(JSON.stringify([
       {
@@ -563,6 +650,37 @@ describe("memory token benchmark helpers", () => {
     expect(prompt).toContain("proposed_answer=3");
     expect(prompt).toContain("Revell");
     expect(estimateTokens(prompt)).toBeLessThanOrEqual(520);
+  });
+
+  it("extracts narrow multi-session counts without using answer sessions", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "baking-count",
+        question_type: "multi-session",
+        question: "How many times did I bake something in the past two weeks?",
+        answer: "Four.",
+        answer_session_ids: ["cookies", "bread", "baguette", "cake"],
+        haystack_session_ids: ["cookies", "bread", "baguette", "cake", "dinner"],
+        haystack_dates: ["2023/05/20", "2023/05/21", "2023/05/22", "2023/05/23", "2023/05/24"],
+        haystack_sessions: [
+          [{ role: "user", content: "I baked a batch of cookies on Thursday." }],
+          [{ role: "user", content: "I tried out a new bread recipe using sourdough starter." }],
+          [{ role: "user", content: "I made a delicious whole wheat baguette last Saturday." }],
+          [{ role: "user", content: "I just baked a chocolate cake for my sister." }],
+          [{ role: "user", content: "I cooked pasta for dinner." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+
+    expect(worksheet.deterministic_answer).toBe("4");
+    expect(worksheet.deterministic_reason).toBe("multi-session-count-extract");
   });
 
   it("builds public comparison reports with leaderboard targets", () => {
