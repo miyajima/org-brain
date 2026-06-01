@@ -10,8 +10,12 @@ import {
   sqlString
 } from "./lib/metrics-common.mjs";
 import {
+  LEADERBOARD_TARGETS,
   TOKEN_ESTIMATE_MODEL,
+  applyTreatmentTokenBudget,
+  buildComparisonRankEstimate,
   buildFullContextPrompt,
+  buildPublicComparisonReport,
   buildTreatmentPrompt,
   buildTransientBenchmarkIndex,
   collapseWhitespace,
@@ -28,7 +32,9 @@ import {
 const DEFAULT_DATASET_URL = "https://huggingface.co/datasets/LIXINYI33/longmemeval-s/resolve/main/longmemeval_s_cleaned.json";
 const STRATEGIES = new Set(["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"]);
 const BENCHMARK_INDEXES = new Set(["transient-sqlite", "transient-memory", "production-d1"]);
-const TRANSIENT_STRATEGIES = new Set(["bm25_lite_v1", "longmemeval_session_v2"]);
+const TRANSIENT_STRATEGIES = new Set(["bm25_lite_v1", "longmemeval_session_v2", "longmemeval_session_v3"]);
+const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1"]);
+const LEADERBOARD_PROFILES = new Set(["org_brain_repro_v3"]);
 
 function printHelp() {
   console.log(`Org Brain token reduction benchmark
@@ -44,7 +50,11 @@ Options:
   --env <name>                 Wrangler environment name
   --benchmark <name>           Benchmark name (default: longmemeval-s)
   --benchmark-index <name>     transient-sqlite|transient-memory|production-d1 (default: transient-sqlite)
-  --transient-strategy <name>  bm25_lite_v1|longmemeval_session_v2 (default: longmemeval_session_v2)
+  --transient-strategy <name>  bm25_lite_v1|longmemeval_session_v2|longmemeval_session_v3
+  --retrieval-profile <name>   Alias for --transient-strategy (default: longmemeval_session_v3)
+  --leaderboard-profile <name> org_brain_repro_v3 enables public-comparison defaults
+  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1
+  --token-budget <n>           Estimated treatment prompt token budget per item (default: 850)
   --strategy <name>            bm25_v1|bm25_rewrite_v1|hybrid_memory_docs_v1 (default: hybrid_memory_docs_v1)
   --limit <n>                  Number of benchmark items (default: 500)
   --dataset-path <path>        Local LongMemEval JSON/JSONL dataset
@@ -55,6 +65,7 @@ Options:
   --generator-model <name>     Gemini generator model (default: gemini-3.5-flash)
   --write-retrieval-failures <path>
                               Write failed evidence retrieval examples as JSONL
+  --compare-public             Include or emit public comparison report
   --skip-llm                   Skip Gemini generation/judging and use token accounting only
   --dry-run                    Alias for --skip-llm
   --json                       Emit machine-readable JSON
@@ -67,7 +78,11 @@ function parseArgs(argv) {
     ...parseLocationArgs(argv),
     benchmark: "longmemeval-s",
     benchmarkIndex: "transient-sqlite",
-    transientStrategy: "longmemeval_session_v2",
+    transientStrategy: "longmemeval_session_v3",
+    retrievalProfile: "longmemeval_session_v3",
+    leaderboardProfile: undefined,
+    answererProfile: "specialist_router_v1",
+    tokenBudget: 850,
     strategy: "hybrid_memory_docs_v1",
     limit: 500,
     datasetPath: undefined,
@@ -77,7 +92,9 @@ function parseArgs(argv) {
     judgeModel: "gemini-3.5-flash",
     generatorModel: "gemini-3.5-flash",
     writeRetrievalFailures: undefined,
-    skipLlm: false
+    comparePublic: false,
+    skipLlm: false,
+    datasetUrlProvided: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -104,6 +121,10 @@ function parseArgs(argv) {
       options.skipLlm = true;
       continue;
     }
+    if (arg === "--compare-public") {
+      options.comparePublic = true;
+      continue;
+    }
     if (arg === "--benchmark" || arg.startsWith("--benchmark=")) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!value) throw new Error("--benchmark requires a value");
@@ -120,6 +141,37 @@ function parseArgs(argv) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!TRANSIENT_STRATEGIES.has(value)) throw new Error(`--transient-strategy must be one of ${[...TRANSIENT_STRATEGIES].join(", ")}`);
       options.transientStrategy = value;
+      options.retrievalProfile = value;
+      continue;
+    }
+    if (arg === "--retrieval-profile" || arg.startsWith("--retrieval-profile=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      if (!TRANSIENT_STRATEGIES.has(value)) throw new Error(`--retrieval-profile must be one of ${[...TRANSIENT_STRATEGIES].join(", ")}`);
+      options.retrievalProfile = value;
+      options.transientStrategy = value;
+      continue;
+    }
+    if (arg === "--leaderboard-profile" || arg.startsWith("--leaderboard-profile=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      if (!LEADERBOARD_PROFILES.has(value)) throw new Error(`--leaderboard-profile must be one of ${[...LEADERBOARD_PROFILES].join(", ")}`);
+      options.leaderboardProfile = value;
+      options.retrievalProfile = "longmemeval_session_v3";
+      options.transientStrategy = "longmemeval_session_v3";
+      options.answererProfile = "specialist_router_v1";
+      options.comparePublic = true;
+      continue;
+    }
+    if (arg === "--answerer-profile" || arg.startsWith("--answerer-profile=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      if (!ANSWERER_PROFILES.has(value)) throw new Error(`--answerer-profile must be one of ${[...ANSWERER_PROFILES].join(", ")}`);
+      options.answererProfile = value;
+      continue;
+    }
+    if (arg === "--token-budget" || arg.startsWith("--token-budget=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      const parsed = Number.parseInt(value ?? "", 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("--token-budget requires a positive integer");
+      options.tokenBudget = parsed;
       continue;
     }
     if (arg === "--strategy" || arg.startsWith("--strategy=")) {
@@ -152,6 +204,7 @@ function parseArgs(argv) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!value) throw new Error("--dataset-url requires a value");
       options.datasetUrl = value;
+      options.datasetUrlProvided = true;
       continue;
     }
     if (arg === "--judge-provider" || arg.startsWith("--judge-provider=")) {
@@ -372,11 +425,11 @@ async function runRetrieval(options, item) {
   if (useTransientIndex(options)) {
     const itemIndex = buildTransientBenchmarkIndex([item], {
       chunkCharLimit: Math.max(options.contextCharLimit, 1800),
-      transientStrategy: options.transientStrategy
+      transientStrategy: options.retrievalProfile ?? options.transientStrategy
     });
     return retrieveFromTransientBenchmarkIndex(itemIndex, item, {
-      strategy: `${options.strategy}:transient_${options.transientStrategy}`,
-      transientStrategy: options.transientStrategy,
+      strategy: `${options.strategy}:transient_${options.retrievalProfile ?? options.transientStrategy}`,
+      transientStrategy: options.retrievalProfile ?? options.transientStrategy,
       topK: 5,
       contextCharLimit: options.contextCharLimit
     });
@@ -421,7 +474,19 @@ function extractGeminiText(body) {
     .trim();
 }
 
-async function generateWithGemini(prompt, model, apiKey) {
+function extractGeminiUsage(body) {
+  const usage = body.usageMetadata ?? body.usage_metadata ?? {};
+  const promptTokens = Number(usage.promptTokenCount ?? usage.prompt_token_count ?? 0);
+  const candidatesTokens = Number(usage.candidatesTokenCount ?? usage.candidates_token_count ?? 0);
+  const totalTokens = Number(usage.totalTokenCount ?? usage.total_token_count ?? (promptTokens + candidatesTokens));
+  return {
+    prompt_tokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+    candidates_tokens: Number.isFinite(candidatesTokens) ? candidatesTokens : 0,
+    total_tokens: Number.isFinite(totalTokens) ? totalTokens : 0
+  };
+}
+
+async function generateWithGeminiDetailed(prompt, model, apiKey) {
   const body = await geminiRequest(
     model,
     "generateContent",
@@ -431,7 +496,22 @@ async function generateWithGemini(prompt, model, apiKey) {
     },
     apiKey
   );
-  return extractGeminiText(body);
+  const text = extractGeminiText(body);
+  const usage = extractGeminiUsage(body);
+  return {
+    text,
+    usage: usage.total_tokens > 0
+      ? usage
+      : {
+          prompt_tokens: estimateTokens(prompt),
+          candidates_tokens: estimateTokens(text),
+          total_tokens: estimateTokens(prompt) + estimateTokens(text)
+        }
+  };
+}
+
+async function generateWithGemini(prompt, model, apiKey) {
+  return (await generateWithGeminiDetailed(prompt, model, apiKey)).text;
 }
 
 function parseJudgeText(text) {
@@ -467,8 +547,11 @@ async function judgeWithGemini(item, generatedAnswer, model, apiKey) {
     `Gold answer: ${item.answer || "(missing)"}`,
     `Model answer: ${generatedAnswer || "(empty)"}`
   ].join("\n");
-  const text = await generateWithGemini(prompt, model, apiKey);
-  return parseJudgeText(text);
+  const generated = await generateWithGeminiDetailed(prompt, model, apiKey);
+  return {
+    ...parseJudgeText(generated.text),
+    usage: generated.usage
+  };
 }
 
 async function fetchExistingMeasurementRuns(options) {
@@ -516,21 +599,30 @@ async function fetchExistingMeasurementRuns(options) {
 async function runItem(options, item, apiKey) {
   const retrieval = await runRetrieval(options, item);
   const fullPrompt = buildFullContextPrompt(item);
-  const treatmentPrompt = buildTreatmentPrompt(item, retrieval.contexts);
+  const treatmentContexts = applyTreatmentTokenBudget(item, retrieval.contexts, {
+    tokenBudget: options.tokenBudget,
+    answererProfile: options.answererProfile
+  });
+  const treatmentPrompt = buildTreatmentPrompt(item, treatmentContexts, {
+    answererProfile: options.answererProfile
+  });
   const [fullTokenCount, treatmentTokenCount] = await Promise.all([
     countPromptTokens(fullPrompt, options.generatorModel, apiKey),
     countPromptTokens(treatmentPrompt, options.generatorModel, apiKey)
   ]);
   const reduction = computeTokenReduction(fullTokenCount.tokens, treatmentTokenCount.tokens);
-  const evidenceRecallAtFive = computeEvidenceRecallAtK(item, retrieval.contexts);
-  const evidenceCoverageAtFive = computeEvidenceCoverageAtK(item, retrieval.contexts);
-  const answerTextHitAtFive = computeAnswerTextHitAtK(item.answer, retrieval.contexts);
+  const evidenceRecallAtFive = computeEvidenceRecallAtK(item, treatmentContexts);
+  const evidenceCoverageAtFive = computeEvidenceCoverageAtK(item, treatmentContexts);
+  const answerTextHitAtFive = computeAnswerTextHitAtK(item.answer, treatmentContexts);
 
   let generatedAnswer = null;
   let judge = { verdict: "not_run", passed: null, rationale: options.skipLlm ? "LLM skipped" : "Gemini API key missing" };
+  let answerComputeTokens = 0;
   if (!options.skipLlm && apiKey) {
-    generatedAnswer = await generateWithGemini(treatmentPrompt, options.generatorModel, apiKey);
+    const generated = await generateWithGeminiDetailed(treatmentPrompt, options.generatorModel, apiKey);
+    generatedAnswer = generated.text;
     judge = await judgeWithGemini(item, generatedAnswer, options.judgeModel, apiKey);
+    answerComputeTokens = Number(generated.usage?.total_tokens ?? 0) + Number(judge.usage?.total_tokens ?? 0);
   }
 
   return {
@@ -542,7 +634,10 @@ async function runItem(options, item, apiKey) {
       fullTokenCount.token_source === treatmentTokenCount.token_source
         ? fullTokenCount.token_source
         : `${fullTokenCount.token_source}+${treatmentTokenCount.token_source}`,
-    retrieval_count: retrieval.returned_count,
+    treatment_prompt_tokens: treatmentTokenCount.tokens,
+    answer_compute_tokens: answerComputeTokens,
+    retrieval_compute_tokens: 0,
+    retrieval_count: treatmentContexts.length,
     retrieval_latency_ms: retrieval.latency_ms,
     fallback_used: retrieval.fallback_used,
     matched_count: retrieval.matched_count,
@@ -550,8 +645,8 @@ async function runItem(options, item, apiKey) {
     evidence_recall_at_5: evidenceRecallAtFive,
     evidence_coverage_at_5: evidenceCoverageAtFive,
     answer_text_hit_at_5: answerTextHitAtFive,
-    retrieved_context_ids: retrieval.contexts.map((context) => context.kind === "doc" ? `doc:${context.id}` : context.id),
-    retrieved_session_ids: [...new Set(retrieval.contexts.map((context) => context.session_id).filter(Boolean))],
+    retrieved_context_ids: treatmentContexts.map((context) => context.kind === "doc" ? `doc:${context.id}` : context.id),
+    retrieved_session_ids: [...new Set(treatmentContexts.map((context) => context.session_id).filter(Boolean))],
     answer_session_ids: item.answer_session_ids ?? [],
     generated_answer: generatedAnswer,
     judge
@@ -582,6 +677,10 @@ async function writeRetrievalFailures(path, items, results) {
 }
 
 function printText(snapshot) {
+  if (snapshot.kind === "public_comparison") {
+    printComparisonText(snapshot);
+    return;
+  }
   const accuracy = snapshot.summary.accuracy === null ? "n/a" : `${(snapshot.summary.accuracy * 100).toFixed(1)}%`;
   console.log("Org Brain token reduction benchmark");
   console.log(`Scope: tenant=${snapshot.scope.tenant} benchmark=${snapshot.scope.benchmark} strategy=${snapshot.scope.strategy} source=${snapshot.scope.location}`);
@@ -597,6 +696,9 @@ function printText(snapshot) {
   console.log(`  answer_text_hit@5=${answerTextHit} evidence_coverage@5=${evidenceCoverage}`);
   console.log(
     `  full_context_tokens=${snapshot.summary.full_context_tokens} org_brain_context_tokens=${snapshot.summary.org_brain_context_tokens} tokens_saved=${snapshot.summary.tokens_saved} reduction=${(snapshot.summary.token_reduction_rate * 100).toFixed(1)}%`
+  );
+  console.log(
+    `  treatment_prompt_tokens=${snapshot.summary.treatment_prompt_tokens} answer_compute_tokens=${snapshot.summary.answer_compute_tokens} retrieval_compute_tokens=${snapshot.summary.retrieval_compute_tokens}`
   );
   console.log(
     `  retrieval_count=${snapshot.summary.retrieval_count} fallback_count=${snapshot.summary.fallback_count} fallback_rate=${(snapshot.summary.fallback_rate * 100).toFixed(1)}% avg_latency_ms=${snapshot.summary.avg_retrieval_latency_ms.toFixed(1)}`
@@ -628,6 +730,27 @@ function printText(snapshot) {
       );
     }
   }
+  if (snapshot.public_comparison) {
+    console.log("");
+    printComparisonText(snapshot.public_comparison, { nested: true });
+  }
+}
+
+function formatPercent(value) {
+  return value === null || value === undefined ? "n/a" : `${(Number(value) * 100).toFixed(2)}%`;
+}
+
+function printComparisonText(report, options = {}) {
+  if (!options.nested) console.log("Org Brain public comparison report");
+  console.log(`Targets: accuracy=${formatPercent(report.leaderboard_targets.accuracy)} evidence_recall@5=${formatPercent(report.leaderboard_targets.evidence_recall_at_5)} token_reduction=${formatPercent(report.leaderboard_targets.token_reduction_rate)} fallback=${formatPercent(report.leaderboard_targets.fallback_rate)}`);
+  console.log("Comparison rows");
+  for (const row of report.rows) {
+    console.log(
+      `  ${row.system} (${row.profile}): accuracy=${formatPercent(row.accuracy)} evidence_recall@5=${formatPercent(row.evidence_recall_at_5)} token_reduction=${formatPercent(row.token_reduction_rate)} source=${row.source_url ?? "current"}`
+    );
+  }
+  console.log(`Rank estimate: accuracy=${report.comparison_rank_estimate.accuracy_rank ?? "n/a"} evidence_recall=${report.comparison_rank_estimate.evidence_recall_rank ?? "n/a"} token_reduction=${report.comparison_rank_estimate.token_reduction_rank ?? "n/a"}`);
+  console.log(`Caveat: ${report.caveat}`);
 }
 
 async function main() {
@@ -638,6 +761,18 @@ async function main() {
   }
   if (options.judgeProvider !== "gemini") {
     throw new Error("Only --judge-provider gemini is supported in v1");
+  }
+
+  if (options.comparePublic && !options.datasetPath && !options.datasetUrlProvided) {
+    const report = buildPublicComparisonReport(null, {
+      profile: options.leaderboardProfile ?? options.retrievalProfile
+    });
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    printText(report);
+    return;
   }
 
   const rawDataset = await loadDataset(options);
@@ -653,6 +788,13 @@ async function main() {
   await writeRetrievalFailures(options.writeRetrievalFailures, items, results);
 
   const summary = summarizeBenchmarkResults(results, existingMeasurementRuns);
+  const publicComparison = options.comparePublic
+    ? buildPublicComparisonReport(summary, {
+        profile: options.leaderboardProfile ?? options.retrievalProfile,
+        sourceUrl: options.datasetPath ? `file:${options.datasetPath}` : options.datasetUrl,
+        retrievedAt: new Date().toISOString().slice(0, 10)
+      })
+    : null;
   const tokenSources = [...new Set(results.map((result) => result.token_source))];
   const now = Date.now();
   const snapshot = {
@@ -666,6 +808,10 @@ async function main() {
       benchmark: options.benchmark,
       benchmark_index: options.benchmarkIndex,
       transient_strategy: options.transientStrategy,
+      retrieval_profile: options.retrievalProfile,
+      leaderboard_profile: options.leaderboardProfile ?? null,
+      answerer_profile: options.answererProfile,
+      token_budget: options.tokenBudget,
       strategy: options.strategy,
       limit: options.limit,
       dataset_path: options.datasetPath ?? null,
@@ -677,6 +823,9 @@ async function main() {
       skip_llm: options.skipLlm
     },
     token_source: tokenSources.length === 1 ? tokenSources[0] : tokenSources.join("+"),
+    leaderboard_targets: LEADERBOARD_TARGETS,
+    comparison_rank_estimate: buildComparisonRankEstimate(summary),
+    public_comparison: publicComparison,
     summary,
     results
   };

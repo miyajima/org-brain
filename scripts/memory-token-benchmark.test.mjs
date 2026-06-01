@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyTreatmentTokenBudget,
+  buildEvidenceCardsForItem,
   buildFullContextPrompt,
+  buildPublicComparisonReport,
   buildTreatmentPrompt,
   buildTransientBenchmarkIndex,
   computeAnswerTextHitAtK,
@@ -268,6 +271,125 @@ describe("memory token benchmark helpers", () => {
     expect(retrieval.contexts.map((context) => context.session_id)).toContain("premiere-session");
     expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
     expect(computeAnswerTextHitAtK(item.answer, retrieval.contexts)).toBe(false);
+  });
+
+  it("builds v3 evidence cards without using answer session ids as scoring input", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "card-1",
+        question_type: "single-session-preference",
+        question: "Can you recommend resources for medical image analysis?",
+        answer: "Deep learning for medical image analysis.",
+        answer_session_ids: ["gold-secret-session"],
+        haystack_session_ids: ["medical-session", "generic-session"],
+        haystack_dates: ["2023/05/21", "2023/05/22"],
+        haystack_sessions: [
+          [{ role: "user", content: "I work in deep learning for medical image analysis and want advanced research updates." }],
+          [{ role: "assistant", content: "General AI conferences are popular." }]
+        ]
+      }
+    ]));
+
+    const cards = buildEvidenceCardsForItem(item);
+    expect(cards[0]).toMatchObject({
+      session_id: "medical-session",
+      date: "2023/05/21",
+      speaker: "user"
+    });
+    const renderedPrompt = buildTreatmentPrompt(item, [
+      {
+        kind: "memory",
+        id: "card",
+        source: "transient-evidence-card-index",
+        content_preview: "placeholder",
+        evidence_card: cards[0],
+        session_id: cards[0].session_id
+      }
+    ], { answererProfile: "specialist_router_v1" });
+    expect(renderedPrompt).not.toContain("gold-secret-session");
+    expect(renderedPrompt).not.toContain("session_id=medical-session");
+    expect(renderedPrompt).toContain("medical image analysis");
+  });
+
+  it("retrieves v3 temporal evidence with date-normalized cards", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "temporal-v3",
+        question_type: "temporal-reasoning",
+        question_date: "2023/06/24 (Sat) 12:00",
+        question: "I mentioned participating in a sports event two weeks ago. What was the event?",
+        answer: "Midsummer 5K Run.",
+        answer_session_ids: ["run-session"],
+        haystack_session_ids: ["bike-session", "run-session", "soccer-session"],
+        haystack_dates: ["2023/06/02", "2023/06/10", "2023/06/17"],
+        haystack_sessions: [
+          [{ role: "user", content: "I completed the Spring Sprint Triathlon today." }],
+          [{ role: "user", content: "I finished a 5K run at the Midsummer 5K Run today." }],
+          [{ role: "user", content: "I participate in the annual charity soccer tournament today." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    expect(retrieval.contexts[0].session_id).toBe("run-session");
+    expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
+  });
+
+  it("keeps v3 multi-session cards diverse and compact", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "multi-v3",
+        question_type: "multi-session",
+        question: "How many times did I bake something in the past two weeks?",
+        answer: "Three.",
+        answer_session_ids: ["bread", "cake", "wings"],
+        haystack_session_ids: ["bread", "generic", "cake", "wings"],
+        haystack_dates: ["2023/05/20", "2023/05/21", "2023/05/25", "2023/05/28"],
+        haystack_sessions: [
+          [{ role: "user", content: "I tried a sourdough bread recipe on Tuesday." }],
+          [{ role: "assistant", content: "Baking can be fun for many people." }],
+          [{ role: "user", content: "I baked a chocolate cake for my sister." }],
+          [{ role: "user", content: "I am baking chicken wings tonight." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    expect([...new Set(retrieval.contexts.map((context) => context.session_id))]).toEqual(expect.arrayContaining(["bread", "cake", "wings"]));
+    const budgeted = applyTreatmentTokenBudget(item, retrieval.contexts, { tokenBudget: 260, answererProfile: "specialist_router_v1" });
+    expect(estimateTokens(buildTreatmentPrompt(item, budgeted, { answererProfile: "specialist_router_v1" }))).toBeLessThanOrEqual(260);
+  });
+
+  it("builds public comparison reports with leaderboard targets", () => {
+    const report = buildPublicComparisonReport({
+      accuracy: 0.86,
+      evidence_recall_at_5: 0.982,
+      recall_at_5: 0.982,
+      token_reduction_rate: 0.992,
+      fallback_rate: 0
+    }, { profile: "org_brain_repro_v3" });
+    expect(report.leaderboard_targets).toMatchObject({
+      profile: "org_brain_repro_v3",
+      accuracy: 0.86
+    });
+    expect(report.rows[0]).toMatchObject({
+      system: "Org Brain current run",
+      profile: "org_brain_repro_v3"
+    });
+    expect(report.comparison_rank_estimate.target_pass).toMatchObject({
+      accuracy: true,
+      evidence_recall_at_5: true,
+      token_reduction_rate: true,
+      fallback_rate: true
+    });
   });
 
   it("summarizes accuracy, token reduction, categories, and fallbacks", () => {
