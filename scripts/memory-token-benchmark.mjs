@@ -14,6 +14,7 @@ import {
   TOKEN_ESTIMATE_MODEL,
   applyTreatmentTokenBudget,
   buildComparisonRankEstimate,
+  buildAnswerWorksheet,
   buildFullContextPrompt,
   buildPublicComparisonReport,
   buildTreatmentPrompt,
@@ -33,7 +34,7 @@ const DEFAULT_DATASET_URL = "https://huggingface.co/datasets/LIXINYI33/longmemev
 const STRATEGIES = new Set(["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"]);
 const BENCHMARK_INDEXES = new Set(["transient-sqlite", "transient-memory", "production-d1"]);
 const TRANSIENT_STRATEGIES = new Set(["bm25_lite_v1", "longmemeval_session_v2", "longmemeval_session_v3"]);
-const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1"]);
+const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1", "worksheet_router_v2"]);
 const LEADERBOARD_PROFILES = new Set(["org_brain_repro_v3"]);
 
 function printHelp() {
@@ -53,7 +54,7 @@ Options:
   --transient-strategy <name>  bm25_lite_v1|longmemeval_session_v2|longmemeval_session_v3
   --retrieval-profile <name>   Alias for --transient-strategy (default: longmemeval_session_v3)
   --leaderboard-profile <name> org_brain_repro_v3 enables public-comparison defaults
-  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1
+  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1|worksheet_router_v2
   --token-budget <n>           Estimated treatment prompt token budget per item (default: 850)
   --strategy <name>            bm25_v1|bm25_rewrite_v1|hybrid_memory_docs_v1 (default: hybrid_memory_docs_v1)
   --limit <n>                  Number of benchmark items (default: 500)
@@ -81,7 +82,7 @@ function parseArgs(argv) {
     transientStrategy: "longmemeval_session_v3",
     retrievalProfile: "longmemeval_session_v3",
     leaderboardProfile: undefined,
-    answererProfile: "specialist_router_v1",
+    answererProfile: "worksheet_router_v2",
     tokenBudget: 850,
     strategy: "hybrid_memory_docs_v1",
     limit: 500,
@@ -157,7 +158,7 @@ function parseArgs(argv) {
       options.leaderboardProfile = value;
       options.retrievalProfile = "longmemeval_session_v3";
       options.transientStrategy = "longmemeval_session_v3";
-      options.answererProfile = "specialist_router_v1";
+      options.answererProfile = "worksheet_router_v2";
       options.comparePublic = true;
       continue;
     }
@@ -596,6 +597,30 @@ async function fetchExistingMeasurementRuns(options) {
   }
 }
 
+function compactAnswerWorksheet(worksheet) {
+  if (!worksheet) return null;
+  return {
+    answer_type: worksheet.answer_type,
+    proposed_answer: worksheet.proposed_answer || "",
+    rows: (worksheet.rows ?? []).slice(0, 5).map((row) => ({
+      row: row.row,
+      session: row.session,
+      date: row.date,
+      candidate_values: (row.candidates ?? []).slice(0, 6).map((candidate) => ({
+        value: candidate.value,
+        type: candidate.type,
+        role: candidate.role,
+        score: Number(candidate.score ?? 0)
+      })),
+      answer_spans: (row.spans ?? []).slice(0, 2).map((span) => ({
+        role: span.role,
+        text: clip(span.text ?? "", 180),
+        score: Number(span.score ?? 0)
+      }))
+    }))
+  };
+}
+
 async function runItem(options, item, apiKey) {
   const retrieval = await runRetrieval(options, item);
   const fullPrompt = buildFullContextPrompt(item);
@@ -603,6 +628,9 @@ async function runItem(options, item, apiKey) {
     tokenBudget: options.tokenBudget,
     answererProfile: options.answererProfile
   });
+  const answerWorksheet = options.answererProfile === "worksheet_router_v2"
+    ? buildAnswerWorksheet(item, treatmentContexts)
+    : null;
   const treatmentPrompt = buildTreatmentPrompt(item, treatmentContexts, {
     answererProfile: options.answererProfile
   });
@@ -648,6 +676,7 @@ async function runItem(options, item, apiKey) {
     retrieved_context_ids: treatmentContexts.map((context) => context.kind === "doc" ? `doc:${context.id}` : context.id),
     retrieved_session_ids: [...new Set(treatmentContexts.map((context) => context.session_id).filter(Boolean))],
     answer_session_ids: item.answer_session_ids ?? [],
+    answer_worksheet: compactAnswerWorksheet(answerWorksheet),
     generated_answer: generatedAnswer,
     judge
   };

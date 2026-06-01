@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTreatmentTokenBudget,
+  buildAnswerWorksheet,
   buildEvidenceCardsForItem,
   buildFullContextPrompt,
   buildPublicComparisonReport,
@@ -366,6 +367,126 @@ describe("memory token benchmark helpers", () => {
     expect([...new Set(retrieval.contexts.map((context) => context.session_id))]).toEqual(expect.arrayContaining(["bread", "cake", "wings"]));
     const budgeted = applyTreatmentTokenBudget(item, retrieval.contexts, { tokenBudget: 260, answererProfile: "specialist_router_v1" });
     expect(estimateTokens(buildTreatmentPrompt(item, budgeted, { answererProfile: "specialist_router_v1" }))).toBeLessThanOrEqual(260);
+  });
+
+  it("builds worksheet candidate values for coupon place answers", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "coupon-worksheet",
+        question_type: "single-session-user",
+        question: "Where did I redeem the $5 coupon on coffee creamer?",
+        answer: "Target",
+        answer_session_ids: ["coupon-session"],
+        haystack_session_ids: ["generic-session", "coupon-session"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "user", content: "I clipped a grocery coupon." }],
+          [{ role: "user", content: "I redeemed a $5 coupon on coffee creamer through the Cartwheel app from Target." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+    expect(worksheet.proposed_answer).toBe("Target");
+    expect(worksheet.text).toContain("Target");
+    expect(buildTreatmentPrompt(item, retrieval.contexts, { answererProfile: "worksheet_router_v2" })).toContain("proposed_answer=Target");
+  });
+
+  it("keeps named titles in worksheet spans and candidate values", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "play-worksheet",
+        question_type: "single-session-user",
+        question: "What play did I attend at the community theater?",
+        answer: "The Glass Menagerie",
+        answer_session_ids: ["play-session"],
+        haystack_session_ids: ["play-session", "generic-session"],
+        haystack_dates: ["2023/06/01", "2023/06/02"],
+        haystack_sessions: [
+          [{ role: "user", content: "I attended a community theater play called \"The Glass Menagerie\" last night." }],
+          [{ role: "assistant", content: "Community theater schedules change often." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+    expect(worksheet.proposed_answer).toBe("The Glass Menagerie");
+    expect(worksheet.text).toContain("The Glass Menagerie");
+  });
+
+  it("prioritizes user-stated preference candidates over assistant suggestions", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "yoga-worksheet",
+        question_type: "single-session-preference",
+        question: "Where should I look for yoga classes based on my preference?",
+        answer: "Serenity Yoga",
+        answer_session_ids: ["yoga-session"],
+        haystack_session_ids: ["yoga-session"],
+        haystack_dates: ["2023/06/03"],
+        haystack_sessions: [
+          [
+            { role: "user", content: "I prefer in-person beginner classes near Serenity Yoga because the pace is gentle." },
+            { role: "assistant", content: "For yoga apps, try Asana Rebel, YogaGlo, or Peloton Digital." }
+          ]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+    expect(worksheet.proposed_answer).toBe("Serenity Yoga");
+    expect(worksheet.rows[0].candidates.map((candidate) => candidate.value)).toContain("Serenity Yoga");
+  });
+
+  it("uses worksheet rows to propose multi-session counts", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "count-worksheet",
+        question_type: "multi-session",
+        question: "How many model kits have I bought or worked on?",
+        answer: "Three.",
+        answer_session_ids: ["kit-a", "kit-b", "kit-c"],
+        haystack_session_ids: ["kit-a", "paint", "kit-b", "unrelated", "kit-c"],
+        haystack_dates: ["2023/01/01", "2023/01/02", "2023/01/03", "2023/01/04", "2023/01/05"],
+        haystack_sessions: [
+          [{ role: "user", content: "I bought a Revell F-15 model kit." }],
+          [{ role: "user", content: "I need advice on paint brushes." }],
+          [{ role: "user", content: "I worked on a Tamiya Spitfire model kit." }],
+          [{ role: "assistant", content: "Model kits require patience." }],
+          [{ role: "user", content: "I bought a German Tiger tank model kit." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const budgeted = applyTreatmentTokenBudget(item, retrieval.contexts, { tokenBudget: 520, answererProfile: "worksheet_router_v2" });
+    const worksheet = buildAnswerWorksheet(item, budgeted);
+    const prompt = buildTreatmentPrompt(item, budgeted, { answererProfile: "worksheet_router_v2" });
+
+    expect(worksheet.proposed_answer).toBe("3");
+    expect([...new Set(budgeted.map((context) => context.session_id))]).toEqual(expect.arrayContaining(["kit-a", "kit-b", "kit-c"]));
+    expect(prompt).toContain("proposed_answer=3");
+    expect(prompt).toContain("Revell");
+    expect(estimateTokens(prompt)).toBeLessThanOrEqual(520);
   });
 
   it("builds public comparison reports with leaderboard targets", () => {
