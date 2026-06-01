@@ -64,8 +64,10 @@ Options:
   --judge-provider <name>      Judge provider (default: gemini)
   --judge-model <name>         Gemini judge model (default: gemini-3.5-flash)
   --generator-model <name>     Gemini generator model (default: gemini-3.5-flash)
+  --concurrency <n>            Parallel item workers for LLM runs (default: 1)
   --write-retrieval-failures <path>
                               Write failed evidence retrieval examples as JSONL
+  --progress                   Print per-item progress to stderr
   --compare-public             Include or emit public comparison report
   --skip-llm                   Skip Gemini generation/judging and use token accounting only
   --dry-run                    Alias for --skip-llm
@@ -92,7 +94,9 @@ function parseArgs(argv) {
     judgeProvider: "gemini",
     judgeModel: "gemini-3.5-flash",
     generatorModel: "gemini-3.5-flash",
+    concurrency: 1,
     writeRetrievalFailures: undefined,
+    progress: false,
     comparePublic: false,
     skipLlm: false,
     datasetUrlProvided: false
@@ -124,6 +128,10 @@ function parseArgs(argv) {
     }
     if (arg === "--compare-public") {
       options.comparePublic = true;
+      continue;
+    }
+    if (arg === "--progress") {
+      options.progress = true;
       continue;
     }
     if (arg === "--benchmark" || arg.startsWith("--benchmark=")) {
@@ -224,6 +232,13 @@ function parseArgs(argv) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!value) throw new Error("--generator-model requires a value");
       options.generatorModel = value;
+      continue;
+    }
+    if (arg === "--concurrency" || arg.startsWith("--concurrency=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      const parsed = Number.parseInt(value ?? "", 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("--concurrency requires a positive integer");
+      options.concurrency = parsed;
       continue;
     }
     if (arg === "--write-retrieval-failures" || arg.startsWith("--write-retrieval-failures=")) {
@@ -442,17 +457,43 @@ function geminiKey(env = process.env) {
   return env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "";
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableGeminiFailure(status) {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
 async function geminiRequest(model, method, payload, apiKey) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${method}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`Gemini ${method} failed: ${response.status} ${JSON.stringify(body)}`);
+  const maxAttempts = method === "countTokens" ? 2 : 4;
+  const requestTimeoutMs = method === "countTokens" ? 8_000 : 60_000;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${method}?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok) return body;
+      const error = new Error(`Gemini ${method} failed: ${response.status} ${JSON.stringify(body)}`);
+      error.retryable = isRetryableGeminiFailure(response.status);
+      if (!error.retryable || attempt === maxAttempts) throw error;
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+      if (error?.retryable === false || attempt === maxAttempts) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+    await sleep(500 * (2 ** (attempt - 1)));
   }
-  return body;
+  throw lastError;
 }
 
 async function countPromptTokens(text, model, apiKey) {
@@ -602,6 +643,9 @@ function compactAnswerWorksheet(worksheet) {
   return {
     answer_type: worksheet.answer_type,
     proposed_answer: worksheet.proposed_answer || "",
+    deterministic_answer: worksheet.deterministic_answer || "",
+    deterministic_confidence: worksheet.deterministic_confidence || "none",
+    deterministic_reason: worksheet.deterministic_reason || "",
     rows: (worksheet.rows ?? []).slice(0, 5).map((row) => ({
       row: row.row,
       session: row.session,
@@ -647,10 +691,24 @@ async function runItem(options, item, apiKey) {
   let judge = { verdict: "not_run", passed: null, rationale: options.skipLlm ? "LLM skipped" : "Gemini API key missing" };
   let answerComputeTokens = 0;
   if (!options.skipLlm && apiKey) {
-    const generated = await generateWithGeminiDetailed(treatmentPrompt, options.generatorModel, apiKey);
-    generatedAnswer = generated.text;
-    judge = await judgeWithGemini(item, generatedAnswer, options.judgeModel, apiKey);
-    answerComputeTokens = Number(generated.usage?.total_tokens ?? 0) + Number(judge.usage?.total_tokens ?? 0);
+    try {
+      const deterministicAnswer = collapseWhitespace(answerWorksheet?.deterministic_answer ?? "");
+      if (deterministicAnswer) {
+        generatedAnswer = deterministicAnswer;
+      } else {
+        const generated = await generateWithGeminiDetailed(treatmentPrompt, options.generatorModel, apiKey);
+        generatedAnswer = generated.text;
+        answerComputeTokens += Number(generated.usage?.total_tokens ?? 0);
+      }
+      judge = await judgeWithGemini(item, generatedAnswer, options.judgeModel, apiKey);
+      answerComputeTokens += Number(judge.usage?.total_tokens ?? 0);
+    } catch (error) {
+      judge = {
+        verdict: "error",
+        passed: false,
+        rationale: collapseWhitespace(error instanceof Error ? error.message : String(error))
+      };
+    }
   }
 
   return {
@@ -680,6 +738,32 @@ async function runItem(options, item, apiKey) {
     generated_answer: generatedAnswer,
     judge
   };
+}
+
+async function runItems(options, items, apiKey) {
+  const workerCount = Math.max(1, Math.min(Number(options.concurrency ?? 1), items.length || 1));
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  let completed = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const result = await runItem(options, items[index], apiKey);
+      results[index] = result;
+      completed += 1;
+      if (options.progress) {
+        const accuracyMark = result.judge?.verdict === "not_run"
+          ? "not_run"
+          : (result.judge?.passed ? "pass" : "fail");
+        process.stderr.write(`[benchmark] ${completed}/${items.length} ${result.id} ${accuracyMark}\n`);
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
 }
 
 async function writeRetrievalFailures(path, items, results) {
@@ -810,10 +894,7 @@ async function main() {
   if (!apiKey) options.skipLlm = true;
 
   const existingMeasurementRuns = await fetchExistingMeasurementRuns(options);
-  const results = [];
-  for (const item of items) {
-    results.push(await runItem(options, item, apiKey));
-  }
+  const results = await runItems(options, items, apiKey);
   await writeRetrievalFailures(options.writeRetrievalFailures, items, results);
 
   const summary = summarizeBenchmarkResults(results, existingMeasurementRuns);
@@ -841,6 +922,7 @@ async function main() {
       leaderboard_profile: options.leaderboardProfile ?? null,
       answerer_profile: options.answererProfile,
       token_budget: options.tokenBudget,
+      concurrency: options.concurrency,
       strategy: options.strategy,
       limit: options.limit,
       dataset_path: options.datasetPath ?? null,

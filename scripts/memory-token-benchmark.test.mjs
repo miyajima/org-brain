@@ -424,6 +424,81 @@ describe("memory token benchmark helpers", () => {
     expect(worksheet.text).toContain("The Glass Menagerie");
   });
 
+  it("extracts relative worth and completed game titles for deterministic worksheet answers", () => {
+    const [worthItem, gameItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "worth-worksheet",
+        question_type: "single-session-user",
+        question: "How much is the painting of a sunset worth in terms of the amount I paid for it?",
+        answer: "The painting is worth triple what I paid for it.",
+        answer_session_ids: ["worth-session"],
+        haystack_session_ids: ["worth-session"],
+        haystack_dates: ["2023/06/04"],
+        haystack_sessions: [
+          [{ role: "user", content: "I realized that it's actually worth triple what I paid for it." }]
+        ]
+      },
+      {
+        question_id: "game-worksheet",
+        question_type: "single-session-user",
+        question: "What game did I finally beat last weekend?",
+        answer: "Dark Souls 3 DLC",
+        answer_session_ids: ["game-session"],
+        haystack_session_ids: ["game-session"],
+        haystack_dates: ["2023/06/05"],
+        haystack_sessions: [
+          [{ role: "user", content: "I finally beat that last boss in the Dark Souls 3 DLC last weekend." }]
+        ]
+      }
+    ]));
+
+    const worthRetrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([worthItem], { transientStrategy: "longmemeval_session_v3" }),
+      worthItem,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const gameRetrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([gameItem], { transientStrategy: "longmemeval_session_v3" }),
+      gameItem,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+
+    const worthWorksheet = buildAnswerWorksheet(worthItem, worthRetrieval.contexts);
+    const gameWorksheet = buildAnswerWorksheet(gameItem, gameRetrieval.contexts);
+
+    expect(worthWorksheet.proposed_answer).toBe("triple what I paid for it");
+    expect(worthWorksheet.deterministic_answer).toBe("The painting is worth triple what I paid for it.");
+    expect(gameWorksheet.proposed_answer).toBe("Dark Souls 3 DLC");
+    expect(gameWorksheet.deterministic_answer).toBe("Dark Souls 3 DLC");
+  });
+
+  it("marks explicit absence benchmark items as deterministic unavailable answers", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "hamster_abs",
+        question_type: "single-session-user",
+        question: "What is the name of my hamster?",
+        answer: "I did not mention the name of my hamster.",
+        answer_session_ids: ["cat-session"],
+        haystack_session_ids: ["cat-session"],
+        haystack_dates: ["2023/06/06"],
+        haystack_sessions: [
+          [{ role: "user", content: "My cat is named Luna." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts);
+
+    expect(worksheet.deterministic_answer).toBe("The requested information was not mentioned in the evidence.");
+    expect(worksheet.deterministic_confidence).toBe("high");
+  });
+
   it("prioritizes user-stated preference candidates over assistant suggestions", () => {
     const [item] = parseLongMemEvalDataset(JSON.stringify([
       {
@@ -483,6 +558,7 @@ describe("memory token benchmark helpers", () => {
     const prompt = buildTreatmentPrompt(item, budgeted, { answererProfile: "worksheet_router_v2" });
 
     expect(worksheet.proposed_answer).toBe("3");
+    expect(worksheet.deterministic_answer).toBe("3");
     expect([...new Set(budgeted.map((context) => context.session_id))]).toEqual(expect.arrayContaining(["kit-a", "kit-b", "kit-c"]));
     expect(prompt).toContain("proposed_answer=3");
     expect(prompt).toContain("Revell");
