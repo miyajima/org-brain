@@ -3,6 +3,9 @@ import {
   buildFullContextPrompt,
   buildTreatmentPrompt,
   buildTransientBenchmarkIndex,
+  computeAnswerTextHitAtK,
+  computeEvidenceCoverageAtK,
+  computeEvidenceRecallAtK,
   computeRecallAtK,
   computeTokenReduction,
   createBenchmarkChunks,
@@ -27,13 +30,24 @@ describe("memory token benchmark helpers", () => {
     ]);
 
     expect(parseLongMemEvalDataset(raw)).toEqual([
-      {
+      expect.objectContaining({
         id: "q-1",
         category: "single-session-user",
         question: "What date did Alex buy the notebook?",
         answer: "March 3",
-        historyText: "user: I bought a notebook on March 3."
-      }
+        historyText: "user: I bought a notebook on March 3.",
+        question_date: "",
+        answer_session_ids: [],
+        haystack_session_ids: [],
+        haystack_dates: []
+      })
+    ]);
+    expect(parseLongMemEvalDataset(raw)[0].historySessions).toEqual([
+      expect.objectContaining({
+        session_id: "q-1:session:1",
+        session_index: 0,
+        content: "user: I bought a notebook on March 3."
+      })
     ]);
   });
 
@@ -74,6 +88,39 @@ describe("memory token benchmark helpers", () => {
       answer: "Dropbox",
       historyText: "user: The receipt is in Dropbox."
     });
+  });
+
+  it("preserves LongMemEval session metadata without indexing answer session ids", () => {
+    const raw = JSON.stringify([
+      {
+        question_id: "meta-1",
+        question_type: "temporal-reasoning",
+        question_date: "2023/01/03 (Tue) 10:00",
+        question: "Which museum did I visit first?",
+        answer: "MoMA",
+        answer_session_ids: ["answer-session"],
+        haystack_session_ids: ["answer-session", "distractor-session"],
+        haystack_dates: ["2023/01/01 (Sun) 09:00", "2023/01/02 (Mon) 09:00"],
+        haystack_sessions: [
+          [{ role: "user", content: "I visited MoMA today." }],
+          [{ role: "user", content: "I visited the park today." }]
+        ]
+      }
+    ]);
+
+    const [item] = parseLongMemEvalDataset(raw);
+    expect(item).toMatchObject({
+      question_date: "2023/01/03 (Tue) 10:00",
+      answer_session_ids: ["answer-session"],
+      haystack_session_ids: ["answer-session", "distractor-session"],
+      haystack_dates: ["2023/01/01 (Sun) 09:00", "2023/01/02 (Mon) 09:00"]
+    });
+    const index = buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v2" });
+    expect(index.chunks[0]).toMatchObject({
+      session_id: "answer-session",
+      session_date: "2023/01/01 (Sun) 09:00"
+    });
+    expect(index.chunks.map((chunk) => chunk.search_text).join("\n")).not.toContain("answer-session");
   });
 
   it("computes token estimates and reductions without clamping negative savings", () => {
@@ -135,11 +182,92 @@ describe("memory token benchmark helpers", () => {
     ];
 
     expect(createBenchmarkChunks(items[0], { chunkCharLimit: 40 })).toHaveLength(2);
-    const index = buildTransientBenchmarkIndex(items, { chunkCharLimit: 80 });
-    const retrieval = retrieveFromTransientBenchmarkIndex(index, items[0], { topK: 5 });
+    const index = buildTransientBenchmarkIndex(items, { chunkCharLimit: 80, transientStrategy: "bm25_lite_v1" });
+    const retrieval = retrieveFromTransientBenchmarkIndex(index, items[0], { topK: 5, transientStrategy: "bm25_lite_v1" });
     expect(retrieval.returned_count).toBeGreaterThan(0);
     expect(retrieval.contexts[0].content_preview).toContain("blue notebook");
     expect(computeRecallAtK(items[0].answer, retrieval.contexts)).toBe(true);
+  });
+
+  it("retrieves temporal evidence from distinct session-aware chunks", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "temporal-1",
+        question_type: "temporal-reasoning",
+        question: "Which happened first: visiting MoMA or seeing the Ancient Civilizations exhibit?",
+        answer: "Visiting MoMA happened first.",
+        answer_session_ids: ["moma-session", "met-session"],
+        haystack_session_ids: ["recipe-session", "moma-session", "met-session"],
+        haystack_dates: ["2023/01/01", "2023/01/08", "2023/01/15"],
+        haystack_sessions: [
+          [{ role: "user", content: "I cooked dinner." }],
+          [{ role: "user", content: "I visited the Museum of Modern Art MoMA." }],
+          [{ role: "user", content: "I saw the Ancient Civilizations exhibit at the Metropolitan Museum of Art." }]
+        ]
+      }
+    ]));
+
+    const index = buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v2" });
+    const retrieval = retrieveFromTransientBenchmarkIndex(index, item, { transientStrategy: "longmemeval_session_v2", topK: 5 });
+    expect(retrieval.contexts.map((context) => context.session_id)).toEqual(expect.arrayContaining(["moma-session", "met-session"]));
+    expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
+    expect(computeEvidenceCoverageAtK(item, retrieval.contexts)).toBe(1);
+  });
+
+  it("diversifies multi-session evidence instead of returning one repeated session", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "multi-1",
+        question_type: "multi-session",
+        question: "How many model kits have I worked on or bought?",
+        answer: "Three model kits.",
+        answer_session_ids: ["kit-a", "kit-b", "kit-c"],
+        haystack_session_ids: ["kit-a", "paint", "kit-b", "unrelated", "kit-c"],
+        haystack_dates: ["2023/01/01", "2023/01/02", "2023/01/03", "2023/01/04", "2023/01/05"],
+        haystack_sessions: [
+          [{ role: "user", content: "I bought a Revell F-15 model kit." }],
+          [{ role: "user", content: "I need advice on paint brushes." }],
+          [{ role: "user", content: "I worked on a Tamiya Spitfire model kit." }],
+          [{ role: "user", content: "What is the capital of France?" }],
+          [{ role: "user", content: "I bought a German Tiger tank model kit." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v2" }),
+      item,
+      { transientStrategy: "longmemeval_session_v2", topK: 5 }
+    );
+    expect(new Set(retrieval.contexts.map((context) => context.session_id)).size).toBeGreaterThanOrEqual(3);
+    expect(computeEvidenceCoverageAtK(item, retrieval.contexts)).toBe(1);
+  });
+
+  it("separates preference evidence recall from literal answer text hits", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "pref-1",
+        question_type: "single-session-preference",
+        question: "Can you recommend resources where I can learn more about video editing?",
+        answer: "The user prefers Adobe Premiere Pro resources about advanced settings.",
+        answer_session_ids: ["premiere-session"],
+        haystack_session_ids: ["generic-session", "premiere-session"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "assistant", content: "General video editing courses are available." }],
+          [{ role: "user", content: "I currently use Adobe Premiere Pro and want to understand advanced settings." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v2" }),
+      item,
+      { transientStrategy: "longmemeval_session_v2", topK: 5 }
+    );
+    expect(retrieval.contexts.map((context) => context.session_id)).toContain("premiere-session");
+    expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
+    expect(computeAnswerTextHitAtK(item.answer, retrieval.contexts)).toBe(false);
   });
 
   it("summarizes accuracy, token reduction, categories, and fallbacks", () => {
@@ -154,6 +282,9 @@ describe("memory token benchmark helpers", () => {
           retrieval_latency_ms: 10,
           fallback_used: false,
           recall_at_5: true,
+          evidence_recall_at_5: true,
+          evidence_coverage_at_5: 1,
+          answer_text_hit_at_5: true,
           judge: { verdict: "pass", passed: true }
         },
         {
@@ -165,6 +296,9 @@ describe("memory token benchmark helpers", () => {
           retrieval_latency_ms: 5,
           fallback_used: true,
           recall_at_5: false,
+          evidence_recall_at_5: false,
+          evidence_coverage_at_5: 0,
+          answer_text_hit_at_5: false,
           judge: { verdict: "fail", passed: false }
         },
         {
@@ -176,6 +310,9 @@ describe("memory token benchmark helpers", () => {
           retrieval_latency_ms: 15,
           fallback_used: false,
           recall_at_5: null,
+          evidence_recall_at_5: null,
+          evidence_coverage_at_5: null,
+          answer_text_hit_at_5: null,
           judge: { verdict: "not_run", passed: null }
         }
       ],
@@ -190,6 +327,9 @@ describe("memory token benchmark helpers", () => {
       recall_eligible_count: 2,
       recall_at_5_pass_count: 1,
       recall_at_5: 0.5,
+      evidence_recall_at_5: 0.5,
+      answer_text_hit_at_5: 0.5,
+      evidence_coverage_at_5: 0.5,
       full_context_tokens: 230,
       org_brain_context_tokens: 95,
       tokens_saved: 135,
