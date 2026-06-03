@@ -67,6 +67,9 @@ Options:
   --judge-model <name>         Gemini judge model (default: gemini-3.5-flash)
   --generator-model <name>     Gemini generator model (default: gemini-3.5-flash)
   --concurrency <n>            Parallel item workers for LLM runs (default: 1)
+  --llm-request-timeout-ms <n> Gemini request timeout in ms (default: 60000)
+  --llm-max-attempts <n>       Gemini max attempts per request (default: 4)
+  --continue-on-llm-error      Write llm_error item results and continue
   --write-retrieval-failures <path>
                               Write failed evidence retrieval examples as JSONL
   --write-answer-failures <path>
@@ -101,6 +104,9 @@ function parseArgs(argv) {
     judgeModel: "gemini-3.5-flash",
     generatorModel: "gemini-3.5-flash",
     concurrency: 1,
+    llmRequestTimeoutMs: 60_000,
+    llmMaxAttempts: 4,
+    continueOnLlmError: false,
     writeRetrievalFailures: undefined,
     writeAnswerFailures: undefined,
     writeResultsJsonl: undefined,
@@ -140,6 +146,10 @@ function parseArgs(argv) {
     }
     if (arg === "--progress") {
       options.progress = true;
+      continue;
+    }
+    if (arg === "--continue-on-llm-error") {
+      options.continueOnLlmError = true;
       continue;
     }
     if (arg === "--benchmark" || arg.startsWith("--benchmark=")) {
@@ -247,6 +257,20 @@ function parseArgs(argv) {
       const parsed = Number.parseInt(value ?? "", 10);
       if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("--concurrency requires a positive integer");
       options.concurrency = parsed;
+      continue;
+    }
+    if (arg === "--llm-request-timeout-ms" || arg.startsWith("--llm-request-timeout-ms=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      const parsed = Number.parseInt(value ?? "", 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("--llm-request-timeout-ms requires a positive integer");
+      options.llmRequestTimeoutMs = parsed;
+      continue;
+    }
+    if (arg === "--llm-max-attempts" || arg.startsWith("--llm-max-attempts=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      const parsed = Number.parseInt(value ?? "", 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("--llm-max-attempts requires a positive integer");
+      options.llmMaxAttempts = parsed;
       continue;
     }
     if (arg === "--write-retrieval-failures" || arg.startsWith("--write-retrieval-failures=")) {
@@ -485,9 +509,9 @@ function isRetryableGeminiFailure(status) {
   return status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
-async function geminiRequest(model, method, payload, apiKey) {
-  const maxAttempts = method === "countTokens" ? 2 : 2;
-  const requestTimeoutMs = method === "countTokens" ? 8_000 : 25_000;
+async function geminiRequest(model, method, payload, apiKey, options = {}) {
+  const maxAttempts = Math.max(1, Number(options.llmMaxAttempts ?? 4));
+  const requestTimeoutMs = Math.max(1, Number(options.llmRequestTimeoutMs ?? 60_000));
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
@@ -516,10 +540,10 @@ async function geminiRequest(model, method, payload, apiKey) {
   throw lastError;
 }
 
-async function countPromptTokens(text, model, apiKey) {
+async function countPromptTokens(text, model, apiKey, options = {}) {
   if (!apiKey) return { tokens: estimateTokens(text), token_source: TOKEN_ESTIMATE_MODEL };
   try {
-    const body = await geminiRequest(model, "countTokens", { contents: [{ parts: [{ text }] }] }, apiKey);
+    const body = await geminiRequest(model, "countTokens", { contents: [{ parts: [{ text }] }] }, apiKey, options);
     const tokens = Number(body.totalTokens ?? body.total_tokens);
     if (Number.isFinite(tokens)) return { tokens, token_source: "gemini_count_tokens" };
   } catch {
@@ -548,7 +572,7 @@ function extractGeminiUsage(body) {
   };
 }
 
-async function generateWithGeminiDetailed(prompt, model, apiKey) {
+async function generateWithGeminiDetailed(prompt, model, apiKey, options = {}) {
   const body = await geminiRequest(
     model,
     "generateContent",
@@ -556,7 +580,8 @@ async function generateWithGeminiDetailed(prompt, model, apiKey) {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0, topP: 1 }
     },
-    apiKey
+    apiKey,
+    options
   );
   const text = extractGeminiText(body);
   const usage = extractGeminiUsage(body);
@@ -572,8 +597,8 @@ async function generateWithGeminiDetailed(prompt, model, apiKey) {
   };
 }
 
-async function generateWithGemini(prompt, model, apiKey) {
-  return (await generateWithGeminiDetailed(prompt, model, apiKey)).text;
+async function generateWithGemini(prompt, model, apiKey, options = {}) {
+  return (await generateWithGeminiDetailed(prompt, model, apiKey, options)).text;
 }
 
 function parseJudgeText(text) {
@@ -599,7 +624,7 @@ function parseJudgeText(text) {
   };
 }
 
-async function judgeWithGemini(item, generatedAnswer, model, apiKey) {
+async function judgeWithGemini(item, generatedAnswer, model, apiKey, options = {}) {
   const prompt = [
     "You are a deterministic benchmark judge.",
     "Decide whether the model answer correctly answers the question given the gold answer.",
@@ -609,7 +634,7 @@ async function judgeWithGemini(item, generatedAnswer, model, apiKey) {
     `Gold answer: ${item.answer || "(missing)"}`,
     `Model answer: ${generatedAnswer || "(empty)"}`
   ].join("\n");
-  const generated = await generateWithGeminiDetailed(prompt, model, apiKey);
+  const generated = await generateWithGeminiDetailed(prompt, model, apiKey, options);
   return {
     ...parseJudgeText(generated.text),
     usage: generated.usage
@@ -666,6 +691,9 @@ function compactAnswerWorksheet(worksheet) {
     deterministic_answer: worksheet.deterministic_answer || "",
     deterministic_confidence: worksheet.deterministic_confidence || "none",
     deterministic_reason: worksheet.deterministic_reason || "",
+    solver_reason: worksheet.solver_reason || "",
+    solver_confidence: worksheet.solver_confidence || "none",
+    solver_evidence_rows: worksheet.solver_evidence_rows ?? [],
     rows: (worksheet.rows ?? []).slice(0, 5).map((row) => ({
       row: row.row,
       session: row.session,
@@ -725,8 +753,8 @@ async function runItem(options, item, apiKey) {
     answererProfile: options.answererProfile
   });
   const [fullTokenCount, treatmentTokenCount] = await Promise.all([
-    countPromptTokens(fullPrompt, options.generatorModel, apiKey),
-    countPromptTokens(treatmentPrompt, options.generatorModel, apiKey)
+    countPromptTokens(fullPrompt, options.generatorModel, apiKey, options),
+    countPromptTokens(treatmentPrompt, options.generatorModel, apiKey, options)
   ]);
   const reduction = computeTokenReduction(fullTokenCount.tokens, treatmentTokenCount.tokens);
   const evidenceRecallAtFive = computeEvidenceRecallAtK(item, treatmentContexts);
@@ -739,16 +767,18 @@ async function runItem(options, item, apiKey) {
   if (!options.skipLlm && apiKey) {
     try {
       const deterministicAnswer = collapseWhitespace(answerWorksheet?.deterministic_answer ?? "");
-      if (deterministicAnswer) {
+      const deterministicConfidence = collapseWhitespace(answerWorksheet?.deterministic_confidence ?? "");
+      if (deterministicAnswer && deterministicConfidence === "high") {
         generatedAnswer = deterministicAnswer;
       } else {
-        const generated = await generateWithGeminiDetailed(treatmentPrompt, options.generatorModel, apiKey);
+        const generated = await generateWithGeminiDetailed(treatmentPrompt, options.generatorModel, apiKey, options);
         generatedAnswer = generated.text;
         answerComputeTokens += Number(generated.usage?.total_tokens ?? 0);
       }
-      judge = await judgeWithGemini(item, generatedAnswer, options.judgeModel, apiKey);
+      judge = await judgeWithGemini(item, generatedAnswer, options.judgeModel, apiKey, options);
       answerComputeTokens += Number(judge.usage?.total_tokens ?? 0);
     } catch (error) {
+      if (!options.continueOnLlmError) throw error;
       judge = {
         verdict: "error",
         passed: false,
@@ -1064,6 +1094,9 @@ async function main() {
       judge_provider: options.judgeProvider,
       judge_model: options.judgeModel,
       generator_model: options.generatorModel,
+      llm_request_timeout_ms: options.llmRequestTimeoutMs,
+      llm_max_attempts: options.llmMaxAttempts,
+      continue_on_llm_error: options.continueOnLlmError,
       write_retrieval_failures: options.writeRetrievalFailures ?? null,
       write_answer_failures: options.writeAnswerFailures ?? null,
       write_results_jsonl: options.writeResultsJsonl ?? null,

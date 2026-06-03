@@ -63,6 +63,9 @@ describe("memory token benchmark helpers", () => {
       "--dataset-path", datasetPath,
       "--limit", "2",
       "--skip-llm",
+      "--llm-request-timeout-ms", "1234",
+      "--llm-max-attempts", "2",
+      "--continue-on-llm-error",
       "--write-results-jsonl", checkpointPath,
       "--json"
     ], { encoding: "utf8" });
@@ -70,6 +73,9 @@ describe("memory token benchmark helpers", () => {
     expect(lines.map((line) => line.id)).toEqual(["checkpoint-1", "checkpoint-2"]);
     const snapshot = JSON.parse(stdout);
     expect(snapshot.scope.resumed_result_count).toBe(1);
+    expect(snapshot.scope.llm_request_timeout_ms).toBe(1234);
+    expect(snapshot.scope.llm_max_attempts).toBe(2);
+    expect(snapshot.scope.continue_on_llm_error).toBe(true);
     expect(snapshot.results.map((result) => result.id)).toEqual(["checkpoint-1", "checkpoint-2"]);
   });
 
@@ -869,7 +875,9 @@ describe("memory token benchmark helpers", () => {
     const prompt = buildTreatmentPrompt(item, budgeted, { answererProfile: "worksheet_router_v3" });
 
     expect(worksheet.deterministic_answer).toBe("$55");
+    expect(worksheet.deterministic_confidence).toBe("medium");
     expect(worksheet.deterministic_reason).toBe("multi-session-money-sum");
+    expect(worksheet.solver_evidence_rows).toEqual(expect.arrayContaining([1, 2]));
     expect(worksheet.ledger.map((entry) => entry.source_anchor).join(" ")).toContain("bike");
     expect(estimateTokens(prompt)).toBeLessThanOrEqual(520);
   });
