@@ -1011,6 +1011,151 @@ describe("memory token benchmark helpers", () => {
     }
   });
 
+  it("solves worksheet_router_v3 targeted multi-session count regressions", () => {
+    const [bedtimeItem, doctorItem, fishItem, deviceItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-doctor-bedtime",
+        question_type: "multi-session",
+        question: "What time did I go to bed on the day before I had a doctor's appointment?",
+        answer: "2 AM",
+        haystack_session_ids: ["doctor", "sleep"],
+        haystack_dates: ["2023/05/24", "2023/05/29"],
+        haystack_sessions: [
+          [{ role: "user", content: "I had a doctor's appointment at 10 AM last Thursday." }],
+          [{ role: "user", content: "I didn't get to bed until 2 AM last Wednesday, which made Thursday morning a struggle." }]
+        ]
+      },
+      {
+        question_id: "v3-march-doctors",
+        question_type: "multi-session",
+        question: "How many doctor's appointments did I go to in March?",
+        answer: "2",
+        haystack_session_ids: ["pcp", "surgeon", "emg"],
+        haystack_dates: ["2023/03/03", "2023/03/20", "2023/03/28"],
+        haystack_sessions: [
+          [{ role: "user", content: "I had a doctor appointment on March 3rd with my primary care physician." }],
+          [{ role: "user", content: "I had a doctor follow-up appointment on March 20th with my orthopedic surgeon." }],
+          [{ role: "user", content: "My EMG test is scheduled for April 1st." }]
+        ]
+      },
+      {
+        question_id: "v3-aquarium-fish",
+        question_type: "multi-session",
+        question: "How many fish are there in total in both of my aquariums?",
+        answer: "17",
+        haystack_session_ids: ["new-tank", "old-tank"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "user", content: "My 20-gallon tank has 10 neon tetras, 5 golden honey gouramis, and a small pleco catfish." }],
+          [{ role: "user", content: "My old 10-gallon tank still has my betta fish Bubbles." }]
+        ]
+      },
+      {
+        question_id: "v3-health-devices",
+        question_type: "multi-session",
+        question: "How many health-related devices do I use in a day?",
+        answer: "4",
+        haystack_session_ids: ["morning", "evening"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "user", content: "Each morning I use my blood pressure monitor, Fitbit, and pill organizer." }],
+          [{ role: "user", content: "At night I use a medication reminder app to track my doses." }]
+        ]
+      }
+    ]));
+
+    for (const [item, expected] of [[bedtimeItem, "2 AM"], [doctorItem, "2"], [fishItem, "17"], [deviceItem, "4"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toBe("multi-session-count-extract");
+    }
+  });
+
+  it("extracts worksheet_router_v3 assistant answers from context-matched lists", () => {
+    const [ginItem, restaurantItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-gin-bottle",
+        question_type: "single-session-assistant",
+        question: "What was the fifth bottle in the Gin based cocktail list?",
+        answer: "Absinthe",
+        haystack_session_ids: ["bar-list"],
+        haystack_dates: ["2023/05/20"],
+        haystack_sessions: [[
+          { role: "user", content: "Give me five general cocktail bottles." },
+          { role: "assistant", content: "1. Vodka 2. Rum 3. Tequila 4. Vermouth 5. Triple Sec" },
+          { role: "user", content: "Now give me five bottles for Gin based cocktail prep." },
+          { role: "assistant", content: "For a Gin based cocktail setup: 1. London Dry Gin 2. Sweet Vermouth 3. Campari 4. Orange Bitters 5. Absinthe" }
+        ]]
+      },
+      {
+        question_id: "v3-bandung-restaurant",
+        question_type: "single-session-assistant",
+        question: "Which Cihampelas Walk restaurant served Nasi Goreng?",
+        answer: "Miss Bee Providore",
+        haystack_session_ids: ["bandung"],
+        haystack_dates: ["2023/05/30"],
+        haystack_sessions: [[
+          { role: "user", content: "Where should I eat around Cihampelas Walk in Bandung?" },
+          { role: "assistant", content: "For Nasi Goreng near Cihampelas Walk, Miss Bee Providore is the restaurant I would choose. Take a taxi if traffic is heavy." }
+        ]]
+      }
+    ]));
+
+    for (const [item, expected] of [[ginItem, "Absinthe"], [restaurantItem, "Miss Bee Providore"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toBe("v3-assistant-generic-extract");
+    }
+  });
+
+  it("prioritizes concrete worksheet_router_v3 preference resources over generic advice", () => {
+    const [commuteItem, tokyoItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-commute-preference",
+        question_type: "single-session-preference",
+        question: "What kinds of recommendations would I prefer for my commute?",
+        answer: "podcasts or audiobooks",
+        haystack_session_ids: ["commute"],
+        haystack_dates: ["2023/05/20"],
+        haystack_sessions: [[
+          { role: "user", content: "On my commute I like listening to podcasts and audiobooks, especially true crime, self-improvement, and history. Reading is hard on the train." }
+        ]]
+      },
+      {
+        question_id: "v3-tokyo-navigation",
+        question_type: "single-session-preference",
+        question: "What would I prefer for getting around Tokyo?",
+        answer: "Suica and TripIt",
+        haystack_session_ids: ["tokyo"],
+        haystack_dates: ["2023/05/20"],
+        haystack_sessions: [[
+          { role: "user", content: "For Tokyo, I plan to use a Suica card for trains and the TripIt app to keep my travel details organized." }
+        ]]
+      }
+    ]));
+
+    for (const [item, expectedTerms] of [[commuteItem, ["podcasts", "audiobooks"]], [tokyoItem, ["Suica", "TripIt"]]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      for (const term of expectedTerms) expect(worksheet.deterministic_answer).toContain(term);
+      expect(worksheet.deterministic_reason).toBe("preference-profile-extract");
+    }
+  });
+
   it("uses worksheet_router_v3 timeline rows for temporal date differences", () => {
     const [item] = parseLongMemEvalDataset(JSON.stringify([
       {
