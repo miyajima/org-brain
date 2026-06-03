@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 import {
   buildFtsQuery,
@@ -14,11 +14,13 @@ import {
   TOKEN_ESTIMATE_MODEL,
   applyTreatmentTokenBudget,
   buildComparisonRankEstimate,
+  buildAnswerFailureExportEntry,
   buildAnswerWorksheet,
   buildFullContextPrompt,
   buildPublicComparisonReport,
   buildTreatmentPrompt,
   buildTransientBenchmarkIndex,
+  classifyAnswerFailure,
   collapseWhitespace,
   computeAnswerTextHitAtK,
   computeEvidenceCoverageAtK,
@@ -34,7 +36,7 @@ const DEFAULT_DATASET_URL = "https://huggingface.co/datasets/LIXINYI33/longmemev
 const STRATEGIES = new Set(["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"]);
 const BENCHMARK_INDEXES = new Set(["transient-sqlite", "transient-memory", "production-d1"]);
 const TRANSIENT_STRATEGIES = new Set(["bm25_lite_v1", "longmemeval_session_v2", "longmemeval_session_v3"]);
-const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1", "worksheet_router_v2"]);
+const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1", "worksheet_router_v2", "worksheet_router_v3"]);
 const LEADERBOARD_PROFILES = new Set(["org_brain_repro_v3"]);
 
 function printHelp() {
@@ -54,7 +56,7 @@ Options:
   --transient-strategy <name>  bm25_lite_v1|longmemeval_session_v2|longmemeval_session_v3
   --retrieval-profile <name>   Alias for --transient-strategy (default: longmemeval_session_v3)
   --leaderboard-profile <name> org_brain_repro_v3 enables public-comparison defaults
-  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1|worksheet_router_v2
+  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1|worksheet_router_v2|worksheet_router_v3
   --token-budget <n>           Estimated treatment prompt token budget per item (default: 850)
   --strategy <name>            bm25_v1|bm25_rewrite_v1|hybrid_memory_docs_v1 (default: hybrid_memory_docs_v1)
   --limit <n>                  Number of benchmark items (default: 500)
@@ -67,6 +69,10 @@ Options:
   --concurrency <n>            Parallel item workers for LLM runs (default: 1)
   --write-retrieval-failures <path>
                               Write failed evidence retrieval examples as JSONL
+  --write-answer-failures <path>
+                              Write failed judged answers as JSONL
+  --write-results-jsonl <path>
+                              Append each completed item result as JSONL and resume from existing lines
   --progress                   Print per-item progress to stderr
   --compare-public             Include or emit public comparison report
   --skip-llm                   Skip Gemini generation/judging and use token accounting only
@@ -96,6 +102,8 @@ function parseArgs(argv) {
     generatorModel: "gemini-3.5-flash",
     concurrency: 1,
     writeRetrievalFailures: undefined,
+    writeAnswerFailures: undefined,
+    writeResultsJsonl: undefined,
     progress: false,
     comparePublic: false,
     skipLlm: false,
@@ -245,6 +253,18 @@ function parseArgs(argv) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!value) throw new Error("--write-retrieval-failures requires a value");
       options.writeRetrievalFailures = value;
+      continue;
+    }
+    if (arg === "--write-answer-failures" || arg.startsWith("--write-answer-failures=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      if (!value) throw new Error("--write-answer-failures requires a value");
+      options.writeAnswerFailures = value;
+      continue;
+    }
+    if (arg === "--write-results-jsonl" || arg.startsWith("--write-results-jsonl=")) {
+      const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
+      if (!value) throw new Error("--write-results-jsonl requires a value");
+      options.writeResultsJsonl = value;
       continue;
     }
     throw new Error(`Unknown argument: ${arg}`);
@@ -466,8 +486,8 @@ function isRetryableGeminiFailure(status) {
 }
 
 async function geminiRequest(model, method, payload, apiKey) {
-  const maxAttempts = method === "countTokens" ? 2 : 4;
-  const requestTimeoutMs = method === "countTokens" ? 8_000 : 60_000;
+  const maxAttempts = method === "countTokens" ? 2 : 2;
+  const requestTimeoutMs = method === "countTokens" ? 8_000 : 25_000;
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
@@ -661,7 +681,30 @@ function compactAnswerWorksheet(worksheet) {
         text: clip(span.text ?? "", 180),
         score: Number(span.score ?? 0)
       }))
-    }))
+    })),
+    ledger: (worksheet.ledger ?? []).slice(0, 5).map((entry) => ({
+      row: entry.row,
+      session: entry.session,
+      date: entry.date,
+      entity: entry.entity,
+      event: entry.event,
+      value: entry.value,
+      role: entry.role,
+      source_anchor: entry.source_anchor
+    })),
+    timeline: worksheet.timeline
+      ? {
+          question_date: worksheet.timeline.question_date,
+          events: (worksheet.timeline.events ?? []).slice(0, 5).map((event) => ({
+            row: event.row,
+            session: event.session,
+            session_date: event.session_date,
+            event_date: event.event_date,
+            role: event.role,
+            event: event.event
+          }))
+        }
+      : null
   };
 }
 
@@ -672,8 +715,11 @@ async function runItem(options, item, apiKey) {
     tokenBudget: options.tokenBudget,
     answererProfile: options.answererProfile
   });
-  const answerWorksheet = options.answererProfile === "worksheet_router_v2"
-    ? buildAnswerWorksheet(item, treatmentContexts)
+  const answerWorksheetContexts = options.answererProfile === "worksheet_router_v3"
+    ? retrieval.contexts
+    : treatmentContexts;
+  const answerWorksheet = /^worksheet_router_v[23]$/u.test(options.answererProfile)
+    ? buildAnswerWorksheet(item, answerWorksheetContexts, { answererProfile: options.answererProfile })
     : null;
   const treatmentPrompt = buildTreatmentPrompt(item, treatmentContexts, {
     answererProfile: options.answererProfile
@@ -711,7 +757,7 @@ async function runItem(options, item, apiKey) {
     }
   }
 
-  return {
+  const result = {
     id: item.id,
     category: item.category,
     question_preview: item.question.slice(0, 160),
@@ -738,20 +784,81 @@ async function runItem(options, item, apiKey) {
     generated_answer: generatedAnswer,
     judge
   };
+  result.answer_failure_kind = classifyAnswerFailure(result);
+  return result;
 }
 
-async function runItems(options, items, apiKey) {
+async function loadCheckpointResults(path, items) {
+  if (!path) return { resultsById: new Map(), loadedCount: 0 };
+  let text = "";
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return { resultsById: new Map(), loadedCount: 0 };
+    throw error;
+  }
+
+  const validIds = new Set(items.map((item) => item.id));
+  const resultsById = new Map();
+  let loadedCount = 0;
+  const lines = text.split(/\r?\n/u).filter((line) => line.trim());
+  for (const [lineIndex, line] of lines.entries()) {
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch (error) {
+      throw new Error(`Invalid JSON in --write-results-jsonl at line ${lineIndex + 1}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const result = parsed.kind === "item_result" ? parsed.result : parsed;
+    if (!result?.id || !validIds.has(result.id)) continue;
+    resultsById.set(result.id, result);
+    loadedCount += 1;
+  }
+  return { resultsById, loadedCount };
+}
+
+function createCheckpointAppender(path) {
+  if (!path) return null;
+  let appendQueue = Promise.resolve();
+  return (result) => {
+    const line = `${JSON.stringify({
+      kind: "item_result",
+      written_at: new Date().toISOString(),
+      id: result.id,
+      result
+    })}\n`;
+    appendQueue = appendQueue.then(() => appendFile(path, line, "utf8"));
+    return appendQueue;
+  };
+}
+
+async function runItems(options, items, apiKey, checkpoint = {}) {
   const workerCount = Math.max(1, Math.min(Number(options.concurrency ?? 1), items.length || 1));
   const results = new Array(items.length);
+  const completedIds = new Set();
+  const checkpointResults = checkpoint.resultsById ?? new Map();
+  for (let index = 0; index < items.length; index += 1) {
+    const checkpointResult = checkpointResults.get(items[index].id);
+    if (!checkpointResult) continue;
+    results[index] = checkpointResult;
+    completedIds.add(items[index].id);
+  }
   let nextIndex = 0;
-  let completed = 0;
+  let completed = completedIds.size;
+
+  if (options.progress && completed > 0) {
+    process.stderr.write(`[benchmark] resumed ${completed}/${items.length} from ${options.writeResultsJsonl}\n`);
+  }
 
   async function worker() {
     while (nextIndex < items.length) {
       const index = nextIndex;
       nextIndex += 1;
+      if (completedIds.has(items[index].id)) continue;
       const result = await runItem(options, items[index], apiKey);
       results[index] = result;
+      completedIds.add(result.id);
+      if (checkpoint.appendResult) await checkpoint.appendResult(result);
       completed += 1;
       if (options.progress) {
         const accuracyMark = result.judge?.verdict === "not_run"
@@ -789,6 +896,16 @@ async function writeRetrievalFailures(path, items, results) {
   await writeFile(path, lines ? `${lines}\n` : "", "utf8");
 }
 
+async function writeAnswerFailures(path, items, results) {
+  if (!path) return;
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const lines = results
+    .filter((result) => result.judge?.verdict !== "not_run" && result.judge?.passed !== true)
+    .map((result) => JSON.stringify(buildAnswerFailureExportEntry(itemById.get(result.id), result)))
+    .join("\n");
+  await writeFile(path, lines ? `${lines}\n` : "", "utf8");
+}
+
 function printText(snapshot) {
   if (snapshot.kind === "public_comparison") {
     printComparisonText(snapshot);
@@ -816,6 +933,11 @@ function printText(snapshot) {
   console.log(
     `  retrieval_count=${snapshot.summary.retrieval_count} fallback_count=${snapshot.summary.fallback_count} fallback_rate=${(snapshot.summary.fallback_rate * 100).toFixed(1)}% avg_latency_ms=${snapshot.summary.avg_retrieval_latency_ms.toFixed(1)}`
   );
+  const answerFailures = Object.entries(snapshot.summary.answer_failure_counts ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => `${kind}=${count}`)
+    .join(" ");
+  if (answerFailures) console.log(`  answer_failures ${answerFailures}`);
   console.log("");
   console.log("Categories");
   for (const category of snapshot.summary.categories) {
@@ -826,6 +948,11 @@ function printText(snapshot) {
     console.log(
       `  ${category.category}: items=${category.item_count} accuracy=${categoryAccuracy} evidence_recall@5=${categoryRecall} answer_text_hit@5=${categoryTextHit} evidence_coverage@5=${categoryCoverage} saved=${category.tokens_saved} reduction=${(category.token_reduction_rate * 100).toFixed(1)}% fallback=${category.fallback_count}`
     );
+    const categoryFailures = Object.entries(category.failure_counts ?? {})
+      .filter(([, count]) => count > 0)
+      .map(([kind, count]) => `${kind}=${count}`)
+      .join(" ");
+    if (categoryFailures) console.log(`    failures ${categoryFailures}`);
   }
   console.log("");
   console.log("Existing measurement runs");
@@ -889,13 +1016,20 @@ async function main() {
   }
 
   const rawDataset = await loadDataset(options);
-  const items = parseLongMemEvalDataset(rawDataset).slice(0, options.limit);
+  const items = parseLongMemEvalDataset(rawDataset, { limit: options.limit });
   const apiKey = options.skipLlm ? "" : geminiKey();
   if (!apiKey) options.skipLlm = true;
 
   const existingMeasurementRuns = await fetchExistingMeasurementRuns(options);
-  const results = await runItems(options, items, apiKey);
+  const checkpoint = options.writeResultsJsonl
+    ? {
+        ...(await loadCheckpointResults(options.writeResultsJsonl, items)),
+        appendResult: createCheckpointAppender(options.writeResultsJsonl)
+      }
+    : {};
+  const results = await runItems(options, items, apiKey, checkpoint);
   await writeRetrievalFailures(options.writeRetrievalFailures, items, results);
+  await writeAnswerFailures(options.writeAnswerFailures, items, results);
 
   const summary = summarizeBenchmarkResults(results, existingMeasurementRuns);
   const publicComparison = options.comparePublic
@@ -931,6 +1065,9 @@ async function main() {
       judge_model: options.judgeModel,
       generator_model: options.generatorModel,
       write_retrieval_failures: options.writeRetrievalFailures ?? null,
+      write_answer_failures: options.writeAnswerFailures ?? null,
+      write_results_jsonl: options.writeResultsJsonl ?? null,
+      resumed_result_count: checkpoint.resultsById?.size ?? 0,
       skip_llm: options.skipLlm
     },
     token_source: tokenSources.length === 1 ? tokenSources[0] : tokenSources.join("+"),

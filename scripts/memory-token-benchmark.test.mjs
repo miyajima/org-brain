@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   applyTreatmentTokenBudget,
+  buildAnswerFailureExportEntry,
   buildAnswerWorksheet,
   buildEvidenceCardsForItem,
   buildFullContextPrompt,
   buildPublicComparisonReport,
   buildTreatmentPrompt,
   buildTransientBenchmarkIndex,
+  classifyAnswerFailure,
   computeAnswerTextHitAtK,
   computeEvidenceCoverageAtK,
   computeEvidenceRecallAtK,
@@ -20,6 +26,53 @@ import {
 } from "./lib/memory-token-benchmark-core.mjs";
 
 describe("memory token benchmark helpers", () => {
+  it("writes incremental result checkpoints and resumes without duplicating completed ids", () => {
+    const dir = mkdtempSync(join(tmpdir(), "org-brain-benchmark-"));
+    const datasetPath = join(dir, "dataset.json");
+    const checkpointPath = join(dir, "results.jsonl");
+    writeFileSync(datasetPath, JSON.stringify([
+      {
+        question_id: "checkpoint-1",
+        question_type: "single-session-user",
+        question: "What color notebook did I buy?",
+        answer: "blue",
+        haystack_sessions: [[{ role: "user", content: "I bought a blue notebook." }]]
+      },
+      {
+        question_id: "checkpoint-2",
+        question_type: "single-session-user",
+        question: "Where is the receipt?",
+        answer: "Dropbox",
+        haystack_sessions: [[{ role: "user", content: "The receipt is stored in Dropbox." }]]
+      }
+    ]));
+    const scriptPath = new URL("./memory-token-benchmark.mjs", import.meta.url).pathname;
+
+    execFileSync(process.execPath, [
+      scriptPath,
+      "--dataset-path", datasetPath,
+      "--limit", "1",
+      "--skip-llm",
+      "--write-results-jsonl", checkpointPath,
+      "--json"
+    ], { encoding: "utf8" });
+    expect(readFileSync(checkpointPath, "utf8").trim().split("\n")).toHaveLength(1);
+
+    const stdout = execFileSync(process.execPath, [
+      scriptPath,
+      "--dataset-path", datasetPath,
+      "--limit", "2",
+      "--skip-llm",
+      "--write-results-jsonl", checkpointPath,
+      "--json"
+    ], { encoding: "utf8" });
+    const lines = readFileSync(checkpointPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(lines.map((line) => line.id)).toEqual(["checkpoint-1", "checkpoint-2"]);
+    const snapshot = JSON.parse(stdout);
+    expect(snapshot.scope.resumed_result_count).toBe(1);
+    expect(snapshot.results.map((result) => result.id)).toEqual(["checkpoint-1", "checkpoint-2"]);
+  });
+
   it("normalizes LongMemEval JSON arrays", () => {
     const raw = JSON.stringify([
       {
@@ -92,6 +145,16 @@ describe("memory token benchmark helpers", () => {
       answer: "Dropbox",
       historyText: "user: The receipt is in Dropbox."
     });
+  });
+
+  it("can stop LongMemEval normalization at a requested limit", () => {
+    const raw = [
+      JSON.stringify({ qid: "limit-1", type: "single", query: "Q1?", gold_answer: "A1", messages: [] }),
+      JSON.stringify({ qid: "limit-2", type: "single", query: "Q2?", gold_answer: "A2", messages: [] }),
+      JSON.stringify({ qid: "limit-3", type: "single", query: "Q3?", gold_answer: "A3", messages: [] })
+    ].join("\n");
+
+    expect(parseLongMemEvalDataset(raw, { limit: 2 }).map((item) => item.id)).toEqual(["limit-1", "limit-2"]);
   });
 
   it("preserves LongMemEval session metadata without indexing answer session ids", () => {
@@ -683,6 +746,363 @@ describe("memory token benchmark helpers", () => {
     expect(worksheet.deterministic_reason).toBe("multi-session-count-extract");
   });
 
+  it("builds worksheet_router_v3 prompts with assistant-first extraction and no gold metadata", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "assistant-v3-phone",
+        question_type: "single-session-assistant",
+        question: "What phone number did you provide for the concierge?",
+        answer: "+1 (415) 555-0198",
+        answer_session_ids: ["gold-phone-session"],
+        haystack_session_ids: ["phone-session"],
+        haystack_dates: ["2023/06/12"],
+        haystack_sessions: [
+          [
+            { role: "user", content: "Can you draft my travel contact list?" },
+            { role: "assistant", content: "Use the hotel concierge number +1 (415) 555-0198 and the front desk email." }
+          ]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+    const prompt = buildTreatmentPrompt(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+
+    expect(worksheet.deterministic_answer).toBe("+1 (415) 555-0198");
+    expect(worksheet.deterministic_reason).toBe("v3-assistant-generic-extract");
+    expect(prompt).not.toContain("Ledger:");
+    expect(prompt).not.toContain("Timeline:");
+    expect(prompt).not.toContain("gold-phone-session");
+    expect(prompt).not.toContain("gold_answer");
+    expect(prompt).not.toContain("answer_session_ids");
+  });
+
+  it("does not turn low-confidence assistant candidates into worksheet_router_v3 deterministic answers", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "assistant-v3-restaurant",
+        question_type: "single-session-assistant",
+        question: "Can you remind me of the name of that restaurant in Cihampelas?",
+        answer: "Miss Bee Providore",
+        haystack_session_ids: ["restaurant-session"],
+        haystack_dates: ["2023/06/12"],
+        haystack_sessions: [
+          [
+            { role: "user", content: "Can you suggest restaurants around Cihampelas?" },
+            { role: "assistant", content: "Consider Miss Bee Providore for brunch near Cihampelas. Another option is a bamboo cafe, but the estimated cost there is $90." }
+          ]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+
+    expect(worksheet.deterministic_answer).toBe("");
+    expect(worksheet.text).toContain("Miss Bee Providore");
+  });
+
+  it("keeps worksheet_router_v3 preference prompts in preference-answer mode", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "preference-v3-accessories",
+        question_type: "single-session-preference",
+        question: "Can you suggest some accessories that would complement my current photography setup?",
+        answer: "The user would prefer Sony-compatible photography accessories.",
+        haystack_session_ids: ["camera-session"],
+        haystack_dates: ["2023/06/12"],
+        haystack_sessions: [
+          [
+            { role: "user", content: "I am using a Sony camera and want high-quality gear for photography." },
+            { role: "assistant", content: "Sony-compatible lenses, filters, tripods, and protective camera bags would fit that setup." }
+          ]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const prompt = buildTreatmentPrompt(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+
+    expect(prompt).toContain("Preference mode");
+    expect(prompt).toContain("The user would prefer");
+    expect(prompt).toContain("Sony");
+  });
+
+  it("uses worksheet_router_v3 ledger rows for multi-session sums and prompt budgeting", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "ledger-v3-money",
+        question_type: "multi-session",
+        question: "How much did I spend on bike-related expenses in total?",
+        answer: "$55",
+        answer_session_ids: ["bike-light", "bike-helmet"],
+        haystack_session_ids: ["bike-light", "tea", "bike-helmet"],
+        haystack_dates: ["2023/06/01", "2023/06/02", "2023/06/03"],
+        haystack_sessions: [
+          [{ role: "user", content: "I spent $20 on bike lights." }],
+          [{ role: "user", content: "I spent $8 on tea." }],
+          [{ role: "user", content: "I spent $35 on a bike helmet." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const budgeted = applyTreatmentTokenBudget(item, retrieval.contexts, { tokenBudget: 520, answererProfile: "worksheet_router_v3" });
+    const worksheet = buildAnswerWorksheet(item, budgeted, { answererProfile: "worksheet_router_v3" });
+    const prompt = buildTreatmentPrompt(item, budgeted, { answererProfile: "worksheet_router_v3" });
+
+    expect(worksheet.deterministic_answer).toBe("$55");
+    expect(worksheet.deterministic_reason).toBe("multi-session-money-sum");
+    expect(worksheet.ledger.map((entry) => entry.source_anchor).join(" ")).toContain("bike");
+    expect(estimateTokens(prompt)).toBeLessThanOrEqual(520);
+  });
+
+  it("dedupes worksheet_router_v3 multi-session counts by row intent", () => {
+    const [clothesItem, campingItem, gamesItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-clothes-count",
+        question_type: "multi-session",
+        question: "How many items of clothing do I need to pick up or return from a store?",
+        answer: "3",
+        answer_session_ids: ["boots", "cleaning", "pants"],
+        haystack_session_ids: ["boots", "cleaning", "pants"],
+        haystack_dates: ["2023/02/15", "2023/02/15", "2023/02/15"],
+        haystack_sessions: [
+          [{ role: "user", content: "I exchanged a pair of boots from Zara and still need to return them." }],
+          [{ role: "user", content: "I still need to pick up my dry cleaning from the store." }],
+          [{ role: "user", content: "My yoga pants were too small, so I need to return them Thursday." }]
+        ]
+      },
+      {
+        question_id: "v3-camping-days",
+        question_type: "multi-session",
+        question: "How many days did I spend on camping trips in the United States this year?",
+        answer: "8 days",
+        answer_session_ids: ["yellowstone", "bigsur"],
+        haystack_session_ids: ["yellowstone", "bigsur", "moab"],
+        haystack_dates: ["2023/04/29", "2023/04/29", "2023/04/29"],
+        haystack_sessions: [
+          [
+            { role: "user", content: "I just got back from an amazing 5-day camping trip to Yellowstone National Park." },
+            { role: "assistant", content: "Your 5-day camping trip sounds memorable." }
+          ],
+          [
+            { role: "user", content: "I just got back from a 3-day solo camping trip to Big Sur." },
+            { role: "assistant", content: "The 3-day solo camping trip is noted." }
+          ],
+          [{ role: "user", content: "I loved the scenic drives in Moab for 4 hours." }]
+        ]
+      },
+      {
+        question_id: "v3-game-hours",
+        question_type: "multi-session",
+        question: "How many hours have I spent playing games in total?",
+        answer: "140 hours",
+        answer_session_ids: ["last-of-us", "ac"],
+        haystack_session_ids: ["last-of-us", "ac"],
+        haystack_dates: ["2023/05/25", "2023/05/20"],
+        haystack_sessions: [
+          [{ role: "user", content: "I spent 30 hours playing The Last of Us Part II." }],
+          [{ role: "user", content: "I spent around 70 hours playing Assassin's Creed Odyssey, and 40 hours playing Dragon Age: Inquisition." }]
+        ]
+      }
+    ]));
+
+    for (const [item, expected] of [[clothesItem, "3"], [campingItem, "8 days"], [gamesItem, "140 hours"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toBe("multi-session-count-extract");
+    }
+  });
+
+  it("solves worksheet_router_v3 multi-session totals from user-event rows", () => {
+    const [movieItem, socialBreakItem, luxuryItem, followerItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-movie-weeks",
+        question_type: "multi-session",
+        question: "How many weeks did it take me to watch all the Marvel Cinematic Universe movies and the main Star Wars films?",
+        answer: "3.5 weeks",
+        haystack_session_ids: ["mcu", "star-wars"],
+        haystack_dates: ["2023/05/23", "2023/05/25"],
+        haystack_sessions: [
+          [{ role: "user", content: "I watched all 22 Marvel Cinematic Universe movies in two weeks." }],
+          [{ role: "user", content: "I just finished a Star Wars marathon, watched all the main films in a week and a half." }]
+        ]
+      },
+      {
+        question_id: "v3-social-breaks",
+        question_type: "multi-session",
+        question: "How many days did I take social media breaks in total?",
+        answer: "17 days",
+        haystack_session_ids: ["jan", "feb"],
+        haystack_dates: ["2023/03/14", "2023/03/14"],
+        haystack_sessions: [
+          [{ role: "user", content: "I took a week-long break from social media in mid-January." }],
+          [{ role: "user", content: "I just got back from a 10-day break from social media in mid-February." }]
+        ]
+      },
+      {
+        question_id: "v3-luxury",
+        question_type: "multi-session",
+        question: "What is the total amount I spent on luxury items in the past few months?",
+        answer: "$2,500",
+        haystack_session_ids: ["bag", "gown", "boots"],
+        haystack_dates: ["2023/05/25", "2023/05/24", "2023/05/28"],
+        haystack_sessions: [
+          [{ role: "user", content: "I got a designer handbag from Gucci for $1,200." }],
+          [{ role: "user", content: "I recently bought a luxury evening gown for a wedding. It cost $800." }],
+          [{ role: "user", content: "I bought leather boots from a high-end Italian designer for $500." }]
+        ]
+      },
+      {
+        question_id: "v3-followers",
+        question_type: "multi-session",
+        question: "Which social media platform did I gain the most followers on over the past month?",
+        answer: "TikTok",
+        haystack_session_ids: ["twitter", "tiktok", "facebook"],
+        haystack_dates: ["2023/05/29", "2023/05/29", "2023/05/30"],
+        haystack_sessions: [
+          [{ role: "user", content: "My Twitter follower count has jumped from 420 to 540 over the past month." }],
+          [{ role: "user", content: "On TikTok, I've gained around 200 followers over the past three weeks." }],
+          [{ role: "user", content: "My Facebook follower count has remained steady at around 800." }]
+        ]
+      }
+    ]));
+
+    for (const [item, expected] of [[movieItem, "3.5 weeks"], [socialBreakItem, "17 days"], [luxuryItem, "$2,500"], [followerItem, "TikTok"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toMatch(/multi-session/);
+    }
+  });
+
+  it("uses worksheet_router_v3 timeline rows for temporal date differences", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "timeline-v3-diff",
+        question_type: "temporal-reasoning",
+        question_date: "2023/06/20",
+        question: "How many days were between buying the camera and receiving the lens?",
+        answer: "9 days",
+        answer_session_ids: ["camera", "lens"],
+        haystack_session_ids: ["camera", "lens"],
+        haystack_dates: ["2023/06/01", "2023/06/10"],
+        haystack_sessions: [
+          [{ role: "user", content: "I bought the camera today." }],
+          [{ role: "user", content: "I received the lens today." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+
+    expect(worksheet.timeline.events.map((event) => event.event_date)).toEqual(expect.arrayContaining(["2023-06-01", "2023-06-10"]));
+    expect(worksheet.deterministic_answer).toBe("9 days");
+    expect(worksheet.deterministic_reason).toBe("v3-temporal-timeline");
+  });
+
+  it("uses worksheet_router_v3 structured actual events for temporal order answers", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "timeline-v3-actual-order",
+        question_type: "temporal-reasoning",
+        question_date: "2023/06/24",
+        question: "What is the order of the three sports events I participated in during the past month, from earliest to latest?",
+        answer: "Spring Sprint Triathlon, Midsummer 5K Run, charity soccer tournament",
+        haystack_session_ids: ["planned", "triathlon", "run", "soccer"],
+        haystack_dates: ["2023/06/01", "2023/06/02", "2023/06/10", "2023/06/17"],
+        haystack_sessions: [
+          [{ role: "user", content: "I am planning to attend the Midsummer 5K Run again next month." }],
+          [{ role: "user", content: "I just completed the Spring Sprint Triathlon today." }],
+          [{ role: "user", content: "I just finished a 5K run at the Midsummer 5K Run today." }],
+          [{ role: "user", content: "I participated in the charity soccer tournament today." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+
+    expect(worksheet.structured.intent).toBe("temporal_order");
+    expect(worksheet.structured.events.some((event) => event.event_status === "planned")).toBe(true);
+    expect(worksheet.deterministic_answer).toBe("Spring Sprint Triathlon, Midsummer 5K Run, charity soccer tournament");
+    expect(worksheet.deterministic_reason).toBe("v3-temporal-timeline");
+  });
+
+  it("classifies answer failures and builds the requested failure export shape", () => {
+    const item = {
+      id: "fail-1",
+      category: "multi-session",
+      question: "How much did I spend?",
+      answer: "$55"
+    };
+    const result = {
+      id: "fail-1",
+      category: "multi-session",
+      generated_answer: "$20",
+      retrieved_session_ids: ["a", "b"],
+      answer_session_ids: ["a", "b"],
+      evidence_recall_at_5: true,
+      answer_text_hit_at_5: false,
+      answer_worksheet: {
+        deterministic_reason: "v3-multi-session-ledger",
+        deterministic_answer: "$20"
+      },
+      judge: { verdict: "fail", passed: false, rationale: "The total is wrong." }
+    };
+
+    expect(classifyAnswerFailure(result)).toBe("aggregation_error");
+    expect(buildAnswerFailureExportEntry(item, result)).toMatchObject({
+      id: "fail-1",
+      category: "multi-session",
+      question: "How much did I spend?",
+      gold_answer: "$55",
+      generated_answer: "$20",
+      failure_kind: "aggregation_error",
+      retrieved_session_ids: ["a", "b"],
+      answer_session_ids: ["a", "b"],
+      evidence_recall_at_5: true,
+      answer_text_hit_at_5: false,
+      deterministic_reason: "v3-multi-session-ledger"
+    });
+  });
+
   it("builds public comparison reports with leaderboard targets", () => {
     const report = buildPublicComparisonReport({
       accuracy: 0.86,
@@ -772,7 +1192,10 @@ describe("memory token benchmark helpers", () => {
       tokens_saved: 135,
       retrieval_count: 3,
       retrieval_latency_ms: 30,
-      fallback_count: 1
+      fallback_count: 1,
+      answer_failure_counts: expect.objectContaining({
+        missing_evidence: 1
+      })
     });
     expect(summary.categories.find((category) => category.category === "single")).toMatchObject({
       item_count: 2,
@@ -781,7 +1204,10 @@ describe("memory token benchmark helpers", () => {
       fallback_count: 1,
       recall_eligible_count: 2,
       recall_at_5_pass_count: 1,
-      recall_at_5: 0.5
+      recall_at_5: 0.5,
+      failure_counts: expect.objectContaining({
+        missing_evidence: 1
+      })
     });
     expect(summary.existing_measurement_runs).toEqual([{ id: "run-1", input_tokens_saved: 2036 }]);
   });
