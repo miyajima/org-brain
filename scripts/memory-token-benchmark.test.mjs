@@ -875,7 +875,7 @@ describe("memory token benchmark helpers", () => {
     const prompt = buildTreatmentPrompt(item, budgeted, { answererProfile: "worksheet_router_v3" });
 
     expect(worksheet.deterministic_answer).toBe("$55");
-    expect(worksheet.deterministic_confidence).toBe("medium");
+    expect(worksheet.deterministic_confidence).toBe("high");
     expect(worksheet.deterministic_reason).toBe("multi-session-money-sum");
     expect(worksheet.solver_evidence_rows).toEqual(expect.arrayContaining([1, 2]));
     expect(worksheet.ledger.map((entry) => entry.source_anchor).join(" ")).toContain("bike");
@@ -1153,6 +1153,264 @@ describe("memory token benchmark helpers", () => {
       const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
       for (const term of expectedTerms) expect(worksheet.deterministic_answer).toContain(term);
       expect(worksheet.deterministic_reason).toBe("preference-profile-extract");
+    }
+  });
+
+  it("solves worksheet_router_v3 conservative aggregation when complete evidence is present", () => {
+    const [propertyItem, kitchenItem, instrumentItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-property-complete",
+        question_type: "multi-session",
+        question: "How many properties did I view before making an offer on the townhouse in the Brookside neighborhood?",
+        answer: "4",
+        haystack_session_ids: ["bungalow", "cedar", "one-bed", "two-bed"],
+        haystack_dates: ["2023/02/01", "2023/02/05", "2023/02/10", "2023/02/15"],
+        haystack_sessions: [
+          [{ role: "user", content: "I saw a 3-bedroom bungalow, but the kitchen needed serious renovation." }],
+          [{ role: "user", content: "I viewed a property in Cedar Creek, but it was out of my budget." }],
+          [{ role: "user", content: "I saw a 1-bedroom condo, but noise from the highway was a deal-breaker." }],
+          [{ role: "user", content: "I fell in love with a 2-bedroom condo, but my offer got rejected due to a higher bid." }]
+        ]
+      },
+      {
+        question_id: "v3-kitchen-complete",
+        question_type: "multi-session",
+        question: "How many kitchen items did I replace or fix?",
+        answer: "5",
+        haystack_session_ids: ["shelves", "faucet", "mat", "toaster", "coffee"],
+        haystack_dates: ["2023/05/20", "2023/05/21", "2023/05/22", "2023/05/23", "2023/05/24"],
+        haystack_sessions: [
+          [{ role: "user", content: "I finally fixed the kitchen shelves last weekend." }],
+          [{ role: "user", content: "I replaced my old kitchen faucet with a new Moen one." }],
+          [{ role: "user", content: "I replaced the worn-out kitchen mat in front of the sink." }],
+          [{ role: "user", content: "I got rid of my old toaster, replacing it with a toaster oven." }],
+          [{ role: "user", content: "I repaired the kitchen coffee maker after it stopped brewing." }]
+        ]
+      },
+      {
+        question_id: "v3-instruments-complete",
+        question_type: "multi-session",
+        question: "How many musical instruments do I currently own?",
+        answer: "4",
+        haystack_session_ids: ["electric", "acoustic", "drums", "piano", "sister"],
+        haystack_dates: ["2023/05/20", "2023/05/21", "2023/05/22", "2023/05/23", "2023/05/24"],
+        haystack_sessions: [
+          [{ role: "user", content: "I own a Fender Stratocaster electric guitar." }],
+          [{ role: "user", content: "I have a Yamaha FG800 acoustic guitar." }],
+          [{ role: "user", content: "My Pearl Export drum set needs new heads." }],
+          [{ role: "user", content: "I need a technician to service my Korg B1 piano." }],
+          [{ role: "user", content: "My sister just bought a student-level violin." }]
+        ]
+      }
+    ]));
+
+    for (const [item, expected] of [[propertyItem, "4"], [kitchenItem, "5"], [instrumentItem, "4"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toBe("multi-session-count-extract");
+    }
+  });
+
+  it("does not emit worksheet_router_v3 aggregation answers from partial or mismatched evidence", () => {
+    const [doctorItem, propertyItem, instrumentItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-doctors-partial",
+        question_type: "multi-session",
+        question: "How many different doctors did I visit?",
+        answer: "3",
+        haystack_session_ids: ["derm", "generic"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "user", content: "I got back from a follow-up appointment with my dermatologist." }],
+          [{ role: "assistant", content: "Your doctor may recommend avoiding strenuous exercise for 1-2 days." }]
+        ]
+      },
+      {
+        question_id: "v3-properties-partial",
+        question_type: "multi-session",
+        question: "How many properties did I view before making an offer on the townhouse in the Brookside neighborhood?",
+        answer: "4",
+        haystack_session_ids: ["bungalow", "cedar", "two-bed"],
+        haystack_dates: ["2023/02/01", "2023/02/05", "2023/02/15"],
+        haystack_sessions: [
+          [{ role: "user", content: "I saw a 3-bedroom bungalow, but the kitchen needed serious renovation." }],
+          [{ role: "user", content: "I viewed a property in Cedar Creek, but it was out of my budget." }],
+          [{ role: "user", content: "I fell in love with a 2-bedroom condo, but my offer got rejected due to a higher bid." }]
+        ]
+      },
+      {
+        question_id: "v3-instruments-ledger-guard",
+        question_type: "multi-session",
+        question: "How many musical instruments do I currently own?",
+        answer: "4",
+        haystack_session_ids: ["piano", "distance"],
+        haystack_dates: ["2023/05/29", "2023/05/30"],
+        haystack_sessions: [
+          [{ role: "user", content: "I need a technician to service my Korg B1 piano." }],
+          [{ role: "assistant", content: "Los Alamos is about 400 miles away from Las Vegas." }]
+        ]
+      }
+    ]));
+
+    for (const item of [doctorItem, propertyItem, instrumentItem]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe("");
+      expect(worksheet.deterministic_reason).toBe("");
+    }
+  });
+
+  it("promotes narrow worksheet_router_v3 money sums only when directly supported", () => {
+    const [charityItem, workshopItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-charity-money-direct",
+        question_type: "multi-session",
+        question: "How much money did I raise for charity in total?",
+        answer: "$3,750",
+        haystack_session_ids: ["bake", "walk"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "user", content: "I raised $1,500 for charity at the bake sale." }],
+          [{ role: "user", content: "The sponsored walk raised another $2,250 for charity." }]
+        ]
+      },
+      {
+        question_id: "v3-workshop-ledger-guard",
+        question_type: "multi-session",
+        question: "How much total money did I spend on attending workshops in the last four months?",
+        answer: "$720",
+        haystack_session_ids: ["pottery", "membership"],
+        haystack_dates: ["2023/05/20", "2023/05/21"],
+        haystack_sessions: [
+          [{ role: "user", content: "I attended a pottery workshop for $220." }],
+          [{ role: "assistant", content: "The studio also sells an annual membership for $500, but that is optional." }]
+        ]
+      }
+    ]));
+
+    const charityRetrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([charityItem], { transientStrategy: "longmemeval_session_v3" }),
+      charityItem,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const charityWorksheet = buildAnswerWorksheet(charityItem, charityRetrieval.contexts, { answererProfile: "worksheet_router_v3" });
+    expect(charityWorksheet.deterministic_answer).toBe("$3,750");
+    expect(charityWorksheet.deterministic_confidence).toBe("high");
+    expect(charityWorksheet.deterministic_reason).toBe("multi-session-money-sum");
+
+    const workshopRetrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([workshopItem], { transientStrategy: "longmemeval_session_v3" }),
+      workshopItem,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const workshopWorksheet = buildAnswerWorksheet(workshopItem, workshopRetrieval.contexts, { answererProfile: "worksheet_router_v3" });
+    expect(workshopWorksheet.deterministic_answer).toBe("");
+    expect(workshopWorksheet.deterministic_reason).toBe("");
+  });
+
+  it("solves worksheet_router_v3 relative temporal event questions from question_date", () => {
+    const [artItem, relativeItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-art-two-weeks",
+        question_type: "temporal-reasoning",
+        question_date: "2023/01/29",
+        question: "I mentioned that I participated in an art-related event two weeks ago. Where was that event held at?",
+        answer: "Metropolitan Museum of Art",
+        haystack_session_ids: ["city", "met", "modern"],
+        haystack_dates: ["2023/01/14", "2023/01/15", "2023/01/15"],
+        haystack_sessions: [
+          [{ role: "user", content: "I attended the Impressionist Masterpieces exhibition at the City Art Museum yesterday." }],
+          [{ role: "user", content: "I attended the Ancient Civilizations exhibit at the Metropolitan Museum of Art today." }],
+          [{ role: "user", content: "Do you know upcoming exhibitions at the Modern Art Museum that I should check out?" }]
+        ]
+      },
+      {
+        question_id: "v3-relative-one-week",
+        question_type: "temporal-reasoning",
+        question_date: "2023/06/22",
+        question: "What was the the life event of one of my relatives that I participated in a week ago?",
+        answer: "my cousin's wedding",
+        haystack_session_ids: ["wedding", "baby"],
+        haystack_dates: ["2023/06/15", "2023/06/15"],
+        haystack_sessions: [
+          [{ role: "user", content: "I recently walked down the aisle as a bridesmaid at my cousin's wedding." }],
+          [{ role: "user", content: "I got back from my cousin Rachel's baby shower in February." }]
+        ]
+      }
+    ]));
+
+    for (const [item, expected] of [[artItem, "Metropolitan Museum of Art"], [relativeItem, "my cousin's wedding"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toBe("v3-temporal-timeline");
+    }
+  });
+
+  it("does not emit worksheet_router_v3 temporal answers for relative labels or generic choices", () => {
+    const [lunchItem, vehicleItem, monthsItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-last-tuesday-person-guard",
+        question_type: "temporal-reasoning",
+        question_date: "2023/06/21",
+        question: "Who did I meet with during the lunch last Tuesday?",
+        answer: "Emma",
+        haystack_session_ids: ["lunch"],
+        haystack_dates: ["2023/06/13"],
+        haystack_sessions: [[
+          { role: "user", content: "I had lunch with Emma in Chicago last Tuesday." }
+        ]]
+      },
+      {
+        question_id: "v3-generic-bike-car-guard",
+        question_type: "temporal-reasoning",
+        question_date: "2023/03/01",
+        question: "Which vehicle did I take care of first in February, the bike or the car?",
+        answer: "bike",
+        haystack_session_ids: ["bike", "car"],
+        haystack_dates: ["2023/02/02", "2023/02/12"],
+        haystack_sessions: [
+          [{ role: "user", content: "I tuned up my bike in early February." }],
+          [{ role: "user", content: "I washed the car later in February." }]
+        ]
+      },
+      {
+        question_id: "v3-month-diff-guard",
+        question_type: "temporal-reasoning",
+        question_date: "2023/07/01",
+        question: "How many months passed between the completion of my undergraduate degree and the submission of my master's thesis?",
+        answer: "6 months",
+        haystack_session_ids: ["degree", "thesis"],
+        haystack_dates: ["2023/01/01", "2023/06/30"],
+        haystack_sessions: [
+          [{ role: "user", content: "I completed my undergraduate degree in January." }],
+          [{ role: "user", content: "I submitted my master's thesis at the end of June." }]
+        ]
+      }
+    ]));
+
+    for (const item of [lunchItem, vehicleItem, monthsItem]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe("");
+      expect(worksheet.deterministic_reason).toBe("");
     }
   });
 

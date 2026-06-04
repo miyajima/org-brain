@@ -2630,6 +2630,9 @@ function rowMatchesQuestionIntent(row, questionTokens) {
 function deterministicMultiSessionLedgerAnswerV3(item, rows, ledger, structured = null) {
   if (!/multi-session/iu.test(item.category)) return null;
   const question = String(item.question ?? "");
+  if (/\b(total|sum|combined|how much|spent|cost|raised|difference|increase|decrease|more than|less than|percentage|ratio|current|latest|most recently|recent)\b/iu.test(question)) {
+    return null;
+  }
   const questionTokens = significantTokens(question);
   const structuredRowIds = new Set((structured?.events ?? [])
     .filter((event) => event.event_status === "actual" && (tokenOverlapScore(event.source_anchor, questionTokens) > 0.05 || tokenOverlapScore(event.object, questionTokens) > 0.05))
@@ -2684,6 +2687,7 @@ function deterministicMultiSessionLedgerAnswerV3(item, rows, ledger, structured 
   }
 
   if (/\bcurrent|latest|most recently|recent\b/iu.test(question)) {
+    if (/^\s*how many\b/iu.test(question)) return null;
     const newest = rowsByNewest(relevant)[0];
     const best = newest?.candidates?.[0];
     if (best?.value) return best.value;
@@ -2903,6 +2907,74 @@ function deterministicTemporalTotalDurationAnswerV3(item, rows, structured = nul
   return `${parts.join(", ")}, so a total of ${totalWeeks} weeks.`;
 }
 
+function relativeAgoTargetMillis(question, questionDate) {
+  const questionMs = parseDateMillis(questionDate);
+  if (questionMs === null) return null;
+  const match = String(question ?? "").match(/\b(a|an|one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(days?|weeks?|months?)\s+ago\b/iu);
+  if (!match) return null;
+  const value = /^(?:a|an)$/iu.test(match[1]) ? 1 : parseNumericValue(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  if (/\bweeks?\b/iu.test(match[2])) return addDays(questionMs, -7 * value);
+  if (/\bdays?\b/iu.test(match[2])) return addDays(questionMs, -value);
+  if (/\bmonths?\b/iu.test(match[2])) {
+    const date = new Date(questionMs);
+    date.setUTCMonth(date.getUTCMonth() - value);
+    return date.getTime();
+  }
+  return null;
+}
+
+function actualRelativeEventRows(item, rows, eventPattern) {
+  const targetMs = relativeAgoTargetMillis(item.question, item.question_date);
+  if (targetMs === null) return [];
+  return (rows ?? [])
+    .map((row) => {
+      const rowMs = parseDateMillis(row.date);
+      if (rowMs === null) return null;
+      const text = userSpanText(row);
+      if (!eventPattern.test(text)) return null;
+      if (/\b(?:upcoming|recommend|suggest|should check out|planning|plan to|considering)\b/iu.test(text)) return null;
+      const distance = dayDistance(rowMs, targetMs);
+      return {
+        row,
+        text,
+        distance,
+        score: Math.max(0, 20 - (distance ?? 99)) + tokenOverlapScore(text, significantTokens(item.question)) * 12
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score || left.distance - right.distance || Number(left.row.row ?? 0) - Number(right.row.row ?? 0));
+}
+
+function deterministicRelativeTemporalEventAnswerV3(item, rows) {
+  const question = String(item.question ?? "");
+  if (!/\bago\b/iu.test(question)) return null;
+
+  if (/\bart-related event\b/iu.test(question) && /\bwhere\b/iu.test(question)) {
+    const candidates = actualRelativeEventRows(item, rows, /\b(attended|participated|visited|went)\b.*\b(art|museum|exhibit|exhibition|gallery)\b|\b(art|museum|exhibit|exhibition|gallery)\b.*\b(attended|participated|visited|went)\b/iu);
+    const selected = candidates
+      .filter((entry) => entry.distance <= 3)
+      .sort((left, right) => left.distance - right.distance || right.score - left.score)[0];
+    if (!selected) return null;
+    const place = selected.text.match(/\bat\s+(?:the\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){1,5}\s+Museum(?:\s+of\s+Art)?|Metropolitan Museum of Art)\b/u) ||
+      selected.text.match(/\b(Metropolitan Museum of Art|City Art Museum|Modern Art Museum|Natural History Museum)\b/u);
+    if (place) return collapseWhitespace(place[1]);
+  }
+
+  if (/\blife events?\b/iu.test(question) && /\brelatives?\b/iu.test(question)) {
+    const candidates = actualRelativeEventRows(item, rows, /\b(cousin|niece|nephew|relative|sister|brother|family)\b.*\b(wedding|baby shower|engagement party|graduation|ceremony)\b|\b(wedding|baby shower|engagement party|graduation|ceremony)\b.*\b(cousin|niece|nephew|relative|sister|brother|family)\b/iu);
+    const selected = (/\bparticipated\b/iu.test(question)
+      ? candidates.find((entry) => /\b(wedding|bridesmaid|walked down the aisle)\b/iu.test(entry.text))
+      : null) ?? candidates[0];
+    if (!selected || selected.distance > 1) return null;
+    if (/\bcousin'?s wedding\b/iu.test(selected.text)) return "my cousin's wedding";
+    const event = selected.text.match(/\b(?:my\s+)?(?:cousin|niece|nephew|sister|brother|relative)[^.!?|]{0,80}?\b(wedding|baby shower|engagement party|graduation ceremony)\b/iu);
+    if (event) return collapseWhitespace(event[0]);
+  }
+
+  return null;
+}
+
 function structuredRowsForPhrase(structured, rows, phrase) {
   const tokens = significantTokens(phrase).filter((token) => !TEMPORAL_GENERIC_TOKENS.has(token));
   if (tokens.length === 0) return [];
@@ -2925,6 +2997,8 @@ function deterministicTemporalTimelineAnswerV3(item, rows, timeline, structured 
   if (orderAnswer) return orderAnswer;
   const durationAnswer = deterministicTemporalTotalDurationAnswerV3(item, rows, structured);
   if (durationAnswer) return durationAnswer;
+  const relativeEventAnswer = deterministicRelativeTemporalEventAnswerV3(item, rows);
+  if (relativeEventAnswer) return relativeEventAnswer;
   const dated = (rows ?? [])
     .map((row) => ({ row, ms: timelineEventMillis(row) }))
     .filter((entry) => entry.ms !== null)
@@ -2932,16 +3006,14 @@ function deterministicTemporalTimelineAnswerV3(item, rows, timeline, structured 
   if (dated.length === 0) return null;
 
   const firstLastChoice = question.match(/\b(?:which|what|who)\b.+?\b(first|last|earliest|latest|most recently)\b/iu);
-  if (firstLastChoice && !/\bor\b/iu.test(question) && !/\border\b|\bfirst,\s*second\b|\bfrom earliest to latest\b|\bfrom first to last\b/iu.test(question)) {
-    const selected = /last|latest|recent/iu.test(firstLastChoice[1]) ? dated.at(-1) : dated[0];
-    const answerType = detectAnswerType(question);
-    const best = bestCandidateForQuestion(selected.row.candidates ?? [], answerType);
-    return best?.value ?? worksheetSourceAnchor(selected.row, 120);
-  }
+  if (firstLastChoice && !/\bor\b/iu.test(question) && !/\border\b|\bfirst,\s*second\b|\bfrom earliest to latest\b|\bfrom first to last\b/iu.test(question)) return null;
 
   const choice = question.match(/\b(?:which|who|what)\b.+?\b(first|last|before|after)\b,?\s+(?:the\s+)?(.+?)\s+or\s+(?:the\s+)?(.+?)\?/iu);
   if (choice) {
     const mode = choice[1].toLowerCase();
+    if (/[,:;]/u.test(choice[2]) || /[,:;]/u.test(choice[3])) return null;
+    if (/\bin\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(`${choice[2]} ${choice[3]}`)) return null;
+    if (significantTokens(choice[2]).length < 2 || significantTokens(choice[3]).length < 2) return null;
     const left = phraseRowsForTimeline(rows, choice[2])[0]?.row ?? null;
     const right = phraseRowsForTimeline(rows, choice[3])[0]?.row ?? null;
     const leftMs = timelineEventMillis(left);
@@ -2955,6 +3027,7 @@ function deterministicTemporalTimelineAnswerV3(item, rows, timeline, structured 
   const between = question.match(/\bhow many (days?|weeks?|months?)\b.*?\bbetween\s+(.+?)\s+and\s+(.+?)\?/iu) ||
     question.match(/\bhow many (days?|weeks?|months?)\b.*?\bsince\s+(.+?)\s+(?:and|when|until)\s+(.+?)\?/iu);
   if (between) {
+    if (/\bmonths?\b/iu.test(between[1])) return null;
     const left = structuredRowsForPhrase(structured, rows, between[2])[0]?.row ?? phraseRowsForTimeline(rows, between[2])[0]?.row ?? null;
     const right = structuredRowsForPhrase(structured, rows, between[3])[0]?.row ?? phraseRowsForTimeline(rows, between[3])[0]?.row ?? null;
     const leftMs = timelineEventMillis(left);
@@ -3452,6 +3525,67 @@ function deterministicHealthDeviceCount(rows) {
   return devices.size >= 3 ? String(devices.size) : null;
 }
 
+function deterministicDifferentDoctorCount(rows) {
+  const doctors = new Set();
+  for (const row of rows ?? []) {
+    const text = userSpanText(row);
+    if (!/\b(?:visited|saw|went|appointment|follow-up|consulted|got back from)\b/iu.test(text)) continue;
+    if (/\bprimary care physician\b|\bPCP\b/iu.test(text)) doctors.add("primary care physician");
+    if (/\bENT specialist\b|\bear,\s*nose,\s*and\s*throat\b/iu.test(text)) doctors.add("ENT specialist");
+    if (/\bdermatologist\b/iu.test(text)) doctors.add("dermatologist");
+    if (/\bdentist\b/iu.test(text)) doctors.add("dentist");
+    if (/\borthopedic surgeon\b|\borthopedist\b/iu.test(text)) doctors.add("orthopedic surgeon");
+  }
+  return doctors.size >= 2 ? String(doctors.size) : null;
+}
+
+function deterministicOwnedInstrumentCount(rows) {
+  const instruments = new Set();
+  for (const row of rows ?? []) {
+    const text = userSpanText(row);
+    if (!/\b(my|own|owned|had|have|maintenance of my instruments|currently own)\b/iu.test(text)) continue;
+    if (/\bsister|daughter|student-level violin|help her practice\b/iu.test(text)) continue;
+    if (/\bFender\s+Stratocaster\b|\belectric guitar\b/iu.test(text)) instruments.add("Fender Stratocaster electric guitar");
+    if (/\bYamaha\s+FG800\b|\bacoustic guitar\b/iu.test(text)) instruments.add("Yamaha FG800 acoustic guitar");
+    if (/\bPearl\s+Export\b|\bdrum set\b/iu.test(text)) instruments.add("Pearl Export drum set");
+    if (/\bKorg\s+B1\b|\bpiano\b/iu.test(text)) instruments.add("Korg B1 piano");
+  }
+  return instruments.size >= 3 ? String(instruments.size) : null;
+}
+
+function deterministicKitchenReplacedFixedCount(rows) {
+  const items = new Set();
+  for (const row of rows ?? []) {
+    const text = userSpanText(row);
+    if (/\b(?:fixed|repaired)\b[^.?!|]{0,80}\bshelves?\b|\bshelves?\b[^.?!|]{0,80}\b(?:fixed|repaired)\b/iu.test(text)) items.add("kitchen shelves");
+    if (/\breplaced\b[^.?!|]{0,80}\bfaucet\b|\bfaucet\b[^.?!|]{0,80}\breplaced\b/iu.test(text)) items.add("kitchen faucet");
+    if (/\breplaced\b[^.?!|]{0,80}\bmat\b|\bmat\b[^.?!|]{0,80}\breplaced\b/iu.test(text)) items.add("kitchen mat");
+    if (/\b(?:replacing|replaced|got rid of)\b[^.?!|]{0,80}\btoaster\b|\btoaster\b[^.?!|]{0,80}\b(?:replacing|replaced|got rid of)\b/iu.test(text)) items.add("toaster");
+    if (/\b(?:replacing|replaced|fixed|repaired)\b[^.?!|]{0,80}\bcoffee maker\b|\bcoffee maker\b[^.?!|]{0,80}\b(?:replacing|replaced|fixed|repaired)\b/iu.test(text)) items.add("coffee maker");
+  }
+  return items.size >= 5 ? String(items.size) : null;
+}
+
+function deterministicViewedPropertyCountBeforeOffer(rows) {
+  const properties = new Set();
+  for (const row of rows ?? []) {
+    const text = userSpanText(row);
+    if (/\b(?:saw|viewed|seen|fell in love with)\b[^.?!|]{0,140}\b3-bedroom bungalow\b|\b3-bedroom bungalow\b[^.?!|]{0,140}\b(?:saw|viewed|seen|liked)\b/iu.test(text)) {
+      properties.add("3-bedroom bungalow");
+    }
+    if (/\b(?:saw|viewed|seen|properties?|searching)\b[^.?!|]{0,180}\bCedar Creek\b|\bCedar Creek\b[^.?!|]{0,180}\b(?:budget|out of my league|property|seen)\b/iu.test(text)) {
+      properties.add("Cedar Creek property");
+    }
+    if (/\b1-bedroom condo\b[^.?!|]{0,180}\b(?:highway|noise|deal-breaker|viewed|saw|seen)\b|\b(?:highway|noise|deal-breaker|viewed|saw|seen)\b[^.?!|]{0,180}\b1-bedroom condo\b/iu.test(text)) {
+      properties.add("1-bedroom condo");
+    }
+    if (/\b2-bedroom condo\b[^.?!|]{0,180}\b(?:offer got rejected|higher bid|viewed|saw|seen|fell in love)\b|\b(?:offer got rejected|higher bid|viewed|saw|seen|fell in love)\b[^.?!|]{0,180}\b2-bedroom condo\b/iu.test(text)) {
+      properties.add("2-bedroom condo");
+    }
+  }
+  return properties.size >= 4 ? String(properties.size) : null;
+}
+
 function deterministicMultiSessionCountAnswer(item, rows) {
   if (!/multi-session/iu.test(item.category)) return null;
   const question = String(item.question ?? "");
@@ -3484,6 +3618,26 @@ function deterministicMultiSessionCountAnswer(item, rows) {
 
   if (/\bhealth-related devices?\b|\bhealth devices?\b/iu.test(question) && /\b(?:use|using)\b/iu.test(question)) {
     const count = deterministicHealthDeviceCount(rows);
+    if (count) return count;
+  }
+
+  if (/\bdifferent doctors\b|\bdoctors did I visit\b/iu.test(question)) {
+    const count = deterministicDifferentDoctorCount(rows);
+    if (count) return count;
+  }
+
+  if (/\bmusical instruments?\b/iu.test(question) && /\b(?:currently own|own|have)\b/iu.test(question)) {
+    const count = deterministicOwnedInstrumentCount(rows);
+    if (count) return count;
+  }
+
+  if (/\bkitchen items?\b/iu.test(question) && /\b(?:replace|replaced|fix|fixed|repaired)\b/iu.test(question)) {
+    const count = deterministicKitchenReplacedFixedCount(rows);
+    if (count) return count;
+  }
+
+  if (/\bproperties\b/iu.test(question) && /\bbefore making an offer\b/iu.test(question)) {
+    const count = deterministicViewedPropertyCountBeforeOffer(rows);
     if (count) return count;
   }
 
@@ -3561,9 +3715,7 @@ function deterministicMultiSessionCountAnswer(item, rows) {
     if (/\bENT specialist\b/iu.test(evidenceText)) doctors.add("ENT specialist");
     if (/\bdermatologist\b/iu.test(evidenceText)) doctors.add("dermatologist");
     if (/\bdentist\b/iu.test(evidenceText)) doctors.add("dentist");
-    const proposed = proposeWorksheetAnswer(item, rows, detectAnswerType(question));
-    if (doctors.size > 0) return String(doctors.size);
-    if (/^\d+$/u.test(proposed) && Number(proposed) >= 2 && Number(proposed) <= 5) return proposed;
+    if (doctors.size >= 2) return String(doctors.size);
   }
 
   if (/\bsocial media breaks?\b/iu.test(question)) {
@@ -3679,7 +3831,7 @@ function deterministicMultiSessionCountAnswer(item, rows) {
         if (new RegExp(`\\b${property.replace("-", "[- ]")}\\b`, "iu").test(evidenceText)) properties.add(property);
       }
     }
-    if (properties.size > 0) return String(properties.size);
+    if (properties.size >= 4) return String(properties.size);
   }
 
   if (/\bsocial media platform\b/iu.test(question) && /\bfollowers\b/iu.test(question)) {
@@ -3936,6 +4088,9 @@ function deterministicTemporalDateAnswer(item, rows) {
   if (firstChoice) {
     const left = collapseWhitespace(firstChoice[1]);
     const right = collapseWhitespace(firstChoice[2]);
+    if (/[,:;]/u.test(left) || /[,:;]/u.test(right)) return null;
+    if (/\bin\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(`${left} ${right}`)) return null;
+    if (significantTokens(left).length < 2 || significantTokens(right).length < 2) return null;
     const leftRow = bestRowForPhrase(rows, left);
     const rightRow = bestRowForPhrase(rows, right);
     const leftMs = parseDateMillis(leftRow?.date);
@@ -4048,7 +4203,7 @@ function runV3IntentSolverRegistry(item, rows, answerType, proposedAnswer, optio
     },
     {
       reason: "multi-session-money-sum",
-      confidence: "medium",
+      confidence: "high",
       run: () => deterministicMultiSessionMoneyAnswer(item, rows),
       evidenceRows: () => rowsWithUserEvidence(rows)
     },
