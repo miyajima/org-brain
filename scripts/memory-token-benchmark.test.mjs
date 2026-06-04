@@ -655,6 +655,84 @@ describe("memory token benchmark helpers", () => {
     expect(worksheet.deterministic_reason).toBe("knowledge-update-latest");
   });
 
+  it("uses worksheet_router_v3 user-stated knowledge updates for latest profile facts", () => {
+    const [bookItem, paintingItem, saturdayItem] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-short-history-page",
+        question_type: "knowledge-update",
+        question: "How many pages of 'A Short History of Nearly Everything' have I read so far?",
+        answer: "220",
+        haystack_session_ids: ["old-page", "new-page"],
+        haystack_dates: ["2023/05/20", "2023/05/29"],
+        haystack_sessions: [
+          [{ role: "user", content: "I've been reading \"A Short History of Nearly Everything\" and I'm currently on page 200." }],
+          [{ role: "user", content: "I just finished reading about DNA structure in \"A Short History of Nearly Everything\" - I'm now on page 220." }]
+        ]
+      },
+      {
+        question_id: "v3-painting-projects",
+        question_type: "knowledge-update",
+        question: "How many projects have I completed since starting painting classes?",
+        answer: "5",
+        haystack_session_ids: ["old-projects", "new-projects"],
+        haystack_dates: ["2023/08/16", "2023/10/09"],
+        haystack_sessions: [
+          [{ role: "user", content: "Since I've completed 4 projects since starting painting classes, I feel more confident in my skills." }],
+          [{ role: "user", content: "By the way, I just finished my 5th project since starting painting classes, and I'm feeling pretty accomplished!" }]
+        ]
+      },
+      {
+        question_id: "v3-saturday-wake-time",
+        question_type: "knowledge-update",
+        question: "What time do I wake up on Saturday mornings?",
+        answer: "7:30 am",
+        haystack_session_ids: ["old-wake", "new-wake"],
+        haystack_dates: ["2023/05/23", "2023/05/27"],
+        haystack_sessions: [
+          [{ role: "user", content: "I've been waking up around 8:30 am on Saturdays, which gives me enough time to jog." }],
+          [{ role: "user", content: "I like to wake up at 7:30 am on Saturdays and fit in a cup of coffee beforehand." }]
+        ]
+      }
+    ]));
+
+    for (const [item, expected] of [[bookItem, "220"], [paintingItem, "5"], [saturdayItem, "7:30 am"]]) {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+        item,
+        { transientStrategy: "longmemeval_session_v3", topK: 5 }
+      );
+      const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+      expect(worksheet.deterministic_answer).toBe(expected);
+      expect(worksheet.deterministic_reason).toBe("knowledge-update-latest");
+    }
+  });
+
+  it("does not use assistant suggestions as worksheet_router_v3 knowledge updates", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "v3-painting-assistant-guard",
+        question_type: "knowledge-update",
+        question: "How many projects have I completed since starting painting classes?",
+        answer: "5",
+        haystack_session_ids: ["suggestion"],
+        haystack_dates: ["2023/10/09"],
+        haystack_sessions: [[
+          { role: "user", content: "I've been taking painting classes and need ideas for what to paint next." },
+          { role: "assistant", content: "You could plan five projects since starting painting classes, such as landscapes and portraits." }
+        ]]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
+      item,
+      { transientStrategy: "longmemeval_session_v3", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router_v3" });
+    expect(worksheet.deterministic_answer).toBe("");
+    expect(worksheet.deterministic_reason).toBe("");
+  });
+
   it("prioritizes user-stated preference candidates over assistant suggestions", () => {
     const [item] = parseLongMemEvalDataset(JSON.stringify([
       {
@@ -1012,7 +1090,7 @@ describe("memory token benchmark helpers", () => {
   });
 
   it("solves worksheet_router_v3 targeted multi-session count regressions", () => {
-    const [bedtimeItem, doctorItem, fishItem, deviceItem] = parseLongMemEvalDataset(JSON.stringify([
+    const [bedtimeItem, doctorItem, doctorCurlyItem, funRunItem, fishItem, deviceItem] = parseLongMemEvalDataset(JSON.stringify([
       {
         question_id: "v3-doctor-bedtime",
         question_type: "multi-session",
@@ -1036,6 +1114,32 @@ describe("memory token benchmark helpers", () => {
           [{ role: "user", content: "I had a doctor appointment on March 3rd with my primary care physician." }],
           [{ role: "user", content: "I had a doctor follow-up appointment on March 20th with my orthopedic surgeon." }],
           [{ role: "user", content: "My EMG test is scheduled for April 1st." }]
+        ]
+      },
+      {
+        question_id: "v3-march-doctors-curly",
+        question_type: "multi-session",
+        question: "How many doctor’s appointments did I go to in March?",
+        answer: "2",
+        haystack_session_ids: ["orthopedic", "pcp", "pt"],
+        haystack_dates: ["2023/03/27", "2023/03/27", "2023/03/27"],
+        haystack_sessions: [
+          [{ role: "user", content: "I recently had a follow-up appointment with my orthopedic surgeon, Dr. Thompson, on March 20th." }],
+          [{ role: "user", content: "I saw Dr. Smith for a doctor's appointment on March 3rd, and he diagnosed me with bronchitis." }],
+          [{ role: "user", content: "I'm scheduled to start physical therapy sessions twice a week since March 25th to strengthen my leg muscles." }]
+        ]
+      },
+      {
+        question_id: "v3-march-fun-runs",
+        question_type: "multi-session",
+        question: "How many fun runs did I miss in March due to work commitments?",
+        answer: "2",
+        haystack_session_ids: ["march-5", "march-26", "april"],
+        haystack_dates: ["2023/04/26", "2023/04/26", "2023/04/26"],
+        haystack_sessions: [
+          [{ role: "user", content: "I was able to attend most weekly 5K fun runs, except for the run on March 5th when I had to miss due to work commitments." }],
+          [{ role: "user", content: "I've been pretty busy with work lately and missed a few events, including a 5K fun run on March 26th." }],
+          [{ role: "user", content: "I completed my first full marathon on April 10th." }]
         ]
       },
       {
@@ -1064,7 +1168,7 @@ describe("memory token benchmark helpers", () => {
       }
     ]));
 
-    for (const [item, expected] of [[bedtimeItem, "2 AM"], [doctorItem, "2"], [fishItem, "17"], [deviceItem, "4"]]) {
+    for (const [item, expected] of [[bedtimeItem, "2 AM"], [doctorItem, "2"], [doctorCurlyItem, "2"], [funRunItem, "2"], [fishItem, "17"], [deviceItem, "4"]]) {
       const retrieval = retrieveFromTransientBenchmarkIndex(
         buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
         item,
@@ -1217,7 +1321,7 @@ describe("memory token benchmark helpers", () => {
   });
 
   it("does not emit worksheet_router_v3 aggregation answers from partial or mismatched evidence", () => {
-    const [doctorItem, propertyItem, instrumentItem] = parseLongMemEvalDataset(JSON.stringify([
+    const [doctorItem, propertyItem, instrumentItem, funRunItem] = parseLongMemEvalDataset(JSON.stringify([
       {
         question_id: "v3-doctors-partial",
         question_type: "multi-session",
@@ -1254,10 +1358,22 @@ describe("memory token benchmark helpers", () => {
           [{ role: "user", content: "I need a technician to service my Korg B1 piano." }],
           [{ role: "assistant", content: "Los Alamos is about 400 miles away from Las Vegas." }]
         ]
+      },
+      {
+        question_id: "v3-fun-run-partial",
+        question_type: "multi-session",
+        question: "How many fun runs did I miss in March due to work commitments?",
+        answer: "2",
+        haystack_session_ids: ["one-miss", "busy"],
+        haystack_dates: ["2023/04/26", "2023/04/26"],
+        haystack_sessions: [
+          [{ role: "user", content: "I missed the 5K fun run on March 5th due to work commitments." }],
+          [{ role: "assistant", content: "March can be busy, so try blocking time for the next run." }]
+        ]
       }
     ]));
 
-    for (const item of [doctorItem, propertyItem, instrumentItem]) {
+    for (const item of [doctorItem, propertyItem, instrumentItem, funRunItem]) {
       const retrieval = retrieveFromTransientBenchmarkIndex(
         buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session_v3" }),
         item,
