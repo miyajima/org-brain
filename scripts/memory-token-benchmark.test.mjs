@@ -1639,7 +1639,7 @@ describe("memory token benchmark helpers", () => {
       fallback_rate: 0
     }, { profile: "org_brain_repro_v3" });
     expect(report.leaderboard_targets).toMatchObject({
-      profile: "org_brain_repro_v3",
+      profile: "org_brain_repro",
       accuracy: 0.86
     });
     expect(report.rows[0]).toMatchObject({
@@ -1652,6 +1652,180 @@ describe("memory token benchmark helpers", () => {
       token_reduction_rate: true,
       fallback_rate: true
     });
+  });
+
+  it("builds stable public comparison reports with track-aware primary ranking", () => {
+    const report = buildPublicComparisonReport({
+      accuracy: 0.904,
+      evidence_recall_at_5: 0.983,
+      recall_at_5: 0.983,
+      token_reduction_rate: 0.993,
+      fallback_rate: 0
+    }, { profile: "org_brain_repro" });
+
+    expect(report.rows[0]).toMatchObject({
+      system: "Org Brain current run",
+      profile: "org_brain_repro",
+      track: "reproducible_oss_retrieval"
+    });
+    expect(report.rows.find((row) => row.system === "Supermemory experimental ASMR")).toMatchObject({
+      track: "experimental_ensemble"
+    });
+    expect(report.comparison_rank_estimate).toMatchObject({
+      primary_track: "reproducible_oss_retrieval",
+      primary_track_rank: 1,
+      evidence_recall_rank: 1,
+      token_reduction_rank: 1
+    });
+    expect(report.comparison_rank_estimate.target_pass).toMatchObject({
+      public_answer_accuracy: true,
+      reproducible_evidence_recall_at_5: true,
+      token_reduction_rate: true,
+      fallback_rate: true
+    });
+  });
+
+  it("retrieves stable update evidence without using gold metadata", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "stable-update-retrieval",
+        question_type: "knowledge-update",
+        question: "Which bank am I currently pre-approved with for the mortgage?",
+        answer: "Wells Fargo",
+        answer_session_ids: ["new-bank"],
+        haystack_session_ids: ["old-bank", "new-bank", "distractor"],
+        haystack_dates: ["2026/04/01", "2026/05/01", "2026/05/02"],
+        haystack_sessions: [
+          [{ role: "user", content: "I was pre-approved with Chase for the mortgage last month." }],
+          [{ role: "user", content: "I am now pre-approved with Wells Fargo for the mortgage instead." }],
+          [{ role: "user", content: "I opened a savings account for vacation planning." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session" }),
+      item,
+      { transientStrategy: "longmemeval_session", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router" });
+
+    expect(retrieval.strategy).toBe("longmemeval_session");
+    expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
+    expect(retrieval.contexts.map((context) => context.session_id)).toContain("new-bank");
+    expect(worksheet.deterministic_answer).toMatch(/Wells Fargo/i);
+    expect(worksheet.deterministic_reason).toMatch(/^stable-/u);
+  });
+
+  it("uses worksheet_router timeline rows for temporal date differences", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "timeline-stable-diff",
+        question_type: "temporal-reasoning",
+        question_date: "2023/06/20",
+        question: "How many days were between buying the camera and receiving the lens?",
+        answer: "9 days",
+        answer_session_ids: ["camera", "lens"],
+        haystack_session_ids: ["camera", "lens"],
+        haystack_dates: ["2023/06/01", "2023/06/10"],
+        haystack_sessions: [
+          [{ role: "user", content: "I bought the camera today." }],
+          [{ role: "user", content: "I received the lens today." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session" }),
+      item,
+      { transientStrategy: "longmemeval_session", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router" });
+
+    expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
+    expect(worksheet.deterministic_answer).toBe("9 days");
+    expect(worksheet.deterministic_reason).toBe("stable-temporal-timeline");
+  });
+
+  it("uses worksheet_router ledger rows for multi-session totals", () => {
+    const [item] = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "ledger-stable-total",
+        question_type: "multi-session",
+        question: "How much did I spend on the car cover and detailing spray in total?",
+        answer: "$140",
+        answer_session_ids: ["cover", "spray"],
+        haystack_session_ids: ["cover", "spray"],
+        haystack_dates: ["2026/05/01", "2026/05/04"],
+        haystack_sessions: [
+          [{ role: "user", content: "I bought a waterproof car cover on Amazon for $120." }],
+          [{ role: "user", content: "I also picked up detailing spray for $20 for the car." }]
+        ]
+      }
+    ]));
+
+    const retrieval = retrieveFromTransientBenchmarkIndex(
+      buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session" }),
+      item,
+      { transientStrategy: "longmemeval_session", topK: 5 }
+    );
+    const worksheet = buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router" });
+
+    expect(computeEvidenceRecallAtK(item, retrieval.contexts)).toBe(true);
+    expect(worksheet.deterministic_answer).toBe("$140");
+    expect(worksheet.deterministic_reason).toMatch(/multi-session-count-extract|multi-session-money-sum|ledger/u);
+  });
+
+  it("uses worksheet_router pattern rows for explicit single-session facts", () => {
+    const items = parseLongMemEvalDataset(JSON.stringify([
+      {
+        question_id: "pattern-stable-old-name",
+        question_type: "single-session-user",
+        question: "What was my last name before I changed it?",
+        answer: "Johnson",
+        answer_session_ids: ["name-change"],
+        haystack_session_ids: ["name-change"],
+        haystack_sessions: [
+          [{ role: "user", content: "I just recently changed my last name. My old name was Johnson, but now it's Winters." }]
+        ]
+      },
+      {
+        question_id: "pattern-stable-valentine",
+        question_type: "single-session-user",
+        question: "When did I volunteer at the local animal shelter's fundraising dinner?",
+        answer: "February 14th",
+        answer_session_ids: ["dinner"],
+        haystack_session_ids: ["dinner", "workshop"],
+        haystack_sessions: [
+          [{ role: "user", content: "I loved the Love is in the Air fundraising dinner I volunteered at back on Valentine's Day." }],
+          [{ role: "user", content: "I attended a wellness workshop on February 27." }]
+        ]
+      },
+      {
+        question_id: "pattern-stable-undergrad",
+        question_type: "single-session-user",
+        question: "Where did I complete my Bachelor's degree in Computer Science?",
+        answer: "UCLA",
+        answer_session_ids: ["school"],
+        haystack_session_ids: ["school"],
+        haystack_sessions: [
+          [{ role: "user", content: "I completed my undergrad in CS from UCLA before working in the tech industry." }]
+        ]
+      }
+    ]));
+
+    const answers = items.map((item) => {
+      const retrieval = retrieveFromTransientBenchmarkIndex(
+        buildTransientBenchmarkIndex([item], { transientStrategy: "longmemeval_session" }),
+        item,
+        { transientStrategy: "longmemeval_session", topK: 5 }
+      );
+      return buildAnswerWorksheet(item, retrieval.contexts, { answererProfile: "worksheet_router" });
+    });
+
+    expect(answers.map((worksheet) => worksheet.deterministic_answer)).toEqual(["Johnson", "February 14th", "UCLA"]);
+    expect(answers.every((worksheet) => worksheet.deterministic_confidence === "high")).toBe(true);
+    expect(answers.every((worksheet) => worksheet.deterministic_reason === "stable-pattern")).toBe(true);
   });
 
   it("summarizes accuracy, token reduction, categories, and fallbacks", () => {

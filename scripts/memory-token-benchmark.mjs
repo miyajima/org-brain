@@ -35,9 +35,9 @@ import {
 const DEFAULT_DATASET_URL = "https://huggingface.co/datasets/LIXINYI33/longmemeval-s/resolve/main/longmemeval_s_cleaned.json";
 const STRATEGIES = new Set(["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"]);
 const BENCHMARK_INDEXES = new Set(["transient-sqlite", "transient-memory", "production-d1"]);
-const TRANSIENT_STRATEGIES = new Set(["bm25_lite_v1", "longmemeval_session_v2", "longmemeval_session_v3"]);
-const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1", "worksheet_router_v2", "worksheet_router_v3"]);
-const LEADERBOARD_PROFILES = new Set(["org_brain_repro_v3"]);
+const TRANSIENT_STRATEGIES = new Set(["bm25_lite_v1", "longmemeval_session_v2", "longmemeval_session_v3", "longmemeval_session"]);
+const ANSWERER_PROFILES = new Set(["evidence_cards_v1", "specialist_router_v1", "decision_forest_v1", "worksheet_router_v2", "worksheet_router_v3", "worksheet_router"]);
+const LEADERBOARD_PROFILES = new Set(["org_brain_repro_v3", "org_brain_repro"]);
 
 function printHelp() {
   console.log(`Org Brain token reduction benchmark
@@ -53,22 +53,23 @@ Options:
   --env <name>                 Wrangler environment name
   --benchmark <name>           Benchmark name (default: longmemeval-s)
   --benchmark-index <name>     transient-sqlite|transient-memory|production-d1 (default: transient-sqlite)
-  --transient-strategy <name>  bm25_lite_v1|longmemeval_session_v2|longmemeval_session_v3
-  --retrieval-profile <name>   Alias for --transient-strategy (default: longmemeval_session_v3)
-  --leaderboard-profile <name> org_brain_repro_v3 enables public-comparison defaults
-  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1|worksheet_router_v2|worksheet_router_v3
-  --token-budget <n>           Estimated treatment prompt token budget per item (default: 850)
+  --transient-strategy <name>  bm25_lite_v1|longmemeval_session
+  --retrieval-profile <name>   Alias for --transient-strategy (default: longmemeval_session)
+  --leaderboard-profile <name> org_brain_repro enables public-comparison defaults
+  --answerer-profile <name>    evidence_cards_v1|specialist_router_v1|decision_forest_v1|worksheet_router
+  --token-budget <n>           Estimated treatment prompt token budget per item (default: 650)
   --strategy <name>            bm25_v1|bm25_rewrite_v1|hybrid_memory_docs_v1 (default: hybrid_memory_docs_v1)
   --limit <n>                  Number of benchmark items (default: 500)
   --dataset-path <path>        Local LongMemEval JSON/JSONL dataset
   --dataset-url <url>          Dataset URL when no local path is provided
-  --context-char-limit <n>     Characters kept per retrieved context item (default: 1200)
+  --context-char-limit <n>     Characters kept per retrieved context item (default: 900)
   --judge-provider <name>      Judge provider (default: gemini)
   --judge-model <name>         Gemini judge model (default: gemini-3.5-flash)
   --generator-model <name>     Gemini generator model (default: gemini-3.5-flash)
   --concurrency <n>            Parallel item workers for LLM runs (default: 1)
   --llm-request-timeout-ms <n> Gemini request timeout in ms (default: 60000)
   --llm-max-attempts <n>       Gemini max attempts per request (default: 4)
+  --estimate-tokens            Use the local token estimator instead of Gemini countTokens
   --continue-on-llm-error      Write llm_error item results and continue
   --write-retrieval-failures <path>
                               Write failed evidence retrieval examples as JSONL
@@ -90,22 +91,23 @@ function parseArgs(argv) {
     ...parseLocationArgs(argv),
     benchmark: "longmemeval-s",
     benchmarkIndex: "transient-sqlite",
-    transientStrategy: "longmemeval_session_v3",
-    retrievalProfile: "longmemeval_session_v3",
+    transientStrategy: "longmemeval_session",
+    retrievalProfile: "longmemeval_session",
     leaderboardProfile: undefined,
-    answererProfile: "worksheet_router_v2",
-    tokenBudget: 850,
+    answererProfile: "worksheet_router",
+    tokenBudget: 650,
     strategy: "hybrid_memory_docs_v1",
     limit: 500,
     datasetPath: undefined,
     datasetUrl: DEFAULT_DATASET_URL,
-    contextCharLimit: 1200,
+    contextCharLimit: 900,
     judgeProvider: "gemini",
     judgeModel: "gemini-3.5-flash",
     generatorModel: "gemini-3.5-flash",
     concurrency: 1,
     llmRequestTimeoutMs: 60_000,
     llmMaxAttempts: 4,
+    estimateTokensOnly: false,
     continueOnLlmError: false,
     writeRetrievalFailures: undefined,
     writeAnswerFailures: undefined,
@@ -152,6 +154,10 @@ function parseArgs(argv) {
       options.continueOnLlmError = true;
       continue;
     }
+    if (arg === "--estimate-tokens") {
+      options.estimateTokensOnly = true;
+      continue;
+    }
     if (arg === "--benchmark" || arg.startsWith("--benchmark=")) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!value) throw new Error("--benchmark requires a value");
@@ -182,9 +188,17 @@ function parseArgs(argv) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       if (!LEADERBOARD_PROFILES.has(value)) throw new Error(`--leaderboard-profile must be one of ${[...LEADERBOARD_PROFILES].join(", ")}`);
       options.leaderboardProfile = value;
-      options.retrievalProfile = "longmemeval_session_v3";
-      options.transientStrategy = "longmemeval_session_v3";
-      options.answererProfile = "worksheet_router_v2";
+      if (value === "org_brain_repro") {
+        options.retrievalProfile = "longmemeval_session";
+        options.transientStrategy = "longmemeval_session";
+        options.answererProfile = "worksheet_router";
+        options.tokenBudget = 650;
+        options.contextCharLimit = Math.min(options.contextCharLimit, 900);
+      } else {
+        options.retrievalProfile = "longmemeval_session_v3";
+        options.transientStrategy = "longmemeval_session_v3";
+        options.answererProfile = "worksheet_router_v2";
+      }
       options.comparePublic = true;
       continue;
     }
@@ -541,7 +555,7 @@ async function geminiRequest(model, method, payload, apiKey, options = {}) {
 }
 
 async function countPromptTokens(text, model, apiKey, options = {}) {
-  if (!apiKey) return { tokens: estimateTokens(text), token_source: TOKEN_ESTIMATE_MODEL };
+  if (!apiKey || options.estimateTokensOnly) return { tokens: estimateTokens(text), token_source: TOKEN_ESTIMATE_MODEL };
   try {
     const body = await geminiRequest(model, "countTokens", { contents: [{ parts: [{ text }] }] }, apiKey, options);
     const tokens = Number(body.totalTokens ?? body.total_tokens);
@@ -743,10 +757,10 @@ async function runItem(options, item, apiKey) {
     tokenBudget: options.tokenBudget,
     answererProfile: options.answererProfile
   });
-  const answerWorksheetContexts = options.answererProfile === "worksheet_router_v3"
+  const answerWorksheetContexts = /^worksheet_router(?:_v[34])?$/u.test(options.answererProfile)
     ? retrieval.contexts
     : treatmentContexts;
-  const answerWorksheet = /^worksheet_router_v[23]$/u.test(options.answererProfile)
+  const answerWorksheet = /^worksheet_router(?:_v[234])?$/u.test(options.answererProfile)
     ? buildAnswerWorksheet(item, answerWorksheetContexts, { answererProfile: options.answererProfile })
     : null;
   const treatmentPrompt = buildTreatmentPrompt(item, treatmentContexts, {
@@ -1012,14 +1026,15 @@ function formatPercent(value) {
 
 function printComparisonText(report, options = {}) {
   if (!options.nested) console.log("Org Brain public comparison report");
-  console.log(`Targets: accuracy=${formatPercent(report.leaderboard_targets.accuracy)} evidence_recall@5=${formatPercent(report.leaderboard_targets.evidence_recall_at_5)} token_reduction=${formatPercent(report.leaderboard_targets.token_reduction_rate)} fallback=${formatPercent(report.leaderboard_targets.fallback_rate)}`);
+  console.log(`Targets: accuracy=${formatPercent(report.leaderboard_targets.accuracy)} public_answer_accuracy=${formatPercent(report.leaderboard_targets.public_answer_accuracy)} evidence_recall@5=${formatPercent(report.leaderboard_targets.evidence_recall_at_5)} reproducible_recall@5=${formatPercent(report.leaderboard_targets.reproducible_evidence_recall_at_5)} token_reduction=${formatPercent(report.leaderboard_targets.token_reduction_rate)} fallback=${formatPercent(report.leaderboard_targets.fallback_rate)}`);
+  console.log(`Primary track: ${report.leaderboard_targets.primary_track}`);
   console.log("Comparison rows");
   for (const row of report.rows) {
     console.log(
-      `  ${row.system} (${row.profile}): accuracy=${formatPercent(row.accuracy)} evidence_recall@5=${formatPercent(row.evidence_recall_at_5)} token_reduction=${formatPercent(row.token_reduction_rate)} source=${row.source_url ?? "current"}`
+      `  ${row.system} (${row.profile}, track=${row.track ?? "unknown"}): accuracy=${formatPercent(row.accuracy)} evidence_recall@5=${formatPercent(row.evidence_recall_at_5)} token_reduction=${formatPercent(row.token_reduction_rate)} source=${row.source_url ?? "current"}`
     );
   }
-  console.log(`Rank estimate: accuracy=${report.comparison_rank_estimate.accuracy_rank ?? "n/a"} evidence_recall=${report.comparison_rank_estimate.evidence_recall_rank ?? "n/a"} token_reduction=${report.comparison_rank_estimate.token_reduction_rank ?? "n/a"}`);
+  console.log(`Rank estimate: accuracy=${report.comparison_rank_estimate.accuracy_rank ?? "n/a"} evidence_recall=${report.comparison_rank_estimate.evidence_recall_rank ?? "n/a"} token_reduction=${report.comparison_rank_estimate.token_reduction_rank ?? "n/a"} primary_track_rank=${report.comparison_rank_estimate.primary_track_rank ?? "n/a"}`);
   console.log(`Caveat: ${report.caveat}`);
 }
 
@@ -1096,6 +1111,7 @@ async function main() {
       generator_model: options.generatorModel,
       llm_request_timeout_ms: options.llmRequestTimeoutMs,
       llm_max_attempts: options.llmMaxAttempts,
+      estimate_tokens: options.estimateTokensOnly,
       continue_on_llm_error: options.continueOnLlmError,
       write_retrieval_failures: options.writeRetrievalFailures ?? null,
       write_answer_failures: options.writeAnswerFailures ?? null,
@@ -1105,7 +1121,10 @@ async function main() {
     },
     token_source: tokenSources.length === 1 ? tokenSources[0] : tokenSources.join("+"),
     leaderboard_targets: LEADERBOARD_TARGETS,
-    comparison_rank_estimate: buildComparisonRankEstimate(summary),
+    comparison_rank_estimate: buildComparisonRankEstimate(summary, {
+      profile: options.leaderboardProfile ?? options.retrievalProfile,
+      track: LEADERBOARD_TARGETS.primary_track
+    }),
     public_comparison: publicComparison,
     summary,
     results

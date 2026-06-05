@@ -200,7 +200,7 @@ Start here for the stable maps of contents.
         },
         `# Current State
 
-Org Brain runs as a Cloudflare-based org bus MVP.
+Org Brain runs as a self-hostable agent memory bus.
 
 ## Topology
 
