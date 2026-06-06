@@ -8,6 +8,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
+import { memoryModeFields, resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -787,6 +788,31 @@ export async function main() {
 
   await loadEnvFallbacks();
 
+  const memoryMode = resolveMemoryMode();
+  if (memoryMode.configurationError) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        skipped: "cloud-memory-disabled",
+        reason: memoryMode.configurationError,
+        source: sourceName,
+        ...memoryModeFields(memoryMode)
+      })
+    );
+    return;
+  }
+  if (!memoryMode.cloudWritesAllowed) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        skipped: "cloud-memory-disabled",
+        source: sourceName,
+        ...memoryModeFields(memoryMode)
+      })
+    );
+    return;
+  }
+
   const apiBase = resolveApiBase();
   const apiKey = ensureRequiredEnv("ORGBRAIN_API_KEY");
   const tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
@@ -796,7 +822,8 @@ export async function main() {
       JSON.stringify({
         ok: true,
         skipped: "missing-orgbrain-env",
-        source: sourceName
+        source: sourceName,
+        ...memoryModeFields(memoryMode)
       })
     );
     return;
@@ -809,7 +836,8 @@ export async function main() {
         ok: true,
         source: sourceName,
         tenant_id: tenantId,
-        skipped: "low-signal-memory"
+        skipped: "low-signal-memory",
+        ...memoryModeFields(memoryMode)
       })
     );
     return;
@@ -825,7 +853,8 @@ export async function main() {
       tenant_id: tenantId,
       external_key: prepared.record.externalKey,
       inserted: Number(result?.inserted ?? 0),
-      updated: Number(result?.updated ?? 0)
+      updated: Number(result?.updated ?? 0),
+      ...memoryModeFields(memoryMode)
     })
   );
 }

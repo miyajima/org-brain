@@ -45,13 +45,49 @@ By default the database is stored at `~/.org-brain/memory.sqlite`. Override it w
 export ORGBRAIN_LOCAL_DB="$HOME/.org-brain/memory.sqlite"
 ```
 
-You can also import/export existing local agent memory:
+After enabling Cloudflare-backed memory in one of the modes below, you can import/export existing local agent memory through the API bridge:
 
 ```bash
 pnpm sync:agents-memory
 ```
 
 OpenClaw currently has an import path from `~/.openclaw/memory/main.sqlite`; other agents receive markdown exports.
+
+## Memory Sharing Modes
+
+Cloudflare-backed memory and organization sharing are both OFF by default. With the default env values, `pnpm local:memory` stores personal memory locally and `pnpm hook:bridge` / `pnpm sync:agents-memory` do not write to the Cloudflare API.
+
+```bash
+ORGBRAIN_ENABLE_CLOUD_MEMORY=false
+ORGBRAIN_ENABLE_ORG_SHARING=false
+```
+
+To use personal portable memory on your own Cloudflare deployment, enable Cloudflare memory but keep organization sharing OFF:
+
+```bash
+export ORGBRAIN_ENABLE_CLOUD_MEMORY=true
+export ORGBRAIN_ENABLE_ORG_SHARING=false
+export ORGBRAIN_API_URL="http://127.0.0.1:8787"
+export ORGBRAIN_API_KEY="dev-org-brain-api-key"
+export ORGBRAIN_TENANT_ID="personal"
+
+pnpm hook:bridge -- codex '{"type":"agent-turn-complete","cwd":"<repo-root>","last-assistant-message":"..."}'
+pnpm sync:agents-memory
+```
+
+In this mode hook output includes `memory_scope:"personal_cloud"` and `shared_write:false`.
+
+To share memory with an organization, enable both settings and use a team tenant:
+
+```bash
+export ORGBRAIN_ENABLE_CLOUD_MEMORY=true
+export ORGBRAIN_ENABLE_ORG_SHARING=true
+export ORGBRAIN_API_URL="https://<your-worker>.<account>.workers.dev"
+export ORGBRAIN_API_KEY="<team-api-key>"
+export ORGBRAIN_TENANT_ID="<team-tenant>"
+```
+
+For organization sharing, configure tenant grants in the gateway with `API_TENANT_POLICY_JSON` and, for MCP clients, `MCP_TENANT_POLICY_JSON`. In this mode hook output includes `memory_scope:"organization"` and `shared_write:true`, and `pnpm sync:agents-memory` prints a `[mode]` line with the active scope, sharing flag, and tenant before import/export.
 
 ## Quick Start: Cloudflare Self-host
 

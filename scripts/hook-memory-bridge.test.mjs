@@ -9,8 +9,53 @@ import {
   resolveApiBase,
   resolveProjectNameForWorkspace
 } from "./hook-memory-bridge.mjs";
+import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 
 describe("hook-memory-bridge promotion", () => {
+  it("keeps Cloudflare memory disabled by default", () => {
+    expect(resolveMemoryMode({})).toMatchObject({
+      cloudMemoryEnabled: false,
+      orgSharingEnabled: false,
+      scope: "local",
+      cloudWritesAllowed: false,
+      sharedWrite: false
+    });
+  });
+
+  it("separates personal portable cloud memory from organization sharing", () => {
+    expect(resolveMemoryMode({ ORGBRAIN_ENABLE_CLOUD_MEMORY: "true" })).toMatchObject({
+      cloudMemoryEnabled: true,
+      orgSharingEnabled: false,
+      scope: "personal_cloud",
+      cloudWritesAllowed: true,
+      sharedWrite: false
+    });
+
+    expect(
+      resolveMemoryMode({
+        ORGBRAIN_ENABLE_CLOUD_MEMORY: "true",
+        ORGBRAIN_ENABLE_ORG_SHARING: "true"
+      })
+    ).toMatchObject({
+      cloudMemoryEnabled: true,
+      orgSharingEnabled: true,
+      scope: "organization",
+      cloudWritesAllowed: true,
+      sharedWrite: true
+    });
+  });
+
+  it("does not allow organization sharing without Cloudflare memory", () => {
+    expect(resolveMemoryMode({ ORGBRAIN_ENABLE_ORG_SHARING: "true" })).toMatchObject({
+      cloudMemoryEnabled: false,
+      orgSharingEnabled: true,
+      scope: "local",
+      cloudWritesAllowed: false,
+      sharedWrite: false,
+      configurationError: "ORGBRAIN_ENABLE_ORG_SHARING requires ORGBRAIN_ENABLE_CLOUD_MEMORY"
+    });
+  });
+
   it("uses ORGBRAIN_API_BASE as a fallback alias when canonical URL is absent", () => {
     expect(resolveApiBase({ ORGBRAIN_API_BASE: "https://legacy.example.test" })).toBe("https://legacy.example.test");
     expect(

@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -441,6 +442,20 @@ async function exportToTargets(memories, targets, tenantId) {
 
 export async function main() {
   await loadEnvFallbacks();
+  const memoryMode = resolveMemoryMode();
+  if (memoryMode.configurationError) {
+    console.log(
+      `[mode] skipped scope=${memoryMode.scope} cloud_memory=${memoryMode.cloudMemoryEnabled ? "on" : "off"} org_sharing=${memoryMode.orgSharingEnabled ? "on" : "off"} reason=${memoryMode.configurationError}`
+    );
+    return;
+  }
+  if (!memoryMode.cloudWritesAllowed) {
+    console.log(
+      `[mode] skipped scope=${memoryMode.scope} cloud_memory=off org_sharing=${memoryMode.orgSharingEnabled ? "on" : "off"} reason=ORGBRAIN_ENABLE_CLOUD_MEMORY is off`
+    );
+    return;
+  }
+
   const apiBase = resolveApiBase();
   const apiKey = getRequiredEnv("ORGBRAIN_API_KEY");
   const tenantId = (process.env.ORGBRAIN_TENANT_ID ?? "default").trim() || "default";
@@ -454,6 +469,10 @@ export async function main() {
   if (!["both", "import", "export"].includes(direction)) {
     throw new Error("SYNC_DIRECTION must be one of: both, import, export");
   }
+
+  console.log(
+    `[mode] scope=${memoryMode.scope} cloud_memory=on org_sharing=${memoryMode.orgSharingEnabled ? "on" : "off"} shared_write=${memoryMode.sharedWrite ? "yes" : "no"} tenant=${tenantId}`
+  );
 
   if (direction === "both" || direction === "import") {
     const importResult = await importOpenClawIfPresent(apiBase, apiKey, tenantId, chunkLimit, batchSize, targets);
