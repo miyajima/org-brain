@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import os from "node:os";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import process from "node:process";
@@ -15,9 +16,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const apiGatewayDir = resolve(repoRoot, "apps/api-gateway");
 const projectRootOverrides = new Map([
-  [".agents", "/Users/miya/.agents"],
-  [".codex", "/Users/miya/.codex"],
-  ["org-brain", "/Users/miya/projects/org-brain"]
+  [".agents", resolve(os.homedir(), ".agents")],
+  [".codex", resolve(os.homedir(), ".codex")],
+  ["org-brain", repoRoot]
 ]);
 
 function configuredProjectRootOverrides() {
@@ -179,7 +180,7 @@ function resolveProjectRoot(projectId) {
   const configured = configuredProjectRootOverrides();
   if (configured.has(projectId)) return configured.get(projectId);
   if (projectRootOverrides.has(projectId)) return projectRootOverrides.get(projectId);
-  return `/Users/miya/projects/${projectId}`;
+  return null;
 }
 
 async function inspectProjectRepo(projectId) {

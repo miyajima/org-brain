@@ -8,6 +8,7 @@ export type Env = {
   OPEN_BRAIN_BUCKET: R2Bucket;
   ORG_BUS_OUT: Queue<TaskEnvelope>;
   API_KEY: string;
+  API_TENANT_POLICY_JSON?: string;
   MCP_TENANT_POLICY_JSON?: string;
   MCP_ACCESS_AUD?: string;
   MCP_SERVICE_TOKENS_JSON?: string;

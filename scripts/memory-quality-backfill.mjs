@@ -2,17 +2,20 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
 import { assessMemoryUsefulness } from "./lib/memory-quality.mjs";
 import { parseLocationArgs, runD1Queries, sqlNullable, sqlString } from "./lib/metrics-common.mjs";
 
 const DEFAULT_LIMIT = 5000;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
 const PROJECT_ROOT_OVERRIDES = new Map([
-  [".agents", "/Users/miya/.agents"],
-  [".codex", "/Users/miya/.codex"],
-  ["org-brain", "/Users/miya/projects/org-brain"]
+  [".agents", path.join(os.homedir(), ".agents")],
+  [".codex", path.join(os.homedir(), ".codex")],
+  ["org-brain", repoRoot]
 ]);
 
 function configuredProjectRootOverrides() {
@@ -138,7 +141,7 @@ function resolveProjectRoot(projectId) {
   const configured = configuredProjectRootOverrides();
   if (configured.has(projectId)) return configured.get(projectId);
   if (PROJECT_ROOT_OVERRIDES.has(projectId)) return PROJECT_ROOT_OVERRIDES.get(projectId);
-  return `/Users/miya/projects/${projectId}`;
+  return null;
 }
 
 function projectMappingWarning(row) {

@@ -35,6 +35,9 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 - Propose memory save: `orgbrain_memories_propose`
 - Confirm memory save: `orgbrain_memories_confirm`
 - Upsert memory: `orgbrain_memories_upsert`
+- Enrich task context: `orgbrain_context_enrich`
+- Create decision memory: `orgbrain_decision_memories_create`
+- Search decision memory: `orgbrain_decision_memories_search`
 - Create task: `orgbrain_task_create`
 - Get task: `orgbrain_task_get`
 - Get events: `orgbrain_task_events`
@@ -44,6 +47,7 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 - OpenClaw local memory remains cache/index.
 - Retrieval impact should be measured primarily with D1 `retrieval_events` and opt-in measurement mode; the final-report impact note is a lightweight self-report for cases where memory avoided another lookup.
 - `orgbrain_memories_upsert` remains for compatibility and non-interactive flows, but interactive assistant flows should use propose/confirm.
+- For agent preflight, call `orgbrain_context_enrich` with `task.title`, `task.description`, `project_id`, and `task_type`; use returned `decisionContext`, `constraints`, and `knownPitfalls` as guidance, not as a replacement for source verification.
 - If MCP returns auth errors, ask for:
   - service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`)
   - optional `x-orgbrain-tenant` header

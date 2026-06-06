@@ -3,6 +3,7 @@
 ## Architecture
 - Endpoint: `https://<api-gateway-domain>/mcp`
 - Host Worker: `apps/api-gateway` (`/mcp` is mounted in the same Worker)
+- Compatibility Worker: `apps/mcp` is retained only for legacy deployments that need an `API` service binding proxy.
 - Auth: Worker-validated service tokens via `CF-Access-Client-Id` / `CF-Access-Client-Secret`
 - Tenant control: per-token `tenants` plus optional `MCP_TENANT_POLICY_JSON`
 
@@ -44,7 +45,7 @@ Optional policy:
 
 ## Deploy
 ```bash
-cd /Users/miya/projects/org-brain
+cd <repo-root>
 pnpm install
 
 # set secrets/vars for api-gateway
@@ -83,4 +84,26 @@ pnpm wrangler deploy
 - Browser-based login can be added later by placing Cloudflare Access in front of the endpoint and wiring JWT verification.
 
 ## Skill
-- [skills/org-brain-mcp/SKILL.md](/Users/miya/projects/org-brain/skills/org-brain-mcp/SKILL.md)
+- `skills/org-brain-mcp/SKILL.md`
+
+## Preflight Tools
+Use these tools before implementation/review/debug work when shared org context may matter:
+
+- `orgbrain_context_enrich`: returns decision context, constraints, known pitfalls, conflicts, and next actions for a task.
+- `orgbrain_decision_memories_search`: searches decision-grade context directly.
+- `orgbrain_decision_memories_create`: records a durable decision memory when an operator has confirmed the decision.
+
+Example `orgbrain_context_enrich` input:
+
+```json
+{
+  "tenant_id": "default",
+  "project_id": "org-brain",
+  "task_type": "implementation",
+  "task": {
+    "title": "Add memory sharing preflight",
+    "description": "Expose shared decision context through MCP",
+    "target_files": ["apps/api-gateway/src/mcp.ts"]
+  }
+}
+```

@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(SCRIPT_DIR, "..");
 const DEFAULT_ENV_FILES = [
   "~/.config/org-brain/hooks.env",
   "~/.openclaw/.env",
   "~/.agents/.env",
-  "/Users/miya/projects/org-brain/.env.local",
-  "/Users/miya/projects/org-brain/.env"
+  path.join(ROOT, ".env.local"),
+  path.join(ROOT, ".env")
 ];
 
 const AGENT_TARGETS = [
@@ -28,19 +31,22 @@ const AGENT_TARGETS = [
     id: "codex",
     homeDir: "~/.codex",
     exportDir: "~/.codex/memories",
-    exportFile: "org-brain-sync.md"
+    exportFile: "org-brain-sync.md",
+    importMarkdownDir: "~/.codex/memories"
   },
   {
     id: "claude",
     homeDir: "~/.claude",
     exportDir: "~/.claude/memories",
-    exportFile: "org-brain-sync.md"
+    exportFile: "org-brain-sync.md",
+    importMarkdownDir: "~/.claude/memories"
   },
   {
     id: "cursor",
     homeDir: "~/.cursor",
     exportDir: "~/.cursor/memories",
-    exportFile: "org-brain-sync.md"
+    exportFile: "org-brain-sync.md",
+    importMarkdownDir: "~/.cursor/memories"
   },
   {
     id: "opencode",
@@ -63,12 +69,15 @@ function resolveHome(p) {
   return p;
 }
 
-function getRequiredEnv(key) {
+function getOptionalEnv(key) {
   const value = process.env[key];
-  if (!value || value.trim().length === 0) {
-    throw new Error(`Missing required env: ${key}`);
-  }
-  return value.trim();
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getRequiredEnv(key) {
+  const value = getOptionalEnv(key);
+  if (!value) throw new Error(`Missing required env: ${key}`);
+  return value;
 }
 
 function parseEnvText(raw) {
@@ -94,7 +103,7 @@ function parseEnvText(raw) {
   return result;
 }
 
-async function loadEnvFallbacks() {
+export async function loadEnvFallbacks() {
   const configured = process.env.ORGBRAIN_HOOK_ENV_FILES;
   const files = (configured ? configured.split(/[:,;]/) : DEFAULT_ENV_FILES)
     .map((entry) => resolveHome(entry.trim()))
@@ -113,8 +122,12 @@ async function loadEnvFallbacks() {
   }
 }
 
-function resolveApiBase() {
-  return getRequiredEnv("ORGBRAIN_API_URL") || getRequiredEnv("ORGBRAIN_API_BASE");
+export function resolveApiBase(env = process.env) {
+  const canonical = typeof env.ORGBRAIN_API_URL === "string" ? env.ORGBRAIN_API_URL.trim() : "";
+  if (canonical) return canonical;
+  const alias = typeof env.ORGBRAIN_API_BASE === "string" ? env.ORGBRAIN_API_BASE.trim() : "";
+  if (alias) return alias;
+  throw new Error("Missing required env: ORGBRAIN_API_URL");
 }
 
 function normalizeInt(raw, fallback, min, max) {
@@ -195,8 +208,76 @@ function chunkArray(arr, size) {
   return chunks;
 }
 
-function renderOrgBrainMarkdown(memories, targetId) {
+async function digestHex(value) {
+  const crypto = await import("node:crypto");
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function parseFrontmatter(raw) {
+  if (!raw.startsWith("---\n")) return {};
+  const end = raw.indexOf("\n---", 4);
+  if (end < 0) return {};
+  const frontmatter = raw.slice(4, end).split(/\r?\n/);
+  const parsed = {};
+  for (const line of frontmatter) {
+    const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!match) continue;
+    const [, key, value] = match;
+    try {
+      parsed[key] = JSON.parse(value);
+    } catch {
+      parsed[key] = value.trim();
+    }
+  }
+  return parsed;
+}
+
+function inferProjectIdFromMarkdown(raw) {
+  const frontmatter = parseFrontmatter(raw);
+  if (typeof frontmatter.project_id === "string" && frontmatter.project_id.trim()) {
+    return frontmatter.project_id.trim().slice(0, 128);
+  }
+  const match = raw.match(/^- Project:\s*(.+)$/im);
+  if (!match) return null;
+  const value = match[1].trim();
+  if (!value || value === "(global)") return null;
+  return path.basename(value).slice(0, 128);
+}
+
+async function readMarkdownImportItems(target, limit) {
+  if (!target.importMarkdownDir) return [];
+  if (!(await pathExists(target.importMarkdownDir))) return [];
+  const entries = await readdir(target.importMarkdownDir, { withFileTypes: true }).catch(() => []);
+  const files = entries
+    .filter((entry) => entry.isFile() && /\.md(?:own)?$/i.test(entry.name) && entry.name !== target.exportFile)
+    .slice(0, limit);
+  const items = [];
+  for (const entry of files) {
+    const file = path.join(target.importMarkdownDir, entry.name);
+    const raw = await readFile(file, "utf8").catch(() => "");
+    const content = raw.trim();
+    if (content.length < 40) continue;
+    const hash = await digestHex(`${target.id}:${file}:${content}`);
+    items.push({
+      external_key: `${target.id}:markdown:${hash.slice(0, 32)}`,
+      content: content.slice(0, 20_000),
+      summary: `${target.id} markdown memory: ${entry.name}`.slice(0, 1000),
+      tags: [target.id, "markdown-import", "curated-memory"],
+      project_id: inferProjectIdFromMarkdown(content),
+      created_at: Date.now()
+    });
+  }
+  return items;
+}
+
+export function renderOrgBrainMarkdown(memories, targetId, tenantId = "default") {
   const lines = [];
+  lines.push("---");
+  lines.push(`target: ${JSON.stringify(targetId)}`);
+  lines.push(`tenant: ${JSON.stringify(tenantId)}`);
+  lines.push(`generated_at: ${JSON.stringify(new Date().toISOString())}`);
+  lines.push("---");
+  lines.push("");
   lines.push("# OrgBrain Sync");
   lines.push("");
   lines.push(`Target: ${targetId}`);
@@ -210,6 +291,18 @@ function renderOrgBrainMarkdown(memories, targetId) {
     if (memory.external_key) lines.push(`- ExternalKey: ${memory.external_key}`);
     if (memory.summary) lines.push(`- Summary: ${String(memory.summary).slice(0, 1000)}`);
     if (memory.project_id !== undefined) lines.push(`- Project: ${memory.project_id ?? "(global)"}`);
+    lines.push(`- Tenant: ${memory.tenant_id ?? tenantId}`);
+    lines.push(`- MemoryKind: ${memory.kind ?? memory.memory_kind ?? "episodic"}`);
+    lines.push(`- LifecycleState: ${memory.lifecycle_state ?? "active"}`);
+    lines.push("");
+    lines.push("```yaml");
+    lines.push(`tenant: ${JSON.stringify(memory.tenant_id ?? tenantId)}`);
+    lines.push(`project_id: ${JSON.stringify(memory.project_id ?? null)}`);
+    lines.push(`source: ${JSON.stringify(memory.source ?? "org-brain")}`);
+    lines.push(`external_key: ${JSON.stringify(memory.external_key ?? null)}`);
+    lines.push(`memory_kind: ${JSON.stringify(memory.kind ?? memory.memory_kind ?? "episodic")}`);
+    lines.push(`lifecycle_state: ${JSON.stringify(memory.lifecycle_state ?? "active")}`);
+    lines.push("```");
     lines.push("");
     lines.push("```text");
     lines.push(String(memory.content ?? "").slice(0, 20_000));
@@ -236,6 +329,7 @@ function resolveTargets() {
     ...target,
     homeDir: resolveHome(target.homeDir),
     exportDir: resolveHome(target.exportDir),
+    importMarkdownDir: target.importMarkdownDir ? resolveHome(target.importMarkdownDir) : null,
     importSQLite: target.importSQLite ? resolveHome(target.importSQLite) : null
   })).filter((target) => target.homeDir && target.exportDir);
 }
@@ -282,6 +376,38 @@ async function importOpenClawIfPresent(apiBase, apiKey, tenantId, chunkLimit, ba
   };
 }
 
+export async function importMarkdownMemoriesIfPresent(apiBase, apiKey, tenantId, markdownLimit, batchSize, targets) {
+  const importTargets = targets.filter((target) => target.importMarkdownDir && target.id !== "openclaw");
+  const results = [];
+  for (const target of importTargets) {
+    if (!(await pathExists(target.homeDir))) {
+      results.push({ target: target.id, status: "skipped", reason: "missing-home-dir" });
+      continue;
+    }
+    const items = await readMarkdownImportItems(target, markdownLimit);
+    if (items.length === 0) {
+      results.push({ target: target.id, status: "skipped", reason: "no-markdown-memories" });
+      continue;
+    }
+    let inserted = 0;
+    let updated = 0;
+    for (const batch of chunkArray(items, batchSize)) {
+      const result = await fetchApiJson(apiBase, apiKey, "/v1/memories/upsert", {
+        method: "POST",
+        body: {
+          tenant_id: tenantId,
+          source: target.id,
+          items: batch
+        }
+      });
+      inserted += Number(result.inserted ?? 0);
+      updated += Number(result.updated ?? 0);
+    }
+    results.push({ target: target.id, status: "imported", memories: items.length, inserted, updated });
+  }
+  return results;
+}
+
 async function fetchExportMemories(apiBase, apiKey, tenantId, exportLimit, exportSource) {
   const route = new URLSearchParams({
     tenant_id: tenantId,
@@ -291,7 +417,7 @@ async function fetchExportMemories(apiBase, apiKey, tenantId, exportLimit, expor
   return fetchApiJson(apiBase, apiKey, `/v1/memories?${route.toString()}`);
 }
 
-async function exportToTargets(memories, targets) {
+async function exportToTargets(memories, targets, tenantId) {
   const results = [];
   for (const target of targets) {
     if (!(await pathExists(target.homeDir))) {
@@ -301,7 +427,7 @@ async function exportToTargets(memories, targets) {
 
     const exportFile = path.join(target.exportDir, target.exportFile);
     await mkdir(target.exportDir, { recursive: true });
-    await writeFile(exportFile, renderOrgBrainMarkdown(memories, target.id), "utf8");
+    await writeFile(exportFile, renderOrgBrainMarkdown(memories, target.id, tenantId), "utf8");
     const reindex = await tryReindex(target);
     results.push({
       target: target.id,
@@ -338,11 +464,22 @@ export async function main() {
     } else {
       console.log("[import] openclaw skipped (missing home dir or sqlite)");
     }
+    const markdownLimit = normalizeInt(process.env.AGENT_MARKDOWN_IMPORT_LIMIT, 100, 1, 500);
+    const markdownResults = await importMarkdownMemoriesIfPresent(apiBase, apiKey, tenantId, markdownLimit, batchSize, targets);
+    for (const result of markdownResults) {
+      if (result.status !== "imported") {
+        console.log(`[import] ${result.target} markdown skipped (${result.reason})`);
+        continue;
+      }
+      console.log(
+        `[import] ${result.target} markdown memories=${result.memories} inserted=${result.inserted} updated=${result.updated}`
+      );
+    }
   }
 
   if (direction === "both" || direction === "export") {
     const memories = await fetchExportMemories(apiBase, apiKey, tenantId, exportLimit, exportSource);
-    const exportResults = await exportToTargets(Array.isArray(memories) ? memories : [], targets);
+    const exportResults = await exportToTargets(Array.isArray(memories) ? memories : [], targets, tenantId);
     for (const result of exportResults) {
       if (result.status !== "exported") {
         console.log(`[export] ${result.target} skipped (${result.reason})`);

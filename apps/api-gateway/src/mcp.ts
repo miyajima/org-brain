@@ -6,6 +6,7 @@ import { z } from "zod";
 import { authorizeMcpRequest } from "./mcp-security";
 import { getTask, getTaskEvents, createTask } from "./task-service";
 import type { Env } from "./types";
+import { createDecisionMemory, enrichContext, searchDecisionMemories } from "./context-engine-service";
 import {
   getMemoryProfile,
   listMemories,
@@ -21,6 +22,21 @@ type AgentProps = {
   principal: string;
   allowedTenants: string[];
 };
+
+const sourceRefSchema = z.object({
+  type: z.string().max(64).optional(),
+  id: z.string().max(128).optional(),
+  title: z.string().max(240).optional(),
+  url: z.string().max(512).optional(),
+  updatedAt: z.string().max(64).optional(),
+  allowedPrincipals: z.array(z.string().min(1).max(128)).max(64).optional()
+});
+
+const ownerRefSchema = z.object({
+  type: z.string().max(64).optional(),
+  id: z.string().max(128).optional(),
+  name: z.string().max(128).optional()
+});
 
 function toContent(data: unknown) {
   return {
@@ -224,6 +240,96 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           limit_recent,
           rewrite_query,
           search_mode
+        });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_context_enrich",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        user_id: z.string().max(128).optional(),
+        agent_id: z.string().max(128).optional(),
+        task_type: z.enum(["implementation", "review", "debug", "proposal", "support"]).optional(),
+        task: z.object({
+          title: z.string().max(240).optional(),
+          description: z.string().max(2000).optional(),
+          target_files: z.array(z.string().max(256)).max(32).optional(),
+          related_issue_ids: z.array(z.string().max(128)).max(32).optional()
+        }),
+        max_tokens: z.number().int().min(500).max(32000).optional(),
+        include_sources: z.boolean().optional(),
+        include_conflicts: z.boolean().optional(),
+        debug_scores: z.boolean().optional()
+      },
+      async ({ tenant_id, user_id, agent_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await enrichContext(this.env, {
+          tenant_id: tenantId,
+          user_id: user_id ?? principal,
+          agent_id: agent_id ?? principal,
+          ...payload
+        });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_decision_memories_create",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        domain: z.enum(["engineering", "sales", "cs", "ops", "finance", "general"]).optional(),
+        title: z.string().min(1).max(240),
+        decision: z.string().min(1).max(1000),
+        rationale: z.string().min(1).max(2000),
+        rejected_alternatives: z.array(z.object({
+          alternative: z.string().min(1).max(500),
+          reasonRejected: z.string().min(1).max(500)
+        })).max(16).optional(),
+        constraints: z.array(z.string().min(1).max(500)).max(32).optional(),
+        known_pitfalls: z.array(z.string().min(1).max(500)).max(32).optional(),
+        source_refs: z.array(sourceRefSchema).max(16).optional(),
+        owner_refs: z.array(ownerRefSchema).max(16).optional(),
+        valid_from: z.union([z.string(), z.number()]).nullable().optional(),
+        valid_until: z.union([z.string(), z.number()]).nullable().optional(),
+        status: z.enum(["active", "deprecated", "superseded", "uncertain"]).optional(),
+        superseded_by: z.string().max(128).nullable().optional(),
+        confidence: z.number().min(0).max(1).optional(),
+        visibility: z.enum(["tenant", "project", "restricted"]).optional(),
+        allowed_principals: z.array(z.string().min(1).max(128)).max(64).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const result = await createDecisionMemory(this.env, {
+          tenant_id: tenantId,
+          ...payload
+        });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_decision_memories_search",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        q: z.string().max(500).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+        user_id: z.string().max(128).optional(),
+        agent_id: z.string().max(128).optional()
+      },
+      async ({ tenant_id, user_id, agent_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await searchDecisionMemories(this.env, {
+          tenant_id: tenantId,
+          user_id: user_id ?? principal,
+          agent_id: agent_id ?? principal,
+          ...payload
         });
         return toContent(result);
       }

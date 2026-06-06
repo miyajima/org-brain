@@ -6,10 +6,21 @@ import {
   classifyMemoryRecord,
   normalizeRecord,
   prepareMemoryRecordForUpsert,
+  resolveApiBase,
   resolveProjectNameForWorkspace
 } from "./hook-memory-bridge.mjs";
 
 describe("hook-memory-bridge promotion", () => {
+  it("uses ORGBRAIN_API_BASE as a fallback alias when canonical URL is absent", () => {
+    expect(resolveApiBase({ ORGBRAIN_API_BASE: "https://legacy.example.test" })).toBe("https://legacy.example.test");
+    expect(
+      resolveApiBase({
+        ORGBRAIN_API_URL: "https://canonical.example.test",
+        ORGBRAIN_API_BASE: "https://legacy.example.test"
+      })
+    ).toBe("https://canonical.example.test");
+  });
+
   it("skips generic agent-turn-complete messages", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",
@@ -24,7 +35,7 @@ describe("hook-memory-bridge promotion", () => {
   it("promotes Japanese diagnosis and fix memories", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",
-      cwd: "/Users/miya/projects/org-brain",
+      cwd: "/tmp/workspaces/org-brain",
       "last-assistant-message":
         "原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。"
     });
@@ -42,7 +53,7 @@ describe("hook-memory-bridge promotion", () => {
   it("promotes command and result pairs", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",
-      cwd: "/Users/miya/projects/org-brain",
+      cwd: "/tmp/workspaces/org-brain",
       "last-assistant-message":
         "調査のため `wrangler d1 execute open-brain --remote --json` を実行し、その後 `pnpm usage:status` も再実行しました。どちらも成功し、remote D1 へ届くことを確認できました。次回も同じ症状ならこの順で確認します。"
     });
@@ -55,7 +66,7 @@ describe("hook-memory-bridge promotion", () => {
   it("uses concrete takeaway details instead of vague Japanese completion titles", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",
-      cwd: "/Users/miya/projects/omopay",
+      cwd: "/tmp/workspaces/omopay",
       "last-assistant-message":
         "3件とも修正しました。\n\n- `Payment` に `staff` と `store` の整合性バリデーションを追加しました。\n- `Merchant::DistributionSnapshotBuilder` は finalized 期間を再集計しません。\n- `bundle exec rspec spec/models/payment_spec.rb` を実行し、11 examples, 0 failures でした。"
     });
@@ -80,7 +91,7 @@ describe("hook-memory-bridge promotion", () => {
   it("extracts normalized codex records", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",
-      cwd: "/Users/miya/projects/org-brain",
+      cwd: "/tmp/workspaces/org-brain",
       "turn-id": "turn-123",
       "input-messages": ["現在の利用状況をレポートして"],
       "last-assistant-message": "原因は認証不足です。対処として `wrangler login` を実行しました。"
@@ -95,7 +106,7 @@ describe("hook-memory-bridge promotion", () => {
   it("respects explicit global project scope from payload", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",
-      cwd: "/Users/miya/.agents",
+      cwd: "/tmp/dot-agents",
       project_id: null,
       "last-assistant-message":
         "原因は、このMacでは再生成可能な大きいローカル成果物が複数の定位置に蓄積することです。対処として `df -h ~` で確認し、Chrome の OptGuideOnDeviceModel、Docker の未使用 image/build cache、Atomic Chat モデルを優先して削除します。結果として空き容量を回復でき、再発時も同じ順序で確認できます。"
@@ -111,14 +122,14 @@ describe("hook-memory-bridge promotion", () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
     const file = path.join(dir, "project-names.json");
     const record = {
-      cwd: "/Users/miya/projects/org-brain",
+      cwd: "/tmp/workspaces/org-brain",
       projectId: "org-brain"
     };
 
     const selected = await resolveProjectNameForWorkspace(record, {
       file,
       prompt: async (cwd, fallback) => {
-        expect(cwd).toBe("/Users/miya/projects/org-brain");
+        expect(cwd).toBe("/tmp/workspaces/org-brain");
         expect(fallback).toBe("org-brain");
         return "client-workspace";
       }
@@ -126,7 +137,7 @@ describe("hook-memory-bridge promotion", () => {
 
     expect(selected).toBe("client-workspace");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved["/Users/miya/projects/org-brain"]).toBe("client-workspace");
+    expect(saved["/tmp/workspaces/org-brain"]).toBe("client-workspace");
 
     const reused = await resolveProjectNameForWorkspace(record, {
       file,
@@ -143,7 +154,7 @@ describe("hook-memory-bridge promotion", () => {
 
     const selected = await resolveProjectNameForWorkspace(
       {
-        cwd: "/Users/miya/projects/demo-app",
+        cwd: "/tmp/workspaces/demo-app",
         projectId: "demo-app"
       },
       {
@@ -154,7 +165,7 @@ describe("hook-memory-bridge promotion", () => {
 
     expect(selected).toBe("demo-app");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved["/Users/miya/projects/demo-app"]).toBe("demo-app");
+    expect(saved["/tmp/workspaces/demo-app"]).toBe("demo-app");
   });
 
   it("promotes structured project facts from learning-loop payloads", () => {
@@ -162,7 +173,7 @@ describe("hook-memory-bridge promotion", () => {
       type: "learning-loop",
       action: "record",
       context: {
-        workspaceDir: "/Users/miya/projects/org-brain",
+        workspaceDir: "/tmp/workspaces/org-brain",
         messageId: "learning-loop:LRN-20260421-001",
         sessionKey: "learning-loop",
         bodyForAgent: "Canonical harness project fact."

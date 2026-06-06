@@ -6,10 +6,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
+import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
 
-const ROOT = "/Users/miya/projects/org-brain";
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(SCRIPT_DIR, "..");
 const DEFAULT_ENV_FILES = [
   "~/.config/org-brain/hooks.env",
   "~/.openclaw/.env",
@@ -151,7 +153,7 @@ function parseEnvText(raw) {
   return result;
 }
 
-async function loadEnvFallbacks() {
+export async function loadEnvFallbacks() {
   const configured = process.env.ORGBRAIN_HOOK_ENV_FILES;
   const files = (configured ? configured.split(/[:,;]/) : DEFAULT_ENV_FILES)
     .map((entry) => resolveHome(entry.trim()))
@@ -737,7 +739,11 @@ async function readPayload(argvPayload) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function resolveApiBase() {
+export function resolveApiBase(env = process.env) {
+  const canonical = typeof env.ORGBRAIN_API_URL === "string" ? env.ORGBRAIN_API_URL.trim() : "";
+  if (canonical) return canonical;
+  const alias = typeof env.ORGBRAIN_API_BASE === "string" ? env.ORGBRAIN_API_BASE.trim() : "";
+  if (alias) return alias;
   return ensureRequiredEnv("ORGBRAIN_API_URL") || ensureRequiredEnv("ORGBRAIN_API_BASE");
 }
 

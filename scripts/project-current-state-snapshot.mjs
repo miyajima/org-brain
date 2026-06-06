@@ -3,6 +3,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { assessMemoryUsefulness } from "./lib/memory-quality.mjs";
@@ -13,9 +14,9 @@ const repoRoot = path.resolve(__dirname, "..");
 const apiGatewayDir = path.resolve(repoRoot, "apps/api-gateway");
 
 const PROJECT_ROOT_OVERRIDES = new Map([
-  [".agents", "/Users/miya/.agents"],
-  [".codex", "/Users/miya/.codex"],
-  ["org-brain", "/Users/miya/projects/org-brain"]
+  [".agents", path.join(os.homedir(), ".agents")],
+  [".codex", path.join(os.homedir(), ".codex")],
+  ["org-brain", repoRoot]
 ]);
 
 function configuredProjectRootOverrides() {
@@ -111,7 +112,7 @@ function resolveProjectRoot(projectId) {
   const configured = configuredProjectRootOverrides();
   if (configured.has(projectId)) return configured.get(projectId);
   if (PROJECT_ROOT_OVERRIDES.has(projectId)) return PROJECT_ROOT_OVERRIDES.get(projectId);
-  return `/Users/miya/projects/${projectId}`;
+  return null;
 }
 
 async function runD1(options, command) {

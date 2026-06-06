@@ -154,6 +154,40 @@ export type MemoryListPage = {
   };
 };
 
+export type MemoryDetail = {
+  tenant_id: string;
+  memory_id: string;
+  versions: Array<{
+    version: number;
+    operation: string;
+    summary: string | null;
+    kind: string;
+    lifecycle_state: string;
+    actor_type: string | null;
+    actor_id: string | null;
+    created_at: number;
+  }>;
+  rationales: Array<{
+    id: string;
+    decision_type: string;
+    conclusion: string;
+    reason_summary: string;
+    status: string;
+    confirmation_state: string;
+    confidence_score: number | null;
+    created_at: number;
+    confirmed_at: number | null;
+    evidence: Array<{
+      id: string;
+      evidence_type: string;
+      evidence_ref: string;
+      relation: string;
+      note: string | null;
+      weight_score: number | null;
+    }>;
+  }>;
+};
+
 function parseString(value: unknown, field: string): string {
   if (typeof value !== "string") {
     throw new HttpError(400, "invalid_payload", `${field} must be a string`);
@@ -514,6 +548,92 @@ export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<Memo
     "api-memory-profile"
   );
   return profile;
+}
+
+export async function getMemoryDetails(env: Env, tenantId: string, memoryId: string): Promise<MemoryDetail> {
+  const versions = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT version, operation, summary, kind, lifecycle_state, actor_type, actor_id, created_at
+     FROM memory_versions
+     WHERE tenant_id = ? AND memory_id = ?
+     ORDER BY version DESC
+     LIMIT 20`
+  )
+    .bind(tenantId, memoryId)
+    .all<{
+      version: number;
+      operation: string;
+      summary: string | null;
+      kind: string;
+      lifecycle_state: string;
+      actor_type: string | null;
+      actor_id: string | null;
+      created_at: number;
+    }>();
+
+  const rationaleRows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, decision_type, conclusion, reason_summary, status, confirmation_state, confidence_score, created_at, confirmed_at
+     FROM decision_rationales
+     WHERE tenant_id = ? AND memory_id = ?
+     ORDER BY created_at DESC
+     LIMIT 20`
+  )
+    .bind(tenantId, memoryId)
+    .all<{
+      id: string;
+      decision_type: string;
+      conclusion: string;
+      reason_summary: string;
+      status: string;
+      confirmation_state: string;
+      confidence_score: number | null;
+      created_at: number;
+      confirmed_at: number | null;
+    }>();
+
+  const rationaleIds = rationaleRows.results.map((row) => row.id);
+  const evidenceByRationale = new Map<string, MemoryDetail["rationales"][number]["evidence"]>();
+  if (rationaleIds.length > 0) {
+    const placeholders = rationaleIds.map(() => "?").join(", ");
+    const evidenceRows = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, rationale_id, evidence_type, evidence_ref, relation, note, weight_score
+       FROM decision_evidence
+       WHERE tenant_id = ? AND rationale_id IN (${placeholders})
+       ORDER BY created_at DESC
+       LIMIT 100`
+    )
+      .bind(tenantId, ...rationaleIds)
+      .all<{
+        id: string;
+        rationale_id: string;
+        evidence_type: string;
+        evidence_ref: string;
+        relation: string;
+        note: string | null;
+        weight_score: number | null;
+      }>();
+    for (const row of evidenceRows.results) {
+      const list = evidenceByRationale.get(row.rationale_id) ?? [];
+      list.push({
+        id: row.id,
+        evidence_type: row.evidence_type,
+        evidence_ref: row.evidence_ref,
+        relation: row.relation,
+        note: row.note,
+        weight_score: row.weight_score
+      });
+      evidenceByRationale.set(row.rationale_id, list);
+    }
+  }
+
+  return {
+    tenant_id: tenantId,
+    memory_id: memoryId,
+    versions: versions.results,
+    rationales: rationaleRows.results.map((row) => ({
+      ...row,
+      evidence: evidenceByRationale.get(row.id) ?? []
+    }))
+  };
 }
 
 async function bestEffortRefreshMemoryResults(env: Env, tenantId: string, ids: string[], actorId: string): Promise<void> {

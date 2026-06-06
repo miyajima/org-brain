@@ -93,6 +93,40 @@ type MemoryListPage = {
   };
 };
 
+type MemoryDetailResponse = {
+  tenant_id: string;
+  memory_id: string;
+  versions: Array<{
+    version: number;
+    operation: string;
+    summary: string | null;
+    kind: string;
+    lifecycle_state: string;
+    actor_type: string | null;
+    actor_id: string | null;
+    created_at: number;
+  }>;
+  rationales: Array<{
+    id: string;
+    decision_type: string;
+    conclusion: string;
+    reason_summary: string;
+    status: string;
+    confirmation_state: string;
+    confidence_score: number | null;
+    created_at: number;
+    confirmed_at: number | null;
+    evidence: Array<{
+      id: string;
+      evidence_type: string;
+      evidence_ref: string;
+      relation: string;
+      note: string | null;
+      weight_score: number | null;
+    }>;
+  }>;
+};
+
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error?: { code?: string; message?: string } };
 type ApiResponse<T> = ApiOk<T> | ApiErr;
@@ -131,6 +165,12 @@ const view = ["search", "profile", "maintenance"].includes(params.get("view") ??
 const rewriteQuery = params.get("rewrite_query") !== "0";
 const searchMode = params.get("search_mode") === "memories" ? "memories" : "hybrid";
 const includeHistory = params.get("include_history") !== "0";
+const entityId = params.get("entity_id")?.trim() || "";
+const entityRole = params.get("entity_role")?.trim() || "";
+const decisionType = params.get("decision_type")?.trim() || "";
+const decisionStatus = params.get("decision_status")?.trim() || "";
+const confirmationState = params.get("confirmation_state")?.trim() || "";
+const reasonText = params.get("reason_text")?.trim() || "";
 const pageSize = Math.min(50, Math.max(10, Number.parseInt(params.get("page_size") ?? "20", 10) || 20));
 const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
 const offset = (page - 1) * pageSize;
@@ -322,7 +362,13 @@ const searchPayload =
           limit: 12,
           rewrite_query: rewriteQuery,
           search_mode: searchMode,
-          include_history: includeHistory
+          include_history: includeHistory,
+          entity_id: entityId || undefined,
+          entity_role: entityRole || undefined,
+          decision_type: decisionType || undefined,
+          decision_status: decisionStatus || undefined,
+          confirmation_state: confirmationState || undefined,
+          reason_text: reasonText || undefined
         })
       })
     : null;
@@ -402,10 +448,16 @@ const datalistSuggestions = [
 ].slice(0, 12);
 
 const detail = buildDetailRecord(selectedId, corpusItems, searchResults, [...durableRows, ...recentRows]);
+const detailPayload =
+  detail?.kind === "memory"
+    ? await fetchApi<MemoryDetailResponse>(`/api/v1/memories/${encodeURIComponent(detail.id)}/details?tenant_id=${encodeURIComponent(tenantId)}`)
+    : null;
+const memoryDetail = detailPayload?.ok ? detailPayload.data : null;
 const loadErrors = [...new Set([
   listPayload?.ok === false ? listPayload.error?.message ?? "Memory list could not be loaded" : null,
   searchPayload?.ok === false ? searchPayload.error?.message ?? "Memory search could not be loaded" : null,
-  profilePayload?.ok === false ? profilePayload.error?.message ?? "Memory profile could not be loaded" : null
+  profilePayload?.ok === false ? profilePayload.error?.message ?? "Memory profile could not be loaded" : null,
+  detailPayload?.ok === false ? detailPayload.error?.message ?? "Memory detail could not be loaded" : null
 ].filter(Boolean) as string[])];
 
 const prevPageHref = listPage?.meta.has_prev ? makeHref({ page: String(page - 1), selected: "" }) : null;
@@ -527,6 +579,29 @@ const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
                 <option value="50" selected={pageSize === 50}>50</option>
               </select>
             </label>
+            <label>
+              <span class="surface-label">Rationale state</span>
+              <select name="confirmation_state">
+                <option value="" selected={confirmationState === ""}>any</option>
+                <option value="user_confirmed" selected={confirmationState === "user_confirmed"}>confirmed</option>
+                <option value="user_corrected" selected={confirmationState === "user_corrected"}>corrected</option>
+                <option value="inferred_unconfirmed" selected={confirmationState === "inferred_unconfirmed"}>inferred</option>
+              </select>
+            </label>
+            <label>
+              <span class="surface-label">Decision type</span>
+              <input name="decision_type" value={decisionType} placeholder="policy / diagnose" />
+            </label>
+            <label>
+              <span class="surface-label">Entity ID</span>
+              <input name="entity_id" value={entityId} placeholder="optional entity id" />
+            </label>
+            <label>
+              <span class="surface-label">Reason text</span>
+              <input name="reason_text" value={reasonText} placeholder="reason contains..." />
+            </label>
+            <input type="hidden" name="entity_role" value={entityRole} />
+            <input type="hidden" name="decision_status" value={decisionStatus} />
             <button class="md:col-span-2 xl:col-span-5" type="submit">Apply filters</button>
           </form>
 
@@ -906,6 +981,85 @@ const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
                 <p class="mt-3 text-sm leading-7 text-zinc-300">{detail.preview}</p>
               </section>
 
+              {detail.kind === "memory" && (
+                <section class="surface-soft-card !rounded-[24px] !p-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="surface-label">Operations</p>
+                      <h3 class="mt-2 text-base font-semibold text-white">Lifecycle actions</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        class="memory-action-button"
+                        type="button"
+                        data-memory-action="refresh"
+                        data-memory-id={detail.id}
+                        data-tenant-id={tenantId}
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        class="memory-action-button"
+                        type="button"
+                        data-memory-action="suppress"
+                        data-memory-id={detail.id}
+                        data-tenant-id={tenantId}
+                      >
+                        Suppress
+                      </button>
+                    </div>
+                  </div>
+                  <p class="mt-3 text-sm leading-7 text-zinc-400" data-memory-action-status>
+                    Refresh records a recall event. Suppress hides the memory from normal retrieval; physical delete stays in cleanup scripts.
+                  </p>
+                </section>
+              )}
+
+              {memoryDetail && (
+                <section class="space-y-3">
+                  <div class="surface-soft-card !rounded-[24px] !p-4">
+                    <p class="surface-label">Rationales</p>
+                    <div class="mt-3 space-y-3">
+                      {memoryDetail.rationales.length > 0 ? memoryDetail.rationales.map((rationale) => (
+                        <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
+                          <div class="flex flex-wrap gap-2">
+                            <span class="surface-chip">{rationale.decision_type}</span>
+                            <span class="surface-chip">{rationale.confirmation_state}</span>
+                            <span class="surface-chip">{rationale.status}</span>
+                          </div>
+                          <h3 class="mt-3 text-base font-semibold text-white">{rationale.conclusion}</h3>
+                          <p class="mt-2 text-sm leading-7 text-zinc-300">{rationale.reason_summary}</p>
+                          {rationale.evidence.length > 0 && (
+                            <div class="mt-3 space-y-2">
+                              {rationale.evidence.map((evidence) => (
+                                <p class="break-all rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-xs leading-6 text-zinc-400">
+                                  {evidence.relation} / {evidence.evidence_type}: {evidence.evidence_ref}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )) : <p class="text-sm leading-7 text-zinc-400">No rationale rows for this memory.</p>}
+                    </div>
+                  </div>
+
+                  <div class="surface-soft-card !rounded-[24px] !p-4">
+                    <p class="surface-label">Versions</p>
+                    <div class="mt-3 space-y-2">
+                      {memoryDetail.versions.length > 0 ? memoryDetail.versions.map((version) => (
+                        <div class="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <strong class="text-sm font-semibold text-white">v{version.version} / {version.operation}</strong>
+                            <span class="text-xs uppercase tracking-[0.16em] text-zinc-500">{formatDate(version.created_at)}</span>
+                          </div>
+                          <p class="mt-2 text-xs leading-6 text-zinc-400">{version.summary || `${version.kind} / ${version.lifecycle_state}`}</p>
+                        </div>
+                      )) : <p class="text-sm leading-7 text-zinc-400">No version history available.</p>}
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {detail.content && detail.content !== detail.preview && (
                 <details class="surface-soft-card !rounded-[24px] !p-4">
                   <summary class="cursor-pointer text-sm font-semibold text-white">Raw content</summary>
@@ -937,3 +1091,30 @@ const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
     </div>
   </section>
 </BaseLayout>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-memory-action]")) {
+    button.addEventListener("click", async () => {
+      const action = button.dataset.memoryAction;
+      const memoryId = button.dataset.memoryId;
+      const tenantId = button.dataset.tenantId || "default";
+      const status = document.querySelector<HTMLElement>("[data-memory-action-status]");
+      if (!action || !memoryId) return;
+      if (action === "suppress" && !window.confirm("Suppress this memory from normal retrieval?")) return;
+      button.disabled = true;
+      if (status) status.textContent = `${action} running...`;
+      const route = action === "refresh" ? "/api/v1/memories/refresh" : "/api/v1/memories/suppress";
+      const body = action === "refresh"
+        ? { tenant_id: tenantId, memory_id: memoryId }
+        : { tenant_id: tenantId, memory_id: memoryId, reason: "suppressed from console" };
+      const response = await fetch(route, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
+      if (response.ok) window.location.reload();
+      button.disabled = false;
+    });
+  }
+</script>
