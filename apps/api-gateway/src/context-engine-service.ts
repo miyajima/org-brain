@@ -9,6 +9,7 @@ const TASK_TYPES = ["implementation", "review", "debug", "proposal", "support"] 
 const DECISION_DOMAINS = ["engineering", "sales", "cs", "ops", "finance", "general"] as const;
 const DECISION_STATUSES = ["active", "deprecated", "superseded", "uncertain"] as const;
 const VISIBILITIES = ["tenant", "project", "restricted"] as const;
+const CONFIRMATION_STATES = ["draft", "inferred_unconfirmed", "user_confirmed", "user_corrected", "reviewed"] as const;
 
 const DEFAULT_SOURCE_AUTHORITY: Record<string, number> = {
   current_code: 1.0,
@@ -26,6 +27,7 @@ export type TaskType = (typeof TASK_TYPES)[number];
 type DecisionDomain = (typeof DECISION_DOMAINS)[number];
 type DecisionStatus = (typeof DECISION_STATUSES)[number];
 type DecisionVisibility = (typeof VISIBILITIES)[number];
+type ConfirmationState = (typeof CONFIRMATION_STATES)[number];
 
 type SourceRef = {
   type?: string;
@@ -60,6 +62,7 @@ type DecisionMemoryRow = {
   known_pitfalls_json: string | null;
   source_refs_json: string | null;
   owner_refs_json: string | null;
+  reviewer_refs_json: string | null;
   valid_from: number | null;
   valid_until: number | null;
   status: string;
@@ -67,6 +70,9 @@ type DecisionMemoryRow = {
   confidence: number | null;
   visibility: string | null;
   allowed_principals_json: string | null;
+  confirmation_state: string | null;
+  confirmation_note: string | null;
+  confirmed_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -84,6 +90,7 @@ type DecisionMemory = {
   knownPitfalls: string[];
   sourceRefs: SourceRef[];
   ownerRefs: OwnerRef[];
+  reviewerRefs: OwnerRef[];
   validFrom: number | null;
   validUntil: number | null;
   status: DecisionStatus;
@@ -91,8 +98,35 @@ type DecisionMemory = {
   confidence: number;
   visibility: DecisionVisibility;
   allowedPrincipals: string[];
+  confirmationState: ConfirmationState;
+  confirmationNote: string | null;
+  confirmedAt: number | null;
   createdAt: number;
   updatedAt: number;
+};
+
+type DecisionMemoryVersionRow = {
+  id: string;
+  decision_memory_id: string;
+  tenant_id: string;
+  operation: string;
+  snapshot_json: string;
+  actor_refs_json: string | null;
+  reviewer_refs_json: string | null;
+  note: string | null;
+  created_at: number;
+};
+
+type DecisionMemoryVersion = {
+  id: string;
+  decisionMemoryId: string;
+  tenantId: string;
+  operation: string;
+  snapshot: Record<string, unknown>;
+  actorRefs: OwnerRef[];
+  reviewerRefs: OwnerRef[];
+  note: string | null;
+  createdAt: number;
 };
 
 export type ContextScoreBreakdown = {
@@ -139,6 +173,12 @@ type ContextEnrichRequest = {
   include_conflicts?: boolean;
   debugScores?: boolean;
   debug_scores?: boolean;
+  includeProvenance?: boolean;
+  include_provenance?: boolean;
+  authorityScoring?: boolean;
+  authority_scoring?: boolean;
+  verificationView?: boolean;
+  verification_view?: boolean;
 };
 
 type DecisionMemoryCreateRequest = {
@@ -159,6 +199,8 @@ type DecisionMemoryCreateRequest = {
   source_refs?: SourceRef[];
   ownerRefs?: OwnerRef[];
   owner_refs?: OwnerRef[];
+  reviewerRefs?: OwnerRef[];
+  reviewer_refs?: OwnerRef[];
   validFrom?: string | number | null;
   valid_from?: string | number | null;
   validUntil?: string | number | null;
@@ -170,6 +212,10 @@ type DecisionMemoryCreateRequest = {
   visibility?: DecisionVisibility;
   allowedPrincipals?: string[];
   allowed_principals?: string[];
+  confirmationState?: ConfirmationState;
+  confirmation_state?: ConfirmationState;
+  confirmationNote?: string | null;
+  confirmation_note?: string | null;
 };
 
 type DecisionMemorySearchRequest = {
@@ -183,6 +229,48 @@ type DecisionMemorySearchRequest = {
   user_id?: string;
   agentId?: string;
   agent_id?: string;
+  personId?: string;
+  person_id?: string;
+  reviewerId?: string;
+  reviewer_id?: string;
+  confirmationState?: ConfirmationState;
+  confirmation_state?: ConfirmationState;
+  validAt?: string | number | null;
+  valid_at?: string | number | null;
+  hasConflicts?: boolean;
+  has_conflicts?: boolean;
+  taskContext?: string;
+  task_context?: string;
+  includeProvenance?: boolean;
+  include_provenance?: boolean;
+  authorityScoring?: boolean;
+  authority_scoring?: boolean;
+  verificationView?: boolean;
+  verification_view?: boolean;
+};
+
+type DecisionMemoryReviseRequest = Partial<DecisionMemoryCreateRequest> & {
+  note?: string;
+  actorRefs?: OwnerRef[];
+  actor_refs?: OwnerRef[];
+};
+
+type DecisionMemoryConfirmRequest = {
+  orgId?: string;
+  tenant_id?: string;
+  reviewerRefs?: OwnerRef[];
+  reviewer_refs?: OwnerRef[];
+  confirmationState?: ConfirmationState;
+  confirmation_state?: ConfirmationState;
+  confirmationNote?: string | null;
+  confirmation_note?: string | null;
+  confidenceDelta?: number;
+  confidence_delta?: number;
+  confidence?: number;
+  validFrom?: string | number | null;
+  valid_from?: string | number | null;
+  validUntil?: string | number | null;
+  valid_until?: string | number | null;
 };
 
 function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
@@ -229,6 +317,14 @@ function parseEnum<T extends readonly string[]>(value: unknown, field: string, a
   return value as T[number];
 }
 
+function parseOptionalEnum<T extends readonly string[]>(value: unknown, field: string, allowed: T): T[number] | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !allowed.includes(value)) {
+    throw new HttpError(400, "invalid_payload", `${field} must be one of ${allowed.join(", ")}`);
+  }
+  return value as T[number];
+}
+
 function parseStringArray(value: unknown, field: string, maxItems = 32, maxLength = 500): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new HttpError(400, "invalid_payload", `${field} must be an array`);
@@ -252,6 +348,11 @@ function parseTimestamp(value: unknown, field: string): number | null {
   throw new HttpError(400, "invalid_payload", `${field} must be an ISO date string or timestamp`);
 }
 
+function parseOptionalTimestamp(value: unknown, field: string): number | null | undefined {
+  if (value === undefined) return undefined;
+  return parseTimestamp(value, field);
+}
+
 function parseJsonArray<T>(raw: string | null | undefined): T[] {
   if (!raw) return [];
   try {
@@ -260,6 +361,39 @@ function parseJsonArray<T>(raw: string | null | undefined): T[] {
   } catch {
     return [];
   }
+}
+
+function parseOwnerRefs(value: unknown, field: string, maxItems = 16): OwnerRef[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new HttpError(400, "invalid_payload", `${field} must be an array`);
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    .map((item) => ({
+      type: typeof item.type === "string" ? item.type.slice(0, 64) : undefined,
+      id: typeof item.id === "string" ? item.id.slice(0, 128) : undefined,
+      name: typeof item.name === "string" ? item.name.slice(0, 160) : undefined
+    }))
+    .filter((item) => Boolean(item.id || item.name))
+    .slice(0, maxItems);
+}
+
+function parseSourceRefs(value: unknown, field: string, maxItems = 16): SourceRef[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new HttpError(400, "invalid_payload", `${field} must be an array`);
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    .map((item) => ({
+      type: typeof item.type === "string" ? item.type.slice(0, 80) : undefined,
+      id: typeof item.id === "string" ? item.id.slice(0, 160) : undefined,
+      title: typeof item.title === "string" ? item.title.slice(0, 240) : undefined,
+      url: typeof item.url === "string" ? item.url.slice(0, 500) : undefined,
+      updatedAt: typeof item.updatedAt === "string" ? item.updatedAt.slice(0, 80) : undefined,
+      allowedPrincipals: Array.isArray(item.allowedPrincipals)
+        ? item.allowedPrincipals.filter((principal): principal is string => typeof principal === "string").slice(0, 32)
+        : undefined
+    }))
+    .filter((item) => Boolean(item.type || item.id || item.title || item.url))
+    .slice(0, maxItems);
 }
 
 function normalizeStatus(raw: unknown): DecisionStatus {
@@ -272,6 +406,11 @@ function normalizeDomain(raw: unknown): DecisionDomain {
 
 function normalizeVisibility(raw: unknown): DecisionVisibility {
   return raw === "project" || raw === "restricted" ? raw : "tenant";
+}
+
+function normalizeConfirmationState(raw: unknown): ConfirmationState {
+  if (raw === "draft" || raw === "user_confirmed" || raw === "user_corrected" || raw === "reviewed") return raw;
+  return "inferred_unconfirmed";
 }
 
 function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
@@ -288,6 +427,7 @@ function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
     knownPitfalls: parseJsonArray<string>(row.known_pitfalls_json),
     sourceRefs: parseJsonArray<SourceRef>(row.source_refs_json),
     ownerRefs: parseJsonArray<OwnerRef>(row.owner_refs_json),
+    reviewerRefs: parseJsonArray<OwnerRef>(row.reviewer_refs_json),
     validFrom: row.valid_from ?? null,
     validUntil: row.valid_until ?? null,
     status: normalizeStatus(row.status),
@@ -295,8 +435,32 @@ function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
     confidence: clamp(Number(row.confidence ?? 0.5), 0, 1),
     visibility: normalizeVisibility(row.visibility),
     allowedPrincipals: parseJsonArray<string>(row.allowed_principals_json),
+    confirmationState: normalizeConfirmationState(row.confirmation_state),
+    confirmationNote: row.confirmation_note ?? null,
+    confirmedAt: row.confirmed_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function toDecisionMemoryVersion(row: DecisionMemoryVersionRow): DecisionMemoryVersion {
+  let snapshot: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(row.snapshot_json || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) snapshot = parsed as Record<string, unknown>;
+  } catch {
+    snapshot = {};
+  }
+  return {
+    id: row.id,
+    decisionMemoryId: row.decision_memory_id,
+    tenantId: row.tenant_id,
+    operation: row.operation,
+    snapshot,
+    actorRefs: parseJsonArray<OwnerRef>(row.actor_refs_json),
+    reviewerRefs: parseJsonArray<OwnerRef>(row.reviewer_refs_json),
+    note: row.note ?? null,
+    createdAt: row.created_at
   };
 }
 
@@ -507,7 +671,10 @@ function parseEnrichRequest(rawBody: unknown) {
     maxTokens: parseOptionalInteger(body.maxTokens ?? body.max_tokens, "maxTokens", DEFAULT_MAX_TOKENS, 500, 32000),
     includeSources: parseOptionalBoolean(body.includeSources ?? body.include_sources, "includeSources", true),
     includeConflicts: parseOptionalBoolean(body.includeConflicts ?? body.include_conflicts, "includeConflicts", true),
-    debugScores: parseOptionalBoolean(body.debugScores ?? body.debug_scores, "debugScores", false)
+    debugScores: parseOptionalBoolean(body.debugScores ?? body.debug_scores, "debugScores", false),
+    includeProvenance: parseOptionalBoolean(body.includeProvenance ?? body.include_provenance, "includeProvenance", false),
+    authorityScoring: parseOptionalBoolean(body.authorityScoring ?? body.authority_scoring, "authorityScoring", false),
+    verificationView: parseOptionalBoolean(body.verificationView ?? body.verification_view, "verificationView", false)
   };
 }
 
@@ -526,8 +693,9 @@ function parseCreateDecisionRequest(rawBody: unknown): DecisionMemory {
     rejectedAlternatives: ((body.rejectedAlternatives ?? body.rejected_alternatives ?? []) as RejectedAlternative[]).slice(0, 16),
     constraints: parseStringArray(body.constraints, "constraints", 32, 500),
     knownPitfalls: parseStringArray(body.knownPitfalls ?? body.known_pitfalls, "knownPitfalls", 32, 500),
-    sourceRefs: ((body.sourceRefs ?? body.source_refs ?? []) as SourceRef[]).slice(0, 16),
-    ownerRefs: ((body.ownerRefs ?? body.owner_refs ?? []) as OwnerRef[]).slice(0, 16),
+    sourceRefs: parseSourceRefs(body.sourceRefs ?? body.source_refs, "sourceRefs", 16),
+    ownerRefs: parseOwnerRefs(body.ownerRefs ?? body.owner_refs, "ownerRefs", 16),
+    reviewerRefs: parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16),
     validFrom: parseTimestamp(body.validFrom ?? body.valid_from, "validFrom"),
     validUntil: parseTimestamp(body.validUntil ?? body.valid_until, "validUntil"),
     status: parseEnum(body.status, "status", DECISION_STATUSES, "active"),
@@ -535,6 +703,9 @@ function parseCreateDecisionRequest(rawBody: unknown): DecisionMemory {
     confidence: parseOptionalNumber(body.confidence, "confidence", 0.5, 0, 1),
     visibility: parseEnum(body.visibility, "visibility", VISIBILITIES, "tenant"),
     allowedPrincipals: parseStringArray(body.allowedPrincipals ?? body.allowed_principals, "allowedPrincipals", 64, 128),
+    confirmationState: parseEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES, "inferred_unconfirmed"),
+    confirmationNote: parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000),
+    confirmedAt: null,
     createdAt: now,
     updatedAt: now
   };
@@ -549,15 +720,25 @@ function parseSearchDecisionRequest(rawBody: unknown) {
     q: parseOptionalString(body.q, "q", 500) ?? "",
     limit: parseOptionalInteger(body.limit, "limit", DEFAULT_SEARCH_LIMIT, 1, 50),
     userId: parseOptionalString(body.userId ?? body.user_id, "userId", 128),
-    agentId: parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128)
+    agentId: parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
+    personId: parseOptionalString(body.personId ?? body.person_id, "personId", 128),
+    reviewerId: parseOptionalString(body.reviewerId ?? body.reviewer_id, "reviewerId", 128),
+    confirmationState: parseOptionalEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES),
+    validAt: parseOptionalTimestamp(body.validAt ?? body.valid_at, "validAt"),
+    hasConflicts: parseOptionalBoolean(body.hasConflicts ?? body.has_conflicts, "hasConflicts", false),
+    taskContext: parseOptionalString(body.taskContext ?? body.task_context, "taskContext", 1000) ?? "",
+    includeProvenance: parseOptionalBoolean(body.includeProvenance ?? body.include_provenance, "includeProvenance", false),
+    authorityScoring: parseOptionalBoolean(body.authorityScoring ?? body.authority_scoring, "authorityScoring", false),
+    verificationView: parseOptionalBoolean(body.verificationView ?? body.verification_view, "verificationView", false)
   };
 }
 
 async function loadDecisionMemories(env: Env, args: { tenantId: string; projectId: string | null; q: string; limit: number }): Promise<DecisionMemory[]> {
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, domain, title, decision, rationale,
-            rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json,
+            rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
             valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
+            confirmation_state, confirmation_note, confirmed_at,
             created_at, updated_at
      FROM decision_memories
      WHERE tenant_id = ?
@@ -574,6 +755,95 @@ async function loadDecisionMemories(env: Env, args: { tenantId: string; projectI
   return (matched.length > 0 ? matched : memories).slice(0, args.limit);
 }
 
+async function loadDecisionMemoryById(env: Env, tenantId: string, id: string): Promise<DecisionMemory> {
+  const result = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, tenant_id, project_id, domain, title, decision, rationale,
+            rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
+            valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
+            confirmation_state, confirmation_note, confirmed_at,
+            created_at, updated_at
+     FROM decision_memories
+     WHERE tenant_id = ? AND id = ?
+     LIMIT 1`
+  )
+    .bind(tenantId, id)
+    .all<DecisionMemoryRow>();
+  const row = result.results[0];
+  if (!row) throw new HttpError(404, "decision_memory_not_found", `decision memory not found: ${id}`);
+  return toDecisionMemory(row);
+}
+
+async function loadDecisionMemoryVersions(env: Env, tenantId: string, id: string): Promise<DecisionMemoryVersion[]> {
+  const result = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, decision_memory_id, tenant_id, operation, snapshot_json, actor_refs_json, reviewer_refs_json, note, created_at
+     FROM decision_memory_versions
+     WHERE tenant_id = ? AND decision_memory_id = ?
+     ORDER BY created_at DESC
+     LIMIT 30`
+  )
+    .bind(tenantId, id)
+    .all<DecisionMemoryVersionRow>();
+  return result.results.map(toDecisionMemoryVersion);
+}
+
+function snapshotDecisionMemory(memory: DecisionMemory): Record<string, unknown> {
+  return {
+    id: memory.id,
+    tenantId: memory.tenantId,
+    projectId: memory.projectId,
+    domain: memory.domain,
+    title: memory.title,
+    decision: memory.decision,
+    rationale: memory.rationale,
+    rejectedAlternatives: memory.rejectedAlternatives,
+    constraints: memory.constraints,
+    knownPitfalls: memory.knownPitfalls,
+    sourceRefs: memory.sourceRefs,
+    ownerRefs: memory.ownerRefs,
+    reviewerRefs: memory.reviewerRefs,
+    validFrom: memory.validFrom,
+    validUntil: memory.validUntil,
+    status: memory.status,
+    supersededBy: memory.supersededBy,
+    confidence: memory.confidence,
+    visibility: memory.visibility,
+    allowedPrincipals: memory.allowedPrincipals,
+    confirmationState: memory.confirmationState,
+    confirmationNote: memory.confirmationNote,
+    confirmedAt: memory.confirmedAt,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt
+  };
+}
+
+async function insertDecisionMemoryVersion(env: Env, args: {
+  memory: DecisionMemory;
+  operation: string;
+  note?: string | null;
+  actorRefs?: OwnerRef[];
+  reviewerRefs?: OwnerRef[];
+  now?: number;
+}) {
+  const now = args.now ?? Date.now();
+  await env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO decision_memory_versions(
+       id, decision_memory_id, tenant_id, operation, snapshot_json, actor_refs_json, reviewer_refs_json, note, created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?)`
+  )
+    .bind(
+      ulid(now),
+      args.memory.id,
+      args.memory.tenantId,
+      args.operation,
+      JSON.stringify(snapshotDecisionMemory(args.memory)),
+      JSON.stringify(args.actorRefs ?? []),
+      JSON.stringify(args.reviewerRefs ?? []),
+      args.note ?? null,
+      now
+    )
+    .run();
+}
+
 function toPublicDecisionContext(item: ScoredDecisionMemory, includeSources: boolean, userId: string | null, agentId: string | null, debugScores: boolean) {
   return {
     id: item.memory.id,
@@ -585,6 +855,121 @@ function toPublicDecisionContext(item: ScoredDecisionMemory, includeSources: boo
     sources: includeSources ? filterSourceRefs(item.memory.sourceRefs, userId, agentId) : undefined,
     score: debugScores ? item.score : undefined
   };
+}
+
+function refsMatch(refs: OwnerRef[], needle: string | null): boolean {
+  if (!needle) return true;
+  const normalized = needle.toLowerCase();
+  return refs.some((ref) =>
+    [ref.id, ref.name, ref.id ? `user:${ref.id}` : null, ref.id ? `agent:${ref.id}` : null]
+      .filter((item): item is string => Boolean(item))
+      .some((item) => item.toLowerCase() === normalized)
+  );
+}
+
+function validAt(memory: DecisionMemory, timestamp: number | null | undefined): boolean {
+  if (timestamp === undefined || timestamp === null) return true;
+  if (memory.validFrom && memory.validFrom > timestamp) return false;
+  if (memory.validUntil && memory.validUntil < timestamp) return false;
+  return true;
+}
+
+function freshnessState(memory: DecisionMemory, now = Date.now()): "not_yet_valid" | "expired" | "stale" | "current" {
+  if (memory.validFrom && memory.validFrom > now) return "not_yet_valid";
+  if (memory.validUntil && memory.validUntil < now) return "expired";
+  return stalenessPenalty(memory, now) > 0 ? "stale" : "current";
+}
+
+function confirmationWeight(state: ConfirmationState): number {
+  if (state === "user_confirmed" || state === "user_corrected" || state === "reviewed") return 1;
+  if (state === "draft") return 0.25;
+  return 0.45;
+}
+
+function buildTrustSignals(memory: DecisionMemory, conflicts: ReturnType<typeof detectConflicts>, userId: string | null, agentId: string | null) {
+  const readableSourceRefs = filterSourceRefs(memory.sourceRefs, userId, agentId);
+  const conflictCount = conflicts.filter((conflict) =>
+    conflict.preferredMemoryId === memory.id || conflict.conflictingMemoryIds.includes(memory.id)
+  ).length;
+  return {
+    confidence: memory.confidence,
+    confirmationState: memory.confirmationState,
+    humanConfirmed: confirmationWeight(memory.confirmationState) >= 1,
+    sourceAuthority: Number(sourceAuthorityScore(readableSourceRefs).toFixed(3)),
+    sourceCount: readableSourceRefs.length,
+    ownerCount: memory.ownerRefs.length,
+    reviewerCount: memory.reviewerRefs.length,
+    freshness: freshnessState(memory),
+    conflictCount,
+    visibility: memory.visibility,
+    permissionFilteredSourceCount: Math.max(0, memory.sourceRefs.length - readableSourceRefs.length)
+  };
+}
+
+function buildProvenance(memory: DecisionMemory, userId: string | null, agentId: string | null) {
+  return {
+    decidedBy: memory.ownerRefs,
+    reviewedBy: memory.reviewerRefs,
+    confirmedAt: memory.confirmedAt,
+    confirmationNote: memory.confirmationNote,
+    sourceRefs: filterSourceRefs(memory.sourceRefs, userId, agentId),
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
+    applicableContext: {
+      tenantId: memory.tenantId,
+      projectId: memory.projectId,
+      domain: memory.domain,
+      validFrom: memory.validFrom,
+      validUntil: memory.validUntil,
+      status: memory.status,
+      constraints: memory.constraints,
+      knownPitfalls: memory.knownPitfalls
+    }
+  };
+}
+
+function toPublicDecisionSearchResult(args: {
+  item: ScoredDecisionMemory;
+  includeProvenance: boolean;
+  authorityScoring: boolean;
+  verificationView: boolean;
+  conflicts: ReturnType<typeof detectConflicts>;
+  userId: string | null;
+  agentId: string | null;
+}) {
+  const result: Record<string, unknown> = {
+    ...args.item.memory,
+    sourceRefs: filterSourceRefs(args.item.memory.sourceRefs, args.userId, args.agentId),
+    score: args.item.score
+  };
+  if (args.includeProvenance || args.verificationView) {
+    result.provenance = buildProvenance(args.item.memory, args.userId, args.agentId);
+  }
+  if (args.authorityScoring || args.verificationView) {
+    result.trustSignals = buildTrustSignals(args.item.memory, args.conflicts, args.userId, args.agentId);
+  }
+  return result;
+}
+
+function toPublicDecisionContextWithFlags(args: {
+  item: ScoredDecisionMemory;
+  includeSources: boolean;
+  includeProvenance: boolean;
+  authorityScoring: boolean;
+  verificationView: boolean;
+  conflicts: ReturnType<typeof detectConflicts>;
+  userId: string | null;
+  agentId: string | null;
+  debugScores: boolean;
+}) {
+  const result: Record<string, unknown> = toPublicDecisionContext(args.item, args.includeSources, args.userId, args.agentId, args.debugScores);
+  if (args.includeProvenance || args.verificationView) {
+    result.provenance = buildProvenance(args.item.memory, args.userId, args.agentId);
+  }
+  if (args.authorityScoring || args.verificationView) {
+    result.trustSignals = buildTrustSignals(args.item.memory, args.conflicts, args.userId, args.agentId);
+  }
+  return result;
 }
 
 function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): Record<string, unknown> {
@@ -609,10 +994,11 @@ export async function createDecisionMemory(env: Env, rawBody: unknown) {
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO decision_memories(
        id, tenant_id, project_id, domain, title, decision, rationale,
-       rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json,
+       rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
        valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
+       confirmation_state, confirmation_note, confirmed_at,
        created_at, updated_at
-     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   )
     .bind(
       memory.id,
@@ -627,6 +1013,7 @@ export async function createDecisionMemory(env: Env, rawBody: unknown) {
       JSON.stringify(memory.knownPitfalls),
       JSON.stringify(memory.sourceRefs),
       JSON.stringify(memory.ownerRefs),
+      JSON.stringify(memory.reviewerRefs),
       memory.validFrom,
       memory.validUntil,
       memory.status,
@@ -634,23 +1021,33 @@ export async function createDecisionMemory(env: Env, rawBody: unknown) {
       memory.confidence,
       memory.visibility,
       JSON.stringify(memory.allowedPrincipals),
+      memory.confirmationState,
+      memory.confirmationNote,
+      memory.confirmedAt,
       memory.createdAt,
       memory.updatedAt
     )
     .run();
+  await insertDecisionMemoryVersion(env, { memory, operation: "create", actorRefs: memory.ownerRefs, reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
   return { decisionMemory: memory };
 }
 
 export async function searchDecisionMemories(env: Env, rawBody: unknown) {
   const request = parseSearchDecisionRequest(rawBody);
-  const memories = await loadDecisionMemories(env, request);
-  const visible = memories.filter((memory) => canReadMemory(memory, request.userId, request.agentId));
+  const q = request.q || request.taskContext;
+  const memories = await loadDecisionMemories(env, { ...request, q });
+  const visible = memories
+    .filter((memory) => canReadMemory(memory, request.userId, request.agentId))
+    .filter((memory) => refsMatch(memory.ownerRefs, request.personId))
+    .filter((memory) => refsMatch(memory.reviewerRefs, request.reviewerId))
+    .filter((memory) => !request.confirmationState || memory.confirmationState === request.confirmationState)
+    .filter((memory) => validAt(memory, request.validAt));
   const scored = visible
     .map((memory) => ({
       memory,
       score: scoreDecisionMemory({
         memory,
-        taskText: request.q,
+        taskText: q,
         taskType: "implementation",
         targetFiles: [],
         projectId: request.projectId,
@@ -658,18 +1055,207 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown) {
         agentId: request.agentId
       })
     }))
-    .sort(compareScored)
-    .slice(0, request.limit);
+    .sort(compareScored);
+  const conflicts = detectConflicts(scored, Date.now());
+  const conflictMemoryIds = new Set(conflicts.flatMap((conflict) => [conflict.preferredMemoryId, ...conflict.conflictingMemoryIds]));
+  const filtered = request.hasConflicts ? scored.filter((item) => conflictMemoryIds.has(item.memory.id)) : scored;
+  const selected = filtered.slice(0, request.limit);
   return {
     tenant_id: request.tenantId,
     project_id: request.projectId,
-    q: request.q,
-    results: scored.map((item) => ({
-      ...item.memory,
-      sourceRefs: filterSourceRefs(item.memory.sourceRefs, request.userId, request.agentId),
-      score: item.score
-    }))
+    q,
+    feature_flags: {
+      include_provenance: request.includeProvenance,
+      authority_scoring: request.authorityScoring,
+      verification_view: request.verificationView
+    },
+    conflicts: request.verificationView ? conflicts : undefined,
+    results: selected.map((item) =>
+      toPublicDecisionSearchResult({
+        item,
+        includeProvenance: request.includeProvenance,
+        authorityScoring: request.authorityScoring,
+        verificationView: request.verificationView,
+        conflicts,
+        userId: request.userId,
+        agentId: request.agentId
+      })
+    )
   };
+}
+
+function mergeDecisionMemory(current: DecisionMemory, rawBody: unknown): { memory: DecisionMemory; actorRefs: OwnerRef[]; note: string | null } {
+  if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
+  const body = rawBody as DecisionMemoryReviseRequest;
+  const now = Date.now();
+  const memory: DecisionMemory = {
+    ...current,
+    projectId: body.projectId !== undefined || body.project_id !== undefined ? parseOptionalString(body.projectId ?? body.project_id, "projectId", 128) : current.projectId,
+    domain: body.domain !== undefined ? parseEnum(body.domain, "domain", DECISION_DOMAINS, current.domain) : current.domain,
+    title: body.title !== undefined ? parseRequiredString(body.title, "title", 240) : current.title,
+    decision: body.decision !== undefined ? parseRequiredString(body.decision, "decision", 1000) : current.decision,
+    rationale: body.rationale !== undefined ? parseRequiredString(body.rationale, "rationale", 2000) : current.rationale,
+    rejectedAlternatives: body.rejectedAlternatives !== undefined || body.rejected_alternatives !== undefined
+      ? ((body.rejectedAlternatives ?? body.rejected_alternatives ?? []) as RejectedAlternative[]).slice(0, 16)
+      : current.rejectedAlternatives,
+    constraints: body.constraints !== undefined ? parseStringArray(body.constraints, "constraints", 32, 500) : current.constraints,
+    knownPitfalls: body.knownPitfalls !== undefined || body.known_pitfalls !== undefined
+      ? parseStringArray(body.knownPitfalls ?? body.known_pitfalls, "knownPitfalls", 32, 500)
+      : current.knownPitfalls,
+    sourceRefs: body.sourceRefs !== undefined || body.source_refs !== undefined ? parseSourceRefs(body.sourceRefs ?? body.source_refs, "sourceRefs", 16) : current.sourceRefs,
+    ownerRefs: body.ownerRefs !== undefined || body.owner_refs !== undefined ? parseOwnerRefs(body.ownerRefs ?? body.owner_refs, "ownerRefs", 16) : current.ownerRefs,
+    reviewerRefs: body.reviewerRefs !== undefined || body.reviewer_refs !== undefined ? parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16) : current.reviewerRefs,
+    validFrom: body.validFrom !== undefined || body.valid_from !== undefined ? parseTimestamp(body.validFrom ?? body.valid_from, "validFrom") : current.validFrom,
+    validUntil: body.validUntil !== undefined || body.valid_until !== undefined ? parseTimestamp(body.validUntil ?? body.valid_until, "validUntil") : current.validUntil,
+    status: body.status !== undefined ? parseEnum(body.status, "status", DECISION_STATUSES, current.status) : current.status,
+    supersededBy: body.supersededBy !== undefined || body.superseded_by !== undefined ? parseOptionalString(body.supersededBy ?? body.superseded_by, "supersededBy", 128) : current.supersededBy,
+    confidence: body.confidence !== undefined ? parseOptionalNumber(body.confidence, "confidence", current.confidence, 0, 1) : current.confidence,
+    visibility: body.visibility !== undefined ? parseEnum(body.visibility, "visibility", VISIBILITIES, current.visibility) : current.visibility,
+    allowedPrincipals: body.allowedPrincipals !== undefined || body.allowed_principals !== undefined
+      ? parseStringArray(body.allowedPrincipals ?? body.allowed_principals, "allowedPrincipals", 64, 128)
+      : current.allowedPrincipals,
+    confirmationState: body.confirmationState !== undefined || body.confirmation_state !== undefined
+      ? parseEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES, current.confirmationState)
+      : current.confirmationState,
+    confirmationNote: body.confirmationNote !== undefined || body.confirmation_note !== undefined
+      ? parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000)
+      : current.confirmationNote,
+    updatedAt: now
+  };
+  return {
+    memory,
+    actorRefs: parseOwnerRefs(body.actorRefs ?? body.actor_refs, "actorRefs", 16),
+    note: parseOptionalString(body.note, "note", 1000)
+  };
+}
+
+async function persistDecisionMemory(env: Env, memory: DecisionMemory) {
+  await env.OPEN_BRAIN_DB.prepare(
+    `UPDATE decision_memories
+     SET project_id = ?, domain = ?, title = ?, decision = ?, rationale = ?,
+         rejected_alternatives_json = ?, constraints_json = ?, known_pitfalls_json = ?,
+         source_refs_json = ?, owner_refs_json = ?, reviewer_refs_json = ?,
+         valid_from = ?, valid_until = ?, status = ?, superseded_by = ?, confidence = ?,
+         visibility = ?, allowed_principals_json = ?,
+         confirmation_state = ?, confirmation_note = ?, confirmed_at = ?, updated_at = ?
+     WHERE tenant_id = ? AND id = ?`
+  )
+    .bind(
+      memory.projectId,
+      memory.domain,
+      memory.title,
+      memory.decision,
+      memory.rationale,
+      JSON.stringify(memory.rejectedAlternatives),
+      JSON.stringify(memory.constraints),
+      JSON.stringify(memory.knownPitfalls),
+      JSON.stringify(memory.sourceRefs),
+      JSON.stringify(memory.ownerRefs),
+      JSON.stringify(memory.reviewerRefs),
+      memory.validFrom,
+      memory.validUntil,
+      memory.status,
+      memory.supersededBy,
+      memory.confidence,
+      memory.visibility,
+      JSON.stringify(memory.allowedPrincipals),
+      memory.confirmationState,
+      memory.confirmationNote,
+      memory.confirmedAt,
+      memory.updatedAt,
+      memory.tenantId,
+      memory.id
+    )
+    .run();
+}
+
+export async function getDecisionMemoryContext(env: Env, args: { tenantId: string; id: string; userId?: string | null; agentId?: string | null }) {
+  const memory = await loadDecisionMemoryById(env, args.tenantId, args.id);
+  const userId = args.userId ?? null;
+  const agentId = args.agentId ?? null;
+  if (!canReadMemory(memory, userId, agentId)) throw new HttpError(403, "forbidden", "decision memory is restricted");
+  const related = await loadDecisionMemories(env, {
+    tenantId: memory.tenantId,
+    projectId: memory.projectId,
+    q: memory.title,
+    limit: 64
+  });
+  const visibleRelated = related.filter((item) => canReadMemory(item, userId, agentId));
+  const scored = visibleRelated
+    .map((item) => ({
+      memory: item,
+      score: scoreDecisionMemory({
+        memory: item,
+        taskText: `${memory.title} ${memory.decision}`,
+        taskType: "implementation",
+        targetFiles: [],
+        projectId: memory.projectId,
+        userId,
+        agentId
+      })
+    }))
+    .sort(compareScored);
+  const conflicts = detectConflicts(scored, Date.now()).filter((conflict) =>
+    conflict.preferredMemoryId === memory.id || conflict.conflictingMemoryIds.includes(memory.id)
+  );
+  const versions = await loadDecisionMemoryVersions(env, memory.tenantId, memory.id);
+  return {
+    decisionMemory: {
+      ...memory,
+      sourceRefs: filterSourceRefs(memory.sourceRefs, userId, agentId)
+    },
+    whyTrustThis: {
+      trustSignals: buildTrustSignals(memory, conflicts, userId, agentId),
+      provenance: buildProvenance(memory, userId, agentId),
+      conflicts,
+      versions
+    },
+    related: scored
+      .filter((item) => item.memory.id !== memory.id)
+      .slice(0, 8)
+      .map((item) => ({
+        id: item.memory.id,
+        title: item.memory.title,
+        decision: item.memory.decision,
+        status: item.memory.status,
+        confirmationState: item.memory.confirmationState,
+        score: item.score
+      }))
+  };
+}
+
+export async function reviseDecisionMemory(env: Env, tenantId: string, id: string, rawBody: unknown) {
+  const current = await loadDecisionMemoryById(env, tenantId, id);
+  const { memory, actorRefs, note } = mergeDecisionMemory(current, rawBody);
+  await persistDecisionMemory(env, memory);
+  await insertDecisionMemoryVersion(env, { memory, operation: "revise", actorRefs, reviewerRefs: memory.reviewerRefs, note });
+  return { decisionMemory: memory };
+}
+
+export async function confirmDecisionMemory(env: Env, tenantId: string, id: string, rawBody: unknown) {
+  if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
+  const body = rawBody as DecisionMemoryConfirmRequest;
+  const current = await loadDecisionMemoryById(env, tenantId, id);
+  const reviewerRefs = parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16);
+  const confidence =
+    body.confidence !== undefined
+      ? parseOptionalNumber(body.confidence, "confidence", current.confidence, 0, 1)
+      : clamp(current.confidence + parseOptionalNumber(body.confidenceDelta ?? body.confidence_delta, "confidenceDelta", 0, -1, 1), 0, 1);
+  const now = Date.now();
+  const memory: DecisionMemory = {
+    ...current,
+    reviewerRefs: reviewerRefs.length > 0 ? reviewerRefs : current.reviewerRefs,
+    confirmationState: parseEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES, "reviewed"),
+    confirmationNote: parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000),
+    confidence,
+    validFrom: body.validFrom !== undefined || body.valid_from !== undefined ? parseTimestamp(body.validFrom ?? body.valid_from, "validFrom") : current.validFrom,
+    validUntil: body.validUntil !== undefined || body.valid_until !== undefined ? parseTimestamp(body.validUntil ?? body.valid_until, "validUntil") : current.validUntil,
+    confirmedAt: now,
+    updatedAt: now
+  };
+  await persistDecisionMemory(env, memory);
+  await insertDecisionMemoryVersion(env, { memory, operation: "confirm", reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
+  return { decisionMemory: memory };
 }
 
 export async function enrichContext(env: Env, rawBody: unknown) {
@@ -714,7 +1300,19 @@ export async function enrichContext(env: Env, rawBody: unknown) {
       summary: top
         ? `このタスクでは「${top.memory.title}」の判断を優先してください: ${top.memory.decision}`
         : "このタスクに十分関連するdecision memoryは見つかりませんでした。",
-      decisionContext: selected.map((item) => toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, request.debugScores)),
+      decisionContext: selected.map((item) =>
+        toPublicDecisionContextWithFlags({
+          item,
+          includeSources: request.includeSources,
+          includeProvenance: request.includeProvenance,
+          authorityScoring: request.authorityScoring,
+          verificationView: request.verificationView,
+          conflicts,
+          userId: request.userId,
+          agentId: request.agentId,
+          debugScores: request.debugScores
+        })
+      ),
       constraints,
       knownPitfalls,
       conflicts,
@@ -730,6 +1328,11 @@ export async function enrichContext(env: Env, rawBody: unknown) {
         task_type: request.taskType,
         selectedMemoryCount: selected.length,
         conflictCount: conflicts.length,
+        featureFlags: {
+          includeProvenance: request.includeProvenance,
+          authorityScoring: request.authorityScoring,
+          verificationView: request.verificationView
+        },
         estimatedTokens: 0
       }
     },

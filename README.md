@@ -27,6 +27,18 @@ Org Brain's reproducible LongMemEval-S run is intentionally reported as an evide
 
 Method: LongMemEval-S 500 questions, Gemini judge enabled, single final answer per item, no best-of-N picking, compact evidence-card context, local token estimator for prompt accounting. The benchmark command and comparison report live in `scripts/memory-token-benchmark.mjs`.
 
+## Console Preview
+
+The decision knowledge editor defaults to English and supports Japanese and Chinese through the in-page language switcher or `?lang=ja` / `?lang=zh`.
+
+![Decision Knowledge Editor desktop view](docs/assets/decision-editor-desktop.png)
+
+Mobile create flow:
+
+<p align="center">
+  <img src="docs/assets/decision-editor-mobile-create.png" alt="Decision Knowledge Editor mobile create flow" width="260" />
+</p>
+
 ## Quick Start: Local SQLite Memory
 
 Use this when you want free personal memory without Cloudflare.
@@ -157,9 +169,14 @@ The self-hosted API gateway exposes:
 - `POST /v1/memories/revise`
 - `POST /v1/memories/refresh`
 - `POST /v1/memories/suppress`
+- `POST /v1/decision-memories/search`
+- `GET /v1/decision-memories/:id/context`
+- `POST /v1/decision-memories/:id/revise`
+- `POST /v1/decision-memories/:id/confirm`
 - `/mcp` for Remote MCP clients
 
 Memory search supports lexical query expansion, hybrid memory/docs retrieval, recent history, lifecycle states, and rationale-aware filters.
+Decision memory APIs support opt-in provenance and trust review for the Console decision editor without changing default memory retrieval profiles.
 
 ## Benchmark Commands
 

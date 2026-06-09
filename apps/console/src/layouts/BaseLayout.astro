@@ -1,17 +1,44 @@
 ---
 import "../styles/global.css";
 
-const { title = "Org Brain Console" } = Astro.props;
+const { title = "Org Brain Console", lang = "en" } = Astro.props;
 const currentPath = Astro.url.pathname;
+type LayoutLocale = "en" | "ja" | "zh";
+const locale: LayoutLocale = lang === "ja" || lang === "zh" ? lang : "en";
+const navCopy = {
+  en: {
+    dashboard: "Dashboard",
+    memories: "Memories",
+    decisions: "Decisions",
+    newTask: "New Task",
+    tasks: "Tasks"
+  },
+  ja: {
+    dashboard: "ダッシュボード",
+    memories: "メモリ",
+    decisions: "判断",
+    newTask: "Task作成",
+    tasks: "Task一覧"
+  },
+  zh: {
+    dashboard: "仪表盘",
+    memories: "记忆",
+    decisions: "决策",
+    newTask: "新建任务",
+    tasks: "任务"
+  }
+}[locale];
+const decisionsHref = locale === "en" ? "/decisions" : `/decisions?lang=${locale}`;
 
 const isActive = (href: string) => {
   if (href === "/") return currentPath === "/";
   if (href === "/tasks") return currentPath === "/tasks" || (currentPath.startsWith("/tasks/") && currentPath !== "/tasks/new");
   if (href === "/tasks/new") return currentPath === "/tasks/new";
+  if (href === "/decisions") return currentPath === "/decisions";
   return currentPath === href;
 };
 ---
-<html lang="ja">
+<html lang={lang}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -25,10 +52,11 @@ const isActive = (href: string) => {
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_22%)]"></div>
       <nav class="console-nav">
         <span class="console-brand">Org Brain</span>
-        <a class="console-nav-link" href="/" aria-current={isActive("/") ? "page" : undefined}>Dashboard</a>
-        <a class="console-nav-link" href="/memories" aria-current={isActive("/memories") ? "page" : undefined}>Memories</a>
-        <a class="console-nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>Task作成</a>
-        <a class="console-nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>Task一覧</a>
+        <a class="console-nav-link" href="/" aria-current={isActive("/") ? "page" : undefined}>{navCopy.dashboard}</a>
+        <a class="console-nav-link" href="/memories" aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
+        <a class="console-nav-link" href={decisionsHref} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
+        <a class="console-nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
+        <a class="console-nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
       </nav>
       <main class="console-main">
         <slot />

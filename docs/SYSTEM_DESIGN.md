@@ -16,6 +16,7 @@
 - `entities` / `memory_entities`: searchable subject graph for memories.
 - `decision_rationales` / `decision_evidence`: confirmed conclusion/reason structure plus evidence references.
 - `decision_memories`: agent-facing decision-grade context rows with constraints, pitfalls, source refs, validity, status, confidence, and permission metadata.
+- `decision_memory_versions`: append-only decision memory edit/confirmation history for the human review editor.
 - `memory_confirmations`: short-lived propose/confirm state for interactive saves.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
 - `measurement_runs` / `measurement_variants` / `measurement_comparisons`: opt-in memory savings AB measurements.
@@ -44,6 +45,8 @@
 - Decision memory rows are an additive context shaping layer over the existing memory/rationale model. They are used by `/v1/context/enrich` to score task-relevant organizational context without changing `/v1/memories/search`.
 - Context scoring combines task text overlap, recency, source authority, project proximity, task specificity, permission fit, and penalties for deprecated/superseded/expired context.
 - Minimal conflict detection groups same-title decision memories and reports active versus deprecated/superseded/expired contradictions in the enrich response.
+- Decision editor provenance is opt-in for agent APIs: `includeProvenance`, `authorityScoring`, and `verificationView` default to false so compact benchmark retrieval remains unchanged.
+- Decision memory edit/confirm flows update the current `decision_memories` snapshot and append `decision_memory_versions` rows for reviewability.
 - Hook ingestion derives a default project name from `basename(cwd)` and, on first use per workspace, can confirm and cache a user-provided project name locally for later upserts.
 - Retrieval refresh is best-effort: cap-runner and API memory search/profile update `last_accessed_at` and append a `memory_versions` refresh snapshot for top memory hits without blocking task execution.
 - Measurement mode is isolated from normal execution. API task creation expands one logical request into raw-context control and compact-memory treatment task variants, cap-runner records estimated token/cost/duration usage per variant, and both variants run with memory writes disabled so measurement does not pollute future recall. Shared `measurement_session_id` values group multiple measured turns into one session report.
@@ -77,6 +80,7 @@
 - `/tasks`: task list
 - `/tasks/[task_id]`: task detail
 - `/memories`: memory explorer and maintenance view
+- `/decisions`: decision knowledge search, editor, confirmation, and trust/provenance review.
 
 ## Current State
 - The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDecisionMemory, enrichContext, searchDecisionMemories } from "../src/context-engine-service";
+import { confirmDecisionMemory, createDecisionMemory, enrichContext, getDecisionMemoryContext, reviseDecisionMemory, searchDecisionMemories } from "../src/context-engine-service";
 
 type DecisionMemoryRecord = {
   id: string;
@@ -14,6 +14,7 @@ type DecisionMemoryRecord = {
   known_pitfalls_json: string | null;
   source_refs_json: string | null;
   owner_refs_json: string | null;
+  reviewer_refs_json: string | null;
   valid_from: number | null;
   valid_until: number | null;
   status: string;
@@ -21,19 +22,24 @@ type DecisionMemoryRecord = {
   confidence: number | null;
   visibility: string | null;
   allowed_principals_json: string | null;
+  confirmation_state: string | null;
+  confirmation_note: string | null;
+  confirmed_at: number | null;
   created_at: number;
   updated_at: number;
 };
 
-function matchesQuery(row: DecisionMemoryRecord, query: string): boolean {
-  if (!query.trim()) return true;
-  const haystack = `${row.title} ${row.decision} ${row.rationale} ${row.constraints_json ?? ""} ${row.known_pitfalls_json ?? ""}`.toLowerCase();
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .some((token) => haystack.includes(token));
-}
+type DecisionMemoryVersionRecord = {
+  id: string;
+  decision_memory_id: string;
+  tenant_id: string;
+  operation: string;
+  snapshot_json: string;
+  actor_refs_json: string | null;
+  reviewer_refs_json: string | null;
+  note: string | null;
+  created_at: number;
+};
 
 class FakeStatement {
   args: unknown[] = [];
@@ -49,6 +55,19 @@ class FakeStatement {
   }
 
   async all<T>() {
+    if (this.sql.includes("FROM decision_memory_versions")) {
+      const tenantId = String(this.args[0]);
+      const decisionMemoryId = String(this.args[1]);
+      const rows = this.db.decisionMemoryVersions
+        .filter((row) => row.tenant_id === tenantId && row.decision_memory_id === decisionMemoryId)
+        .sort((left, right) => right.created_at - left.created_at);
+      return { results: rows as T[] };
+    }
+    if (this.sql.includes("FROM decision_memories") && this.sql.includes("WHERE tenant_id = ? AND id = ?")) {
+      const tenantId = String(this.args[0]);
+      const id = String(this.args[1]);
+      return { results: this.db.decisionMemories.filter((row) => row.tenant_id === tenantId && row.id === id).slice(0, 1) as T[] };
+    }
     if (this.sql.includes("FROM decision_memories")) {
       const tenantId = String(this.args[0]);
       const projectId = this.args[1] === null ? null : String(this.args[1]);
@@ -64,7 +83,19 @@ class FakeStatement {
   }
 
   async run() {
-    if (this.sql.includes("INSERT INTO decision_memories(")) {
+    if (this.sql.includes("INSERT INTO decision_memory_versions(")) {
+      this.db.decisionMemoryVersions.push({
+        id: String(this.args[0]),
+        decision_memory_id: String(this.args[1]),
+        tenant_id: String(this.args[2]),
+        operation: String(this.args[3]),
+        snapshot_json: String(this.args[4]),
+        actor_refs_json: this.args[5] === null ? null : String(this.args[5]),
+        reviewer_refs_json: this.args[6] === null ? null : String(this.args[6]),
+        note: this.args[7] === null ? null : String(this.args[7]),
+        created_at: Number(this.args[8])
+      });
+    } else if (this.sql.includes("INSERT INTO decision_memories(")) {
       this.db.decisionMemories.push({
         id: String(this.args[0]),
         tenant_id: String(this.args[1]),
@@ -78,16 +109,48 @@ class FakeStatement {
         known_pitfalls_json: String(this.args[9]),
         source_refs_json: String(this.args[10]),
         owner_refs_json: String(this.args[11]),
-        valid_from: this.args[12] === null ? null : Number(this.args[12]),
-        valid_until: this.args[13] === null ? null : Number(this.args[13]),
-        status: String(this.args[14]),
-        superseded_by: this.args[15] === null ? null : String(this.args[15]),
-        confidence: Number(this.args[16]),
-        visibility: String(this.args[17]),
-        allowed_principals_json: String(this.args[18]),
-        created_at: Number(this.args[19]),
-        updated_at: Number(this.args[20])
+        reviewer_refs_json: String(this.args[12]),
+        valid_from: this.args[13] === null ? null : Number(this.args[13]),
+        valid_until: this.args[14] === null ? null : Number(this.args[14]),
+        status: String(this.args[15]),
+        superseded_by: this.args[16] === null ? null : String(this.args[16]),
+        confidence: Number(this.args[17]),
+        visibility: String(this.args[18]),
+        allowed_principals_json: String(this.args[19]),
+        confirmation_state: String(this.args[20]),
+        confirmation_note: this.args[21] === null ? null : String(this.args[21]),
+        confirmed_at: this.args[22] === null ? null : Number(this.args[22]),
+        created_at: Number(this.args[23]),
+        updated_at: Number(this.args[24])
       });
+    } else if (this.sql.includes("UPDATE decision_memories")) {
+      const tenantId = String(this.args[22]);
+      const id = String(this.args[23]);
+      const row = this.db.decisionMemories.find((item) => item.tenant_id === tenantId && item.id === id);
+      if (row) {
+        row.project_id = this.args[0] === null ? null : String(this.args[0]);
+        row.domain = String(this.args[1]);
+        row.title = String(this.args[2]);
+        row.decision = String(this.args[3]);
+        row.rationale = String(this.args[4]);
+        row.rejected_alternatives_json = String(this.args[5]);
+        row.constraints_json = String(this.args[6]);
+        row.known_pitfalls_json = String(this.args[7]);
+        row.source_refs_json = String(this.args[8]);
+        row.owner_refs_json = String(this.args[9]);
+        row.reviewer_refs_json = String(this.args[10]);
+        row.valid_from = this.args[11] === null ? null : Number(this.args[11]);
+        row.valid_until = this.args[12] === null ? null : Number(this.args[12]);
+        row.status = String(this.args[13]);
+        row.superseded_by = this.args[14] === null ? null : String(this.args[14]);
+        row.confidence = Number(this.args[15]);
+        row.visibility = String(this.args[16]);
+        row.allowed_principals_json = String(this.args[17]);
+        row.confirmation_state = String(this.args[18]);
+        row.confirmation_note = this.args[19] === null ? null : String(this.args[19]);
+        row.confirmed_at = this.args[20] === null ? null : Number(this.args[20]);
+        row.updated_at = Number(this.args[21]);
+      }
     }
     return { success: true };
   }
@@ -95,6 +158,7 @@ class FakeStatement {
 
 class FakeD1 {
   decisionMemories: DecisionMemoryRecord[] = [];
+  decisionMemoryVersions: DecisionMemoryVersionRecord[] = [];
 
   prepare(sql: string) {
     return new FakeStatement(this, sql);
@@ -116,6 +180,7 @@ function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryR
     known_pitfalls_json: JSON.stringify(["READMEの認証セクションは古い可能性がある"]),
     source_refs_json: JSON.stringify([{ type: "adr", id: "ADR-014", title: "Auth Provider Migration", updatedAt: "2026-03-12" }]),
     owner_refs_json: "[]",
+    reviewer_refs_json: "[]",
     valid_from: null,
     valid_until: null,
     status: "active",
@@ -123,6 +188,9 @@ function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryR
     confidence: 0.88,
     visibility: "tenant",
     allowed_principals_json: "[]",
+    confirmation_state: "inferred_unconfirmed",
+    confirmation_note: null,
+    confirmed_at: null,
     created_at: now,
     updated_at: now,
     ...overrides
@@ -264,6 +332,127 @@ describe("context-engine-service", () => {
 
     expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-visible"]);
     expect(result.decisionContext[0].sources.map((source: any) => source.id)).toEqual(["ADR-014"]);
+  });
+
+  it("keeps provenance out of enrich results unless explicitly requested", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-trust",
+        owner_refs_json: JSON.stringify([{ type: "user", id: "sre-lead", name: "SRE Lead" }]),
+        reviewer_refs_json: JSON.stringify([{ type: "user", id: "arch", name: "Architect" }]),
+        confirmation_state: "reviewed",
+        confirmed_at: Date.now()
+      })
+    ];
+
+    const base = (await enrichContext({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123",
+      projectId: "proj_abc",
+      userId: "user_001",
+      task: { title: "legacy_auth", description: "new_auth_providerへ寄せる" }
+    })) as any;
+    expect(base.decisionContext[0].provenance).toBeUndefined();
+    expect(base.decisionContext[0].trustSignals).toBeUndefined();
+
+    const rich = (await enrichContext({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123",
+      projectId: "proj_abc",
+      userId: "user_001",
+      includeProvenance: true,
+      authorityScoring: true,
+      task: { title: "legacy_auth", description: "new_auth_providerへ寄せる" }
+    })) as any;
+    expect(rich.decisionContext[0].provenance.decidedBy[0]).toMatchObject({ id: "sre-lead" });
+    expect(rich.decisionContext[0].trustSignals).toMatchObject({ confirmationState: "reviewed", humanConfirmed: true });
+  });
+
+  it("returns a trust context with versions and conflicts", async () => {
+    const db = new FakeD1();
+    const now = Date.now();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-context",
+        owner_refs_json: JSON.stringify([{ type: "user", id: "lead", name: "Lead" }]),
+        reviewer_refs_json: JSON.stringify([{ type: "user", id: "reviewer", name: "Reviewer" }]),
+        confirmation_state: "user_confirmed",
+        confirmation_note: "Reviewed during architecture sync",
+        confirmed_at: now
+      }),
+      baseDecision({ id: "dm-context-old", status: "deprecated", decision: "legacy_authを使う" })
+    ];
+    db.decisionMemoryVersions = [
+      {
+        id: "ver-1",
+        decision_memory_id: "dm-context",
+        tenant_id: "org_123",
+        operation: "create",
+        snapshot_json: JSON.stringify({ title: "新規認証処理はnew_auth_providerへ統一" }),
+        actor_refs_json: "[]",
+        reviewer_refs_json: "[]",
+        note: null,
+        created_at: now - 1000
+      }
+    ];
+
+    const result = await getDecisionMemoryContext({ OPEN_BRAIN_DB: db } as any, {
+      tenantId: "org_123",
+      id: "dm-context",
+      userId: "user_001"
+    }) as any;
+
+    expect(result.whyTrustThis.trustSignals).toMatchObject({ humanConfirmed: true, reviewerCount: 1 });
+    expect(result.whyTrustThis.provenance.decidedBy[0]).toMatchObject({ id: "lead" });
+    expect(result.whyTrustThis.versions).toHaveLength(1);
+    expect(result.whyTrustThis.conflicts).toHaveLength(1);
+  });
+
+  it("revises and confirms decision memories with version history", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [baseDecision({ id: "dm-edit", title: "Old title" })];
+
+    const revised = await reviseDecisionMemory({ OPEN_BRAIN_DB: db } as any, "org_123", "dm-edit", {
+      title: "Updated policy",
+      decision: "new_auth_provider is required",
+      note: "Clarified wording",
+      actorRefs: [{ type: "user", id: "editor", name: "Editor" }]
+    }) as any;
+    expect(revised.decisionMemory).toMatchObject({ title: "Updated policy", decision: "new_auth_provider is required" });
+
+    const confirmed = await confirmDecisionMemory({ OPEN_BRAIN_DB: db } as any, "org_123", "dm-edit", {
+      reviewerRefs: [{ type: "user", id: "architect", name: "Architect" }],
+      confirmationState: "reviewed",
+      confirmationNote: "Architectural decision confirmed",
+      confidenceDelta: 0.05
+    }) as any;
+
+    expect(confirmed.decisionMemory).toMatchObject({ confirmationState: "reviewed", confirmationNote: "Architectural decision confirmed" });
+    expect(confirmed.decisionMemory.reviewerRefs[0]).toMatchObject({ id: "architect" });
+    expect(db.decisionMemoryVersions.map((version) => version.operation)).toEqual(["revise", "confirm"]);
+  });
+
+  it("filters decision search by reviewer and confirmation state with opt-in trust signals", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-reviewed",
+        reviewer_refs_json: JSON.stringify([{ type: "user", id: "architect", name: "Architect" }]),
+        confirmation_state: "reviewed"
+      }),
+      baseDecision({ id: "dm-unconfirmed", confirmation_state: "inferred_unconfirmed" })
+    ];
+
+    const result = await searchDecisionMemories({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123",
+      projectId: "proj_abc",
+      q: "legacy_auth",
+      reviewerId: "architect",
+      confirmationState: "reviewed",
+      authorityScoring: true
+    }) as any;
+
+    expect(result.results.map((item: any) => item.id)).toEqual(["dm-reviewed"]);
+    expect(result.results[0].trustSignals).toMatchObject({ confirmationState: "reviewed" });
   });
 
   it("compresses response below maxTokens", async () => {

@@ -1,7 +1,7 @@
 import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
 import { apiKeyAuth, assertApiTenantAccess, jsonOk, tenantFromBody } from "./auth";
-import { createDecisionMemory, enrichContext, searchDecisionMemories } from "./context-engine-service";
+import { confirmDecisionMemory, createDecisionMemory, enrichContext, getDecisionMemoryContext, reviseDecisionMemory, searchDecisionMemories } from "./context-engine-service";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import {
   captureMemories,
@@ -171,6 +171,33 @@ app.post("/v1/decision-memories/search", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
   const result = await searchDecisionMemories(c.env, body);
+  return jsonOk(c, result);
+});
+
+app.get("/v1/decision-memories/:id/context", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const userId = c.req.query("user_id");
+  const agentId = c.req.query("agent_id");
+  const result = await getDecisionMemoryContext(c.env, {
+    tenantId,
+    id: c.req.param("id"),
+    userId,
+    agentId
+  });
+  return jsonOk(c, result);
+});
+
+app.post("/v1/decision-memories/:id/revise", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const body = await c.req.json<unknown>();
+  const result = await reviseDecisionMemory(c.env, tenantId, c.req.param("id"), body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/decision-memories/:id/confirm", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const body = await c.req.json<unknown>();
+  const result = await confirmDecisionMemory(c.env, tenantId, c.req.param("id"), body);
   return jsonOk(c, result);
 });
 

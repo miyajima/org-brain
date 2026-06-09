@@ -1,0 +1,1806 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import {
+  confirmationLabel as decisionConfirmationLabel,
+  freshnessLabel as decisionFreshnessLabel,
+  isExpired,
+  isHumanConfirmed,
+  isUnconfirmedInference,
+  LOCALES,
+  normalizeLocale,
+  operationLabel as decisionOperationLabel,
+  refLabel,
+  statusLabel as decisionStatusLabel,
+  type Locale,
+  type OwnerRef,
+  type SourceRef
+} from "../lib/decision-ui";
+
+type DecisionMemory = {
+  id: string;
+  tenantId: string;
+  projectId: string | null;
+  domain: string;
+  title: string;
+  decision: string;
+  rationale: string;
+  constraints: string[];
+  knownPitfalls: string[];
+  sourceRefs: SourceRef[];
+  ownerRefs: OwnerRef[];
+  reviewerRefs: OwnerRef[];
+  validFrom: number | null;
+  validUntil: number | null;
+  status: string;
+  supersededBy: string | null;
+  confidence: number;
+  visibility: string;
+  confirmationState: string;
+  confirmationNote: string | null;
+  confirmedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  score?: { finalScore?: number; sourceAuthority?: number };
+  trustSignals?: {
+    confidence: number;
+    confirmationState: string;
+    humanConfirmed: boolean;
+    sourceAuthority: number;
+    sourceCount: number;
+    ownerCount: number;
+    reviewerCount: number;
+    freshness: string;
+    conflictCount: number;
+    visibility?: string;
+    permissionFilteredSourceCount?: number;
+  };
+};
+
+type DecisionVersion = {
+  id: string;
+  operation: string;
+  actorRefs: OwnerRef[];
+  reviewerRefs: OwnerRef[];
+  note: string | null;
+  createdAt: number;
+};
+
+type DecisionContext = {
+  decisionMemory: DecisionMemory;
+  whyTrustThis: {
+    trustSignals: NonNullable<DecisionMemory["trustSignals"]>;
+    provenance: {
+      decidedBy: OwnerRef[];
+      reviewedBy: OwnerRef[];
+      sourceRefs: SourceRef[];
+      createdAt: number;
+      updatedAt: number;
+      confirmedAt: number | null;
+      confirmationNote: string | null;
+      applicableContext: {
+        domain: string;
+        projectId: string | null;
+        validFrom: number | null;
+        validUntil: number | null;
+        status: string;
+        constraints: string[];
+        knownPitfalls: string[];
+      };
+    };
+    conflicts: Array<{
+      topic: string;
+      preferredMemoryId: string;
+      conflictingMemoryIds: string[];
+      severity: string;
+      requiresHumanReview: boolean;
+    }>;
+    versions: DecisionVersion[];
+  };
+  related: Array<{
+    id: string;
+    title: string;
+    decision: string;
+    status: string;
+    confirmationState: string;
+  }>;
+};
+
+type SearchResponse = {
+  tenant_id: string;
+  project_id: string | null;
+  q: string;
+  results: DecisionMemory[];
+};
+
+type ApiOk<T> = { ok: true; data: T };
+type ApiErr = { ok: false; error?: { code?: string; message?: string } };
+type ApiResponse<T> = ApiOk<T> | ApiErr;
+
+const PAGE_COPY: Record<Locale, Record<string, string>> = {
+  en: {
+    pageTitle: "Decision Knowledge",
+    eyebrow: "Decision knowledge",
+    heading: "Decision Knowledge Editor",
+    subtitle: "Review who decided, who confirmed it, the evidence, conflicts, and validity window in one place.",
+    resultsUnit: "results",
+    reviewedUnit: "reviewed",
+    language: "Language",
+    search: "Search",
+    tenant: "Tenant",
+    project: "Project",
+    projectPlaceholder: "optional",
+    advancedFilters: "Advanced filters",
+    decider: "Decider",
+    reviewer: "Reviewer",
+    reviewers: "Reviewers",
+    confirmationState: "Confirmation state",
+    all: "All",
+    dataSourceError: "Cannot connect to the data source",
+    details: "Details",
+    selected: "Selected",
+    tabDecisions: "Decisions",
+    tabEditor: "Editor",
+    tabTrust: "Trust",
+    searchResults: "Search results",
+    decisions: "Decisions",
+    clearFilters: "Clear filters",
+    addDecision: "Add decision",
+    noResults: "No matching decision knowledge yet.",
+    confidence: "Confidence",
+    updated: "Updated",
+    validUntil: "Valid until",
+    validFrom: "Valid from",
+    evidence: "Evidence",
+    conflicts: "Conflicts",
+    global: "global",
+    create: "Create",
+    newDecision: "New decision",
+    draftBadge: "Draft",
+    title: "Title",
+    decision: "Decision",
+    rationale: "Rationale",
+    status: "Status",
+    decidersEvidenceSummary: "Deciders, reviewers, and evidence",
+    deciders: "Deciders",
+    add: "Add",
+    type: "Type",
+    name: "Name",
+    remove: "Remove",
+    constraints: "Constraints",
+    knownPitfalls: "Known pitfalls",
+    createDecision: "Create decision",
+    cancel: "Cancel",
+    notCreated: "Not created yet",
+    editor: "Editor",
+    revisionNote: "Revision note",
+    saveRevision: "Save revision",
+    notSaved: "Not saved",
+    confirmation: "Confirmation",
+    confirmDecision: "Confirm decision",
+    humanReview: "Human review",
+    confidenceDelta: "Confidence delta",
+    confirmationNote: "Confirmation note",
+    notConfirmed: "Not confirmed",
+    selectDecision: "Select a decision from the search results.",
+    trustEvidence: "Trust evidence",
+    humanReviewMetric: "Human review",
+    yes: "Yes",
+    no: "No",
+    freshness: "Freshness",
+    evidenceAuthority: "Evidence authority",
+    timeline: "Timeline",
+    created: "Created",
+    confirmed: "Confirmed",
+    applicableContext: "Applicable context",
+    domain: "Domain",
+    noEvidence: "No evidence is registered yet.",
+    conflictsIntro: "There are potential contradictions in the same context.",
+    preferred: "Preferred",
+    conflicting: "Conflicting",
+    severity: "Severity",
+    humanReviewRequired: "required",
+    humanReviewOptional: "optional",
+    history: "History",
+    noHistory: "No history yet.",
+    actors: "Actors",
+    relatedDecisions: "Related decisions",
+    trustEmpty: "Select a decision to see trust evidence.",
+    unconfirmedWarning: "Unconfirmed",
+    conflictWarning: "Conflict",
+    expiredWarning: "Expired"
+  },
+  ja: {
+    pageTitle: "判断知識",
+    eyebrow: "判断知識",
+    heading: "判断知識エディタ",
+    subtitle: "判断者、確認者、証拠、競合、有効期限を同じ画面で確認します。",
+    resultsUnit: "件",
+    reviewedUnit: "確認済み",
+    language: "言語",
+    search: "検索",
+    tenant: "テナント",
+    project: "プロジェクト",
+    projectPlaceholder: "任意",
+    advancedFilters: "詳細フィルタ",
+    decider: "判断者",
+    reviewer: "確認者",
+    reviewers: "確認者",
+    confirmationState: "確認状態",
+    all: "すべて",
+    dataSourceError: "データソースに接続できません",
+    details: "詳細",
+    selected: "選択中",
+    tabDecisions: "判断",
+    tabEditor: "編集",
+    tabTrust: "信頼根拠",
+    searchResults: "検索結果",
+    decisions: "判断",
+    clearFilters: "条件をクリア",
+    addDecision: "判断を追加",
+    noResults: "該当する判断知識がありません。",
+    confidence: "信頼度",
+    updated: "更新",
+    validUntil: "有効期限",
+    validFrom: "有効開始",
+    evidence: "証拠",
+    conflicts: "競合",
+    global: "全体",
+    create: "作成",
+    newDecision: "新しい判断",
+    draftBadge: "下書き",
+    title: "タイトル",
+    decision: "判断",
+    rationale: "根拠",
+    status: "状態",
+    decidersEvidenceSummary: "判断者・確認者・証拠",
+    deciders: "判断者",
+    add: "追加",
+    type: "種別",
+    name: "名前",
+    remove: "削除",
+    constraints: "制約",
+    knownPitfalls: "既知の落とし穴",
+    createDecision: "判断を作成",
+    cancel: "キャンセル",
+    notCreated: "未作成",
+    editor: "編集",
+    revisionNote: "改訂メモ",
+    saveRevision: "改訂を保存",
+    notSaved: "未保存",
+    confirmation: "確認",
+    confirmDecision: "判断を確認",
+    humanReview: "人の確認",
+    confidenceDelta: "信頼度の変化",
+    confirmationNote: "確認メモ",
+    notConfirmed: "未確認",
+    selectDecision: "検索結果から判断を選択してください。",
+    trustEvidence: "信頼根拠",
+    humanReviewMetric: "人の確認",
+    yes: "あり",
+    no: "なし",
+    freshness: "鮮度",
+    evidenceAuthority: "証拠スコア",
+    timeline: "日時",
+    created: "作成",
+    confirmed: "確認",
+    applicableContext: "適用文脈",
+    domain: "ドメイン",
+    noEvidence: "証拠は登録されていません。",
+    conflictsIntro: "現在の判断と同じ文脈に矛盾候補があります。",
+    preferred: "優先候補",
+    conflicting: "競合候補",
+    severity: "重要度",
+    humanReviewRequired: "必要",
+    humanReviewOptional: "任意",
+    history: "履歴",
+    noHistory: "履歴はありません。",
+    actors: "改訂者",
+    relatedDecisions: "関連判断",
+    trustEmpty: "判断を選ぶと信頼根拠が表示されます。",
+    unconfirmedWarning: "未確認",
+    conflictWarning: "競合あり",
+    expiredWarning: "期限切れ"
+  },
+  zh: {
+    pageTitle: "决策知识",
+    eyebrow: "决策知识",
+    heading: "决策知识编辑器",
+    subtitle: "在同一界面查看决策者、确认者、证据、冲突和有效期。",
+    resultsUnit: "条",
+    reviewedUnit: "已审核",
+    language: "语言",
+    search: "搜索",
+    tenant: "租户",
+    project: "项目",
+    projectPlaceholder: "可选",
+    advancedFilters: "高级筛选",
+    decider: "决策者",
+    reviewer: "确认者",
+    reviewers: "确认者",
+    confirmationState: "确认状态",
+    all: "全部",
+    dataSourceError: "无法连接到数据源",
+    details: "详情",
+    selected: "已选择",
+    tabDecisions: "决策",
+    tabEditor: "编辑",
+    tabTrust: "信任依据",
+    searchResults: "搜索结果",
+    decisions: "决策",
+    clearFilters: "清除筛选",
+    addDecision: "添加决策",
+    noResults: "暂无匹配的决策知识。",
+    confidence: "置信度",
+    updated: "更新",
+    validUntil: "有效期至",
+    validFrom: "生效时间",
+    evidence: "证据",
+    conflicts: "冲突",
+    global: "全局",
+    create: "创建",
+    newDecision: "新建决策",
+    draftBadge: "草稿",
+    title: "标题",
+    decision: "决策",
+    rationale: "理由",
+    status: "状态",
+    decidersEvidenceSummary: "决策者、确认者和证据",
+    deciders: "决策者",
+    add: "添加",
+    type: "类型",
+    name: "名称",
+    remove: "删除",
+    constraints: "约束",
+    knownPitfalls: "已知风险",
+    createDecision: "创建决策",
+    cancel: "取消",
+    notCreated: "尚未创建",
+    editor: "编辑",
+    revisionNote: "修订备注",
+    saveRevision: "保存修订",
+    notSaved: "未保存",
+    confirmation: "确认",
+    confirmDecision: "确认决策",
+    humanReview: "人工确认",
+    confidenceDelta: "置信度变化",
+    confirmationNote: "确认备注",
+    notConfirmed: "未确认",
+    selectDecision: "请从搜索结果中选择一个决策。",
+    trustEvidence: "信任依据",
+    humanReviewMetric: "人工确认",
+    yes: "是",
+    no: "否",
+    freshness: "新鲜度",
+    evidenceAuthority: "证据权威度",
+    timeline: "时间线",
+    created: "创建",
+    confirmed: "确认",
+    applicableContext: "适用上下文",
+    domain: "领域",
+    noEvidence: "尚未登记证据。",
+    conflictsIntro: "同一上下文中存在潜在矛盾。",
+    preferred: "优先候选",
+    conflicting: "冲突候选",
+    severity: "严重程度",
+    humanReviewRequired: "需要",
+    humanReviewOptional: "可选",
+    history: "历史",
+    noHistory: "暂无历史记录。",
+    actors: "修订者",
+    relatedDecisions: "相关决策",
+    trustEmpty: "选择决策后会显示信任依据。",
+    unconfirmedWarning: "未确认",
+    conflictWarning: "有冲突",
+    expiredWarning: "已过期"
+  }
+};
+
+const url = Astro.url;
+const params = url.searchParams;
+const tenantId = params.get("tenant_id")?.trim() || "default";
+const projectId = params.get("project_id")?.trim() || "";
+const query = params.get("q")?.trim() || "";
+const personId = params.get("person_id")?.trim() || "";
+const reviewerId = params.get("reviewer_id")?.trim() || "";
+const confirmationState = params.get("confirmation_state")?.trim() || "";
+const selectedId = params.get("selected")?.trim() || "";
+const locale = normalizeLocale(params.get("lang"));
+const copy = PAGE_COPY[locale];
+const dateLocale = locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
+const createMode = params.get("mode") === "create";
+const requestedView = params.get("view")?.trim() || "results";
+const mobileView = ["results", "editor", "trust"].includes(requestedView) ? requestedView : "results";
+const advancedOpen = Boolean(personId || reviewerId || confirmationState);
+const now = Date.now();
+
+const confirmationLabel = (value: string | null | undefined) => decisionConfirmationLabel(value, locale);
+const statusLabel = (value: string | null | undefined) => decisionStatusLabel(value, locale);
+const freshnessLabel = (value: string | null | undefined) => decisionFreshnessLabel(value, locale);
+const operationLabel = (value: string | null | undefined) => decisionOperationLabel(value, locale);
+
+async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
+  const response = await fetch(new URL(path, url), init);
+  const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: payload && "error" in payload ? payload.error : { code: "http_error", message: `HTTP ${response.status}` }
+    };
+  }
+  return payload ?? { ok: false, error: { code: "parse_error", message: "Invalid JSON response" } };
+}
+
+function makeHref(overrides: Record<string, string | null | undefined>): string {
+  const next = new URLSearchParams(params);
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === null || value === undefined || value === "") next.delete(key);
+    else next.set(key, value);
+  }
+  const queryString = next.toString();
+  return queryString ? `${url.pathname}?${queryString}` : url.pathname;
+}
+
+function formatDate(timestamp: number | null | undefined): string {
+  if (!timestamp) return "-";
+  return new Intl.DateTimeFormat(dateLocale, {
+    timeZone: "Asia/Tokyo",
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(timestamp));
+}
+
+function dateTimeValue(timestamp: number | null | undefined): string {
+  if (!timestamp) return "";
+  return new Date(timestamp).toISOString().slice(0, 16);
+}
+
+function trimText(value: string | null | undefined, limit = 160): string {
+  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  return normalized.length > limit ? `${normalized.slice(0, limit - 1)}...` : normalized;
+}
+
+function lines(value: string[] | null | undefined): string {
+  return (value ?? []).join("\n");
+}
+
+function percent(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${Math.round(value * 100)}%`;
+}
+
+function ownerRows(refs: OwnerRef[] | null | undefined): OwnerRef[] {
+  return refs && refs.length > 0 ? refs : [{ type: "user", id: "", name: "" }];
+}
+
+function sourceRows(refs: SourceRef[] | null | undefined): SourceRef[] {
+  return refs && refs.length > 0 ? refs : [{ type: "doc", id: "", title: "", url: "", updatedAt: "" }];
+}
+
+function compactRefs(refs: OwnerRef[] | SourceRef[] | null | undefined, limit = 2): string {
+  const labels = (refs ?? []).map(refLabel).filter(Boolean);
+  if (labels.length === 0) return "-";
+  const shown = labels.slice(0, limit).join(", ");
+  return labels.length > limit ? `${shown} + ${labels.length - limit} more` : shown;
+}
+
+function sourceCount(memory: DecisionMemory): number {
+  return memory.trustSignals?.sourceCount ?? memory.sourceRefs.length;
+}
+
+function conflictCount(memory: DecisionMemory): number {
+  return memory.trustSignals?.conflictCount ?? 0;
+}
+
+function freshness(memory: DecisionMemory): string {
+  return freshnessLabel(memory.trustSignals?.freshness);
+}
+
+function trustWarnings(memory: DecisionMemory): string[] {
+  const warnings = [];
+  if (isUnconfirmedInference(memory.confirmationState)) warnings.push(copy.unconfirmedWarning);
+  if (conflictCount(memory) > 0) warnings.push(copy.conflictWarning);
+  if (isExpired(memory.validUntil, now)) warnings.push(copy.expiredWarning);
+  return warnings;
+}
+
+function panelClass(view: string): string {
+  return [mobileView === view ? "block" : "hidden", "xl:block"].join(" ");
+}
+
+const searchPayload = await fetchApi<SearchResponse>("/api/v1/decision-memories/search", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    tenant_id: tenantId,
+    project_id: projectId || null,
+    q: query,
+    person_id: personId || undefined,
+    reviewer_id: reviewerId || undefined,
+    confirmation_state: confirmationState || undefined,
+    include_provenance: true,
+    authority_scoring: true,
+    verification_view: true,
+    limit: 24
+  })
+});
+
+const results = searchPayload?.ok ? searchPayload.data.results : [];
+const activeId = !createMode ? selectedId || results[0]?.id || "" : "";
+const contextPayload = activeId
+  ? await fetchApi<DecisionContext>(
+      `/api/v1/decision-memories/${encodeURIComponent(activeId)}/context?tenant_id=${encodeURIComponent(tenantId)}`
+    )
+  : null;
+const context = contextPayload?.ok ? contextPayload.data : null;
+const active = context?.decisionMemory ?? results.find((item) => item.id === activeId) ?? null;
+const errors = [
+  searchPayload?.ok === false ? searchPayload.error?.message ?? "Decision search could not be loaded" : null,
+  contextPayload?.ok === false ? contextPayload.error?.message ?? "Decision context could not be loaded" : null
+].filter(Boolean) as string[];
+const reviewedCount = results.filter((item) => isHumanConfirmed(item.confirmationState)).length;
+const selectedSummary = active ?? results[0] ?? null;
+---
+<BaseLayout title={copy.pageTitle} lang={locale}>
+  <section class="decision-page space-y-5">
+    <header class="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(7,7,8,0.96)_0%,rgba(10,10,12,0.92)_100%)] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.36)] sm:p-7">
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+        <div class="space-y-3">
+          <p class="surface-label">{copy.eyebrow}</p>
+          <h1 class="text-3xl font-semibold text-white sm:text-5xl">{copy.heading}</h1>
+          <p class="max-w-3xl text-base leading-8 text-zinc-300">
+            {copy.subtitle}
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2 xl:justify-end" aria-label={copy.language}>
+          {LOCALES.map((item) => (
+            <a class={["trust-chip", locale === item.code ? "trust-chip-good" : ""].join(" ")} href={makeHref({ lang: item.code })} aria-current={locale === item.code ? "page" : undefined}>
+              {item.label}
+            </a>
+          ))}
+          <span class="trust-chip">{results.length} {copy.resultsUnit}</span>
+          <span class="trust-chip trust-chip-good">{reviewedCount} {copy.reviewedUnit}</span>
+          <span class="trust-chip">{tenantId}</span>
+          {projectId && <span class="trust-chip">{projectId}</span>}
+        </div>
+      </div>
+    </header>
+
+    <section class="rounded-[22px] border border-white/8 bg-white/[0.04] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.28)] sm:p-5">
+      <form class="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(11rem,0.75fr)_minmax(11rem,0.75fr)_auto] lg:items-end" method="get" action="/decisions">
+        <label>
+          <span class="field-label">{copy.search}</span>
+          <input name="q" value={query} placeholder="auth policy / deploy / review" />
+        </label>
+        <label>
+          <span class="field-label">{copy.tenant}</span>
+          <input name="tenant_id" value={tenantId} />
+        </label>
+        <label>
+          <span class="field-label">{copy.project}</span>
+          <input name="project_id" value={projectId} placeholder={copy.projectPlaceholder} />
+        </label>
+        <button type="submit">{copy.search}</button>
+        <details class="advanced-filters lg:col-span-4" open={advancedOpen}>
+          <summary>{copy.advancedFilters}</summary>
+          <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <label>
+              <span class="field-label">{copy.decider}</span>
+              <input name="person_id" value={personId} placeholder="person id" />
+            </label>
+            <label>
+              <span class="field-label">{copy.reviewer}</span>
+              <input name="reviewer_id" value={reviewerId} placeholder="reviewer id" />
+            </label>
+            <label>
+              <span class="field-label">{copy.confirmationState}</span>
+              <select name="confirmation_state">
+                <option value="" selected={!confirmationState}>{copy.all}</option>
+                <option value="draft" selected={confirmationState === "draft"}>{confirmationLabel("draft")}</option>
+                <option value="inferred_unconfirmed" selected={confirmationState === "inferred_unconfirmed"}>{confirmationLabel("inferred_unconfirmed")}</option>
+                <option value="user_confirmed" selected={confirmationState === "user_confirmed"}>{confirmationLabel("user_confirmed")}</option>
+                <option value="user_corrected" selected={confirmationState === "user_corrected"}>{confirmationLabel("user_corrected")}</option>
+                <option value="reviewed" selected={confirmationState === "reviewed"}>{confirmationLabel("reviewed")}</option>
+              </select>
+            </label>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    {errors.length > 0 && (
+      <section class="rounded-[22px] border border-rose-300/25 bg-rose-400/8 p-5">
+        <strong class="block text-sm font-semibold text-rose-100">{copy.dataSourceError}</strong>
+        <details class="mt-3 text-sm leading-7 text-rose-100/80">
+          <summary>{copy.details}</summary>
+          <ul class="mt-2 list-disc space-y-2 pl-5">
+            {errors.map((message) => <li>{message}</li>)}
+          </ul>
+        </details>
+      </section>
+    )}
+
+    {selectedSummary && (
+      <section class="xl:hidden rounded-[20px] border border-white/8 bg-white/[0.04] p-4">
+        <p class="surface-label">{copy.selected}</p>
+        <h2 class="mt-2 text-xl font-semibold text-white">{selectedSummary.title}</h2>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <span class="trust-chip">{confirmationLabel(selectedSummary.confirmationState)}</span>
+          <span class="trust-chip">{statusLabel(selectedSummary.status)}</span>
+          <span class="trust-chip">{percent(selectedSummary.confidence)}</span>
+          {trustWarnings(selectedSummary).map((warning) => <span class="trust-chip trust-chip-warn">{warning}</span>)}
+        </div>
+      </section>
+    )}
+
+    <nav class="decision-tabs xl:hidden" aria-label={copy.language}>
+      <a href={makeHref({ view: "results" })} aria-current={mobileView === "results" ? "page" : undefined}>{copy.tabDecisions}</a>
+      <a href={makeHref({ view: "editor" })} aria-current={mobileView === "editor" ? "page" : undefined}>{copy.tabEditor}</a>
+      <a href={makeHref({ view: "trust" })} aria-current={mobileView === "trust" ? "page" : undefined}>{copy.tabTrust}</a>
+    </nav>
+
+    <div class="grid gap-5 xl:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.35fr)_minmax(20rem,0.78fr)] xl:items-start">
+      <section class={panelClass("results")}>
+        <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p class="surface-label">{copy.searchResults}</p>
+            <h2 class="mt-1 text-2xl font-semibold text-white">{copy.decisions}</h2>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            {(query || personId || reviewerId || confirmationState) && <a class="button-link button-link-secondary" href={makeHref({ q: "", person_id: "", reviewer_id: "", confirmation_state: "", selected: "" })}>{copy.clearFilters}</a>}
+            <a class="button-link" href={makeHref({ mode: "create", selected: "", view: "editor" })}>{copy.addDecision}</a>
+          </div>
+        </div>
+        {results.length === 0 ? (
+          <div class="surface-empty">
+            <p class="text-sm leading-7 text-zinc-300">{copy.noResults}</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              {(query || personId || reviewerId || confirmationState) && <a class="button-link button-link-secondary" href={makeHref({ q: "", person_id: "", reviewer_id: "", confirmation_state: "" })}>{copy.clearFilters}</a>}
+              <a class="button-link" href={makeHref({ mode: "create", selected: "", view: "editor" })}>{copy.addDecision}</a>
+            </div>
+          </div>
+        ) : (
+          <div class="space-y-3">
+            {results.map((item) => (
+              <a class={["decision-result", activeId === item.id ? "decision-result-active" : ""].join(" ")} href={makeHref({ selected: item.id, mode: "", view: "editor" })}>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class={["trust-chip", isHumanConfirmed(item.confirmationState) ? "trust-chip-good" : ""].join(" ")}>{confirmationLabel(item.confirmationState)}</span>
+                  <span class="trust-chip">{statusLabel(item.status)}</span>
+                  <span class="trust-chip">{copy.confidence} {percent(item.confidence)}</span>
+                  {trustWarnings(item).map((warning) => <span class="trust-chip trust-chip-warn">{warning}</span>)}
+                </div>
+                <h3 class="mt-3 text-lg font-semibold text-white">{item.title}</h3>
+                <p class="mt-2 text-sm leading-7 text-zinc-400">{trimText(item.decision, 180)}</p>
+                <dl class="mt-4 grid gap-2 text-xs leading-5 text-zinc-400">
+                  <div><dt>{copy.decider}</dt><dd>{compactRefs(item.ownerRefs)}</dd></div>
+                  <div><dt>{copy.reviewer}</dt><dd>{compactRefs(item.reviewerRefs)}</dd></div>
+                  <div><dt>{copy.updated}</dt><dd>{formatDate(item.updatedAt)}</dd></div>
+                  <div><dt>{copy.validUntil}</dt><dd>{formatDate(item.validUntil)}</dd></div>
+                </dl>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <span class="mini-chip">{copy.evidence} {sourceCount(item)}</span>
+                  <span class="mini-chip">{copy.conflicts} {conflictCount(item)}</span>
+                  <span class="mini-chip">{freshness(item)}</span>
+                  <span class="mini-chip">{item.projectId || copy.global}</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section class={["space-y-5", panelClass("editor")].join(" ")}>
+        {createMode ? (
+          <section class="card" id="editor">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p class="surface-label">{copy.create}</p>
+                <h2 class="mt-2 text-3xl font-semibold text-white">{copy.newDecision}</h2>
+              </div>
+              <span class="trust-chip">{copy.draftBadge}</span>
+            </div>
+
+            <form id="decision-create-form" class="mt-6 grid gap-5" data-tenant={tenantId} data-project={projectId}>
+              <div class="grid gap-4 md:grid-cols-2">
+                <label>
+                  <span class="field-label">{copy.title}</span>
+                  <input name="title" required maxlength="240" />
+                </label>
+                <label>
+                  <span class="field-label">{copy.confidence}</span>
+                  <input name="confidence" type="number" min="0" max="1" step="0.01" value="0.5" />
+                </label>
+              </div>
+              <label>
+                <span class="field-label">{copy.decision}</span>
+                <textarea name="decision" rows="4" required maxlength="1000"></textarea>
+              </label>
+              <label>
+                <span class="field-label">{copy.rationale}</span>
+                <textarea name="rationale" rows="5" required maxlength="2000"></textarea>
+              </label>
+              <div class="grid gap-4 md:grid-cols-2">
+                <label>
+                  <span class="field-label">{copy.status}</span>
+                  <select name="status">
+                    <option value="active">{statusLabel("active")}</option>
+                    <option value="uncertain">{statusLabel("uncertain")}</option>
+                    <option value="deprecated">{statusLabel("deprecated")}</option>
+                    <option value="superseded">{statusLabel("superseded")}</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="field-label">{copy.confirmationState}</span>
+                  <select name="confirmationState">
+                    <option value="draft">{confirmationLabel("draft")}</option>
+                    <option value="inferred_unconfirmed">{confirmationLabel("inferred_unconfirmed")}</option>
+                    <option value="user_confirmed">{confirmationLabel("user_confirmed")}</option>
+                    <option value="reviewed">{confirmationLabel("reviewed")}</option>
+                  </select>
+                </label>
+              </div>
+
+              <details class="structured-section" open>
+                <summary>{copy.decidersEvidenceSummary}</summary>
+                <div class="mt-4 grid gap-5">
+                  <div>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3>{copy.deciders}</h3>
+                      <button type="button" class="secondary-button" data-add-row="ownerRefs" data-default-type="user">{copy.add}</button>
+                    </div>
+                    <div class="structured-list" data-ref-list="ownerRefs">
+                      {ownerRows([]).map((ref) => (
+                        <div class="structured-row structured-row-owner" data-ref-row>
+                          <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={ref.type ?? "user"} /></label>
+                          <label><span class="field-label">ID</span><input data-ref-field="id" value={ref.id ?? ""} /></label>
+                          <label><span class="field-label">{copy.name}</span><input data-ref-field="name" value={ref.name ?? ""} /></label>
+                          <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                          <p class="field-error" data-row-error></p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3>{copy.reviewers}</h3>
+                      <button type="button" class="secondary-button" data-add-row="reviewerRefs" data-default-type="user">{copy.add}</button>
+                    </div>
+                    <div class="structured-list" data-ref-list="reviewerRefs">
+                      {ownerRows([]).map((ref) => (
+                        <div class="structured-row structured-row-owner" data-ref-row>
+                          <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={ref.type ?? "user"} /></label>
+                          <label><span class="field-label">ID</span><input data-ref-field="id" value={ref.id ?? ""} /></label>
+                          <label><span class="field-label">{copy.name}</span><input data-ref-field="name" value={ref.name ?? ""} /></label>
+                          <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                          <p class="field-error" data-row-error></p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between gap-3">
+                      <h3>{copy.evidence}</h3>
+                      <button type="button" class="secondary-button" data-add-row="sourceRefs" data-default-type="doc">{copy.add}</button>
+                    </div>
+                    <div class="structured-list" data-ref-list="sourceRefs">
+                      {sourceRows([]).map((source) => (
+                        <div class="structured-row structured-row-source" data-ref-row>
+                          <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={source.type ?? "doc"} /></label>
+                          <label><span class="field-label">ID</span><input data-ref-field="id" value={source.id ?? ""} /></label>
+                          <label><span class="field-label">{copy.title}</span><input data-ref-field="title" value={source.title ?? ""} /></label>
+                          <label><span class="field-label">URL</span><input data-ref-field="url" value={source.url ?? ""} /></label>
+                          <label><span class="field-label">{copy.updated}</span><input data-ref-field="updatedAt" value={source.updatedAt ?? ""} /></label>
+                          <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                          <p class="field-error" data-row-error></p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <div class="grid gap-4 md:grid-cols-2">
+                <label>
+                  <span class="field-label">{copy.constraints}</span>
+                  <textarea name="constraints" rows="4"></textarea>
+                </label>
+                <label>
+                  <span class="field-label">{copy.knownPitfalls}</span>
+                  <textarea name="knownPitfalls" rows="4"></textarea>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="submit">{copy.createDecision}</button>
+                <a class="button-link button-link-secondary" href={makeHref({ mode: "", view: "results" })}>{copy.cancel}</a>
+                <p class="form-status" data-form-status aria-live="polite">{copy.notCreated}</p>
+              </div>
+            </form>
+          </section>
+        ) : active ? (
+          <>
+            <section class="card" id="editor">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="surface-label">{copy.editor}</p>
+                  <h2 class="mt-2 text-3xl font-semibold text-white">{active.title}</h2>
+                  <p class="mt-2 text-sm leading-7 text-zinc-400">{copy.deciders}: {compactRefs(active.ownerRefs)} / {copy.reviewers}: {compactRefs(active.reviewerRefs)}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <span class={["trust-chip", isHumanConfirmed(active.confirmationState) ? "trust-chip-good" : ""].join(" ")}>{confirmationLabel(active.confirmationState)}</span>
+                  <span class="trust-chip">{statusLabel(active.status)}</span>
+                  <span class="trust-chip">{copy.confidence} {percent(active.confidence)}</span>
+                  {trustWarnings(active).map((warning) => <span class="trust-chip trust-chip-warn">{warning}</span>)}
+                </div>
+              </div>
+
+              <form id="decision-revise-form" class="mt-6 grid gap-5" data-id={active.id} data-tenant={tenantId}>
+                <label>
+                  <span class="field-label">{copy.title}</span>
+                  <input name="title" value={active.title} required maxlength="240" />
+                </label>
+                <label>
+                  <span class="field-label">{copy.decision}</span>
+                  <textarea name="decision" rows="4" required maxlength="1000">{active.decision}</textarea>
+                </label>
+                <label>
+                  <span class="field-label">{copy.rationale}</span>
+                  <textarea name="rationale" rows="5" required maxlength="2000">{active.rationale}</textarea>
+                </label>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label>
+                    <span class="field-label">{copy.constraints}</span>
+                    <textarea name="constraints" rows="5">{lines(active.constraints)}</textarea>
+                  </label>
+                  <label>
+                    <span class="field-label">{copy.knownPitfalls}</span>
+                    <textarea name="knownPitfalls" rows="5">{lines(active.knownPitfalls)}</textarea>
+                  </label>
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                  <label>
+                    <span class="field-label">{copy.status}</span>
+                    <select name="status">
+                      <option value="active" selected={active.status === "active"}>{statusLabel("active")}</option>
+                      <option value="uncertain" selected={active.status === "uncertain"}>{statusLabel("uncertain")}</option>
+                      <option value="deprecated" selected={active.status === "deprecated"}>{statusLabel("deprecated")}</option>
+                      <option value="superseded" selected={active.status === "superseded"}>{statusLabel("superseded")}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span class="field-label">{copy.confidence}</span>
+                    <input name="confidence" type="number" min="0" max="1" step="0.01" value={active.confidence} />
+                  </label>
+                  <label>
+                    <span class="field-label">{copy.confirmationState}</span>
+                    <select name="confirmationState">
+                      <option value="draft" selected={active.confirmationState === "draft"}>{confirmationLabel("draft")}</option>
+                      <option value="inferred_unconfirmed" selected={active.confirmationState === "inferred_unconfirmed"}>{confirmationLabel("inferred_unconfirmed")}</option>
+                      <option value="user_confirmed" selected={active.confirmationState === "user_confirmed"}>{confirmationLabel("user_confirmed")}</option>
+                      <option value="user_corrected" selected={active.confirmationState === "user_corrected"}>{confirmationLabel("user_corrected")}</option>
+                      <option value="reviewed" selected={active.confirmationState === "reviewed"}>{confirmationLabel("reviewed")}</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label>
+                    <span class="field-label">{copy.validFrom}</span>
+                    <input name="validFrom" type="datetime-local" value={dateTimeValue(active.validFrom)} />
+                  </label>
+                  <label>
+                    <span class="field-label">{copy.validUntil}</span>
+                    <input name="validUntil" type="datetime-local" value={dateTimeValue(active.validUntil)} />
+                  </label>
+                </div>
+
+                <details class="structured-section" open>
+                  <summary>{copy.decidersEvidenceSummary}</summary>
+                  <div class="mt-4 grid gap-5">
+                    <div>
+                      <div class="flex items-center justify-between gap-3">
+                        <h3>{copy.deciders}</h3>
+                        <button type="button" class="secondary-button" data-add-row="ownerRefs" data-default-type="user">{copy.add}</button>
+                      </div>
+                      <div class="structured-list" data-ref-list="ownerRefs">
+                        {ownerRows(active.ownerRefs).map((ref) => (
+                          <div class="structured-row structured-row-owner" data-ref-row>
+                            <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={ref.type ?? "user"} /></label>
+                            <label><span class="field-label">ID</span><input data-ref-field="id" value={ref.id ?? ""} /></label>
+                            <label><span class="field-label">{copy.name}</span><input data-ref-field="name" value={ref.name ?? ""} /></label>
+                            <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                            <p class="field-error" data-row-error></p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="flex items-center justify-between gap-3">
+                        <h3>{copy.reviewers}</h3>
+                        <button type="button" class="secondary-button" data-add-row="reviewerRefs" data-default-type="user">{copy.add}</button>
+                      </div>
+                      <div class="structured-list" data-ref-list="reviewerRefs">
+                        {ownerRows(active.reviewerRefs).map((ref) => (
+                          <div class="structured-row structured-row-owner" data-ref-row>
+                            <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={ref.type ?? "user"} /></label>
+                            <label><span class="field-label">ID</span><input data-ref-field="id" value={ref.id ?? ""} /></label>
+                            <label><span class="field-label">{copy.name}</span><input data-ref-field="name" value={ref.name ?? ""} /></label>
+                            <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                            <p class="field-error" data-row-error></p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="flex items-center justify-between gap-3">
+                        <h3>{copy.evidence}</h3>
+                        <button type="button" class="secondary-button" data-add-row="sourceRefs" data-default-type="doc">{copy.add}</button>
+                      </div>
+                      <div class="structured-list" data-ref-list="sourceRefs">
+                        {sourceRows(active.sourceRefs).map((source) => (
+                          <div class="structured-row structured-row-source" data-ref-row>
+                            <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={source.type ?? "doc"} /></label>
+                            <label><span class="field-label">ID</span><input data-ref-field="id" value={source.id ?? ""} /></label>
+                            <label><span class="field-label">{copy.title}</span><input data-ref-field="title" value={source.title ?? ""} /></label>
+                            <label><span class="field-label">URL</span><input data-ref-field="url" value={source.url ?? ""} /></label>
+                            <label><span class="field-label">{copy.updated}</span><input data-ref-field="updatedAt" value={source.updatedAt ?? ""} /></label>
+                            <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                            <p class="field-error" data-row-error></p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
+                <label>
+                  <span class="field-label">{copy.revisionNote}</span>
+                  <input name="note" placeholder={copy.projectPlaceholder} maxlength="1000" />
+                </label>
+                <div class="form-actions">
+                  <button type="submit">{copy.saveRevision}</button>
+                  <p class="form-status" data-form-status aria-live="polite">{copy.notSaved}</p>
+                </div>
+              </form>
+            </section>
+
+            <section class="card confirmation-card">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="surface-label">{copy.confirmation}</p>
+                  <h2 class="mt-2 text-2xl font-semibold text-white">{copy.confirmDecision}</h2>
+                </div>
+                <span class="trust-chip trust-chip-good">{copy.humanReview}</span>
+              </div>
+              <form id="decision-confirm-form" class="mt-4 grid gap-4" data-id={active.id} data-tenant={tenantId}>
+                <div class="grid gap-4 md:grid-cols-3">
+                  <label>
+                    <span class="field-label">{copy.confirmationState}</span>
+                    <select name="confirmationState">
+                      <option value="reviewed">{confirmationLabel("reviewed")}</option>
+                      <option value="user_confirmed">{confirmationLabel("user_confirmed")}</option>
+                      <option value="user_corrected">{confirmationLabel("user_corrected")}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span class="field-label">{copy.confidenceDelta}</span>
+                    <input name="confidenceDelta" type="number" min="-1" max="1" step="0.01" value="0.05" />
+                  </label>
+                  <label>
+                    <span class="field-label">{copy.validUntil}</span>
+                    <input name="validUntil" type="datetime-local" value={dateTimeValue(active.validUntil)} />
+                  </label>
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between gap-3">
+                    <h3>{copy.reviewers}</h3>
+                    <button type="button" class="secondary-button" data-add-row="confirmReviewerRefs" data-default-type="user">{copy.add}</button>
+                  </div>
+                  <div class="structured-list" data-ref-list="confirmReviewerRefs">
+                    {ownerRows(active.reviewerRefs).map((ref) => (
+                      <div class="structured-row structured-row-owner" data-ref-row>
+                        <label><span class="field-label">{copy.type}</span><input data-ref-field="type" value={ref.type ?? "user"} /></label>
+                        <label><span class="field-label">ID</span><input data-ref-field="id" value={ref.id ?? ""} /></label>
+                        <label><span class="field-label">{copy.name}</span><input data-ref-field="name" value={ref.name ?? ""} /></label>
+                        <button type="button" class="secondary-button" data-remove-row>{copy.remove}</button>
+                        <p class="field-error" data-row-error></p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <label>
+                  <span class="field-label">{copy.confirmationNote}</span>
+                  <textarea name="confirmationNote" rows="3" maxlength="1000">{active.confirmationNote ?? ""}</textarea>
+                </label>
+                <div class="form-actions">
+                  <button type="submit">{copy.confirmDecision}</button>
+                  <p class="form-status" data-form-status aria-live="polite">{copy.notConfirmed}</p>
+                </div>
+              </form>
+            </section>
+          </>
+        ) : (
+          <section class="card text-sm leading-7 text-zinc-400">
+            <p>{copy.selectDecision}</p>
+            <a class="button-link mt-4" href={makeHref({ mode: "create", selected: "", view: "editor" })}>{copy.addDecision}</a>
+          </section>
+        )}
+      </section>
+
+      <aside class={["space-y-5", panelClass("trust")].join(" ")}>
+        {context ? (
+          <>
+            <section class="card trust-panel">
+              <p class="surface-label">{copy.trustEvidence}</p>
+              <div class="mt-4 grid grid-cols-2 gap-3">
+                <div class="trust-metric">
+                  <p>{copy.humanReviewMetric}</p>
+                  <strong>{isHumanConfirmed(context.whyTrustThis.trustSignals.confirmationState) ? copy.yes : copy.no}</strong>
+                </div>
+                <div class="trust-metric">
+                  <p>{copy.conflicts}</p>
+                  <strong>{context.whyTrustThis.trustSignals.conflictCount}</strong>
+                </div>
+                <div class="trust-metric">
+                  <p>{copy.evidence}</p>
+                  <strong>{context.whyTrustThis.trustSignals.sourceCount}</strong>
+                </div>
+                <div class="trust-metric">
+                  <p>{copy.freshness}</p>
+                  <strong>{freshnessLabel(context.whyTrustThis.trustSignals.freshness)}</strong>
+                </div>
+              </div>
+              <p class="mt-3 text-xs leading-6 text-zinc-500">{copy.evidenceAuthority} {percent(context.whyTrustThis.trustSignals.sourceAuthority)}</p>
+              <div class="mt-5 space-y-4 text-sm leading-7 text-zinc-300">
+                <div>
+                  <p class="surface-label">{copy.deciders}</p>
+                  <p class="mt-1">{compactRefs(context.whyTrustThis.provenance.decidedBy, 4)}</p>
+                </div>
+                <div>
+                  <p class="surface-label">{copy.reviewers}</p>
+                  <p class="mt-1">{compactRefs(context.whyTrustThis.provenance.reviewedBy, 4)}</p>
+                </div>
+                {context.whyTrustThis.provenance.confirmationNote && (
+                  <div>
+                    <p class="surface-label">{copy.confirmationNote}</p>
+                    <p class="mt-1">{context.whyTrustThis.provenance.confirmationNote}</p>
+                  </div>
+                )}
+                <div>
+                  <p class="surface-label">{copy.timeline}</p>
+                  <p class="mt-1">{copy.created} {formatDate(context.whyTrustThis.provenance.createdAt)}</p>
+                  <p>{copy.updated} {formatDate(context.whyTrustThis.provenance.updatedAt)}</p>
+                  <p>{copy.confirmed} {formatDate(context.whyTrustThis.provenance.confirmedAt)}</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <p class="surface-label">{copy.applicableContext}</p>
+              <dl class="mt-4 context-list">
+                <div><dt>{copy.domain}</dt><dd>{context.whyTrustThis.provenance.applicableContext.domain}</dd></div>
+                <div><dt>{copy.project}</dt><dd>{context.whyTrustThis.provenance.applicableContext.projectId ?? copy.global}</dd></div>
+                <div><dt>{copy.status}</dt><dd>{statusLabel(context.whyTrustThis.provenance.applicableContext.status)}</dd></div>
+                <div><dt>{copy.validFrom}</dt><dd>{formatDate(context.whyTrustThis.provenance.applicableContext.validFrom)}</dd></div>
+                <div><dt>{copy.validUntil}</dt><dd>{formatDate(context.whyTrustThis.provenance.applicableContext.validUntil)}</dd></div>
+              </dl>
+              {context.whyTrustThis.provenance.applicableContext.constraints.length > 0 && (
+                <div class="mt-4">
+                  <p class="surface-label">{copy.constraints}</p>
+                  <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-7 text-zinc-300">
+                    {context.whyTrustThis.provenance.applicableContext.constraints.map((item) => <li>{item}</li>)}
+                  </ul>
+                </div>
+              )}
+            </section>
+
+            <section class="card">
+              <p class="surface-label">{copy.evidence}</p>
+              <div class="mt-4 space-y-3">
+                {context.whyTrustThis.provenance.sourceRefs.length === 0 ? (
+                  <p class="text-sm text-zinc-400">{copy.noEvidence}</p>
+                ) : context.whyTrustThis.provenance.sourceRefs.map((source) => (
+                  <div class="surface-soft-card">
+                    <p class="text-sm font-semibold text-white">{refLabel(source)}</p>
+                    {source.url ? <a class="mt-1 block break-all text-xs leading-6 text-amber-100 hover:text-white" href={source.url} target="_blank" rel="noreferrer">{source.url}</a> : null}
+                    <p class="mt-1 text-xs text-zinc-500">{copy.updated} {source.updatedAt ?? "-"}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {context.whyTrustThis.conflicts.length > 0 && (
+              <section class="card border-amber-300/25">
+                <p class="surface-label">{copy.conflicts}</p>
+                <p class="mt-3 text-sm leading-7 text-amber-50">{copy.conflictsIntro}</p>
+                <div class="mt-4 space-y-3">
+                  {context.whyTrustThis.conflicts.map((conflict) => (
+                    <div class="surface-soft-card border-amber-300/20">
+                      <p class="text-sm font-semibold text-amber-50">{conflict.topic}</p>
+                      <p class="mt-2 text-xs leading-6 text-zinc-400">{copy.preferred}: {conflict.preferredMemoryId}</p>
+                      <p class="text-xs leading-6 text-zinc-400">{copy.conflicting}: {conflict.conflictingMemoryIds.join(", ")}</p>
+                      <p class="text-xs leading-6 text-zinc-500">{copy.severity}: {conflict.severity} / {copy.humanReview}: {conflict.requiresHumanReview ? copy.humanReviewRequired : copy.humanReviewOptional}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section class="card">
+              <p class="surface-label">{copy.history}</p>
+              <div class="mt-4 space-y-3">
+                {context.whyTrustThis.versions.length === 0 ? (
+                  <p class="text-sm text-zinc-400">{copy.noHistory}</p>
+                ) : context.whyTrustThis.versions.map((version) => (
+                  <div class="surface-soft-card">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <strong class="text-sm text-white">{operationLabel(version.operation)}</strong>
+                      <span class="text-xs text-zinc-500">{formatDate(version.createdAt)}</span>
+                    </div>
+                    <p class="mt-2 text-xs leading-6 text-zinc-500">{copy.actors}: {compactRefs(version.actorRefs)} / {copy.reviewers}: {compactRefs(version.reviewerRefs)}</p>
+                    {version.note && <p class="mt-2 text-sm leading-7 text-zinc-400">{version.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {context.related.length > 0 && (
+              <section class="card">
+                <p class="surface-label">{copy.relatedDecisions}</p>
+                <div class="mt-4 space-y-3">
+                  {context.related.map((item) => (
+                    <a class="block rounded-[20px] border border-white/8 bg-white/[0.03] p-3 hover:border-white/20" href={makeHref({ selected: item.id, mode: "", view: "trust" })}>
+                      <div class="flex flex-wrap gap-2">
+                        <span class="mini-chip">{confirmationLabel(item.confirmationState)}</span>
+                        <span class="mini-chip">{statusLabel(item.status)}</span>
+                      </div>
+                      <p class="mt-2 text-sm font-semibold text-white">{item.title}</p>
+                      <p class="mt-1 text-xs leading-6 text-zinc-400">{trimText(item.decision, 120)}</p>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        ) : (
+          <section class="card text-sm leading-7 text-zinc-400">{copy.trustEmpty}</section>
+        )}
+      </aside>
+    </div>
+  </section>
+
+  <script>
+    import { compactOwnerRefs, compactSourceRefs } from "../lib/decision-ui";
+
+    type StructuredRowValue = Record<string, string>;
+    type ClientLocale = "en" | "ja" | "zh";
+
+    const CLIENT_COPY: Record<ClientLocale, Record<string, string>> = {
+      en: {
+        invalidUrl: "Enter a valid URL.",
+        invalidDate: "Enter an updated date that can be parsed.",
+        invalidFields: "Check the highlighted fields.",
+        saveFailed: "The request could not be saved.",
+        createDirty: "Unsaved new decision changes.",
+        createPending: "Creating decision.",
+        createSuccess: "Decision created.",
+        createFailed: "Could not create the decision.",
+        reviseDirty: "Unsaved changes.",
+        revisePending: "Saving revision.",
+        reviseSuccess: "Revision saved.",
+        reviseFailed: "Could not save the revision.",
+        confirmDirty: "Unconfirmed changes.",
+        confirmPending: "Confirming decision.",
+        confirmSuccess: "Decision confirmed.",
+        confirmFailed: "Could not confirm the decision."
+      },
+      ja: {
+        invalidUrl: "URL形式で入力してください。",
+        invalidDate: "更新日は日付として解釈できる形式で入力してください。",
+        invalidFields: "入力内容を確認してください。",
+        saveFailed: "保存できませんでした。",
+        createDirty: "未作成の変更があります。",
+        createPending: "作成しています。",
+        createSuccess: "判断を作成しました。",
+        createFailed: "作成できませんでした。",
+        reviseDirty: "未保存の変更があります。",
+        revisePending: "保存しています。",
+        reviseSuccess: "改訂を保存しました。",
+        reviseFailed: "保存できませんでした。",
+        confirmDirty: "未確認の変更があります。",
+        confirmPending: "確認しています。",
+        confirmSuccess: "判断を確認しました。",
+        confirmFailed: "確認できませんでした。"
+      },
+      zh: {
+        invalidUrl: "请输入有效URL。",
+        invalidDate: "请输入可解析的更新日期。",
+        invalidFields: "请检查高亮字段。",
+        saveFailed: "无法保存。",
+        createDirty: "新决策有未保存更改。",
+        createPending: "正在创建决策。",
+        createSuccess: "决策已创建。",
+        createFailed: "无法创建决策。",
+        reviseDirty: "有未保存更改。",
+        revisePending: "正在保存修订。",
+        reviseSuccess: "修订已保存。",
+        reviseFailed: "无法保存修订。",
+        confirmDirty: "有未确认更改。",
+        confirmPending: "正在确认决策。",
+        confirmSuccess: "决策已确认。",
+        confirmFailed: "无法确认决策。"
+      }
+    };
+
+    const pageLocale = document.documentElement.lang === "ja" || document.documentElement.lang === "zh" ? document.documentElement.lang : "en";
+    const clientCopy = CLIENT_COPY[pageLocale];
+
+    function parseLines(form: HTMLFormElement, name: string) {
+      const value = String(new FormData(form).get(name) ?? "");
+      return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    }
+
+    function optionalText(formData: FormData, name: string) {
+      const value = String(formData.get(name) ?? "").trim();
+      return value ? value : null;
+    }
+
+    function collectRows(form: HTMLFormElement, listName: string): StructuredRowValue[] {
+      const list = form.querySelector(`[data-ref-list="${listName}"]`);
+      if (!list) return [];
+      return Array.from(list.querySelectorAll<HTMLElement>("[data-ref-row]")).map((row) => {
+        const value: StructuredRowValue = {};
+        row.querySelectorAll<HTMLInputElement>("[data-ref-field]").forEach((input) => {
+          value[String(input.dataset.refField)] = input.value;
+        });
+        return value;
+      });
+    }
+
+    function clearRowErrors(form: HTMLFormElement) {
+      form.querySelectorAll<HTMLElement>("[data-row-error]").forEach((error) => {
+        error.textContent = "";
+      });
+    }
+
+    function setRowError(row: HTMLElement, message: string) {
+      const error = row.querySelector<HTMLElement>("[data-row-error]");
+      if (error) error.textContent = message;
+    }
+
+    function validateStructuredRows(form: HTMLFormElement) {
+      clearRowErrors(form);
+      let valid = true;
+      form.querySelectorAll<HTMLElement>('[data-ref-list="sourceRefs"] [data-ref-row]').forEach((row) => {
+        const url = row.querySelector<HTMLInputElement>('[data-ref-field="url"]')?.value.trim() ?? "";
+        const updatedAt = row.querySelector<HTMLInputElement>('[data-ref-field="updatedAt"]')?.value.trim() ?? "";
+        const hasContent = Array.from(row.querySelectorAll<HTMLInputElement>("[data-ref-field]")).some((input) => input.dataset.refField !== "type" && input.value.trim());
+        if (url) {
+          try {
+            new URL(url);
+          } catch {
+            setRowError(row, clientCopy.invalidUrl);
+            valid = false;
+          }
+        }
+        if (hasContent && updatedAt && Number.isNaN(Date.parse(updatedAt))) {
+          setRowError(row, clientCopy.invalidDate);
+          valid = false;
+        }
+      });
+      if (!valid) throw new Error(clientCopy.invalidFields);
+    }
+
+    function setStatus(form: HTMLFormElement, text: string, tone: "idle" | "pending" | "success" | "error" = "idle") {
+      const status = form.querySelector<HTMLElement>("[data-form-status]");
+      if (!status) return;
+      status.textContent = text;
+      status.dataset.tone = tone;
+    }
+
+    function setPending(form: HTMLFormElement, pending: boolean) {
+      const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (button) button.disabled = pending;
+    }
+
+    function responseMessage(json: { ok?: boolean; error?: { message?: string } }, successText: string) {
+      if (json.ok) return successText;
+      return json.error?.message ?? clientCopy.saveFailed;
+    }
+
+    function nextUrlWithSelected(id: string, tenantId: string, projectId: string | null) {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tenant_id", tenantId || "default");
+      if (projectId) params.set("project_id", projectId);
+      else params.delete("project_id");
+      params.set("selected", id);
+      params.delete("mode");
+      params.set("view", "editor");
+      return `${window.location.pathname}?${params.toString()}`;
+    }
+
+    function wireStructuredRows() {
+      document.querySelectorAll<HTMLButtonElement>("[data-add-row]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const listName = button.dataset.addRow;
+          const list = listName ? document.querySelector<HTMLElement>(`[data-ref-list="${listName}"]`) : null;
+          const source = list?.querySelector<HTMLElement>("[data-ref-row]");
+          if (!list || !source) return;
+          const clone = source.cloneNode(true) as HTMLElement;
+          clone.querySelectorAll<HTMLInputElement>("[data-ref-field]").forEach((input) => {
+            input.value = input.dataset.refField === "type" ? button.dataset.defaultType ?? "" : "";
+          });
+          const error = clone.querySelector<HTMLElement>("[data-row-error]");
+          if (error) error.textContent = "";
+          list.appendChild(clone);
+        });
+      });
+
+      document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.matches("[data-remove-row]")) return;
+        const row = target.closest<HTMLElement>("[data-ref-row]");
+        const list = row?.parentElement;
+        if (!row || !list) return;
+        if (list.querySelectorAll("[data-ref-row]").length <= 1) {
+          row.querySelectorAll<HTMLInputElement>("[data-ref-field]").forEach((input) => {
+            input.value = input.dataset.refField === "type" ? input.value : "";
+          });
+          const error = row.querySelector<HTMLElement>("[data-row-error]");
+          if (error) error.textContent = "";
+          return;
+        }
+        row.remove();
+      });
+    }
+
+    function wireDirtyState(form: HTMLFormElement, text: string) {
+      form.addEventListener("input", () => setStatus(form, text, "pending"));
+    }
+
+    const createForm = document.getElementById("decision-create-form") as HTMLFormElement | null;
+    if (createForm) {
+      wireDirtyState(createForm, clientCopy.createDirty);
+      createForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(createForm);
+        try {
+          validateStructuredRows(createForm);
+          setPending(createForm, true);
+          setStatus(createForm, clientCopy.createPending, "pending");
+          const tenant = createForm.dataset.tenant ?? "default";
+          const project = createForm.dataset.project || null;
+          const body = {
+            tenant_id: tenant,
+            project_id: project,
+            title: optionalText(formData, "title"),
+            decision: optionalText(formData, "decision"),
+            rationale: optionalText(formData, "rationale"),
+            constraints: parseLines(createForm, "constraints"),
+            knownPitfalls: parseLines(createForm, "knownPitfalls"),
+            status: optionalText(formData, "status") ?? "active",
+            confirmationState: optionalText(formData, "confirmationState") ?? "draft",
+            confidence: Number(formData.get("confidence") ?? 0.5),
+            ownerRefs: compactOwnerRefs(collectRows(createForm, "ownerRefs")),
+            reviewerRefs: compactOwnerRefs(collectRows(createForm, "reviewerRefs")),
+            sourceRefs: compactSourceRefs(collectRows(createForm, "sourceRefs"))
+          };
+          const response = await fetch("/api/v1/decision-memories", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          const json = await response.json() as { ok?: boolean; data?: { decisionMemory?: { id?: string; tenantId?: string; projectId?: string | null } }; error?: { message?: string } };
+          setStatus(createForm, responseMessage(json, clientCopy.createSuccess), json.ok ? "success" : "error");
+          if (json.ok && json.data?.decisionMemory?.id) {
+            window.location.href = nextUrlWithSelected(json.data.decisionMemory.id, json.data.decisionMemory.tenantId ?? tenant, json.data.decisionMemory.projectId ?? project);
+          }
+        } catch (error) {
+          setStatus(createForm, error instanceof Error ? error.message : clientCopy.createFailed, "error");
+        } finally {
+          setPending(createForm, false);
+        }
+      });
+    }
+
+    const reviseForm = document.getElementById("decision-revise-form") as HTMLFormElement | null;
+    if (reviseForm) {
+      wireDirtyState(reviseForm, clientCopy.reviseDirty);
+      reviseForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(reviseForm);
+        try {
+          validateStructuredRows(reviseForm);
+          setPending(reviseForm, true);
+          setStatus(reviseForm, clientCopy.revisePending, "pending");
+          const id = reviseForm.dataset.id;
+          const tenant = reviseForm.dataset.tenant;
+          const body = {
+            title: optionalText(formData, "title"),
+            decision: optionalText(formData, "decision"),
+            rationale: optionalText(formData, "rationale"),
+            constraints: parseLines(reviseForm, "constraints"),
+            knownPitfalls: parseLines(reviseForm, "knownPitfalls"),
+            status: optionalText(formData, "status"),
+            confidence: Number(formData.get("confidence")),
+            confirmationState: optionalText(formData, "confirmationState"),
+            validFrom: optionalText(formData, "validFrom"),
+            validUntil: optionalText(formData, "validUntil"),
+            ownerRefs: compactOwnerRefs(collectRows(reviseForm, "ownerRefs")),
+            reviewerRefs: compactOwnerRefs(collectRows(reviseForm, "reviewerRefs")),
+            sourceRefs: compactSourceRefs(collectRows(reviseForm, "sourceRefs")),
+            note: optionalText(formData, "note")
+          };
+          const response = await fetch(`/api/v1/decision-memories/${id}/revise?tenant_id=${encodeURIComponent(String(tenant ?? ""))}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          const json = await response.json() as { ok?: boolean; error?: { message?: string } };
+          setStatus(reviseForm, responseMessage(json, clientCopy.reviseSuccess), json.ok ? "success" : "error");
+          if (json.ok) window.location.reload();
+        } catch (error) {
+          setStatus(reviseForm, error instanceof Error ? error.message : clientCopy.reviseFailed, "error");
+        } finally {
+          setPending(reviseForm, false);
+        }
+      });
+    }
+
+    const confirmForm = document.getElementById("decision-confirm-form") as HTMLFormElement | null;
+    if (confirmForm) {
+      wireDirtyState(confirmForm, clientCopy.confirmDirty);
+      confirmForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(confirmForm);
+        try {
+          setPending(confirmForm, true);
+          setStatus(confirmForm, clientCopy.confirmPending, "pending");
+          const id = confirmForm.dataset.id;
+          const tenant = confirmForm.dataset.tenant;
+          const body = {
+            reviewerRefs: compactOwnerRefs(collectRows(confirmForm, "confirmReviewerRefs")),
+            confirmationState: optionalText(formData, "confirmationState"),
+            confirmationNote: optionalText(formData, "confirmationNote"),
+            confidenceDelta: Number(formData.get("confidenceDelta")),
+            validUntil: optionalText(formData, "validUntil")
+          };
+          const response = await fetch(`/api/v1/decision-memories/${id}/confirm?tenant_id=${encodeURIComponent(String(tenant ?? ""))}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          const json = await response.json() as { ok?: boolean; error?: { message?: string } };
+          setStatus(confirmForm, responseMessage(json, clientCopy.confirmSuccess), json.ok ? "success" : "error");
+          if (json.ok) window.location.reload();
+        } catch (error) {
+          setStatus(confirmForm, error instanceof Error ? error.message : clientCopy.confirmFailed, "error");
+        } finally {
+          setPending(confirmForm, false);
+        }
+      });
+    }
+
+    wireStructuredRows();
+  </script>
+
+  <style>
+    .decision-page label {
+      margin: 0;
+      color: inherit;
+      font-family: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 0.45rem;
+      color: rgba(244, 244, 245, 0.66);
+      font-size: 0.86rem;
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .field-label small {
+      display: block;
+      margin-top: 0.12rem;
+      color: rgba(244, 244, 245, 0.42);
+      font-size: 0.72rem;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+
+    .advanced-filters,
+    .structured-section {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1rem;
+    }
+
+    .advanced-filters summary,
+    .structured-section summary {
+      cursor: pointer;
+      min-height: 44px;
+      color: rgba(255, 248, 231, 0.94);
+      font-weight: 700;
+    }
+
+    .decision-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.35rem;
+    }
+
+    @media (min-width: 1280px) {
+      .decision-tabs {
+        display: none;
+      }
+    }
+
+    .decision-tabs a {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      color: rgba(244, 244, 245, 0.72);
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    .decision-tabs a[aria-current="page"] {
+      background: rgba(250, 204, 21, 0.16);
+      color: #fff8e7;
+      box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.24);
+    }
+
+    .trust-chip,
+    .mini-chip {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.045);
+      color: rgba(255, 244, 214, 0.92);
+      padding: 0.35rem 0.7rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      line-height: 1.35;
+      white-space: normal;
+    }
+
+    .mini-chip {
+      min-height: 28px;
+      color: rgba(244, 244, 245, 0.72);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .trust-chip-good {
+      border-color: rgba(134, 239, 172, 0.24);
+      background: rgba(34, 197, 94, 0.12);
+      color: #dcfce7;
+    }
+
+    .trust-chip-warn {
+      border-color: rgba(251, 191, 36, 0.28);
+      background: rgba(251, 191, 36, 0.13);
+      color: #fef3c7;
+    }
+
+    .button-link {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(212, 175, 55, 0.28);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(250, 204, 21, 0.26), rgba(212, 175, 55, 0.16));
+      color: #fff7d6;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .button-link-secondary,
+    .secondary-button {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.045);
+      color: rgba(244, 244, 245, 0.82);
+      box-shadow: none;
+    }
+
+    .secondary-button {
+      min-height: 40px;
+      border-radius: 14px;
+      padding: 0.45rem 0.75rem;
+    }
+
+    .surface-empty {
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 1.25rem;
+    }
+
+    .decision-result {
+      display: block;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 1rem;
+      transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+    }
+
+    .decision-result:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.055);
+      transform: translateY(-1px);
+    }
+
+    .decision-result-active {
+      border-color: rgba(250, 204, 21, 0.42);
+      background: rgba(250, 204, 21, 0.1);
+      box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.14);
+    }
+
+    .decision-result dl div,
+    .context-list div {
+      display: grid;
+      grid-template-columns: minmax(4.5rem, 0.36fr) minmax(0, 1fr);
+      gap: 0.65rem;
+    }
+
+    .decision-result dt,
+    .context-list dt {
+      color: rgba(244, 244, 245, 0.52);
+      font-weight: 700;
+    }
+
+    .decision-result dd,
+    .context-list dd {
+      min-width: 0;
+      color: rgba(244, 244, 245, 0.78);
+      word-break: break-word;
+    }
+
+    .structured-list {
+      margin-top: 0.75rem;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .structured-section h3,
+    .confirmation-card h3 {
+      color: rgba(255, 255, 255, 0.94);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .structured-section h3 span,
+    .confirmation-card h3 span {
+      display: block;
+      margin-top: 0.16rem;
+      color: rgba(244, 244, 245, 0.48);
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+
+    .structured-row {
+      display: grid;
+      gap: 0.75rem;
+      align-items: end;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.85rem;
+    }
+
+    .structured-row-owner {
+      grid-template-columns: minmax(5.5rem, 0.5fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    }
+
+    .structured-row-source {
+      grid-template-columns: minmax(5.5rem, 0.45fr) minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr) auto;
+    }
+
+    .field-error {
+      grid-column: 1 / -1;
+      min-height: 1.3rem;
+      color: #fecdd3;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .form-status {
+      min-height: 44px;
+      flex: 1 1 14rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.035);
+      color: rgba(244, 244, 245, 0.72);
+      padding: 0.7rem 0.9rem;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .form-status[data-tone="pending"] {
+      border-color: rgba(250, 204, 21, 0.25);
+      color: #fef3c7;
+    }
+
+    .form-status[data-tone="success"] {
+      border-color: rgba(134, 239, 172, 0.24);
+      color: #dcfce7;
+    }
+
+    .form-status[data-tone="error"] {
+      border-color: rgba(253, 164, 175, 0.28);
+      color: #fecdd3;
+    }
+
+    .trust-metric {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 0.9rem;
+    }
+
+    .trust-metric p {
+      color: rgba(244, 244, 245, 0.58);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .trust-metric strong {
+      display: block;
+      margin-top: 0.4rem;
+      color: #fff;
+      font-size: 1.25rem;
+      line-height: 1.2;
+    }
+
+    .context-list {
+      display: grid;
+      gap: 0.65rem;
+      color: rgba(244, 244, 245, 0.76);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.55;
+      transform: none;
+    }
+
+    @media (max-width: 900px) {
+      .structured-row-owner,
+      .structured-row-source {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .structured-row [data-remove-row] {
+        justify-self: start;
+      }
+    }
+  </style>
+</BaseLayout>
