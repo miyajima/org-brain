@@ -4,7 +4,7 @@ Thanks for helping make AI memory portable, inspectable, and useful.
 
 ## License
 
-Org Brain is licensed under AGPL-3.0-or-later. By contributing, you agree that your contribution will be distributed under the same license.
+Org Brain is licensed under Apache-2.0. By contributing, you agree that your contribution will be distributed under the same license.
 
 ## What Belongs in This Repository
 
@@ -41,4 +41,4 @@ Use `pnpm local:memory` for local SQLite memory smoke tests and `pnpm benchmark:
 
 ## Managed SaaS Boundary
 
-Self-hosting this repository is free under AGPL-3.0-or-later. The official managed SaaS is a paid service that bundles hosting, authentication, operations, monitoring, backups, and support. Contributions to this repo should keep self-hosting complete while avoiding official SaaS-only billing, customer management, or secret configuration.
+Self-hosting this repository is free under Apache-2.0. The official managed SaaS is a paid service that bundles hosting, authentication, operations, monitoring, backups, and support. Contributions to this repo should keep self-hosting complete while avoiding official SaaS-only billing, customer management, or secret configuration.

@@ -11,7 +11,7 @@ The future we are building is simple: every person and team should be able to ow
 - **Local-first memory**: keep personal agent memory in a local SQLite database with no cloud dependency.
 - **Agent memory bridge**: connect Codex, Claude Code, Cursor, OpenClaw, OpenCode, and other agent workflows through reusable memory exports and hooks.
 - **Team memory bus**: share durable project and organizational context through Cloudflare Workers, D1, R2, Queues, Durable Objects, Remote MCP, and an Astro console.
-- **Self-hostable by default**: all source needed to run the OSS stack yourself is public under AGPL-3.0-or-later.
+- **Self-hostable by default**: all source needed to run the OSS stack yourself is public under Apache-2.0.
 - **Managed SaaS option**: the official hosted service is paid because it includes operations, authentication, monitoring, backups, team administration, and support.
 
 ## Benchmark Snapshot
@@ -32,12 +32,6 @@ Method: LongMemEval-S 500 questions, Gemini judge enabled, single final answer p
 The decision knowledge editor defaults to English and supports Japanese and Chinese through the in-page language switcher or `?lang=ja` / `?lang=zh`.
 
 ![Decision Knowledge Editor desktop view](docs/assets/decision-editor-desktop.png)
-
-Mobile create flow:
-
-<p align="center">
-  <img src="docs/assets/decision-editor-mobile-create.png" alt="Decision Knowledge Editor mobile create flow" width="260" />
-</p>
 
 ## Quick Start: Local SQLite Memory
 
@@ -211,7 +205,7 @@ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` before running LLM judging.
 
 ## Managed SaaS
 
-Self-hosting is free under AGPL-3.0-or-later. The official managed SaaS is paid because it provides:
+Self-hosting is free under Apache-2.0. The official managed SaaS is paid because it provides:
 
 - hosted Cloudflare deployment and upgrades
 - authentication and team administration
@@ -223,7 +217,7 @@ The public repo does not include official SaaS billing systems, customer adminis
 
 ## License
 
-Org Brain is licensed under AGPL-3.0-or-later. If you modify the software and provide it over a network, the AGPL requires you to provide the corresponding source code for that modified version.
+Org Brain is licensed under the Apache License 2.0. See `LICENSE` for the full license text.
 
 The Org Brain name, official hosted service, official domains, billing operations, and managed service branding are not granted by the source license.
 
