@@ -1,0 +1,44 @@
+{
+  "tasks": [
+    {
+      "id": "access-login-principal",
+      "status": "done",
+      "description": "Verify Cloudflare Access JWTs and resolve login requests to user:<access-sub> principals with tenant grants."
+    },
+    {
+      "id": "profile-display-fields",
+      "status": "done",
+      "description": "Add per-tenant profile storage for display name, email, company name, organization name, and avatar URL."
+    },
+    {
+      "id": "arbitrary-groups",
+      "status": "done",
+      "description": "Add tenant-scoped groups with owner/admin/member roles independent of company or organization labels."
+    },
+    {
+      "id": "resource-acl-sharing",
+      "status": "done",
+      "description": "Add resource ACLs and share endpoints for knowledge docs and decision memories, including owner and group-admin checks."
+    },
+    {
+      "id": "restricted-read-filtering",
+      "status": "done",
+      "description": "Apply principal and group ACL checks during decision memory search/context enrichment and knowledge doc search/context/detail."
+    },
+    {
+      "id": "console-surfaces",
+      "status": "done",
+      "description": "Add Console profile and groups pages, plus navigation entries."
+    },
+    {
+      "id": "docs-tests",
+      "status": "done",
+      "description": "Update docs/env examples and add focused auth, ACL, and sharing tests."
+    },
+    {
+      "id": "console-e2e",
+      "status": "done",
+      "description": "Add Playwright E2E coverage for authenticated profile/login identity and memory management search/detail/refresh flows."
+    }
+  ]
+}

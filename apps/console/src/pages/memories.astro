@@ -1053,6 +1053,11 @@ const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
                             <span class="text-xs uppercase tracking-[0.16em] text-zinc-500">{formatDate(version.created_at)}</span>
                           </div>
                           <p class="mt-2 text-xs leading-6 text-zinc-400">{version.summary || `${version.kind} / ${version.lifecycle_state}`}</p>
+                          {(version.actor_type || version.actor_id) && (
+                            <p class="mt-1 break-all text-xs leading-6 text-zinc-500">
+                              actor: {version.actor_type || "unknown"} / {version.actor_id || "unknown"}
+                            </p>
+                          )}
                         </div>
                       )) : <p class="text-sm leading-7 text-zinc-400">No version history available.</p>}
                     </div>

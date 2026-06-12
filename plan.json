@@ -1,0 +1,26 @@
+{
+  "title": "Login identity and arbitrary group sharing",
+  "status": "implemented",
+  "summary": [
+    "Keep API key principals as canonical API identities and add Cloudflare Access login principals.",
+    "Add display-only user profile fields for name, email, company, and organization.",
+    "Add tenant-scoped arbitrary groups and resource ACL sharing for decision memories and knowledge docs.",
+    "Evaluate restricted decision memory and knowledge doc reads with authenticated principal plus group memberships."
+  ],
+  "scope": {
+    "included": [
+      "api-gateway Access JWT auth context",
+      "user profile endpoints",
+      "group CRUD and membership endpoints",
+      "resource sharing endpoints and ACL tables",
+      "restricted-read filtering for decision memories and knowledge docs",
+      "console profile and groups pages",
+      "tests, env examples, README, and governed docs"
+    ],
+    "excluded": [
+      "billing or managed SaaS administration",
+      "company/org based authorization",
+      "third-party IdP user provisioning beyond Cloudflare Access JWT claims"
+    ]
+  }
+}

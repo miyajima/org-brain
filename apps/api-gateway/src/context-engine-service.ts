@@ -1,4 +1,5 @@
 import { HttpError, collapseWhitespace, ulid } from "@org-brain/shared";
+import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import type { Env } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -273,6 +274,10 @@ type DecisionMemoryConfirmRequest = {
   valid_until?: string | number | null;
 };
 
+type PrincipalIdentityOptions = {
+  principal?: string | null;
+};
+
 function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
   if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
   const trimmed = value.trim();
@@ -523,6 +528,26 @@ function sourceProximityScore(memory: DecisionMemory, projectId: string | null):
   return 0.35;
 }
 
+function normalizePrincipal(principal: string | null | undefined): string | null {
+  const trimmed = principal?.trim();
+  return trimmed ? trimmed.slice(0, 128) : null;
+}
+
+function principalOwnerRef(principal: string): OwnerRef {
+  return { type: "principal", id: principal, name: principal };
+}
+
+function ensurePrincipalOwner(ownerRefs: OwnerRef[], principal: string | null): OwnerRef[] {
+  if (!principal) return ownerRefs;
+  if (ownerRefs.some((ref) => ref.id === principal)) return ownerRefs;
+  return [principalOwnerRef(principal), ...ownerRefs].slice(0, 16);
+}
+
+function ensurePrincipalAllowed(allowedPrincipals: string[], principal: string | null): string[] {
+  if (!principal) return allowedPrincipals;
+  return [...new Set([principal, ...allowedPrincipals])].slice(0, 64);
+}
+
 function principalsFor(userId: string | null, agentId: string | null): string[] {
   return [userId, agentId, userId ? `user:${userId}` : null, agentId ? `agent:${agentId}` : null].filter((item): item is string => Boolean(item));
 }
@@ -543,6 +568,35 @@ function filterSourceRefs(sourceRefs: SourceRef[], userId: string | null, agentI
 
 function permissionFit(memory: DecisionMemory, userId: string | null, agentId: string | null): number {
   return canReadMemory(memory, userId, agentId) ? 1 : 0;
+}
+
+async function filterReadableDecisionMemories(
+  env: Env,
+  tenantId: string,
+  memories: DecisionMemory[],
+  userId: string | null,
+  agentId: string | null,
+  principal?: string | null
+): Promise<DecisionMemory[]> {
+  const direct = memories.filter((memory) => canReadMemory(memory, userId, agentId));
+  const directIds = new Set(direct.map((memory) => memory.id));
+  const needsAcl = memories.filter((memory) => !directIds.has(memory.id) && memory.visibility === "restricted");
+  const normalizedPrincipal = normalizePrincipal(principal);
+  if (!normalizedPrincipal || needsAcl.length === 0) return direct;
+  const authz = await buildAuthzContext(env, tenantId, normalizedPrincipal);
+  const allowedIds = await loadReadableResourceIds(env, {
+    tenantId,
+    resourceType: "decision_memory",
+    resourceIds: needsAcl.map((memory) => memory.id),
+    authz
+  });
+  return memories
+    .filter((memory) => directIds.has(memory.id) || allowedIds.has(memory.id))
+    .map((memory) =>
+      allowedIds.has(memory.id)
+        ? { ...memory, allowedPrincipals: ensurePrincipalAllowed(memory.allowedPrincipals, normalizedPrincipal) }
+        : memory
+    );
 }
 
 function statusPenalty(memory: DecisionMemory): number {
@@ -649,9 +703,10 @@ function buildTaskText(task: { title?: string; description?: string; relatedIssu
   return collapseWhitespace(`${task.title ?? ""} ${task.description ?? ""} ${(task.relatedIssueIds ?? task.related_issue_ids ?? []).join(" ")}`);
 }
 
-function parseEnrichRequest(rawBody: unknown) {
+function parseEnrichRequest(rawBody: unknown, principal?: string | null) {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as ContextEnrichRequest;
+  const requestPrincipal = normalizePrincipal(principal);
   const task = body.task;
   if (!task || typeof task !== "object") throw new HttpError(400, "invalid_payload", "task is required");
   const taskTitle = parseOptionalString(task.title, "task.title", 240);
@@ -661,8 +716,8 @@ function parseEnrichRequest(rawBody: unknown) {
   return {
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
     projectId: parseOptionalString(body.projectId ?? body.project_id, "projectId", 128),
-    agentId: parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
-    userId: parseOptionalString(body.userId ?? body.user_id, "userId", 128),
+    agentId: requestPrincipal ?? parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
+    userId: requestPrincipal ?? parseOptionalString(body.userId ?? body.user_id, "userId", 128),
     taskType: parseEnum(body.taskType ?? body.task_type, "taskType", TASK_TYPES, "implementation"),
     taskTitle: taskTitle ?? "",
     taskDescription: taskDescription ?? "",
@@ -678,10 +733,12 @@ function parseEnrichRequest(rawBody: unknown) {
   };
 }
 
-function parseCreateDecisionRequest(rawBody: unknown): DecisionMemory {
+function parseCreateDecisionRequest(rawBody: unknown, principal?: string | null): DecisionMemory {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as DecisionMemoryCreateRequest;
   const now = Date.now();
+  const requestPrincipal = normalizePrincipal(principal);
+  const visibility = parseEnum(body.visibility, "visibility", VISIBILITIES, "tenant");
   return {
     id: ulid(now),
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
@@ -694,15 +751,21 @@ function parseCreateDecisionRequest(rawBody: unknown): DecisionMemory {
     constraints: parseStringArray(body.constraints, "constraints", 32, 500),
     knownPitfalls: parseStringArray(body.knownPitfalls ?? body.known_pitfalls, "knownPitfalls", 32, 500),
     sourceRefs: parseSourceRefs(body.sourceRefs ?? body.source_refs, "sourceRefs", 16),
-    ownerRefs: parseOwnerRefs(body.ownerRefs ?? body.owner_refs, "ownerRefs", 16),
+    ownerRefs: ensurePrincipalOwner(parseOwnerRefs(body.ownerRefs ?? body.owner_refs, "ownerRefs", 16), requestPrincipal),
     reviewerRefs: parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16),
     validFrom: parseTimestamp(body.validFrom ?? body.valid_from, "validFrom"),
     validUntil: parseTimestamp(body.validUntil ?? body.valid_until, "validUntil"),
     status: parseEnum(body.status, "status", DECISION_STATUSES, "active"),
     supersededBy: parseOptionalString(body.supersededBy ?? body.superseded_by, "supersededBy", 128),
     confidence: parseOptionalNumber(body.confidence, "confidence", 0.5, 0, 1),
-    visibility: parseEnum(body.visibility, "visibility", VISIBILITIES, "tenant"),
-    allowedPrincipals: parseStringArray(body.allowedPrincipals ?? body.allowed_principals, "allowedPrincipals", 64, 128),
+    visibility,
+    allowedPrincipals:
+      visibility === "restricted"
+        ? ensurePrincipalAllowed(
+            parseStringArray(body.allowedPrincipals ?? body.allowed_principals, "allowedPrincipals", 64, 128),
+            requestPrincipal
+          )
+        : parseStringArray(body.allowedPrincipals ?? body.allowed_principals, "allowedPrincipals", 64, 128),
     confirmationState: parseEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES, "inferred_unconfirmed"),
     confirmationNote: parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000),
     confirmedAt: null,
@@ -711,16 +774,17 @@ function parseCreateDecisionRequest(rawBody: unknown): DecisionMemory {
   };
 }
 
-function parseSearchDecisionRequest(rawBody: unknown) {
+function parseSearchDecisionRequest(rawBody: unknown, principal?: string | null) {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as DecisionMemorySearchRequest;
+  const requestPrincipal = normalizePrincipal(principal);
   return {
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
     projectId: parseOptionalString(body.projectId ?? body.project_id, "projectId", 128),
     q: parseOptionalString(body.q, "q", 500) ?? "",
     limit: parseOptionalInteger(body.limit, "limit", DEFAULT_SEARCH_LIMIT, 1, 50),
-    userId: parseOptionalString(body.userId ?? body.user_id, "userId", 128),
-    agentId: parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
+    userId: requestPrincipal ?? parseOptionalString(body.userId ?? body.user_id, "userId", 128),
+    agentId: requestPrincipal ?? parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
     personId: parseOptionalString(body.personId ?? body.person_id, "personId", 128),
     reviewerId: parseOptionalString(body.reviewerId ?? body.reviewer_id, "reviewerId", 128),
     confirmationState: parseOptionalEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES),
@@ -989,8 +1053,8 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
   return trimmed;
 }
 
-export async function createDecisionMemory(env: Env, rawBody: unknown) {
-  const memory = parseCreateDecisionRequest(rawBody);
+export async function createDecisionMemory(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
+  const memory = parseCreateDecisionRequest(rawBody, options.principal);
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO decision_memories(
        id, tenant_id, project_id, domain, title, decision, rationale,
@@ -1032,12 +1096,19 @@ export async function createDecisionMemory(env: Env, rawBody: unknown) {
   return { decisionMemory: memory };
 }
 
-export async function searchDecisionMemories(env: Env, rawBody: unknown) {
-  const request = parseSearchDecisionRequest(rawBody);
+export async function searchDecisionMemories(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
+  const request = parseSearchDecisionRequest(rawBody, options.principal);
   const q = request.q || request.taskContext;
   const memories = await loadDecisionMemories(env, { ...request, q });
-  const visible = memories
-    .filter((memory) => canReadMemory(memory, request.userId, request.agentId))
+  const visibleMemories = await filterReadableDecisionMemories(
+    env,
+    request.tenantId,
+    memories,
+    request.userId,
+    request.agentId,
+    options.principal
+  );
+  const visible = visibleMemories
     .filter((memory) => refsMatch(memory.ownerRefs, request.personId))
     .filter((memory) => refsMatch(memory.reviewerRefs, request.reviewerId))
     .filter((memory) => !request.confirmationState || memory.confirmationState === request.confirmationState)
@@ -1173,14 +1244,15 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
   const memory = await loadDecisionMemoryById(env, args.tenantId, args.id);
   const userId = args.userId ?? null;
   const agentId = args.agentId ?? null;
-  if (!canReadMemory(memory, userId, agentId)) throw new HttpError(403, "forbidden", "decision memory is restricted");
+  const visibleMemory = await filterReadableDecisionMemories(env, args.tenantId, [memory], userId, agentId, userId ?? agentId);
+  if (visibleMemory.length === 0) throw new HttpError(403, "forbidden", "decision memory is restricted");
   const related = await loadDecisionMemories(env, {
     tenantId: memory.tenantId,
     projectId: memory.projectId,
     q: memory.title,
     limit: 64
   });
-  const visibleRelated = related.filter((item) => canReadMemory(item, userId, agentId));
+  const visibleRelated = await filterReadableDecisionMemories(env, memory.tenantId, related, userId, agentId, userId ?? agentId);
   const scored = visibleRelated
     .map((item) => ({
       memory: item,
@@ -1224,19 +1296,34 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
   };
 }
 
-export async function reviseDecisionMemory(env: Env, tenantId: string, id: string, rawBody: unknown) {
+export async function reviseDecisionMemory(
+  env: Env,
+  tenantId: string,
+  id: string,
+  rawBody: unknown,
+  options: PrincipalIdentityOptions = {}
+) {
   const current = await loadDecisionMemoryById(env, tenantId, id);
   const { memory, actorRefs, note } = mergeDecisionMemory(current, rawBody);
+  const principal = normalizePrincipal(options.principal);
+  const versionActorRefs = actorRefs.length > 0 ? actorRefs : principal ? [principalOwnerRef(principal)] : actorRefs;
   await persistDecisionMemory(env, memory);
-  await insertDecisionMemoryVersion(env, { memory, operation: "revise", actorRefs, reviewerRefs: memory.reviewerRefs, note });
+  await insertDecisionMemoryVersion(env, { memory, operation: "revise", actorRefs: versionActorRefs, reviewerRefs: memory.reviewerRefs, note });
   return { decisionMemory: memory };
 }
 
-export async function confirmDecisionMemory(env: Env, tenantId: string, id: string, rawBody: unknown) {
+export async function confirmDecisionMemory(
+  env: Env,
+  tenantId: string,
+  id: string,
+  rawBody: unknown,
+  options: PrincipalIdentityOptions = {}
+) {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as DecisionMemoryConfirmRequest;
   const current = await loadDecisionMemoryById(env, tenantId, id);
-  const reviewerRefs = parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16);
+  const principal = normalizePrincipal(options.principal);
+  const reviewerRefs = ensurePrincipalOwner(parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16), principal);
   const confidence =
     body.confidence !== undefined
       ? parseOptionalNumber(body.confidence, "confidence", current.confidence, 0, 1)
@@ -1258,15 +1345,22 @@ export async function confirmDecisionMemory(env: Env, tenantId: string, id: stri
   return { decisionMemory: memory };
 }
 
-export async function enrichContext(env: Env, rawBody: unknown) {
-  const request = parseEnrichRequest(rawBody);
+export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
+  const request = parseEnrichRequest(rawBody, options.principal);
   const memories = await loadDecisionMemories(env, {
     tenantId: request.tenantId,
     projectId: request.projectId,
     q: request.taskText,
     limit: 24
   });
-  const visibleMemories = memories.filter((memory) => canReadMemory(memory, request.userId, request.agentId));
+  const visibleMemories = await filterReadableDecisionMemories(
+    env,
+    request.tenantId,
+    memories,
+    request.userId,
+    request.agentId,
+    options.principal
+  );
   const scored = visibleMemories
     .map((memory) => ({
       memory,

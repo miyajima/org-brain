@@ -24,6 +24,12 @@ Never include these in issues, pull requests, benchmark files, or examples:
 
 Use `.env.example` and `.dev.vars.example` for configuration shape only.
 
+## API Key Identity
+
+For API-key authenticated endpoints, `API_TENANT_POLICY_JSON` `principal` values are treated as the canonical request identity. Use separate API keys for users, teams, and services when memory ownership or restricted memory access must be distinguishable. A shared API key is attributed only to that shared principal.
+
+Cloudflare Access login identity uses the verified Access JWT subject as `user:<sub>`. Email, company name, and organization name are profile/display metadata only and must not be used for authorization. Resource sharing should use principals, tenant-scoped groups, or tenant-wide visibility.
+
 ## Self-hosting Notes
 
 Self-hosters are responsible for their own Cloudflare account security, access controls, backups, logging, and tenant policies. The managed SaaS offering provides those operations as a paid service.

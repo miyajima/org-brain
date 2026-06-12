@@ -95,6 +95,8 @@ export ORGBRAIN_TENANT_ID="<team-tenant>"
 
 For organization sharing, configure tenant grants in the gateway with `API_TENANT_POLICY_JSON` and, for MCP clients, `MCP_TENANT_POLICY_JSON`. In this mode hook output includes `memory_scope:"organization"` and `shared_write:true`, and `pnpm sync:agents-memory` prints a `[mode]` line with the active scope, sharing flag, and tenant before import/export.
 
+Identity is explicit. API-key requests are owned by the `principal` configured for that key, such as `user:alice@example.com`, `team:platform`, or `service:openclaw-orgbrain`. Cloudflare Access login requests are owned by `user:<access-sub>`. Optional profile fields such as display name, email, company name, and organization name are for display only; sharing uses tenant-scoped groups and resource ACLs, so groups can span companies, departments, projects, or any other collaboration unit.
+
 ## Quick Start: Cloudflare Self-host
 
 Use this when you want team memory sharing, Remote MCP, the console, and the organization bus.
@@ -155,6 +157,11 @@ Use this when you want team memory sharing, Remote MCP, the console, and the org
 
 The self-hosted API gateway exposes:
 
+- `GET /v1/auth/me`
+- `PUT /v1/auth/me/profile`
+- `GET /v1/groups`
+- `POST /v1/groups`
+- `PUT /v1/resource-shares`
 - `POST /v1/memories/search`
 - `POST /v1/memories/profile`
 - `POST /v1/memories/capture`

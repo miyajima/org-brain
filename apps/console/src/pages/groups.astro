@@ -1,0 +1,91 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+type ApiOk<T> = { ok: true; data: T };
+type ApiErr = { ok: false; error?: { code?: string; message?: string } };
+type ApiResponse<T> = ApiOk<T> | ApiErr;
+type Group = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  role: string | null;
+  updated_at: number;
+};
+
+const url = Astro.url;
+const params = url.searchParams;
+const tenantId = params.get("tenant_id")?.trim() || "default";
+let message = "";
+let error = "";
+
+async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
+  const response = await fetch(new URL(path, url), init);
+  const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
+  if (!response.ok) return payload ?? { ok: false, error: { message: `HTTP ${response.status}` } };
+  return payload;
+}
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const saved = await fetchApi("/api/v1/groups", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      name: String(form.get("name") ?? ""),
+      slug: String(form.get("slug") ?? ""),
+      description: String(form.get("description") ?? "")
+    })
+  });
+  if (saved?.ok) message = "Created";
+  else error = saved?.error?.message ?? "Group could not be created";
+}
+
+const groupsPayload = await fetchApi<{ groups: Group[] }>(`/api/v1/groups?tenant_id=${encodeURIComponent(tenantId)}`);
+const groups = groupsPayload?.ok ? groupsPayload.data.groups : [];
+if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? "Groups could not be loaded";
+---
+<BaseLayout title="Groups">
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
+      <p class="surface-label">{tenantId}</p>
+      <h1 class="mt-2 text-3xl font-semibold text-white">Groups</h1>
+    </header>
+
+    {message && <div class="rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">{message}</div>}
+    {error && <div class="rounded-lg border border-rose-300/20 bg-rose-400/10 p-3 text-sm text-rose-100">{error}</div>}
+
+    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 lg:grid-cols-[minmax(0,1fr)_14rem_auto] lg:items-end">
+      <label>
+        <span class="field-label">Name</span>
+        <input name="name" required />
+      </label>
+      <label>
+        <span class="field-label">Slug</span>
+        <input name="slug" />
+      </label>
+      <button type="submit">Create</button>
+      <label class="lg:col-span-3">
+        <span class="field-label">Description</span>
+        <input name="description" />
+      </label>
+    </form>
+
+    <section class="grid gap-3">
+      {groups.map((group) => (
+        <article class="rounded-[18px] border border-white/8 bg-white/[0.035] p-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-semibold text-white">{group.name}</h2>
+              <p class="mt-1 text-sm text-zinc-400">{group.slug} · {group.role ?? "member"}</p>
+            </div>
+            <code class="rounded bg-black/30 px-2 py-1 text-xs text-zinc-300">{group.id}</code>
+          </div>
+          {group.description && <p class="mt-3 text-sm leading-6 text-zinc-300">{group.description}</p>}
+        </article>
+      ))}
+      {groups.length === 0 && <p class="rounded-[18px] border border-white/8 bg-white/[0.035] p-4 text-sm text-zinc-400">No groups.</p>}
+    </section>
+  </section>
+</BaseLayout>

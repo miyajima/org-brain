@@ -1,5 +1,15 @@
 API_KEY=dev-org-brain-api-key
 
+# API key identity and tenant grants.
+# Each grant principal becomes the canonical identity for API-key requests.
+# API_TENANT_POLICY_JSON={"keys":[{"api_key":"dev-org-brain-api-key","principal":"user:local-dev","tenants":["default"]}]}
+
+# Optional Cloudflare Access login identity.
+# ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
+# ACCESS_AUD=your-access-application-aud
+# ACCESS_TENANT_POLICY_JSON={"email_domains":{"example.com":["default"]},"principals":{"user:<access-sub>":["default"]}}
+# ACCESS_JWKS_JSON={"keys":[]}
+
 # Optional local development values if you want to exercise MCP or workflows
 # without setting secrets in production.
 # MCP_SERVICE_TOKENS_JSON={"tokens":[]}

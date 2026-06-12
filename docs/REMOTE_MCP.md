@@ -61,6 +61,64 @@ pnpm wrangler deploy
 3. Configure the MCP client to send the same headers.
 4. If you later want interactive browser login, add Cloudflare Access in front of the MCP hostname and extend the Worker with Access JWT verification.
 
+## API Key Principal Identity
+For `/v1/*` and `/api/*` HTTP APIs, `API_TENANT_POLICY_JSON` `principal` values are the canonical identity for API-key authenticated requests.
+
+- Use stable principal strings such as `user:alice@example.com`, `team:platform`, or `service:openclaw-orgbrain`.
+- Issue separate API keys per user, team, or service when memory ownership must be distinguishable.
+- If multiple people share one API key, Org Brain can only attribute writes and restricted reads to that shared key principal.
+- API-key routes store normal memory writes with `actor_type="principal"` and `actor_id=<principal>`, ignoring caller-supplied actor fields.
+- Decision memory restricted reads are evaluated against the authenticated principal, not caller-supplied `user_id` values.
+
+Example API key tenant policy:
+```json
+{
+  "keys": [
+    {
+      "api_key": "replace-me",
+      "principal": "user:alice@example.com",
+      "tenants": ["default", "team-a"]
+    }
+  ]
+}
+```
+
+## Login Identity And Groups
+HTTP APIs also accept Cloudflare Access login identity through `cf-access-jwt-assertion`.
+
+Required settings for login auth:
+- `ACCESS_TEAM_DOMAIN`
+- `ACCESS_AUD`
+- optional `ACCESS_TENANT_POLICY_JSON`
+
+Login principals use the stable Access subject:
+```text
+user:<cloudflare-access-sub>
+```
+
+Example login tenant policy:
+```json
+{
+  "principals": {
+    "user:access-sub-123": ["default"]
+  },
+  "email_domains": {
+    "example.com": ["default"]
+  },
+  "default_tenants": ["default"]
+}
+```
+
+User profile fields such as display name, company name, and organization name are display metadata only. They do not grant tenant, group, or resource access.
+
+Groups are tenant-scoped arbitrary collaboration units. A group can represent a project, customer, cross-company effort, department, guild, or any other sharing boundary. Group membership is independent from company and organization display fields.
+
+Initial group sharing applies to:
+- decision memories
+- knowledge docs
+
+Raw/episodic memories are not group-published in this phase.
+
 ## Client Configuration
 ### Cursor (`.cursor/mcp.json`) with service token
 ```json

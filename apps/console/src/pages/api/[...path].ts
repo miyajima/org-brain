@@ -1,11 +1,25 @@
 import type { APIRoute } from "astro";
-import { env } from "cloudflare:workers";
+import { env as cloudflareEnv } from "cloudflare:workers";
 
 type ConsoleWorkerEnv = {
   API?: Fetcher;
   INTERNAL_API_KEY?: string;
   API_BASE_URL?: string;
 };
+
+type ProcessLike = {
+  env?: Record<string, string | undefined>;
+};
+
+function getRuntimeEnv(): ConsoleWorkerEnv {
+  const processEnv = (globalThis as typeof globalThis & { process?: ProcessLike }).process?.env ?? {};
+  const runtimeEnv = cloudflareEnv as unknown as ConsoleWorkerEnv;
+  return {
+    API: runtimeEnv.API,
+    INTERNAL_API_KEY: runtimeEnv.INTERNAL_API_KEY ?? processEnv.INTERNAL_API_KEY,
+    API_BASE_URL: runtimeEnv.API_BASE_URL ?? processEnv.API_BASE_URL
+  };
+}
 
 function stripHeaders(headers: Headers): Headers {
   const next = new Headers();
@@ -25,7 +39,7 @@ function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string):
 }
 
 export const ALL: APIRoute = async ({ params, request }) => {
-  const runtimeEnv = env as unknown as ConsoleWorkerEnv;
+  const runtimeEnv = getRuntimeEnv();
   const apiBaseUrl = typeof runtimeEnv?.API_BASE_URL === "string" ? runtimeEnv.API_BASE_URL.trim() : "";
   if ((!runtimeEnv?.API && !apiBaseUrl) || !runtimeEnv?.INTERNAL_API_KEY) {
     return new Response(

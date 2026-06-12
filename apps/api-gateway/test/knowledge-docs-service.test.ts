@@ -21,6 +21,8 @@ type KnowledgeDocRecord = {
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
+  visibility?: string | null;
+  owner_principal?: string | null;
 };
 
 type KnowledgeLinkRecord = {
@@ -39,6 +41,21 @@ type KnowledgeFtsRecord = {
   summary: string;
   tags: string;
   body_text: string;
+};
+
+type GroupMemberRecord = {
+  tenant_id: string;
+  group_id: string;
+  principal: string;
+};
+
+type ResourceAclRecord = {
+  tenant_id: string;
+  resource_type: string;
+  resource_id: string;
+  subject_type: string;
+  subject_id: string;
+  permission: string;
 };
 
 function parseMatchTokens(raw: string) {
@@ -77,6 +94,31 @@ class FakeStatement {
   }
 
   async all<T>() {
+    if (this.sql.includes("FROM group_members") && this.sql.includes("principal = ?")) {
+      const tenantId = String(this.args[0]);
+      const principal = String(this.args[1]);
+      return {
+        results: this.db.groupMembers
+          .filter((row) => row.tenant_id === tenantId && row.principal === principal)
+          .map((row) => ({ group_id: row.group_id })) as T[]
+      };
+    }
+
+    if (this.sql.includes("FROM resource_acl")) {
+      const tenantId = String(this.args[0]);
+      const resourceType = String(this.args[1]);
+      const rows = this.db.resourceAcl.filter((row) => {
+        if (row.tenant_id !== tenantId || row.resource_type !== resourceType || row.permission !== "read") return false;
+        const resourceIds = new Set(this.args.slice(2).map(String));
+        if (!resourceIds.has(row.resource_id)) return false;
+        for (let index = 2; index < this.args.length - 1; index += 1) {
+          if (String(this.args[index]) === row.subject_type && String(this.args[index + 1]) === row.subject_id) return true;
+        }
+        return false;
+      });
+      return { results: rows.map((row) => ({ resource_id: row.resource_id })) as T[] };
+    }
+
     if (this.sql.includes("SELECT id, slug, created_at") && this.sql.includes("FROM knowledge_docs")) {
       const [tenantId] = this.args as [string];
       const rows = this.db.docs
@@ -170,15 +212,17 @@ class FakeStatement {
         frontmatter: this.args[8] as string | null,
         body_text: this.args[9] as string | null,
         artifact_ref: this.args[10] as string | null,
-        created_at: this.args[11] as number,
-        updated_at: this.args[12] as number,
+        visibility: this.args[11] as string | null,
+        owner_principal: this.args[12] as string | null,
+        created_at: this.args[13] as number,
+        updated_at: this.args[14] as number,
         deleted_at: null
       });
       return { success: true };
     }
 
     if (this.sql.startsWith("UPDATE knowledge_docs")) {
-      const row = this.db.docs.find((doc) => doc.tenant_id === (this.args[10] as string) && doc.id === (this.args[11] as string));
+      const row = this.db.docs.find((doc) => doc.tenant_id === (this.args[12] as string) && doc.id === (this.args[13] as string));
       if (row) {
         row.scope = this.args[0] as string;
         row.kind = this.args[1] as string;
@@ -189,7 +233,9 @@ class FakeStatement {
         row.frontmatter = this.args[6] as string | null;
         row.body_text = this.args[7] as string | null;
         row.artifact_ref = this.args[8] as string | null;
-        row.updated_at = this.args[9] as number;
+        row.visibility = this.args[9] as string | null;
+        row.owner_principal = (row.owner_principal ?? this.args[10]) as string | null;
+        row.updated_at = this.args[11] as number;
         row.deleted_at = null;
       }
       return { success: true };
@@ -239,6 +285,8 @@ class FakeD1 {
   docs: KnowledgeDocRecord[] = [];
   links: KnowledgeLinkRecord[] = [];
   fts: KnowledgeFtsRecord[] = [];
+  groupMembers: GroupMemberRecord[] = [];
+  resourceAcl: ResourceAclRecord[] = [];
 
   prepare(sql: string) {
     return new FakeStatement(this, sql);
@@ -438,5 +486,58 @@ ${longBody}`
       limit: 5
     });
     expect(search.results.map((item) => item.slug)).toContain("capabilities/spec-writer");
+  });
+
+  it("filters restricted knowledge docs by group ACL membership", async () => {
+    const env = createEnv();
+    await upsertKnowledgeDoc(
+      env,
+      {
+        tenant_id: "default",
+        scope: "policy",
+        kind: "doc",
+        title: "Shared group policy",
+        slug: "policies/group-only",
+        visibility: "restricted",
+        markdown: `---
+id: policies/group-only
+title: Shared group policy
+scope: policy
+kind: doc
+tags: [group]
+stability: stable
+updated_at: 2026-06-12
+summary: Group-only policy
+---
+
+Group-only deployment guidance.`
+      },
+      { principal: "user:owner" }
+    );
+    env.OPEN_BRAIN_DB.groupMembers = [{ tenant_id: "default", group_id: "grp-1", principal: "user:alice" }];
+    env.OPEN_BRAIN_DB.resourceAcl = [
+      {
+        tenant_id: "default",
+        resource_type: "knowledge_doc",
+        resource_id: "policies/group-only",
+        subject_type: "group",
+        subject_id: "grp-1",
+        permission: "read"
+      }
+    ];
+
+    const alice = await searchKnowledgeDocs(
+      env,
+      { tenant_id: "default", q: "deployment guidance", limit: 10 },
+      { principal: "user:alice" }
+    );
+    const bob = await searchKnowledgeDocs(
+      env,
+      { tenant_id: "default", q: "deployment guidance", limit: 10 },
+      { principal: "user:bob" }
+    );
+
+    expect(alice.results.map((entry) => entry.slug)).toEqual(["policies/group-only"]);
+    expect(bob.results).toEqual([]);
   });
 });

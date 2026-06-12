@@ -17,6 +17,7 @@ import {
   type KnowledgeLinkRelation
 } from "@org-brain/shared";
 import { HttpError, ulid } from "@org-brain/shared";
+import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import type { Env } from "./types";
 
 type UpsertKnowledgeDocRequest = {
@@ -26,6 +27,7 @@ type UpsertKnowledgeDocRequest = {
   title: string;
   slug: string;
   markdown: string;
+  visibility?: "tenant" | "restricted";
 };
 
 type SearchKnowledgeDocsRequest = {
@@ -50,6 +52,8 @@ type KnowledgeDocRow = {
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
+  visibility?: string | null;
+  owner_principal?: string | null;
 };
 
 type KnowledgeDocLookupRow = {
@@ -76,6 +80,8 @@ type StoredDocSummary = {
   created_at: number;
   updated_at: number;
   body_storage: "inline" | "r2";
+  visibility: "tenant" | "restricted";
+  owner_principal: string | null;
 };
 
 type StoredDocDetail = StoredDocSummary & {
@@ -111,6 +117,7 @@ function parseUpsertKnowledgeDocRequest(raw: unknown): {
   title: string;
   slug: string;
   markdown: string;
+  visibility: "tenant" | "restricted";
 } {
   if (!raw || typeof raw !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
@@ -128,7 +135,8 @@ function parseUpsertKnowledgeDocRequest(raw: unknown): {
     kind: normalizeDocKind(body.kind, "kind"),
     title,
     slug,
-    markdown
+    markdown,
+    visibility: body.visibility === "restricted" ? "restricted" : "tenant"
   };
 }
 
@@ -217,7 +225,9 @@ function rowToSummary(row: KnowledgeDocRow): StoredDocSummary {
     owner: frontmatter.owner,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    body_storage: row.artifact_ref ? "r2" : "inline"
+    body_storage: row.artifact_ref ? "r2" : "inline",
+    visibility: row.visibility === "restricted" ? "restricted" : "tenant",
+    owner_principal: row.owner_principal ?? null
   };
 }
 
@@ -244,7 +254,8 @@ function buildBodyExcerpt(body: string): string {
 
 async function findKnowledgeDocBySlug(env: Env, tenantId: string, slug: string) {
   return env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at
+    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at,
+            visibility, owner_principal
      FROM knowledge_docs
      WHERE tenant_id = ? AND slug = ? AND deleted_at IS NULL`
   )
@@ -254,7 +265,8 @@ async function findKnowledgeDocBySlug(env: Env, tenantId: string, slug: string) 
 
 async function findKnowledgeDocById(env: Env, tenantId: string, id: string) {
   return env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at
+    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at,
+            visibility, owner_principal
      FROM knowledge_docs
      WHERE tenant_id = ? AND id = ? AND deleted_at IS NULL`
   )
@@ -276,7 +288,8 @@ async function listTenantKnowledgeDocLookups(env: Env, tenantId: string) {
 
 async function listTenantKnowledgeDocRows(env: Env, tenantId: string) {
   const result = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at
+    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at,
+            visibility, owner_principal
      FROM knowledge_docs
      WHERE tenant_id = ? AND deleted_at IS NULL`
   )
@@ -316,9 +329,42 @@ async function replaceKnowledgeDocFts(
   ]);
 }
 
-async function listOutgoingKnowledgeLinks(env: Env, tenantId: string, docId: string, limit = 20) {
+type PrincipalOptions = { principal?: string | null };
+
+async function filterReadableKnowledgeRows<T extends KnowledgeDocRow>(
+  env: Env,
+  tenantId: string,
+  rows: T[],
+  options: PrincipalOptions = {}
+): Promise<T[]> {
+  const principal = options.principal?.trim();
+  if (!principal) return rows;
+  const restricted = rows.filter((row) => row.visibility === "restricted");
+  if (restricted.length === 0) return rows;
+  const authz = await buildAuthzContext(env, tenantId, principal);
+  const allowedRestrictedIds = await loadReadableResourceIds(env, {
+    tenantId,
+    resourceType: "knowledge_doc",
+    resourceIds: restricted.map((row) => row.id),
+    authz
+  });
+  return rows.filter((row) => row.visibility !== "restricted" || allowedRestrictedIds.has(row.id));
+}
+
+async function assertCanReadKnowledgeDoc(
+  env: Env,
+  tenantId: string,
+  row: KnowledgeDocRow,
+  options: PrincipalOptions = {}
+): Promise<void> {
+  const visible = await filterReadableKnowledgeRows(env, tenantId, [row], options);
+  if (visible.length === 0) throw new HttpError(403, "forbidden", "knowledge doc is restricted");
+}
+
+async function listOutgoingKnowledgeLinks(env: Env, tenantId: string, docId: string, limit = 20, options: PrincipalOptions = {}) {
   const result = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT d.id, d.tenant_id, d.scope, d.kind, d.title, d.slug, d.summary, d.tags, d.frontmatter, d.body_text, d.artifact_ref, d.created_at, d.updated_at, d.deleted_at, l.relation
+    `SELECT d.id, d.tenant_id, d.scope, d.kind, d.title, d.slug, d.summary, d.tags, d.frontmatter, d.body_text, d.artifact_ref, d.created_at, d.updated_at, d.deleted_at,
+            d.visibility, d.owner_principal, l.relation
      FROM knowledge_links l
      JOIN knowledge_docs d
        ON d.id = l.to_doc_id
@@ -339,15 +385,17 @@ async function listOutgoingKnowledgeLinks(env: Env, tenantId: string, docId: str
     .bind(tenantId, docId, limit)
     .all<KnowledgeDocLinkRow>();
 
-  return result.results.map((row) => ({
+  const rows = await filterReadableKnowledgeRows(env, tenantId, result.results, options);
+  return rows.map((row) => ({
     relation: row.relation,
     doc: rowToSummary(row)
   })) satisfies StoredDocLink[];
 }
 
-async function listIncomingKnowledgeLinks(env: Env, tenantId: string, docId: string, limit = 20) {
+async function listIncomingKnowledgeLinks(env: Env, tenantId: string, docId: string, limit = 20, options: PrincipalOptions = {}) {
   const result = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT d.id, d.tenant_id, d.scope, d.kind, d.title, d.slug, d.summary, d.tags, d.frontmatter, d.body_text, d.artifact_ref, d.created_at, d.updated_at, d.deleted_at, l.relation
+    `SELECT d.id, d.tenant_id, d.scope, d.kind, d.title, d.slug, d.summary, d.tags, d.frontmatter, d.body_text, d.artifact_ref, d.created_at, d.updated_at, d.deleted_at,
+            d.visibility, d.owner_principal, l.relation
      FROM knowledge_links l
      JOIN knowledge_docs d
        ON d.id = l.from_doc_id
@@ -359,7 +407,8 @@ async function listIncomingKnowledgeLinks(env: Env, tenantId: string, docId: str
     .bind(tenantId, docId, limit)
     .all<KnowledgeDocLinkRow>();
 
-  return result.results.map((row) => ({
+  const rows = await filterReadableKnowledgeRows(env, tenantId, result.results, options);
+  return rows.map((row) => ({
     relation: row.relation,
     doc: rowToSummary(row)
   })) satisfies StoredDocLink[];
@@ -419,8 +468,8 @@ function dedupeSummaryDocs(docs: StoredDocSummary[], excludeIds = new Set<string
   });
 }
 
-export async function upsertKnowledgeDoc(env: Env, rawBody: unknown) {
-  const { tenantId, scope, kind, title, slug, markdown } = parseUpsertKnowledgeDocRequest(rawBody);
+export async function upsertKnowledgeDoc(env: Env, rawBody: unknown, options: PrincipalOptions = {}) {
+  const { tenantId, scope, kind, title, slug, markdown, visibility } = parseUpsertKnowledgeDocRequest(rawBody);
   const parsed = parseKnowledgeMarkdown(markdown, { title, scope, kind });
   const docId = parsed.frontmatter.id;
 
@@ -458,7 +507,8 @@ export async function upsertKnowledgeDoc(env: Env, rawBody: unknown) {
   if (existing) {
     await env.OPEN_BRAIN_DB.prepare(
       `UPDATE knowledge_docs
-       SET scope = ?, kind = ?, title = ?, slug = ?, summary = ?, tags = ?, frontmatter = ?, body_text = ?, artifact_ref = ?, updated_at = ?, deleted_at = NULL
+       SET scope = ?, kind = ?, title = ?, slug = ?, summary = ?, tags = ?, frontmatter = ?, body_text = ?, artifact_ref = ?,
+           visibility = ?, owner_principal = COALESCE(owner_principal, ?), updated_at = ?, deleted_at = NULL
        WHERE tenant_id = ? AND id = ?`
     )
       .bind(
@@ -471,6 +521,8 @@ export async function upsertKnowledgeDoc(env: Env, rawBody: unknown) {
         frontmatterJson,
         inlineBody,
         artifactRef,
+        visibility,
+        options.principal ?? null,
         now,
         tenantId,
         docId
@@ -478,8 +530,10 @@ export async function upsertKnowledgeDoc(env: Env, rawBody: unknown) {
       .run();
   } else {
     await env.OPEN_BRAIN_DB.prepare(
-      `INSERT INTO knowledge_docs(id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`
+      `INSERT INTO knowledge_docs(
+         id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref,
+         visibility, owner_principal, created_at, updated_at, deleted_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`
     )
       .bind(
         docId,
@@ -493,6 +547,8 @@ export async function upsertKnowledgeDoc(env: Env, rawBody: unknown) {
         frontmatterJson,
         inlineBody,
         artifactRef,
+        visibility,
+        options.principal ?? null,
         createdAt,
         now
       )
@@ -517,28 +573,31 @@ export async function upsertKnowledgeDoc(env: Env, rawBody: unknown) {
   };
 }
 
-export async function getKnowledgeDoc(env: Env, tenantId: string, rawSlug: string) {
+export async function getKnowledgeDoc(env: Env, tenantId: string, rawSlug: string, options: PrincipalOptions = {}) {
   const slug = normalizeDocSlug(rawSlug);
   const row = await findKnowledgeDocBySlug(env, tenantId, slug);
   if (!row) {
     throw new HttpError(404, "doc_not_found", `knowledge doc not found: ${slug}`);
   }
+  await assertCanReadKnowledgeDoc(env, tenantId, row, options);
 
   return {
     doc: rowToDetail(row),
-    resolved_links: await listOutgoingKnowledgeLinks(env, tenantId, row.id, KNOWLEDGE_CONTEXT_LIMITS.direct_links),
+    resolved_links: await listOutgoingKnowledgeLinks(env, tenantId, row.id, KNOWLEDGE_CONTEXT_LIMITS.direct_links, options),
     markdown: await readKnowledgeDocMarkdown(env, row)
   };
 }
 
-export async function searchKnowledgeDocs(env: Env, rawBody: unknown) {
+export async function searchKnowledgeDocs(env: Env, rawBody: unknown, options: PrincipalOptions = {}) {
   const { tenantId, q, scopes, limit } = parseSearchKnowledgeDocsRequest(rawBody);
   const ftsQuery = buildKnowledgeFtsQuery(q);
   const scopeSql = scopes.length > 0 ? ` AND d.scope IN (${scopes.map(() => "?").join(", ")})` : "";
+  const queryLimit = options.principal ? Math.max(limit * 4, limit) : limit;
 
   if (ftsQuery) {
     const result = await env.OPEN_BRAIN_DB.prepare(
-      `SELECT d.id, d.tenant_id, d.scope, d.kind, d.title, d.slug, d.summary, d.tags, d.frontmatter, d.body_text, d.artifact_ref, d.created_at, d.updated_at, d.deleted_at
+      `SELECT d.id, d.tenant_id, d.scope, d.kind, d.title, d.slug, d.summary, d.tags, d.frontmatter, d.body_text, d.artifact_ref, d.created_at, d.updated_at, d.deleted_at,
+              d.visibility, d.owner_principal
        FROM knowledge_docs_fts
        JOIN knowledge_docs d
          ON d.id = knowledge_docs_fts.doc_id
@@ -549,43 +608,47 @@ export async function searchKnowledgeDocs(env: Env, rawBody: unknown) {
        ORDER BY bm25(knowledge_docs_fts) ASC, d.updated_at DESC
        LIMIT ?`
     )
-      .bind(tenantId, ftsQuery, ...scopes, limit)
+      .bind(tenantId, ftsQuery, ...scopes, queryLimit)
       .all<KnowledgeDocRow>();
+    const rows = await filterReadableKnowledgeRows(env, tenantId, result.results, options);
 
     return {
       tenant_id: tenantId,
       q,
-      results: result.results.map((row) => rowToSummary(row))
+      results: rows.slice(0, limit).map((row) => rowToSummary(row))
     };
   }
 
   const result = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at
+    `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at,
+            visibility, owner_principal
      FROM knowledge_docs d
      WHERE tenant_id = ?${scopeSql}
        AND deleted_at IS NULL
      ORDER BY updated_at DESC
      LIMIT ?`
   )
-    .bind(tenantId, ...scopes, limit)
+    .bind(tenantId, ...scopes, queryLimit)
     .all<KnowledgeDocRow>();
+  const rows = await filterReadableKnowledgeRows(env, tenantId, result.results, options);
 
   return {
     tenant_id: tenantId,
     q,
-    results: result.results.map((row) => rowToSummary(row))
+    results: rows.slice(0, limit).map((row) => rowToSummary(row))
   };
 }
 
-export async function getKnowledgeDocContext(env: Env, tenantId: string, rawSlug: string) {
+export async function getKnowledgeDocContext(env: Env, tenantId: string, rawSlug: string, options: PrincipalOptions = {}) {
   const slug = normalizeDocSlug(rawSlug);
   const row = await findKnowledgeDocBySlug(env, tenantId, slug);
   if (!row) {
     throw new HttpError(404, "doc_not_found", `knowledge doc not found: ${slug}`);
   }
+  await assertCanReadKnowledgeDoc(env, tenantId, row, options);
 
-  const outgoing = await listOutgoingKnowledgeLinks(env, tenantId, row.id, 20);
-  const incoming = await listIncomingKnowledgeLinks(env, tenantId, row.id, 12);
+  const outgoing = await listOutgoingKnowledgeLinks(env, tenantId, row.id, 20, options);
+  const incoming = await listIncomingKnowledgeLinks(env, tenantId, row.id, 12, options);
   const parentMoc = outgoing.find((link) => link.relation === "parent")?.doc ?? null;
   const children = outgoing
     .filter((link) => link.relation === "child")

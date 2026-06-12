@@ -63,6 +63,8 @@
 - Remote MCP uses worker-validated service token headers with per-token tenant grants.
 - MCP lifecycle mutations store the authenticated service-token `principal` as the memory actor for audit visibility.
 - Context Engine MVP also applies per-row and per-source allowed principal filtering during context shaping. This is finer grained than existing tenant isolation, but remains a lightweight MVP model rather than full RBAC.
+- API Gateway can resolve principals from API keys or verified Cloudflare Access JWTs. Login profile fields such as company and organization names are display-only metadata.
+- Tenant-scoped arbitrary groups and `resource_acl` entries provide group sharing for decision memories and knowledge docs without coupling access to company or organization labels.
 
 ## Operator Workflows
 - `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.

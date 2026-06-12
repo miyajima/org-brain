@@ -41,6 +41,22 @@ type DecisionMemoryVersionRecord = {
   created_at: number;
 };
 
+type GroupMemberRecord = {
+  tenant_id: string;
+  group_id: string;
+  principal: string;
+  role: string;
+};
+
+type ResourceAclRecord = {
+  tenant_id: string;
+  resource_type: string;
+  resource_id: string;
+  subject_type: string;
+  subject_id: string;
+  permission: string;
+};
+
 class FakeStatement {
   args: unknown[] = [];
 
@@ -55,6 +71,30 @@ class FakeStatement {
   }
 
   async all<T>() {
+    if (this.sql.includes("FROM group_members") && this.sql.includes("principal = ?")) {
+      const tenantId = String(this.args[0]);
+      const principal = String(this.args[1]);
+      return {
+        results: this.db.groupMembers
+          .filter((row) => row.tenant_id === tenantId && row.principal === principal)
+          .map((row) => ({ group_id: row.group_id })) as T[]
+      };
+    }
+    if (this.sql.includes("FROM resource_acl")) {
+      const tenantId = String(this.args[0]);
+      const resourceType = String(this.args[1]);
+      const permission = "read";
+      const rows = this.db.resourceAcl.filter((row) => {
+        if (row.tenant_id !== tenantId || row.resource_type !== resourceType || row.permission !== permission) return false;
+        const resourceIdArgs = new Set(this.args.slice(2).map(String));
+        if (!resourceIdArgs.has(row.resource_id)) return false;
+        for (let index = 2; index < this.args.length - 1; index += 1) {
+          if (String(this.args[index]) === row.subject_type && String(this.args[index + 1]) === row.subject_id) return true;
+        }
+        return false;
+      });
+      return { results: rows.map((row) => ({ resource_id: row.resource_id })) as T[] };
+    }
     if (this.sql.includes("FROM decision_memory_versions")) {
       const tenantId = String(this.args[0]);
       const decisionMemoryId = String(this.args[1]);
@@ -159,6 +199,8 @@ class FakeStatement {
 class FakeD1 {
   decisionMemories: DecisionMemoryRecord[] = [];
   decisionMemoryVersions: DecisionMemoryVersionRecord[] = [];
+  groupMembers: GroupMemberRecord[] = [];
+  resourceAcl: ResourceAclRecord[] = [];
 
   prepare(sql: string) {
     return new FakeStatement(this, sql);
@@ -332,6 +374,91 @@ describe("context-engine-service", () => {
 
     expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-visible"]);
     expect(result.decisionContext[0].sources.map((source: any) => source.id)).toEqual(["ADR-014"]);
+  });
+
+  it("uses the authenticated principal for restricted decision memory reads when user_id is omitted", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-alice-only",
+        visibility: "restricted",
+        allowed_principals_json: JSON.stringify(["user:alice@example.com"])
+      })
+    ];
+
+    const result = (await enrichContext(
+      { OPEN_BRAIN_DB: db } as any,
+      {
+        orgId: "org_123",
+        projectId: "proj_abc",
+        task: { title: "legacy_auth", description: "new_auth_providerへ寄せる" }
+      },
+      { principal: "user:alice@example.com" }
+    )) as any;
+
+    expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-alice-only"]);
+  });
+
+  it("does not allow a request body user_id to impersonate another principal", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-alice-only",
+        visibility: "restricted",
+        allowed_principals_json: JSON.stringify(["user:alice@example.com"])
+      })
+    ];
+
+    const result = (await searchDecisionMemories(
+      { OPEN_BRAIN_DB: db } as any,
+      {
+        orgId: "org_123",
+        projectId: "proj_abc",
+        q: "legacy_auth",
+        userId: "user:alice@example.com"
+      },
+      { principal: "user:bob@example.com" }
+    )) as any;
+
+    expect(result.results).toEqual([]);
+  });
+
+  it("allows restricted decision memories through group ACL membership", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-group-only",
+        visibility: "restricted",
+        allowed_principals_json: "[]"
+      })
+    ];
+    db.groupMembers = [
+      { tenant_id: "org_123", group_id: "grp-platform", principal: "user:alice", role: "member" }
+    ];
+    db.resourceAcl = [
+      {
+        tenant_id: "org_123",
+        resource_type: "decision_memory",
+        resource_id: "dm-group-only",
+        subject_type: "group",
+        subject_id: "grp-platform",
+        permission: "read"
+      }
+    ];
+
+    const alice = (await searchDecisionMemories(
+      { OPEN_BRAIN_DB: db } as any,
+      { orgId: "org_123", projectId: "proj_abc", q: "legacy_auth" },
+      { principal: "user:alice" }
+    )) as any;
+    const bob = (await searchDecisionMemories(
+      { OPEN_BRAIN_DB: db } as any,
+      { orgId: "org_123", projectId: "proj_abc", q: "legacy_auth" },
+      { principal: "user:bob" }
+    )) as any;
+
+    expect(alice.results.map((item: any) => item.id)).toEqual(["dm-group-only"]);
+    expect(bob.results).toEqual([]);
   });
 
   it("keeps provenance out of enrich results unless explicitly requested", async () => {

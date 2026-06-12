@@ -1,7 +1,9 @@
 import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
-import { apiKeyAuth, assertApiTenantAccess, jsonOk, tenantFromBody } from "./auth";
+import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, getApiPrincipal, jsonOk, tenantFromBody, type ApiContextEnv } from "./auth";
 import { confirmDecisionMemory, createDecisionMemory, enrichContext, getDecisionMemoryContext, reviseDecisionMemory, searchDecisionMemories } from "./context-engine-service";
+import { addGroupMember, createGroup, getGroup, listGroups, removeGroupMember, updateGroup } from "./group-service";
+import { getMyIdentity, updateUserProfile } from "./identity-service";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import {
   captureMemories,
@@ -17,15 +19,97 @@ import {
 } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
+import { getResourceShare, updateResourceShare } from "./share-service";
 import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
 import type { Env } from "./types";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<ApiContextEnv>();
+
+function withPrincipalActor(rawBody: unknown, principal: string): unknown {
+  if (!rawBody || typeof rawBody !== "object") return rawBody;
+  const body = rawBody as Record<string, unknown>;
+  return {
+    ...body,
+    actor_type: "principal",
+    actor_id: principal
+  };
+}
 
 mountMcp(app);
 
 app.use("/v1/*", apiKeyAuth);
 app.use("/api/*", apiKeyAuth);
+
+app.get("/v1/auth/me", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await getMyIdentity(c.env, tenantId, getApiAuthContext(c));
+  return jsonOk(c, result);
+});
+
+app.put("/v1/auth/me/profile", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await updateUserProfile(c.env, tenantId, getApiAuthContext(c), body);
+  return jsonOk(c, result);
+});
+
+app.get("/v1/groups", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await listGroups(c.env, tenantId, getApiPrincipal(c));
+  return jsonOk(c, result);
+});
+
+app.post("/v1/groups", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await createGroup(c.env, tenantId, getApiPrincipal(c), body);
+  return jsonOk(c, result, 201);
+});
+
+app.get("/v1/groups/:groupId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await getGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c));
+  return jsonOk(c, result);
+});
+
+app.patch("/v1/groups/:groupId", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await updateGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), body);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/groups/:groupId/members", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await addGroupMember(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), body);
+  return jsonOk(c, result);
+});
+
+app.delete("/v1/groups/:groupId/members/:principal", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await removeGroupMember(
+    c.env,
+    tenantId,
+    c.req.param("groupId"),
+    getApiPrincipal(c),
+    decodeURIComponent(c.req.param("principal"))
+  );
+  return jsonOk(c, result);
+});
+
+app.put("/v1/resource-shares", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await updateResourceShare(c.env, body, getApiPrincipal(c));
+  return jsonOk(c, result);
+});
+
+app.get("/v1/resource-shares/:resourceType/:resourceId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await getResourceShare(c.env, tenantId, c.req.param("resourceType"), c.req.param("resourceId"));
+  return jsonOk(c, result);
+});
 
 app.post("/v1/tasks", async (c) => {
   const body = await c.req.json<unknown>();
@@ -87,28 +171,28 @@ app.get("/v1/memories", async (c) => {
 app.post("/v1/memories/upsert", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await upsertMemories(c.env, body);
+  const result = await upsertMemories(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result, 201);
 });
 
 app.post("/v1/memories/capture", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await captureMemories(c.env, body);
+  const result = await captureMemories(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result, 201);
 });
 
 app.post("/v1/memories/propose", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await proposeMemoryWithRationale(c.env, body);
+  const result = await proposeMemoryWithRationale(c.env, withPrincipalActor(body, getApiPrincipal(c)));
   return jsonOk(c, result, 201);
 });
 
 app.post("/v1/memories/capture-rationale", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await captureMemoryWithInferredRationale(c.env, body);
+  const result = await captureMemoryWithInferredRationale(c.env, withPrincipalActor(body, getApiPrincipal(c)));
   return jsonOk(c, result, 201);
 });
 
@@ -122,21 +206,21 @@ app.post("/v1/memories/confirm", async (c) => {
 app.post("/v1/memories/revise", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await reviseMemoryByRequest(c.env, body);
+  const result = await reviseMemoryByRequest(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.post("/v1/memories/refresh", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await refreshMemoryByRequest(c.env, body);
+  const result = await refreshMemoryByRequest(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.post("/v1/memories/suppress", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await suppressMemoryByRequest(c.env, body);
+  const result = await suppressMemoryByRequest(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
@@ -163,26 +247,25 @@ app.get("/v1/memories/:memoryId/details", async (c) => {
 app.post("/v1/decision-memories", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await createDecisionMemory(c.env, body);
+  const result = await createDecisionMemory(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result, 201);
 });
 
 app.post("/v1/decision-memories/search", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await searchDecisionMemories(c.env, body);
+  const result = await searchDecisionMemories(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.get("/v1/decision-memories/:id/context", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const userId = c.req.query("user_id");
-  const agentId = c.req.query("agent_id");
+  const principal = getApiPrincipal(c);
   const result = await getDecisionMemoryContext(c.env, {
     tenantId,
     id: c.req.param("id"),
-    userId,
-    agentId
+    userId: principal,
+    agentId: principal
   });
   return jsonOk(c, result);
 });
@@ -190,56 +273,56 @@ app.get("/v1/decision-memories/:id/context", async (c) => {
 app.post("/v1/decision-memories/:id/revise", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const body = await c.req.json<unknown>();
-  const result = await reviseDecisionMemory(c.env, tenantId, c.req.param("id"), body);
+  const result = await reviseDecisionMemory(c.env, tenantId, c.req.param("id"), body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.post("/v1/decision-memories/:id/confirm", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const body = await c.req.json<unknown>();
-  const result = await confirmDecisionMemory(c.env, tenantId, c.req.param("id"), body);
+  const result = await confirmDecisionMemory(c.env, tenantId, c.req.param("id"), body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.post("/v1/context/enrich", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await enrichContext(c.env, body);
+  const result = await enrichContext(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.post("/api/context/enrich", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await enrichContext(c.env, body);
+  const result = await enrichContext(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.post("/v1/docs", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await upsertKnowledgeDoc(c.env, body);
+  const result = await upsertKnowledgeDoc(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result, result.created ? 201 : 200);
 });
 
 app.post("/v1/docs/search", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await searchKnowledgeDocs(c.env, body);
+  const result = await searchKnowledgeDocs(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.get("/v1/docs/:slug{.+}/context", async (c) => {
   const slug = c.req.param("slug");
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await getKnowledgeDocContext(c.env, tenantId, slug);
+  const result = await getKnowledgeDocContext(c.env, tenantId, slug, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.get("/v1/docs/:slug{.+}", async (c) => {
   const slug = c.req.param("slug");
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await getKnowledgeDoc(c.env, tenantId, slug);
+  const result = await getKnowledgeDoc(c.env, tenantId, slug, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 

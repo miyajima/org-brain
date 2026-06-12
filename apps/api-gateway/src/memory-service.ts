@@ -122,6 +122,10 @@ type ListMemoriesOptions = {
   projectId?: string | null;
 };
 
+type PrincipalActorOptions = {
+  actorPrincipal?: string | null;
+};
+
 export type MemoryListPage = {
   tenant_id: string;
   project_id: string | null;
@@ -157,6 +161,10 @@ export type MemoryListPage = {
 export type MemoryDetail = {
   tenant_id: string;
   memory_id: string;
+  memory: {
+    actor_type: string | null;
+    actor_id: string | null;
+  } | null;
   versions: Array<{
     version: number;
     operation: string;
@@ -282,6 +290,34 @@ function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySe
     throw new HttpError(400, "invalid_payload", `${field} must be 'memories' or 'hybrid'`);
   }
   return value;
+}
+
+function normalizeActorPrincipal(principal: string | null | undefined): string | null {
+  const trimmed = principal?.trim();
+  return trimmed ? trimmed.slice(0, 128) : null;
+}
+
+function withPrincipalActor(rawBody: unknown, principal: string | null | undefined): unknown {
+  const actorId = normalizeActorPrincipal(principal);
+  if (!actorId || !rawBody || typeof rawBody !== "object") return rawBody;
+  const body = rawBody as Record<string, unknown>;
+  const items = Array.isArray(body.items)
+    ? body.items.map((item) =>
+        item && typeof item === "object"
+          ? {
+              ...(item as Record<string, unknown>),
+              actor_type: "principal",
+              actor_id: actorId
+            }
+          : item
+      )
+    : body.items;
+  return {
+    ...body,
+    actor_type: "principal",
+    actor_id: actorId,
+    items
+  };
 }
 
 function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; actorType: string | null; actorId: string | null; items: UpsertMemoryItem[] } {
@@ -412,8 +448,8 @@ function buildMemoryListFilterSql(options: { source?: string; projectId?: string
   return { sql, bindings };
 }
 
-export async function upsertMemories(env: Env, rawBody: unknown) {
-  const { tenantId, source, items } = parseUpsertRequest(rawBody);
+export async function upsertMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
+  const { tenantId, source, items } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
   return captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
 }
 
@@ -551,6 +587,14 @@ export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<Memo
 }
 
 export async function getMemoryDetails(env: Env, tenantId: string, memoryId: string): Promise<MemoryDetail> {
+  const memory = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT actor_type, actor_id
+     FROM memories
+     WHERE tenant_id = ? AND id = ?`
+  )
+    .bind(tenantId, memoryId)
+    .first<{ actor_type: string | null; actor_id: string | null }>();
+
   const versions = await env.OPEN_BRAIN_DB.prepare(
     `SELECT version, operation, summary, kind, lifecycle_state, actor_type, actor_id, created_at
      FROM memory_versions
@@ -628,6 +672,12 @@ export async function getMemoryDetails(env: Env, tenantId: string, memoryId: str
   return {
     tenant_id: tenantId,
     memory_id: memoryId,
+    memory: memory
+      ? {
+          actor_type: memory.actor_type,
+          actor_id: memory.actor_id
+        }
+      : null,
     versions: versions.results,
     rationales: rationaleRows.results.map((row) => ({
       ...row,
@@ -652,7 +702,8 @@ async function bestEffortRefreshMemoryResults(env: Env, tenantId: string, ids: s
   }
 }
 
-export async function captureMemories(env: Env, rawBody: unknown) {
+export async function captureMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
+  rawBody = withPrincipalActor(rawBody, options.actorPrincipal);
   if (!rawBody || typeof rawBody !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
@@ -665,18 +716,19 @@ export async function captureMemories(env: Env, rawBody: unknown) {
   return captureMemoryItems(env, { tenantId, source, items: body.items, operation: "capture" });
 }
 
-export async function reviseMemoryByRequest(env: Env, rawBody: unknown) {
+export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   if (!rawBody || typeof rawBody !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
   const body = rawBody as ReviseMemoryRequest;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const memoryId = parseString(body.memory_id, "memory_id");
+  const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   return reviseMemory(env, {
     tenantId,
     memoryId,
-    actorType: parseOptionalActorField(body.actor_type, "actor_type", 64),
-    actorId: parseOptionalActorField(body.actor_id, "actor_id", 128),
+    actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
+    actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128),
     content: typeof body.content === "string" ? body.content.slice(0, 20_000) : undefined,
     summary: parseOptionalString(body.summary, "summary", 1000),
     tags: body.tags ? parseTags(body.tags) : undefined,
@@ -685,32 +737,34 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown) {
   });
 }
 
-export async function refreshMemoryByRequest(env: Env, rawBody: unknown) {
+export async function refreshMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   if (!rawBody || typeof rawBody !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
   const body = rawBody as RefreshMemoryRequest;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   return refreshMemory(env, {
     tenantId,
     memoryId: parseString(body.memory_id, "memory_id"),
-    actorType: parseOptionalActorField(body.actor_type, "actor_type", 64),
-    actorId: parseOptionalActorField(body.actor_id, "actor_id", 128),
+    actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
+    actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128),
     confidenceDelta: parseOptionalFiniteNumber(body.confidence_delta, "confidence_delta")
   });
 }
 
-export async function suppressMemoryByRequest(env: Env, rawBody: unknown) {
+export async function suppressMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   if (!rawBody || typeof rawBody !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
   const body = rawBody as SuppressMemoryRequest;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   return suppressMemory(env, {
     tenantId,
     memoryId: parseString(body.memory_id, "memory_id"),
     reason: parseString(body.reason, "reason").slice(0, 500),
-    actorType: parseOptionalActorField(body.actor_type, "actor_type", 64),
-    actorId: parseOptionalActorField(body.actor_id, "actor_id", 128)
+    actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
+    actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128)
   });
 }

@@ -10,6 +10,8 @@ const navCopy = {
     dashboard: "Dashboard",
     memories: "Memories",
     decisions: "Decisions",
+    groups: "Groups",
+    profile: "Profile",
     newTask: "New Task",
     tasks: "Tasks"
   },
@@ -17,6 +19,8 @@ const navCopy = {
     dashboard: "ダッシュボード",
     memories: "メモリ",
     decisions: "判断",
+    groups: "グループ",
+    profile: "プロフィール",
     newTask: "Task作成",
     tasks: "Task一覧"
   },
@@ -24,6 +28,8 @@ const navCopy = {
     dashboard: "仪表盘",
     memories: "记忆",
     decisions: "决策",
+    groups: "群组",
+    profile: "个人资料",
     newTask: "新建任务",
     tasks: "任务"
   }
@@ -35,6 +41,8 @@ const isActive = (href: string) => {
   if (href === "/tasks") return currentPath === "/tasks" || (currentPath.startsWith("/tasks/") && currentPath !== "/tasks/new");
   if (href === "/tasks/new") return currentPath === "/tasks/new";
   if (href === "/decisions") return currentPath === "/decisions";
+  if (href === "/groups") return currentPath === "/groups";
+  if (href === "/profile") return currentPath === "/profile";
   return currentPath === href;
 };
 ---
@@ -55,6 +63,8 @@ const isActive = (href: string) => {
         <a class="console-nav-link" href="/" aria-current={isActive("/") ? "page" : undefined}>{navCopy.dashboard}</a>
         <a class="console-nav-link" href="/memories" aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
         <a class="console-nav-link" href={decisionsHref} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
+        <a class="console-nav-link" href="/groups" aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
+        <a class="console-nav-link" href="/profile" aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
         <a class="console-nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
         <a class="console-nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
       </nav>

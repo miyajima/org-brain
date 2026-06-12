@@ -1,0 +1,13 @@
+{
+  "score": 0.95,
+  "basis": [
+    "Additive API behavior preserves existing request shapes while adding login identity, profiles, groups, and ACL sharing.",
+    "Focused tests cover Access identity, principal actor persistence, group ACL reads, and share-management authorization.",
+    "Playwright E2E covers authenticated Console identity/profile behavior and memory management search/detail/refresh behavior.",
+    "Docs and env examples describe operational identity constraints and display-only organization metadata."
+  ],
+  "deductions": [
+    "Profile and group Console pages are functional but intentionally minimal.",
+    "Knowledge doc ownership for pre-existing rows may need an operational backfill."
+  ]
+}

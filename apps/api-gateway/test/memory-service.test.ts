@@ -14,12 +14,27 @@ type MemoryRecord = {
   lexical_score?: number | null;
   kind?: string | null;
   lifecycle_state?: string | null;
+  scope_type?: string | null;
+  scope_key?: string | null;
+  actor_type?: string | null;
+  actor_id?: string | null;
   current_version?: number | null;
   last_accessed_at?: number | null;
   confidence_score?: number | null;
   utility_score?: number | null;
   expires_at?: number | null;
   revised_at?: number | null;
+};
+
+type MemoryVersionRecord = {
+  id: string;
+  memory_id: string;
+  tenant_id: string;
+  version: number;
+  operation: string;
+  content: string;
+  actor_type: string | null;
+  actor_id: string | null;
 };
 
 type KnowledgeDocRecord = {
@@ -234,6 +249,10 @@ class FakeStatement {
         created_at: this.args[8] as number,
         kind: this.args[9] as string | null,
         lifecycle_state: this.args[10] as string | null,
+        scope_type: this.args[11] as string | null,
+        scope_key: this.args[12] as string | null,
+        actor_type: this.args[13] as string | null,
+        actor_id: this.args[14] as string | null,
         confidence_score: this.args[15] as number | null,
         utility_score: this.args[16] as number | null,
         current_version: this.args[19] as number | null,
@@ -257,6 +276,10 @@ class FakeStatement {
           row.created_at = this.args[5] as number;
           row.kind = this.args[6] as string | null;
           row.lifecycle_state = this.args[7] as string | null;
+          row.scope_type = this.args[8] as string | null;
+          row.scope_key = this.args[9] as string | null;
+          row.actor_type = this.args[10] as string | null;
+          row.actor_id = this.args[11] as string | null;
           row.confidence_score = this.args[12] as number | null;
           row.utility_score = this.args[13] as number | null;
           row.current_version = this.args[16] as number | null;
@@ -272,7 +295,21 @@ class FakeStatement {
       return { success: true };
     }
 
-    if (this.sql.startsWith("INSERT INTO memory_versions(") || this.sql.startsWith("UPDATE memory_versions SET")) {
+    if (this.sql.startsWith("INSERT INTO memory_versions(")) {
+      this.db.memoryVersions.push({
+        id: this.args[0] as string,
+        memory_id: this.args[1] as string,
+        tenant_id: this.args[2] as string,
+        version: this.args[3] as number,
+        operation: this.args[4] as string,
+        content: this.args[5] as string,
+        actor_type: this.args[12] as string | null,
+        actor_id: this.args[13] as string | null
+      });
+      return { success: true };
+    }
+
+    if (this.sql.startsWith("UPDATE memory_versions SET")) {
       return { success: true };
     }
 
@@ -282,6 +319,7 @@ class FakeStatement {
 
 class FakeD1 {
   memories: MemoryRecord[] = [];
+  memoryVersions: MemoryVersionRecord[] = [];
   knowledgeDocs: KnowledgeDocRecord[] = [];
 
   prepare(sql: string) {
@@ -348,6 +386,40 @@ describe("memory-service", () => {
     });
     expect(listed[0].utility_score).toEqual(expect.any(Number));
     expect(listed[0].confidence_score).toEqual(expect.any(Number));
+  });
+
+  it("uses the authenticated principal as the memory actor instead of body-supplied actor fields", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as any;
+
+    await upsertMemories(
+      env,
+      {
+        tenant_id: "default",
+        source: "codex",
+        actor_type: "user",
+        actor_id: "user:spoofed@example.com",
+        items: [
+          {
+            external_key: "principal-owned",
+            content: "principal owned memory",
+            summary: "owner",
+            actor_type: "user",
+            actor_id: "user:item-spoof@example.com"
+          }
+        ]
+      },
+      { actorPrincipal: "user:alice@example.com" }
+    );
+
+    expect(db.memories[0]).toMatchObject({
+      actor_type: "principal",
+      actor_id: "user:alice@example.com"
+    });
+    expect(db.memoryVersions[0]).toMatchObject({
+      actor_type: "principal",
+      actor_id: "user:alice@example.com"
+    });
   });
 
   it("adds quality metadata and short expiry for direct API artifact captures", async () => {

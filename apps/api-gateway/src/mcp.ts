@@ -272,7 +272,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           user_id: user_id ?? principal,
           agent_id: agent_id ?? principal,
           ...payload
-        });
+        }, { principal });
         return toContent(result);
       }
     );
@@ -304,10 +304,11 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       },
       async ({ tenant_id, ...payload }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
         const result = await createDecisionMemory(this.env, {
           tenant_id: tenantId,
           ...payload
-        });
+        }, { principal });
         return toContent(result);
       }
     );
@@ -330,7 +331,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           user_id: user_id ?? principal,
           agent_id: agent_id ?? principal,
           ...payload
-        });
+        }, { principal });
         return toContent(result);
       }
     );
@@ -428,7 +429,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
   }
 }
 
-export function mountMcp(app: Hono<{ Bindings: Env }>) {
+export function mountMcp(app: Hono<any>) {
   app.mount("/mcp", (request, env, ctx) => {
     try {
       const auth = authorizeMcpRequest(request, env);

@@ -1,0 +1,17 @@
+{
+  "status": "self-reviewed",
+  "findings": [],
+  "checks": [
+    "API-key tenant grants still resolve principals and enforce tenant access before route handlers run.",
+    "Cloudflare Access JWTs validate signature, time claims, optional audience, issuer, and tenant policy grants.",
+    "Company and organization profile fields are not consulted for authorization.",
+    "Group ACL reads require the authenticated principal or one of its tenant-scoped groups.",
+    "Resource share updates require resource ownership and group owner/admin role for group targets.",
+    "Playwright E2E uses a deterministic mock API server instead of depending on live D1 or external login providers."
+  ],
+  "residual_risk": [
+    "Cloudflare Access tenant policy must be configured carefully in production; absent policy defaults only to the default tenant.",
+    "Backfilled knowledge docs without owner_principal remain share-manageable for compatibility until ownership is populated.",
+    "Shared API keys still collapse ownership to the shared principal by design."
+  ]
+}

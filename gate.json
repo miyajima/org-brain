@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "required_checks": [
+    "rtk pnpm test",
+    "rtk pnpm -r --if-present typecheck",
+    "rtk pnpm --filter @org-brain/console test:e2e"
+  ],
+  "notes": [
+    "Added migration 0012_login_groups_acl.sql for profiles, groups, group_members, resource_acl, and knowledge doc visibility/owner fields.",
+    "API gateway focused test passed: 10 files, 45 tests.",
+    "Console Playwright E2E passed: 2 tests covering authenticated profile identity/profile save and memory search/detail/refresh.",
+    "Console unit test passed after excluding Playwright specs from Vitest.",
+    "Full workspace test passed.",
+    "Recursive workspace typecheck passed outside the sandbox after Astro/Cloudflare port binding hit EPERM inside the sandbox."
+  ]
+}
