@@ -1,13 +1,13 @@
 {
-  "score": 0.95,
+  "score": 0.96,
   "basis": [
-    "Additive API behavior preserves existing request shapes while adding login identity, profiles, groups, and ACL sharing.",
-    "Focused tests cover Access identity, principal actor persistence, group ACL reads, and share-management authorization.",
-    "Playwright E2E covers authenticated Console identity/profile behavior and memory management search/detail/refresh behavior.",
-    "Docs and env examples describe operational identity constraints and display-only organization metadata."
+    "README now communicates the organizational learning vision before implementation details.",
+    "The rewrite preserves existing commands, benchmark numbers, API endpoints, storage modes, and SaaS/license/status details.",
+    "Mode selection and quick starts make the local, self-hosted, and managed paths easier to compare.",
+    "Verification covered JSON artifacts, Markdown structure, whitespace, workspace lint, and full workspace tests."
   ],
   "deductions": [
-    "Profile and group Console pages are functional but intentionally minimal.",
-    "Knowledge doc ownership for pre-existing rows may need an operational backfill."
+    "This is a documentation-only change, so runtime behavior was not exercised beyond the existing test suite.",
+    "The product vision includes future-facing examples that will need continued wording discipline as features evolve."
   ]
 }

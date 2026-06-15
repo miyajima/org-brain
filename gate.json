@@ -1,16 +1,17 @@
 {
   "status": "passed",
   "required_checks": [
-    "rtk pnpm test",
-    "rtk pnpm -r --if-present typecheck",
-    "rtk pnpm --filter @org-brain/console test:e2e"
+    "rtk node -e JSON.parse(...) for harness JSON artifacts",
+    "rtk node -e README structure and code-fence check",
+    "rtk git diff --check -- README.md plan.json tasks.json",
+    "rtk pnpm lint",
+    "rtk pnpm test"
   ],
   "notes": [
-    "Added migration 0012_login_groups_acl.sql for profiles, groups, group_members, resource_acl, and knowledge doc visibility/owner fields.",
-    "API gateway focused test passed: 10 files, 45 tests.",
-    "Console Playwright E2E passed: 2 tests covering authenticated profile identity/profile save and memory search/detail/refresh.",
-    "Console unit test passed after excluding Playwright specs from Vitest.",
-    "Full workspace test passed.",
-    "Recursive workspace typecheck passed outside the sandbox after Astro/Cloudflare port binding hit EPERM inside the sandbox."
+    "README.md was rewritten around the requested vision-first structure.",
+    "The requested mode table, local quick start, self-host quick start, integrations, APIs, benchmarks, package overview, managed SaaS, license, and project status sections are present.",
+    "Markdown structure check passed with closed code fences and no trailing whitespace.",
+    "Workspace lint passed.",
+    "Full workspace test passed: apps/console 5 tests, packages/shared 6 tests, apps/org-router 1 test, apps/cap-runner 20 tests, apps/api-gateway 45 tests; apps/mcp and apps/orchestrator had no test files and passed with passWithNoTests."
   ]
 }

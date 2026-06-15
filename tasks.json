@@ -1,44 +1,39 @@
 {
   "tasks": [
     {
-      "id": "access-login-principal",
+      "id": "read-plan-and-existing-readme",
       "status": "done",
-      "description": "Verify Cloudflare Access JWTs and resolve login requests to user:<access-sub> principals with tenant grants."
+      "description": "Read the requested README rewrite plan and current README technical content."
     },
     {
-      "id": "profile-display-fields",
+      "id": "vision-first-opening",
       "status": "done",
-      "description": "Add per-tenant profile storage for display name, email, company name, organization name, and avatar URL."
+      "description": "Replace the opening with the OrgBrain tagline and organizational memory positioning."
     },
     {
-      "id": "arbitrary-groups",
+      "id": "core-story-sections",
       "status": "done",
-      "description": "Add tenant-scoped groups with owner/admin/member roles independent of company or organization labels."
+      "description": "Add The Problem, The Future, What OrgBrain Does, Example Use Cases, Why It Matters, and Why OrgBrain is Different."
     },
     {
-      "id": "resource-acl-sharing",
+      "id": "setup-restructure",
       "status": "done",
-      "description": "Add resource ACLs and share endpoints for knowledge docs and decision memories, including owner and group-admin checks."
+      "description": "Add Choose Your Mode and split setup into local memory and self-hosted team memory quick starts."
     },
     {
-      "id": "restricted-read-filtering",
+      "id": "preserve-technical-details",
       "status": "done",
-      "description": "Apply principal and group ACL checks during decision memory search/context enrichment and knowledge doc search/context/detail."
+      "description": "Keep existing commands, API list, benchmark snapshot and commands, package overview, console preview, SaaS, license, and status details."
     },
     {
-      "id": "console-surfaces",
+      "id": "quality-checks",
       "status": "done",
-      "description": "Add Console profile and groups pages, plus navigation entries."
+      "description": "Run markdown-oriented validation and workspace quality checks appropriate for a documentation-only change."
     },
     {
-      "id": "docs-tests",
+      "id": "review-and-gate",
       "status": "done",
-      "description": "Update docs/env examples and add focused auth, ACL, and sharing tests."
-    },
-    {
-      "id": "console-e2e",
-      "status": "done",
-      "description": "Add Playwright E2E coverage for authenticated profile/login identity and memory management search/detail/refresh flows."
+      "description": "Refresh review.json, gate.json, and quality_score.json after verification."
     }
   ]
 }

@@ -2,16 +2,14 @@
   "status": "self-reviewed",
   "findings": [],
   "checks": [
-    "API-key tenant grants still resolve principals and enforce tenant access before route handlers run.",
-    "Cloudflare Access JWTs validate signature, time claims, optional audience, issuer, and tenant policy grants.",
-    "Company and organization profile fields are not consulted for authorization.",
-    "Group ACL reads require the authenticated principal or one of its tenant-scoped groups.",
-    "Resource share updates require resource ownership and group owner/admin role for group targets.",
-    "Playwright E2E uses a deterministic mock API server instead of depending on live D1 or external login providers."
+    "README opening now leads with the OrgBrain tagline and organizational memory positioning.",
+    "Existing local SQLite commands, Cloudflare self-host steps, environment variables, API endpoint list, benchmark data, console preview, SaaS notes, license, and project status were preserved.",
+    "Benchmark details were moved below Quick Start, integrations, and APIs while retaining the original snapshot and commands.",
+    "Aspirational examples use design/help language instead of claiming fully automated cross-team detection or dependency planning.",
+    "Product prose uses OrgBrain while code identifiers and package names remain in their existing forms."
   ],
   "residual_risk": [
-    "Cloudflare Access tenant policy must be configured carefully in production; absent policy defaults only to the default tenant.",
-    "Backfilled knowledge docs without owner_principal remain share-manageable for compatibility until ownership is populated.",
-    "Shared API keys still collapse ownership to the shared principal by design."
+    "The README intentionally presents a product vision; future implementation depth should continue to be reflected with careful wording as features mature.",
+    "No runtime code changed, so browser or live API smoke testing was not applicable."
   ]
 }

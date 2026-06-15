@@ -1,26 +1,24 @@
 {
-  "title": "Login identity and arbitrary group sharing",
+  "title": "Vision-first README rewrite",
   "status": "implemented",
   "summary": [
-    "Keep API key principals as canonical API identities and add Cloudflare Access login principals.",
-    "Add display-only user profile fields for name, email, company, and organization.",
-    "Add tenant-scoped arbitrary groups and resource ACL sharing for decision memories and knowledge docs.",
-    "Evaluate restricted decision memory and knowledge doc reads with authenticated principal plus group memberships."
+    "Rewrite the README opening so OrgBrain is framed as organizational learning for AI agents.",
+    "Move problem, future, product loop, use cases, and differentiation before setup details.",
+    "Preserve existing local SQLite, Cloudflare self-hosting, API, benchmark, package, SaaS, license, and status details.",
+    "Avoid overclaiming aspirational capabilities by using design-oriented language where implementation is not guaranteed."
   ],
   "scope": {
     "included": [
-      "api-gateway Access JWT auth context",
-      "user profile endpoints",
-      "group CRUD and membership endpoints",
-      "resource sharing endpoints and ACL tables",
-      "restricted-read filtering for decision memories and knowledge docs",
-      "console profile and groups pages",
-      "tests, env examples, README, and governed docs"
+      "README.md product narrative and structure",
+      "mode-selection table before quick starts",
+      "benchmark repositioning under a lower Benchmarks section",
+      "harness planning, task, review, gate, and quality artifacts"
     ],
     "excluded": [
-      "billing or managed SaaS administration",
-      "company/org based authorization",
-      "third-party IdP user provisioning beyond Cloudflare Access JWT claims"
+      "runtime code changes",
+      "new product features",
+      "Cloudflare deploy or live API smoke tests",
+      "changes to governed architecture/design docs beyond README-adjacent quality records"
     ]
   }
 }
