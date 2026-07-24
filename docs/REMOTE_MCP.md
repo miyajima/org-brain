@@ -151,6 +151,29 @@ Use these tools before implementation/review/debug work when shared org context 
 - `orgbrain_decision_memories_search`: searches decision-grade context directly.
 - `orgbrain_decision_memories_create`: records a durable decision memory when an operator has confirmed the decision.
 
+## Agent Message Tools
+Use these tools for agmsg-style agent inbox workflows:
+
+- `orgbrain_messages_send`: send a durable message to `principal`, `agent`, `project`, or `channel`.
+- `orgbrain_messages_inbox`: list active inbox messages; without a target it reads the authenticated MCP principal inbox.
+- `orgbrain_messages_get`: fetch a single message for the requested or default target.
+- `orgbrain_messages_read`: mark a message as read.
+- `orgbrain_messages_ack`: acknowledge a message.
+
+Example send input:
+
+```json
+{
+  "tenant_id": "default",
+  "project_id": "org-brain",
+  "target_type": "agent",
+  "target_key": "codex",
+  "subject": "Review needed",
+  "body": "Please check the latest implementation plan.",
+  "idempotency_key": "review-needed-2026-07-08"
+}
+```
+
 Example `orgbrain_context_enrich` input:
 
 ```json

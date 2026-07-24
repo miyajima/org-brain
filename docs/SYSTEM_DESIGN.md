@@ -18,6 +18,7 @@
 - `decision_memories`: agent-facing decision-grade context rows with constraints, pitfalls, source refs, validity, status, confidence, and permission metadata.
 - `decision_memory_versions`: append-only decision memory edit/confirmation history for the human review editor.
 - `memory_confirmations`: short-lived propose/confirm state for interactive saves.
+- `agent_messages`: durable agmsg-style agent inbox rows with target, thread, read, and ack state.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
 - `measurement_runs` / `measurement_variants` / `measurement_comparisons`: opt-in memory savings AB measurements.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
@@ -26,6 +27,7 @@
 ## Control Plane
 - `LeaseDO`: tenant and capability concurrency gate.
 - `MailboxDO`: short-lived operational mailbox for worker snapshots.
+- Agent messages do not use `MailboxDO` as their source of truth; D1 remains the durable inbox and polling surface.
 
 ## Memory and Retrieval
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
@@ -56,6 +58,7 @@
 - Router validates envelopes and task results before materializing state.
 - Memory upsert deduplicates `external_key` inside one request and resolves existing IDs in batches.
 - Retrieval telemetry is best-effort so memory writes do not block task execution.
+- Agent message sends dedupe only when clients provide `idempotency_key`, so repeated natural-language messages are not collapsed accidentally.
 
 ## Security
 - Public API is API-key protected.
@@ -68,6 +71,7 @@
 
 ## Operator Workflows
 - `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
+- `pnpm agmsg` is the local CLI for sending, listing, reading, and acking agent messages through the API Gateway.
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
 - `pnpm memories:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
 - `pnpm memories:backfill-rationales` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing memories, skipping memories that already have rationale rows.

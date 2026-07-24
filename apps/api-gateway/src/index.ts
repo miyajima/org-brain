@@ -1,5 +1,12 @@
 import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
+import {
+  ackAgentMessage,
+  getAgentMessage,
+  listAgentMessages,
+  markAgentMessageRead,
+  sendAgentMessage
+} from "./agent-message-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, getApiPrincipal, jsonOk, tenantFromBody, type ApiContextEnv } from "./auth";
 import { confirmDecisionMemory, createDecisionMemory, enrichContext, getDecisionMemoryContext, reviseDecisionMemory, searchDecisionMemories } from "./context-engine-service";
 import { addGroupMember, createGroup, getGroup, listGroups, removeGroupMember, updateGroup } from "./group-service";
@@ -108,6 +115,68 @@ app.put("/v1/resource-shares", async (c) => {
 app.get("/v1/resource-shares/:resourceType/:resourceId", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const result = await getResourceShare(c.env, tenantId, c.req.param("resourceType"), c.req.param("resourceId"));
+  return jsonOk(c, result);
+});
+
+app.post("/v1/agent-messages", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await sendAgentMessage(c.env, body, { principal: getApiPrincipal(c) });
+  return jsonOk(c, result, result.deduped ? 200 : 201);
+});
+
+app.get("/v1/agent-messages", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const limit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+  const cursorValue = c.req.query("cursor");
+  const cursor = cursorValue ? Number.parseInt(cursorValue, 10) : undefined;
+  const result = await listAgentMessages(
+    c.env,
+    {
+      tenant_id: tenantId,
+      project_id: c.req.query("project_id"),
+      target_type: c.req.query("target_type"),
+      target_key: c.req.query("target_key"),
+      status: c.req.query("status"),
+      limit: Number.isNaN(limit) ? 50 : limit,
+      cursor: cursor && !Number.isNaN(cursor) ? cursor : undefined
+    },
+    { principal: getApiPrincipal(c) }
+  );
+  return jsonOk(c, result);
+});
+
+app.get("/v1/agent-messages/:messageId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await getAgentMessage(
+    c.env,
+    tenantId,
+    c.req.param("messageId"),
+    {
+      tenant_id: tenantId,
+      target_type: c.req.query("target_type"),
+      target_key: c.req.query("target_key")
+    },
+    { principal: getApiPrincipal(c) }
+  );
+  return jsonOk(c, result);
+});
+
+app.post("/v1/agent-messages/:messageId/read", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await markAgentMessageRead(c.env, tenantId, c.req.param("messageId"), body, {
+    principal: getApiPrincipal(c)
+  });
+  return jsonOk(c, result);
+});
+
+app.post("/v1/agent-messages/:messageId/ack", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await ackAgentMessage(c.env, tenantId, c.req.param("messageId"), body, {
+    principal: getApiPrincipal(c)
+  });
   return jsonOk(c, result);
 });
 

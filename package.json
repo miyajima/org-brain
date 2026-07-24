@@ -10,6 +10,7 @@
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "local:memory": "node ./scripts/local-memory.mjs",
+    "agmsg": "node ./scripts/agent-messages.mjs",
     "hook:bridge": "node ./scripts/hook-memory-bridge.mjs",
     "sync:agents-memory": "node ./scripts/sync-agents-memory.mjs",
     "sync:openclaw-memory": "node ./scripts/sync-openclaw-memory.mjs",

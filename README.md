@@ -272,6 +272,17 @@ for MCP clients, `MCP_TENANT_POLICY_JSON`. In this mode hook output includes
 `memory_scope:"organization"` and `shared_write:true`, and `pnpm sync:agents-memory` prints a `[mode]`
 line with the active scope, sharing flag, and tenant before import/export.
 
+Agent messages provide an agmsg-style inbox over the same API credentials:
+
+```bash
+pnpm agmsg send --to agent:codex --subject "Review needed" --body "Please check the latest plan."
+pnpm agmsg inbox --target agent:codex
+pnpm agmsg ack <message-id> --target agent:codex
+```
+
+The CLI uses `ORGBRAIN_API_URL`, `ORGBRAIN_API_KEY`, and `ORGBRAIN_TENANT_ID`.
+`ORGBRAIN_API_BASE` remains a compatibility alias when `ORGBRAIN_API_URL` is unset.
+
 Identity is explicit. API-key requests are owned by the `principal` configured for that key, such as
 `user:alice@example.com`, `team:platform`, or `service:openclaw-orgbrain`. Cloudflare Access login requests
 are owned by `user:<access-sub>`. Optional profile fields such as display name, email, company name,
@@ -287,6 +298,11 @@ The self-hosted API gateway exposes:
 - `GET /v1/groups`
 - `POST /v1/groups`
 - `PUT /v1/resource-shares`
+- `POST /v1/agent-messages`
+- `GET /v1/agent-messages`
+- `GET /v1/agent-messages/:messageId`
+- `POST /v1/agent-messages/:messageId/read`
+- `POST /v1/agent-messages/:messageId/ack`
 - `POST /v1/memories/search`
 - `POST /v1/memories/profile`
 - `POST /v1/memories/capture`

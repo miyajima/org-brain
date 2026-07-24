@@ -9,7 +9,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Event Bus: Cloudflare Queues (`org-bus`, `cap-plan`)
 - Coordination: Durable Objects (`LeaseDO`, `MailboxDO`)
 - MCP: Remote MCP endpoint on API Gateway (`/mcp`, service-token auth)
-- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`) + R2 artifacts
+- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
 
 ## API
@@ -17,6 +17,11 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `GET /v1/tasks`
 - `GET /v1/tasks/:taskId`
 - `GET /v1/tasks/:taskId/events`
+- `POST /v1/agent-messages`
+- `GET /v1/agent-messages`
+- `GET /v1/agent-messages/:messageId`
+- `POST /v1/agent-messages/:messageId/read`
+- `POST /v1/agent-messages/:messageId/ack`
 - `GET /v1/memories`
 - `POST /v1/memories/upsert`
 - `POST /v1/memories/capture`
@@ -48,7 +53,19 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
   - memory list/upsert/search/profile
   - memory refresh/suppress
   - task create/get/events
+  - agent message send/inbox/get/read/ack
 - Tenant isolation: per-token tenant grants with optional principal -> tenant mapping (`MCP_TENANT_POLICY_JSON`) enforced server-side
+
+## Agent Messages
+- `agent_messages` is the durable source of truth for agmsg-style agent-to-agent messages.
+- Messages have one target per row: `principal`, `agent`, `project`, or `channel`.
+- Inbox reads default to the authenticated principal target when `target_type` / `target_key` are omitted.
+- Status is `unread -> read -> acked`; `archived` is reserved for later cleanup/UI flows.
+- `idempotency_key` dedupes sends only when supplied; repeated messages without a key are stored as distinct messages.
+- `thread_id` defaults to the root message id, and replies inherit the parent thread when `reply_to_message_id` is supplied.
+- Message storage is not automatic memory capture. Messages can later be referenced from memories or decision memories as evidence.
+- MCP exposes `orgbrain_messages_send`, `orgbrain_messages_inbox`, `orgbrain_messages_get`, `orgbrain_messages_read`, and `orgbrain_messages_ack`.
+- `pnpm agmsg` is a thin CLI wrapper over the HTTP API and uses `ORGBRAIN_API_URL` with `ORGBRAIN_API_BASE` as a compatibility alias.
 
 ## Memory Source of Truth
 - Master data is Cloudflare D1 (`memories`, `memories_fts`)
@@ -133,6 +150,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 
 ## Operator Workflow
 - `pnpm -s usage:status` queries the D1 source of truth and reports a tenant usage snapshot for memory/thread counts. It intentionally does not query task rows.
+- `pnpm agmsg` sends, lists, reads, and acks agent messages through the API Gateway.
 - `pnpm hook:bridge <source>` normalizes hook payloads from coding agents and upserts them into `memories`.
 - `pnpm hook:bridge` emits JSON with `memory_scope`, `cloud_memory_enabled`, `org_sharing_enabled`, and `shared_write`; `pnpm sync:agents-memory` prints the same mode before API import/export.
 - hook/bridge 由来の自動保存は非対話 path として扱い、propose/confirm を要求しない。代わりに `/v1/memories/capture-rationale` で `decision_rationales` / `decision_evidence` を `inferred_unconfirmed` として保存する。

@@ -4,6 +4,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
 import { z } from "zod";
 import { authorizeMcpRequest } from "./mcp-security";
+import {
+  ackAgentMessage,
+  getAgentMessage,
+  listAgentMessages,
+  markAgentMessageRead,
+  sendAgentMessage
+} from "./agent-message-service";
 import { getTask, getTaskEvents, createTask } from "./task-service";
 import type { Env } from "./types";
 import { createDecisionMemory, enrichContext, searchDecisionMemories } from "./context-engine-service";
@@ -37,6 +44,9 @@ const ownerRefSchema = z.object({
   id: z.string().max(128).optional(),
   name: z.string().max(128).optional()
 });
+
+const agentMessageTargetTypeSchema = z.enum(["principal", "agent", "project", "channel"]);
+const agentMessageStatusSchema = z.enum(["unread", "read", "acked", "archived", "active"]);
 
 function toContent(data: unknown) {
   return {
@@ -372,6 +382,110 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           actor_type: "principal",
           actor_id: this.props?.principal ?? null
         });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_send",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        target_type: agentMessageTargetTypeSchema,
+        target_key: z.string().min(1).max(256),
+        subject: z.string().max(500).nullable().optional(),
+        body: z.string().min(1).max(20_000),
+        metadata: z.record(z.unknown()).optional(),
+        thread_id: z.string().min(1).max(128).optional(),
+        reply_to_message_id: z.string().min(1).max(128).optional(),
+        idempotency_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await sendAgentMessage(this.env, {
+          tenant_id: tenantId,
+          ...payload
+        }, { principal });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_inbox",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional(),
+        status: agentMessageStatusSchema.optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+        cursor: z.number().int().positive().optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await listAgentMessages(this.env, {
+          tenant_id: tenantId,
+          ...payload
+        }, { principal });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_get",
+      {
+        tenant_id: z.string().optional(),
+        message_id: z.string().min(1),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, message_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await getAgentMessage(this.env, tenantId, message_id, {
+          tenant_id: tenantId,
+          ...payload
+        }, { principal });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_read",
+      {
+        tenant_id: z.string().optional(),
+        message_id: z.string().min(1),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, message_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await markAgentMessageRead(this.env, tenantId, message_id, {
+          tenant_id: tenantId,
+          ...payload
+        }, { principal });
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_ack",
+      {
+        tenant_id: z.string().optional(),
+        message_id: z.string().min(1),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, message_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await ackAgentMessage(this.env, tenantId, message_id, {
+          tenant_id: tenantId,
+          ...payload
+        }, { principal });
         return toContent(result);
       }
     );

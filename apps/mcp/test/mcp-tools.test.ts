@@ -14,24 +14,21 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => {
 vi.mock("agents/mcp", () => {
   class MockMcpAgent {
     env = {};
-    props = { tenantId: "default", principal: "service:test", allowedTenants: ["default"] };
+    props = { tenantId: "default" };
   }
   return { McpAgent: MockMcpAgent };
 });
 
-describe("OrgBrainMCP tool surface", () => {
+describe("legacy OrgBrain MCP tool surface", () => {
   beforeEach(() => {
     registeredTools.length = 0;
   });
 
-  it("registers context and decision memory tools for agent preflight", async () => {
-    const { OrgBrainMCP } = await import("../src/mcp");
+  it("registers agent message tools", async () => {
+    const { OrgBrainMCP } = await import("../src/index");
     const agent = new (OrgBrainMCP as any)();
     await agent.init();
 
-    expect(registeredTools).toContain("orgbrain_context_enrich");
-    expect(registeredTools).toContain("orgbrain_decision_memories_create");
-    expect(registeredTools).toContain("orgbrain_decision_memories_search");
     expect(registeredTools).toContain("orgbrain_messages_send");
     expect(registeredTools).toContain("orgbrain_messages_inbox");
     expect(registeredTools).toContain("orgbrain_messages_get");

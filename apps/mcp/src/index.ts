@@ -90,6 +90,9 @@ function isAuthorized(req: Request, expectedToken: string): boolean {
   return auth === `Bearer ${expectedToken}`;
 }
 
+const agentMessageTargetTypeSchema = z.enum(["principal", "agent", "project", "channel"]);
+const agentMessageStatusSchema = z.enum(["unread", "read", "acked", "archived", "active"]);
+
 export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
   server = new McpServer({
     name: "OrgBrain Remote MCP",
@@ -325,6 +328,129 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
             tenant_id: tenantId
           }
         });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_send",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        target_type: agentMessageTargetTypeSchema,
+        target_key: z.string().min(1).max(256),
+        subject: z.string().max(500).nullable().optional(),
+        body: z.string().min(1).max(20_000),
+        metadata: z.record(z.unknown()).optional(),
+        thread_id: z.string().min(1).max(128).optional(),
+        reply_to_message_id: z.string().min(1).max(128).optional(),
+        idempotency_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/agent-messages", {
+          method: "POST",
+          body: {
+            tenant_id: tenantId,
+            ...payload
+          }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_inbox",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional(),
+        status: agentMessageStatusSchema.optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+        cursor: z.number().int().positive().optional()
+      },
+      async ({ tenant_id, project_id, target_type, target_key, status, limit, cursor }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const query = new URLSearchParams({
+          tenant_id: tenantId,
+          limit: String(limit ?? 50)
+        });
+        if (project_id) query.set("project_id", project_id);
+        if (target_type) query.set("target_type", target_type);
+        if (target_key) query.set("target_key", target_key);
+        if (status) query.set("status", status);
+        if (cursor) query.set("cursor", String(cursor));
+        const data = await callOrgBrainApi<unknown>(this.env, `/v1/agent-messages?${query.toString()}`);
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_get",
+      {
+        tenant_id: z.string().optional(),
+        message_id: z.string().min(1),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, message_id, target_type, target_key }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const query = new URLSearchParams({ tenant_id: tenantId });
+        if (target_type) query.set("target_type", target_type);
+        if (target_key) query.set("target_key", target_key);
+        const route = `/v1/agent-messages/${encodeURIComponent(message_id)}?${query.toString()}`;
+        const data = await callOrgBrainApi<unknown>(this.env, route);
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_read",
+      {
+        tenant_id: z.string().optional(),
+        message_id: z.string().min(1),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, message_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(
+          this.env,
+          `/v1/agent-messages/${encodeURIComponent(message_id)}/read`,
+          {
+            method: "POST",
+            body: {
+              tenant_id: tenantId,
+              ...payload
+            }
+          }
+        );
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_messages_ack",
+      {
+        tenant_id: z.string().optional(),
+        message_id: z.string().min(1),
+        target_type: agentMessageTargetTypeSchema.optional(),
+        target_key: z.string().min(1).max(256).optional()
+      },
+      async ({ tenant_id, message_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(
+          this.env,
+          `/v1/agent-messages/${encodeURIComponent(message_id)}/ack`,
+          {
+            method: "POST",
+            body: {
+              tenant_id: tenantId,
+              ...payload
+            }
+          }
+        );
         return asJsonContent(data);
       }
     );
