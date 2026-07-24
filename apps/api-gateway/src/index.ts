@@ -1,5 +1,6 @@
 import { HttpError } from "@org-brain/shared";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import {
   ackAgentMessage,
   getAgentMessage,
@@ -43,6 +44,25 @@ function withPrincipalActor(rawBody: unknown, principal: string): unknown {
 }
 
 mountMcp(app);
+
+app.use(
+  "/v1/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["content-type", "x-api-key"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    maxAge: 86400
+  })
+);
+app.use(
+  "/api/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["content-type", "x-api-key"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    maxAge: 86400
+  })
+);
 
 app.use("/v1/*", apiKeyAuth);
 app.use("/api/*", apiKeyAuth);
