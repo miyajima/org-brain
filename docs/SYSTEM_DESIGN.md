@@ -42,9 +42,20 @@
 - Compact rows tagged `compacted` are excluded from retrieval and profile flows.
 - Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows. `quality-v2` canonical summaries must expose representative reusable guidance instead of count-only labels.
 - Manual memory cleanup can physically remove low-signal memory rows after exporting a JSONL backup. Cleanup deletes associated FTS, lifecycle, edge, entity, and rationale rows, then lets maintenance rebuild `quality-v2` canonical rows from the remaining high-quality memories.
+- MemoryRecord v2 is the common logical source-of-truth contract for local SQLite and Cloud D1. FTS, embedding, graph, and cache layers are projections that must be rebuildable and must never receive an independent dual-write.
+- Local SQLite uses the Node-bundled driver, WAL, schema version 15 (aligned
+  with Cloud D1), SHA-256 content hashes, immutable JSON version snapshots,
+  verified backup/restore, `quick_check`, read-only query connections, and
+  POSIX-private file modes.
+- Local SQLite maintains a reconstructable sparse-vector feature projection and
+  feature-frequency catalog for offline semantic candidates. Search fuses FTS,
+  sparse-vector similarity, memory edges, time, authority, and utility; delete,
+  restore tombstone replay, verify, and rebuild cover both FTS and the vector
+  projection.
+- Cloud hard delete removes the authoritative memory plus FTS, version, edge, entity, rationale, and evidence rows before returning success; only a content-free `memory_deletions` tombstone remains for audit correlation.
 - Interactive saves use `propose -> user confirmation -> confirm` and create `decision_rationales` as `user_confirmed` or `user_corrected`.
 - Non-interactive hook ingestion writes promoted memory rows plus inferred rationale/evidence rows with `confirmation_state=inferred_unconfirmed`; these rows are explicitly not human-confirmed.
-- Decision memory rows are an additive context shaping layer over the existing memory/rationale model. They are used by `/v1/context/enrich` to score task-relevant organizational context without changing `/v1/memories/search`.
+- Decision memory rows are an additive context shaping layer over the existing memory/rationale model. They are used by `/v1/context/enrich`, `/v1/context/pre-action-gate`, and the decision review queue to score task-relevant organizational context.
 - Context scoring combines task text overlap, recency, source authority, project proximity, task specificity, permission fit, and penalties for deprecated/superseded/expired context.
 - Minimal conflict detection groups same-title decision memories and reports active versus deprecated/superseded/expired contradictions in the enrich response.
 - Decision editor provenance is opt-in for agent APIs: `includeProvenance`, `authorityScoring`, and `verificationView` default to false so compact benchmark retrieval remains unchanged.
@@ -55,18 +66,34 @@
 
 ## Orchestration and Reliability
 - Queue consumers use explicit ack/retry behavior.
+- Org Bus and capability consumers route exhausted messages to configured DLQs;
+  operators can inspect failed/dead-letter counts and recreate a task from its
+  immutable `created` event through `POST /v1/ops/tasks/:id/replay`.
+- Capability `max_concurrency` is enforced by the lease Durable Object as a
+  per-tenant quota. `cost_limit_ms` is enforced after execution as a hard
+  duration-cost ceiling; over-budget results are failed instead of published as
+  successful.
 - Router validates envelopes and task results before materializing state.
 - Memory upsert deduplicates `external_key` inside one request and resolves existing IDs in batches.
 - Retrieval telemetry is best-effort so memory writes do not block task execution.
 - Agent message sends dedupe only when clients provide `idempotency_key`, so repeated natural-language messages are not collapsed accidentally.
 
 ## Security
-- Public API is API-key protected.
+- Public API supports API keys, Cloudflare Access, generic RS256 OIDC, and
+  hash-only stored scoped bearer tokens.
 - Browser preflight requests for `/v1/*` and `/api/*` are handled before API-key auth, while non-OPTIONS requests still require `x-api-key`.
 - Browser traffic uses the Pages proxy; the service API key never reaches the client.
 - Remote MCP uses worker-validated service token headers with per-token tenant grants.
+- HTTP and mutating MCP calls append hash-chained outcome audit events.
+- Fixed-role RBAC, record ACLs, scoped tokens, retention, and legal holds are
+  enforced server-side; identity fields in request bodies never override the
+  authenticated principal.
+- An optional Workers `API_RATE_LIMITER` binding applies tenant + principal +
+  route limits after authentication and before authorization; 429 outcomes enter
+  the same denied audit chain.
 - MCP lifecycle mutations store the authenticated service-token `principal` as the memory actor for audit visibility.
-- Context Engine MVP also applies per-row and per-source allowed principal filtering during context shaping. This is finer grained than existing tenant isolation, but remains a lightweight MVP model rather than full RBAC.
+- Context shaping also applies per-row and per-source allowed-principal
+  filtering after the common fixed-role RBAC and tenant/project gate.
 - API Gateway can resolve principals from API keys or verified Cloudflare Access JWTs. Login profile fields such as company and organization names are display-only metadata.
 - Tenant-scoped arbitrary groups and `resource_acl` entries provide group sharing for decision memories and knowledge docs without coupling access to company or organization labels.
 
@@ -88,6 +115,8 @@
 - `/tasks/[task_id]`: task detail
 - `/memories`: memory explorer and maintenance view
 - `/decisions`: decision knowledge search, editor, confirmation, and trust/provenance review.
+- `/operations`: memory/decision debt, queue, audit, retrieval quality, token,
+  retention, and SLO status.
 
 ## Current State
 - The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.

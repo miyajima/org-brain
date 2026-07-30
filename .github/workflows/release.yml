@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build:standalone
+      - run: sha256sum dist/orgbrain.mjs > orgbrain-${{ github.ref_name }}-standalone.sha256
+      - run: npm pack
+      - run: npm sbom --sbom-format cyclonedx > orgbrain-${{ github.ref_name }}.cdx.json
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            orgbrain-*.tgz
+            dist/orgbrain.mjs
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: gh release create "${GITHUB_REF_NAME}" orgbrain-*.tgz orgbrain-*.cdx.json orgbrain-*-standalone.sha256 dist/orgbrain.mjs --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

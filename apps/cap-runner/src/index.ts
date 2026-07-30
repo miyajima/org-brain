@@ -12,34 +12,33 @@ import { MailboxDO } from "./do/mailbox";
 import { runScheduledMemoryMaintenance } from "./memory-maintenance";
 import { previousUtcDay, pruneRetrievalEvents, rawRetentionCutoff, rollupRetrievalMetricsForDay } from "./retrieval-metrics";
 import type { CapabilityContext, Env } from "./types";
+import {
+  assertWithinCapabilityCostLimit,
+  loadCapabilityPolicy,
+  type CapabilityPolicy
+} from "./capability-policy";
 
 export { LeaseDO, MailboxDO };
 
 const METRICS_CRON = "5 0 * * *";
 const MEMORY_MAINTENANCE_CRON = "30 18 * * *";
 
-async function getCapabilityLimit(env: Env, tenantId: string, capability: CapabilityName): Promise<number> {
-  const row = await env.OPEN_BRAIN_DB.prepare(
-    "SELECT max_concurrency FROM capabilities WHERE tenant_id = ? AND name = ?"
-  )
-    .bind(tenantId, capability)
-    .first<{ max_concurrency?: number }>();
-
-  return row?.max_concurrency ?? 2;
-}
-
 async function acquireLease(
   env: Env,
   tenantId: string,
   capability: CapabilityName,
-  taskId: string
+  taskId: string,
+  policy: CapabilityPolicy
 ): Promise<{ ok: true } | { ok: false; reason: "capacity" | "duplicate" | "unknown" }> {
-  const max = await getCapabilityLimit(env, tenantId, capability);
   const id = env.LEASES.idFromName(`${tenantId}:${capability}`);
   const stub = env.LEASES.get(id);
   const res = await stub.fetch("https://leases/acquire", {
     method: "POST",
-    body: JSON.stringify({ task_id: taskId, ttl_ms: 60_000, max_concurrency: max })
+    body: JSON.stringify({
+      task_id: taskId,
+      ttl_ms: policy.costLimitMs > 0 ? Math.max(60_000, policy.costLimitMs + 5_000) : 60_000,
+      max_concurrency: policy.maxConcurrency
+    })
   });
 
   if (res.ok) return { ok: true };
@@ -292,7 +291,8 @@ async function processMessage(env: Env, raw: unknown): Promise<void> {
   const { tenant_id: tenantId } = envelope;
   const { task_id: taskId, capability } = envelope.payload;
 
-  const lease = await acquireLease(env, tenantId, capability, taskId);
+  const policy = await loadCapabilityPolicy(env.OPEN_BRAIN_DB, tenantId, capability);
+  const lease = await acquireLease(env, tenantId, capability, taskId, policy);
   if (!lease.ok) {
     // Queue redelivery for the same task can happen. Drop duplicate runs safely.
     if (lease.reason === "duplicate") return;
@@ -303,6 +303,7 @@ async function processMessage(env: Env, raw: unknown): Promise<void> {
   try {
     await markRunning(env, tenantId, taskId);
     const result = await runCapability(toContext(env, envelope));
+    assertWithinCapabilityCostLimit(result.durationMs, policy.costLimitMs);
     await recordMeasurementVariant(env, envelope, result);
 
     await publishResult(env, envelope, {

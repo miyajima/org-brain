@@ -163,12 +163,16 @@ The goal is to help the organization learn.
 
 Use this when you want free personal memory without Cloudflare.
 
+Requires Node.js 22.13 or newer. The CLI uses the SQLite driver bundled with Node;
+the external `sqlite3` command is not required.
+
 ```bash
 pnpm install
-pnpm local:memory init
-printf '{"summary":"Use UTC for backend validation","content":"In astronomy backend tests, run Maven with TZ=UTC to avoid timezone-sensitive failures.","project_id":"astronomy","tags":["testing","memory"]}' | pnpm local:memory upsert
-pnpm local:memory search "timezone validation"
-pnpm local:memory export-markdown
+pnpm exec orgbrain init
+pnpm exec orgbrain doctor
+printf '{"summary":"Use UTC for backend validation","content":"In astronomy backend tests, run Maven with TZ=UTC to avoid timezone-sensitive failures.","project_id":"astronomy","kind":"constraint","tags":["testing","memory"]}' | pnpm exec orgbrain memory capture
+pnpm exec orgbrain memory search "timezone validation"
+pnpm exec orgbrain memory export --format markdown
 ```
 
 By default the database is stored at `~/.org-brain/memory.sqlite`. Override it with:
@@ -177,6 +181,59 @@ By default the database is stored at `~/.org-brain/memory.sqlite`. Override it w
 export ORGBRAIN_LOCAL_DB="$HOME/.org-brain/memory.sqlite"
 ```
 
+The local database uses WAL, schema migrations, content hashes, immutable version
+snapshots, and private filesystem modes (`0700` directory, `0600` database and
+backups). Operational commands:
+
+```bash
+pnpm exec orgbrain index rebuild
+pnpm exec orgbrain backup create
+pnpm exec orgbrain backup verify --from ~/.org-brain/backups/<backup>.sqlite
+pnpm exec orgbrain backup restore --from ~/.org-brain/backups/<backup>.sqlite
+pnpm exec orgbrain migrate --from /path/to/legacy-memory.sqlite
+pnpm exec orgbrain serve
+pnpm exec orgbrain mcp
+```
+
+`orgbrain serve` binds to `127.0.0.1` by default and local mode makes no external
+network requests. `orgbrain mcp` is a stdio MCP server over the same SQLite
+MemoryStore, so Codex, Claude, and OpenCode can use local capture and search
+without a second daemon or cloud account. See [Local migration and recovery](docs/LOCAL_MIGRATION.md) and
+the [threat model](docs/THREAT_MODEL.md).
+
+Generate a reviewable MCP registration plan for any supported agent, then add
+`--execute` only when you want the CLI to change that agent's configuration:
+
+```bash
+orgbrain connector setup codex
+orgbrain connector setup claude --scope user
+orgbrain connector setup opencode --scope project
+orgbrain connector setup openclaw
+
+orgbrain connector setup codex --execute
+```
+
+Codex, Claude Code, and OpenCode use their documented MCP CLI registration
+commands. OpenClaw returns the exact `mcp.servers` JSON to merge and its config
+validation command because its configuration is managed as a bundle/config
+surface. References: [Codex MCP](https://developers.openai.com/codex/mcp/),
+[Claude Code MCP](https://docs.anthropic.com/en/docs/claude-code/mcp),
+[OpenCode MCP](https://opencode.ai/v2/docs/mcp-servers), and
+[OpenClaw MCP](https://docs.openclaw.ai/cli/mcp).
+
+The common hook bridge accepts Codex, Claude, OpenCode, and OpenClaw events.
+When cloud memory is disabled (the default), distilled durable entries are
+written directly to local SQLite; raw transcripts are not stored:
+
+```bash
+printf '%s' '{"type":"agent-turn-complete","project_id":"my-project","memory_entry":{"type":"project-fact","trigger":"A release is planned","decision":"Require approval before production","reason":"Keep releases auditable","evidence":"ADR-42","action":"Run the approval gate","result":"Policy confirmed","reuse":"Apply before every release","validity":"Until ADR-42 is superseded","tags":"policy,release"}}' \
+  | pnpm exec orgbrain event ingest codex
+```
+
+Use `claude`, `opencode`, or `openclaw` in place of `codex`; the bridge
+normalizes each native event envelope to the same durable-memory contract.
+Set `ORGBRAIN_LOCAL_HOOK_CAPTURE=false` to disable this local automatic capture.
+
 After enabling Cloudflare-backed memory in one of the modes below, you can import/export existing local agent memory through the API bridge:
 
 ```bash
@@ -184,6 +241,37 @@ pnpm sync:agents-memory
 ```
 
 OpenClaw currently has an import path from `~/.openclaw/memory/main.sqlite`; other agents receive markdown exports.
+
+### Supported local runtime
+
+| Component | Supported |
+| --- | --- |
+| Node.js | 22.13 or newer |
+| macOS | Current supported releases, arm64 and x64 |
+| Linux | glibc-based arm64 and x64 distributions |
+| Windows | Native Node CLI; private-mode checks follow platform capabilities |
+| Storage | SQLite bundled with Node, no external database required |
+
+Docker Compose exposes the container only on host loopback and persists data in
+a named volume:
+
+```bash
+docker compose up --build
+curl http://127.0.0.1:8788/health
+```
+
+Release assets also include `orgbrain.mjs`, a single-file executable bundle for
+users who already have Node.js 22.13 or newer and do not want to install the npm
+package:
+
+```bash
+chmod +x orgbrain.mjs
+./orgbrain.mjs init
+./orgbrain.mjs memory search "release policy"
+```
+
+`pnpm build:standalone` reproduces the bundle locally. Tagged releases publish
+its SHA-256 checksum and include the bundle in the build-provenance attestation.
 
 ## Quick Start: Self-hosted Team Memory
 
@@ -205,7 +293,40 @@ Use this when you want team memory sharing, Remote MCP, the console, and the org
 
 3. Configure Cloudflare resources in each `wrangler.toml`: D1, R2, Queues, Durable Objects, and service bindings.
 
-4. Apply D1 migrations:
+   The CLI can inspect the checkout and produce the complete provisioning plan
+   without changing Cloudflare or local configuration:
+
+   ```bash
+   pnpm exec orgbrain cloud doctor --root .
+   pnpm exec orgbrain cloud provision --root . --with-vectorize
+   ```
+
+   After reviewing that JSON plan, provide a narrowly scoped Cloudflare token
+   and opt in to execution:
+
+   ```bash
+   export CLOUDFLARE_ACCOUNT_ID="<account-id>"
+   export CLOUDFLARE_API_TOKEN="<provisioning-token>"
+   pnpm exec orgbrain cloud provision --root . --with-vectorize --execute
+   ```
+
+Execution creates missing D1, R2, Queue/DLQ, and optional Vectorize
+   resources, synchronizes the resulting D1 UUID across the three Worker
+   configurations, applies remote migrations, and deploys services in
+   dependency order. It does not create application API keys, OIDC policy, or
+   production secrets. Run `cloud doctor --live` to verify Cloudflare
+authentication separately.
+
+`.github/workflows/cloud-restore-drill.yml` provides the staging recovery gate.
+With the `cloud-staging` environment configured with
+`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and optionally
+`ORGBRAIN_STAGING_D1_NAME`, it exports the staging D1 database, restores into an
+isolated run-specific database, verifies counts and ordered content hashes,
+checks RPO ≤ 5 minutes and RTO ≤ 60 minutes, then deletes the drill database in
+an `always()` cleanup step. Until that workflow has a successful staging
+artifact, the targets are configured but not production evidence.
+
+4. If you did not use `cloud provision --execute`, apply D1 migrations manually:
 
    ```bash
    pnpm -C apps/api-gateway wrangler d1 migrations apply open-brain --local -c wrangler.local.toml
@@ -295,6 +416,12 @@ The self-hosted API gateway exposes:
 
 - `GET /v1/auth/me`
 - `PUT /v1/auth/me/profile`
+- `GET|PUT|DELETE /v1/role-assignments`
+- `GET|POST|DELETE /v1/scoped-tokens`
+- `GET|PUT /v1/retention-policies`
+- `POST /v1/retention-policies/apply` (dry-run unless `execute=true`)
+- `GET /v1/audit-events`
+- `GET /v1/audit-events/verify`
 - `GET /v1/groups`
 - `POST /v1/groups`
 - `PUT /v1/resource-shares`
@@ -311,16 +438,67 @@ The self-hosted API gateway exposes:
 - `POST /v1/memories/revise`
 - `POST /v1/memories/refresh`
 - `POST /v1/memories/suppress`
+- `DELETE /v1/memories/:memoryId`
+- `POST /v1/retrieval-index/rebuild`
+- `GET /v1/ops/status`
+- `POST /v1/ops/tasks/:id/replay` (failed/dead-letter task replay)
 - `POST /v1/decision-memories/search`
+- `POST /v1/decision-memories/review-queue`
 - `GET /v1/decision-memories/:id/context`
 - `POST /v1/decision-memories/:id/revise`
 - `POST /v1/decision-memories/:id/confirm`
+- `POST /v1/context/pre-action-gate`
+- `POST /v1/context/review-check`
+- `POST /v1/context/debt/scan`
 - `/mcp` for Remote MCP clients
 
 Memory search supports lexical query expansion, hybrid memory/docs retrieval, recent history,
-lifecycle states, and rationale-aware filters.
+lifecycle states, and rationale-aware filters. `search_mode=hybrid_v2` fuses lexical,
+semantic, graph, time, authority, and utility signals and returns a score breakdown.
+When Workers AI and Vectorize are not bound, semantic scoring is explicitly reported
+as unavailable and the response sets `meta.retrieval.degraded=true`; it is never
+simulated with lexical overlap.
 Decision memory APIs support opt-in provenance and trust review for the Console decision editor
 without changing default memory retrieval profiles.
+
+Personal mode uses `local-sparse-feature-hash-v1` by default. It builds a
+reconstructable SQLite sparse-vector projection from normalized terms, local
+concept aliases, and CJK trigrams; no model download or network request occurs.
+Local search fuses FTS, cosine-style sparse-vector similarity, memory edges,
+recency, authority, and utility. `orgbrain index rebuild` recreates both FTS and
+the local vector projection, while `doctor` and backup verification compare
+their row counts with the authoritative records.
+`orgbrain serve` also creates a verified startup backup and repeats it every
+five minutes by default. Set `ORGBRAIN_AUTO_BACKUP=false` to disable it or
+`ORGBRAIN_AUTO_BACKUP_INTERVAL_MS` to change the interval (minimum one minute).
+
+For real semantic search, create a 384-dimensional cosine Vectorize index, add
+`AI` and `MEMORY_VECTOR_INDEX` bindings, then call the admin-only
+`POST /v1/retrieval-index/rebuild` endpoint. New and revised memories are then
+projected automatically, while suppression and deletion remove their vectors.
+
+Cloud deployments accept API keys, Cloudflare Access JWTs, or generic RS256 OIDC
+JWTs. Generic OIDC uses `OIDC_ISSUER`, `OIDC_AUD`, optional
+`OIDC_JWKS_JSON`, and `OIDC_TENANT_POLICY_JSON`. Admins can issue short-lived
+`obp_` scoped tokens; only a SHA-256 token hash is stored and the clear token is
+returned once. Retention enforcement is dry-run by default, and matching legal
+holds block hard deletion.
+
+Cloud deployments may additionally bind `API_RATE_LIMITER` using a Workers
+Rate Limiting binding. Requests are keyed by authenticated tenant, principal,
+and route; rejected requests return HTTP 429 and are recorded as denied audit
+events. The binding is optional so local/self-hosted development remains
+dependency-free:
+
+```toml
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 1500
+  period = 60
+```
 
 ## Benchmarks
 
@@ -337,6 +515,80 @@ not a vague claim. Public anchors are not same-harness measurements, but they pr
 Method: LongMemEval-S 500 questions, Gemini judge enabled, single final answer per item,
 no best-of-N picking, compact evidence-card context, local token estimator for prompt accounting.
 The benchmark command and comparison report live in `scripts/memory-token-benchmark.mjs`.
+
+The fixed `competitive-memory-v1` suite adds 100 personal and 100 organization
+tasks covering coding, preferences, permissions, staleness, contradictions,
+decisions, evidence, policy, and cross-tenant isolation. Personal cases are
+explicitly labeled as LongMemEval-style or LoCoMo-style; governed multi-step
+cases are labeled STATE-Bench-style. These labels describe the fixed task
+shape, not results on the upstream datasets. The separate 500-question
+LongMemEval-S run above remains the upstream-dataset result.
+
+The suite runs each task five times and records raw per-task results, task
+completion, pass^5, turn count, adapter-reported cost, context size, provenance,
+leaks, and latency. External systems use the same `/reset`, `/capture`,
+`/search` benchmark bridge contract; `/search` may return either a results array
+or `{ "results": [...], "usage": { "turns": 1, "cost_usd": 0.0 } }`.
+Every request includes the declared shared harness. Bridges may also implement
+`POST /capabilities`, or operators may pass an evidence file, to supply the
+remaining weighted dimensions. A capability score is ignored unless it has at
+least one non-empty evidence reference.
+The benchmark workflow also downloads the upstream LongMemEval-S dataset and
+publishes all 500 deterministic retrieval/context item rows plus its summary as
+a separate CI artifact.
+
+```bash
+pnpm benchmark:competitive -- --adapter orgbrain-local
+pnpm benchmark:competitive -- \
+  --adapter all \
+  --evidence ./benchmark-evidence.json \
+  --model-id shared-model \
+  --budget-usd 5 \
+  --hardware-id shared-runner
+pnpm benchmark:scale -- --count 100000 --queries 200
+```
+
+The evidence file is keyed by adapter. Each component uses the same
+`{ "score": 0..100, "evidence": ["artifact or report reference"] }` shape:
+
+```json
+{
+  "adapters": {
+    "orgbrain-local": {
+      "personal": {
+        "setup_and_daily_ux": {
+          "score": 95,
+          "evidence": ["artifacts/orgbrain-setup-timing.json"]
+        }
+      },
+      "organization": {
+        "availability_and_recovery": {
+          "score": 90,
+          "evidence": ["artifacts/orgbrain-staging-restore.json"]
+        }
+      }
+    }
+  }
+}
+```
+
+Current OrgBrain local baseline on the development machine (2026-07-30):
+
+| Suite | Accuracy | R@5 | pass^5 | Avg context | p95 | Leaks | Provenance |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| competitive-memory-v1, 200 tasks | 100% | 100% | 100% | 366.86 tokens | 3.17 ms | 0 | 100% |
+| local-scale-v1, 100,000 memories | 100% retrieval | 100% | n/a | n/a | 20.82 ms | 0 | 100% indexed |
+
+These are OrgBrain baselines, not a first-place claim. Supermemory, GBrain,
+Cognee, and Mem0 results are only comparable when their bridge URLs are
+configured and all adapters run on the same model budget and hardware. CI
+uploads the complete settings and per-task JSON as artifacts. The JSON also
+contains the plan's personal and organization weighted scorecards. Any
+unmeasured dimension is `null`, the complete weighted score stays `null`, and
+ranking remains ineligible until every dimension and every same-harness
+competitor is measured. A first-place claim is emitted only when all five
+adapters are complete, OrgBrain has a strict lead in both weighted scorecards,
+and it does not trail any competitor in a critical dimension.
 
 Token-only smoke:
 

@@ -1,8 +1,9 @@
-import { HttpError } from "@org-brain/shared";
+import { HttpError, isOrgRole, type OrgRole } from "@org-brain/shared";
 
 type TenantPolicy = {
   principals?: Record<string, string[]>;
   default_tenants?: string[];
+  default_role?: OrgRole;
 };
 
 type ServiceTokenConfig = {
@@ -11,6 +12,7 @@ type ServiceTokenConfig = {
     client_secret?: string;
     principal?: string;
     tenants?: string[];
+    role?: OrgRole;
   }>;
 };
 
@@ -18,6 +20,7 @@ type PrincipalResolution = {
   principal: string;
   source: "service-token";
   inlineAllowedTenants?: string[];
+  role?: OrgRole;
 };
 
 export type McpAuthResult = {
@@ -25,6 +28,7 @@ export type McpAuthResult = {
   tenantId: string;
   allowedTenants: string[];
   source: PrincipalResolution["source"];
+  defaultRole: OrgRole;
 };
 
 function normalizeTenantList(input: unknown): string[] {
@@ -97,7 +101,8 @@ function resolveServiceToken(headers: Headers, rawConfig: string | undefined): P
     return {
       principal: token.principal?.trim() || `service:${expectedId}`,
       source: "service-token",
-      inlineAllowedTenants: normalizeTenantList(token.tenants)
+      inlineAllowedTenants: normalizeTenantList(token.tenants),
+      role: isOrgRole(token.role) ? token.role : undefined
     };
   }
 
@@ -145,7 +150,8 @@ export function authorizeMcpRequest(
       principal: serviceToken.principal,
       tenantId,
       allowedTenants,
-      source: serviceToken.source
+      source: serviceToken.source,
+      defaultRole: serviceToken.role ?? (isOrgRole(policy?.default_role) ? policy.default_role : "service_agent")
     };
   }
 

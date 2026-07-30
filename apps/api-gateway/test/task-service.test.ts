@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTask } from "../src/task-service";
+import { createTask, replayFailedTask } from "../src/task-service";
 
 class FakeStatement {
   sql: string;
@@ -17,6 +17,16 @@ class FakeStatement {
   }
 
   async first<T>() {
+    if (this.sql.startsWith("SELECT status FROM tasks")) {
+      const found = this.db.tasks.find((x) => x.tenant_id === this.args[0] && x.id === this.args[1]);
+      return (found ? { status: found.status } : null) as T | null;
+    }
+
+    if (this.sql.startsWith("SELECT payload FROM task_events")) {
+      const found = this.db.events.find((x) => x.tenant_id === this.args[0] && x.task_id === this.args[1] && x.kind === "created");
+      return (found ? { payload: found.payload } : null) as T | null;
+    }
+
     if (this.sql.startsWith("SELECT id, status FROM tasks")) {
       const tenantId = this.args[0] as string;
       const idem = this.args[1] as string;
@@ -53,7 +63,13 @@ class FakeStatement {
     }
 
     if (this.sql.startsWith("INSERT INTO task_events")) {
-      this.db.events.push({ id: this.args[0] as string, task_id: this.args[2] as string });
+      this.db.events.push({
+        id: this.args[0] as string,
+        tenant_id: this.args[1] as string,
+        task_id: this.args[2] as string,
+        kind: this.args[3] as string,
+        payload: this.args[4] as string
+      });
     }
 
     if (this.sql.startsWith("INSERT INTO measurement_variants")) {
@@ -84,7 +100,7 @@ class FakeStatement {
 
 class FakeD1 {
   tasks: Array<{ id: string; tenant_id: string; status: string; idempotency_key: string }> = [];
-  events: Array<{ id: string; task_id: string }> = [];
+  events: Array<{ id: string; tenant_id: string; task_id: string; kind: string; payload: string }> = [];
   measurementRuns: Array<{ id: string; tenant_id: string; pair_key: string }> = [];
   measurementVariants: Array<{
     run_id: string;
@@ -180,5 +196,30 @@ describe("createTask", () => {
       memory_enabled: true,
       memory_write_enabled: false
     });
+  });
+
+  it("replays only failed tasks from their immutable created event", async () => {
+    const db = new FakeD1();
+    const sent: any[] = [];
+    const env = {
+      OPEN_BRAIN_DB: db,
+      OPEN_BRAIN_BUCKET: {},
+      API_KEY: "x",
+      ORG_BUS_OUT: { send: async (payload: unknown) => sent.push(payload) }
+    } as any;
+    const original = await createTask(env, {
+      tenant_id: "default",
+      capability: "memory_measurement",
+      input_ref: "spec://failed"
+    });
+    db.tasks[0].status = "failed";
+
+    const replay = await replayFailedTask(env, "default", original.task_id);
+    expect(replay.replayed_from_task_id).toBe(original.task_id);
+    expect(replay.task_id).not.toBe(original.task_id);
+    expect(sent).toHaveLength(2);
+    expect(db.events.some((event) =>
+      event.task_id === original.task_id && event.kind === "replayed"
+    )).toBe(true);
   });
 });

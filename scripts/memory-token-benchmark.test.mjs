@@ -79,6 +79,54 @@ describe("memory token benchmark helpers", () => {
     expect(snapshot.results.map((result) => result.id)).toEqual(["checkpoint-1", "checkpoint-2"]);
   });
 
+  it("uses worker threads for deterministic transient concurrency without changing results", () => {
+    const dir = mkdtempSync(join(tmpdir(), "org-brain-benchmark-workers-"));
+    const datasetPath = join(dir, "dataset.json");
+    writeFileSync(datasetPath, JSON.stringify([
+      {
+        question_id: "worker-1",
+        question_type: "single-session-user",
+        question: "What database is used?",
+        answer: "SQLite",
+        haystack_sessions: [[{ role: "user", content: "The local database is SQLite." }]]
+      },
+      {
+        question_id: "worker-2",
+        question_type: "single-session-user",
+        question: "Which timezone is required?",
+        answer: "UTC",
+        haystack_sessions: [[{ role: "user", content: "Backend validation requires UTC." }]]
+      }
+    ]));
+    const scriptPath = new URL("./memory-token-benchmark.mjs", import.meta.url).pathname;
+    const common = [
+      scriptPath,
+      "--dataset-path", datasetPath,
+      "--limit", "2",
+      "--skip-llm",
+      "--estimate-tokens",
+      "--json"
+    ];
+    const sequential = JSON.parse(execFileSync(process.execPath, [
+      ...common,
+      "--concurrency", "1"
+    ], { encoding: "utf8" }));
+    const parallel = JSON.parse(execFileSync(process.execPath, [
+      ...common,
+      "--concurrency", "2"
+    ], { encoding: "utf8" }));
+
+    expect(parallel.results.map((result) => result.id)).toEqual(["worker-1", "worker-2"]);
+    expect(parallel.summary).toMatchObject({
+      item_count: sequential.summary.item_count,
+      answer_text_hit_at_5: sequential.summary.answer_text_hit_at_5,
+      full_context_tokens: sequential.summary.full_context_tokens,
+      treatment_prompt_tokens: sequential.summary.treatment_prompt_tokens,
+      token_reduction_rate: sequential.summary.token_reduction_rate,
+      fallback_count: sequential.summary.fallback_count
+    });
+  });
+
   it("normalizes LongMemEval JSON arrays", () => {
     const raw = JSON.stringify([
       {

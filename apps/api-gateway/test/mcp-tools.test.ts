@@ -30,9 +30,11 @@ describe("OrgBrainMCP tool surface", () => {
     await agent.init();
 
     expect(registeredTools).toContain("orgbrain_context_enrich");
+    expect(registeredTools).toContain("orgbrain_memories_extract");
     expect(registeredTools).toContain("orgbrain_decision_memories_create");
     expect(registeredTools).toContain("orgbrain_decision_memories_search");
     expect(registeredTools).toContain("orgbrain_messages_send");
+    expect(registeredTools).toContain("orgbrain_handoff_send");
     expect(registeredTools).toContain("orgbrain_messages_inbox");
     expect(registeredTools).toContain("orgbrain_messages_get");
     expect(registeredTools).toContain("orgbrain_messages_read");

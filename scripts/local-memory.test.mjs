@@ -1,0 +1,228 @@
+import assert from "node:assert/strict";
+import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { LocalMemoryStore, MEMORY_SCHEMA_VERSION } from "./lib/local-memory-store.mjs";
+import { handleLocalMcpRequest } from "./local-mcp.mjs";
+
+async function fixture() {
+  const directory = await mkdtemp(join(tmpdir(), "orgbrain-local-test-"));
+  await chmod(directory, 0o700);
+  return {
+    directory,
+    dbPath: join(directory, "memory.sqlite"),
+    async cleanup() {
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
+}
+
+function captureInput(overrides = {}) {
+  return {
+    tenant_id: "personal",
+    project_id: "orgbrain",
+    kind: "decision",
+    lifecycle_state: "active",
+    scope_type: "project",
+    scope_key: "orgbrain",
+    content: "Use one authoritative MemoryStore contract for local and cloud.",
+    summary: "Unify MemoryStore",
+    tags: ["decision", "architecture"],
+    entities: ["MemoryStore"],
+    source: "test",
+    source_references: [{ type: "file", ref: "docs/SPEC.md" }],
+    external_key: "decision:memory-store",
+    actor_type: "principal",
+    actor_id: "tester",
+    valid_from: null,
+    valid_until: null,
+    confidence_score: 0.95,
+    utility_score: 0.9,
+    rationale: "Avoid split product contracts.",
+    evidence: [{ type: "file", ref: "scripts/local-memory.mjs" }],
+    conflicts: [],
+    permissions: [],
+    ...overrides
+  };
+}
+
+test("capture, revise, search, suppress, verify and delete share one record contract", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const capture = await store.capture(captureInput());
+    assert.equal(capture.created, true);
+    assert.equal(capture.version, 1);
+
+    const record = await store.get("personal", capture.memory_id);
+    assert.equal(record.kind, "decision");
+    assert.equal(record.entities[0], "MemoryStore");
+    assert.match(record.content_hash, /^[a-f0-9]{64}$/);
+
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "authoritative contract"
+    });
+    assert.equal(results[0].memory.id, capture.memory_id);
+    assert.ok(results[0].score.lexical > 0);
+    assert.ok(results[0].score.semantic > 0);
+
+    const revised = await store.revise("personal", capture.memory_id, {
+      content: "Use the MemoryStore v2 contract everywhere.",
+      tags: ["decision", "v2"]
+    });
+    assert.equal(revised.version, 2);
+    assert.equal((await store.versions("personal", capture.memory_id)).length, 2);
+
+    await store.suppress("personal", capture.memory_id, "superseded");
+    assert.equal((await store.search({ tenant_id: "personal", query: "MemoryStore" })).length, 0);
+    const suppressedVerification = await store.verify();
+    assert.equal(suppressedVerification.ok, true);
+    assert.equal(suppressedVerification.fts_count, 0);
+
+    await store.delete("personal", capture.memory_id);
+    assert.equal(await store.get("personal", capture.memory_id), null);
+    const verification = await store.verify();
+    assert.equal(verification.ok, true);
+    assert.equal(verification.record_count, 0);
+    assert.equal(verification.version_count, 0);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("local sparse embeddings retrieve a synonym without external services", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const capture = await store.capture(captureInput({
+      kind: "fact",
+      content: "The automobile inspection workflow is documented.",
+      summary: "Vehicle inspection",
+      external_key: "fact:automobile"
+    }));
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "car"
+    });
+    assert.equal(results[0].memory.id, capture.memory_id);
+    assert.equal(results[0].score.lexical, 0);
+    assert.ok(results[0].score.semantic > 0);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("external keys are idempotent and preserve version history", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const first = await store.capture(captureInput());
+    const second = await store.capture(captureInput({ content: "Updated authoritative content." }));
+    assert.equal(second.memory_id, first.memory_id);
+    assert.equal(second.created, false);
+    assert.equal(second.version, 2);
+    assert.equal((await store.versions("personal", first.memory_id)).length, 2);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("init upgrades a legacy local database in place without losing records", async () => {
+  const ctx = await fixture();
+  try {
+    const legacy = new DatabaseSync(ctx.dbPath);
+    legacy.exec(`
+      CREATE TABLE memories (
+        id TEXT PRIMARY KEY,
+        project_id TEXT,
+        content TEXT NOT NULL,
+        summary TEXT,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        source TEXT NOT NULL DEFAULT 'local',
+        external_key TEXT,
+        created_at INTEGER NOT NULL
+      );
+      INSERT INTO memories VALUES(
+        'legacy-1', 'legacy-project', 'Legacy durable fact', 'Legacy fact',
+        '["fact"]', 'legacy', 'fact:1', 1700000000000
+      );
+    `);
+    legacy.close();
+
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.init();
+    const record = await store.get("default", "legacy-1");
+    assert.equal(record.content, "Legacy durable fact");
+    assert.equal(record.project_id, "legacy-project");
+    assert.equal(record.current_version, 1);
+    assert.equal((await store.verify()).schema_version, MEMORY_SCHEMA_VERSION);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("restore verifies backups and reapplies later deletion tombstones", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const capture = await store.capture(captureInput());
+    const expected = await store.verify();
+    const backupPath = join(ctx.directory, "backups", "memory.sqlite");
+    const backup = await store.createBackup(backupPath);
+    assert.equal(backup.ok, true);
+    assert.equal((await stat(backupPath)).mode & 0o777, 0o600);
+
+    await store.delete("personal", capture.memory_id);
+    const restored = await store.restoreBackup(backupPath);
+    assert.equal(restored.restored, ctx.dbPath);
+    assert.equal(restored.reapplied_deletions, 1);
+    const actual = await store.verify();
+    assert.equal(actual.record_count, 0);
+    assert.notEqual(actual.content_digest, expected.content_digest);
+
+    const doctor = await store.doctor();
+    assert.equal(doctor.ok, true);
+    assert.equal(doctor.directory_mode, "700");
+    assert.equal(doctor.database_mode, "600");
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("local MCP exposes capture and search over the same MemoryStore", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const tools = await handleLocalMcpRequest(store, { method: "tools/list" });
+    assert.ok(tools.tools.some((tool) => tool.name === "orgbrain_memory_capture"));
+    const captured = await handleLocalMcpRequest(store, {
+      method: "tools/call",
+      params: {
+        name: "orgbrain_memory_capture",
+        arguments: {
+          tenant_id: "personal",
+          project_id: "orgbrain",
+          kind: "constraint",
+          content: "Local MCP must never send memory to an external service."
+        }
+      }
+    });
+    assert.equal(captured.isError, false);
+    const searched = await handleLocalMcpRequest(store, {
+      method: "tools/call",
+      params: {
+        name: "orgbrain_memory_search",
+        arguments: { tenant_id: "personal", query: "external service" }
+      }
+    });
+    assert.equal(searched.isError, false);
+    assert.match(searched.content[0].text, /Local MCP/);
+  } finally {
+    await ctx.cleanup();
+  }
+});

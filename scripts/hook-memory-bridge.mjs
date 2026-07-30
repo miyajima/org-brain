@@ -203,6 +203,25 @@ function normalizeWhitespace(value) {
     .trim();
 }
 
+const HOOK_SECRET_PATTERNS = [
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/giu,
+  /\b(?:sk|sk-proj|ghp|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{16,}\b/gu,
+  /\bBearer\s+[A-Za-z0-9._~+/-]+=*\b/giu,
+  /\b(?:api[_-]?key|client[_-]?secret|password|passwd|token)\s*[:=]\s*["']?[^\s"',;]{8,}/giu
+];
+const HOOK_EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu;
+const HOOK_PHONE_PATTERN = /(?<!\d)(?:\+?\d[\d ()-]{8,}\d)(?!\d)/gu;
+
+export function redactHookMemoryText(value) {
+  let redacted = String(value ?? "");
+  for (const pattern of HOOK_SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, "[REDACTED_SECRET]");
+  }
+  return redacted
+    .replace(HOOK_EMAIL_PATTERN, "[REDACTED_EMAIL]")
+    .replace(HOOK_PHONE_PATTERN, "[REDACTED_PHONE]");
+}
+
 function normalizeForAnalysis(value) {
   return normalizeWhitespace(value)
     .replace(/[`*_>#-]/g, " ")
@@ -762,8 +781,8 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
       actor_id: record.actorId ?? sourceName,
       item: {
         external_key: record.externalKey,
-        content: clip(record.content, 20_000),
-        summary: clip(record.summary, 1_000),
+        content: clip(redactHookMemoryText(record.content), 20_000),
+        summary: clip(redactHookMemoryText(record.summary), 1_000),
         tags: record.tags,
         created_at: record.createdAt,
         project_id: record.projectId
@@ -778,9 +797,53 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
   return body.data;
 }
 
-export async function main() {
-  const sourceName = firstString(process.argv[2], "unknown");
-  const payloadText = await readPayload(process.argv[3]);
+async function captureLocalMemory(sourceName, tenantId, record) {
+  const { DEFAULT_LOCAL_DB, LocalMemoryStore } = await import("./lib/local-memory-store.mjs");
+  const store = new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+  const category = record.tags.find((tag) =>
+    ["policy", "diagnosis", "command-result", "workaround"].includes(tag)
+  );
+  const kind =
+    category === "policy"
+      ? "constraint"
+      : category === "diagnosis" || category === "workaround"
+        ? "pitfall"
+        : "fact";
+  return store.capture({
+    tenant_id: tenantId,
+    project_id: record.projectId,
+    kind,
+    lifecycle_state: "active",
+    scope_type: record.projectId ? "project" : "tenant",
+    scope_key: record.projectId || tenantId,
+    content: clip(redactHookMemoryText(record.content), 20_000),
+    summary: clip(redactHookMemoryText(record.summary), 1_000),
+    tags: record.tags,
+    entities: [],
+    source: sourceName,
+    source_references: [{
+      type: "agent-event",
+      ref: record.externalKey,
+      captured_at: record.createdAt
+    }],
+    external_key: record.externalKey,
+    actor_type: record.actorType ?? "system",
+    actor_id: record.actorId ?? sourceName,
+    created_at: record.createdAt,
+    valid_from: record.createdAt,
+    valid_until: null,
+    confidence_score: category === "policy" ? 0.88 : 0.78,
+    utility_score: 0.75,
+    rationale: "Automatically distilled from a durable agent hook event.",
+    evidence: [{ type: "agent-event", ref: record.externalKey }],
+    conflicts: [],
+    permissions: []
+  });
+}
+
+export async function ingestHookEvent(sourceInput, payloadInput) {
+  const sourceName = firstString(sourceInput, "unknown");
+  const payloadText = await readPayload(payloadInput);
   if (!payloadText.trim()) {
     console.log(JSON.stringify({ ok: true, skipped: "empty-payload", source: sourceName }));
     return;
@@ -789,46 +852,7 @@ export async function main() {
   await loadEnvFallbacks();
 
   const memoryMode = resolveMemoryMode();
-  if (memoryMode.configurationError) {
-    console.log(
-      JSON.stringify({
-        ok: true,
-        skipped: "cloud-memory-disabled",
-        reason: memoryMode.configurationError,
-        source: sourceName,
-        ...memoryModeFields(memoryMode)
-      })
-    );
-    return;
-  }
-  if (!memoryMode.cloudWritesAllowed) {
-    console.log(
-      JSON.stringify({
-        ok: true,
-        skipped: "cloud-memory-disabled",
-        source: sourceName,
-        ...memoryModeFields(memoryMode)
-      })
-    );
-    return;
-  }
-
-  const apiBase = resolveApiBase();
-  const apiKey = ensureRequiredEnv("ORGBRAIN_API_KEY");
   const tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
-
-  if (!apiBase || !apiKey) {
-    console.log(
-      JSON.stringify({
-        ok: true,
-        skipped: "missing-orgbrain-env",
-        source: sourceName,
-        ...memoryModeFields(memoryMode)
-      })
-    );
-    return;
-  }
-
   const prepared = prepareMemoryRecordForUpsert(sourceName, payloadText);
   if (prepared.action === "skip") {
     console.log(
@@ -842,8 +866,49 @@ export async function main() {
     );
     return;
   }
-
   prepared.record.projectId = await resolveProjectNameForWorkspace(prepared.record);
+
+  if (!memoryMode.cloudWritesAllowed) {
+    if (process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE === "false") {
+      console.log(
+        JSON.stringify({
+          ok: true,
+          skipped: "local-hook-capture-disabled",
+          source: sourceName,
+          ...memoryModeFields(memoryMode)
+        })
+      );
+      return;
+    }
+    const result = await captureLocalMemory(sourceName, tenantId, prepared.record);
+    console.log(
+      JSON.stringify({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        mode: "local",
+        external_key: prepared.record.externalKey,
+        memory_id: result.memory_id,
+        created: result.created
+      })
+    );
+    return;
+  }
+
+  const apiBase = resolveApiBase();
+  const apiKey = ensureRequiredEnv("ORGBRAIN_API_KEY");
+
+  if (!apiBase || !apiKey) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        skipped: "missing-orgbrain-env",
+        source: sourceName,
+        ...memoryModeFields(memoryMode)
+      })
+    );
+    return;
+  }
 
   const result = await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
   console.log(
@@ -859,7 +924,15 @@ export async function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export async function main() {
+  return ingestHookEvent(process.argv[2], process.argv[3]);
+}
+
+if (
+  process.argv[1] &&
+  path.basename(process.argv[1]) === "hook-memory-bridge.mjs" &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

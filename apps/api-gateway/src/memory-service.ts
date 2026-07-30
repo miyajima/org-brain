@@ -13,8 +13,22 @@ import {
   type MemorySearchResponse,
   type MemorySearchMode
 } from "@org-brain/shared";
-import { captureMemoryItems, loadExistingMemoryIdsByExternalKeys, refreshMemory, reviseMemory, runBatchChunks, suppressMemory } from "./memory-lifecycle-service";
+import {
+  captureMemoryItems,
+  deleteMemory,
+  loadExistingMemoryIdsByExternalKeys,
+  refreshMemory,
+  reviseMemory,
+  runBatchChunks,
+  suppressMemory
+} from "./memory-lifecycle-service";
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
+import {
+  removeMemoryIdsFromSemanticIndex,
+  searchSemanticIndex,
+  syncMemoryIdsToSemanticIndex
+} from "./retrieval-index-service";
+import { assertMemoryNotOnLegalHold } from "./retention-service";
 import type { Env } from "./types";
 
 type UpsertMemoryItem = {
@@ -34,6 +48,14 @@ type UpsertMemoryItem = {
   utility_score?: number | null;
   canonical_key?: string | null;
   expires_at?: number | null;
+  entities?: string[];
+  source_references?: Array<Record<string, unknown>>;
+  valid_from?: number | null;
+  valid_until?: number | null;
+  rationale?: string | null;
+  evidence?: Array<Record<string, unknown>>;
+  conflicts?: string[];
+  permissions?: Array<Record<string, unknown>>;
 };
 
 type UpsertMemoryRequest = {
@@ -97,6 +119,14 @@ type ReviseMemoryRequest = {
   utility_score?: number | null;
   actor_type?: string | null;
   actor_id?: string | null;
+  entities?: string[];
+  source_references?: Array<Record<string, unknown>>;
+  valid_from?: number | null;
+  valid_until?: number | null;
+  rationale?: string | null;
+  evidence?: Array<Record<string, unknown>>;
+  conflicts?: string[];
+  permissions?: Array<Record<string, unknown>>;
 };
 
 type RefreshMemoryRequest = {
@@ -254,6 +284,14 @@ function parseTags(raw: unknown): string[] {
   return [...new Set(tags)];
 }
 
+function parseObjectArray(raw: unknown, field: string): Array<Record<string, unknown>> {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.some((value) => !value || typeof value !== "object" || Array.isArray(value))) {
+    throw new HttpError(400, "invalid_payload", `${field} must be an array of objects`);
+  }
+  return raw.slice(0, 64) as Array<Record<string, unknown>>;
+}
+
 function parseOptionalActorField(value: unknown, field: string, maxLength: number): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
@@ -286,8 +324,8 @@ function parseOptionalFiniteNumber(value: unknown, field: string): number | null
 
 function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySearchMode): MemorySearchMode {
   if (value === undefined) return fallback;
-  if (value !== "memories" && value !== "hybrid") {
-    throw new HttpError(400, "invalid_payload", `${field} must be 'memories' or 'hybrid'`);
+  if (value !== "memories" && value !== "hybrid" && value !== "hybrid_v2") {
+    throw new HttpError(400, "invalid_payload", `${field} must be 'memories', 'hybrid', or 'hybrid_v2'`);
   }
   return value;
 }
@@ -372,7 +410,18 @@ function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; a
       confidence_score: parseOptionalFiniteNumber((item as UpsertMemoryItem).confidence_score, `items[${i}].confidence_score`),
       utility_score: parseOptionalFiniteNumber((item as UpsertMemoryItem).utility_score, `items[${i}].utility_score`),
       canonical_key: parseOptionalString((item as UpsertMemoryItem).canonical_key, `items[${i}].canonical_key`, 256),
-      expires_at: parseOptionalFiniteNumber((item as UpsertMemoryItem).expires_at, `items[${i}].expires_at`)
+      expires_at: parseOptionalFiniteNumber((item as UpsertMemoryItem).expires_at, `items[${i}].expires_at`),
+      entities: parseTags((item as UpsertMemoryItem).entities),
+      source_references: parseObjectArray(
+        (item as UpsertMemoryItem).source_references,
+        `items[${i}].source_references`
+      ),
+      valid_from: parseOptionalFiniteNumber((item as UpsertMemoryItem).valid_from, `items[${i}].valid_from`),
+      valid_until: parseOptionalFiniteNumber((item as UpsertMemoryItem).valid_until, `items[${i}].valid_until`),
+      rationale: parseOptionalString((item as UpsertMemoryItem).rationale, `items[${i}].rationale`, 4000),
+      evidence: parseObjectArray((item as UpsertMemoryItem).evidence, `items[${i}].evidence`),
+      conflicts: parseTags((item as UpsertMemoryItem).conflicts),
+      permissions: parseObjectArray((item as UpsertMemoryItem).permissions, `items[${i}].permissions`)
     };
   });
 
@@ -450,7 +499,13 @@ function buildMemoryListFilterSql(options: { source?: string; projectId?: string
 
 export async function upsertMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   const { tenantId, source, items } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
-  return captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
+  const result = await captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
+  const retrieval_projection = await syncMemoryIdsToSemanticIndex(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id)
+  );
+  return { ...result, retrieval_projection };
 }
 
 export async function listMemories(env: Env, tenantId: string, options: ListMemoriesOptions = {}) {
@@ -536,10 +591,29 @@ export async function listMemoriesPage(env: Env, tenantId: string, options: List
   };
 }
 
-export async function searchMemories(env: Env, rawBody: unknown): Promise<MemorySearchResponse> {
+export async function searchMemories(
+  env: Env,
+  rawBody: unknown,
+  options: PrincipalActorOptions = {}
+): Promise<MemorySearchResponse> {
   const request = parseSearchRequest(rawBody);
   const widenedLimit = Math.max(request.limit, 20);
-  const base = await searchTenantMemories(env.OPEN_BRAIN_DB, { ...request, limit: widenedLimit });
+  const semantic =
+    request.searchMode === "hybrid_v2"
+      ? await searchSemanticIndex(env, {
+          tenant_id: request.tenantId,
+          project_id: request.projectId,
+          query: request.q,
+          limit: widenedLimit
+        })
+      : null;
+  const base = await searchTenantMemories(env.OPEN_BRAIN_DB, {
+    ...request,
+    limit: widenedLimit,
+    principalId: normalizeActorPrincipal(options.actorPrincipal),
+    semanticHits: semantic?.hits,
+    semanticProvider: semantic?.provider
+  });
   const filters = parseSearchFilters(rawBody);
   const allowedIds = await filterMemorySearchResults(
     env,
@@ -713,7 +787,13 @@ export async function captureMemories(env: Env, rawBody: unknown, options: Princ
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HttpError(400, "invalid_payload", "items must be a non-empty array");
   }
-  return captureMemoryItems(env, { tenantId, source, items: body.items, operation: "capture" });
+  const result = await captureMemoryItems(env, { tenantId, source, items: body.items, operation: "capture" });
+  const retrieval_projection = await syncMemoryIdsToSemanticIndex(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id)
+  );
+  return { ...result, retrieval_projection };
 }
 
 export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
@@ -724,7 +804,7 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const memoryId = parseString(body.memory_id, "memory_id");
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
-  return reviseMemory(env, {
+  const result = await reviseMemory(env, {
     tenantId,
     memoryId,
     actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
@@ -733,8 +813,22 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
     summary: parseOptionalString(body.summary, "summary", 1000),
     tags: body.tags ? parseTags(body.tags) : undefined,
     confidenceScore: parseOptionalFiniteNumber(body.confidence_score, "confidence_score"),
-    utilityScore: parseOptionalFiniteNumber(body.utility_score, "utility_score")
+    utilityScore: parseOptionalFiniteNumber(body.utility_score, "utility_score"),
+    entities: body.entities ? parseTags(body.entities) : undefined,
+    sourceReferences: body.source_references
+      ? parseObjectArray(body.source_references, "source_references")
+      : undefined,
+    validFrom: parseOptionalFiniteNumber(body.valid_from, "valid_from"),
+    validUntil: parseOptionalFiniteNumber(body.valid_until, "valid_until"),
+    rationale: parseOptionalString(body.rationale, "rationale", 4000),
+    evidence: body.evidence ? parseObjectArray(body.evidence, "evidence") : undefined,
+    conflicts: body.conflicts ? parseTags(body.conflicts) : undefined,
+    permissions: body.permissions ? parseObjectArray(body.permissions, "permissions") : undefined
   });
+  return {
+    ...result,
+    retrieval_projection: await syncMemoryIdsToSemanticIndex(env, tenantId, [memoryId])
+  };
 }
 
 export async function refreshMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
@@ -760,11 +854,50 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   const body = rawBody as SuppressMemoryRequest;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
-  return suppressMemory(env, {
+  const memoryId = parseString(body.memory_id, "memory_id");
+  const retrievalProjection = await removeMemoryIdsFromSemanticIndex(env, tenantId, [memoryId]);
+  if (retrievalProjection.error) {
+    throw new HttpError(503, "retrieval_projection_failed", retrievalProjection.error);
+  }
+  const result = await suppressMemory(env, {
     tenantId,
-    memoryId: parseString(body.memory_id, "memory_id"),
+    memoryId,
     reason: parseString(body.reason, "reason").slice(0, 500),
     actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
     actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128)
   });
+  return {
+    ...result,
+    retrieval_projection: retrievalProjection
+  };
+}
+
+export async function deleteMemoryById(
+  env: Env,
+  tenantId: string,
+  memoryId: string,
+  options: PrincipalActorOptions = {}
+) {
+  const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
+  const normalizedTenantId = parseString(tenantId, "tenant_id");
+  const normalizedMemoryId = parseString(memoryId, "memory_id");
+  await assertMemoryNotOnLegalHold(env, normalizedTenantId, normalizedMemoryId);
+  const retrievalProjection = await removeMemoryIdsFromSemanticIndex(
+    env,
+    normalizedTenantId,
+    [normalizedMemoryId]
+  );
+  if (retrievalProjection.error) {
+    throw new HttpError(503, "retrieval_projection_failed", retrievalProjection.error);
+  }
+  const result = await deleteMemory(env, {
+    tenantId: normalizedTenantId,
+    memoryId: normalizedMemoryId,
+    actorType: actorPrincipal ? "principal" : null,
+    actorId: actorPrincipal
+  });
+  return {
+    ...result,
+    retrieval_projection: retrievalProjection
+  };
 }

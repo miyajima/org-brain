@@ -1,13 +1,47 @@
 {
-  "name": "org-brain",
-  "private": true,
+  "name": "orgbrain",
+  "private": false,
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "description": "Local-first, auditable memory and decision layer for AI agents",
+  "type": "module",
+  "bin": {
+    "orgbrain": "./scripts/local-memory.mjs"
+  },
+  "files": [
+    "scripts/local-memory.mjs",
+    "scripts/lib/local-memory-store.mjs",
+    "scripts/local-mcp.mjs",
+    "scripts/cloud-operations.mjs",
+    "scripts/connector-setup.mjs",
+    "scripts/hook-memory-bridge.mjs",
+    "scripts/lib/local-embedding.mjs",
+    "scripts/lib/memory-mode.mjs",
+    "scripts/lib/memory-quality.mjs",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "dist/orgbrain.mjs",
+    "docs/LOCAL_MIGRATION.md",
+    "docs/THREAT_MODEL.md"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
   "packageManager": "pnpm@10.16.1",
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "build:standalone": "node ./scripts/build-standalone.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm run test:node && pnpm run test:scripts && pnpm -r --if-present test",
+    "test:node": "node --test ./scripts/agent-messages.test.mjs ./scripts/local-memory.test.mjs ./scripts/competitive-memory-benchmark.test.mjs ./scripts/cloud-operations.test.mjs ./scripts/connector-setup.test.mjs ./scripts/verify-cloud-restore-drill.test.mjs",
+    "test:scripts": "vitest run ./scripts/hook-memory-bridge.test.mjs ./scripts/memory-cleanup.test.mjs ./scripts/memory-quality-backfill.test.mjs ./scripts/memory-quality.test.mjs ./scripts/memory-rationale-backfill.test.mjs ./scripts/memory-token-benchmark.test.mjs ./scripts/sync-agents-memory.test.mjs",
     "lint": "pnpm -r --if-present lint",
     "local:memory": "node ./scripts/local-memory.mjs",
     "agmsg": "node ./scripts/agent-messages.mjs",
@@ -25,10 +59,14 @@
     "metrics:replay": "node ./scripts/retrieval-metrics-replay.mjs",
     "metrics:rollup": "node ./scripts/retrieval-metrics-rollup.mjs",
     "measurement:report": "node ./scripts/measurement-report.mjs",
-    "benchmark:tokens": "node ./scripts/memory-token-benchmark.mjs"
+    "benchmark:tokens": "node ./scripts/memory-token-benchmark.mjs",
+    "benchmark:competitive": "node ./scripts/competitive-memory-benchmark.mjs",
+    "benchmark:scale": "node ./scripts/local-scale-benchmark.mjs",
+    "restore:drill": "node ./scripts/restore-drill.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260405.1",
+    "rollup": "^4.60.1",
     "typescript": "^5.8.2",
     "vitest": "^2.1.8"
   }

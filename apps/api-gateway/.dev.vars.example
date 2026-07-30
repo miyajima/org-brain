@@ -2,15 +2,21 @@ API_KEY=dev-org-brain-api-key
 
 # API key identity and tenant grants.
 # Each grant principal becomes the canonical identity for API-key requests.
-# API_TENANT_POLICY_JSON={"keys":[{"api_key":"dev-org-brain-api-key","principal":"user:local-dev","tenants":["default"]}]}
+# API_TENANT_POLICY_JSON={"keys":[{"api_key":"dev-org-brain-api-key","principal":"user:local-dev","tenants":["default"],"role":"tenant_admin"}],"default_role":"service_agent"}
 
 # Optional Cloudflare Access login identity.
 # ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
 # ACCESS_AUD=your-access-application-aud
-# ACCESS_TENANT_POLICY_JSON={"email_domains":{"example.com":["default"]},"principals":{"user:<access-sub>":["default"]}}
+# ACCESS_TENANT_POLICY_JSON={"email_domains":{"example.com":["default"]},"principals":{"user:<access-sub>":["default"]},"default_role":"reader"}
 # ACCESS_JWKS_JSON={"keys":[]}
+
+# Optional generic RS256 OIDC. Authorization: Bearer <JWT>.
+# OIDC_ISSUER=https://id.example.com
+# OIDC_AUD=orgbrain-api
+# OIDC_TENANT_POLICY_JSON={"principals":{"user:<oidc-sub>":["default"]},"default_role":"reader"}
+# OIDC_JWKS_JSON={"keys":[]}
 
 # Optional local development values if you want to exercise MCP or workflows
 # without setting secrets in production.
-# MCP_SERVICE_TOKENS_JSON={"tokens":[]}
-# MCP_TENANT_POLICY_JSON={"default_tenants":["default"]}
+# MCP_SERVICE_TOKENS_JSON={"tokens":[{"client_id":"example","client_secret":"replace-me","principal":"service:agent","tenants":["default"],"role":"service_agent"}]}
+# MCP_TENANT_POLICY_JSON={"default_tenants":["default"],"default_role":"service_agent"}

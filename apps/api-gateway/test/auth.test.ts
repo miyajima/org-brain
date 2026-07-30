@@ -154,4 +154,46 @@ describe("api tenant auth", () => {
       displayName: "Alice"
     });
   });
+
+  it("accepts a generic RS256 OIDC bearer and enforces issuer and audience", async () => {
+    const app = buildApp();
+    const now = Math.floor(Date.now() / 1000);
+    const issuer = "https://identity.example.com";
+    const { token, jwks } = await signedAccessJwt({
+      sub: "oidc-user-123",
+      email: "oidc@example.com",
+      aud: "orgbrain-api",
+      iss: issuer,
+      exp: now + 600
+    });
+    const env = {
+      OIDC_ISSUER: issuer,
+      OIDC_AUD: "orgbrain-api",
+      OIDC_JWKS_JSON: jwks,
+      OIDC_TENANT_POLICY_JSON: JSON.stringify({
+        principals: { "user:oidc-user-123": ["default", "team-a"] }
+      })
+    } as Env;
+
+    const accepted = await app.fetch(
+      new Request("https://example.test/principal", {
+        headers: { authorization: `Bearer ${token}` }
+      }),
+      env
+    );
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      principal: "user:oidc-user-123",
+      source: "oidc-jwt",
+      allowedTenants: ["default", "team-a"]
+    });
+
+    const denied = await app.fetch(
+      new Request("https://example.test/principal", {
+        headers: { authorization: `Bearer ${token}` }
+      }),
+      { ...env, OIDC_AUD: "wrong-audience" }
+    );
+    expect(denied.status).toBe(401);
+  });
 });

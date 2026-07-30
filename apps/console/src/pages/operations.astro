@@ -1,0 +1,157 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const response = await fetch(new URL("/api/v1/ops/status?tenant_id=default", Astro.url));
+const payload: any = response.ok ? await response.json() : { ok: false, data: null };
+const status = payload.ok ? payload.data : null;
+const display = (value: unknown, suffix = "") =>
+  typeof value === "number" && Number.isFinite(value) ? `${value}${suffix}` : "未計測";
+const percent = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "未計測";
+---
+<BaseLayout title="Org Brain Operations">
+  <section class="card">
+    <span class="surface-chip">Operations</span>
+    <h1 class="mt-4 text-3xl font-semibold">運用ステータス</h1>
+    <p class="surface-muted mt-2">
+      権限・競合・古い記憶・検索品質・キュー状態を、tenant単位で確認します。
+    </p>
+    {!status && (
+      <p class="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/8 p-4 text-rose-100">
+        運用データを取得できませんでした。API設定とadmin権限を確認してください。
+      </p>
+    )}
+  </section>
+
+  {status && (
+    <>
+      <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <article class="surface-soft-card">
+          <p class="surface-label">Memories</p>
+          <p class="mt-3 text-3xl font-semibold">{display(status.memories.total)}</p>
+          <p class="surface-muted mt-2 text-sm">
+            競合 {display(status.memories.conflicting)} / 期限切れ {display(status.memories.expired)}
+          </p>
+        </article>
+        <article class="surface-soft-card">
+          <p class="surface-label">Decision review</p>
+          <p class="mt-3 text-3xl font-semibold">{display(status.decision_review.unconfirmed)}</p>
+          <p class="surface-muted mt-2 text-sm">
+            未確認 / 低信頼 {display(status.decision_review.low_confidence)}
+          </p>
+        </article>
+        <article class="surface-soft-card">
+          <p class="surface-label">Queue</p>
+          <p class="mt-3 text-3xl font-semibold">{display(status.tasks.active)}</p>
+          <p class="surface-muted mt-2 text-sm">実行中 / 失敗・DLQ {display(status.tasks.failed)}</p>
+        </article>
+        <article class="surface-soft-card">
+          <p class="surface-label">Audit 24h</p>
+          <p class="mt-3 text-3xl font-semibold">{display(status.audit.events_24h)}</p>
+          <p class="surface-muted mt-2 text-sm">拒否 {display(status.audit.denied_24h)} / 失敗 {display(status.audit.failed_24h)}</p>
+        </article>
+      </section>
+
+      <section class="card mt-6">
+        <h2 class="text-xl font-semibold">権限とロール</h2>
+        <p class="surface-muted mt-2 text-sm">
+          tenant内の固定ロール、許可される操作、現在の割り当て数を表示します。
+        </p>
+        <div class="mt-5 overflow-x-auto">
+          <table>
+            <thead><tr><th>Role</th><th>Permissions</th><th>Assignments</th><th>Principals</th></tr></thead>
+            <tbody>
+              {status.authorization.roles.map((role: any) => (
+                <tr>
+                  <td><code>{role.role}</code></td>
+                  <td>{role.permissions.join(", ")}</td>
+                  <td>{display(role.assignments)}</td>
+                  <td>{display(role.principals)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card mt-6">
+        <h2 class="text-xl font-semibold">検索品質と索引</h2>
+        <div class="mt-5 overflow-x-auto">
+          <table>
+            <tbody>
+              <tr><th>24h searches</th><td>{display(status.retrieval.searches_24h)}</td></tr>
+              <tr><th>Hit rate</th><td>{percent(status.retrieval.hit_rate_24h)}</td></tr>
+              <tr><th>Fallback rate</th><td>{percent(status.retrieval.fallback_rate_24h)}</td></tr>
+              <tr><th>Average latency</th><td>{display(status.retrieval.average_latency_ms_24h, " ms")}</td></tr>
+              <tr><th>Semantic index</th><td>{status.retrieval.semantic_configured ? "設定済み" : "未設定"}</td></tr>
+              <tr><th>Lexical / Graph</th><td>{status.retrieval.lexical} / {status.retrieval.graph}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card mt-6">
+        <h2 class="text-xl font-semibold">失敗・DLQタスク</h2>
+        <p class="surface-muted mt-2 text-sm">元のimmutable created eventから、新しいtaskとして再実行します。</p>
+        <div class="mt-5 overflow-x-auto">
+          <table>
+            <thead><tr><th>Task</th><th>Capability</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead>
+            <tbody>
+              {status.tasks.failed_items.length === 0 ? (
+                <tr><td colspan="5">対象なし</td></tr>
+              ) : status.tasks.failed_items.map((task: any) => (
+                <tr>
+                  <td><code>{task.id}</code></td>
+                  <td>{task.capability}</td>
+                  <td>{task.status}</td>
+                  <td>{new Date(task.updated_at).toLocaleString("ja-JP")}</td>
+                  <td><button class="replay-task" data-task-id={task.id}>再実行</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p id="replay-result" class="surface-muted mt-3 text-sm" aria-live="polite"></p>
+      </section>
+
+      <section class="card mt-6">
+        <h2 class="text-xl font-semibold">ガバナンスと復旧目標</h2>
+        <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="surface-soft-card"><p class="surface-label">Active tokens</p><p class="mt-2 text-2xl">{display(status.scoped_tokens.active)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">Legal holds</p><p class="mt-2 text-2xl">{display(status.retention.legal_holds)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">RPO target</p><p class="mt-2 text-2xl">{display(status.slo_targets.rpo_minutes, " min")}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">RTO target</p><p class="mt-2 text-2xl">{display(status.slo_targets.rto_minutes, " min")}</p></div>
+        </div>
+      </section>
+    </>
+  )}
+</BaseLayout>
+
+<script>
+  const output = document.querySelector<HTMLElement>("#replay-result");
+  document.querySelectorAll<HTMLButtonElement>(".replay-task").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const taskId = button.dataset.taskId;
+      if (!taskId || !output) return;
+      button.disabled = true;
+      output.textContent = `${taskId} を再実行しています…`;
+      try {
+        const response = await fetch(`/api/v1/ops/tasks/${encodeURIComponent(taskId)}/replay`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ tenant_id: "default" })
+        });
+        const payload = await response.json() as {
+          ok?: boolean;
+          data?: { task_id?: string };
+          error?: { message?: string };
+        };
+        if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+        output.textContent = `再実行task ${payload.data?.task_id ?? "(unknown)"} を作成しました。`;
+      } catch (error) {
+        output.textContent = error instanceof Error ? error.message : String(error);
+        button.disabled = false;
+      }
+    });
+  });
+</script>

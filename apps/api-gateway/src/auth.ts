@@ -1,6 +1,7 @@
-import { HttpError } from "@org-brain/shared";
+import { HttpError, isOrgRole, type OrgRole } from "@org-brain/shared";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Env } from "./types";
+import { authenticateScopedToken } from "./token-service";
 
 type ApiTenantPolicy = {
   keys?: Array<{
@@ -8,22 +9,28 @@ type ApiTenantPolicy = {
     key?: string;
     principal?: string;
     tenants?: string[];
+    role?: OrgRole;
   }>;
   api_keys?: Array<{
     api_key?: string;
     key?: string;
     principal?: string;
     tenants?: string[];
+    role?: OrgRole;
   }>;
   default_tenants?: string[];
+  default_role?: OrgRole;
 };
 
 type ApiKeyGrant = {
   principal: string;
   allowedTenants: string[];
-  source: "api-key" | "access-jwt";
+  source: "api-key" | "access-jwt" | "oidc-jwt" | "scoped-token";
   email?: string | null;
   displayName?: string | null;
+  defaultRole: OrgRole;
+  scopes?: import("@org-brain/shared").OrgPermission[];
+  projectId?: string | null;
 };
 
 export type ApiAuthContext = ApiKeyGrant;
@@ -72,6 +79,7 @@ type AccessTenantPolicy = {
   principals?: Record<string, string[]>;
   email_domains?: Record<string, string[]>;
   default_tenants?: string[];
+  default_role?: OrgRole;
 };
 
 type AccessJwk = JsonWebKey & { kid?: string };
@@ -110,7 +118,12 @@ function resolveApiKeyGrant(env: Env, provided: string): ApiKeyGrant | null {
     return {
       principal: entry.principal?.trim() || "api-key",
       allowedTenants: allowedTenants.length > 0 ? allowedTenants : normalizeTenantList(policy?.default_tenants),
-      source: "api-key"
+      source: "api-key",
+      defaultRole: isOrgRole(entry.role)
+        ? entry.role
+        : isOrgRole(policy?.default_role)
+          ? policy.default_role
+          : "service_agent"
     };
   }
 
@@ -118,7 +131,8 @@ function resolveApiKeyGrant(env: Env, provided: string): ApiKeyGrant | null {
     return {
       principal: "api-key:default",
       allowedTenants: policy ? normalizeTenantList(policy.default_tenants) : ["default"],
-      source: "api-key"
+      source: "api-key",
+      defaultRole: "tenant_admin"
     };
   }
 
@@ -147,12 +161,28 @@ function parseJwtPart<T>(part: string, field: string): T {
 }
 
 async function loadAccessJwks(env: Env): Promise<{ keys?: AccessJwk[] }> {
-  if (env.ACCESS_JWKS_JSON?.trim()) {
+  const configuredJwks = env.OIDC_JWKS_JSON?.trim() || env.ACCESS_JWKS_JSON?.trim();
+  if (configuredJwks) {
     try {
-      return JSON.parse(env.ACCESS_JWKS_JSON) as { keys?: AccessJwk[] };
+      return JSON.parse(configuredJwks) as { keys?: AccessJwk[] };
     } catch {
-      throw new HttpError(500, "misconfigured", "ACCESS_JWKS_JSON is not valid JSON");
+      throw new HttpError(500, "misconfigured", "configured JWKS JSON is not valid JSON");
     }
+  }
+  const oidcIssuer = env.OIDC_ISSUER?.trim().replace(/\/+$/u, "");
+  if (oidcIssuer) {
+    if (!oidcIssuer.startsWith("https://")) {
+      throw new HttpError(500, "misconfigured", "OIDC_ISSUER must use https");
+    }
+    const discovery = await fetch(`${oidcIssuer}/.well-known/openid-configuration`);
+    if (!discovery.ok) throw new HttpError(500, "misconfigured", "Could not load OIDC discovery document");
+    const metadata = await discovery.json<{ jwks_uri?: string }>();
+    if (!metadata.jwks_uri?.startsWith("https://")) {
+      throw new HttpError(500, "misconfigured", "OIDC discovery returned an invalid jwks_uri");
+    }
+    const response = await fetch(metadata.jwks_uri);
+    if (!response.ok) throw new HttpError(500, "misconfigured", "Could not load OIDC JWKS");
+    return response.json();
   }
   const teamDomain = env.ACCESS_TEAM_DOMAIN?.trim();
   if (!teamDomain) throw new HttpError(500, "misconfigured", "ACCESS_TEAM_DOMAIN is required for login auth");
@@ -187,13 +217,15 @@ async function verifyAccessJwt(env: Env, token: string): Promise<AccessClaims> {
   const now = Math.floor(Date.now() / 1000);
   if (claims.exp && claims.exp < now) throw new HttpError(401, "unauthorized", "Access JWT expired");
   if (claims.nbf && claims.nbf > now) throw new HttpError(401, "unauthorized", "Access JWT not yet valid");
-  const expectedAud = env.ACCESS_AUD?.trim();
+  const expectedAud = env.OIDC_AUD?.trim() || env.ACCESS_AUD?.trim();
   if (expectedAud) {
     const aud = Array.isArray(claims.aud) ? claims.aud : claims.aud ? [claims.aud] : [];
     if (!aud.includes(expectedAud)) throw new HttpError(401, "unauthorized", "Access JWT audience is not allowed");
   }
-  const teamDomain = env.ACCESS_TEAM_DOMAIN?.trim();
-  if (teamDomain && claims.iss && claims.iss !== `https://${teamDomain}`) {
+  const expectedIssuer =
+    env.OIDC_ISSUER?.trim().replace(/\/+$/u, "") ||
+    (env.ACCESS_TEAM_DOMAIN?.trim() ? `https://${env.ACCESS_TEAM_DOMAIN.trim()}` : "");
+  if (expectedIssuer && claims.iss !== expectedIssuer) {
     throw new HttpError(401, "unauthorized", "Access JWT issuer is not allowed");
   }
   if (!claims.sub) throw new HttpError(401, "unauthorized", "Access JWT subject is missing");
@@ -201,7 +233,7 @@ async function verifyAccessJwt(env: Env, token: string): Promise<AccessClaims> {
 }
 
 function resolveAccessTenantGrant(env: Env, principal: string, email: string | null): string[] {
-  const policy = parseAccessTenantPolicy(env.ACCESS_TENANT_POLICY_JSON);
+  const policy = parseAccessTenantPolicy(env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON);
   if (!policy) return ["default"];
   const direct = normalizeTenantList(policy.principals?.[principal]);
   if (direct.length > 0) return direct;
@@ -217,14 +249,18 @@ function resolveAccessTenantGrant(env: Env, principal: string, email: string | n
 
 async function resolveAccessGrant(env: Env, token: string): Promise<ApiKeyGrant> {
   const claims = await verifyAccessJwt(env, token);
+  const tenantPolicy = parseAccessTenantPolicy(env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON);
   const email = claims.email?.trim().toLowerCase() || null;
   const principal = `user:${claims.sub}`;
   return {
     principal,
     allowedTenants: resolveAccessTenantGrant(env, principal, email),
-    source: "access-jwt",
+    source: env.OIDC_ISSUER ? "oidc-jwt" : "access-jwt",
     email,
-    displayName: claims.name?.trim() || email
+    displayName: claims.name?.trim() || email,
+    defaultRole: isOrgRole(tenantPolicy?.default_role)
+      ? tenantPolicy.default_role
+      : "reader"
   };
 }
 
@@ -232,6 +268,29 @@ export const apiKeyAuth: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   const accessJwt = c.req.header("cf-access-jwt-assertion")?.trim();
   if (accessJwt) {
     const grant = await resolveAccessGrant(c.env, accessJwt);
+    c.set("apiAuth", grant);
+    await next();
+    return;
+  }
+
+  const authorization = c.req.header("authorization")?.trim();
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (bearer?.startsWith("obp_")) {
+    const record = await authenticateScopedToken(c.env, bearer);
+    if (!record) throw new HttpError(401, "unauthorized", "Invalid or expired scoped token");
+    c.set("apiAuth", {
+      principal: record.principal,
+      allowedTenants: [record.tenant_id],
+      source: "scoped-token",
+      defaultRole: "tenant_admin",
+      scopes: record.scopes,
+      projectId: record.project_id
+    });
+    await next();
+    return;
+  }
+  if (bearer && envHasOidc(c.env)) {
+    const grant = await resolveAccessGrant(c.env, bearer);
     c.set("apiAuth", grant);
     await next();
     return;
@@ -245,6 +304,10 @@ export const apiKeyAuth: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   c.set("apiAuth", grant);
   await next();
 };
+
+function envHasOidc(env: Env): boolean {
+  return Boolean(env.OIDC_ISSUER?.trim());
+}
 
 export function getApiAuthContext(c: Context<ApiContextEnv>): ApiAuthContext {
   const auth = c.get("apiAuth");

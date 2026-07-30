@@ -12,6 +12,7 @@ const navCopy = {
     decisions: "Decisions",
     groups: "Groups",
     profile: "Profile",
+    operations: "Operations",
     newTask: "New Task",
     tasks: "Tasks"
   },
@@ -21,6 +22,7 @@ const navCopy = {
     decisions: "判断",
     groups: "グループ",
     profile: "プロフィール",
+    operations: "運用",
     newTask: "Task作成",
     tasks: "Task一覧"
   },
@@ -30,6 +32,7 @@ const navCopy = {
     decisions: "决策",
     groups: "群组",
     profile: "个人资料",
+    operations: "运维",
     newTask: "新建任务",
     tasks: "任务"
   }
@@ -43,6 +46,7 @@ const isActive = (href: string) => {
   if (href === "/decisions") return currentPath === "/decisions";
   if (href === "/groups") return currentPath === "/groups";
   if (href === "/profile") return currentPath === "/profile";
+  if (href === "/operations") return currentPath === "/operations";
   return currentPath === href;
 };
 ---
@@ -65,6 +69,7 @@ const isActive = (href: string) => {
         <a class="console-nav-link" href={decisionsHref} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
         <a class="console-nav-link" href="/groups" aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
         <a class="console-nav-link" href="/profile" aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
+        <a class="console-nav-link" href="/operations" aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
         <a class="console-nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
         <a class="console-nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
       </nav>

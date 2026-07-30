@@ -1,0 +1,94 @@
+name: Cloud D1 restore drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_database:
+        description: Staging D1 database name
+        required: true
+        default: open-brain-staging
+  schedule:
+    - cron: "23 17 * * 3"
+
+permissions:
+  contents: read
+
+jobs:
+  restore-drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: cloud-staging
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SOURCE_DATABASE: ${{ inputs.source_database || vars.ORGBRAIN_STAGING_D1_NAME || 'open-brain-staging' }}
+      DRILL_DATABASE: orgbrain-restore-drill-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Require staging credentials
+        run: test -n "$CLOUDFLARE_ACCOUNT_ID" -a -n "$CLOUDFLARE_API_TOKEN"
+      - name: Capture source state and export
+        working-directory: apps/api-gateway
+        run: |
+          date +%s%3N > /tmp/drill-started-ms
+          pnpm exec wrangler d1 execute "$SOURCE_DATABASE" --remote --json --command "
+            SELECT
+              (SELECT COUNT(*) FROM memories) AS memory_count,
+              (SELECT COUNT(*) FROM memory_versions) AS version_count,
+              (SELECT COUNT(*) FROM memory_edges) AS edge_count,
+              (SELECT COUNT(*) FROM audit_events) AS audit_count,
+              (SELECT COUNT(*) FROM principal_role_assignments) AS role_assignment_count,
+              (SELECT GROUP_CONCAT(content_hash, ',') FROM
+                (SELECT content_hash FROM memories ORDER BY id)) AS ordered_content_hashes,
+              CAST(unixepoch('subsec') * 1000 AS INTEGER) AS snapshot_at,
+              (SELECT MAX(updated_at) FROM memories) AS max_updated_at;
+          " > ../../source-state.json
+          pnpm exec wrangler d1 export "$SOURCE_DATABASE" --remote --output /tmp/orgbrain-staging-export.sql
+      - name: Create and restore isolated drill database
+        working-directory: apps/api-gateway
+        run: |
+          pnpm exec wrangler d1 create "$DRILL_DATABASE"
+          pnpm exec wrangler d1 execute "$DRILL_DATABASE" --remote --yes --file /tmp/orgbrain-staging-export.sql
+          pnpm exec wrangler d1 execute "$DRILL_DATABASE" --remote --json --command "
+            SELECT
+              (SELECT COUNT(*) FROM memories) AS memory_count,
+              (SELECT COUNT(*) FROM memory_versions) AS version_count,
+              (SELECT COUNT(*) FROM memory_edges) AS edge_count,
+              (SELECT COUNT(*) FROM audit_events) AS audit_count,
+              (SELECT COUNT(*) FROM principal_role_assignments) AS role_assignment_count,
+              (SELECT GROUP_CONCAT(content_hash, ',') FROM
+                (SELECT content_hash FROM memories ORDER BY id)) AS ordered_content_hashes,
+              CAST(unixepoch('subsec') * 1000 AS INTEGER) AS snapshot_at,
+              (SELECT MAX(updated_at) FROM memories) AS max_updated_at;
+          " > ../../restored-state.json
+          date +%s%3N > /tmp/drill-finished-ms
+      - name: Verify RPO, RTO, counts, and content hashes
+        run: >
+          node scripts/verify-cloud-restore-drill.mjs
+          source-state.json
+          restored-state.json
+          "$(cat /tmp/drill-started-ms)"
+          "$(cat /tmp/drill-finished-ms)"
+          "$SOURCE_DATABASE"
+          "$DRILL_DATABASE"
+          > cloud-restore-drill.json
+      - name: Delete isolated drill database
+        if: always()
+        working-directory: apps/api-gateway
+        run: pnpm exec wrangler d1 delete "$DRILL_DATABASE" --skip-confirmation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloud-d1-restore-drill
+          path: |
+            source-state.json
+            restored-state.json
+            cloud-restore-drill.json
+          if-no-files-found: warn
+          retention-days: 90

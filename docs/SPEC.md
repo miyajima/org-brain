@@ -9,7 +9,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Event Bus: Cloudflare Queues (`org-bus`, `cap-plan`)
 - Coordination: Durable Objects (`LeaseDO`, `MailboxDO`)
 - MCP: Remote MCP endpoint on API Gateway (`/mcp`, service-token auth)
-- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`) + R2 artifacts
+- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
 
 ## API
@@ -51,7 +51,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Auth: `CF-Access-Client-Id` + `CF-Access-Client-Secret`
 - Tool surface:
   - memory list/upsert/search/profile
-  - memory refresh/suppress
+  - memory refresh/suppress/delete
   - task create/get/events
   - agent message send/inbox/get/read/ack
 - Tenant isolation: per-token tenant grants with optional principal -> tenant mapping (`MCP_TENANT_POLICY_JSON`) enforced server-side
@@ -64,7 +64,12 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `idempotency_key` dedupes sends only when supplied; repeated messages without a key are stored as distinct messages.
 - `thread_id` defaults to the root message id, and replies inherit the parent thread when `reply_to_message_id` is supplied.
 - Message storage is not automatic memory capture. Messages can later be referenced from memories or decision memories as evidence.
-- MCP exposes `orgbrain_messages_send`, `orgbrain_messages_inbox`, `orgbrain_messages_get`, `orgbrain_messages_read`, and `orgbrain_messages_ack`.
+- MCP exposes `orgbrain_messages_send`, `orgbrain_handoff_send`,
+  `orgbrain_messages_inbox`, `orgbrain_messages_get`,
+  `orgbrain_messages_read`, and `orgbrain_messages_ack`.
+- `orgbrain_handoff_send` stores a versioned `orgbrain-handoff-v1` package with
+  decisions, rationale/source references, unresolved items, and next actions in
+  the durable agent inbox
 - `pnpm agmsg` is a thin CLI wrapper over the HTTP API and uses `ORGBRAIN_API_URL` with `ORGBRAIN_API_BASE` as a compatibility alias.
 
 ## Memory Source of Truth
@@ -77,6 +82,8 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Agent memory sync は API (`/v1/memories*`) + sync script (`scripts/sync-agents-memory.mjs`) で行う
 - `/v1/memories/upsert` は request 内 `external_key` を last-write-wins で dedupe し、既存 key lookup + `memories_fts` 更新を batch 化する
 - memory lifecycle v2 では `memories` を current snapshot、`memory_versions` を immutable 履歴、`memory_edges` を lightweight lineage relation として扱う
+- MemoryRecord v2 は local SQLite と Cloud D1 で tenant/project/kind/state/scope、content/summary/tags/entities、source references、actor、作成・更新・有効期間、confidence/utility/content hash/version、rationale/evidence/conflicts/permissions を共通の論理契約として持つ
+- `MemoryStore` は capture/revise/suppress/delete/get/search/version/export/rebuild/verify の正本インターフェースであり、FTS・embedding・graph retrieval index は再構築可能な派生データとして扱う
 - rationale confirmation v1 では `decision_rationales` を確認済み結論・理由の構造化層、`memory_confirmations` を propose/confirm の短期トークン保管として扱う
 - context engine MVP では `decision_memories` を agent preflight 用の decision-grade context 正規化層として扱い、decision/rationale/rejected alternatives/constraints/known pitfalls/sourceRefs/validity/status/confidence/permission metadata を保持する
 - `memories` は `kind`, `lifecycle_state`, `scope_type`, `scope_key`, `actor_type`, `actor_id`, `confidence_score`, `utility_score`, `current_version`, `last_accessed_at`, `suppressed_at`, `expires_at` を持つ
@@ -87,9 +94,22 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `/v1/memories/revise` は current snapshot を更新しつつ `memory_versions` に `operation=revise` を追加する
 - `/v1/memories/refresh` は `last_accessed_at` と optional な `confidence_delta` を更新し、想起イベントを version 履歴に残す
 - `/v1/memories/suppress` は memory を物理削除せず通常 retrieval から外し、`lifecycle_state=suppressed` と `suppressed_at` を記録する
-- `/v1/memories/search` と cap-runner retrieval は共有 helper を使い、`bm25_v1`、`bm25_rewrite_v1`、`hybrid_memory_docs_v1` を切り替える
+- `DELETE /v1/memories/:memoryId` は認証済み principal と tenant grant を使用し、memory、version、FTS、edge、entity/rationale/evidence 関連を削除して、本文を含まない deletion tombstone のみを残す
+- 固定 role は `tenant_admin`, `project_owner`, `contributor`, `reader`, `service_agent`, `auditor`、分離 permission は `read`, `write`, `share`, `admin`, `delete`, `export` とする
+- `/v1/*`, `/api/*`, Remote MCP tool は tenant grant に加えて固定 role / project scope の permission check を通す。単一 `API_KEY` の self-host operator は `tenant_admin`、policy付きAPI keyは既定 `service_agent`、Access loginはpolicy未指定時 `reader` とする
+- `GET|PUT|DELETE /v1/role-assignments` は tenant admin 用の role assignment surface、`GET /v1/audit-events` と `/v1/audit-events/verify` は auditor 用の監査・hash chain検証 surface とする
+- API mutation は本文・secretを保存せず、principal、tenant/project、action、resource、outcome、request id、permission、statusだけを SHA-256 hash chain付き `audit_events` に記録する
+- `/v1/memories/search` と cap-runner retrieval は共有 helper を使い、`bm25_v1`、`bm25_rewrite_v1`、`hybrid_memory_docs_v1`、`hybrid_v2` を切り替える
 - `rewrite_query=true` は phrase / token OR / split token OR / singularized token OR の最大 4 変種で lexical FTS5 を引き、memory id 単位で best rank を採用する
 - `search_mode=hybrid` は dedupe 後の lexical memory hit が 3 件未満のときに `knowledge_docs_fts` を追加検索し、memory/doc を summary/title 単位で dedupe して返す
+- `search_mode=hybrid_v2` は lexical / semantic / graph / time / authority /
+  utility を融合し、ACL と validity を順位付け前に適用する。semantic
+  provider 未設定時は null と degraded metadata を返し、擬似 score を作らない。
+  個人SQLiteモードは外部通信を行わない `local-sparse-feature-hash-v1`
+  投影を既定で構築し、CloudモードはWorkers AI + Vectorizeを任意選択できる
+- `GET /v1/ops/status` はadmin専用で、memory競合・期限切れ、decision review、
+  task失敗、監査、token、legal hold、検索品質、索引構成、RPO/RTO目標を返す。
+  未計測の検索指標は0ではなくnullを返す
 - `tags_json` に `compacted` を持つ memory は retrieval/profile の対象外とし、古い raw hook memory は digest memory へ圧縮して検索ノイズを下げる
 - lifecycle-aware retrieval は `suppressed` と expired row を通常検索から除外し、`semantic` row を `episodic` より優先する
 - Primary lexical search の対象は `canonical-memory`、`curated-memory`、`promoted-memory`、`memory-digest` に絞る。recent raw hook memory は recent/history 用に保持する
@@ -106,6 +126,10 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Tenant-scoped arbitrary groups can be created independently of profile company/organization metadata, and can be used in resource ACLs for decision memories and knowledge docs.
 - context enrich は active/deprecated/superseded/expired の同一topic decision memoryを最小限の conflict として明示する
 - context enrich は `maxTokens` の概算上限を守るため、pitfalls/actions/constraints/decisionContext の順に圧縮する
+- pre-action gate は高 severity の active decision conflict を block、
+  低信頼または未確認文脈を review、それ以外を allow として返す
+- decision review queue は unconfirmed / uncertain / stale / expiring /
+  conflicting を decision debt として集計する
 - decision memory editor v1 では `reviewer_refs_json`, `confirmation_state`, `confirmation_note`, `confirmed_at`, `decision_memory_versions` を使い、判断の編集・確認・履歴・信頼根拠を memory retrieval 本体とは分離して扱う
 - `GET /v1/decision-memories/:id/context` は判断者、確認者、source refs、適用文脈、履歴、同一 topic conflict、trust signals を返す
 - `POST /v1/decision-memories/search` は `person_id`, `reviewer_id`, `confirmation_state`, `valid_at`, `has_conflicts`, `task_context`, `include_provenance`, `authority_scoring`, `verification_view` を optional filter/flag として扱う
@@ -165,8 +189,9 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Agent-facing memory impact notes (`memory_used`, `avoided_lookup`, `memory_basis`, `confidence`) are qualitative supplements only; quantitative evaluation remains `retrieval_events` plus measurement mode.
 
 ## Out of Scope (MVP)
-- Advanced RBAC and tenant isolation policies
-- DLQ replay UI
+- SCIM/SAML provisioning and arbitrary custom role definitions
+- Production evidence for the credential-gated cloud D1 restore drill
 - Capability plugin marketplace
-- Production observability dashboards
-- Agent transcript stores への直接書き込み統合
+- Third-party SaaS connector ingestion
+- Complete adversarial poisoning, multilingual PII, and redaction evaluation
+- Raw agent transcript stores への直接書き込み統合

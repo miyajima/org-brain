@@ -1,4 +1,13 @@
-export const MEMORY_KINDS = ["episodic", "semantic", "org_knowledge"] as const;
+export const MEMORY_KINDS = [
+  "episodic",
+  "semantic",
+  "org_knowledge",
+  "fact",
+  "decision",
+  "constraint",
+  "pitfall",
+  "preference"
+] as const;
 export const MEMORY_LIFECYCLE_STATES = ["active", "suppressed", "consolidated", "promoted"] as const;
 export const MEMORY_SCOPE_TYPES = ["tenant", "project", "org"] as const;
 export const MEMORY_OPERATIONS = ["capture", "revise", "refresh", "suppress"] as const;
@@ -36,7 +45,9 @@ export type MemoryLifecycleSnapshot = {
 };
 
 export function normalizeMemoryKind(raw: unknown): MemoryKind {
-  return raw === "semantic" || raw === "org_knowledge" ? raw : "episodic";
+  return typeof raw === "string" && MEMORY_KINDS.includes(raw as MemoryKind)
+    ? (raw as MemoryKind)
+    : "episodic";
 }
 
 export function normalizeLifecycleState(raw: unknown): MemoryLifecycleState {

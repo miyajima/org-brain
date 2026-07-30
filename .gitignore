@@ -11,4 +11,5 @@ test-results
 dbx-db/
 *.tsbuildinfo
 .omx/
+.benchmark/
 tmp/

@@ -1,5 +1,11 @@
 import { buildKnowledgeFtsQuery } from "./knowledge-docs";
 import { normalizeLifecycleState, normalizeMemoryKind, type MemoryKind, type MemoryLifecycleState } from "./memory-lifecycle-types";
+import {
+  fuseRetrievalSignals,
+  type RetrievalIndexHit,
+  type RetrievalScoreBreakdown
+} from "./retrieval-index";
+import type { MemorySourceReference } from "./memory-store";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_DAYS = 14;
@@ -11,9 +17,14 @@ const TAG_PRIORITY_ORDER = ["policy", "diagnosis", "command-result", "workaround
 const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest"] as const;
 const LOW_SIGNAL_TITLES = new Set(["起動", "修正", "削除", "空け", "実装完了", "修正完了", "実行結果です", "変更しました", "1"]);
 
-export type MemorySearchMode = "memories" | "hybrid";
+export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2";
 export type MemorySearchKind = "memory" | "doc";
-export type MemorySearchStrategy = "bm25_v1" | "bm25_rewrite_v1" | "hybrid_memory_docs_v1" | "fallback_recent_v1";
+export type MemorySearchStrategy =
+  | "bm25_v1"
+  | "bm25_rewrite_v1"
+  | "hybrid_memory_docs_v1"
+  | "hybrid_v2"
+  | "fallback_recent_v1";
 
 export type StoredMemory = {
   id: string;
@@ -32,6 +43,11 @@ export type StoredMemory = {
   confidence_score?: number | null;
   utility_score?: number | null;
   expires_at?: number | null;
+  valid_from?: number | null;
+  valid_until?: number | null;
+  permissions_json?: string | null;
+  source_refs_json?: string | null;
+  conflicts_json?: string | null;
 };
 
 type MemoryCandidateRow = StoredMemory & {
@@ -64,6 +80,13 @@ export type MemorySearchResult = {
   memory_kind?: MemoryKind;
   lifecycle_state?: MemoryLifecycleState;
   current_version?: number;
+  score_breakdown?: RetrievalScoreBreakdown;
+  source_references?: MemorySourceReference[];
+  conflicts?: string[];
+  permission_decision?: {
+    allowed: boolean;
+    principal_id: string | null;
+  };
 };
 
 export type MemorySearchMeta = {
@@ -77,6 +100,11 @@ export type MemorySearchMeta = {
   history_result_count: number;
   top_result_ids: string[];
   top_result_ranks: Array<number | null>;
+  retrieval?: {
+    semantic: { available: boolean; provider: string | null };
+    graph: { available: boolean; provider: string };
+    degraded: boolean;
+  };
 };
 
 export type MemorySearchResponse = {
@@ -127,6 +155,9 @@ export type MemorySearchOptions = {
   rewriteQuery?: boolean;
   searchMode?: MemorySearchMode;
   includeHistory?: boolean;
+  principalId?: string | null;
+  semanticHits?: RetrievalIndexHit[];
+  semanticProvider?: string | null;
 };
 
 export type MemoryProfileOptions = {
@@ -157,6 +188,20 @@ type SearchCandidate = {
   memory_kind?: MemoryKind;
   lifecycle_state?: MemoryLifecycleState;
   current_version?: number;
+  confidence_score?: number | null;
+  utility_score?: number | null;
+  valid_from?: number | null;
+  valid_until?: number | null;
+  permissions_json?: string | null;
+  graph_score?: number | null;
+  semantic_score?: number | null;
+  score_breakdown?: RetrievalScoreBreakdown;
+  source_refs_json?: string | null;
+  conflicts_json?: string | null;
+  permission_decision?: {
+    allowed: boolean;
+    principal_id: string | null;
+  };
 };
 
 function clipText(value: string | null | undefined, limit = 240): string {
@@ -360,6 +405,8 @@ function bindProjectArgs(projectId: string | null | undefined): unknown[] {
 function searchableFilterSql(alias: string): string {
   return `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')
     AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > unixepoch('now') * 1000)
+    AND (${alias}.valid_from IS NULL OR ${alias}.valid_from <= unixepoch('now') * 1000)
+    AND (${alias}.valid_until IS NULL OR ${alias}.valid_until > unixepoch('now') * 1000)
     AND (${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"compacted"%')`;
 }
 
@@ -378,6 +425,7 @@ async function searchMemoryVariant(
   const result = await db.prepare(
     `SELECT m.id, m.tenant_id, m.project_id, m.content, m.summary, m.tags_json, m.source, m.external_key, m.created_at,
             m.kind, m.lifecycle_state, m.current_version, m.last_accessed_at, m.confidence_score, m.utility_score, m.expires_at,
+            m.valid_from, m.valid_until, m.permissions_json, m.source_refs_json, m.conflicts_json,
             bm25(memories_fts) AS raw_rank
      FROM memories_fts
      JOIN memories m
@@ -407,7 +455,8 @@ async function loadRecentHistoryRows(
 ): Promise<StoredMemory[]> {
   const result = await db.prepare(
     `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at,
-            kind, lifecycle_state, current_version, last_accessed_at, confidence_score, utility_score, expires_at
+            kind, lifecycle_state, current_version, last_accessed_at, confidence_score, utility_score, expires_at,
+            valid_from, valid_until, permissions_json, source_refs_json, conflicts_json
      FROM memories
      WHERE tenant_id = ?
        AND ${searchableFilterSql("memories")}
@@ -462,7 +511,14 @@ function toMemorySearchCandidate(row: MemoryCandidateRow): SearchCandidate {
     dedupe_key: normalizeDedupeKey(summary || row.content || row.id),
     memory_kind: normalizeMemoryKind(row.kind),
     lifecycle_state: normalizeLifecycleState(row.lifecycle_state),
-    current_version: Number(row.current_version ?? 1)
+    current_version: Number(row.current_version ?? 1),
+    confidence_score: row.confidence_score,
+    utility_score: row.utility_score,
+    valid_from: row.valid_from,
+    valid_until: row.valid_until,
+    permissions_json: row.permissions_json,
+    source_refs_json: row.source_refs_json,
+    conflicts_json: row.conflicts_json
   };
 }
 
@@ -497,8 +553,126 @@ function toPublicResult(candidate: SearchCandidate): MemorySearchResult {
     current_version:
       candidate.kind === "memory"
         ? ((candidate as SearchCandidate & { current_version?: number }).current_version ?? 1)
-        : undefined
+        : undefined,
+    score_breakdown: candidate.score_breakdown,
+    source_references: parseJsonArray<MemorySourceReference>(candidate.source_refs_json),
+    conflicts: parseJsonArray<string>(candidate.conflicts_json),
+    permission_decision: candidate.permission_decision
   };
+}
+
+function parseJsonArray<T>(raw: string | null | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function parsePermissionPrincipals(raw: string | null | undefined): Array<{
+  principal_type?: string;
+  principal_id?: string;
+  permissions?: unknown;
+}> {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function candidateAllowed(candidate: SearchCandidate, principalId: string | null | undefined): boolean {
+  const grants = parsePermissionPrincipals(candidate.permissions_json);
+  if (grants.length === 0) return true;
+  if (!principalId) return false;
+  return grants.some(
+    (grant) =>
+      grant.principal_type === "principal" &&
+      grant.principal_id === principalId &&
+      Array.isArray(grant.permissions) &&
+      grant.permissions.includes("read")
+  );
+}
+
+function queryTokens(raw: string): string[] {
+  return [
+    ...new Set(
+      collapseWhitespace(raw)
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}_-]+/u)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2)
+    )
+  ].slice(0, 6);
+}
+
+async function loadGraphScores(
+  db: D1Database,
+  tenantId: string,
+  query: string,
+  limit: number
+): Promise<Map<string, number>> {
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return new Map();
+  const entityMatch = tokens.map(() => "LOWER(e.canonical_name) LIKE ?").join(" OR ");
+  const direct = await db.prepare(
+    `SELECT me.memory_id, COUNT(DISTINCT me.entity_id) AS match_count
+     FROM memory_entities me
+     JOIN entities e ON e.tenant_id = me.tenant_id AND e.id = me.entity_id
+     WHERE me.tenant_id = ? AND (${entityMatch})
+     GROUP BY me.memory_id
+     ORDER BY match_count DESC
+     LIMIT ?`
+  )
+    .bind(tenantId, ...tokens.map((token) => `%${token}%`), limit)
+    .all<{ memory_id: string; match_count: number }>();
+
+  const scores = new Map<string, number>();
+  for (const row of direct.results) {
+    scores.set(row.memory_id, Math.min(1, 0.75 + Number(row.match_count ?? 0) * 0.125));
+  }
+  const directIds = [...scores.keys()];
+  if (directIds.length === 0) return scores;
+
+  const placeholders = directIds.map(() => "?").join(",");
+  const neighbors = await db.prepare(
+    `SELECT from_memory_id, to_memory_id
+     FROM memory_edges
+     WHERE tenant_id = ?
+       AND (from_memory_id IN (${placeholders}) OR to_memory_id IN (${placeholders}))
+     LIMIT ?`
+  )
+    .bind(tenantId, ...directIds, ...directIds, limit * 4)
+    .all<{ from_memory_id: string; to_memory_id: string }>();
+  const directSet = new Set(directIds);
+  for (const edge of neighbors.results) {
+    const neighbor = directSet.has(edge.from_memory_id) ? edge.to_memory_id : edge.from_memory_id;
+    scores.set(neighbor, Math.max(scores.get(neighbor) ?? 0, 0.6));
+  }
+  return scores;
+}
+
+async function loadMemoryRowsByIds(
+  db: D1Database,
+  tenantId: string,
+  ids: string[]
+): Promise<MemoryCandidateRow[]> {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => "?").join(",");
+  const result = await db.prepare(
+    `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at,
+            kind, lifecycle_state, current_version, last_accessed_at, confidence_score, utility_score, expires_at,
+            valid_from, valid_until, permissions_json, source_refs_json, conflicts_json, NULL AS raw_rank
+     FROM memories
+     WHERE tenant_id = ? AND id IN (${placeholders}) AND ${searchableFilterSql("memories")}`
+  )
+    .bind(tenantId, ...ids)
+    .all<MemoryCandidateRow>();
+  return result.results;
 }
 
 function dedupeFinalCandidates(candidates: SearchCandidate[], limit: number): SearchCandidate[] {
@@ -544,6 +718,58 @@ export async function searchTenantMemories(
   const lexicalRows = [...lexicalById.values()].sort((left, right) => compareMemoryCandidates(projectId, left, right));
   const lexicalCandidates = lexicalRows.map(toMemorySearchCandidate);
   const lexicalResultCount = lexicalCandidates.length;
+  let rankedMemoryCandidates = lexicalCandidates;
+  let graphScores = new Map<string, number>();
+  const semanticScores = new Map((options.semanticHits ?? []).map((hit) => [hit.id, hit.score]));
+
+  if (searchMode === "hybrid_v2") {
+    graphScores = await loadGraphScores(db, tenantId, q, lexicalFetchLimit);
+    const candidateById = new Map(lexicalCandidates.map((candidate) => [candidate.id, candidate]));
+    const projectionIds = [...new Set([...graphScores.keys(), ...semanticScores.keys()])]
+      .filter((id) => !candidateById.has(id))
+      .slice(0, lexicalFetchLimit);
+    const projectionRows = await loadMemoryRowsByIds(db, tenantId, projectionIds);
+    for (const row of projectionRows) {
+      candidateById.set(row.id, toMemorySearchCandidate(row));
+    }
+
+    const fused = fuseRetrievalSignals(
+      [...candidateById.values()].map((candidate) => ({
+        id: candidate.id,
+        lexical: toPublicScore(candidate.raw_rank),
+        semantic: semanticScores.get(candidate.id),
+        graph: graphScores.get(candidate.id),
+        created_at: candidate.created_at,
+        valid_from: candidate.valid_from,
+        valid_until: candidate.valid_until,
+        confidence: candidate.confidence_score,
+        utility: candidate.utility_score,
+        authority:
+          candidate.memory_kind === "decision" || candidate.source === "curated" ? 1 : 0.7,
+        allowed: candidateAllowed(candidate, options.principalId)
+      })),
+      {
+        availability: {
+          semantic: options.semanticHits !== undefined,
+          graph: true
+        }
+      }
+    );
+    rankedMemoryCandidates = fused.flatMap<SearchCandidate>((hit) => {
+        const candidate = candidateById.get(hit.id);
+        if (!candidate) return [];
+        return [{
+          ...candidate,
+          graph_score: graphScores.get(hit.id) ?? null,
+          semantic_score: semanticScores.get(hit.id) ?? null,
+          score_breakdown: hit.score,
+          permission_decision: {
+            allowed: true,
+            principal_id: options.principalId ?? null
+          }
+        }];
+      });
+  }
 
   const shouldSearchDocs = searchMode === "hybrid" && q.length > 0 && lexicalResultCount < 3;
   const docCandidates: SearchCandidate[] = [];
@@ -563,7 +789,7 @@ export async function searchTenantMemories(
     docCandidates.push(...[...docById.values()].sort(compareDocCandidates).slice(0, 2).map(toDocSearchCandidate));
   }
 
-  const baseCandidates = dedupeFinalCandidates([...lexicalCandidates, ...docCandidates], limit);
+  const baseCandidates = dedupeFinalCandidates([...rankedMemoryCandidates, ...docCandidates], limit);
   const baseIds = new Set(baseCandidates.filter((candidate) => candidate.kind === "memory").map((candidate) => candidate.id));
   const baseKeys = new Set(baseCandidates.map((candidate) => candidate.dedupe_key).filter(Boolean));
 
@@ -591,7 +817,9 @@ export async function searchTenantMemories(
   const historyResultCount = historyCandidates.length;
 
   let searchStrategy: MemorySearchStrategy;
-  if (shouldSearchDocs) {
+  if (searchMode === "hybrid_v2") {
+    searchStrategy = "hybrid_v2";
+  } else if (shouldSearchDocs) {
     searchStrategy = "hybrid_memory_docs_v1";
   } else if (rewriteQuery) {
     searchStrategy = "bm25_rewrite_v1";
@@ -611,7 +839,11 @@ export async function searchTenantMemories(
     rewrite_query: rewriteQuery,
     search_mode: searchMode,
     include_history: includeHistory,
-    results: finalCandidates.map(toPublicResult),
+    results: finalCandidates.map((candidate) => {
+      const result = toPublicResult(candidate);
+      if (candidate.score_breakdown) result.score = candidate.score_breakdown.total;
+      return result;
+    }),
     meta: {
       search_strategy: searchStrategy,
       matched_count: lexicalResultCount,
@@ -622,7 +854,20 @@ export async function searchTenantMemories(
       doc_result_count: docResultCount,
       history_result_count: historyResultCount,
       top_result_ids: finalCandidates.map((candidate) => candidate.id),
-      top_result_ranks: finalCandidates.map((candidate) => candidate.raw_rank)
+      top_result_ranks: finalCandidates.map((candidate) =>
+        candidate.score_breakdown ? candidate.score_breakdown.total : candidate.raw_rank
+      ),
+      retrieval:
+        searchMode === "hybrid_v2"
+          ? {
+              semantic: {
+                available: options.semanticHits !== undefined,
+                provider: options.semanticProvider ?? null
+              },
+              graph: { available: true, provider: "d1-memory-graph" },
+              degraded: options.semanticHits === undefined
+            }
+          : undefined
     }
   };
 }

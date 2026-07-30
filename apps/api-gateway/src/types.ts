@@ -13,7 +13,14 @@ export type Env = {
   ACCESS_AUD?: string;
   ACCESS_TENANT_POLICY_JSON?: string;
   ACCESS_JWKS_JSON?: string;
+  OIDC_ISSUER?: string;
+  OIDC_AUD?: string;
+  OIDC_JWKS_JSON?: string;
+  OIDC_TENANT_POLICY_JSON?: string;
   MCP_TENANT_POLICY_JSON?: string;
   MCP_ACCESS_AUD?: string;
   MCP_SERVICE_TOKENS_JSON?: string;
+  AI?: Ai;
+  MEMORY_VECTOR_INDEX?: Vectorize;
+  API_RATE_LIMITER?: RateLimit;
 };

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { confirmDecisionMemory, createDecisionMemory, enrichContext, getDecisionMemoryContext, reviseDecisionMemory, searchDecisionMemories } from "../src/context-engine-service";
+import {
+  confirmDecisionMemory,
+  createDecisionMemory,
+  enrichContext,
+  getDecisionMemoryContext,
+  getDecisionReviewQueue,
+  preActionDecisionGate,
+  reviseDecisionMemory,
+  searchDecisionMemories
+} from "../src/context-engine-service";
 
 type DecisionMemoryRecord = {
   id: string;
@@ -240,6 +249,60 @@ function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryR
 }
 
 describe("context-engine-service", () => {
+  it("blocks a pre-action gate when active decisions conflict", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({ id: "dm-active-a", decision: "legacy_authを使わない" }),
+      baseDecision({ id: "dm-active-b", decision: "legacy_authを使う", status: "active" }),
+      baseDecision({ id: "dm-old", decision: "legacy_authを使う", status: "deprecated" })
+    ];
+
+    const result = await preActionDecisionGate(
+      { OPEN_BRAIN_DB: db } as any,
+      {
+        tenant_id: "org_123",
+        project_id: "proj_abc",
+        task: { title: "legacy_auth", description: "認証方式を変更する" }
+      },
+      { principal: "user:reviewer" }
+    );
+
+    expect(result.outcome).toBe("block");
+    expect(result.allowed).toBe(false);
+  });
+
+  it("builds a decision debt review queue", async () => {
+    const db = new FakeD1();
+    const now = Date.now();
+    db.decisionMemories = [
+      baseDecision({
+        id: "dm-review",
+        status: "uncertain",
+        confirmation_state: "inferred_unconfirmed",
+        valid_until: now + 5 * 24 * 60 * 60 * 1000
+      }),
+      baseDecision({
+        id: "dm-clean",
+        confirmation_state: "reviewed",
+        confirmed_at: now,
+        updated_at: now
+      })
+    ];
+
+    const result = await getDecisionReviewQueue(
+      { OPEN_BRAIN_DB: db } as any,
+      { tenant_id: "org_123", project_id: "proj_abc", within_days: 30 },
+      { principal: "user:reviewer" }
+    );
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items.find((item) => item.id === "dm-review")).toMatchObject({
+      id: "dm-review",
+      reasons: expect.arrayContaining(["unconfirmed", "uncertain", "expiring", "conflicting"])
+    });
+    expect(result.debt.uncertain).toBe(1);
+  });
+
   it("creates and searches decision memories", async () => {
     const db = new FakeD1();
     const env = { OPEN_BRAIN_DB: db } as any;

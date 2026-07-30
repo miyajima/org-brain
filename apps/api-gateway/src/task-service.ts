@@ -17,6 +17,55 @@ export type CreatedTaskResult = {
   variants?: Array<{ variant: "control" | "treatment"; task_id: string; status: string }>;
 };
 
+export async function replayFailedTask(
+  env: Env,
+  tenantId: string,
+  taskId: string
+): Promise<CreatedTaskResult & { replayed_from_task_id: string }> {
+  const task = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT status FROM tasks WHERE tenant_id = ? AND id = ?"
+  ).bind(tenantId, taskId).first<{ status: string }>();
+  if (!task) throw new HttpError(404, "task_not_found", `Task not found: ${taskId}`);
+  if (!["failed", "dead_letter"].includes(task.status)) {
+    throw new HttpError(409, "task_not_replayable", "Only failed or dead-letter tasks can be replayed");
+  }
+  const event = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT payload FROM task_events
+     WHERE tenant_id = ? AND task_id = ? AND kind = 'created'
+     ORDER BY created_at ASC
+     LIMIT 1`
+  ).bind(tenantId, taskId).first<{ payload: string | null }>();
+  if (!event?.payload) {
+    throw new HttpError(409, "task_not_replayable", "Original task input is unavailable");
+  }
+  let original: unknown;
+  try {
+    original = JSON.parse(event.payload);
+  } catch {
+    throw new HttpError(409, "task_not_replayable", "Original task input is invalid");
+  }
+  if (!original || typeof original !== "object") {
+    throw new HttpError(409, "task_not_replayable", "Original task input is invalid");
+  }
+  const replayId = ulid();
+  const created = await createTask(env, {
+    ...(original as Record<string, unknown>),
+    tenant_id: tenantId,
+    idempotency_key: `replay:${taskId}:${replayId}`
+  });
+  await env.OPEN_BRAIN_DB.prepare(
+    "INSERT INTO task_events(id, tenant_id, task_id, kind, payload, created_at) VALUES(?,?,?,?,?,?)"
+  ).bind(
+    ulid(),
+    tenantId,
+    taskId,
+    "replayed",
+    JSON.stringify({ replay_task_id: created.task_id }),
+    Date.now()
+  ).run();
+  return { ...created, replayed_from_task_id: taskId };
+}
+
 export async function createTask(env: Env, rawBody: unknown): Promise<CreatedTaskResult> {
   if (!validateTaskCreateBody(rawBody)) {
     throw new HttpError(400, "invalid_payload", "Request body does not match task_create.schema.json");

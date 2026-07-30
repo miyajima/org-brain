@@ -1436,3 +1436,237 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
   if (meta) meta.estimatedTokens = estimateTokens(response);
   return response;
 }
+
+export async function preActionDecisionGate(
+  env: Env,
+  rawBody: unknown,
+  options: PrincipalIdentityOptions = {}
+) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as ContextEnrichRequest & { minimum_confidence?: number };
+  const minimumConfidence =
+    typeof body.minimum_confidence === "number" && Number.isFinite(body.minimum_confidence)
+      ? clamp(body.minimum_confidence, 0, 1)
+      : 0.45;
+  const task = body.task && typeof body.task === "object" ? body.task : {};
+  const taskText = buildTaskText(task);
+  const tenantId = parseOptionalString(body.tenant_id ?? body.orgId, "tenant_id", 128) ?? "default";
+  const projectId = parseOptionalString(body.project_id ?? body.projectId, "project_id", 128);
+  const policyTokens = tokenize(taskText).slice(0, 6);
+  const policyContext = policyTokens.length === 0
+    ? []
+    : (await env.OPEN_BRAIN_DB.prepare(
+        `SELECT id, project_id, kind, content, summary, source, source_refs_json,
+                confidence_score, valid_from, valid_until
+         FROM memories
+         WHERE tenant_id = ?
+           AND (? IS NULL OR project_id = ? OR project_id IS NULL)
+           AND kind IN ('constraint', 'pitfall', 'decision')
+           AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
+           AND (valid_from IS NULL OR valid_from <= ?)
+           AND (valid_until IS NULL OR valid_until > ?)
+           AND (${policyTokens.map(() => "(LOWER(content) LIKE ? OR LOWER(COALESCE(summary, '')) LIKE ?)").join(" OR ")})
+         ORDER BY confidence_score DESC, updated_at DESC
+         LIMIT 8`
+      )
+        .bind(
+          tenantId,
+          projectId,
+          projectId,
+          Date.now(),
+          Date.now(),
+          ...policyTokens.flatMap((token) => [`%${token.toLowerCase()}%`, `%${token.toLowerCase()}%`])
+        )
+        .all<{
+          id: string;
+          project_id: string | null;
+          kind: string;
+          content: string;
+          summary: string | null;
+          source: string;
+          source_refs_json: string | null;
+          confidence_score: number | null;
+          valid_from: number | null;
+          valid_until: number | null;
+        }>()).results.map((row) => ({
+          id: row.id,
+          project_id: row.project_id,
+          kind: row.kind,
+          summary: row.summary,
+          content: row.content,
+          source: row.source,
+          source_references: parseJsonArray<SourceRef>(row.source_refs_json),
+          confidence: row.confidence_score,
+          valid_from: row.valid_from,
+          valid_until: row.valid_until
+        }));
+  const context = await enrichContext(
+    env,
+    {
+      ...body,
+      includeConflicts: true,
+      includeProvenance: true,
+      authorityScoring: true,
+      verificationView: true
+    },
+    options
+  ) as {
+    confidence?: number;
+    requiresHumanReview?: boolean;
+    conflicts?: Array<{ severity?: string; requiresHumanReview?: boolean }>;
+    decisionContext?: unknown[];
+    [key: string]: unknown;
+  };
+  const confidence = Number(context.confidence ?? 0);
+  const conflicts = Array.isArray(context.conflicts) ? context.conflicts : [];
+  const blockingConflict = conflicts.some(
+    (conflict) => conflict.severity === "high" && conflict.requiresHumanReview === true
+  );
+  const blockingPolicies = policyContext.filter((memory) =>
+    /\b(?:must not|never|prohibited|forbidden|do not)\b|(?:禁止|してはいけない|不可)/iu.test(memory.content)
+  );
+  const reasons: string[] = [];
+  if (blockingConflict) reasons.push("conflicting active decisions require human resolution");
+  if (blockingPolicies.length > 0) reasons.push("a relevant policy or known prohibition applies");
+  if (confidence < minimumConfidence) reasons.push(`confidence ${confidence.toFixed(3)} is below ${minimumConfidence.toFixed(3)}`);
+  if ((context.decisionContext?.length ?? 0) === 0) reasons.push("no relevant decision memory was found");
+  if (context.requiresHumanReview && reasons.length === 0) reasons.push("selected decision memory requires human review");
+  const outcome = blockingConflict || blockingPolicies.length > 0
+    ? "block"
+    : context.requiresHumanReview || confidence < minimumConfidence
+      ? "review"
+      : "allow";
+
+  return {
+    outcome,
+    allowed: outcome === "allow",
+    reasons,
+    policy: {
+      minimum_confidence: minimumConfidence,
+      block_on_high_conflict: true,
+      fail_open_on_missing_context: false
+    },
+    context: {
+      ...context,
+      policy_memory_context: policyContext,
+      blocking_policy_memory_ids: blockingPolicies.map((memory) => memory.id)
+    }
+  };
+}
+
+export async function getDecisionReviewQueue(
+  env: Env,
+  rawBody: unknown,
+  options: PrincipalIdentityOptions = {}
+) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as {
+    tenant_id?: string;
+    orgId?: string;
+    project_id?: string | null;
+    projectId?: string | null;
+    within_days?: number;
+    limit?: number;
+  };
+  const tenantId = parseOptionalString(body.tenant_id ?? body.orgId, "tenant_id", 128) ?? "default";
+  const projectId = parseOptionalString(body.project_id ?? body.projectId, "project_id", 128);
+  const withinDays = parseOptionalInteger(body.within_days, "within_days", 30, 1, 365);
+  const limit = parseOptionalInteger(body.limit, "limit", 50, 1, 100);
+  const principal = normalizePrincipal(options.principal);
+  const memories = await loadDecisionMemories(env, { tenantId, projectId, q: "", limit: 100 });
+  const visible = await filterReadableDecisionMemories(
+    env,
+    tenantId,
+    memories,
+    principal,
+    principal,
+    principal
+  );
+  const now = Date.now();
+  const scored = visible.map((memory) => ({
+    memory,
+    score: scoreDecisionMemory({
+      memory,
+      taskText: `${memory.title} ${memory.decision}`,
+      taskType: "review",
+      targetFiles: [],
+      projectId,
+      userId: principal,
+      agentId: principal
+    })
+  }));
+  const conflicts = detectConflicts(scored, now);
+  const conflictIds = new Set(
+    conflicts.flatMap((conflict) => [conflict.preferredMemoryId, ...conflict.conflictingMemoryIds])
+  );
+  const counters = {
+    unconfirmed: 0,
+    uncertain: 0,
+    stale: 0,
+    expiring: 0,
+    conflicting: 0
+  };
+  const items = visible.flatMap((memory) => {
+    const reasons: string[] = [];
+    if (memory.confirmationState === "draft" || memory.confirmationState === "inferred_unconfirmed") {
+      reasons.push("unconfirmed");
+      counters.unconfirmed += 1;
+    }
+    if (memory.status === "uncertain") {
+      reasons.push("uncertain");
+      counters.uncertain += 1;
+    }
+    if (freshnessState(memory, now) === "stale") {
+      reasons.push("stale");
+      counters.stale += 1;
+    }
+    if (memory.validUntil && memory.validUntil >= now && memory.validUntil <= now + withinDays * DAY_MS) {
+      reasons.push("expiring");
+      counters.expiring += 1;
+    }
+    if (conflictIds.has(memory.id)) {
+      reasons.push("conflicting");
+      counters.conflicting += 1;
+    }
+    if (reasons.length === 0) return [];
+    const debtScore =
+      (reasons.includes("conflicting") ? 0.35 : 0) +
+      (reasons.includes("uncertain") ? 0.25 : 0) +
+      (reasons.includes("unconfirmed") ? 0.2 : 0) +
+      (reasons.includes("stale") ? 0.15 : 0) +
+      (reasons.includes("expiring") ? 0.05 : 0);
+    return [{
+      id: memory.id,
+      project_id: memory.projectId,
+      title: memory.title,
+      decision: memory.decision,
+      status: memory.status,
+      confirmation_state: memory.confirmationState,
+      valid_until: memory.validUntil,
+      updated_at: memory.updatedAt,
+      reasons,
+      debt_score: Number(debtScore.toFixed(2))
+    }];
+  })
+    .sort((left, right) => right.debt_score - left.debt_score || left.id.localeCompare(right.id))
+    .slice(0, limit);
+
+  return {
+    tenant_id: tenantId,
+    project_id: projectId,
+    items,
+    debt: {
+      total_items: items.length,
+      ...counters
+    },
+    conflicts,
+    policy: {
+      expiring_within_days: withinDays,
+      stale_rule: "authority-aware decision freshness policy"
+    }
+  };
+}

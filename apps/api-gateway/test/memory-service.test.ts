@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { getMemoryProfile, listMemories, listMemoriesPage, searchMemories, upsertMemories } from "../src/memory-service";
+import {
+  deleteMemoryById,
+  getMemoryProfile,
+  listMemories,
+  listMemoriesPage,
+  searchMemories,
+  upsertMemories
+} from "../src/memory-service";
 
 type MemoryRecord = {
   id: string;
@@ -236,6 +243,32 @@ class FakeStatement {
   }
 
   async run() {
+    if (this.sql.startsWith("INSERT INTO memory_deletions(")) {
+      this.db.memoryDeletions.push({
+        id: this.args[0],
+        tenant_id: this.args[1],
+        memory_id: this.args[2],
+        actor_type: this.args[3],
+        actor_id: this.args[4],
+        deleted_at: this.args[5]
+      });
+      return { success: true };
+    }
+
+    if (this.sql.startsWith("DELETE FROM memory_versions")) {
+      this.db.memoryVersions = this.db.memoryVersions.filter(
+        (version) => version.tenant_id !== this.args[0] || version.memory_id !== this.args[1]
+      );
+      return { success: true };
+    }
+
+    if (this.sql.startsWith("DELETE FROM memories WHERE")) {
+      this.db.memories = this.db.memories.filter(
+        (memory) => memory.tenant_id !== this.args[0] || memory.id !== this.args[1]
+      );
+      return { success: true };
+    }
+
     if (this.sql.startsWith("INSERT INTO memories(")) {
       this.db.memories.push({
         id: this.args[0] as string,
@@ -320,6 +353,7 @@ class FakeStatement {
 class FakeD1 {
   memories: MemoryRecord[] = [];
   memoryVersions: MemoryVersionRecord[] = [];
+  memoryDeletions: Array<Record<string, unknown>> = [];
   knowledgeDocs: KnowledgeDocRecord[] = [];
 
   prepare(sql: string) {
@@ -335,6 +369,34 @@ class FakeD1 {
 }
 
 describe("memory-service", () => {
+  it("hard-deletes authoritative, version, and retrieval rows while keeping a content-free tombstone", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as any;
+    const captured = await upsertMemories(env, {
+      tenant_id: "default",
+      source: "test",
+      items: [{ external_key: "delete-me", content: "sensitive retired memory" }]
+    });
+    const memoryId = captured.items[0].memory_id;
+
+    const deleted = await deleteMemoryById(env, "default", memoryId, {
+      actorPrincipal: "user@example.com"
+    });
+
+    expect(deleted.operation).toBe("delete");
+    expect(db.memories).toHaveLength(0);
+    expect(db.memoryVersions).toHaveLength(0);
+    expect(db.memoryDeletions).toEqual([
+      expect.objectContaining({
+        tenant_id: "default",
+        memory_id: memoryId,
+        actor_type: "principal",
+        actor_id: "user@example.com"
+      })
+    ]);
+    expect(JSON.stringify(db.memoryDeletions)).not.toContain("sensitive retired memory");
+  });
+
   it("upserts memories by external_key with last-write-wins and lists by source", async () => {
     const db = new FakeD1();
     const env = { OPEN_BRAIN_DB: db } as any;

@@ -1,0 +1,74 @@
+name: Memory benchmarks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/**memory**"
+      - "packages/shared/src/memory-**"
+      - ".github/workflows/benchmark.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  competitive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm benchmark:competitive -- --output benchmark-results/competitive-memory.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: competitive-memory-raw-results
+          path: benchmark-results/competitive-memory.json
+
+  local-scale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm benchmark:scale -- --db /tmp/orgbrain-scale/memory.sqlite --output benchmark-results/local-scale.json --progress
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-scale-raw-results
+          path: benchmark-results/local-scale.json
+
+  longmemeval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: mkdir -p benchmark-results
+      - name: LongMemEval-S 500-item deterministic retrieval and context run
+        run: >
+          pnpm benchmark:tokens --
+          --limit 500
+          --skip-llm
+          --estimate-tokens
+          --concurrency 16
+          --json
+          --write-results-jsonl benchmark-results/longmemeval-items.jsonl
+          > benchmark-results/longmemeval-summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: longmemeval-raw-results
+          path: benchmark-results/longmemeval-*
+          if-no-files-found: error

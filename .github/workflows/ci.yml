@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Apply all D1 migrations
+        working-directory: apps/api-gateway
+        run: pnpm exec wrangler d1 migrations apply open-brain --local -c wrangler.local.toml
+      - name: Start local Worker
+        working-directory: apps/api-gateway
+        run: |
+          pnpm exec wrangler dev --port 8797 -c wrangler.local.toml --var API_KEY:dev-org-brain-api-key > "$GITHUB_WORKSPACE/worker.log" 2>&1 &
+          echo $! > /tmp/orgbrain-worker.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8797/v1/tasks -H 'x-api-key: dev-org-brain-api-key' >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$GITHUB_WORKSPACE/worker.log"
+          exit 1
+      - name: API integration smoke
+        env:
+          ORGBRAIN_SMOKE_API_KEY: dev-org-brain-api-key
+          ORGBRAIN_SMOKE_URL: http://127.0.0.1:8797
+        run: node scripts/api-integration-smoke.mjs > api-integration-smoke.json
+      - name: Stop local Worker
+        if: always()
+        run: |
+          if test -f /tmp/orgbrain-worker.pid; then
+            kill "$(cat /tmp/orgbrain-worker.pid)" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orgbrain-api-integration
+          path: |
+            api-integration-smoke.json
+            worker.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Competitive memory benchmark
+        run: pnpm benchmark:competitive -- --adapter orgbrain-local --output benchmark-results/competitive-memory-latest.json
+      - name: 100k local hybrid retrieval benchmark
+        run: pnpm benchmark:scale -- --count 100000 --queries 200 --output benchmark-results/local-scale-latest.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orgbrain-benchmark-results
+          path: benchmark-results/*.json
+          if-no-files-found: error
+          retention-days: 90

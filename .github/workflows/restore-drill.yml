@@ -1,0 +1,26 @@
+name: Restore drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  local-sqlite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/restore-drill.mjs restore-drill.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orgbrain-restore-drill
+          path: restore-drill.json
+          if-no-files-found: error
+          retention-days: 90

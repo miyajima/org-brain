@@ -9,6 +9,7 @@ import {
   normalizeLifecycleState,
   normalizeMemoryKind,
   normalizeScopeType,
+  sha256,
   ulid,
   type MemoryKind,
   type MemoryLifecycleState,
@@ -34,6 +35,14 @@ type LifecycleWriteItem = {
   utility_score?: number | null;
   canonical_key?: string | null;
   expires_at?: number | null;
+  entities?: string[];
+  source_references?: Array<Record<string, unknown>>;
+  valid_from?: number | null;
+  valid_until?: number | null;
+  rationale?: string | null;
+  evidence?: Array<Record<string, unknown>>;
+  conflicts?: string[];
+  permissions?: Array<Record<string, unknown>>;
 };
 
 type StoredMemoryRow = {
@@ -63,13 +72,23 @@ type StoredMemoryRow = {
   promoted_at?: number | null;
   expires_at?: number | null;
   revised_at?: number | null;
+  entities_json?: string | null;
+  source_refs_json?: string | null;
+  updated_at?: number | null;
+  valid_from?: number | null;
+  valid_until?: number | null;
+  content_hash?: string | null;
+  rationale?: string | null;
+  evidence_json?: string | null;
+  conflicts_json?: string | null;
+  permissions_json?: string | null;
 };
 
 export type LifecycleMutationResult = {
   tenant_id: string;
   memory_id: string;
   version: number;
-  operation: MemoryOperation;
+  operation: MemoryOperation | "delete";
   created: boolean;
   kind: MemoryKind;
   lifecycle_state: MemoryLifecycleState;
@@ -79,11 +98,27 @@ function sanitizeTags(raw: string[] | undefined): string[] {
   return [...new Set((raw ?? []).filter((value) => typeof value === "string").map((value) => value.trim()).filter(Boolean))].slice(0, 16);
 }
 
+function sanitizeObjects(raw: Array<Record<string, unknown>> | undefined): Array<Record<string, unknown>> {
+  return (raw ?? []).filter((value) => value && typeof value === "object" && !Array.isArray(value)).slice(0, 64);
+}
+
 function parseStoredTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? sanitizeTags(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseStoredObjects(raw: string | null | undefined): Array<Record<string, unknown>> {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value))
+      : [];
   } catch {
     return [];
   }
@@ -132,6 +167,14 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
   utility_score: number | null;
   canonical_key: string | null;
   expires_at: number | null;
+  entities: string[];
+  source_references: Array<Record<string, unknown>>;
+  valid_from: number | null;
+  valid_until: number | null;
+  rationale: string | null;
+  evidence: Array<Record<string, unknown>>;
+  conflicts: string[];
+  permissions: Array<Record<string, unknown>>;
 } {
   const projectId = typeof item.project_id === "string" && item.project_id.trim() ? item.project_id.trim().slice(0, 128) : null;
   const { scopeType, scopeKey } = deriveScope(tenantId, projectId, item);
@@ -152,6 +195,8 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
   const confidenceScore = coerceNullableNumber(item.confidence_score, "confidence_score");
   const utilityScore = coerceNullableNumber(item.utility_score, "utility_score");
   const expiresAt = coerceNullableNumber(item.expires_at, "expires_at");
+  const validFrom = coerceNullableNumber(item.valid_from, "valid_from");
+  const validUntil = coerceNullableNumber(item.valid_until, "valid_until");
   return {
     external_key: typeof item.external_key === "string" && item.external_key.trim() ? item.external_key.trim().slice(0, 256) : null,
     content,
@@ -173,7 +218,15 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     confidence_score: confidenceScore ?? assessment.confidence_score,
     utility_score: utilityScore ?? assessment.utility_score,
     canonical_key: item.canonical_key?.trim().slice(0, 256) || null,
-    expires_at: expiresAt ?? assessment.expires_at
+    expires_at: expiresAt ?? validUntil ?? assessment.expires_at,
+    entities: sanitizeTags(item.entities).slice(0, 64),
+    source_references: sanitizeObjects(item.source_references),
+    valid_from: validFrom ?? null,
+    valid_until: validUntil ?? expiresAt ?? assessment.expires_at,
+    rationale: item.rationale?.trim().slice(0, 4000) || null,
+    evidence: sanitizeObjects(item.evidence),
+    conflicts: sanitizeTags(item.conflicts).slice(0, 64),
+    permissions: sanitizeObjects(item.permissions)
   };
 }
 
@@ -182,7 +235,9 @@ async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Pro
     `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at,
             kind, lifecycle_state, scope_type, scope_key, actor_type, actor_id, confidence_score,
             utility_score, canonical_key, root_memory_id, current_version, last_accessed_at,
-            suppressed_at, consolidated_at, promoted_at, expires_at, revised_at
+            suppressed_at, consolidated_at, promoted_at, expires_at, revised_at,
+            entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash,
+            rationale, evidence_json, conflicts_json, permissions_json
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
@@ -193,6 +248,29 @@ async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Pro
     throw new HttpError(404, "memory_not_found", "Memory not found");
   }
   return row;
+}
+
+function v2FieldsFromStored(row: StoredMemoryRow): Pick<
+  LifecycleWriteItem,
+  | "entities"
+  | "source_references"
+  | "valid_from"
+  | "valid_until"
+  | "rationale"
+  | "evidence"
+  | "conflicts"
+  | "permissions"
+> {
+  return {
+    entities: parseStoredTags(row.entities_json),
+    source_references: parseStoredObjects(row.source_refs_json),
+    valid_from: row.valid_from ?? null,
+    valid_until: row.valid_until ?? row.expires_at ?? null,
+    rationale: row.rationale ?? null,
+    evidence: parseStoredObjects(row.evidence_json),
+    conflicts: parseStoredTags(row.conflicts_json),
+    permissions: parseStoredObjects(row.permissions_json)
+  };
 }
 
 export async function loadExistingMemoryIdsByExternalKeys(
@@ -238,14 +316,16 @@ function buildVersionInsert(
     version: number;
     operation: MemoryOperation;
     snapshot: ReturnType<typeof normalizeWriteItem>;
+    contentHash: string;
   }
 ) {
   const snapshot = args.snapshot;
   return env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO memory_versions(
       id, memory_id, tenant_id, version, operation, content, summary, tags_json, kind, lifecycle_state,
-      scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score, canonical_key, created_at
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score, canonical_key, created_at,
+      snapshot_json, content_hash
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     ulid(),
     args.memoryId,
@@ -264,7 +344,15 @@ function buildVersionInsert(
     snapshot.confidence_score,
     snapshot.utility_score,
     snapshot.canonical_key,
-    snapshot.created_at
+    snapshot.created_at,
+    JSON.stringify({
+      tenant_id: args.tenantId,
+      memory_id: args.memoryId,
+      version: args.version,
+      ...snapshot,
+      content_hash: args.contentHash
+    }),
+    args.contentHash
   );
 }
 
@@ -300,6 +388,8 @@ async function saveCurrentSnapshot(
   const lifecycleState = normalizeLifecycleState(snapshot.lifecycle_state);
   const revisedAt =
     lifecycleState === "suppressed" ? Date.now() : snapshot.created_at;
+  const updatedAt = Date.now();
+  const contentHash = await sha256(snapshot.content);
   const statements: D1PreparedStatement[] = [];
 
   if (args.rowExists) {
@@ -309,7 +399,9 @@ async function saveCurrentSnapshot(
          SET project_id = ?, content = ?, summary = ?, tags_json = ?, source = ?, created_at = ?,
              kind = ?, lifecycle_state = ?, scope_type = ?, scope_key = ?, actor_type = ?, actor_id = ?,
              confidence_score = ?, utility_score = ?, canonical_key = ?, root_memory_id = ?, current_version = ?,
-             suppressed_at = ?, expires_at = ?, revised_at = ?
+             suppressed_at = ?, expires_at = ?, revised_at = ?, entities_json = ?, source_refs_json = ?,
+             updated_at = ?, valid_from = ?, valid_until = ?, content_hash = ?, rationale = ?,
+             evidence_json = ?, conflicts_json = ?, permissions_json = ?
          WHERE tenant_id = ? AND id = ?`
       ).bind(
         snapshot.project_id,
@@ -332,6 +424,16 @@ async function saveCurrentSnapshot(
         lifecycleState === "suppressed" ? Date.now() : null,
         snapshot.expires_at,
         revisedAt,
+        JSON.stringify(snapshot.entities),
+        JSON.stringify(snapshot.source_references),
+        updatedAt,
+        snapshot.valid_from,
+        snapshot.valid_until,
+        contentHash,
+        snapshot.rationale,
+        JSON.stringify(snapshot.evidence),
+        JSON.stringify(snapshot.conflicts),
+        JSON.stringify(snapshot.permissions),
         args.tenantId,
         args.memoryId
       )
@@ -342,8 +444,10 @@ async function saveCurrentSnapshot(
         `INSERT INTO memories(
           id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at, kind,
           lifecycle_state, scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score,
-          canonical_key, root_memory_id, current_version, suppressed_at, expires_at, revised_at
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          canonical_key, root_memory_id, current_version, suppressed_at, expires_at, revised_at,
+          entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash, rationale,
+          evidence_json, conflicts_json, permissions_json
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         args.memoryId,
         args.tenantId,
@@ -367,7 +471,17 @@ async function saveCurrentSnapshot(
         args.version,
         lifecycleState === "suppressed" ? Date.now() : null,
         snapshot.expires_at,
-        revisedAt
+        revisedAt,
+        JSON.stringify(snapshot.entities),
+        JSON.stringify(snapshot.source_references),
+        updatedAt,
+        snapshot.valid_from,
+        snapshot.valid_until,
+        contentHash,
+        snapshot.rationale,
+        JSON.stringify(snapshot.evidence),
+        JSON.stringify(snapshot.conflicts),
+        JSON.stringify(snapshot.permissions)
       )
     );
   }
@@ -384,7 +498,8 @@ async function saveCurrentSnapshot(
       memoryId: args.memoryId,
       version: args.version,
       operation: "capture",
-      snapshot
+      snapshot,
+      contentHash
     })
   );
 
@@ -489,10 +604,27 @@ export async function reviseMemory(
     tags?: string[];
     confidenceScore?: number | null;
     utilityScore?: number | null;
+    entities?: string[];
+    sourceReferences?: Array<Record<string, unknown>>;
+    validFrom?: number | null;
+    validUntil?: number | null;
+    rationale?: string | null;
+    evidence?: Array<Record<string, unknown>>;
+    conflicts?: string[];
+    permissions?: Array<Record<string, unknown>>;
   }
 ): Promise<LifecycleMutationResult> {
   const existing = await loadMemoryById(env, args.tenantId, args.memoryId);
   const snapshot = normalizeWriteItem(args.tenantId, existing.source, {
+    ...v2FieldsFromStored(existing),
+    entities: args.entities ?? parseStoredTags(existing.entities_json),
+    source_references: args.sourceReferences ?? parseStoredObjects(existing.source_refs_json),
+    valid_from: args.validFrom ?? existing.valid_from,
+    valid_until: args.validUntil ?? existing.valid_until,
+    rationale: args.rationale ?? existing.rationale,
+    evidence: args.evidence ?? parseStoredObjects(existing.evidence_json),
+    conflicts: args.conflicts ?? parseStoredTags(existing.conflicts_json),
+    permissions: args.permissions ?? parseStoredObjects(existing.permissions_json),
     external_key: existing.external_key,
     content: args.content ?? existing.content,
     summary: args.summary ?? existing.summary,
@@ -559,11 +691,13 @@ export async function refreshMemory(
       : Number(((existing.confidence_score ?? 0) + args.confidenceDelta).toFixed(6));
   const now = Date.now();
   const version = (existing.current_version ?? 0) + 1;
+  const contentHash = existing.content_hash || await sha256(existing.content);
 
   await runBatchChunks(env.OPEN_BRAIN_DB, [
     env.OPEN_BRAIN_DB.prepare(
       `UPDATE memories
-       SET current_version = ?, last_accessed_at = ?, actor_type = ?, actor_id = ?, confidence_score = ?, revised_at = ?
+       SET current_version = ?, last_accessed_at = ?, actor_type = ?, actor_id = ?, confidence_score = ?,
+           revised_at = ?, updated_at = ?, content_hash = ?
        WHERE tenant_id = ? AND id = ?`
     ).bind(
       version,
@@ -572,6 +706,8 @@ export async function refreshMemory(
       args.actorId ?? existing.actor_id,
       nextConfidence,
       now,
+      now,
+      contentHash,
       args.tenantId,
       existing.id
     ),
@@ -581,6 +717,7 @@ export async function refreshMemory(
       version,
       operation: "refresh",
       snapshot: normalizeWriteItem(args.tenantId, existing.source, {
+        ...v2FieldsFromStored(existing),
         external_key: existing.external_key,
         content: existing.content,
         summary: existing.summary,
@@ -597,7 +734,8 @@ export async function refreshMemory(
         utility_score: existing.utility_score ?? null,
         canonical_key: existing.canonical_key,
         expires_at: existing.expires_at
-      })
+      }),
+      contentHash
     })
   ]);
 
@@ -627,6 +765,7 @@ export async function suppressMemory(
   const tags = sanitizeTags([...JSON.parse(existing.tags_json ?? "[]"), "compacted"]);
   const version = (existing.current_version ?? 0) + 1;
   const snapshot = normalizeWriteItem(args.tenantId, existing.source, {
+    ...v2FieldsFromStored(existing),
     external_key: existing.external_key,
     content: existing.content,
     summary: existing.summary ?? args.reason,
@@ -673,4 +812,61 @@ export async function deriveMemoryEdge(
   toMemoryId: string
 ): Promise<void> {
   await runBatchChunks(env.OPEN_BRAIN_DB, [buildEdgeInsert(env, tenantId, fromMemoryId, toMemoryId, "derived_from")]);
+}
+
+export async function deleteMemory(
+  env: Env,
+  args: {
+    tenantId: string;
+    memoryId: string;
+    actorType?: string | null;
+    actorId?: string | null;
+  }
+): Promise<LifecycleMutationResult> {
+  const existing = await loadMemoryById(env, args.tenantId, args.memoryId);
+  const version = (existing.current_version ?? 1) + 1;
+  await runBatchChunks(env.OPEN_BRAIN_DB, [
+    env.OPEN_BRAIN_DB.prepare(
+      `INSERT INTO memory_deletions(id, tenant_id, memory_id, actor_type, actor_id, deleted_at)
+       VALUES(?,?,?,?,?,?)`
+    ).bind(ulid(), args.tenantId, args.memoryId, args.actorType ?? null, args.actorId ?? null, Date.now()),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM decision_evidence
+       WHERE tenant_id = ? AND rationale_id IN (
+         SELECT id FROM decision_rationales WHERE tenant_id = ? AND memory_id = ?
+       )`
+    ).bind(args.tenantId, args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare("DELETE FROM decision_rationales WHERE tenant_id = ? AND memory_id = ?").bind(
+      args.tenantId,
+      args.memoryId
+    ),
+    env.OPEN_BRAIN_DB.prepare("DELETE FROM memory_entities WHERE tenant_id = ? AND memory_id = ?").bind(
+      args.tenantId,
+      args.memoryId
+    ),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_edges WHERE tenant_id = ? AND (from_memory_id = ? OR to_memory_id = ?)"
+    ).bind(args.tenantId, args.memoryId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare("DELETE FROM memories_fts WHERE tenant_id = ? AND memory_id = ?").bind(
+      args.tenantId,
+      args.memoryId
+    ),
+    env.OPEN_BRAIN_DB.prepare("DELETE FROM memory_versions WHERE tenant_id = ? AND memory_id = ?").bind(
+      args.tenantId,
+      args.memoryId
+    ),
+    env.OPEN_BRAIN_DB.prepare("DELETE FROM memories WHERE tenant_id = ? AND id = ?").bind(
+      args.tenantId,
+      args.memoryId
+    )
+  ]);
+  return {
+    tenant_id: args.tenantId,
+    memory_id: args.memoryId,
+    version,
+    operation: "delete",
+    created: false,
+    kind: normalizeMemoryKind(existing.kind),
+    lifecycle_state: normalizeLifecycleState(existing.lifecycle_state)
+  };
 }

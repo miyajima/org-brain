@@ -2,6 +2,7 @@
 
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
+import { Worker } from "node:worker_threads";
 import {
   buildFtsQuery,
   formatJst,
@@ -31,6 +32,7 @@ import {
   retrieveFromTransientBenchmarkIndex,
   summarizeBenchmarkResults
 } from "./lib/memory-token-benchmark-core.mjs";
+import { runDeterministicTransientItem } from "./lib/transient-benchmark-item.mjs";
 
 const DEFAULT_DATASET_URL = "https://huggingface.co/datasets/LIXINYI33/longmemeval-s/resolve/main/longmemeval_s_cleaned.json";
 const STRATEGIES = new Set(["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"]);
@@ -751,6 +753,9 @@ function compactAnswerWorksheet(worksheet) {
 }
 
 async function runItem(options, item, apiKey) {
+  if (options.skipLlm && useTransientIndex(options)) {
+    return runDeterministicTransientItem(options, item);
+  }
   const retrieval = await runRetrieval(options, item);
   const fullPrompt = buildFullContextPrompt(item);
   const treatmentContexts = applyTreatmentTokenBudget(item, retrieval.contexts, {
@@ -892,6 +897,41 @@ async function runItems(options, items, apiKey, checkpoint = {}) {
 
   if (options.progress && completed > 0) {
     process.stderr.write(`[benchmark] resumed ${completed}/${items.length} from ${options.writeResultsJsonl}\n`);
+  }
+
+  if (options.skipLlm && useTransientIndex(options) && workerCount > 1) {
+    const pending = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !completedIds.has(item.id));
+    const chunks = Array.from(
+      { length: Math.min(workerCount, pending.length) },
+      () => []
+    );
+    pending.forEach((entry, index) => chunks[index % chunks.length].push(entry));
+    const workerResults = await Promise.all(chunks.map((chunk) => new Promise((resolveWorker, rejectWorker) => {
+      const worker = new Worker(
+        new URL("./lib/transient-benchmark-worker.mjs", import.meta.url),
+        { workerData: { options, items: chunk } }
+      );
+      worker.once("message", (message) => {
+        if (message?.ok) resolveWorker(message.results);
+        else rejectWorker(new Error(message?.error || "transient benchmark worker failed"));
+      });
+      worker.once("error", rejectWorker);
+      worker.once("exit", (code) => {
+        if (code !== 0) rejectWorker(new Error(`transient benchmark worker exited ${code}`));
+      });
+    })));
+    for (const { index, result } of workerResults.flat()) {
+      results[index] = result;
+      completedIds.add(result.id);
+      if (checkpoint.appendResult) await checkpoint.appendResult(result);
+      completed += 1;
+      if (options.progress) {
+        process.stderr.write(`[benchmark] ${completed}/${items.length} ${result.id} not_run\n`);
+      }
+    }
+    return results;
   }
 
   async function worker() {
@@ -1065,7 +1105,9 @@ async function main() {
   const apiKey = options.skipLlm ? "" : geminiKey();
   if (!apiKey) options.skipLlm = true;
 
-  const existingMeasurementRuns = await fetchExistingMeasurementRuns(options);
+  const existingMeasurementRuns = options.benchmarkIndex === "production-d1"
+    ? await fetchExistingMeasurementRuns(options)
+    : [];
   const checkpoint = options.writeResultsJsonl
     ? {
         ...(await loadCheckpointResults(options.writeResultsJsonl, items)),

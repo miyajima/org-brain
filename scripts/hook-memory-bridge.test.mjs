@@ -6,12 +6,24 @@ import {
   classifyMemoryRecord,
   normalizeRecord,
   prepareMemoryRecordForUpsert,
+  redactHookMemoryText,
   resolveApiBase,
   resolveProjectNameForWorkspace
 } from "./hook-memory-bridge.mjs";
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 
 describe("hook-memory-bridge promotion", () => {
+  it("redacts credentials and personal contact data before persistence", () => {
+    const value = redactHookMemoryText(
+      "api_key=supersecretvalue123 contact user@example.com or +81 90 1234 5678"
+    );
+    expect(value).not.toContain("supersecretvalue123");
+    expect(value).not.toContain("user@example.com");
+    expect(value).not.toContain("90 1234 5678");
+    expect(value).toContain("[REDACTED_SECRET]");
+    expect(value).toContain("[REDACTED_EMAIL]");
+    expect(value).toContain("[REDACTED_PHONE]");
+  });
   it("keeps Cloudflare memory disabled by default", () => {
     expect(resolveMemoryMode({})).toMatchObject({
       cloudMemoryEnabled: false,

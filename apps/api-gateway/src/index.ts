@@ -1,6 +1,7 @@
-import { HttpError } from "@org-brain/shared";
+import { HttpError, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import type { MiddlewareHandler } from "hono";
 import {
   ackAgentMessage,
   getAgentMessage,
@@ -8,13 +9,33 @@ import {
   markAgentMessageRead,
   sendAgentMessage
 } from "./agent-message-service";
+import { appendAuditEvent, listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
+import { rebuildSemanticIndex } from "./retrieval-index-service";
+import { getOperationsStatus } from "./operations-service";
+import { assertRequestRateLimit } from "./rate-limit-service";
+import { extractMemoryCandidates } from "./memory-extraction-service";
+import {
+  applyRetentionPolicies,
+  listRetentionPolicies,
+  upsertRetentionPolicy
+} from "./retention-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, getApiPrincipal, jsonOk, tenantFromBody, type ApiContextEnv } from "./auth";
-import { confirmDecisionMemory, createDecisionMemory, enrichContext, getDecisionMemoryContext, reviseDecisionMemory, searchDecisionMemories } from "./context-engine-service";
+import {
+  confirmDecisionMemory,
+  createDecisionMemory,
+  enrichContext,
+  getDecisionMemoryContext,
+  getDecisionReviewQueue,
+  preActionDecisionGate,
+  reviseDecisionMemory,
+  searchDecisionMemories
+} from "./context-engine-service";
 import { addGroupMember, createGroup, getGroup, listGroups, removeGroupMember, updateGroup } from "./group-service";
 import { getMyIdentity, updateUserProfile } from "./identity-service";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import {
   captureMemories,
+  deleteMemoryById,
   getMemoryDetails,
   getMemoryProfile,
   listMemories,
@@ -27,8 +48,15 @@ import {
 } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
+import {
+  assertPermission,
+  deleteRoleAssignment,
+  listRoleAssignments,
+  upsertRoleAssignment
+} from "./rbac-service";
 import { getResourceShare, updateResourceShare } from "./share-service";
-import { createTask, getTask, getTaskEvents, listTasks } from "./task-service";
+import { createTask, getTask, getTaskEvents, listTasks, replayFailedTask } from "./task-service";
+import { issueScopedToken, listScopedTokens, revokeScopedToken } from "./token-service";
 import type { Env } from "./types";
 
 const app = new Hono<ApiContextEnv>();
@@ -49,8 +77,8 @@ app.use(
   "/v1/*",
   cors({
     origin: "*",
-    allowHeaders: ["content-type", "x-api-key"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["content-type", "x-api-key", "authorization"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     maxAge: 86400
   })
 );
@@ -58,14 +86,192 @@ app.use(
   "/api/*",
   cors({
     origin: "*",
-    allowHeaders: ["content-type", "x-api-key"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["content-type", "x-api-key", "authorization"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     maxAge: 86400
   })
 );
 
 app.use("/v1/*", apiKeyAuth);
 app.use("/api/*", apiKeyAuth);
+
+function permissionForRequest(method: string, path: string): OrgPermission {
+  if (path.startsWith("/v1/auth/")) return method === "GET" ? "read" : "write";
+  if (
+    path.startsWith("/v1/role-assignments") ||
+    path.startsWith("/v1/groups") ||
+    path.startsWith("/v1/scoped-tokens") ||
+    path.startsWith("/v1/retention-policies") ||
+    path.startsWith("/v1/ops/") ||
+    path.startsWith("/v1/retrieval-index")
+  ) return "admin";
+  if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
+  if (path.startsWith("/v1/audit-events")) return "export";
+  if (
+    path.endsWith("/search") ||
+    path.endsWith("/profile") ||
+    path.endsWith("/context") ||
+    path.endsWith("/review-queue") ||
+    path.startsWith("/v1/context/") ||
+    path === "/api/context/enrich"
+  ) return "read";
+  if (method === "DELETE") return "delete";
+  if (path.includes("/export")) return "export";
+  if (method === "GET") return "read";
+  return "write";
+}
+
+const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
+  if (c.req.method === "OPTIONS") {
+    await next();
+    return;
+  }
+  const clonedBody = !["GET", "HEAD", "DELETE"].includes(c.req.method)
+    ? await c.req.raw.clone().json().catch(() => ({}))
+    : {};
+  const tenantId = assertApiTenantAccess(
+    c,
+    c.req.query("tenant_id") || tenantFromBody(clonedBody)
+  );
+  const bodyRecord = clonedBody && typeof clonedBody === "object"
+    ? clonedBody as Record<string, unknown>
+    : {};
+  const projectId = (
+    c.req.query("project_id") ||
+    (typeof bodyRecord.project_id === "string" ? bodyRecord.project_id : null)
+  )?.trim() || null;
+  const auth = getApiAuthContext(c);
+  const permission = permissionForRequest(c.req.method, c.req.path);
+  const auditBase = {
+    tenantId,
+    projectId,
+    principal: auth.principal,
+    action: `${c.req.method} ${c.req.path}`,
+    resourceType: c.req.path.split("/").filter(Boolean)[1] ?? "api",
+    resourceId: c.req.param("memoryId") || c.req.param("id") || null,
+    requestId: c.req.header("x-request-id") || c.req.header("cf-ray") || null,
+    metadata: { permission }
+  } as const;
+  try {
+    await assertRequestRateLimit(c.env, {
+      tenantId,
+      principal: auth.principal,
+      path: c.req.path
+    });
+    if (auth.scopes && !auth.scopes.includes(permission)) {
+      throw new HttpError(403, "forbidden", `Scoped token lacks ${permission} permission`);
+    }
+    if (auth.projectId && auth.projectId !== projectId) {
+      throw new HttpError(403, "forbidden", `Scoped token is restricted to project "${auth.projectId}"`);
+    }
+    await assertPermission(c.env, {
+      tenantId,
+      projectId,
+      principal: auth.principal,
+      permission,
+      fallbackRole: auth.defaultRole
+    });
+  } catch (error) {
+    await appendAuditEvent(c.env, { ...auditBase, outcome: "denied" });
+    throw error;
+  }
+  try {
+    await next();
+    if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
+      await appendAuditEvent(c.env, {
+        ...auditBase,
+        outcome: c.res.status < 400 ? "succeeded" : "failed",
+        metadata: { permission, status: c.res.status }
+      });
+    }
+  } catch (error) {
+    await appendAuditEvent(c.env, { ...auditBase, outcome: "failed" });
+    throw error;
+  }
+};
+
+app.use("/v1/*", rbacAuditMiddleware);
+app.use("/api/*", rbacAuditMiddleware);
+
+app.get("/v1/role-assignments", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await listRoleAssignments(c.env, tenantId, {
+    principal: c.req.query("principal"),
+    projectId: c.req.query("project_id")
+  });
+  return jsonOk(c, result);
+});
+
+app.put("/v1/role-assignments", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await upsertRoleAssignment(c.env, tenantId, body, getApiPrincipal(c)), 201);
+});
+
+app.delete("/v1/role-assignments/:id", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await deleteRoleAssignment(c.env, tenantId, c.req.param("id")));
+});
+
+app.get("/v1/scoped-tokens", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listScopedTokens(c.env, tenantId));
+});
+
+app.post("/v1/scoped-tokens", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await issueScopedToken(c.env, tenantId, body, getApiPrincipal(c)), 201);
+});
+
+app.delete("/v1/scoped-tokens/:id", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await revokeScopedToken(c.env, tenantId, c.req.param("id")));
+});
+
+app.get("/v1/retention-policies", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listRetentionPolicies(c.env, tenantId));
+});
+
+app.put("/v1/retention-policies", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await upsertRetentionPolicy(c.env, tenantId, body, getApiPrincipal(c)));
+});
+
+app.post("/v1/retention-policies/apply", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await applyRetentionPolicies(c.env, tenantId, body, getApiPrincipal(c)));
+});
+
+app.get("/v1/audit-events", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listAuditEvents(c.env, tenantId, parseAuditLimit(c.req.query("limit"))));
+});
+
+app.get("/v1/audit-events/verify", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await verifyAuditChain(c.env, tenantId));
+});
+
+app.post("/v1/retrieval-index/rebuild", async (c) => {
+  const body = await c.req.json<{ tenant_id?: string; project_id?: string | null }>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await rebuildSemanticIndex(c.env, tenantId, body.project_id));
+});
+
+app.get("/v1/ops/status", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getOperationsStatus(c.env, tenantId));
+});
+
+app.post("/v1/ops/tasks/:id/replay", async (c) => {
+  const body: { tenant_id?: string } = await c.req.json<{ tenant_id?: string }>().catch(() => ({}));
+  const tenantId = assertApiTenantAccess(c, body.tenant_id);
+  return jsonOk(c, await replayFailedTask(c.env, tenantId, c.req.param("id")), 201);
+});
 
 app.get("/v1/auth/me", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
@@ -271,6 +477,22 @@ app.post("/v1/memories/capture", async (c) => {
   return jsonOk(c, result, 201);
 });
 
+app.post("/v1/memories/extract", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  if (!body || typeof body !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const event = body as AgentMemoryEventV1;
+  const result = await extractMemoryCandidates(c.env, {
+    ...event,
+    tenant_id: tenantId,
+    actor_type: "principal",
+    actor_id: getApiPrincipal(c)
+  });
+  return jsonOk(c, result);
+});
+
 app.post("/v1/memories/propose", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
@@ -313,10 +535,18 @@ app.post("/v1/memories/suppress", async (c) => {
   return jsonOk(c, result);
 });
 
+app.delete("/v1/memories/:memoryId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await deleteMemoryById(c.env, tenantId, c.req.param("memoryId"), {
+    actorPrincipal: getApiPrincipal(c)
+  });
+  return jsonOk(c, result);
+});
+
 app.post("/v1/memories/search", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await searchMemories(c.env, body);
+  const result = await searchMemories(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
@@ -378,6 +608,30 @@ app.post("/v1/context/enrich", async (c) => {
   assertApiTenantAccess(c, tenantFromBody(body));
   const result = await enrichContext(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
+});
+
+app.post("/v1/context/pre-action-gate", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await preActionDecisionGate(c.env, body, { principal: getApiPrincipal(c) }));
+});
+
+app.post("/v1/context/review-check", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await preActionDecisionGate(c.env, body, { principal: getApiPrincipal(c) }));
+});
+
+app.post("/v1/decision-memories/review-queue", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await getDecisionReviewQueue(c.env, body, { principal: getApiPrincipal(c) }));
+});
+
+app.post("/v1/context/debt/scan", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await getDecisionReviewQueue(c.env, body, { principal: getApiPrincipal(c) }));
 });
 
 app.post("/api/context/enrich", async (c) => {
