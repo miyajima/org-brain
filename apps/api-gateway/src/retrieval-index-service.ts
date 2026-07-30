@@ -12,6 +12,7 @@ const EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5" as const;
 export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
 export const RERANKER_MODEL_V3 = "@cf/baai/bge-reranker-base" as const;
 const BATCH_SIZE = 4;
+const UPSERT_CONCURRENCY = 3;
 
 function extractEmbeddings(output: unknown): number[][] {
   if (!output || typeof output !== "object") {
@@ -63,10 +64,16 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
   }
 
   async upsert(documents: RetrievalIndexDocument[]): Promise<void> {
+    const batches: RetrievalIndexDocument[][] = [];
     for (let offset = 0; offset < documents.length; offset += BATCH_SIZE) {
-      const batch = documents.slice(offset, offset + BATCH_SIZE);
-      const values = await this.embedMany(batch.map((document) => document.text));
-      const vectors = batch.map((document, index) => ({
+      batches.push(documents.slice(offset, offset + BATCH_SIZE));
+    }
+    let nextBatch = 0;
+    const worker = async () => {
+      while (nextBatch < batches.length) {
+        const batch = batches[nextBatch++];
+        const values = await this.embedMany(batch.map((document) => document.text));
+        const vectors = batch.map((document, index) => ({
           id: document.id,
           namespace: document.tenant_id,
           values: values[index],
@@ -79,8 +86,12 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
             updated_at: document.updated_at
           }
         }));
-      await this.index.upsert(vectors);
-    }
+        await this.index.upsert(vectors);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(UPSERT_CONCURRENCY, batches.length) }, () => worker())
+    );
   }
 
   async remove(_tenantId: string, ids: string[]): Promise<void> {
