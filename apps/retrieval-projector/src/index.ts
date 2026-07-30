@@ -146,7 +146,7 @@ function eventTimestamp(value: string | null | undefined, fallback: number): num
 
 async function embedMany(texts: string[], env: Env): Promise<number[][]> {
   const output = await env.AI.run(EMBEDDING_MODEL, {
-    text: texts.map((text) => text.slice(0, 6_000))
+    text: texts.map((text) => text.slice(0, 4_000))
   });
   const data = (output as unknown as { data?: unknown }).data;
   if (!Array.isArray(data) || data.some((vector) => !Array.isArray(vector))) {
