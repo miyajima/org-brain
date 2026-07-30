@@ -507,14 +507,27 @@ not a vague claim. Public anchors are not same-harness measurements, but they pr
 
 | System / Track | Accuracy | Evidence recall@5 | Token reduction |
 | --- | ---: | ---: | ---: |
-| OrgBrain reproducible run | 99.4% | 100.0% | 99.54% |
+| OrgBrain LongMemEval-specific profile | 96.8% | 100.0% | 99.54% |
+| OrgBrain current product search path | n/a | 15.0% | n/a |
+| Supermemory public answer-accuracy anchor | 95.0% | n/a (R@15) | 99.4% |
+| Mem0 OSS public answer-accuracy anchor | 91.0% | n/a | n/a |
 | Zep public answer-accuracy anchor | 90.2% | n/a | n/a |
 | gbrain public retrieval anchor | n/a | 97.6% | n/a |
 | agentmemory public retrieval anchor | n/a | 95.2% | 99.13% |
 
-Method: LongMemEval-S 500 questions, Gemini judge enabled, single final answer per item,
-no best-of-N picking, compact evidence-card context, local token estimator for prompt accounting.
-The benchmark command and comparison report live in `scripts/memory-token-benchmark.mjs`.
+Method for the LongMemEval-specific profile: LongMemEval-S 500 questions,
+Gemini 3.6 Flash for answer generation and judging, single final answer per
+item, no best-of-N picking, compact evidence-card context, and a local token
+estimator for prompt accounting. The benchmark command and comparison report
+live in `scripts/memory-token-benchmark.mjs`.
+
+The profile above is not the production `LocalMemoryStore` retrieval path. A
+separate 2026-07-30 product-path check captured 23,867 sessions through
+`LocalMemoryStore.capture()` and queried them through `LocalMemoryStore.search()`;
+it retrieved a gold session in the top five for only 75 of 500 questions
+(15.0%, p95 search latency 991.44 ms). The LongMemEval-specific result must
+therefore not be used to claim that the current product implementation is
+first overall.
 
 The fixed `competitive-memory-v1` suite adds 100 personal and 100 organization
 tasks covering coding, preferences, permissions, staleness, contradictions,

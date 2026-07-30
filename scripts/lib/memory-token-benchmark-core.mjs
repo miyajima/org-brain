@@ -283,17 +283,17 @@ export const PUBLIC_COMPARISON_ROWS = [
   },
   {
     system: "Supermemory Research",
-    profile: "Gemini 3 Pro",
+    profile: "gpt-4o / aggregation",
     benchmark: "LongMemEval-S",
     track: COMPARISON_TRACKS.public_answer_accuracy,
     measured_by: "external_public_report",
-    accuracy: 0.852,
+    accuracy: 0.95,
     evidence_recall_at_5: null,
     retrieval_recall_at_5: null,
-    token_reduction_rate: null,
-    source_url: "https://supermemory.ai/research/",
-    retrieved_at: "2026-06-01",
-    notes: "Public accuracy anchor; not rerun in this harness."
+    token_reduction_rate: 0.994,
+    source_url: "https://supermemory.ai/research/longmembench/",
+    retrieved_at: "2026-07-30",
+    notes: "Public LLM-as-judge overall reported with Recall@15 aggregation and about 720 mean tokens; not rerun in this harness."
   },
   {
     system: "Supermemory experimental ASMR",
@@ -334,8 +334,22 @@ export const PUBLIC_COMPARISON_ROWS = [
     retrieval_recall_at_5: 0.976,
     token_reduction_rate: null,
     source_url: "https://github.com/garrytan/gbrain-evals",
-    retrieved_at: "2026-06-01",
+    retrieved_at: "2026-07-30",
     notes: "Public R@5 anchor from README."
+  },
+  {
+    system: "Mem0 OSS",
+    profile: "GPT-5 extraction / Qwen 600M embedder",
+    benchmark: "LongMemEval",
+    track: COMPARISON_TRACKS.public_answer_accuracy,
+    measured_by: "external_public_repo",
+    accuracy: 0.91,
+    evidence_recall_at_5: null,
+    retrieval_recall_at_5: null,
+    token_reduction_rate: null,
+    source_url: "https://github.com/mem0ai/memory-benchmarks",
+    retrieved_at: "2026-07-30",
+    notes: "Public OSS answer-accuracy anchor with GPT-5 as answerer and judge; not rerun in this harness."
   },
   {
     system: "agentmemory",

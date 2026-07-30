@@ -14,6 +14,8 @@ All notable changes to Org Brain are documented here. Releases use semantic vers
 - Add npm provenance, build attestation, CycloneDX SBOM, Docker Compose,
   migration guidance, and a threat model.
 - Add stable benchmark profile names for the reproducible LongMemEval-S evaluation.
+- Use the production-ready Gemini 3.6 Flash model for LongMemEval answer
+  generation and judging, without deprecated sampling parameters.
 - Add six fixed RBAC roles, project-scoped assignments, generic RS256 OIDC,
   short-lived hashed scoped tokens with rotation and revocation, hash-chained
   API/MCP audit events, and retention/legal-hold enforcement.

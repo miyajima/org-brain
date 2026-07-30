@@ -66,8 +66,8 @@ Options:
   --dataset-url <url>          Dataset URL when no local path is provided
   --context-char-limit <n>     Characters kept per retrieved context item (default: 900)
   --judge-provider <name>      Judge provider (default: gemini)
-  --judge-model <name>         Gemini judge model (default: gemini-3.5-flash)
-  --generator-model <name>     Gemini generator model (default: gemini-3.5-flash)
+  --judge-model <name>         Gemini judge model (default: gemini-3.6-flash)
+  --generator-model <name>     Gemini generator model (default: gemini-3.6-flash)
   --concurrency <n>            Parallel item workers for LLM runs (default: 1)
   --llm-request-timeout-ms <n> Gemini request timeout in ms (default: 60000)
   --llm-max-attempts <n>       Gemini max attempts per request (default: 4)
@@ -104,8 +104,8 @@ function parseArgs(argv) {
     datasetUrl: DEFAULT_DATASET_URL,
     contextCharLimit: 900,
     judgeProvider: "gemini",
-    judgeModel: "gemini-3.5-flash",
-    generatorModel: "gemini-3.5-flash",
+    judgeModel: "gemini-3.6-flash",
+    generatorModel: "gemini-3.6-flash",
     concurrency: 1,
     llmRequestTimeoutMs: 60_000,
     llmMaxAttempts: 4,
@@ -593,8 +593,7 @@ async function generateWithGeminiDetailed(prompt, model, apiKey, options = {}) {
     model,
     "generateContent",
     {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, topP: 1 }
+      contents: [{ parts: [{ text: prompt }] }]
     },
     apiKey,
     options
