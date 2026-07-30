@@ -8,7 +8,8 @@ All notable changes to Org Brain are documented here. Releases use semantic vers
   SQLite, D1 FTS, Qwen3 Vectorize, and BGE reranking.
 - Improve `hybrid_v3` with event-time/validity separation, query-specific
   lexical evidence, relative-time retrieval, bounded intent boosts, and stale
-  Vectorize cleanup during projection rebuilds.
+  Vectorize cleanup during projection rebuilds. Use bounded 16-document
+  embedding batches and 100-ID delete batches to avoid rebuild rate limits.
 - Add a Gemini 3.5 Flash-Lite asynchronous atomic projection Worker with an
   explicit deterministic degraded fallback, checkpointed backfill, shadow
   metrics, and v3 operational coverage.

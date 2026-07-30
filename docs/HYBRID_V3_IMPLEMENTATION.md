@@ -63,19 +63,20 @@ overlap/empty/degraded/latency fields.
 
 ### Live verification — 2026-07-30
 
-- API Worker version: `16f37ec8-ccff-405c-aaa4-3264805389d3`
-- Projector Worker version: `282352cf-8ba4-4410-beb4-2d9e0b72e781`
-- Active memories projected: 543/543 (100%)
-- Retrieval units: 3,448
-- Backfill: complete, 542 memories and 3,443 units in the checkpointed pass
+- API Worker version: `a5e87034-f057-49a7-866e-adabd9c19272`
+- Projector Worker version: `000cc7c6-afeb-4172-9f08-d1fad61b1dd2`
+- Active memories projected: 553/553 (100%)
+- Retrieval units: 3,525
+- Backfill: complete, 553 memories and 3,525 units in the checkpointed pass
 - Vectorize errors: 0 in the completed pass
+- Rebuild batching: 16 documents per embedding call and 100 IDs per delete
 - Metadata indexes: `project_id`, `speaker`, `unit_type`
 - Live smoke: capture 201, search 200/hit, cross-tenant 403, unauthenticated
   MCP 401, delete 200, and no post-delete search result
 - Runtime providers: `@cf/qwen/qwen3-embedding-0.6b` and
   `@cf/baai/bge-reranker-base`
 
-All 3,448 units are currently marked degraded because the Gemini extraction
+All 3,525 units are currently marked degraded because the Gemini extraction
 secret has not been uploaded to Cloudflare. Full-text and turn projections are
 available; quality-mode atomic extraction is not. Shadow mode remains enabled.
 
