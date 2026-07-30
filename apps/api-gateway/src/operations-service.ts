@@ -8,6 +8,7 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
     env.OPEN_BRAIN_DB.prepare(
       `SELECT
          COUNT(*) AS total,
+         SUM(CASE WHEN lifecycle_state IS NULL OR lifecycle_state != 'suppressed' THEN 1 ELSE 0 END) AS active,
          SUM(CASE WHEN lifecycle_state = 'suppressed' THEN 1 ELSE 0 END) AS suppressed,
          SUM(CASE WHEN valid_until IS NOT NULL AND valid_until <= ? THEN 1 ELSE 0 END) AS expired,
          SUM(CASE WHEN kind = 'decision' THEN 1 ELSE 0 END) AS decisions,
@@ -92,6 +93,7 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
     generated_at: now,
     memories: {
       total: numeric(memories, "total"),
+      active: numeric(memories, "active"),
       suppressed: numeric(memories, "suppressed"),
       expired: numeric(memories, "expired"),
       decisions: numeric(memories, "decisions"),
@@ -145,8 +147,8 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
       retrieval_units: numeric(retrievalUnits, "total"),
       projected_memories: numeric(retrievalUnits, "projected_memories"),
       coverage:
-        numeric(memories, "total") > 0
-          ? Number((numeric(retrievalUnits, "projected_memories") / numeric(memories, "total")).toFixed(4))
+        numeric(memories, "active") > 0
+          ? Number((numeric(retrievalUnits, "projected_memories") / numeric(memories, "active")).toFixed(4))
           : 1,
       degraded_units: numeric(retrievalUnits, "degraded"),
       projection_lag_ms:
