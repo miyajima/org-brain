@@ -509,7 +509,7 @@ not a vague claim. Public anchors are not same-harness measurements, but they pr
 | --- | ---: | ---: | ---: |
 | OrgBrain LongMemEval-specific profile | 96.8% | 100.0% | 99.54% |
 | OrgBrain legacy product search path | n/a | 15.0% | n/a |
-| OrgBrain `hybrid_v3` product-path diagnostic | n/a | 98.6% | n/a |
+| OrgBrain `hybrid_v3` product path, five-repeat minimum | n/a | 99.8% | n/a |
 | Supermemory public answer-accuracy anchor | 95.0% | n/a (R@15) | 99.4% |
 | Mem0 OSS public answer-accuracy anchor | 91.0% | n/a | n/a |
 | Zep public answer-accuracy anchor | 90.2% | n/a | n/a |
@@ -535,10 +535,13 @@ rebuildable retrieval units, D1/SQLite FTS, a separate Qwen3 Vectorize index,
 BGE reranking, and optional asynchronous Gemini 3.5 Flash-Lite atomic
 projection. Its product-only runner and rollout status are documented in
 [`docs/HYBRID_V3_IMPLEMENTATION.md`](docs/HYBRID_V3_IMPLEMENTATION.md). A
-2026-07-30 single-repeat product-path run scored 493/500 (98.6% R@5, 401.437 ms
-p95). It is a development-guided diagnostic, not a sealed ranking result:
-strict five-repeat, untouched-holdout, category, cross-benchmark, and
-same-harness competitor gates still apply.
+2026-07-30 frozen product-path run scored 499/500 (99.8% R@5) in every one of
+five repeats, passed every category gate, reported zero errors, and had a
+worst-repeat p95 of 278.070 ms. The LongMemEval data was development-exposed,
+so its hash-selected 100 partition is not treated as sealed. A separately
+unopened LoCoMo 100-question evidence-session holdout scored 92/100 and was not
+used for post-result tuning. Cross-benchmark and same-harness competitor gates
+still apply.
 
 The fixed `competitive-memory-v1` suite adds 100 personal and 100 organization
 tasks covering coding, preferences, permissions, staleness, contradictions,
@@ -600,17 +603,17 @@ Current OrgBrain local baseline on the development machine (2026-07-30):
 
 | Suite | Accuracy | R@5 | pass^5 | Avg context | p95 | Leaks | Provenance |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| competitive-memory-v1, 200 tasks | 100% | 100% | 100% | 366.86 tokens | 3.17 ms | 0 | 100% |
+| competitive-memory-v1, 200 tasks | 94.5% | 100% | 94.5% | 366.86 tokens | 33.38 ms | 0 | 100% |
 | local-scale-v1, 100,000 memories | 100% retrieval | 100% | n/a | n/a | 20.82 ms | 0 | 100% indexed |
 
 These are OrgBrain baselines, not a first-place claim. Supermemory, GBrain,
-Cognee, and Mem0 results are only comparable when their bridge URLs are
-configured and all adapters run on the same model budget and hardware. CI
+Cognee, Mem0, MemPalace, and AgentMemory results are only comparable when their
+bridge URLs are configured and all adapters run on the same model budget and hardware. CI
 uploads the complete settings and per-task JSON as artifacts. The JSON also
 contains the plan's personal and organization weighted scorecards. Any
 unmeasured dimension is `null`, the complete weighted score stays `null`, and
 ranking remains ineligible until every dimension and every same-harness
-competitor is measured. A first-place claim is emitted only when all five
+competitor is measured. A first-place claim is emitted only when all seven
 adapters are complete, OrgBrain has a strict lead in both weighted scorecards,
 and it does not trail any competitor in a critical dimension.
 

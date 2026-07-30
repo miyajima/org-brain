@@ -97,19 +97,26 @@ and applied after search. Errors are written as failed rows; they are never
 excluded. Concurrency uses an independent SQLite database per question, so
 parallel evaluations do not share retrieval state.
 
-The frozen 2026-07-30 local sparse fallback implementation scored 493/500
-(98.6% R@5) in one full product-path run, with 99/100 in the hash-selected
-holdout partition and 401.437 ms search p95. Dataset SHA-256:
+The retrieval implementation was frozen at commit `d9f9844` before the
+independent holdout was opened. It scored 499/500 (99.8% R@5) in every one of
+five full product-path repeats, with zero errors and a worst-repeat p95 of
+278.070 ms. Dataset SHA-256:
 `35961662da991bec512124586e2e399a335e9e7c94272403e820eccc9946589e`.
-Raw rows: `/tmp/orgbrain-product-longmemeval-final-500.jsonl`.
+All 2,500 raw rows are committed at
+`artifacts/benchmarks/2026-07-30/orgbrain-longmemeval-500-repeat5.jsonl`.
 
-Category results were knowledge update 78/78, multi-session 131/133,
-single-session assistant 56/56, preference 30/30, single-session user 67/70,
-and temporal reasoning 131/133. Multi-session and single-session-user therefore
-missed their strict category gates.
+Category minimums across the five repeats were knowledge update 78/78,
+multi-session 133/133, single-session assistant 56/56, preference 30/30,
+single-session user 70/70, and temporal reasoning 132/133. Every category gate
+passed.
 
-This is a development-guided, single-repeat diagnostic: the dataset was
-inspected during tuning, so the 100-question partition is not claim-worthy as
-a sealed holdout. Canary and first-place claims remain blocked until an
-untouched holdout, five repeats, every category/cost/latency gate, and the
-cross-benchmark and same-harness competitor runs pass.
+The LongMemEval dataset was inspected during tuning, so its hash-selected
+100-question partition is not claim-worthy as a sealed holdout despite scoring
+100/100 in every repeat. A separately selected, previously unopened LoCoMo
+100-question evidence-session holdout scored 92/100 with zero errors and
+84.285 ms p95. It was not used for post-result tuning.
+
+The retrieval and category gates pass, but canary and first-place claims remain
+blocked by the lack of an unseen LongMemEval holdout, missing same-harness
+bridges for five required competitors, and incomplete weighted capability
+evidence. See `docs/OSS_MEMORY_COMPARISON_2026-07-30.md`.

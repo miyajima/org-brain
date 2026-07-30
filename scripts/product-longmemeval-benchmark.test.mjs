@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { normalizeRows, runProductRetrieval } from "./product-longmemeval-benchmark.mjs";
+import {
+  normalizeRows,
+  runProductRetrieval,
+  splitItems
+} from "./product-longmemeval-benchmark.mjs";
 
 test("normalizes the dataset preference category to the acceptance gate name", () => {
   const [row] = normalizeRows(JSON.stringify([{
@@ -13,6 +17,16 @@ test("normalizes the dataset preference category to the acceptance gate name", (
     answer_session_ids: ["session-1"]
   }]));
   assert.equal(row.category, "preference");
+});
+
+test("deterministic benchmark partition is not labeled as a sealed holdout", () => {
+  const items = Array.from({ length: 101 }, (_, index) => ({
+    evaluation_id: `question-${index + 1}`
+  }));
+  const split = splitItems(items);
+  assert.equal(split.filter((item) => item.split === "development").length, 1);
+  assert.equal(split.filter((item) => item.split === "hash_holdout").length, 100);
+  assert.equal(split.some((item) => item.split.includes("sealed")), false);
 });
 
 test("product retrieval runtime never receives evaluation labels or question identifiers", async () => {

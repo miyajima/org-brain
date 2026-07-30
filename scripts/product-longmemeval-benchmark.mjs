@@ -133,7 +133,7 @@ export function normalizeRows(raw) {
   });
 }
 
-function splitItems(items) {
+export function splitItems(items) {
   const ordered = [...items].sort((left, right) =>
     sha256(left.evaluation_id).localeCompare(sha256(right.evaluation_id))
   );
@@ -141,7 +141,7 @@ function splitItems(items) {
   const developmentIds = new Set(ordered.slice(0, developmentSize).map((item) => item.evaluation_id));
   return ordered.map((item) => ({
     ...item,
-    split: developmentIds.has(item.evaluation_id) ? "development" : "sealed_holdout"
+    split: developmentIds.has(item.evaluation_id) ? "development" : "hash_holdout"
   }));
 }
 
@@ -228,8 +228,8 @@ function summarize(rows, datasetHash, repeatCount) {
       hits: selected.filter((row) => row.hit_at_k).length,
       total: selected.length,
       recall_at_k: selected.length ? selected.filter((row) => row.hit_at_k).length / selected.length : 0,
-      holdout_recall_at_k: (() => {
-        const holdout = selected.filter((row) => row.split === "sealed_holdout");
+      hash_holdout_recall_at_k: (() => {
+        const holdout = selected.filter((row) => row.split === "hash_holdout");
         return holdout.length ? holdout.filter((row) => row.hit_at_k).length / holdout.length : null;
       })(),
       p95_latency_ms: percentile(selected.map((row) => row.latency_ms), 0.95)
@@ -237,7 +237,7 @@ function summarize(rows, datasetHash, repeatCount) {
   }
   const minimumRecall = Math.min(...byRepeat.map((row) => row.recall_at_k));
   const minimumHoldoutRecall = Math.min(
-    ...byRepeat.map((row) => row.holdout_recall_at_k).filter((value) => value !== null)
+    ...byRepeat.map((row) => row.hash_holdout_recall_at_k).filter((value) => value !== null)
   );
   const categories = {};
   for (const category of new Set(rows.map((row) => row.category))) {
@@ -278,10 +278,12 @@ function summarize(rows, datasetHash, repeatCount) {
         actual: minimumRecall,
         passed: fullSize && minimumRecall >= 0.986
       },
-      sealed_100_recall_at_5: {
+      hash_100_recall_at_5: {
         target: 0.98,
         actual: minimumHoldoutRecall,
-        passed: fullSize && minimumHoldoutRecall >= 0.98
+        passed: fullSize && minimumHoldoutRecall >= 0.98,
+        sealed: false,
+        note: "Deterministic hash partition only; unseen status requires an external provenance record."
       },
       category_gates: categoryGates
     }
@@ -424,7 +426,7 @@ async function main() {
     options.limit === 0 &&
     options.repeat >= 5 &&
     (!summary.gates.full_500_recall_at_5.passed ||
-      !summary.gates.sealed_100_recall_at_5.passed ||
+      !summary.gates.hash_100_recall_at_5.passed ||
       Object.values(summary.gates.category_gates).some((gate) => !gate.passed))
   ) {
     process.exitCode = 2;
