@@ -4,7 +4,7 @@ import type { Env } from "./types";
 export async function getOperationsStatus(env: Env, tenantId: string) {
   const now = Date.now();
   const dayAgo = now - 86_400_000;
-  const [memories, decisions, tasks, failedTasks, audit, tokens, retention, retrieval, roles] = await Promise.all([
+  const [memories, decisions, tasks, failedTasks, audit, tokens, retention, retrieval, roles, retrievalUnits] = await Promise.all([
     env.OPEN_BRAIN_DB.prepare(
       `SELECT
          COUNT(*) AS total,
@@ -74,7 +74,16 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
        WHERE tenant_id = ?
        GROUP BY role
        ORDER BY role`
-    ).bind(tenantId).all<{ role: string; assignments: number; principals: number }>()
+    ).bind(tenantId).all<{ role: string; assignments: number; principals: number }>(),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(DISTINCT memory_id) AS projected_memories,
+         SUM(CASE WHEN extraction_state != 'ready' THEN 1 ELSE 0 END) AS degraded,
+         MAX(created_at) AS latest_projection_at
+       FROM memory_retrieval_units
+       WHERE tenant_id = ?`
+    ).bind(tenantId).first<Record<string, number | null>>()
   ]);
   const numeric = (row: Record<string, number | null> | null, key: string) =>
     Number(row?.[key] ?? 0);
@@ -130,8 +139,20 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
     },
     retrieval: {
       semantic_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX),
+      hybrid_v3_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX_V3),
       lexical: "d1-fts5",
       graph: "d1-memory-graph",
+      retrieval_units: numeric(retrievalUnits, "total"),
+      projected_memories: numeric(retrievalUnits, "projected_memories"),
+      coverage:
+        numeric(memories, "total") > 0
+          ? Number((numeric(retrievalUnits, "projected_memories") / numeric(memories, "total")).toFixed(4))
+          : 1,
+      degraded_units: numeric(retrievalUnits, "degraded"),
+      projection_lag_ms:
+        numeric(retrievalUnits, "latest_projection_at") > 0
+          ? Math.max(0, now - numeric(retrievalUnits, "latest_projection_at"))
+          : null,
       searches_24h: numeric(retrieval, "searches_24h"),
       hit_rate_24h:
         numeric(retrieval, "searches_24h") > 0

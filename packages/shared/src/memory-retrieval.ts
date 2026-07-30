@@ -6,6 +6,7 @@ import {
   type RetrievalScoreBreakdown
 } from "./retrieval-index";
 import type { MemorySourceReference } from "./memory-store";
+import { analyzeRetrievalIntent } from "./retrieval-units";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_DAYS = 14;
@@ -17,13 +18,14 @@ const TAG_PRIORITY_ORDER = ["policy", "diagnosis", "command-result", "workaround
 const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest"] as const;
 const LOW_SIGNAL_TITLES = new Set(["起動", "修正", "削除", "空け", "実装完了", "修正完了", "実行結果です", "変更しました", "1"]);
 
-export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2";
+export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3";
 export type MemorySearchKind = "memory" | "doc";
 export type MemorySearchStrategy =
   | "bm25_v1"
   | "bm25_rewrite_v1"
   | "hybrid_memory_docs_v1"
   | "hybrid_v2"
+  | "hybrid_v3"
   | "fallback_recent_v1";
 
 export type StoredMemory = {
@@ -69,6 +71,25 @@ type KnowledgeDocCandidateRow = {
   raw_rank: number | null;
 };
 
+type RetrievalUnitCandidateRow = {
+  id: string;
+  memory_id: string;
+  tenant_id: string;
+  project_id: string | null;
+  unit_type: string;
+  speaker: string | null;
+  text: string;
+  event_at: number | null;
+  valid_from: number | null;
+  valid_until: number | null;
+  extractor: string;
+  extractor_version: string;
+  extraction_state: string;
+  degraded_reason: string | null;
+  created_at: number;
+  raw_rank: number | null;
+};
+
 export type MemorySearchResult = {
   kind: MemorySearchKind;
   id: string;
@@ -104,6 +125,14 @@ export type MemorySearchMeta = {
     semantic: { available: boolean; provider: string | null };
     graph: { available: boolean; provider: string };
     degraded: boolean;
+    embedding_version?: string | null;
+    reranker_version?: string | null;
+    extractor_version?: string | null;
+    lexical_candidate_count?: number;
+    semantic_candidate_count?: number;
+    parent_candidate_count?: number;
+    projection_lag_ms?: number | null;
+    degraded_reasons?: string[];
   };
 };
 
@@ -158,6 +187,8 @@ export type MemorySearchOptions = {
   principalId?: string | null;
   semanticHits?: RetrievalIndexHit[];
   semanticProvider?: string | null;
+  rerankerScores?: Map<string, number>;
+  rerankerProvider?: string | null;
 };
 
 export type MemoryProfileOptions = {
@@ -690,6 +721,202 @@ function dedupeFinalCandidates(candidates: SearchCandidate[], limit: number): Se
   }
 
   return results;
+}
+
+/**
+ * Unit-level product retrieval. Gold labels and benchmark identifiers never
+ * enter this function: its only inputs are the caller query, tenant/project
+ * scope, and rebuildable lexical/semantic projections.
+ */
+export async function searchTenantRetrievalUnitsV3(
+  db: D1Database,
+  options: MemorySearchOptions
+): Promise<MemorySearchResponse> {
+  const tenantId = options.tenantId;
+  const projectId = options.projectId?.trim() || null;
+  const q = collapseWhitespace(options.q);
+  const limit = Math.max(1, Math.min(20, options.limit ?? 5));
+  const variants = buildMemoryQueryVariants(q, options.rewriteQuery ?? false);
+  const ftsQuery = variants[0]?.ftsQuery ?? null;
+  const lexicalResult = ftsQuery
+    ? await db.prepare(
+        `SELECT u.id, u.memory_id, u.tenant_id, u.project_id, u.unit_type, u.speaker,
+                u.text, u.event_at, u.valid_from, u.valid_until, u.extractor,
+                u.extractor_version, u.extraction_state, u.degraded_reason,
+                u.created_at, bm25(memory_retrieval_units_fts) AS raw_rank
+         FROM memory_retrieval_units_fts
+         JOIN memory_retrieval_units u
+           ON u.id = memory_retrieval_units_fts.unit_id
+          AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+         JOIN memories m
+           ON m.id = u.memory_id
+          AND m.tenant_id = u.tenant_id
+         WHERE memory_retrieval_units_fts.tenant_id = ?
+           AND memory_retrieval_units_fts.text MATCH ?
+           AND (? IS NULL OR u.project_id = ?)
+           AND ${searchableFilterSql("m")}
+           AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
+           AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+         ORDER BY bm25(memory_retrieval_units_fts) ASC
+         LIMIT 50`
+      )
+        .bind(tenantId, ftsQuery, projectId, projectId)
+        .all<RetrievalUnitCandidateRow>()
+    : { results: [] as RetrievalUnitCandidateRow[] };
+  const lexicalRows = lexicalResult.results;
+  const unitById = new Map(lexicalRows.map((row) => [row.id, row]));
+  const semanticHits = (options.semanticHits ?? []).slice(0, 50);
+  const missingUnitIds = semanticHits.map((hit) => hit.id).filter((id) => !unitById.has(id));
+  if (missingUnitIds.length > 0) {
+    const placeholders = missingUnitIds.map(() => "?").join(",");
+    const loaded = await db.prepare(
+      `SELECT u.id, u.memory_id, u.tenant_id, u.project_id, u.unit_type, u.speaker,
+              u.text, u.event_at, u.valid_from, u.valid_until, u.extractor,
+              u.extractor_version, u.extraction_state, u.degraded_reason,
+              u.created_at, NULL AS raw_rank
+       FROM memory_retrieval_units u
+       JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
+       WHERE u.tenant_id = ? AND u.id IN (${placeholders})
+         AND (? IS NULL OR u.project_id = ?)
+         AND ${searchableFilterSql("m")}
+         AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
+         AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)`
+    )
+      .bind(tenantId, ...missingUnitIds, projectId, projectId)
+      .all<RetrievalUnitCandidateRow>();
+    for (const row of loaded.results) unitById.set(row.id, row);
+  }
+
+  const unitScores = new Map<string, number>();
+  lexicalRows.forEach((row, index) => {
+    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
+  });
+  semanticHits.forEach((hit, index) => {
+    if (!unitById.has(hit.id)) return;
+    unitScores.set(hit.id, (unitScores.get(hit.id) ?? 0) + 1 / (60 + index + 1));
+  });
+  const intent = analyzeRetrievalIntent(q);
+  const parentUnitScores = new Map<string, Array<{ unit: RetrievalUnitCandidateRow; score: number }>>();
+  for (const [unitId, rrfScore] of unitScores) {
+    const unit = unitById.get(unitId);
+    if (!unit) continue;
+    let score = rrfScore;
+    if (intent.speaker) {
+      if (unit.speaker === intent.speaker) score += 0.006;
+      else if (unit.speaker && unit.speaker !== "unknown") score -= 0.002;
+    }
+    if (intent.unit_types.includes(unit.unit_type as never)) score += 0.006;
+    const current = parentUnitScores.get(unit.memory_id) ?? [];
+    current.push({ unit, score });
+    parentUnitScores.set(unit.memory_id, current);
+  }
+
+  const parentIds = [...parentUnitScores.entries()]
+    .map(([memoryId, units]) => ({
+      memoryId,
+      score: units
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 3)
+        .reduce((sum, entry, index) => sum + entry.score * [1, 0.25, 0.1][index], 0)
+    }))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 20);
+  const parentRows = await loadMemoryRowsByIds(db, tenantId, parentIds.map((item) => item.memoryId));
+  const rowById = new Map(parentRows.map((row) => [row.id, row]));
+  const rerankerScores = options.rerankerScores ?? new Map<string, number>();
+  const eventTimes = parentIds.map(({ memoryId }) =>
+    Math.max(...(parentUnitScores.get(memoryId) ?? []).map(({ unit }) => unit.event_at ?? 0))
+  );
+  const finiteEventTimes = eventTimes.filter((value) => value > 0);
+  const minEventAt = finiteEventTimes.length > 0 ? Math.min(...finiteEventTimes) : 0;
+  const maxEventAt = finiteEventTimes.length > 0 ? Math.max(...finiteEventTimes) : 0;
+  const eventRange = Math.max(1, maxEventAt - minEventAt);
+  const ranked = parentIds.flatMap<SearchCandidate>(({ memoryId, score: baseScore }) => {
+    const row = rowById.get(memoryId);
+    if (!row) return [];
+    const candidate = toMemorySearchCandidate(row);
+    if (!candidateAllowed(candidate, options.principalId)) return [];
+    const units = parentUnitScores.get(memoryId) ?? [];
+    const eventAt = Math.max(...units.map(({ unit }) => unit.event_at ?? 0));
+    const temporal =
+      intent.temporal_direction && eventAt > 0
+        ? (intent.temporal_direction === "latest"
+            ? (eventAt - minEventAt) / eventRange
+            : (maxEventAt - eventAt) / eventRange) * 0.006
+        : 0;
+    const reranker = rerankerScores.get(memoryId);
+    const total = baseScore + temporal + (reranker === undefined ? 0 : Math.max(0, Math.min(1, reranker)) * 0.02);
+    candidate.score_breakdown = {
+      total: Number(total.toFixed(6)),
+      lexical: units.some(({ unit }) => unit.raw_rank !== null) ? 1 : 0,
+      semantic: semanticHits.some((hit) => units.some(({ unit }) => unit.id === hit.id)) ? 1 : null,
+      graph: null,
+      time: intent.temporal_direction ? Number((temporal / 0.006).toFixed(6)) : 0,
+      authority: 0,
+      utility: 0,
+      active_components: [
+        ...(units.some(({ unit }) => unit.raw_rank !== null) ? ["lexical" as const] : []),
+        ...(semanticHits.some((hit) => units.some(({ unit }) => unit.id === hit.id)) ? ["semantic" as const] : []),
+        ...(intent.temporal_direction ? ["time" as const] : [])
+      ]
+    };
+    candidate.permission_decision = { allowed: true, principal_id: options.principalId ?? null };
+    return [candidate];
+  }).sort((left, right) =>
+    (right.score_breakdown?.total ?? 0) - (left.score_breakdown?.total ?? 0)
+  );
+  const finalCandidates = ranked.slice(0, limit);
+  const allUnits = [...unitById.values()];
+  const degradedReasons = [...new Set(
+    allUnits
+      .filter((unit) => unit.extraction_state !== "ready")
+      .map((unit) => unit.degraded_reason || "atomic_extraction_degraded")
+  )];
+  if (options.semanticHits === undefined) degradedReasons.push("semantic_provider_unavailable");
+  if (options.rerankerScores === undefined) degradedReasons.push("reranker_unavailable");
+  const latestProjectionAt = allUnits.length > 0 ? Math.max(...allUnits.map((unit) => unit.created_at)) : null;
+
+  return {
+    tenant_id: tenantId,
+    project_id: projectId,
+    q,
+    rewrite_query: options.rewriteQuery ?? false,
+    search_mode: "hybrid_v3",
+    include_history: false,
+    results: finalCandidates.map((candidate) => {
+      const result = toPublicResult(candidate);
+      result.score = candidate.score_breakdown?.total ?? null;
+      return result;
+    }),
+    meta: {
+      search_strategy: "hybrid_v3",
+      matched_count: parentIds.length,
+      returned_count: finalCandidates.length,
+      fallback_used: options.semanticHits === undefined || options.rerankerScores === undefined,
+      variant_count: variants.length,
+      lexical_result_count: lexicalRows.length,
+      doc_result_count: 0,
+      history_result_count: 0,
+      top_result_ids: finalCandidates.map((candidate) => candidate.id),
+      top_result_ranks: finalCandidates.map((candidate) => candidate.score_breakdown?.total ?? null),
+      retrieval: {
+        semantic: {
+          available: options.semanticHits !== undefined,
+          provider: options.semanticProvider ?? null
+        },
+        graph: { available: false, provider: "none" },
+        degraded: degradedReasons.length > 0,
+        embedding_version: options.semanticProvider ?? null,
+        reranker_version: options.rerankerProvider ?? null,
+        extractor_version: allUnits[0]?.extractor_version ?? null,
+        lexical_candidate_count: lexicalRows.length,
+        semantic_candidate_count: semanticHits.length,
+        parent_candidate_count: parentIds.length,
+        projection_lag_ms: latestProjectionAt === null ? null : Math.max(0, Date.now() - latestProjectionAt),
+        degraded_reasons: [...new Set(degradedReasons)]
+      }
+    }
+  };
 }
 
 export async function searchTenantMemories(

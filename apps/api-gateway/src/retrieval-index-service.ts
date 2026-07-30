@@ -1,12 +1,16 @@
 import type {
+  MemorySourceReference,
   RetrievalIndex,
   RetrievalIndexDocument,
   RetrievalIndexHit,
   RetrievalIndexQuery
 } from "@org-brain/shared";
+import { buildRetrievalUnits } from "@org-brain/shared";
 import type { Env } from "./types";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5" as const;
+export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
+export const RERANKER_MODEL_V3 = "@cf/baai/bge-reranker-base" as const;
 const BATCH_SIZE = 64;
 
 function extractEmbedding(output: unknown): number[] {
@@ -26,10 +30,10 @@ function extractEmbedding(output: unknown): number[] {
 
 export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
   readonly kind = "semantic" as const;
-  readonly provider = `cloudflare-workers-ai:${EMBEDDING_MODEL}+vectorize`;
+  readonly provider: string = `cloudflare-workers-ai:${EMBEDDING_MODEL}+vectorize`;
 
   constructor(
-    private readonly ai: Ai,
+    protected readonly ai: Ai,
     private readonly index: Vectorize
   ) {}
 
@@ -42,7 +46,7 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
     }
   }
 
-  private async embed(text: string): Promise<number[]> {
+  protected async embed(text: string): Promise<number[]> {
     const output = await this.ai.run(EMBEDDING_MODEL, {
       text: [text.slice(0, 20_000)],
       pooling: "cls"
@@ -61,6 +65,9 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
           metadata: {
             tenant_id: document.tenant_id,
             project_id: document.project_id ?? "",
+            memory_id: document.memory_id ?? document.id,
+            unit_type: document.unit_type ?? "memory",
+            speaker: document.speaker ?? "",
             updated_at: document.updated_at
           }
         }))
@@ -103,6 +110,29 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
 export function getSemanticRetrievalIndex(env: Env): RetrievalIndex | null {
   if (!env.AI || !env.MEMORY_VECTOR_INDEX) return null;
   return new CloudflareVectorRetrievalIndex(env.AI, env.MEMORY_VECTOR_INDEX);
+}
+
+export function getV3SemanticRetrievalIndex(env: Env): RetrievalIndex | null {
+  if (!env.AI || !env.MEMORY_VECTOR_INDEX_V3) return null;
+  return new CloudflareVectorRetrievalIndexV3(env.AI, env.MEMORY_VECTOR_INDEX_V3);
+}
+
+class CloudflareVectorRetrievalIndexV3 extends CloudflareVectorRetrievalIndex {
+  readonly provider = `cloudflare-workers-ai:${EMBEDDING_MODEL_V3}+vectorize`;
+
+  constructor(
+    private readonly v3Ai: Ai,
+    index: Vectorize
+  ) {
+    super(v3Ai, index);
+  }
+
+  protected override async embed(text: string): Promise<number[]> {
+    const output = await this.v3Ai.run(EMBEDDING_MODEL_V3, {
+      text: [text.slice(0, 24_000)]
+    });
+    return extractEmbedding(output);
+  }
 }
 
 export type RetrievalProjectionStatus = {
@@ -256,4 +286,281 @@ export async function searchSemanticIndex(
   const index = getSemanticRetrievalIndex(env);
   if (!index || !(await index.available())) return null;
   return { hits: await index.query(input), provider: index.provider };
+}
+
+export async function syncMemoryIdsToV3SemanticIndex(
+  env: Env,
+  tenantId: string,
+  memoryIds: string[]
+): Promise<RetrievalProjectionStatus> {
+  const index = getV3SemanticRetrievalIndex(env);
+  if (!index) return { available: false, provider: null, indexed: 0 };
+  try {
+    const uniqueIds = [...new Set(memoryIds)].slice(0, 200);
+    if (uniqueIds.length === 0) return { available: true, provider: index.provider, indexed: 0 };
+    const placeholders = uniqueIds.map(() => "?").join(",");
+    const rows = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, memory_id, tenant_id, project_id, unit_type, speaker, text, created_at
+       FROM memory_retrieval_units
+       WHERE tenant_id = ? AND memory_id IN (${placeholders})
+       ORDER BY memory_id, id`
+    )
+      .bind(tenantId, ...uniqueIds)
+      .all<{
+        id: string;
+        memory_id: string;
+        tenant_id: string;
+        project_id: string | null;
+        unit_type: string;
+        speaker: string | null;
+        text: string;
+        created_at: number;
+      }>();
+    const documents: RetrievalIndexDocument[] = rows.results.map((row) => ({
+      id: row.id,
+      memory_id: row.memory_id,
+      tenant_id: row.tenant_id,
+      project_id: row.project_id,
+      unit_type: row.unit_type,
+      speaker: row.speaker,
+      text: row.text,
+      entities: [],
+      updated_at: row.created_at
+    }));
+    await index.upsert(documents);
+    return { available: true, provider: index.provider, indexed: documents.length };
+  } catch (error) {
+    return {
+      available: true,
+      provider: index.provider,
+      indexed: 0,
+      error: error instanceof Error ? error.message : "hybrid_v3 semantic index update failed"
+    };
+  }
+}
+
+export async function searchV3SemanticIndex(
+  env: Env,
+  input: RetrievalIndexQuery
+): Promise<{ hits: RetrievalIndexHit[]; provider: string } | null> {
+  const index = getV3SemanticRetrievalIndex(env);
+  if (!index || !(await index.available())) return null;
+  return { hits: await index.query({ ...input, limit: Math.min(50, input.limit) }), provider: index.provider };
+}
+
+export async function removeMemoryIdsFromV3SemanticIndex(
+  env: Env,
+  tenantId: string,
+  memoryIds: string[]
+): Promise<RetrievalProjectionStatus> {
+  const index = getV3SemanticRetrievalIndex(env);
+  if (!index) return { available: false, provider: null, indexed: 0 };
+  try {
+    const uniqueIds = [...new Set(memoryIds)].slice(0, 200);
+    if (uniqueIds.length === 0) return { available: true, provider: index.provider, indexed: 0 };
+    const placeholders = uniqueIds.map(() => "?").join(",");
+    const rows = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id FROM memory_retrieval_units
+       WHERE tenant_id = ? AND memory_id IN (${placeholders})`
+    )
+      .bind(tenantId, ...uniqueIds)
+      .all<{ id: string }>();
+    await index.remove(tenantId, rows.results.map((row) => row.id));
+    return { available: true, provider: index.provider, indexed: 0 };
+  } catch (error) {
+    return {
+      available: true,
+      provider: index.provider,
+      indexed: 0,
+      error: error instanceof Error ? error.message : "hybrid_v3 semantic index delete failed"
+    };
+  }
+}
+
+function normalizeRerankerScore(value: number): number {
+  if (value >= 0 && value <= 1) return value;
+  return 1 / (1 + Math.exp(-value));
+}
+
+export async function rerankV3MemoryCandidates(
+  env: Env,
+  query: string,
+  candidates: Array<{ id: string; text: string }>
+): Promise<{ scores: Map<string, number>; provider: string } | null> {
+  if (!env.AI || candidates.length === 0) return null;
+  const selected = candidates.slice(0, 20);
+  const output = await env.AI.run(RERANKER_MODEL_V3, {
+    query,
+    contexts: selected.map((candidate) => ({ text: candidate.text.slice(0, 8_000) })),
+    top_k: selected.length
+  });
+  const response = (output as unknown as { response?: unknown }).response;
+  if (!Array.isArray(response)) throw new Error("reranker returned no response array");
+  const scores = new Map<string, number>();
+  for (const [position, item] of response.entries()) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { id?: number; index?: number; score?: number };
+    const index = Number.isInteger(row.id) ? Number(row.id) : Number.isInteger(row.index) ? Number(row.index) : position;
+    if (index < 0 || index >= selected.length || typeof row.score !== "number" || !Number.isFinite(row.score)) continue;
+    scores.set(selected[index].id, normalizeRerankerScore(row.score));
+  }
+  if (scores.size === 0) throw new Error("reranker returned no numeric scores");
+  return { scores, provider: `cloudflare-workers-ai:${RERANKER_MODEL_V3}` };
+}
+
+export async function backfillV3RetrievalUnits(
+  env: Env,
+  options: {
+    tenantId: string;
+    projectId?: string | null;
+    cursor?: string | null;
+    limit?: number;
+  }
+) {
+  const limit = Math.max(1, Math.min(50, options.limit ?? 25));
+  const checkpoint = options.cursor === undefined || options.cursor === null
+    ? await env.OPEN_BRAIN_DB.prepare(
+        `SELECT cursor, processed_memories, projected_units
+         FROM retrieval_projection_backfills
+         WHERE tenant_id = ? AND project_id = ?`
+      ).bind(options.tenantId, options.projectId ?? "").first<{
+        cursor: string;
+        processed_memories: number;
+        projected_units: number;
+      }>()
+    : null;
+  const cursor = options.cursor ?? checkpoint?.cursor ?? "";
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, tenant_id, project_id, content, summary, source_refs_json,
+            created_at, updated_at, valid_from, valid_until, content_hash
+     FROM memories
+     WHERE tenant_id = ? AND id > ?
+       AND (? IS NULL OR project_id = ?)
+       AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
+     ORDER BY id
+     LIMIT ?`
+  )
+    .bind(
+      options.tenantId,
+      cursor,
+      options.projectId ?? null,
+      options.projectId ?? null,
+      limit
+    )
+    .all<{
+      id: string;
+      tenant_id: string;
+      project_id: string | null;
+      content: string;
+      summary: string | null;
+      source_refs_json: string | null;
+      created_at: number;
+      updated_at: number | null;
+      valid_from: number | null;
+      valid_until: number | null;
+      content_hash: string;
+    }>();
+  let projectedUnits = 0;
+  for (const row of rows.results) {
+    let sourceReferences: MemorySourceReference[] = [];
+    try {
+      const parsed = JSON.parse(row.source_refs_json || "[]");
+      if (Array.isArray(parsed)) sourceReferences = parsed as MemorySourceReference[];
+    } catch {
+      sourceReferences = [];
+    }
+    const units = await buildRetrievalUnits({
+      id: row.id,
+      tenant_id: row.tenant_id,
+      project_id: row.project_id,
+      content: row.content,
+      summary: row.summary,
+      created_at: row.created_at,
+      updated_at: row.updated_at ?? row.created_at,
+      valid_from: row.valid_from,
+      valid_until: row.valid_until,
+      source_references: sourceReferences
+    });
+    const statements: D1PreparedStatement[] = [
+      env.OPEN_BRAIN_DB.prepare(
+        "DELETE FROM memory_retrieval_units_fts WHERE tenant_id = ? AND memory_id = ?"
+      ).bind(row.tenant_id, row.id),
+      env.OPEN_BRAIN_DB.prepare(
+        "DELETE FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?"
+      ).bind(row.tenant_id, row.id)
+    ];
+    for (const unit of units) {
+      statements.push(
+        env.OPEN_BRAIN_DB.prepare(
+          `INSERT INTO memory_retrieval_units(
+            id, memory_id, tenant_id, project_id, unit_type, speaker, text,
+            event_at, valid_from, valid_until, source_ref_json, source_span_start,
+            source_span_end, content_hash, extractor, extractor_version,
+            extraction_state, degraded_reason, created_at
+          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          unit.id, unit.memory_id, unit.tenant_id, unit.project_id, unit.unit_type,
+          unit.speaker, unit.text, unit.event_at, unit.valid_from, unit.valid_until,
+          unit.source_ref_json, unit.source_span_start, unit.source_span_end,
+          unit.content_hash, unit.extractor, unit.extractor_version,
+          unit.extraction_state, unit.degraded_reason, unit.created_at
+        ),
+        env.OPEN_BRAIN_DB.prepare(
+          "INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
+        ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
+      );
+    }
+    for (let offset = 0; offset < statements.length; offset += 50) {
+      await env.OPEN_BRAIN_DB.batch(statements.slice(offset, offset + 50));
+    }
+    projectedUnits += units.length;
+    if (
+      env.RETRIEVAL_PROJECTION_QUEUE &&
+      (env.HYBRID_V3_MODE === "canary" || env.HYBRID_V3_MODE === "on")
+    ) {
+      await env.RETRIEVAL_PROJECTION_QUEUE.send({
+        version: 1,
+        tenant_id: row.tenant_id,
+        memory_id: row.id,
+        content_hash: row.content_hash,
+        requested_at: Date.now()
+      }, { contentType: "json" });
+    }
+  }
+  const memoryIds = rows.results.map((row) => row.id);
+  const vectorize = await syncMemoryIdsToV3SemanticIndex(env, options.tenantId, memoryIds);
+  const nextCursor = rows.results.at(-1)?.id ?? cursor;
+  const done = rows.results.length < limit;
+  const totalProcessed = Number(checkpoint?.processed_memories ?? 0) + rows.results.length;
+  const totalProjectedUnits = Number(checkpoint?.projected_units ?? 0) + projectedUnits;
+  await env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO retrieval_projection_backfills(
+       tenant_id, project_id, cursor, processed_memories, projected_units, state, updated_at
+     ) VALUES(?,?,?,?,?,?,?)
+     ON CONFLICT(tenant_id, project_id) DO UPDATE SET
+       cursor = excluded.cursor,
+       processed_memories = excluded.processed_memories,
+       projected_units = excluded.projected_units,
+       state = excluded.state,
+       updated_at = excluded.updated_at`
+  ).bind(
+    options.tenantId,
+    options.projectId ?? "",
+    nextCursor,
+    totalProcessed,
+    totalProjectedUnits,
+    done ? "complete" : "running",
+    Date.now()
+  ).run();
+  return {
+    tenant_id: options.tenantId,
+    project_id: options.projectId ?? null,
+    processed_memories: rows.results.length,
+    projected_units: projectedUnits,
+    total_processed_memories: totalProcessed,
+    total_projected_units: totalProjectedUnits,
+    next_cursor: nextCursor || null,
+    done,
+    vectorize
+  };
 }

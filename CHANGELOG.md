@@ -4,6 +4,14 @@ All notable changes to Org Brain are documented here. Releases use semantic vers
 
 ## 0.1.0 - Initial public release target
 
+- Add rebuildable retrieval units and opt-in `hybrid_v3` search across local
+  SQLite, D1 FTS, Qwen3 Vectorize, and BGE reranking.
+- Add a Gemini 3.5 Flash-Lite asynchronous atomic projection Worker with an
+  explicit deterministic degraded fallback, checkpointed backfill, shadow
+  metrics, and v3 operational coverage.
+- Add a product-path LongMemEval-S runner with hash-sealed development/holdout
+  splits and an integrity boundary that keeps evaluation labels out of runtime
+  capture/search.
 - Publish Org Brain under Apache-2.0 for free self-hosting.
 - Include personal local SQLite memory, Cloudflare self-host API, organization bus, Remote MCP, console, and benchmarks.
 - Add the `orgbrain` CLI with Node-bundled SQLite, MemoryRecord v2, migration,

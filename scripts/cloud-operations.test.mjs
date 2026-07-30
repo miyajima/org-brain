@@ -9,9 +9,11 @@ test("cloud provision defaults to an inspectable non-mutating plan", async () =>
     "org-bus",
     "org-bus-dlq",
     "cap-plan",
-    "cap-plan-dlq"
+    "cap-plan-dlq",
+    "orgbrain-retrieval-projection-v3",
+    "orgbrain-retrieval-projection-v3-dlq"
   ]);
-  assert.equal(plan.resources.vectorize, "orgbrain-memory-384-cosine");
+  assert.equal(plan.resources.vectorize, "orgbrain-memory-units-v3-1024");
   assert.ok(plan.steps.some((step) => step.id === "apply_migrations"));
   assert.ok(plan.steps.some((step) => step.id === "configure_vectorize_binding" && step.local_action));
   assert.ok(plan.steps.some((step) => step.id === "synchronize_d1_bindings" && step.local_action));
@@ -19,7 +21,14 @@ test("cloud provision defaults to an inspectable non-mutating plan", async () =>
     plan.steps
       .filter((step) => step.id.startsWith("deploy_"))
       .map((step) => step.id),
-    ["deploy_cap_runner", "deploy_org_router", "deploy_api_gateway", "deploy_mcp", "deploy_console"]
+    [
+      "deploy_cap_runner",
+      "deploy_org_router",
+      "deploy_retrieval_projector",
+      "deploy_api_gateway",
+      "deploy_mcp",
+      "deploy_console"
+    ]
   );
 
   const result = await runCloudCommand("provision", {

@@ -9,8 +9,13 @@ import {
   LOCAL_EMBEDDING_PROVIDER,
   localEmbeddingText
 } from "./local-embedding.mjs";
+import {
+  analyzeRetrievalIntent,
+  buildRetrievalUnits,
+  retrievalUnitIntentBoost
+} from "./retrieval-units.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 15;
+export const MEMORY_SCHEMA_VERSION = 16;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const JSON_COLUMNS = [
@@ -259,6 +264,48 @@ function createCanonicalTables(db) {
       document_count INTEGER NOT NULL,
       PRIMARY KEY(tenant_id, feature_hash)
     );
+    CREATE TABLE IF NOT EXISTS memory_retrieval_units (
+      id TEXT PRIMARY KEY,
+      memory_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      unit_type TEXT NOT NULL,
+      speaker TEXT,
+      text TEXT NOT NULL,
+      event_at INTEGER,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      source_ref_json TEXT,
+      source_span_start INTEGER,
+      source_span_end INTEGER,
+      content_hash TEXT NOT NULL,
+      extractor TEXT NOT NULL,
+      extractor_version TEXT NOT NULL,
+      extraction_state TEXT NOT NULL DEFAULT 'degraded',
+      degraded_reason TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memory_retrieval_unit_embeddings (
+      unit_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      feature_count INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, unit_id)
+    );
+    CREATE TABLE IF NOT EXISTS memory_retrieval_unit_features (
+      unit_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      feature_hash INTEGER NOT NULL,
+      weight REAL NOT NULL,
+      PRIMARY KEY(tenant_id, unit_id, feature_hash)
+    );
+    CREATE TABLE IF NOT EXISTS memory_retrieval_unit_feature_stats (
+      tenant_id TEXT NOT NULL,
+      feature_hash INTEGER NOT NULL,
+      document_count INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, feature_hash)
+    );
     CREATE TABLE IF NOT EXISTS principal_role_assignments (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,
@@ -367,6 +414,24 @@ function rebuildFts(db) {
   `);
 }
 
+function rebuildRetrievalUnitsFts(db) {
+  db.exec("DROP TABLE IF EXISTS memory_retrieval_units_fts");
+  db.exec(`
+    CREATE VIRTUAL TABLE memory_retrieval_units_fts USING fts5(
+      unit_id UNINDEXED,
+      memory_id UNINDEXED,
+      tenant_id UNINDEXED,
+      text,
+      tokenize = 'unicode61'
+    )
+  `);
+  db.exec(`
+    INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text)
+    SELECT id, memory_id, tenant_id, text
+    FROM memory_retrieval_units
+  `);
+}
+
 function deleteLocalEmbedding(db, tenantId, memoryId) {
   const oldFeatures = db.prepare(
     "SELECT feature_hash FROM memory_embedding_features WHERE tenant_id = ? AND memory_id = ?"
@@ -421,6 +486,115 @@ function rebuildLocalEmbeddings(db) {
   for (const row of rows) writeLocalEmbedding(db, memoryFromRow(row));
 }
 
+function deleteRetrievalUnitEmbedding(db, tenantId, unitId) {
+  const oldFeatures = db.prepare(
+    "SELECT feature_hash FROM memory_retrieval_unit_features WHERE tenant_id = ? AND unit_id = ?"
+  ).all(tenantId, unitId);
+  db.prepare("DELETE FROM memory_retrieval_unit_features WHERE tenant_id = ? AND unit_id = ?")
+    .run(tenantId, unitId);
+  db.prepare("DELETE FROM memory_retrieval_unit_embeddings WHERE tenant_id = ? AND unit_id = ?")
+    .run(tenantId, unitId);
+  const decrement = db.prepare(
+    `UPDATE memory_retrieval_unit_feature_stats
+     SET document_count = document_count - 1
+     WHERE tenant_id = ? AND feature_hash = ?`
+  );
+  const removeEmpty = db.prepare(
+    `DELETE FROM memory_retrieval_unit_feature_stats
+     WHERE tenant_id = ? AND feature_hash = ? AND document_count <= 0`
+  );
+  for (const feature of oldFeatures) {
+    decrement.run(tenantId, feature.feature_hash);
+    removeEmpty.run(tenantId, feature.feature_hash);
+  }
+}
+
+function writeRetrievalUnitEmbedding(db, unit) {
+  deleteRetrievalUnitEmbedding(db, unit.tenant_id, unit.id);
+  const features = embedLocalText(unit.text);
+  const insertFeature = db.prepare(
+    `INSERT INTO memory_retrieval_unit_features(unit_id, tenant_id, feature_hash, weight)
+     VALUES(?,?,?,?)`
+  );
+  const incrementFeatureCount = db.prepare(
+    `INSERT INTO memory_retrieval_unit_feature_stats(tenant_id, feature_hash, document_count)
+     VALUES(?,?,1)
+     ON CONFLICT(tenant_id, feature_hash)
+     DO UPDATE SET document_count = document_count + 1`
+  );
+  for (const feature of features) {
+    insertFeature.run(unit.id, unit.tenant_id, feature.feature_hash, feature.weight);
+    incrementFeatureCount.run(unit.tenant_id, feature.feature_hash);
+  }
+  db.prepare(
+    `INSERT INTO memory_retrieval_unit_embeddings(unit_id, tenant_id, provider, feature_count, updated_at)
+     VALUES(?,?,?,?,?)`
+  ).run(unit.id, unit.tenant_id, LOCAL_EMBEDDING_PROVIDER, features.length, unit.created_at);
+}
+
+function deleteRetrievalUnits(db, tenantId, memoryId) {
+  const units = db.prepare(
+    "SELECT id FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?"
+  ).all(tenantId, memoryId);
+  for (const unit of units) deleteRetrievalUnitEmbedding(db, tenantId, unit.id);
+  db.prepare("DELETE FROM memory_retrieval_units_fts WHERE tenant_id = ? AND memory_id = ?")
+    .run(tenantId, memoryId);
+  db.prepare("DELETE FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?")
+    .run(tenantId, memoryId);
+}
+
+function writeRetrievalUnits(db, record) {
+  deleteRetrievalUnits(db, record.tenant_id, record.id);
+  if (record.lifecycle_state === "suppressed") return;
+  const units = buildRetrievalUnits(record);
+  const insertUnit = db.prepare(
+    `INSERT INTO memory_retrieval_units(
+      id, memory_id, tenant_id, project_id, unit_type, speaker, text, event_at,
+      valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+      content_hash, extractor, extractor_version, extraction_state, degraded_reason, created_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  const insertFts = db.prepare(
+    `INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text)
+     VALUES(?,?,?,?)`
+  );
+  for (const unit of units) {
+    insertUnit.run(
+      unit.id,
+      unit.memory_id,
+      unit.tenant_id,
+      unit.project_id,
+      unit.unit_type,
+      unit.speaker,
+      unit.text,
+      unit.event_at,
+      unit.valid_from,
+      unit.valid_until,
+      unit.source_ref_json,
+      unit.source_span_start,
+      unit.source_span_end,
+      unit.content_hash,
+      unit.extractor,
+      unit.extractor_version,
+      unit.extraction_state,
+      unit.degraded_reason,
+      unit.created_at
+    );
+    insertFts.run(unit.id, unit.memory_id, unit.tenant_id, unit.text);
+    writeRetrievalUnitEmbedding(db, unit);
+  }
+}
+
+function rebuildRetrievalUnits(db) {
+  db.prepare("DELETE FROM memory_retrieval_unit_features").run();
+  db.prepare("DELETE FROM memory_retrieval_unit_embeddings").run();
+  db.prepare("DELETE FROM memory_retrieval_unit_feature_stats").run();
+  db.prepare("DELETE FROM memory_retrieval_units").run();
+  rebuildRetrievalUnitsFts(db);
+  const rows = db.prepare("SELECT * FROM memories WHERE lifecycle_state != 'suppressed'").all();
+  for (const row of rows) writeRetrievalUnits(db, memoryFromRow(row));
+}
+
 function addIndexes(db) {
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_external_key_v2
@@ -452,6 +626,12 @@ function addIndexes(db) {
       ON retention_policies(tenant_id, COALESCE(project_id, ''));
     CREATE INDEX IF NOT EXISTS idx_memory_embedding_lookup
       ON memory_embedding_features(tenant_id, feature_hash, memory_id);
+    CREATE INDEX IF NOT EXISTS idx_retrieval_units_parent
+      ON memory_retrieval_units(tenant_id, memory_id, unit_type);
+    CREATE INDEX IF NOT EXISTS idx_retrieval_units_project
+      ON memory_retrieval_units(tenant_id, project_id, unit_type);
+    CREATE INDEX IF NOT EXISTS idx_retrieval_unit_feature_lookup
+      ON memory_retrieval_unit_features(tenant_id, feature_hash, unit_id);
   `);
 }
 
@@ -484,6 +664,7 @@ function migrateSchema(db) {
     addIndexes(db);
     rebuildFts(db);
     rebuildLocalEmbeddings(db);
+    rebuildRetrievalUnits(db);
     initializeVersionHistory(db);
     db.prepare("INSERT OR REPLACE INTO schema_migrations(version, applied_at) VALUES(?,?)").run(
       MEMORY_SCHEMA_VERSION,
@@ -505,6 +686,174 @@ function buildFtsQuery(query, operator = "AND") {
     .filter((token) => token.length >= 2)
     .slice(0, 16);
   return tokens.map((token) => `"${token}"*`).join(` ${operator} `);
+}
+
+function searchRetrievalUnitsV3(db, {
+  tenantId,
+  projectId,
+  query,
+  limit,
+  includeSuppressed,
+  principalId,
+  at
+}) {
+  const candidateLimit = 50;
+  const ftsQuery = buildFtsQuery(query, "OR");
+  const lexicalRows = ftsQuery
+    ? db.prepare(
+      `SELECT u.*, bm25(memory_retrieval_units_fts) AS raw_rank
+       FROM memory_retrieval_units_fts
+       JOIN memory_retrieval_units u
+         ON u.id = memory_retrieval_units_fts.unit_id
+        AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+       JOIN memories m
+         ON m.id = u.memory_id
+        AND m.tenant_id = u.tenant_id
+       WHERE memory_retrieval_units_fts.tenant_id = ?
+         AND memory_retrieval_units_fts MATCH ?
+         AND (? IS NULL OR u.project_id = ?)
+         AND (? = 1 OR m.lifecycle_state != 'suppressed')
+         AND (u.valid_from IS NULL OR u.valid_from <= ?)
+         AND (u.valid_until IS NULL OR u.valid_until > ?)
+       ORDER BY bm25(memory_retrieval_units_fts) ASC
+       LIMIT ?`
+    ).all(
+      tenantId,
+      ftsQuery,
+      projectId,
+      projectId,
+      includeSuppressed ? 1 : 0,
+      at,
+      at,
+      candidateLimit
+    )
+    : [];
+
+  const rawQueryFeatures = embedLocalText(query);
+  let queryFeatures = rawQueryFeatures;
+  if (rawQueryFeatures.length > 0) {
+    const placeholders = rawQueryFeatures.map(() => "?").join(",");
+    const counts = db.prepare(
+      `SELECT feature_hash, document_count
+       FROM memory_retrieval_unit_feature_stats
+       WHERE tenant_id = ? AND feature_hash IN (${placeholders})`
+    ).all(tenantId, ...rawQueryFeatures.map((feature) => feature.feature_hash));
+    const countByHash = new Map(counts.map((row) => [row.feature_hash, Number(row.document_count)]));
+    queryFeatures = rawQueryFeatures
+      .filter((feature) => countByHash.has(feature.feature_hash))
+      .sort(
+        (left, right) =>
+          (countByHash.get(left.feature_hash) ?? Infinity) -
+          (countByHash.get(right.feature_hash) ?? Infinity)
+      )
+      .slice(0, 12);
+  }
+  const semanticScores = new Map();
+  const featureLookup = db.prepare(
+    `SELECT unit_id, weight
+     FROM memory_retrieval_unit_features
+     WHERE tenant_id = ? AND feature_hash = ?
+     LIMIT ?`
+  );
+  for (const feature of queryFeatures) {
+    for (const match of featureLookup.all(tenantId, feature.feature_hash, candidateLimit * 20)) {
+      semanticScores.set(
+        match.unit_id,
+        (semanticScores.get(match.unit_id) ?? 0) + Number(match.weight) * feature.weight
+      );
+    }
+  }
+  const semanticRows = [...semanticScores.entries()]
+    .map(([unitId, score]) => ({ unitId, score }))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, candidateLimit);
+  const unitById = new Map(lexicalRows.map((row) => [row.id, row]));
+  const missingUnitIds = semanticRows.map((row) => row.unitId).filter((id) => !unitById.has(id));
+  if (missingUnitIds.length > 0) {
+    const placeholders = missingUnitIds.map(() => "?").join(",");
+    const rows = db.prepare(
+      `SELECT u.*
+       FROM memory_retrieval_units u
+       JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
+       WHERE u.tenant_id = ? AND u.id IN (${placeholders})
+         AND (? IS NULL OR u.project_id = ?)
+         AND (? = 1 OR m.lifecycle_state != 'suppressed')
+         AND (u.valid_from IS NULL OR u.valid_from <= ?)
+         AND (u.valid_until IS NULL OR u.valid_until > ?)`
+    ).all(
+      tenantId,
+      ...missingUnitIds,
+      projectId,
+      projectId,
+      includeSuppressed ? 1 : 0,
+      at,
+      at
+    );
+    for (const row of rows) unitById.set(row.id, row);
+  }
+
+  const fusedByUnit = new Map();
+  lexicalRows.forEach((row, index) => {
+    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
+  });
+  semanticRows.forEach((row, index) => {
+    if (!unitById.has(row.unitId)) return;
+    fusedByUnit.set(row.unitId, (fusedByUnit.get(row.unitId) ?? 0) + 1 / (60 + index + 1));
+  });
+  const intent = analyzeRetrievalIntent(query);
+  const parentScores = new Map();
+  for (const [unitId, baseScore] of fusedByUnit) {
+    const unit = unitById.get(unitId);
+    if (!unit) continue;
+    const unitScore = baseScore + retrievalUnitIntentBoost(unit, intent);
+    const current = parentScores.get(unit.memory_id) ?? [];
+    current.push({ unit, score: unitScore });
+    parentScores.set(unit.memory_id, current);
+  }
+  if (parentScores.size === 0) return [];
+
+  const parentIds = [...parentScores.keys()];
+  const placeholders = parentIds.map(() => "?").join(",");
+  const memories = db.prepare(
+    `SELECT * FROM memories WHERE tenant_id = ? AND id IN (${placeholders})`
+  ).all(tenantId, ...parentIds);
+  const memoryById = new Map(memories.map((row) => [row.id, row]));
+  const dated = [...parentScores.entries()].map(([memoryId, units]) => ({
+    memoryId,
+    eventAt: Math.max(...units.map((entry) => Number(entry.unit.event_at ?? 0)))
+  }));
+  const minEventAt = Math.min(...dated.map((entry) => entry.eventAt).filter((value) => value > 0));
+  const maxEventAt = Math.max(...dated.map((entry) => entry.eventAt));
+  const eventRange = Math.max(1, maxEventAt - (Number.isFinite(minEventAt) ? minEventAt : maxEventAt));
+
+  return [...parentScores.entries()]
+    .flatMap(([memoryId, unitScores]) => {
+      const row = memoryById.get(memoryId);
+      if (!row) return [];
+      const memory = memoryFromRow(row);
+      if (!canReadMemory(memory, principalId)) return [];
+      const sorted = unitScores.sort((left, right) => right.score - left.score);
+      let total = (sorted[0]?.score ?? 0) + (sorted[1]?.score ?? 0) * 0.25 + (sorted[2]?.score ?? 0) * 0.1;
+      const eventAt = Math.max(...sorted.map((entry) => Number(entry.unit.event_at ?? 0)));
+      if (intent.temporal_direction && eventAt > 0 && Number.isFinite(minEventAt)) {
+        const relative = (eventAt - minEventAt) / eventRange;
+        total += intent.temporal_direction === "latest" ? relative * 0.012 : (1 - relative) * 0.012;
+      }
+      return [{
+        memory,
+        score: {
+          total: Number(total.toFixed(6)),
+          lexical: lexicalRows.some((unit) => unit.memory_id === memoryId) ? 1 : 0,
+          semantic: semanticRows.some((unit) => unitById.get(unit.unitId)?.memory_id === memoryId) ? 1 : 0,
+          graph: 0,
+          time: intent.temporal_direction ? 1 : 0,
+          authority: Number(memory.confidence_score ?? 0.5),
+          utility: Number(memory.utility_score ?? 0.5)
+        }
+      }];
+    })
+    .sort((left, right) => right.score.total - left.score.total || right.memory.updated_at - left.memory.updated_at)
+    .slice(0, limit);
 }
 
 function readMode(path) {
@@ -547,7 +896,12 @@ export class LocalMemoryStore {
         !hasTable(db, "memories_fts") ||
         !hasTable(db, "memory_embeddings") ||
         !hasTable(db, "memory_embedding_features") ||
-        !hasTable(db, "memory_embedding_feature_stats")
+        !hasTable(db, "memory_embedding_feature_stats") ||
+        !hasTable(db, "memory_retrieval_units") ||
+        !hasTable(db, "memory_retrieval_units_fts") ||
+        !hasTable(db, "memory_retrieval_unit_embeddings") ||
+        !hasTable(db, "memory_retrieval_unit_features") ||
+        !hasTable(db, "memory_retrieval_unit_feature_stats")
       ) {
         migrateSchema(db);
       } else {
@@ -653,6 +1007,7 @@ export class LocalMemoryStore {
         ).run(randomUUID(), tenantId, memoryId, actor.actor_type ?? null, actor.actor_id ?? null, Date.now());
         db.prepare("DELETE FROM memories_fts WHERE tenant_id = ? AND memory_id = ?").run(tenantId, memoryId);
         deleteLocalEmbedding(db, tenantId, memoryId);
+        deleteRetrievalUnits(db, tenantId, memoryId);
         db.prepare(
           "DELETE FROM memory_edges WHERE tenant_id = ? AND (from_memory_id = ? OR to_memory_id = ?)"
         ).run(tenantId, memoryId, memoryId);
@@ -804,6 +1159,7 @@ export class LocalMemoryStore {
       ).run(record.id, record.tenant_id, record.content, record.summary || "", json(record.tags), json(record.entities));
     }
     writeLocalEmbedding(db, record);
+    writeRetrievalUnits(db, record);
   }
 
   writeVersion(db, record, operation) {
@@ -848,9 +1204,27 @@ export class LocalMemoryStore {
     limit = 10,
     include_suppressed = false,
     principal_id: principalId = null,
+    search_mode: searchMode = "memories",
     at = Date.now()
   }) {
     await this.init();
+    if (searchMode === "hybrid_v3") {
+      const db = this.open({ readOnly: true });
+      try {
+        const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
+        return searchRetrievalUnitsV3(db, {
+          tenantId,
+          projectId,
+          query,
+          limit: safeLimit,
+          includeSuppressed: include_suppressed,
+          principalId,
+          at
+        });
+      } finally {
+        db.close();
+      }
+    }
     const ftsQuery = buildFtsQuery(query, "AND");
     if (!ftsQuery) throw new Error("search requires a query");
     const db = this.open({ readOnly: true });
@@ -1091,6 +1465,7 @@ export class LocalMemoryStore {
       db.exec("BEGIN IMMEDIATE");
       rebuildFts(db);
       rebuildLocalEmbeddings(db);
+      rebuildRetrievalUnits(db);
       db.exec("COMMIT");
     } catch (error) {
       db.exec("ROLLBACK");
@@ -1123,6 +1498,33 @@ export class LocalMemoryStore {
       if (embeddingCount !== searchableCount) {
         errors.push(`embedding count ${embeddingCount} != searchable record count ${searchableCount}`);
       }
+      const retrievalUnits = db.prepare(
+        `SELECT id, text, content_hash
+         FROM memory_retrieval_units
+         ORDER BY id`
+      ).all();
+      for (const unit of retrievalUnits) {
+        if (hashContent(unit.text) !== unit.content_hash) {
+          errors.push(`retrieval unit content hash mismatch: ${unit.id}`);
+        }
+      }
+      const retrievalUnitCount = retrievalUnits.length;
+      const retrievalUnitFtsCount = Number(
+        db.prepare("SELECT COUNT(*) AS count FROM memory_retrieval_units_fts").get().count
+      );
+      const retrievalUnitEmbeddingCount = Number(
+        db.prepare("SELECT COUNT(*) AS count FROM memory_retrieval_unit_embeddings").get().count
+      );
+      if (retrievalUnitFtsCount !== retrievalUnitCount) {
+        errors.push(
+          `retrieval unit FTS count ${retrievalUnitFtsCount} != retrieval unit count ${retrievalUnitCount}`
+        );
+      }
+      if (retrievalUnitEmbeddingCount !== retrievalUnitCount) {
+        errors.push(
+          `retrieval unit embedding count ${retrievalUnitEmbeddingCount} != retrieval unit count ${retrievalUnitCount}`
+        );
+      }
       const userVersion = Number(db.prepare("PRAGMA user_version").get().user_version);
       if (userVersion !== MEMORY_SCHEMA_VERSION) errors.push(`schema version ${userVersion} != ${MEMORY_SCHEMA_VERSION}`);
       return {
@@ -1133,6 +1535,10 @@ export class LocalMemoryStore {
         fts_count: ftsCount,
         embedding_count: embeddingCount,
         embedding_provider: LOCAL_EMBEDDING_PROVIDER,
+        retrieval_unit_count: retrievalUnitCount,
+        retrieval_unit_fts_count: retrievalUnitFtsCount,
+        retrieval_unit_embedding_count: retrievalUnitEmbeddingCount,
+        retrieval_unit_digest: stableDigest(retrievalUnits),
         content_digest: stableDigest(rows),
         errors
       };
@@ -1185,6 +1591,31 @@ export class LocalMemoryStore {
       if (embeddingCount !== searchableCount) {
         errors.push(`embedding count ${embeddingCount} != searchable record count ${searchableCount}`);
       }
+      const retrievalUnits = hasTable(db, "memory_retrieval_units")
+        ? db.prepare("SELECT id, text, content_hash FROM memory_retrieval_units ORDER BY id").all()
+        : [];
+      for (const unit of retrievalUnits) {
+        if (hashContent(unit.text) !== unit.content_hash) {
+          errors.push(`retrieval unit content hash mismatch: ${unit.id}`);
+        }
+      }
+      const retrievalUnitCount = retrievalUnits.length;
+      const retrievalUnitFtsCount = hasTable(db, "memory_retrieval_units_fts")
+        ? Number(db.prepare("SELECT COUNT(*) AS count FROM memory_retrieval_units_fts").get().count)
+        : 0;
+      const retrievalUnitEmbeddingCount = hasTable(db, "memory_retrieval_unit_embeddings")
+        ? Number(db.prepare("SELECT COUNT(*) AS count FROM memory_retrieval_unit_embeddings").get().count)
+        : 0;
+      if (retrievalUnitFtsCount !== retrievalUnitCount) {
+        errors.push(
+          `retrieval unit FTS count ${retrievalUnitFtsCount} != retrieval unit count ${retrievalUnitCount}`
+        );
+      }
+      if (retrievalUnitEmbeddingCount !== retrievalUnitCount) {
+        errors.push(
+          `retrieval unit embedding count ${retrievalUnitEmbeddingCount} != retrieval unit count ${retrievalUnitCount}`
+        );
+      }
       return {
         ok:
           check.length === 1 &&
@@ -1196,6 +1627,10 @@ export class LocalMemoryStore {
         fts_count: ftsCount,
         embedding_count: embeddingCount,
         embedding_provider: LOCAL_EMBEDDING_PROVIDER,
+        retrieval_unit_count: retrievalUnitCount,
+        retrieval_unit_fts_count: retrievalUnitFtsCount,
+        retrieval_unit_embedding_count: retrievalUnitEmbeddingCount,
+        retrieval_unit_digest: stableDigest(retrievalUnits),
         content_digest: stableDigest(rows),
         errors
       };
@@ -1258,6 +1693,7 @@ export class LocalMemoryStore {
         for (const deletion of deletionLedger) {
           deleteFts.run(deletion.tenant_id, deletion.memory_id);
           deleteLocalEmbedding(restored, deletion.tenant_id, deletion.memory_id);
+          deleteRetrievalUnits(restored, deletion.tenant_id, deletion.memory_id);
           deleteVersions.run(deletion.tenant_id, deletion.memory_id);
           deleteEdges.run(deletion.tenant_id, deletion.memory_id, deletion.memory_id);
           deleteMemory.run(deletion.tenant_id, deletion.memory_id);

@@ -34,7 +34,11 @@ const TOOL_DEFINITIONS = [
         tenant_id: { type: "string" },
         project_id: { type: ["string", "null"] },
         limit: { type: "integer", minimum: 1, maximum: 50 },
-        principal_id: { type: ["string", "null"] }
+        principal_id: { type: ["string", "null"] },
+        search_mode: {
+          type: "string",
+          enum: ["memories", "hybrid_v3"]
+        }
       }
     }
   },
@@ -124,7 +128,8 @@ async function callTool(store, name, input) {
       project_id: input.project_id || null,
       query: input.query,
       limit: input.limit || 10,
-      principal_id: input.principal_id || null
+      principal_id: input.principal_id || null,
+      search_mode: input.search_mode || "memories"
     });
   }
   if (name === "orgbrain_memory_revise") {

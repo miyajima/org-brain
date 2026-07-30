@@ -6,6 +6,7 @@ import {
   buildTenantMemoryProfile,
   parseTagsJson,
   searchTenantMemories,
+  searchTenantRetrievalUnitsV3,
   type MemoryProfileResponse,
   type MemoryKind,
   type MemoryLifecycleState,
@@ -24,9 +25,13 @@ import {
 } from "./memory-lifecycle-service";
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import {
+  removeMemoryIdsFromV3SemanticIndex,
   removeMemoryIdsFromSemanticIndex,
+  rerankV3MemoryCandidates,
   searchSemanticIndex,
-  syncMemoryIdsToSemanticIndex
+  searchV3SemanticIndex,
+  syncMemoryIdsToSemanticIndex,
+  syncMemoryIdsToV3SemanticIndex
 } from "./retrieval-index-service";
 import { assertMemoryNotOnLegalHold } from "./retention-service";
 import type { Env } from "./types";
@@ -324,8 +329,12 @@ function parseOptionalFiniteNumber(value: unknown, field: string): number | null
 
 function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySearchMode): MemorySearchMode {
   if (value === undefined) return fallback;
-  if (value !== "memories" && value !== "hybrid" && value !== "hybrid_v2") {
-    throw new HttpError(400, "invalid_payload", `${field} must be 'memories', 'hybrid', or 'hybrid_v2'`);
+  if (value !== "memories" && value !== "hybrid" && value !== "hybrid_v2" && value !== "hybrid_v3") {
+    throw new HttpError(
+      400,
+      "invalid_payload",
+      `${field} must be 'memories', 'hybrid', 'hybrid_v2', or 'hybrid_v3'`
+    );
   }
   return value;
 }
@@ -499,13 +508,31 @@ function buildMemoryListFilterSql(options: { source?: string; projectId?: string
 
 export async function upsertMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   const { tenantId, source, items } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
+  const existingByKey = await loadExistingMemoryIdsByExternalKeys(
+    env.OPEN_BRAIN_DB,
+    tenantId,
+    items.map((item) => item.external_key)
+  );
+  const previousV3Projection = await removeMemoryIdsFromV3SemanticIndex(
+    env,
+    tenantId,
+    [...existingByKey.values()]
+  );
+  if (previousV3Projection.error) {
+    throw new HttpError(503, "retrieval_projection_failed", previousV3Projection.error);
+  }
   const result = await captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
   const retrieval_projection = await syncMemoryIdsToSemanticIndex(
     env,
     tenantId,
     result.items.map((item) => item.memory_id)
   );
-  return { ...result, retrieval_projection };
+  const retrieval_projection_v3 = await syncMemoryIdsToV3SemanticIndex(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id)
+  );
+  return { ...result, retrieval_projection, retrieval_projection_v3 };
 }
 
 export async function listMemories(env: Env, tenantId: string, options: ListMemoriesOptions = {}) {
@@ -606,14 +633,116 @@ export async function searchMemories(
           query: request.q,
           limit: widenedLimit
         })
-      : null;
-  const base = await searchTenantMemories(env.OPEN_BRAIN_DB, {
-    ...request,
-    limit: widenedLimit,
-    principalId: normalizeActorPrincipal(options.actorPrincipal),
-    semanticHits: semantic?.hits,
-    semanticProvider: semantic?.provider
-  });
+      : request.searchMode === "hybrid_v3"
+        ? await searchV3SemanticIndex(env, {
+            tenant_id: request.tenantId,
+            project_id: request.projectId,
+            query: request.q,
+            limit: 50
+          })
+        : null;
+  const principalId = normalizeActorPrincipal(options.actorPrincipal);
+  let base: MemorySearchResponse;
+  if (request.searchMode === "hybrid_v3") {
+    const preliminary = await searchTenantRetrievalUnitsV3(env.OPEN_BRAIN_DB, {
+      ...request,
+      limit: 20,
+      principalId,
+      semanticHits: semantic?.hits,
+      semanticProvider: semantic?.provider
+    });
+    let reranker: Awaited<ReturnType<typeof rerankV3MemoryCandidates>> = null;
+    if (preliminary.results.length > 0) {
+      const ids = preliminary.results.map((result) => result.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const rows = await env.OPEN_BRAIN_DB.prepare(
+        `SELECT id, content, summary FROM memories
+         WHERE tenant_id = ? AND id IN (${placeholders})`
+      ).bind(request.tenantId, ...ids).all<{ id: string; content: string; summary: string | null }>();
+      const rowById = new Map(rows.results.map((row) => [row.id, row]));
+      try {
+        reranker = await rerankV3MemoryCandidates(
+          env,
+          request.q,
+          ids.flatMap((id) => {
+            const row = rowById.get(id);
+            return row ? [{ id, text: `${row.summary ?? ""}\n${row.content}`.trim() }] : [];
+          })
+        );
+      } catch {
+        reranker = null;
+      }
+    }
+    base = await searchTenantRetrievalUnitsV3(env.OPEN_BRAIN_DB, {
+      ...request,
+      limit: widenedLimit,
+      principalId,
+      semanticHits: semantic?.hits,
+      semanticProvider: semantic?.provider,
+      rerankerScores: reranker?.scores,
+      rerankerProvider: reranker?.provider
+    });
+  } else {
+    base = await searchTenantMemories(env.OPEN_BRAIN_DB, {
+      ...request,
+      limit: widenedLimit,
+      principalId,
+      semanticHits: semantic?.hits,
+      semanticProvider: semantic?.provider
+    });
+  }
+  if (env.HYBRID_V3_MODE === "shadow" && request.searchMode !== "hybrid_v3") {
+    const shadowStartedAt = performance.now();
+    let shadowError: string | null = null;
+    let shadow: MemorySearchResponse | null = null;
+    try {
+      const shadowSemantic = await searchV3SemanticIndex(env, {
+        tenant_id: request.tenantId,
+        project_id: request.projectId,
+        query: request.q,
+        limit: 50
+      });
+      shadow = await searchTenantRetrievalUnitsV3(env.OPEN_BRAIN_DB, {
+        ...request,
+        searchMode: "hybrid_v3",
+        limit: request.limit,
+        principalId,
+        semanticHits: shadowSemantic?.hits,
+        semanticProvider: shadowSemantic?.provider
+      });
+    } catch (error) {
+      shadowError = error instanceof Error ? error.message.slice(0, 500) : "shadow retrieval failed";
+    }
+    const legacyIds = new Set(base.results.map((result) => result.id));
+    const shadowIds = shadow?.results.map((result) => result.id) ?? [];
+    const queryHash = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(request.q)
+    ).then((digest) =>
+      [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+    );
+    await env.OPEN_BRAIN_DB.prepare(
+      `INSERT INTO retrieval_v3_shadow_events(
+         id, tenant_id, project_id, query_hash, legacy_result_count,
+         v3_result_count, overlap_count, empty, degraded, latency_ms, error, created_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      crypto.randomUUID(),
+      request.tenantId,
+      request.projectId,
+      queryHash,
+      base.results.length,
+      shadowIds.length,
+      shadowIds.filter((id) => legacyIds.has(id)).length,
+      shadowIds.length === 0 ? 1 : 0,
+      shadow?.meta.retrieval?.degraded ? 1 : 0,
+      Number((performance.now() - shadowStartedAt).toFixed(3)),
+      shadowError,
+      Date.now()
+    ).run().catch(() => {
+      // Shadow observability must never break the primary retrieval response.
+    });
+  }
   const filters = parseSearchFilters(rawBody);
   const allowedIds = await filterMemorySearchResults(
     env,
@@ -787,13 +916,36 @@ export async function captureMemories(env: Env, rawBody: unknown, options: Princ
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HttpError(400, "invalid_payload", "items must be a non-empty array");
   }
+  const externalKeys = body.items.flatMap((item) =>
+    typeof item.external_key === "string" && item.external_key.trim()
+      ? [item.external_key.trim()]
+      : []
+  );
+  const existingByKey = await loadExistingMemoryIdsByExternalKeys(
+    env.OPEN_BRAIN_DB,
+    tenantId,
+    externalKeys
+  );
+  const previousV3Projection = await removeMemoryIdsFromV3SemanticIndex(
+    env,
+    tenantId,
+    [...existingByKey.values()]
+  );
+  if (previousV3Projection.error) {
+    throw new HttpError(503, "retrieval_projection_failed", previousV3Projection.error);
+  }
   const result = await captureMemoryItems(env, { tenantId, source, items: body.items, operation: "capture" });
   const retrieval_projection = await syncMemoryIdsToSemanticIndex(
     env,
     tenantId,
     result.items.map((item) => item.memory_id)
   );
-  return { ...result, retrieval_projection };
+  const retrieval_projection_v3 = await syncMemoryIdsToV3SemanticIndex(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id)
+  );
+  return { ...result, retrieval_projection, retrieval_projection_v3 };
 }
 
 export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
@@ -804,6 +956,10 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const memoryId = parseString(body.memory_id, "memory_id");
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
+  const previousV3Projection = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
+  if (previousV3Projection.error) {
+    throw new HttpError(503, "retrieval_projection_failed", previousV3Projection.error);
+  }
   const result = await reviseMemory(env, {
     tenantId,
     memoryId,
@@ -827,7 +983,8 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   });
   return {
     ...result,
-    retrieval_projection: await syncMemoryIdsToSemanticIndex(env, tenantId, [memoryId])
+    retrieval_projection: await syncMemoryIdsToSemanticIndex(env, tenantId, [memoryId]),
+    retrieval_projection_v3: await syncMemoryIdsToV3SemanticIndex(env, tenantId, [memoryId])
   };
 }
 
@@ -855,9 +1012,14 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   const memoryId = parseString(body.memory_id, "memory_id");
+  const retrievalProjectionV3 = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
   const retrievalProjection = await removeMemoryIdsFromSemanticIndex(env, tenantId, [memoryId]);
-  if (retrievalProjection.error) {
-    throw new HttpError(503, "retrieval_projection_failed", retrievalProjection.error);
+  if (retrievalProjection.error || retrievalProjectionV3.error) {
+    throw new HttpError(
+      503,
+      "retrieval_projection_failed",
+      retrievalProjection.error ?? retrievalProjectionV3.error ?? "retrieval projection failed"
+    );
   }
   const result = await suppressMemory(env, {
     tenantId,
@@ -868,7 +1030,8 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   });
   return {
     ...result,
-    retrieval_projection: retrievalProjection
+    retrieval_projection: retrievalProjection,
+    retrieval_projection_v3: retrievalProjectionV3
   };
 }
 
@@ -882,13 +1045,22 @@ export async function deleteMemoryById(
   const normalizedTenantId = parseString(tenantId, "tenant_id");
   const normalizedMemoryId = parseString(memoryId, "memory_id");
   await assertMemoryNotOnLegalHold(env, normalizedTenantId, normalizedMemoryId);
+  const retrievalProjectionV3 = await removeMemoryIdsFromV3SemanticIndex(
+    env,
+    normalizedTenantId,
+    [normalizedMemoryId]
+  );
   const retrievalProjection = await removeMemoryIdsFromSemanticIndex(
     env,
     normalizedTenantId,
     [normalizedMemoryId]
   );
-  if (retrievalProjection.error) {
-    throw new HttpError(503, "retrieval_projection_failed", retrievalProjection.error);
+  if (retrievalProjection.error || retrievalProjectionV3.error) {
+    throw new HttpError(
+      503,
+      "retrieval_projection_failed",
+      retrievalProjection.error ?? retrievalProjectionV3.error ?? "retrieval projection failed"
+    );
   }
   const result = await deleteMemory(env, {
     tenantId: normalizedTenantId,
@@ -898,6 +1070,7 @@ export async function deleteMemoryById(
   });
   return {
     ...result,
-    retrieval_projection: retrievalProjection
+    retrieval_projection: retrievalProjection,
+    retrieval_projection_v3: retrievalProjectionV3
   };
 }

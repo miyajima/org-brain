@@ -309,7 +309,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         q: z.string().min(1).max(500),
         limit: z.number().int().min(1).max(20).optional(),
         rewrite_query: z.boolean().optional(),
-        search_mode: z.enum(["memories", "hybrid", "hybrid_v2"]).optional(),
+        search_mode: z.enum(["memories", "hybrid", "hybrid_v2", "hybrid_v3"]).optional(),
         include_history: z.boolean().optional(),
         entity_id: z.string().optional(),
         entity_role: z.string().optional(),

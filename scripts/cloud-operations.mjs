@@ -7,11 +7,19 @@ import process from "node:process";
 
 const D1_NAME = "open-brain";
 const R2_BUCKET = "open-brain-bucket";
-const QUEUES = ["org-bus", "org-bus-dlq", "cap-plan", "cap-plan-dlq"];
+const QUEUES = [
+  "org-bus",
+  "org-bus-dlq",
+  "cap-plan",
+  "cap-plan-dlq",
+  "orgbrain-retrieval-projection-v3",
+  "orgbrain-retrieval-projection-v3-dlq"
+];
 const D1_CONFIGS = [
   "apps/api-gateway/wrangler.toml",
   "apps/org-router/wrangler.toml",
-  "apps/cap-runner/wrangler.toml"
+  "apps/cap-runner/wrangler.toml",
+  "apps/retrieval-projector/wrangler.toml"
 ];
 
 function command(cwd, ...args) {
@@ -38,14 +46,16 @@ export function buildCloudProvisionPlan(options = {}) {
           command: wrangler(
             "vectorize",
             "create",
-            "orgbrain-memory-384-cosine",
-            "--preset",
-            "@cf/baai/bge-small-en-v1.5"
+            "orgbrain-memory-units-v3-1024",
+            "--dimensions",
+            "1024",
+            "--metric",
+            "cosine"
           )
         }, {
           id: "configure_vectorize_binding",
           mutate: true,
-          local_action: "enable AI and MEMORY_VECTOR_INDEX bindings in apps/api-gateway/wrangler.toml"
+          local_action: "enable AI and MEMORY_VECTOR_INDEX_V3 bindings in apps/api-gateway/wrangler.toml"
         }]
       : []),
     {
@@ -77,6 +87,11 @@ export function buildCloudProvisionPlan(options = {}) {
       command: command("apps/org-router", "exec", "wrangler", "deploy")
     },
     {
+      id: "deploy_retrieval_projector",
+      mutate: true,
+      command: command("apps/retrieval-projector", "exec", "wrangler", "deploy")
+    },
+    {
       id: "deploy_api_gateway",
       mutate: true,
       command: command("apps/api-gateway", "exec", "wrangler", "deploy")
@@ -104,7 +119,7 @@ export function buildCloudProvisionPlan(options = {}) {
       d1: D1_NAME,
       r2: R2_BUCKET,
       queues: QUEUES,
-      vectorize: options.withVectorize ? "orgbrain-memory-384-cosine" : null
+      vectorize: options.withVectorize ? "orgbrain-memory-units-v3-1024" : null
     },
     steps
   };
@@ -180,12 +195,13 @@ async function inspectLocalConfig(root) {
     : [];
   checks.push({
     id: "migrations",
-    ok: migrationsPresent && migrationFiles.at(-1)?.startsWith("0015_"),
+    ok: migrationsPresent && migrationFiles.at(-1)?.startsWith("0016_"),
     value: migrationsPresent ? migrationFiles.at(-1) ?? "empty" : "missing"
   });
   const apiConfig = configText.get("apps/api-gateway/wrangler.toml") ?? "";
   const routerConfig = configText.get("apps/org-router/wrangler.toml") ?? "";
   const runnerConfig = configText.get("apps/cap-runner/wrangler.toml") ?? "";
+  const projectorConfig = configText.get("apps/retrieval-projector/wrangler.toml") ?? "";
   checks.push({
     id: "queue-topology",
     ok:
@@ -194,6 +210,14 @@ async function inspectLocalConfig(root) {
       /queue\s*=\s*"cap-plan"/u.test(routerConfig) &&
       /queue\s*=\s*"cap-plan"/u.test(runnerConfig),
     value: "org-bus -> org-router -> cap-plan -> cap-runner"
+  });
+  checks.push({
+    id: "retrieval-projection-queue",
+    ok:
+      /queue\s*=\s*"orgbrain-retrieval-projection-v3"/u.test(apiConfig) &&
+      /queue\s*=\s*"orgbrain-retrieval-projection-v3"/u.test(projectorConfig) &&
+      /dead_letter_queue\s*=\s*"orgbrain-retrieval-projection-v3-dlq"/u.test(projectorConfig),
+    value: "api-gateway -> retrieval-projector -> v3 Vectorize"
   });
   checks.push({
     id: "dead-letter-queues",

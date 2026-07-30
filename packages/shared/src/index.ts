@@ -12,5 +12,6 @@ export * from "./memory-store";
 export * from "./rationale-extraction";
 export * from "./rbac";
 export * from "./retrieval-index";
+export * from "./retrieval-units";
 export * from "./schemas";
 export * from "./types";

@@ -1,0 +1,17 @@
+{
+  "name": "@org-brain/retrieval-projector",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@org-brain/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "wrangler": "^4.80.0"
+  }
+}

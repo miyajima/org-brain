@@ -529,6 +529,14 @@ it retrieved a gold session in the top five for only 75 of 500 questions
 therefore not be used to claim that the current product implementation is
 first overall.
 
+An additive `hybrid_v3` product path is now available in shadow mode. It uses
+rebuildable retrieval units, D1/SQLite FTS, a separate Qwen3 Vectorize index,
+BGE reranking, and optional asynchronous Gemini 3.5 Flash-Lite atomic
+projection. Its product-only runner and rollout status are documented in
+[`docs/HYBRID_V3_IMPLEMENTATION.md`](docs/HYBRID_V3_IMPLEMENTATION.md). The old
+500-item result above remains the last full product-path measurement until the
+new strict five-repeat gate completes.
+
 The fixed `competitive-memory-v1` suite adds 100 personal and 100 organization
 tasks covering coding, preferences, permissions, staleness, contradictions,
 decisions, evidence, policy, and cross-tenant isolation. Personal cases are

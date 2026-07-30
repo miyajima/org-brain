@@ -117,6 +117,72 @@ test("local sparse embeddings retrieve a synonym without external services", asy
   }
 });
 
+test("hybrid_v3 searches derived units, preserves ACLs, and rebuilds projections", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const allowed = await store.capture(captureInput({
+      kind: "preference",
+      external_key: "preference:drink",
+      content: [
+        "user: I used to order black coffee every morning.",
+        "assistant: You said a compact brewer would fit the kitchen.",
+        "user: I now prefer jasmine tea and avoid coffee."
+      ].join("\n"),
+      summary: "Current drink preference",
+      permissions: [{
+        principal_type: "principal",
+        principal_id: "reader",
+        permissions: ["read"]
+      }]
+    }));
+    await store.capture(captureInput({
+      tenant_id: "other",
+      external_key: "preference:other-tenant",
+      content: "user: I now prefer jasmine tea.",
+      summary: "Other tenant preference"
+    }));
+
+    const denied = await store.search({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer?",
+      search_mode: "hybrid_v3",
+      principal_id: "intruder",
+      limit: 5
+    });
+    assert.equal(denied.length, 0);
+
+    const results = await store.search({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer?",
+      search_mode: "hybrid_v3",
+      principal_id: "reader",
+      limit: 5
+    });
+    assert.equal(results[0].memory.id, allowed.memory_id);
+    assert.equal(results.length, 1);
+
+    let verification = await store.verify();
+    assert.equal(verification.ok, true);
+    assert.ok(verification.retrieval_unit_count >= 4);
+    assert.equal(verification.retrieval_unit_count, verification.retrieval_unit_fts_count);
+    assert.equal(verification.retrieval_unit_count, verification.retrieval_unit_embedding_count);
+
+    await store.rebuildIndex();
+    verification = await store.verify();
+    assert.equal(verification.ok, true);
+    assert.ok(verification.retrieval_unit_count >= 4);
+
+    const beforeSuppressionUnitCount = verification.retrieval_unit_count;
+    await store.suppress("personal", allowed.memory_id, "obsolete");
+    verification = await store.verify();
+    assert.equal(verification.ok, true);
+    assert.ok(verification.retrieval_unit_count < beforeSuppressionUnitCount);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("external keys are idempotent and preserve version history", async () => {
   const ctx = await fixture();
   try {

@@ -24,6 +24,9 @@ export type RetrievalIndexDocument = {
   text: string;
   entities: string[];
   updated_at: number;
+  memory_id?: string;
+  unit_type?: string;
+  speaker?: string | null;
 };
 
 export type RetrievalIndexHit = {

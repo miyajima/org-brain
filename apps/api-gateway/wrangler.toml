@@ -3,13 +3,19 @@ main = "src/index.ts"
 compatibility_date = "2026-03-03"
 compatibility_flags = ["nodejs_compat"]
 
-# Optional real semantic retrieval:
-# [ai]
-# binding = "AI"
+[vars]
+HYBRID_V3_MODE = "shadow"
+
+[ai]
+binding = "AI"
 #
 # [[vectorize]]
 # binding = "MEMORY_VECTOR_INDEX"
 # index_name = "orgbrain-memory-384-cosine"
+
+[[vectorize]]
+binding = "MEMORY_VECTOR_INDEX_V3"
+index_name = "orgbrain-memory-units-v3-1024"
 
 # Optional authenticated API rate limiting. Choose an account-unique positive
 # integer namespace before enabling.
@@ -33,6 +39,10 @@ bucket_name = "open-brain-bucket"
 [[queues.producers]]
 binding = "ORG_BUS_OUT"
 queue = "org-bus"
+
+[[queues.producers]]
+binding = "RETRIEVAL_PROJECTION_QUEUE"
+queue = "orgbrain-retrieval-projection-v3"
 
 [durable_objects]
 bindings = [

@@ -6,6 +6,7 @@ import {
   MEMORY_OPERATIONS,
   MEMORY_SCOPE_TYPES,
   assessMemoryUsefulness,
+  buildRetrievalUnits,
   normalizeLifecycleState,
   normalizeMemoryKind,
   normalizeScopeType,
@@ -14,7 +15,8 @@ import {
   type MemoryKind,
   type MemoryLifecycleState,
   type MemoryOperation,
-  type MemoryScopeType
+  type MemoryScopeType,
+  type MemorySourceReference
 } from "@org-brain/shared";
 import type { Env } from "./types";
 
@@ -390,6 +392,21 @@ async function saveCurrentSnapshot(
     lifecycleState === "suppressed" ? Date.now() : snapshot.created_at;
   const updatedAt = Date.now();
   const contentHash = await sha256(snapshot.content);
+  const retrievalUnits =
+    lifecycleState === "suppressed"
+      ? []
+      : await buildRetrievalUnits({
+          id: args.memoryId,
+          tenant_id: args.tenantId,
+          project_id: snapshot.project_id,
+          content: snapshot.content,
+          summary: snapshot.summary,
+          created_at: snapshot.created_at,
+          updated_at: updatedAt,
+          valid_from: snapshot.valid_from,
+          valid_until: snapshot.valid_until,
+          source_references: snapshot.source_references as MemorySourceReference[]
+        });
   const statements: D1PreparedStatement[] = [];
 
   if (args.rowExists) {
@@ -502,8 +519,70 @@ async function saveCurrentSnapshot(
       contentHash
     })
   );
+  statements.push(
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_fts WHERE memory_id = ? AND tenant_id = ?"
+    ).bind(args.memoryId, args.tenantId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units WHERE memory_id = ? AND tenant_id = ?"
+    ).bind(args.memoryId, args.tenantId)
+  );
+  for (const unit of retrievalUnits) {
+    statements.push(
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO memory_retrieval_units(
+          id, memory_id, tenant_id, project_id, unit_type, speaker, text,
+          event_at, valid_from, valid_until, source_ref_json, source_span_start,
+          source_span_end, content_hash, extractor, extractor_version,
+          extraction_state, degraded_reason, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        unit.id,
+        unit.memory_id,
+        unit.tenant_id,
+        unit.project_id,
+        unit.unit_type,
+        unit.speaker,
+        unit.text,
+        unit.event_at,
+        unit.valid_from,
+        unit.valid_until,
+        unit.source_ref_json,
+        unit.source_span_start,
+        unit.source_span_end,
+        unit.content_hash,
+        unit.extractor,
+        unit.extractor_version,
+        unit.extraction_state,
+        unit.degraded_reason,
+        unit.created_at
+      ),
+      env.OPEN_BRAIN_DB.prepare(
+        "INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
+      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
+    );
+  }
 
   await runBatchChunks(env.OPEN_BRAIN_DB, statements);
+  if (
+    lifecycleState !== "suppressed" &&
+    env.RETRIEVAL_PROJECTION_QUEUE &&
+    (env.HYBRID_V3_MODE === "canary" || env.HYBRID_V3_MODE === "on")
+  ) {
+    await env.RETRIEVAL_PROJECTION_QUEUE.send(
+      {
+        version: 1,
+        tenant_id: args.tenantId,
+        memory_id: args.memoryId,
+        content_hash: contentHash,
+        requested_at: Date.now()
+      },
+      { contentType: "json" }
+    ).catch(() => {
+      // The deterministic projection remains queryable and explicitly marked
+      // degraded when asynchronous quality extraction is unavailable.
+    });
+  }
 }
 
 export async function captureMemoryItems(
@@ -851,6 +930,12 @@ export async function deleteMemory(
       args.tenantId,
       args.memoryId
     ),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_fts WHERE tenant_id = ? AND memory_id = ?"
+    ).bind(args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?"
+    ).bind(args.tenantId, args.memoryId),
     env.OPEN_BRAIN_DB.prepare("DELETE FROM memory_versions WHERE tenant_id = ? AND memory_id = ?").bind(
       args.tenantId,
       args.memoryId

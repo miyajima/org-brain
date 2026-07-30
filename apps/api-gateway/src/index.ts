@@ -10,7 +10,7 @@ import {
   sendAgentMessage
 } from "./agent-message-service";
 import { appendAuditEvent, listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
-import { rebuildSemanticIndex } from "./retrieval-index-service";
+import { backfillV3RetrievalUnits, rebuildSemanticIndex } from "./retrieval-index-service";
 import { getOperationsStatus } from "./operations-service";
 import { assertRequestRateLimit } from "./rate-limit-service";
 import { extractMemoryCandidates } from "./memory-extraction-service";
@@ -260,6 +260,22 @@ app.post("/v1/retrieval-index/rebuild", async (c) => {
   const body = await c.req.json<{ tenant_id?: string; project_id?: string | null }>();
   const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
   return jsonOk(c, await rebuildSemanticIndex(c.env, tenantId, body.project_id));
+});
+
+app.post("/v1/retrieval-index/v3/backfill", async (c) => {
+  const body = await c.req.json<{
+    tenant_id?: string;
+    project_id?: string | null;
+    cursor?: string | null;
+    limit?: number;
+  }>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await backfillV3RetrievalUnits(c.env, {
+    tenantId,
+    projectId: body.project_id,
+    cursor: body.cursor,
+    limit: body.limit
+  }));
 });
 
 app.get("/v1/ops/status", async (c) => {

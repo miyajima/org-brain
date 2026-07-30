@@ -1,0 +1,22 @@
+name = "orgbrain-retrieval-projector"
+main = "src/index.ts"
+compatibility_date = "2026-03-03"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "OPEN_BRAIN_DB"
+database_name = "open-brain"
+database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
+
+[[vectorize]]
+binding = "MEMORY_VECTOR_INDEX_V3"
+index_name = "orgbrain-memory-units-v3-1024"
+
+[[queues.consumers]]
+queue = "orgbrain-retrieval-projection-v3"
+max_batch_size = 5
+max_batch_timeout = 5
+dead_letter_queue = "orgbrain-retrieval-projection-v3-dlq"
+max_retries = 5

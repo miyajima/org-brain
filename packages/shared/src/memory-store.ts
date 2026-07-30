@@ -5,7 +5,7 @@ import type {
   MemoryScopeType
 } from "./memory-lifecycle-types";
 
-export const MEMORY_SCHEMA_VERSION = 15;
+export const MEMORY_SCHEMA_VERSION = 16;
 
 export type MemorySourceReference = {
   type: string;
@@ -114,6 +114,7 @@ export type MemorySearchInput = {
   limit?: number;
   include_suppressed?: boolean;
   principal_id?: string | null;
+  search_mode?: "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3";
   at?: number;
 };
 
@@ -124,6 +125,10 @@ export type MemoryVerification = {
   version_count: number;
   fts_count: number;
   content_digest: string;
+  retrieval_unit_count?: number;
+  retrieval_unit_fts_count?: number;
+  retrieval_unit_embedding_count?: number;
+  retrieval_unit_digest?: string;
   errors: string[];
 };
 
