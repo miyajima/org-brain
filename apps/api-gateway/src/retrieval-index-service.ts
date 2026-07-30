@@ -11,7 +11,7 @@ import type { Env } from "./types";
 const EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5" as const;
 export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
 export const RERANKER_MODEL_V3 = "@cf/baai/bge-reranker-base" as const;
-const BATCH_SIZE = 64;
+const BATCH_SIZE = 8;
 
 function extractEmbeddings(output: unknown): number[][] {
   if (!output || typeof output !== "object") {
@@ -140,7 +140,7 @@ class CloudflareVectorRetrievalIndexV3 extends CloudflareVectorRetrievalIndex {
 
   protected override async embedMany(texts: string[]): Promise<number[][]> {
     const output = await this.v3Ai.run(EMBEDDING_MODEL_V3, {
-      text: texts.map((text) => text.slice(0, 24_000))
+      text: texts.map((text) => text.slice(0, 6_000))
     });
     return extractEmbeddings(output);
   }
