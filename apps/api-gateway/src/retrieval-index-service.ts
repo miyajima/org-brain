@@ -11,7 +11,7 @@ import type { Env } from "./types";
 const EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5" as const;
 export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
 export const RERANKER_MODEL_V3 = "@cf/baai/bge-reranker-base" as const;
-const BATCH_SIZE = 4;
+const BATCH_SIZE = 16;
 const DELETE_BATCH_SIZE = 100;
 const UPSERT_CONCURRENCY = 3;
 

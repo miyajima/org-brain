@@ -2,6 +2,35 @@ import { describe, expect, it } from "vitest";
 import { CloudflareVectorRetrievalIndex } from "../src/retrieval-index-service";
 
 describe("CloudflareVectorRetrievalIndex", () => {
+  it("embeds and upserts documents in bounded high-throughput batches", async () => {
+    const embeddingBatchSizes: number[] = [];
+    const upsertBatchSizes: number[] = [];
+    const ai = {
+      async run(_model: string, input: { text: string[] }) {
+        embeddingBatchSizes.push(input.text.length);
+        return { data: input.text.map(() => [0.1, 0.2, 0.3]) };
+      }
+    };
+    const vector = {
+      async upsert(items: unknown[]) {
+        upsertBatchSizes.push(items.length);
+        return { mutationId: "mutation-batch" };
+      }
+    };
+    const index = new CloudflareVectorRetrievalIndex(ai as any, vector as any);
+    await index.upsert(Array.from({ length: 33 }, (_, itemIndex) => ({
+      id: `memory-${itemIndex}`,
+      tenant_id: "tenant-a",
+      project_id: "project-a",
+      text: `semantic memory ${itemIndex}`,
+      entities: [],
+      updated_at: itemIndex
+    })));
+
+    expect(embeddingBatchSizes.sort((left, right) => right - left)).toEqual([16, 16, 1]);
+    expect(upsertBatchSizes.sort((left, right) => right - left)).toEqual([16, 16, 1]);
+  });
+
   it("uses real embedding output and tenant namespaces for upsert and query", async () => {
     const embedded: unknown[] = [];
     const upserts: any[] = [];
