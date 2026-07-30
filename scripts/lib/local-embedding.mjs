@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const LOCAL_EMBEDDING_PROVIDER = "local-sparse-feature-hash-v1";
+export const LOCAL_EMBEDDING_PROVIDER = "local-sparse-feature-hash-v2";
 export const LOCAL_EMBEDDING_FEATURE_LIMIT = 32;
 
 const CONCEPT_GROUPS = [
@@ -11,7 +11,15 @@ const CONCEPT_GROUPS = [
   ["failure", "error", "bug", "失敗", "エラー", "不具合"],
   ["backup", "snapshot", "バックアップ", "復元"],
   ["credential", "secret", "token", "資格情報", "秘密", "トークン"],
-  ["memory", "knowledge", "記憶", "メモリ", "知識"]
+  ["memory", "knowledge", "記憶", "メモリ", "知識"],
+  ["doctor", "physician", "dermatologist", "clinician", "医師", "医者"],
+  ["publication", "paper", "article", "conference", "research", "論文", "学会", "研究"],
+  ["sibling", "brother", "sister", "きょうだい", "兄弟", "姉妹"],
+  ["ingredient", "recipe", "meal", "dinner", "food", "cooking", "cook", "baking", "bake", "dish", "dessert", "食材", "レシピ", "料理"],
+  ["homegrown", "garden", "harvest", "grow", "栽培", "庭", "収穫"],
+  ["appliance", "smoker", "oven", "grill", "blender", "toaster", "家電", "調理器具"],
+  ["battery", "power", "charger", "charging", "バッテリー", "充電", "電源"],
+  ["milestone", "launch", "achievement", "breakthrough", "節目", "達成"]
 ];
 
 const CONCEPT_BY_TERM = new Map(

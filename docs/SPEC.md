@@ -105,8 +105,12 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `search_mode=hybrid_v2` は lexical / semantic / graph / time / authority /
   utility を融合し、ACL と validity を順位付け前に適用する。semantic
   provider 未設定時は null と degraded metadata を返し、擬似 score を作らない。
-  個人SQLiteモードは外部通信を行わない `local-sparse-feature-hash-v1`
+  個人SQLiteモードは外部通信を行わない `local-sparse-feature-hash-v2`
   投影を既定で構築し、CloudモードはWorkers AI + Vectorizeを任意選択できる
+- `search_mode=hybrid_v3` は session/turn/atomic projection をFTSとsemantic
+  RRFで統合し、親memoryへ集約してからrerankする。会話の前置きを除いた主題語、
+  限定的な形態・概念展開、明示された相対日時・話者・unit typeだけをboostし、
+  通常質問にはrecencyを加えない
 - `GET /v1/ops/status` はadmin専用で、memory競合・期限切れ、decision review、
   task失敗、監査、token、legal hold、検索品質、索引構成、RPO/RTO目標を返す。
   未計測の検索指標は0ではなくnullを返す

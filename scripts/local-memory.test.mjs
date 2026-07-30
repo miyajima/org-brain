@@ -183,6 +183,88 @@ test("hybrid_v3 searches derived units, preserves ACLs, and rebuilds projections
   }
 });
 
+test("hybrid_v3 keeps exact lexical evidence above generic intent matches", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const exact = await store.capture(captureInput({
+      kind: "fact",
+      external_key: "fact:shampoo",
+      content: "user: I currently use Trader Joe's lavender shampoo.",
+      summary: "Current shampoo brand",
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_000
+    }));
+    for (let index = 0; index < 4; index += 1) {
+      await store.capture(captureInput({
+        kind: "fact",
+        external_key: `fact:generic-current-${index}`,
+        content: [
+          "user: I currently use the updated workflow.",
+          "user: My current process is documented.",
+          "user: I now use the latest available option."
+        ].join("\n"),
+        summary: "Current generic workflow",
+        created_at: 1_700_100_000_000 + index,
+        updated_at: 1_700_100_000_000 + index
+      }));
+    }
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "What brand of shampoo do I currently use?",
+      search_mode: "hybrid_v3",
+      at: 1_700_200_000_000,
+      limit: 5
+    });
+    assert.equal(results[0].memory.id, exact.memory_id);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("hybrid_v3 ranks explicit relative-time targets without global recency bias", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const now = 1_720_000_000_000;
+    const targetEventAt = now - 28 * 24 * 60 * 60 * 1000;
+    const target = await store.capture(captureInput({
+      kind: "event",
+      external_key: "event:milestone-target",
+      content: "user: I reached a significant business milestone.",
+      summary: "Business milestone",
+      source_references: [{
+        type: "session",
+        ref: "target-session",
+        captured_at: targetEventAt
+      }]
+    }));
+    await store.capture(captureInput({
+      kind: "event",
+      external_key: "event:milestone-recent",
+      content: "user: I reached a significant business milestone.",
+      summary: "Business milestone",
+      source_references: [{
+        type: "session",
+        ref: "recent-session",
+        captured_at: now - 2 * 24 * 60 * 60 * 1000
+      }]
+    }));
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "What significant business milestone did I mention four weeks ago?",
+      search_mode: "hybrid_v3",
+      at: now,
+      limit: 2
+    });
+    assert.equal(results[0].memory.id, target.memory_id);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("external keys are idempotent and preserve version history", async () => {
   const ctx = await fixture();
   try {

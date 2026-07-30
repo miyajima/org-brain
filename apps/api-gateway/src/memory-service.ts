@@ -752,7 +752,17 @@ export async function searchMemories(
   );
   const hasFilters = Object.values(filters).some(Boolean);
   if (!hasFilters) {
-    const response = { ...base, results: base.results.slice(0, request.limit) };
+    const results = base.results.slice(0, request.limit);
+    const response = {
+      ...base,
+      results,
+      meta: {
+        ...base.meta,
+        returned_count: results.length,
+        top_result_ids: results.map((item) => item.id),
+        top_result_ranks: results.map((item) => item.score)
+      }
+    };
     await bestEffortRefreshMemoryResults(env, request.tenantId, response.results.map((item) => item.id), "api-memory-search");
     return response;
   }

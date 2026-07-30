@@ -36,6 +36,12 @@ Time, speaker, and unit-type boosts are only enabled by generic query intent.
 Normal questions do not receive a recency or authority boost. Parent ACL and
 validity checks run before results are returned.
 
+Query framing words are removed before FTS candidate generation so subject
+terms are not displaced by conversational phrasing. Bounded morphology and a
+small general concept lexicon improve the network-free sparse fallback.
+Explicit relative-time queries add time-windowed lexical candidates and rank
+them by temporal distance before BM25; ordinary queries remain relevance-first.
+
 `meta.retrieval` reports provider versions, lexical/semantic/parent candidate
 counts, projection lag, and degraded reasons while preserving the existing
 result shape.
@@ -50,8 +56,10 @@ result shape.
 - Runtime status: `GET /v1/ops/status`
 - Rollout mode: `HYBRID_V3_MODE=shadow`
 
-Backfill is checkpointed per tenant/project. Shadow events store only a query
-hash and aggregate overlap/empty/degraded/latency fields.
+Backfill is checkpointed per tenant/project. Rebuilds delete prior Vectorize
+unit IDs before replacing D1 projections, so changed unit IDs cannot leave
+stale semantic hits. Shadow events store only a query hash and aggregate
+overlap/empty/degraded/latency fields.
 
 ### Live verification — 2026-07-30
 
@@ -88,8 +96,19 @@ and applied after search. Errors are written as failed rows; they are never
 excluded. Concurrency uses an independent SQLite database per question, so
 parallel evaluations do not share retrieval state.
 
-The 2026-07-30 local sparse fallback smoke scored 8/10 R@5 with 73.38 ms search
-p95. This is diagnostic only: it is not the 500-question acceptance result and
-does not satisfy the 98.6% gate. Canary and first-place claims remain blocked
-until the sealed holdout, five repeats, category gates, cost/latency gates, and
-cross-benchmark/competitor runs pass.
+The frozen 2026-07-30 local sparse fallback implementation scored 493/500
+(98.6% R@5) in one full product-path run, with 99/100 in the hash-selected
+holdout partition and 401.437 ms search p95. Dataset SHA-256:
+`35961662da991bec512124586e2e399a335e9e7c94272403e820eccc9946589e`.
+Raw rows: `/tmp/orgbrain-product-longmemeval-final-500.jsonl`.
+
+Category results were knowledge update 78/78, multi-session 131/133,
+single-session assistant 56/56, preference 30/30, single-session user 67/70,
+and temporal reasoning 131/133. Multi-session and single-session-user therefore
+missed their strict category gates.
+
+This is a development-guided, single-repeat diagnostic: the dataset was
+inspected during tuning, so the 100-question partition is not claim-worthy as
+a sealed holdout. Canary and first-place claims remain blocked until an
+untouched holdout, five repeats, every category/cost/latency gate, and the
+cross-benchmark and same-harness competitor runs pass.

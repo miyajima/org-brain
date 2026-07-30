@@ -6,6 +6,9 @@ All notable changes to Org Brain are documented here. Releases use semantic vers
 
 - Add rebuildable retrieval units and opt-in `hybrid_v3` search across local
   SQLite, D1 FTS, Qwen3 Vectorize, and BGE reranking.
+- Improve `hybrid_v3` with event-time/validity separation, query-specific
+  lexical evidence, relative-time retrieval, bounded intent boosts, and stale
+  Vectorize cleanup during projection rebuilds.
 - Add a Gemini 3.5 Flash-Lite asynchronous atomic projection Worker with an
   explicit deterministic degraded fallback, checkpointed backfill, shadow
   metrics, and v3 operational coverage.

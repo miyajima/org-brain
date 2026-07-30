@@ -95,7 +95,9 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
   }
 
   async remove(_tenantId: string, ids: string[]): Promise<void> {
-    if (ids.length > 0) await this.index.deleteByIds(ids);
+    for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+      await this.index.deleteByIds(ids.slice(offset, offset + BATCH_SIZE));
+    }
   }
 
   async query(input: RetrievalIndexQuery): Promise<RetrievalIndexHit[]> {
@@ -482,6 +484,16 @@ export async function backfillV3RetrievalUnits(
       valid_until: number | null;
       content_hash: string;
     }>();
+  const memoryIds = rows.results.map((row) => row.id);
+  const index = getV3SemanticRetrievalIndex(env);
+  if (index && memoryIds.length > 0) {
+    const placeholders = memoryIds.map(() => "?").join(",");
+    const previousUnits = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id FROM memory_retrieval_units
+       WHERE tenant_id = ? AND memory_id IN (${placeholders})`
+    ).bind(options.tenantId, ...memoryIds).all<{ id: string }>();
+    await index.remove(options.tenantId, previousUnits.results.map((unit) => unit.id));
+  }
   let projectedUnits = 0;
   for (const row of rows.results) {
     let sourceReferences: MemorySourceReference[] = [];
@@ -549,7 +561,6 @@ export async function backfillV3RetrievalUnits(
       }, { contentType: "json" });
     }
   }
-  const memoryIds = rows.results.map((row) => row.id);
   const vectorize = await syncMemoryIdsToV3SemanticIndex(env, options.tenantId, memoryIds);
   const nextCursor = rows.results.at(-1)?.id ?? cursor;
   const done = rows.results.length < limit;

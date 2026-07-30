@@ -191,7 +191,7 @@ async function main() {
     settings: {
       record_count: options.count,
       query_count: options.queries,
-      embedding_provider: "local-sparse-feature-hash-v1",
+      embedding_provider: "local-sparse-feature-hash-v2",
       target_p95_ms: 500
     },
     metrics: {

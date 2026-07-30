@@ -5,14 +5,15 @@
 OrgBrain cannot currently substantiate a first-place claim for its production
 implementation.
 
-The LongMemEval-specific evaluation profile is competitive, but the current
-product retrieval path is not:
+The LongMemEval-specific evaluation profile is competitive. The improved
+product retrieval path now exceeds the cited public GBrain anchor numerically
+in a development-guided diagnostic, but it is not yet ranking eligible:
 
 | OrgBrain path | Dataset | Result |
 | --- | --- | ---: |
 | LongMemEval-specific evidence-card profile | LongMemEval-S, 500 questions | 96.8% answer accuracy, 100% evidence R@5 |
 | Production `LocalMemoryStore.capture/search` | LongMemEval-S, 500 questions | 15.0% retrieval R@5 (75/500) |
-| Production `hybrid_v3` sparse fallback diagnostic | Hash-ordered LongMemEval-S sample, 10 questions | 80.0% retrieval R@5 (8/10); not rank eligible |
+| Production `hybrid_v3` sparse fallback diagnostic | LongMemEval-S, 500 questions, repeat 1 | 98.6% retrieval R@5 (493/500), p95 401.437 ms; not rank eligible |
 | Fixed organization/personal suite | `competitive-memory-v1`, 200 tasks, repeat 5 | 100% accuracy, R@5, and pass^5 |
 
 The fixed 200-task suite remains ranking-ineligible because the four external
@@ -70,6 +71,29 @@ Category retrieval recall@5:
 | Single-session user | 18/70 | 25.71% |
 | Temporal reasoning | 10/133 | 7.52% |
 
+### Improved `hybrid_v3` diagnostic
+
+- Questions: 500, one repeat
+- Retrieval recall@5: 98.6% (493/500)
+- Hash-selected 100-question partition: 99.0% (99/100)
+- Search latency p95: 401.437 ms
+- Dataset SHA-256:
+  `35961662da991bec512124586e2e399a335e9e7c94272403e820eccc9946589e`
+- Raw rows: `/tmp/orgbrain-product-longmemeval-final-500.jsonl`
+
+| Category | Hits / questions | R@5 | Strict gate |
+| --- | ---: | ---: | --- |
+| Knowledge update | 78/78 | 100.00% | pass |
+| Multi-session | 131/133 | 98.50% | fail (132 required) |
+| Single-session assistant | 56/56 | 100.00% | pass |
+| Preference | 30/30 | 100.00% | pass |
+| Single-session user | 67/70 | 95.71% | fail (69 required) |
+| Temporal reasoning | 131/133 | 98.50% | pass |
+
+The full dataset was inspected during development, so the 100-question
+partition is not treated as a sealed holdout. This repeat is quality evidence
+for the implementation, not a leaderboard submission.
+
 ## Current official external anchors
 
 These are official published results, not same-harness reruns. Only matching
@@ -99,14 +123,14 @@ Official repository revisions inspected:
 
 ## Decision
 
-OrgBrain leads the cited public retrieval anchors only inside its specialized
-LongMemEval evidence-card profile. The current product path trails GBrain by
-82.6 percentage points on retrieval R@5 and must be improved before any
-first-place production claim is made.
+The improved product-path diagnostic is 1.0 percentage point above the cited
+GBrain public retrieval anchor. It does not establish first place because it
+was tuned with visibility into the dataset, has only one repeat, misses two
+category gates, and has not rerun competitors under the same harness.
 
 The session-aware projection, intent-limited temporal handling, RRF, dense
 retrieval, and reranking are now implemented in the production path as
-`hybrid_v3` and deployed in shadow mode. The next evidence target is the sealed
-500-question, five-repeat run plus same-harness competitor bridges and weighted
-capability evidence. The 10-question diagnostic is not sufficient to revise the
-ranking.
+`hybrid_v3` and deployed in shadow mode. The next evidence target is an
+untouched holdout and five-repeat run, then same-harness competitor bridges and
+weighted capability evidence. Until those gates pass, the comparison remains
+“numerically leading diagnostic, overall rank unproven.”

@@ -144,6 +144,21 @@ function eventTimestamp(value: string | null | undefined, fallback: number): num
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function firstSourceReference(memory: StoredMemory): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(memory.source_refs_json || "[]");
+    return Array.isArray(parsed) ? asObject(parsed[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function sourceEventTimestamp(memory: StoredMemory): number {
+  const capturedAt = Number(firstSourceReference(memory)?.captured_at);
+  if (Number.isFinite(capturedAt) && capturedAt > 0) return capturedAt;
+  return memory.valid_from ?? memory.created_at;
+}
+
 async function embedMany(texts: string[], env: Env): Promise<number[][]> {
   const output = await env.AI.run(EMBEDDING_MODEL, {
     text: texts.map((text) => text.slice(0, 4_000))
@@ -163,6 +178,11 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
      FROM memories WHERE tenant_id = ? AND id = ?`
   ).bind(job.tenant_id, job.memory_id).first<StoredMemory>();
   if (!row || row.content_hash !== job.content_hash || row.lifecycle_state === "suppressed") return;
+  const previousAtomicUnits = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id FROM memory_retrieval_units
+     WHERE tenant_id = ? AND memory_id = ?
+       AND unit_type IN ('synopsis','fact','update','preference','event','quantity')`
+  ).bind(row.tenant_id, row.id).all<{ id: string }>();
   const extraction = await extract(row, env.GEMINI_API_KEY);
   const candidates: Array<ExtractedAtomicUnit & { type: string }> = [
     ...(extraction.synopsis ? [{ type: "synopsis", text: extraction.synopsis, speaker: null, event_at: null }] : []),
@@ -180,10 +200,10 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
       unit_type: candidate.type,
       speaker: candidate.speaker ?? null,
       text: candidate.text,
-      event_at: eventTimestamp(candidate.event_at, row.valid_from ?? row.created_at),
+      event_at: eventTimestamp(candidate.event_at, sourceEventTimestamp(row)),
       valid_from: row.valid_from,
       valid_until: row.valid_until,
-      source_ref_json: JSON.stringify(JSON.parse(row.source_refs_json || "[]")[0] ?? null),
+      source_ref_json: JSON.stringify(firstSourceReference(row)),
       content_hash: contentHash,
       created_at: row.updated_at ?? row.created_at
     });
@@ -227,6 +247,10 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
         "INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
       ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
     );
+  }
+  const staleVectorIds = previousAtomicUnits.results.map((unit) => unit.id);
+  if (staleVectorIds.length > 0) {
+    await env.MEMORY_VECTOR_INDEX_V3.deleteByIds(staleVectorIds);
   }
   await env.OPEN_BRAIN_DB.batch(statements);
   const values = units.length > 0 ? await embedMany(units.map((unit) => unit.text), env) : [];

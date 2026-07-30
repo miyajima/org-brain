@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { runProductRetrieval } from "./product-longmemeval-benchmark.mjs";
+import { normalizeRows, runProductRetrieval } from "./product-longmemeval-benchmark.mjs";
+
+test("normalizes the dataset preference category to the acceptance gate name", () => {
+  const [row] = normalizeRows(JSON.stringify([{
+    question_id: "question-1",
+    question_type: "single-session-preference",
+    question: "What do I prefer?",
+    haystack_sessions: [["user: I prefer tea."]],
+    haystack_session_ids: ["session-1"],
+    answer_session_ids: ["session-1"]
+  }]));
+  assert.equal(row.category, "preference");
+});
 
 test("product retrieval runtime never receives evaluation labels or question identifiers", async () => {
   const observed = [];
@@ -43,6 +55,8 @@ test("product retrieval runtime never receives evaluation labels or question ide
     assert.equal(serialized.includes(forbidden), false, forbidden);
   }
   assert.equal(observed.at(-1).input.search_mode, "hybrid_v3");
+  assert.equal(observed[0].input.valid_from, null);
+  assert.equal(observed[0].input.created_at, Date.parse("2026-01-01"));
 });
 
 test("product retrieval modules contain no LongMemEval-specific routing", async () => {

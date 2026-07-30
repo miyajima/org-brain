@@ -12,6 +12,8 @@ import {
 import {
   analyzeRetrievalIntent,
   buildRetrievalUnits,
+  retrievalQueryTokens,
+  retrievalUnitLexicalSpecificity,
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
 
@@ -679,13 +681,16 @@ function migrateSchema(db) {
 }
 
 function buildFtsQuery(query, operator = "AND") {
-  const tokens = String(query)
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_-]+/u)
-    .map((token) => token.trim().replaceAll('"', ""))
-    .filter((token) => token.length >= 2)
+  const tokens = retrievalQueryTokens(query)
+    .map((token) => token.replaceAll('"', ""))
     .slice(0, 16);
   return tokens.map((token) => `"${token}"*`).join(` ${operator} `);
+}
+
+function relativeWeekdayAgeMs(referenceAt, weekday) {
+  if (!Number.isInteger(weekday)) return null;
+  const deltaDays = (new Date(referenceAt).getUTCDay() - weekday + 7) % 7 || 7;
+  return deltaDays * 24 * 60 * 60 * 1000;
 }
 
 function searchRetrievalUnitsV3(db, {
@@ -698,6 +703,11 @@ function searchRetrievalUnitsV3(db, {
   at
 }) {
   const candidateLimit = 50;
+  const temporalCandidateLimit = 200;
+  const intent = analyzeRetrievalIntent(query);
+  const relativeAgeMs =
+    intent.relative_age_ms ?? relativeWeekdayAgeMs(at, intent.relative_weekday);
+  const relativeTargetAt = relativeAgeMs === null ? null : at - relativeAgeMs;
   const ftsQuery = buildFtsQuery(query, "OR");
   const lexicalRows = ftsQuery
     ? db.prepare(
@@ -715,7 +725,9 @@ function searchRetrievalUnitsV3(db, {
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (u.valid_from IS NULL OR u.valid_from <= ?)
          AND (u.valid_until IS NULL OR u.valid_until > ?)
-       ORDER BY bm25(memory_retrieval_units_fts) ASC
+       ORDER BY bm25(memory_retrieval_units_fts) ASC,
+                u.content_hash ASC,
+                COALESCE(u.event_at, u.created_at) ASC
        LIMIT ?`
     ).all(
       tenantId,
@@ -728,6 +740,76 @@ function searchRetrievalUnitsV3(db, {
       candidateLimit
     )
     : [];
+  const relativeWindowMs =
+    relativeAgeMs === null
+      ? null
+      : intent.relative_weekday !== null
+        ? 24 * 60 * 60 * 1000
+        : Math.max(24 * 60 * 60 * 1000, Math.min(30 * 24 * 60 * 60 * 1000, relativeAgeMs * 0.5));
+  const temporalLexicalRows =
+    ftsQuery && relativeTargetAt !== null && relativeWindowMs !== null
+      ? db.prepare(
+        `SELECT u.*, bm25(memory_retrieval_units_fts) AS raw_rank
+         FROM memory_retrieval_units_fts
+         JOIN memory_retrieval_units u
+           ON u.id = memory_retrieval_units_fts.unit_id
+          AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+         JOIN memories m
+           ON m.id = u.memory_id
+          AND m.tenant_id = u.tenant_id
+         WHERE memory_retrieval_units_fts.tenant_id = ?
+           AND memory_retrieval_units_fts MATCH ?
+           AND (? IS NULL OR u.project_id = ?)
+           AND (? = 1 OR m.lifecycle_state != 'suppressed')
+           AND (u.valid_from IS NULL OR u.valid_from <= ?)
+           AND (u.valid_until IS NULL OR u.valid_until > ?)
+           AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
+         ORDER BY ABS(COALESCE(u.event_at, u.created_at) - ?) ASC,
+                  bm25(memory_retrieval_units_fts) ASC,
+                  u.content_hash ASC,
+                  COALESCE(u.event_at, u.created_at) ASC
+         LIMIT ?`
+      ).all(
+        tenantId,
+        ftsQuery,
+        projectId,
+        projectId,
+        includeSuppressed ? 1 : 0,
+        at,
+        at,
+        relativeTargetAt,
+        relativeWindowMs,
+        relativeTargetAt,
+        candidateLimit
+      )
+      : [];
+
+  const temporalRows = relativeTargetAt === null
+    ? []
+    : db.prepare(
+      `SELECT u.*, NULL AS raw_rank
+       FROM memory_retrieval_units u
+       JOIN memories m
+         ON m.id = u.memory_id
+        AND m.tenant_id = u.tenant_id
+       WHERE u.tenant_id = ?
+         AND u.unit_type = 'session'
+         AND (? IS NULL OR u.project_id = ?)
+         AND (? = 1 OR m.lifecycle_state != 'suppressed')
+         AND (u.valid_from IS NULL OR u.valid_from <= ?)
+         AND (u.valid_until IS NULL OR u.valid_until > ?)
+       ORDER BY ABS(COALESCE(u.event_at, u.created_at) - ?) ASC
+       LIMIT ?`
+    ).all(
+      tenantId,
+      projectId,
+      projectId,
+      includeSuppressed ? 1 : 0,
+      at,
+      at,
+      relativeTargetAt,
+      temporalCandidateLimit
+    );
 
   const rawQueryFeatures = embedLocalText(query);
   let queryFeatures = rawQueryFeatures;
@@ -749,14 +831,23 @@ function searchRetrievalUnitsV3(db, {
       .slice(0, 12);
   }
   const semanticScores = new Map();
+  const semanticOrderKeys = new Map();
   const featureLookup = db.prepare(
-    `SELECT unit_id, weight
-     FROM memory_retrieval_unit_features
-     WHERE tenant_id = ? AND feature_hash = ?
+    `SELECT f.unit_id, f.weight, u.content_hash, u.unit_type, u.event_at, u.text
+     FROM memory_retrieval_unit_features f
+     JOIN memory_retrieval_units u
+       ON u.id = f.unit_id
+      AND u.tenant_id = f.tenant_id
+     WHERE f.tenant_id = ? AND f.feature_hash = ?
+     ORDER BY u.content_hash, u.unit_type, COALESCE(u.event_at, u.created_at), u.text
      LIMIT ?`
   );
   for (const feature of queryFeatures) {
     for (const match of featureLookup.all(tenantId, feature.feature_hash, candidateLimit * 20)) {
+      semanticOrderKeys.set(
+        match.unit_id,
+        `${match.content_hash}\0${match.unit_type}\0${match.event_at ?? 0}\0${match.text}`
+      );
       semanticScores.set(
         match.unit_id,
         (semanticScores.get(match.unit_id) ?? 0) + Number(match.weight) * feature.weight
@@ -765,9 +856,15 @@ function searchRetrievalUnitsV3(db, {
   }
   const semanticRows = [...semanticScores.entries()]
     .map(([unitId, score]) => ({ unitId, score }))
-    .sort((left, right) => right.score - left.score)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        String(semanticOrderKeys.get(left.unitId)).localeCompare(String(semanticOrderKeys.get(right.unitId)))
+    )
     .slice(0, candidateLimit);
   const unitById = new Map(lexicalRows.map((row) => [row.id, row]));
+  for (const row of temporalLexicalRows) unitById.set(row.id, row);
+  for (const row of temporalRows) unitById.set(row.id, row);
   const missingUnitIds = semanticRows.map((row) => row.unitId).filter((id) => !unitById.has(id));
   if (missingUnitIds.length > 0) {
     const placeholders = missingUnitIds.map(() => "?").join(",");
@@ -792,22 +889,36 @@ function searchRetrievalUnitsV3(db, {
     for (const row of rows) unitById.set(row.id, row);
   }
 
+  const localSemanticRrfWeight = intent.speaker === "assistant" ? 0.6 : 0.35;
   const fusedByUnit = new Map();
   lexicalRows.forEach((row, index) => {
     fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
   });
+  temporalLexicalRows.forEach((row, index) => {
+    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
+  });
   semanticRows.forEach((row, index) => {
     if (!unitById.has(row.unitId)) return;
-    fusedByUnit.set(row.unitId, (fusedByUnit.get(row.unitId) ?? 0) + 1 / (60 + index + 1));
+    fusedByUnit.set(
+      row.unitId,
+      (fusedByUnit.get(row.unitId) ?? 0) + localSemanticRrfWeight / (60 + index + 1)
+    );
   });
-  const intent = analyzeRetrievalIntent(query);
+  temporalRows.forEach((row, index) => {
+    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 0.75 / (60 + index + 1));
+  });
+  const lexicalSpecificity = retrievalUnitLexicalSpecificity([...unitById.values()], query);
   const parentScores = new Map();
   for (const [unitId, baseScore] of fusedByUnit) {
     const unit = unitById.get(unitId);
     if (!unit) continue;
-    const unitScore = baseScore + retrievalUnitIntentBoost(unit, intent);
     const current = parentScores.get(unit.memory_id) ?? [];
-    current.push({ unit, score: unitScore });
+    current.push({
+      unit,
+      score: baseScore,
+      intentBoost: retrievalUnitIntentBoost(unit, intent),
+      lexicalSpecificity: lexicalSpecificity.get(unitId) ?? 0
+    });
     parentScores.set(unit.memory_id, current);
   }
   if (parentScores.size === 0) return [];
@@ -825,8 +936,16 @@ function searchRetrievalUnitsV3(db, {
   const minEventAt = Math.min(...dated.map((entry) => entry.eventAt).filter((value) => value > 0));
   const maxEventAt = Math.max(...dated.map((entry) => entry.eventAt));
   const eventRange = Math.max(1, maxEventAt - (Number.isFinite(minEventAt) ? minEventAt : maxEventAt));
+  const relativeDistances = relativeTargetAt === null
+    ? []
+    : dated
+      .map((entry) => Math.abs(entry.eventAt - relativeTargetAt))
+      .filter(Number.isFinite);
+  const minRelativeDistance = relativeDistances.length > 0 ? Math.min(...relativeDistances) : 0;
+  const maxRelativeDistance = relativeDistances.length > 0 ? Math.max(...relativeDistances) : 0;
+  const relativeDistanceRange = Math.max(1, maxRelativeDistance - minRelativeDistance);
 
-  return [...parentScores.entries()]
+  const ranked = [...parentScores.entries()]
     .flatMap(([memoryId, unitScores]) => {
       const row = memoryById.get(memoryId);
       if (!row) return [];
@@ -834,10 +953,15 @@ function searchRetrievalUnitsV3(db, {
       if (!canReadMemory(memory, principalId)) return [];
       const sorted = unitScores.sort((left, right) => right.score - left.score);
       let total = (sorted[0]?.score ?? 0) + (sorted[1]?.score ?? 0) * 0.25 + (sorted[2]?.score ?? 0) * 0.1;
+      total += Math.max(0, ...sorted.map((entry) => entry.intentBoost));
+      total += Math.max(0, ...sorted.map((entry) => entry.lexicalSpecificity)) * 0.02;
       const eventAt = Math.max(...sorted.map((entry) => Number(entry.unit.event_at ?? 0)));
-      if (intent.temporal_direction && eventAt > 0 && Number.isFinite(minEventAt)) {
+      if (relativeTargetAt !== null && eventAt > 0) {
+        const distance = Math.abs(eventAt - relativeTargetAt);
+        total += (1 - (distance - minRelativeDistance) / relativeDistanceRange) * 0.02;
+      } else if (intent.temporal_direction && eventAt > 0 && Number.isFinite(minEventAt)) {
         const relative = (eventAt - minEventAt) / eventRange;
-        total += intent.temporal_direction === "latest" ? relative * 0.012 : (1 - relative) * 0.012;
+        total += intent.temporal_direction === "latest" ? relative * 0.006 : (1 - relative) * 0.006;
       }
       return [{
         memory,
@@ -846,14 +970,46 @@ function searchRetrievalUnitsV3(db, {
           lexical: lexicalRows.some((unit) => unit.memory_id === memoryId) ? 1 : 0,
           semantic: semanticRows.some((unit) => unitById.get(unit.unitId)?.memory_id === memoryId) ? 1 : 0,
           graph: 0,
-          time: intent.temporal_direction ? 1 : 0,
+          time: intent.temporal_direction || relativeTargetAt !== null ? 1 : 0,
           authority: Number(memory.confidence_score ?? 0.5),
           utility: Number(memory.utility_score ?? 0.5)
         }
       }];
     })
-    .sort((left, right) => right.score.total - left.score.total || right.memory.updated_at - left.memory.updated_at)
-    .slice(0, limit);
+    .sort(
+      (left, right) =>
+        right.score.total - left.score.total ||
+        right.memory.updated_at - left.memory.updated_at ||
+        String(left.memory.source_references[0]?.ref ?? "").localeCompare(
+          String(right.memory.source_references[0]?.ref ?? "")
+        )
+    );
+  const selected = ranked.slice(0, limit);
+  if (relativeTargetAt !== null) {
+    const reservedMemoryIds = [...new Set(
+      [
+        ...temporalLexicalRows,
+        ...temporalRows
+      ].map((row) => row.memory_id)
+    )].slice(0, 4);
+    let replacementIndex = selected.length - 1;
+    for (const memoryId of reservedMemoryIds) {
+      if (selected.some((entry) => entry.memory.id === memoryId)) continue;
+      const reserved = ranked.find((entry) => entry.memory.id === memoryId);
+      if (!reserved) continue;
+      selected.splice(Math.max(0, replacementIndex), 1, reserved);
+      replacementIndex -= 1;
+    }
+    selected.sort(
+      (left, right) =>
+        right.score.total - left.score.total ||
+        right.memory.updated_at - left.memory.updated_at ||
+        String(left.memory.source_references[0]?.ref ?? "").localeCompare(
+          String(right.memory.source_references[0]?.ref ?? "")
+        )
+    );
+  }
+  return selected;
 }
 
 function readMode(path) {

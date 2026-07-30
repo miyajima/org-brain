@@ -95,7 +95,7 @@ function sessionContent(value) {
   return "";
 }
 
-function normalizeRows(raw) {
+export function normalizeRows(raw) {
   const parsed = JSON.parse(raw);
   const rows = Array.isArray(parsed)
     ? parsed
@@ -118,9 +118,10 @@ function normalizeRows(raw) {
       date: scalar(sessionDates[sessionIndex] ?? session?.session_date ?? session?.date),
       content: sessionContent(session)
     })).filter((session) => session.content);
+    const rawCategory = scalar(row.question_type ?? row.category ?? "uncategorized");
     return {
       evaluation_id: scalar(row.question_id ?? row.id ?? `item-${itemIndex + 1}`),
-      category: scalar(row.question_type ?? row.category ?? "uncategorized"),
+      category: rawCategory === "single-session-preference" ? "preference" : rawCategory,
       question: scalar(row.question ?? row.query ?? row.input?.question),
       question_date: scalar(row.question_date ?? row.query_date),
       expected_session_ids: (row.answer_session_ids ?? row.gold_session_ids ?? [])
@@ -177,7 +178,7 @@ export async function runProductRetrieval(runtimeInput, options = {}) {
       actor_id: "product-retrieval-runner",
       created_at: eventAt,
       updated_at: eventAt,
-      valid_from: eventAt,
+      valid_from: null,
       valid_until: null,
       confidence_score: 1,
       utility_score: 0.5,

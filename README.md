@@ -461,7 +461,7 @@ simulated with lexical overlap.
 Decision memory APIs support opt-in provenance and trust review for the Console decision editor
 without changing default memory retrieval profiles.
 
-Personal mode uses `local-sparse-feature-hash-v1` by default. It builds a
+Personal mode uses `local-sparse-feature-hash-v2` by default. It builds a
 reconstructable SQLite sparse-vector projection from normalized terms, local
 concept aliases, and CJK trigrams; no model download or network request occurs.
 Local search fuses FTS, cosine-style sparse-vector similarity, memory edges,
@@ -508,7 +508,8 @@ not a vague claim. Public anchors are not same-harness measurements, but they pr
 | System / Track | Accuracy | Evidence recall@5 | Token reduction |
 | --- | ---: | ---: | ---: |
 | OrgBrain LongMemEval-specific profile | 96.8% | 100.0% | 99.54% |
-| OrgBrain current product search path | n/a | 15.0% | n/a |
+| OrgBrain legacy product search path | n/a | 15.0% | n/a |
+| OrgBrain `hybrid_v3` product-path diagnostic | n/a | 98.6% | n/a |
 | Supermemory public answer-accuracy anchor | 95.0% | n/a (R@15) | 99.4% |
 | Mem0 OSS public answer-accuracy anchor | 91.0% | n/a | n/a |
 | Zep public answer-accuracy anchor | 90.2% | n/a | n/a |
@@ -533,9 +534,11 @@ An additive `hybrid_v3` product path is now available in shadow mode. It uses
 rebuildable retrieval units, D1/SQLite FTS, a separate Qwen3 Vectorize index,
 BGE reranking, and optional asynchronous Gemini 3.5 Flash-Lite atomic
 projection. Its product-only runner and rollout status are documented in
-[`docs/HYBRID_V3_IMPLEMENTATION.md`](docs/HYBRID_V3_IMPLEMENTATION.md). The old
-500-item result above remains the last full product-path measurement until the
-new strict five-repeat gate completes.
+[`docs/HYBRID_V3_IMPLEMENTATION.md`](docs/HYBRID_V3_IMPLEMENTATION.md). A
+2026-07-30 single-repeat product-path run scored 493/500 (98.6% R@5, 401.437 ms
+p95). It is a development-guided diagnostic, not a sealed ranking result:
+strict five-repeat, untouched-holdout, category, cross-benchmark, and
+same-harness competitor gates still apply.
 
 The fixed `competitive-memory-v1` suite adds 100 personal and 100 organization
 tasks covering coding, preferences, permissions, staleness, contradictions,

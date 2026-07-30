@@ -5,6 +5,7 @@ describe("CloudflareVectorRetrievalIndex", () => {
   it("uses real embedding output and tenant namespaces for upsert and query", async () => {
     const embedded: unknown[] = [];
     const upserts: any[] = [];
+    const deletes: string[][] = [];
     const queries: any[] = [];
     const ai = {
       async run(_model: string, input: unknown) {
@@ -20,7 +21,8 @@ describe("CloudflareVectorRetrievalIndex", () => {
         upserts.push(...items);
         return { mutationId: "mutation-1" };
       },
-      async deleteByIds() {
+      async deleteByIds(ids: string[]) {
+        deletes.push(ids);
         return { mutationId: "mutation-2" };
       },
       async query(values: number[], options: unknown) {
@@ -44,6 +46,7 @@ describe("CloudflareVectorRetrievalIndex", () => {
       query: "related meaning",
       limit: 5
     });
+    await index.remove("tenant-a", Array.from({ length: 9 }, (_, index) => `unit-${index}`));
 
     expect(embedded).toHaveLength(2);
     expect(upserts[0]).toMatchObject({
@@ -55,6 +58,7 @@ describe("CloudflareVectorRetrievalIndex", () => {
       namespace: "tenant-a",
       filter: { project_id: { $eq: "project-a" } }
     });
+    expect(deletes.map((ids) => ids.length)).toEqual([4, 4, 1]);
     expect(hits).toEqual([{ id: "memory-1", score: 0.92 }]);
   });
 });
