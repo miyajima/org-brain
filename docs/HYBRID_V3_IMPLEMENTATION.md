@@ -63,20 +63,23 @@ overlap/empty/degraded/latency fields.
 
 ### Live verification — 2026-07-30
 
-- API Worker version: `a5e87034-f057-49a7-866e-adabd9c19272`
-- Projector Worker version: `000cc7c6-afeb-4172-9f08-d1fad61b1dd2`
-- Active memories projected: 553/553 (100%)
-- Retrieval units: 3,525
-- Backfill: complete, 553 memories and 3,525 units in the checkpointed pass
+- API Worker version: `2bd13173-3e7e-46a0-8cd4-bb6e6c2b2cb1`
+- Projector Worker version: `177937a4-5156-4da9-8da5-239a1601f70f`
+- Active memories projected: 560/560 (100%)
+- Retrieval units: 3,564
+- Backfill: complete; live projection coverage remains 100%
 - Vectorize errors: 0 in the completed pass
 - Rebuild batching: 16 documents per embedding call and 100 IDs per delete
 - Metadata indexes: `project_id`, `speaker`, `unit_type`
-- Live smoke: capture 201, search 200/hit, cross-tenant 403, unauthenticated
-  MCP 401, delete 200, and no post-delete search result
+- Live smoke: capture 201, `hybrid_v2` and direct `hybrid_v3` search 200/hit,
+  scoped-token write 403, cross-tenant read 403, legal-hold delete 409, delete
+  200, no post-delete result in either retrieval mode, audit chain valid
+- MCP gate: unauthenticated request 403 at Cloudflare Access. Authenticated MCP
+  search was not run because no `CF-Access-*` service token is configured
 - Runtime providers: `@cf/qwen/qwen3-embedding-0.6b` and
   `@cf/baai/bge-reranker-base`
 
-All 3,525 units are currently marked degraded because the Gemini extraction
+All 3,564 units are currently marked degraded because the Gemini extraction
 secret has not been uploaded to Cloudflare. Full-text and turn projections are
 available; quality-mode atomic extraction is not. Shadow mode remains enabled.
 

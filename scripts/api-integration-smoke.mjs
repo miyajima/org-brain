@@ -61,6 +61,34 @@ if (
   throw new Error("hybrid_v2 smoke assertions failed");
 }
 
+let hybridV3;
+for (let attempt = 0; attempt < 20; attempt += 1) {
+  hybridV3 = await request("/v1/memories/search", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      project_id: projectId,
+      q: "production release approval",
+      search_mode: "hybrid_v3",
+      limit: 5
+    })
+  });
+  if (hybridV3.status === 200 && hybridV3.body.data?.results?.some((item) => item.id === memoryId)) {
+    break;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 500));
+}
+if (
+  hybridV3?.status !== 200 ||
+  !hybridV3.body.data?.results?.some((item) => item.id === memoryId)
+) {
+  throw new Error(`hybrid_v3 smoke assertions failed: ${JSON.stringify({
+    status: hybridV3?.status,
+    hit: hybridV3?.body.data?.results?.some((item) => item.id === memoryId) ?? false,
+    retrieval: hybridV3?.body.data?.meta?.retrieval ?? null
+  })}`);
+}
+
 const issued = await request("/v1/scoped-tokens", {
   method: "POST",
   body: JSON.stringify({
@@ -88,8 +116,20 @@ const tokenWrite = await fetch(`${baseUrl}/v1/memories/capture`, {
     items: [{ external_key: "forbidden", content: "must not write" }]
   })
 });
-if (tokenRead.status !== 200 || tokenWrite.status !== 403) {
-  throw new Error(`scoped token enforcement failed: read=${tokenRead.status}, write=${tokenWrite.status}`);
+const crossTenantRead = await fetch(`${baseUrl}/v1/memories/search`, {
+  method: "POST",
+  headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+  body: JSON.stringify({ tenant_id: "smoke-forbidden-tenant", q: "production release", limit: 1 })
+});
+if (tokenRead.status !== 200 || tokenWrite.status !== 403 || crossTenantRead.status !== 403) {
+  throw new Error(
+    `scoped token enforcement failed: read=${tokenRead.status}, write=${tokenWrite.status}, cross_tenant=${crossTenantRead.status}`
+  );
+}
+
+const unauthenticatedMcp = await fetch(`${baseUrl}/mcp`, { method: "POST" });
+if (![401, 403].includes(unauthenticatedMcp.status)) {
+  throw new Error(`unauthenticated MCP request was not rejected: ${unauthenticatedMcp.status}`);
 }
 
 const hold = await request("/v1/retention-policies", {
@@ -117,6 +157,18 @@ const afterDelete = await request("/v1/memories/search", {
 if (afterDelete.body.data?.results?.some((item) => item.id === memoryId)) {
   throw new Error("deleted memory reappeared in retrieval");
 }
+const afterDeleteV3 = await request("/v1/memories/search", {
+  method: "POST",
+  body: JSON.stringify({
+    tenant_id: tenantId,
+    project_id: projectId,
+    q: "production release approval",
+    search_mode: "hybrid_v3"
+  })
+});
+if (afterDeleteV3.body.data?.results?.some((item) => item.id === memoryId)) {
+  throw new Error("deleted memory reappeared in hybrid_v3 retrieval");
+}
 
 const audit = await request(`/v1/audit-events/verify?tenant_id=${encodeURIComponent(tenantId)}`);
 if (audit.status !== 200 || audit.body.data?.ok !== true) {
@@ -143,10 +195,22 @@ process.stdout.write(`${JSON.stringify({
     degraded: search.body.data.meta.retrieval.degraded,
     source_reference_present: true
   },
-  scoped_token: { read_status: tokenRead.status, denied_write_status: tokenWrite.status },
+  hybrid_v3: {
+    status: hybridV3.status,
+    hit: true,
+    retrieval: hybridV3.body.data.meta.retrieval
+  },
+  scoped_token: {
+    read_status: tokenRead.status,
+    denied_write_status: tokenWrite.status,
+    denied_cross_tenant_read_status: crossTenantRead.status
+  },
+  unauthenticated_mcp_status: unauthenticatedMcp.status,
   legal_hold_delete_status: heldDelete.status,
   delete_status: deleted.status,
-  delete_resurrection_count: afterDelete.body.data.results.length,
+  delete_resurrection_count: afterDelete.body.data.results.filter((item) => item.id === memoryId).length,
+  hybrid_v3_delete_resurrection_count:
+    afterDeleteV3.body.data.results.filter((item) => item.id === memoryId).length,
   audit_chain: audit.body.data,
   operations_status: {
     status: operations.status,
