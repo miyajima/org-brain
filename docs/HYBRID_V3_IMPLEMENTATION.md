@@ -60,13 +60,15 @@ pnpm benchmark:product-longmemeval -- \
   --dataset-path /path/to/longmemeval_s_cleaned.json \
   --repeat 5 \
   --top-k 5 \
+  --concurrency 8 \
   --output /path/to/raw-results.jsonl
 ```
 
 Each question uses an independent tenant. The runtime boundary receives only
 the query and source sessions. Expected source IDs are retained by the scorer
 and applied after search. Errors are written as failed rows; they are never
-excluded.
+excluded. Concurrency uses an independent SQLite database per question, so
+parallel evaluations do not share retrieval state.
 
 The 2026-07-30 local sparse fallback smoke scored 8/10 R@5 with 73.38 ms search
 p95. This is diagnostic only: it is not the 500-question acceptance result and

@@ -25,7 +25,8 @@ function parseArgs(argv) {
     output: null,
     limit: 0,
     repeat: 1,
-    topK: 5
+    topK: 5,
+    concurrency: 1
   };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     else if (value === "--limit") options.limit = Number(next());
     else if (value === "--repeat") options.repeat = Number(next());
     else if (value === "--top-k") options.topK = Number(next());
+    else if (value === "--concurrency") options.concurrency = Number(next());
     else if (value === "--help") {
       process.stdout.write(
         [
@@ -50,7 +52,8 @@ function parseArgs(argv) {
           "  --output <path>        Raw JSONL output path",
           "  --limit <n>            Run the first n hash-ordered items",
           "  --repeat <n>           Full independent repetitions (acceptance: 5)",
-          "  --top-k <n>            Retrieval depth (acceptance: 5)"
+          "  --top-k <n>            Retrieval depth (acceptance: 5)",
+          "  --concurrency <n>      Independent product-path evaluations in parallel"
         ].join("\n") + "\n"
       );
       process.exit(0);
@@ -58,6 +61,9 @@ function parseArgs(argv) {
   }
   if (!Number.isInteger(options.repeat) || options.repeat < 1) throw new Error("--repeat must be >= 1");
   if (!Number.isInteger(options.topK) || options.topK < 1) throw new Error("--top-k must be >= 1");
+  if (!Number.isInteger(options.concurrency) || options.concurrency < 1 || options.concurrency > 16) {
+    throw new Error("--concurrency must be between 1 and 16");
+  }
   return options;
 }
 
@@ -297,12 +303,17 @@ async function main() {
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, "", { mode: 0o600 });
   const rows = [];
+  let appendQueue = Promise.resolve();
   for (let repeat = 1; repeat <= options.repeat; repeat += 1) {
-    const directory = await mkdtemp(join(tmpdir(), "orgbrain-product-benchmark-"));
-    try {
-      const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
-      for (const [itemIndex, item] of items.entries()) {
+    let nextItemIndex = 0;
+    const worker = async () => {
+      while (nextItemIndex < items.length) {
+        const itemIndex = nextItemIndex++;
+        const item = items[itemIndex];
+        const directory = await mkdtemp(join(tmpdir(), "orgbrain-product-benchmark-"));
+        let row;
         try {
+          const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
           const runtimeInput = {
             tenant_id: `benchmark-r${repeat}-i${itemIndex + 1}`,
             question: item.question,
@@ -315,7 +326,7 @@ async function main() {
           });
           const expected = new Set(item.expected_session_ids);
           const recalled = retrieval.source_ids.filter((id) => expected.has(id));
-          const row = {
+          row = {
             repeat,
             evaluation_id: item.evaluation_id,
             split: item.split,
@@ -328,10 +339,8 @@ async function main() {
             latency_ms: Number(retrieval.latency_ms.toFixed(3)),
             error: null
           };
-          rows.push(row);
-          await appendFile(output, `${JSON.stringify(row)}\n`, { mode: 0o600 });
         } catch (error) {
-          const row = {
+          row = {
             repeat,
             evaluation_id: item.evaluation_id,
             split: item.split,
@@ -344,16 +353,30 @@ async function main() {
             latency_ms: null,
             error: error instanceof Error ? error.message : String(error)
           };
-          rows.push(row);
-          await appendFile(output, `${JSON.stringify(row)}\n`, { mode: 0o600 });
+        } finally {
+          await rm(directory, { recursive: true, force: true });
         }
+        rows.push(row);
+        appendQueue = appendQueue.then(() =>
+          appendFile(output, `${JSON.stringify(row)}\n`, { mode: 0o600 })
+        );
       }
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(options.concurrency, items.length) }, () => worker())
+    );
+    await appendQueue;
   }
   const summary = summarize(rows, datasetHash, options.repeat);
-  process.stdout.write(`${JSON.stringify({ output, summary }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({
+    output,
+    runner: {
+      search_mode: "hybrid_v3",
+      top_k: options.topK,
+      concurrency: options.concurrency
+    },
+    summary
+  }, null, 2)}\n`);
   if (
     options.limit === 0 &&
     options.repeat >= 5 &&
