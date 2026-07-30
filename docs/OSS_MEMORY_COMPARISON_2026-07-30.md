@@ -12,6 +12,7 @@ product retrieval path is not:
 | --- | --- | ---: |
 | LongMemEval-specific evidence-card profile | LongMemEval-S, 500 questions | 96.8% answer accuracy, 100% evidence R@5 |
 | Production `LocalMemoryStore.capture/search` | LongMemEval-S, 500 questions | 15.0% retrieval R@5 (75/500) |
+| Production `hybrid_v3` sparse fallback diagnostic | Hash-ordered LongMemEval-S sample, 10 questions | 80.0% retrieval R@5 (8/10); not rank eligible |
 | Fixed organization/personal suite | `competitive-memory-v1`, 200 tasks, repeat 5 | 100% accuracy, R@5, and pass^5 |
 
 The fixed 200-task suite remains ranking-ineligible because the four external
@@ -103,7 +104,9 @@ LongMemEval evidence-card profile. The current product path trails GBrain by
 82.6 percentage points on retrieval R@5 and must be improved before any
 first-place production claim is made.
 
-The next engineering target is to bring the session-aware extraction,
-recency/temporal handling, and hybrid retrieval behavior into the production
-path, then rerun all five systems through the same bridge and complete the
-weighted capability evidence.
+The session-aware projection, intent-limited temporal handling, RRF, dense
+retrieval, and reranking are now implemented in the production path as
+`hybrid_v3` and deployed in shadow mode. The next evidence target is the sealed
+500-question, five-repeat run plus same-harness competitor bridges and weighted
+capability evidence. The 10-question diagnostic is not sufficient to revise the
+ranking.

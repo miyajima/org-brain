@@ -53,6 +53,24 @@ result shape.
 Backfill is checkpointed per tenant/project. Shadow events store only a query
 hash and aggregate overlap/empty/degraded/latency fields.
 
+### Live verification — 2026-07-30
+
+- API Worker version: `16f37ec8-ccff-405c-aaa4-3264805389d3`
+- Projector Worker version: `282352cf-8ba4-4410-beb4-2d9e0b72e781`
+- Active memories projected: 543/543 (100%)
+- Retrieval units: 3,448
+- Backfill: complete, 542 memories and 3,443 units in the checkpointed pass
+- Vectorize errors: 0 in the completed pass
+- Metadata indexes: `project_id`, `speaker`, `unit_type`
+- Live smoke: capture 201, search 200/hit, cross-tenant 403, unauthenticated
+  MCP 401, delete 200, and no post-delete search result
+- Runtime providers: `@cf/qwen/qwen3-embedding-0.6b` and
+  `@cf/baai/bge-reranker-base`
+
+All 3,448 units are currently marked degraded because the Gemini extraction
+secret has not been uploaded to Cloudflare. Full-text and turn projections are
+available; quality-mode atomic extraction is not. Shadow mode remains enabled.
+
 ## Reproducible benchmark
 
 ```bash
