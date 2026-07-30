@@ -46,7 +46,7 @@ describe("CloudflareVectorRetrievalIndex", () => {
       query: "related meaning",
       limit: 5
     });
-    await index.remove("tenant-a", Array.from({ length: 9 }, (_, index) => `unit-${index}`));
+    await index.remove("tenant-a", Array.from({ length: 205 }, (_, index) => `unit-${index}`));
 
     expect(embedded).toHaveLength(2);
     expect(upserts[0]).toMatchObject({
@@ -58,7 +58,7 @@ describe("CloudflareVectorRetrievalIndex", () => {
       namespace: "tenant-a",
       filter: { project_id: { $eq: "project-a" } }
     });
-    expect(deletes.map((ids) => ids.length)).toEqual([4, 4, 1]);
+    expect(deletes.map((ids) => ids.length)).toEqual([100, 100, 5]);
     expect(hits).toEqual([{ id: "memory-1", score: 0.92 }]);
   });
 });

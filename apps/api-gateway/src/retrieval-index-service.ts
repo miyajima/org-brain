@@ -12,6 +12,7 @@ const EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5" as const;
 export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
 export const RERANKER_MODEL_V3 = "@cf/baai/bge-reranker-base" as const;
 const BATCH_SIZE = 4;
+const DELETE_BATCH_SIZE = 100;
 const UPSERT_CONCURRENCY = 3;
 
 function extractEmbeddings(output: unknown): number[][] {
@@ -95,8 +96,8 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
   }
 
   async remove(_tenantId: string, ids: string[]): Promise<void> {
-    for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
-      await this.index.deleteByIds(ids.slice(offset, offset + BATCH_SIZE));
+    for (let offset = 0; offset < ids.length; offset += DELETE_BATCH_SIZE) {
+      await this.index.deleteByIds(ids.slice(offset, offset + DELETE_BATCH_SIZE));
     }
   }
 
