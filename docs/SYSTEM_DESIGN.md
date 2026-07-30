@@ -43,6 +43,12 @@
 - Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows. `quality-v2` canonical summaries must expose representative reusable guidance instead of count-only labels.
 - Manual memory cleanup can physically remove low-signal memory rows after exporting a JSONL backup. Cleanup deletes associated FTS, lifecycle, edge, entity, and rationale rows, then lets maintenance rebuild `quality-v2` canonical rows from the remaining high-quality memories.
 - MemoryRecord v2 is the common logical source-of-truth contract for local SQLite and Cloud D1. FTS, embedding, graph, and cache layers are projections that must be rebuildable and must never receive an independent dual-write.
+- SQLite remains the local default and D1 remains the shared Cloudflare
+  default. PostgreSQL with pgvector is a future opt-in backend for measured
+  scale, concurrency, transaction, analytics, or private-network requirements;
+  it is not expected to improve retrieval quality by storage substitution
+  alone. The backend contract, activation criteria, migration rules, and parity
+  gates are defined in [`STORAGE_BACKENDS.md`](STORAGE_BACKENDS.md).
 - Local SQLite uses the Node-bundled driver, WAL, schema version 15 (aligned
   with Cloud D1), SHA-256 content hashes, immutable JSON version snapshots,
   verified backup/restore, `quick_check`, read-only query connections, and

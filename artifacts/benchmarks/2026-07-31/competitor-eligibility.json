@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-07-31",
+  "strict_overall_first_place_allowed": false,
+  "retrieval_evidence": {
+    "orgbrain_product_path": {
+      "status": "complete_repeat_5",
+      "questions": 500,
+      "hits": 499,
+      "recall_at_5": 99.8
+    },
+    "mempalace_hybrid_v4_native_runner": {
+      "status": "complete",
+      "revision": "aa89bd82272f55381206c83b6f306e79351824eb",
+      "questions": 500,
+      "hits": 491,
+      "recall_at_5": 98.2,
+      "same_dataset_hash_as_orgbrain": true
+    },
+    "gbrain_keyword_native_runner": {
+      "status": "complete_keyword_only",
+      "revision": "565b80754ffa6abb9afb041026f2fab048aa7553",
+      "questions": 500,
+      "hits": 99,
+      "recall_at_5": 19.8,
+      "published_hybrid_reproduced": false
+    }
+  },
+  "competitive_memory_v1": {
+    "complete_repeat_5": [
+      "orgbrain-local",
+      "agentmemory",
+      "mem0",
+      "gbrain-keyword"
+    ],
+    "ineligible_or_incomplete": {
+      "cognee": "Native add-cognify-CHUNKS smoke passed, but mandatory ingest LLM cost is not metered by the harness.",
+      "supermemory": "Pinned source does not contain the distributed local binary; its inspected Gemini provider is fixed to gemini-3.1-flash-lite-preview.",
+      "mempalace": "Native LongMemEval run is complete, but the organization and ACL same-harness bridge is not."
+    }
+  },
+  "remaining_ranking_blockers": [
+    "unseen sealed LongMemEval holdout",
+    "eligible same-harness Cognee, Supermemory, and MemPalace coverage",
+    "complete evidence-backed personal and organization capability scorecards",
+    "five complete repeats for every adapter included in the strict ranking"
+  ]
+}

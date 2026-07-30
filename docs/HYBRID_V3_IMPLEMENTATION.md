@@ -121,5 +121,8 @@ The LongMemEval dataset was inspected during tuning, so its hash-selected
 
 The retrieval and category gates pass, but canary and first-place claims remain
 blocked by the lack of an unseen LongMemEval holdout, missing same-harness
-bridges for five required competitors, and incomplete weighted capability
-evidence. See `docs/OSS_MEMORY_COMPARISON_2026-07-30.md`.
+eligible runs for Cognee, Supermemory, and MemPalace, and incomplete weighted
+capability evidence. AgentMemory, Mem0, and GBrain keyword have completed
+`competitive-memory-v1` repeat-five runs. MemPalace additionally completed its
+native LongMemEval-S `hybrid_v4` runner at 491/500 (98.2%), below OrgBrain's
+499/500 (99.8%). See `docs/OSS_MEMORY_COMPARISON_2026-07-30.md`.

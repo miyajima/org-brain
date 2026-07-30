@@ -1,0 +1,66 @@
+{
+  "benchmark": "LongMemEval-S",
+  "adapter": "mempalace-hybrid-v4",
+  "revision": "aa89bd82272f55381206c83b6f306e79351824eb",
+  "dataset_sha256": "35961662da991bec512124586e2e399a335e9e7c94272403e820eccc9946589e",
+  "questions": 500,
+  "top_k": 5,
+  "hits": 491,
+  "recall_at_5": 98.2,
+  "errors": 0,
+  "latency_ms": {
+    "samples": 0,
+    "p50": null,
+    "p95": null
+  },
+  "categories": {
+    "single-session-user": {
+      "questions": 70,
+      "hits": 69,
+      "recall_at_5": 98.57
+    },
+    "multi-session": {
+      "questions": 133,
+      "hits": 131,
+      "recall_at_5": 98.5
+    },
+    "single-session-preference": {
+      "questions": 30,
+      "hits": 27,
+      "recall_at_5": 90
+    },
+    "temporal-reasoning": {
+      "questions": 133,
+      "hits": 130,
+      "recall_at_5": 97.74
+    },
+    "knowledge-update": {
+      "questions": 78,
+      "hits": 78,
+      "recall_at_5": 100
+    },
+    "single-session-assistant": {
+      "questions": 56,
+      "hits": 56,
+      "recall_at_5": 100
+    }
+  },
+  "failure_question_ids": [
+    "29f2956b_abs",
+    "10d9b85a",
+    "60bf93ed_abs",
+    "06f04340",
+    "09d032c9",
+    "95228167",
+    "gpt4_21adecb5",
+    "gpt4_468eb064",
+    "eac54add"
+  ],
+  "inputs": [
+    "mempalace-hybrid-v4-000-124.jsonl",
+    "mempalace-hybrid-v4-125-249.jsonl",
+    "mempalace-hybrid-v4-250-374.jsonl",
+    "mempalace-hybrid-v4-375-499.jsonl"
+  ],
+  "execution_profile": "Apple M2; 4x125 shards; session granularity; default MiniLM; BLAS/Rayon/ONNX one thread per process; ONNX spin waiting disabled"
+}

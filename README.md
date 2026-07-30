@@ -159,6 +159,14 @@ The goal is to help the organization learn.
 | Self-hosted | team memory bus | Cloudflare stack | tenant-scoped |
 | Managed | teams that do not want to operate infrastructure | hosted OrgBrain | managed |
 
+SQLite is the dependency-free local default and D1 is the shared Cloudflare
+default. A PostgreSQL + pgvector backend is planned as a future opt-in for
+deployments with measured scale, concurrency, transaction, analytics, or
+private-network requirements. It will use one authoritative store at a time;
+OrgBrain will not dual-write source-of-truth memory across databases. See
+[`docs/STORAGE_BACKENDS.md`](docs/STORAGE_BACKENDS.md) for the activation and
+parity gates.
+
 ## Quick Start: Local Memory
 
 Use this when you want free personal memory without Cloudflare.
@@ -563,6 +571,15 @@ least one non-empty evidence reference.
 The benchmark workflow also downloads the upstream LongMemEval-S dataset and
 publishes all 500 deterministic retrieval/context item rows plus its summary as
 a separate CI artifact.
+
+Reference bridges for AgentMemory, GBrain, and Mem0 live under
+`scripts/benchmark-bridges/`. The Mem0 bridge uses the actual OSS `Memory`
+implementation with embedded Qdrant and FastEmbed. It captures raw memories
+with `infer=False`, maps tenant IDs to Mem0 `user_id` filters, and deliberately
+does not synthesize record ACL behavior that the provider does not enforce.
+The GBrain bridge uses its PGLite import path and keyword search without adding
+tenant or ACL filters; it is a keyword-only result unless a separate fixed
+embedding configuration is explicitly reported.
 
 ```bash
 pnpm benchmark:competitive -- --adapter orgbrain-local

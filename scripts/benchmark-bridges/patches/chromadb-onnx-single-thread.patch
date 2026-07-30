@@ -1,0 +1,12 @@
+--- a/chromadb/utils/embedding_functions/onnx_mini_lm_l6_v2.py
++++ b/chromadb/utils/embedding_functions/onnx_mini_lm_l6_v2.py
+@@ -240,5 +240,9 @@
+         so = self.ort.SessionOptions()
+         so.log_severity_level = 3
+         so.graph_optimization_level = self.ort.GraphOptimizationLevel.ORT_ENABLE_ALL
++        so.intra_op_num_threads = 1
++        so.inter_op_num_threads = 1
++        so.add_session_config_entry("session.intra_op.allow_spinning", "0")
++        so.add_session_config_entry("session.inter_op.allow_spinning", "0")
+ 
+         if (
