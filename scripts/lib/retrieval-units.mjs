@@ -18,9 +18,9 @@ const QUERY_STOP_WORDS = new Set([
   "to", "use", "using", "was", "ways", "were", "what", "when", "where", "which", "while", "who",
   "why", "with", "would", "you", "your", "ve", "recommend", "recommendation", "recommendations",
   "suggest", "suggestion", "suggestions", "ideas", "choose", "chat", "list", "name", "remind",
-  "find", "interesting", "get", "getting", "upcoming", "sure", "excited", "visit", "tips",
+  "find", "interesting", "get", "getting", "upcoming", "sure", "excited", "visit", "tips", "during",
   "look", "new", "weekend", "good", "idea", "feeling", "need", "something", "extra",
-  "advice", "trouble", "looking", "back", "previous", "conversation", "is", "planning"
+  "advice", "trouble", "looking", "back", "previous", "conversation", "is", "planning", "try", "tried"
 ]);
 const RELATIVE_NUMBER_WORDS = new Map([
   ["a", 1], ["an", 1], ["one", 1], ["two", 2], ["three", 3], ["four", 4],
@@ -51,6 +51,30 @@ const LEXICAL_CONCEPT_BY_TERM = new Map(
   LEXICAL_CONCEPT_GROUPS.flatMap((group) => group.map((term) => [term, group]))
 );
 const TOKEN_CORRECTIONS = new Map([["buisiness", "business"]]);
+const SUBJECT_STOP_WORDS = new Set([
+  "amount", "day", "days", "kind", "number", "related", "total", "type"
+]);
+const SUBJECT_QUERY_EXPANSIONS = new Map([
+  ["publication", ["paper", "article", "conference", "symposium"]],
+  ["doctor", ["physician", "dermatologist", "clinician"]],
+  ["sibling", ["brother", "sister"]],
+  ["occupation", ["job", "work", "role", "career", "employment", "profession"]],
+  ["hamster", ["pet", "rodent", "animal"]],
+  ["event", [
+    "exhibit", "museum", "festival", "workshop", "conference", "concert", "show", "fair",
+    "wedding", "shower", "graduation", "ceremony"
+  ]],
+  ["participated", ["participate", "attend", "attended", "joined"]],
+  ["participate", ["attend", "attended", "joined"]],
+  ["held", ["venue", "location"]],
+  ["buisiness", ["business"]],
+  ["meet", ["met", "meeting", "catch", "caught"]],
+  ["appliance", ["smoker", "oven", "grill", "blender", "toaster"]],
+  ["battery", ["power", "charger", "charging"]],
+  ["milestone", [
+    "launch", "launched", "achievement", "breakthrough", "contract", "client", "founded"
+  ]]
+]);
 
 function collapseWhitespace(value) {
   return String(value ?? "").replace(/\s+/gu, " ").trim();
@@ -65,7 +89,7 @@ function hash(value) {
   return createHash("sha256").update(String(value), "utf8").digest("hex");
 }
 
-export function retrievalQueryTokens(value) {
+function retrievalPrimaryQueryTokens(value) {
   const tokens = [...new Set(
     String(value ?? "")
       .toLowerCase()
@@ -89,11 +113,25 @@ export function retrievalQueryTokens(value) {
     if (token.endsWith("s") && !token.endsWith("ss")) return [token, token.slice(0, -1)];
     return [token];
   }))];
-  return [...new Set(inflected.flatMap((token) => [token, ...(LEXICAL_CONCEPT_BY_TERM.get(token) ?? [])]))];
+  return inflected;
+}
+
+export function retrievalQueryTokens(value) {
+  return [...new Set(
+    retrievalPrimaryQueryTokens(value)
+      .flatMap((token) => [token, ...(LEXICAL_CONCEPT_BY_TERM.get(token) ?? [])])
+  )];
+}
+
+export function retrievalSubjectQueryTokens(value) {
+  return retrievalPrimaryQueryTokens(value)
+    .filter((token) => !SUBJECT_STOP_WORDS.has(token))
+    .flatMap((token) => [token, ...(SUBJECT_QUERY_EXPANSIONS.get(token) ?? [])])
+    .filter((token, index, tokens) => tokens.indexOf(token) === index);
 }
 
 export function retrievalUnitLexicalSpecificity(units, query) {
-  const queryTokens = retrievalQueryTokens(query);
+  const queryTokens = retrievalSubjectQueryTokens(query);
   const scores = new Map();
   if (queryTokens.length === 0 || units.length === 0) return scores;
   const unitTokens = new Map(units.map((unit) => [unit.id, new Set(retrievalQueryTokens(unit.text))]));

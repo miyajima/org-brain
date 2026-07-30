@@ -265,6 +265,50 @@ test("hybrid_v3 ranks explicit relative-time targets without global recency bias
   }
 });
 
+test("hybrid_v3 keeps subject-related relative-time evidence in top five", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const now = 1_720_000_000_000;
+    const targetEventAt = now - 28 * 24 * 60 * 60 * 1000;
+    const target = await store.capture(captureInput({
+      kind: "event",
+      external_key: "event:business-launch",
+      content: "user: I launched my website and created a business social account.",
+      summary: "Website launch",
+      source_references: [{
+        type: "session",
+        ref: "business-launch-session",
+        captured_at: targetEventAt
+      }]
+    }));
+    for (let index = 0; index < 8; index += 1) {
+      await store.capture(captureInput({
+        kind: "fact",
+        external_key: `fact:significant-research-${index}`,
+        content: `assistant: Significant research milestone number ${index + 1}.`,
+        summary: "Significant research milestone",
+        source_references: [{
+          type: "session",
+          ref: `research-session-${index}`,
+          captured_at: now - (index + 1) * 24 * 60 * 60 * 1000
+        }]
+      }));
+    }
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "What significant business milestone did I mention four weeks ago?",
+      search_mode: "hybrid_v3",
+      at: now,
+      limit: 5
+    });
+    assert.ok(results.some((result) => result.memory.id === target.memory_id));
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("external keys are idempotent and preserve version history", async () => {
   const ctx = await fixture();
   try {

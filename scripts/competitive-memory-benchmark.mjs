@@ -16,7 +16,9 @@ const ADAPTER_ENV = {
   supermemory: "SUPERMEMORY_BENCHMARK_URL",
   gbrain: "GBRAIN_BENCHMARK_URL",
   cognee: "COGNEE_BENCHMARK_URL",
-  mem0: "MEM0_BENCHMARK_URL"
+  mem0: "MEM0_BENCHMARK_URL",
+  mempalace: "MEMPALACE_BENCHMARK_URL",
+  agentmemory: "AGENTMEMORY_BENCHMARK_URL"
 };
 
 function parseArgs(argv) {
@@ -58,7 +60,7 @@ function parseArgs(argv) {
       console.log(`Usage: node scripts/competitive-memory-benchmark.mjs [options]
 
 Options:
-  --adapter orgbrain-local|supermemory|gbrain|cognee|mem0|all
+  --adapter orgbrain-local|supermemory|gbrain|cognee|mem0|mempalace|agentmemory|all
   --output <path>   Raw settings and results JSON
   --db <path>       Isolated OrgBrain local benchmark database
   --repeat <n>      Attempts used for pass^5 (default: 5)
@@ -96,6 +98,8 @@ class OrgBrainLocalAdapter {
     try {
       db.exec(`
         DELETE FROM memories_fts;
+        DELETE FROM memory_retrieval_units_fts;
+        DELETE FROM memory_retrieval_units;
         DELETE FROM memory_embedding_features;
         DELETE FROM memory_embedding_feature_stats;
         DELETE FROM memory_embeddings;

@@ -518,7 +518,15 @@ export const COMPETITIVE_ACCEPTANCE_TARGETS = {
   minimum_decision_grade_provenance_rate: 100
 };
 
-const REQUIRED_ADAPTERS = ["orgbrain-local", "supermemory", "gbrain", "cognee", "mem0"];
+const REQUIRED_ADAPTERS = [
+  "orgbrain-local",
+  "supermemory",
+  "gbrain",
+  "cognee",
+  "mem0",
+  "mempalace",
+  "agentmemory"
+];
 const CRITICAL_COMPONENTS = {
   personal: ["search_quality", "privacy_and_offline", "automatic_extraction"],
   organization: [
@@ -559,7 +567,7 @@ export function evaluateCompetitiveRanking(results, unavailable = [], harness = 
     .map((adapter) => byAdapter.get(adapter))
     .filter(Boolean);
   const modeWins = {};
-  if (orgbrain && competitors.length === 4) {
+  if (orgbrain && competitors.length === REQUIRED_ADAPTERS.length - 1) {
     for (const mode of ["personal", "organization"]) {
       const ownScore = orgbrain.scorecards?.[mode]?.weighted_score;
       const competitorScores = competitors.map((result) => result.scorecards?.[mode]?.weighted_score);

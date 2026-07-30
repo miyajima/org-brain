@@ -5,6 +5,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 import { LocalMemoryStore } from "./lib/local-memory-store.mjs";
 
 const DEFAULT_DATASET_URL =
@@ -294,6 +295,97 @@ async function loadDataset(options) {
   return response.text();
 }
 
+async function evaluateItem(item, repeat, itemIndex, topK) {
+  const directory = await mkdtemp(join(tmpdir(), "orgbrain-product-benchmark-"));
+  try {
+    const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
+    const runtimeInput = {
+      tenant_id: `benchmark-r${repeat}-i${itemIndex + 1}`,
+      question: item.question,
+      question_date: item.question_date,
+      sessions: item.sessions
+    };
+    const retrieval = await runProductRetrieval(runtimeInput, { store, topK });
+    const expected = new Set(item.expected_session_ids);
+    const recalled = retrieval.source_ids.filter((id) => expected.has(id));
+    return {
+      repeat,
+      evaluation_id: item.evaluation_id,
+      split: item.split,
+      category: item.category,
+      expected_source_count: expected.size,
+      retrieved_source_ids: retrieval.source_ids,
+      recalled_source_ids: recalled,
+      hit_at_k: recalled.length > 0,
+      all_expected_recalled: expected.size > 0 && recalled.length === expected.size,
+      latency_ms: Number(retrieval.latency_ms.toFixed(3)),
+      error: null
+    };
+  } catch (error) {
+    return {
+      repeat,
+      evaluation_id: item.evaluation_id,
+      split: item.split,
+      category: item.category,
+      expected_source_count: item.expected_session_ids.length,
+      retrieved_source_ids: [],
+      recalled_source_ids: [],
+      hit_at_k: false,
+      all_expected_recalled: false,
+      latency_ms: null,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function runWorkerTasks(tasks, concurrency, onRow) {
+  if (concurrency === 1) {
+    for (const task of tasks) onRow(await evaluateItem(task.item, task.repeat, task.itemIndex, task.topK));
+    return;
+  }
+  await new Promise((resolvePromise, rejectPromise) => {
+    let nextTask = 0;
+    let completed = 0;
+    let settled = false;
+    const workers = [];
+    const stop = async (error = null) => {
+      if (settled) return;
+      settled = true;
+      await Promise.all(workers.map((worker) => worker.terminate()));
+      if (error) rejectPromise(error);
+      else resolvePromise();
+    };
+    const dispatch = (worker) => {
+      if (nextTask >= tasks.length) return;
+      worker.postMessage(tasks[nextTask++]);
+    };
+    for (let index = 0; index < Math.min(concurrency, tasks.length); index += 1) {
+      const worker = new Worker(new URL(import.meta.url), {
+        workerData: { productLongMemEvalWorker: true }
+      });
+      workers.push(worker);
+      worker.on("message", (message) => {
+        if (settled) return;
+        if (message?.error) {
+          void stop(new Error(message.error));
+          return;
+        }
+        onRow(message.row);
+        completed += 1;
+        if (completed === tasks.length) void stop();
+        else dispatch(worker);
+      });
+      worker.on("error", (error) => void stop(error));
+      worker.on("exit", (code) => {
+        if (!settled && code !== 0) void stop(new Error(`benchmark worker exited with code ${code}`));
+      });
+      dispatch(worker);
+    }
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const rawDataset = await loadDataset(options);
@@ -305,69 +397,19 @@ async function main() {
   await writeFile(output, "", { mode: 0o600 });
   const rows = [];
   let appendQueue = Promise.resolve();
+  const tasks = [];
   for (let repeat = 1; repeat <= options.repeat; repeat += 1) {
-    let nextItemIndex = 0;
-    const worker = async () => {
-      while (nextItemIndex < items.length) {
-        const itemIndex = nextItemIndex++;
-        const item = items[itemIndex];
-        const directory = await mkdtemp(join(tmpdir(), "orgbrain-product-benchmark-"));
-        let row;
-        try {
-          const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
-          const runtimeInput = {
-            tenant_id: `benchmark-r${repeat}-i${itemIndex + 1}`,
-            question: item.question,
-            question_date: item.question_date,
-            sessions: item.sessions
-          };
-          const retrieval = await runProductRetrieval(runtimeInput, {
-            store,
-            topK: options.topK
-          });
-          const expected = new Set(item.expected_session_ids);
-          const recalled = retrieval.source_ids.filter((id) => expected.has(id));
-          row = {
-            repeat,
-            evaluation_id: item.evaluation_id,
-            split: item.split,
-            category: item.category,
-            expected_source_count: expected.size,
-            retrieved_source_ids: retrieval.source_ids,
-            recalled_source_ids: recalled,
-            hit_at_k: recalled.length > 0,
-            all_expected_recalled: expected.size > 0 && recalled.length === expected.size,
-            latency_ms: Number(retrieval.latency_ms.toFixed(3)),
-            error: null
-          };
-        } catch (error) {
-          row = {
-            repeat,
-            evaluation_id: item.evaluation_id,
-            split: item.split,
-            category: item.category,
-            expected_source_count: item.expected_session_ids.length,
-            retrieved_source_ids: [],
-            recalled_source_ids: [],
-            hit_at_k: false,
-            all_expected_recalled: false,
-            latency_ms: null,
-            error: error instanceof Error ? error.message : String(error)
-          };
-        } finally {
-          await rm(directory, { recursive: true, force: true });
-        }
-        rows.push(row);
-        appendQueue = appendQueue.then(() =>
-          appendFile(output, `${JSON.stringify(row)}\n`, { mode: 0o600 })
-        );
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(options.concurrency, items.length) }, () => worker())
-    );
-    await appendQueue;
+    for (const [itemIndex, item] of items.entries()) {
+      tasks.push({ item, repeat, itemIndex, topK: options.topK });
+    }
   }
+  await runWorkerTasks(tasks, options.concurrency, (row) => {
+    rows.push(row);
+    appendQueue = appendQueue.then(() =>
+      appendFile(output, `${JSON.stringify(row)}\n`, { mode: 0o600 })
+    );
+  });
+  await appendQueue;
   const summary = summarize(rows, datasetHash, options.repeat);
   process.stdout.write(`${JSON.stringify({
     output,
@@ -389,6 +431,18 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (!isMainThread && workerData?.productLongMemEvalWorker) {
+  parentPort.on("message", async (task) => {
+    try {
+      parentPort.postMessage({
+        row: await evaluateItem(task.item, task.repeat, task.itemIndex, task.topK)
+      });
+    } catch (error) {
+      parentPort.postMessage({
+        error: error instanceof Error ? error.stack || error.message : String(error)
+      });
+    }
+  });
+} else if (isMainThread && process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }

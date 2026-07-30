@@ -13,6 +13,7 @@ import {
   analyzeRetrievalIntent,
   buildRetrievalUnits,
   retrievalQueryTokens,
+  retrievalSubjectQueryTokens,
   retrievalUnitLexicalSpecificity,
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
@@ -680,11 +681,15 @@ function migrateSchema(db) {
   }
 }
 
-function buildFtsQuery(query, operator = "AND") {
-  const tokens = retrievalQueryTokens(query)
+function buildFtsQueryFromTokens(inputTokens, operator = "AND") {
+  const tokens = inputTokens
     .map((token) => token.replaceAll('"', ""))
     .slice(0, 16);
   return tokens.map((token) => `"${token}"*`).join(` ${operator} `);
+}
+
+function buildFtsQuery(query, operator = "AND") {
+  return buildFtsQueryFromTokens(retrievalQueryTokens(query), operator);
 }
 
 function relativeWeekdayAgeMs(referenceAt, weekday) {
@@ -709,6 +714,7 @@ function searchRetrievalUnitsV3(db, {
     intent.relative_age_ms ?? relativeWeekdayAgeMs(at, intent.relative_weekday);
   const relativeTargetAt = relativeAgeMs === null ? null : at - relativeAgeMs;
   const ftsQuery = buildFtsQuery(query, "OR");
+  const subjectFtsQuery = buildFtsQueryFromTokens(retrievalSubjectQueryTokens(query), "OR");
   const lexicalRows = ftsQuery
     ? db.prepare(
       `SELECT u.*, bm25(memory_retrieval_units_fts) AS raw_rank
@@ -740,6 +746,38 @@ function searchRetrievalUnitsV3(db, {
       candidateLimit
     )
     : [];
+  const subjectLexicalRows =
+    subjectFtsQuery && subjectFtsQuery !== ftsQuery
+      ? db.prepare(
+        `SELECT u.*, bm25(memory_retrieval_units_fts) AS raw_rank
+         FROM memory_retrieval_units_fts
+         JOIN memory_retrieval_units u
+           ON u.id = memory_retrieval_units_fts.unit_id
+          AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+         JOIN memories m
+           ON m.id = u.memory_id
+          AND m.tenant_id = u.tenant_id
+         WHERE memory_retrieval_units_fts.tenant_id = ?
+           AND memory_retrieval_units_fts MATCH ?
+           AND (? IS NULL OR u.project_id = ?)
+           AND (? = 1 OR m.lifecycle_state != 'suppressed')
+           AND (u.valid_from IS NULL OR u.valid_from <= ?)
+           AND (u.valid_until IS NULL OR u.valid_until > ?)
+         ORDER BY bm25(memory_retrieval_units_fts) ASC,
+                  u.content_hash ASC,
+                  COALESCE(u.event_at, u.created_at) ASC
+         LIMIT ?`
+      ).all(
+        tenantId,
+        subjectFtsQuery,
+        projectId,
+        projectId,
+        includeSuppressed ? 1 : 0,
+        at,
+        at,
+        candidateLimit
+      )
+      : lexicalRows;
   const relativeWindowMs =
     relativeAgeMs === null
       ? null
@@ -747,7 +785,7 @@ function searchRetrievalUnitsV3(db, {
         ? 24 * 60 * 60 * 1000
         : Math.max(24 * 60 * 60 * 1000, Math.min(30 * 24 * 60 * 60 * 1000, relativeAgeMs * 0.5));
   const temporalLexicalRows =
-    ftsQuery && relativeTargetAt !== null && relativeWindowMs !== null
+    subjectFtsQuery && relativeTargetAt !== null && relativeWindowMs !== null
       ? db.prepare(
         `SELECT u.*, bm25(memory_retrieval_units_fts) AS raw_rank
          FROM memory_retrieval_units_fts
@@ -771,7 +809,44 @@ function searchRetrievalUnitsV3(db, {
          LIMIT ?`
       ).all(
         tenantId,
-        ftsQuery,
+        subjectFtsQuery,
+        projectId,
+        projectId,
+        includeSuppressed ? 1 : 0,
+        at,
+        at,
+        relativeTargetAt,
+        relativeWindowMs,
+        relativeTargetAt,
+        candidateLimit
+      )
+      : [];
+  const temporalRelevanceRows =
+    subjectFtsQuery && relativeTargetAt !== null && relativeWindowMs !== null
+      ? db.prepare(
+        `SELECT u.*, bm25(memory_retrieval_units_fts) AS raw_rank
+         FROM memory_retrieval_units_fts
+         JOIN memory_retrieval_units u
+           ON u.id = memory_retrieval_units_fts.unit_id
+          AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+         JOIN memories m
+           ON m.id = u.memory_id
+          AND m.tenant_id = u.tenant_id
+         WHERE memory_retrieval_units_fts.tenant_id = ?
+           AND memory_retrieval_units_fts MATCH ?
+           AND (? IS NULL OR u.project_id = ?)
+           AND (? = 1 OR m.lifecycle_state != 'suppressed')
+           AND (u.valid_from IS NULL OR u.valid_from <= ?)
+           AND (u.valid_until IS NULL OR u.valid_until > ?)
+           AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
+         ORDER BY bm25(memory_retrieval_units_fts) ASC,
+                  ABS(COALESCE(u.event_at, u.created_at) - ?) ASC,
+                  u.content_hash ASC,
+                  COALESCE(u.event_at, u.created_at) ASC
+         LIMIT ?`
+      ).all(
+        tenantId,
+        subjectFtsQuery,
         projectId,
         projectId,
         includeSuppressed ? 1 : 0,
@@ -863,7 +938,9 @@ function searchRetrievalUnitsV3(db, {
     )
     .slice(0, candidateLimit);
   const unitById = new Map(lexicalRows.map((row) => [row.id, row]));
+  for (const row of subjectLexicalRows) unitById.set(row.id, row);
   for (const row of temporalLexicalRows) unitById.set(row.id, row);
+  for (const row of temporalRelevanceRows) unitById.set(row.id, row);
   for (const row of temporalRows) unitById.set(row.id, row);
   const missingUnitIds = semanticRows.map((row) => row.unitId).filter((id) => !unitById.has(id));
   if (missingUnitIds.length > 0) {
@@ -894,7 +971,13 @@ function searchRetrievalUnitsV3(db, {
   lexicalRows.forEach((row, index) => {
     fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
   });
+  subjectLexicalRows.forEach((row, index) => {
+    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1.25 / (60 + index + 1));
+  });
   temporalLexicalRows.forEach((row, index) => {
+    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
+  });
+  temporalRelevanceRows.forEach((row, index) => {
     fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
   });
   semanticRows.forEach((row, index) => {
@@ -967,7 +1050,11 @@ function searchRetrievalUnitsV3(db, {
         memory,
         score: {
           total: Number(total.toFixed(6)),
-          lexical: lexicalRows.some((unit) => unit.memory_id === memoryId) ? 1 : 0,
+          lexical:
+            lexicalRows.some((unit) => unit.memory_id === memoryId) ||
+            subjectLexicalRows.some((unit) => unit.memory_id === memoryId)
+              ? 1
+              : 0,
           semantic: semanticRows.some((unit) => unitById.get(unit.unitId)?.memory_id === memoryId) ? 1 : 0,
           graph: 0,
           time: intent.temporal_direction || relativeTargetAt !== null ? 1 : 0,
@@ -988,9 +1075,10 @@ function searchRetrievalUnitsV3(db, {
   if (relativeTargetAt !== null) {
     const reservedMemoryIds = [...new Set(
       [
-        ...temporalLexicalRows,
-        ...temporalRows
-      ].map((row) => row.memory_id)
+        ...temporalLexicalRows.slice(0, 2).map((row) => row.memory_id),
+        ...temporalRelevanceRows.slice(0, 2).map((row) => row.memory_id),
+        ...temporalRows.map((row) => row.memory_id)
+      ]
     )].slice(0, 4);
     let replacementIndex = selected.length - 1;
     for (const memoryId of reservedMemoryIds) {
@@ -1019,9 +1107,21 @@ function readMode(path) {
 export class LocalMemoryStore {
   constructor(dbPath = DEFAULT_LOCAL_DB) {
     this.dbPath = resolve(dbPath);
+    this.initialization = null;
   }
 
   async init() {
+    if (!this.initialization) {
+      this.initialization = this.initialize().catch((error) => {
+        this.initialization = null;
+        throw error;
+      });
+    }
+    await this.initialization;
+    return this;
+  }
+
+  async initialize() {
     await enforcePrivatePermissions(this.dbPath);
     const existed = existsSync(this.dbPath);
     if (existed) {
@@ -1067,7 +1167,6 @@ export class LocalMemoryStore {
       db.close();
     }
     await enforcePrivatePermissions(this.dbPath);
-    return this;
   }
 
   open({ readOnly = false } = {}) {

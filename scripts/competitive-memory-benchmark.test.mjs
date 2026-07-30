@@ -101,7 +101,7 @@ test("capability scores without evidence remain unmeasured", async () => {
   }
 });
 
-test("ranking requires five complete same-harness reports and a strict OrgBrain lead", () => {
+test("ranking requires every configured complete same-harness report and a strict OrgBrain lead", () => {
   const harness = { model_id: "model-a", budget_usd: 2, hardware_id: "runner-a" };
   const component = (score) => ({ score, evidence: ["benchmark artifact"] });
   const makeScorecard = (score) => ({
@@ -130,13 +130,19 @@ test("ranking requires five complete same-harness reports and a strict OrgBrain 
     makeResult("supermemory", 90),
     makeResult("gbrain", 89),
     makeResult("cognee", 88),
-    makeResult("mem0", 87)
+    makeResult("mem0", 87),
+    makeResult("mempalace", 86),
+    makeResult("agentmemory", 85)
   ];
   const ranking = evaluateCompetitiveRanking(results, [], harness);
   assert.equal(ranking.first_place_claim_allowed, true);
   assert.deepEqual(ranking.blockers, []);
 
-  const incomplete = evaluateCompetitiveRanking(results.slice(0, 4), [], harness);
+  const incomplete = evaluateCompetitiveRanking(
+    results.filter((result) => result.adapter !== "mem0"),
+    [],
+    harness
+  );
   assert.equal(incomplete.first_place_claim_allowed, false);
   assert.ok(incomplete.blockers.includes("missing adapter result: mem0"));
 

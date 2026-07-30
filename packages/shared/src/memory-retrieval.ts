@@ -9,6 +9,7 @@ import type { MemorySourceReference } from "./memory-store";
 import {
   analyzeRetrievalIntent,
   retrievalQueryTokens,
+  retrievalSubjectQueryTokens,
   retrievalUnitLexicalSpecificity
 } from "./retrieval-units";
 
@@ -365,7 +366,11 @@ function toPublicScore(rawRank: number | null): number | null {
 }
 
 export function buildMemoryFtsQuery(raw: string): string | null {
-  const tokens = retrievalQueryTokens(raw)
+  return buildMemoryFtsQueryFromTokens(retrievalQueryTokens(raw));
+}
+
+function buildMemoryFtsQueryFromTokens(inputTokens: string[]): string | null {
+  const tokens = inputTokens
     .slice(0, 12)
     .map((token) => `"${token.replace(/"/g, '""')}"*`);
 
@@ -746,6 +751,7 @@ export async function searchTenantRetrievalUnitsV3(
   const relativeTargetAt = relativeAgeMs === null ? null : referenceAt - relativeAgeMs;
   const variants = buildMemoryQueryVariants(q, options.rewriteQuery ?? false);
   const ftsQuery = variants[0]?.ftsQuery ?? null;
+  const subjectFtsQuery = buildMemoryFtsQueryFromTokens(retrievalSubjectQueryTokens(q));
   const lexicalResult = ftsQuery
     ? await db.prepare(
         `SELECT u.id, u.memory_id, u.tenant_id, u.project_id, u.unit_type, u.speaker,
@@ -774,7 +780,37 @@ export async function searchTenantRetrievalUnitsV3(
         .all<RetrievalUnitCandidateRow>()
     : { results: [] as RetrievalUnitCandidateRow[] };
   const lexicalRows = lexicalResult.results;
+  const subjectLexicalResult =
+    subjectFtsQuery && subjectFtsQuery !== ftsQuery
+      ? await db.prepare(
+          `SELECT u.id, u.memory_id, u.tenant_id, u.project_id, u.unit_type, u.speaker,
+                  u.text, u.event_at, u.valid_from, u.valid_until, u.extractor,
+                  u.extractor_version, u.extraction_state, u.degraded_reason,
+                  u.created_at, bm25(memory_retrieval_units_fts) AS raw_rank
+           FROM memory_retrieval_units_fts
+           JOIN memory_retrieval_units u
+             ON u.id = memory_retrieval_units_fts.unit_id
+            AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+           JOIN memories m
+             ON m.id = u.memory_id
+            AND m.tenant_id = u.tenant_id
+           WHERE memory_retrieval_units_fts.tenant_id = ?
+             AND memory_retrieval_units_fts.text MATCH ?
+             AND (? IS NULL OR u.project_id = ?)
+             AND ${searchableFilterSql("m")}
+             AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
+             AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+           ORDER BY bm25(memory_retrieval_units_fts) ASC,
+                    u.content_hash ASC,
+                    COALESCE(u.event_at, u.created_at) ASC
+           LIMIT 50`
+        )
+          .bind(tenantId, subjectFtsQuery, projectId, projectId)
+          .all<RetrievalUnitCandidateRow>()
+      : lexicalResult;
+  const subjectLexicalRows = subjectLexicalResult.results;
   const unitById = new Map(lexicalRows.map((row) => [row.id, row]));
+  for (const row of subjectLexicalRows) unitById.set(row.id, row);
   const relativeWindowMs =
     relativeAgeMs === null
       ? null
@@ -782,7 +818,7 @@ export async function searchTenantRetrievalUnitsV3(
         ? DAY_MS
         : Math.max(24 * 60 * 60 * 1000, Math.min(30 * 24 * 60 * 60 * 1000, relativeAgeMs * 0.5));
   const temporalLexicalResult =
-    ftsQuery && relativeTargetAt !== null && relativeWindowMs !== null
+    subjectFtsQuery && relativeTargetAt !== null && relativeWindowMs !== null
       ? await db.prepare(
           `SELECT u.id, u.memory_id, u.tenant_id, u.project_id, u.unit_type, u.speaker,
                   u.text, u.event_at, u.valid_from, u.valid_until, u.extractor,
@@ -810,7 +846,7 @@ export async function searchTenantRetrievalUnitsV3(
         )
           .bind(
             tenantId,
-            ftsQuery,
+            subjectFtsQuery,
             projectId,
             projectId,
             relativeTargetAt,
@@ -821,6 +857,46 @@ export async function searchTenantRetrievalUnitsV3(
       : { results: [] as RetrievalUnitCandidateRow[] };
   const temporalLexicalRows = temporalLexicalResult.results;
   for (const row of temporalLexicalRows) unitById.set(row.id, row);
+  const temporalRelevanceResult =
+    subjectFtsQuery && relativeTargetAt !== null && relativeWindowMs !== null
+      ? await db.prepare(
+          `SELECT u.id, u.memory_id, u.tenant_id, u.project_id, u.unit_type, u.speaker,
+                  u.text, u.event_at, u.valid_from, u.valid_until, u.extractor,
+                  u.extractor_version, u.extraction_state, u.degraded_reason,
+                  u.created_at, bm25(memory_retrieval_units_fts) AS raw_rank
+           FROM memory_retrieval_units_fts
+           JOIN memory_retrieval_units u
+             ON u.id = memory_retrieval_units_fts.unit_id
+            AND u.tenant_id = memory_retrieval_units_fts.tenant_id
+           JOIN memories m
+             ON m.id = u.memory_id
+            AND m.tenant_id = u.tenant_id
+           WHERE memory_retrieval_units_fts.tenant_id = ?
+             AND memory_retrieval_units_fts.text MATCH ?
+             AND (? IS NULL OR u.project_id = ?)
+             AND ${searchableFilterSql("m")}
+             AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
+             AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+             AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
+           ORDER BY bm25(memory_retrieval_units_fts) ASC,
+                    ABS(COALESCE(u.event_at, u.created_at) - ?) ASC,
+                    u.content_hash ASC,
+                    COALESCE(u.event_at, u.created_at) ASC
+           LIMIT 50`
+        )
+          .bind(
+            tenantId,
+            subjectFtsQuery,
+            projectId,
+            projectId,
+            relativeTargetAt,
+            relativeWindowMs,
+            relativeTargetAt
+          )
+          .all<RetrievalUnitCandidateRow>()
+      : { results: [] as RetrievalUnitCandidateRow[] };
+  const temporalRelevanceRows = temporalRelevanceResult.results;
+  for (const row of temporalRelevanceRows) unitById.set(row.id, row);
   const temporalResult = relativeTargetAt === null
     ? { results: [] as RetrievalUnitCandidateRow[] }
     : await db.prepare(
@@ -871,7 +947,13 @@ export async function searchTenantRetrievalUnitsV3(
   lexicalRows.forEach((row, index) => {
     unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
   });
+  subjectLexicalRows.forEach((row, index) => {
+    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1.25 / (60 + index + 1));
+  });
   temporalLexicalRows.forEach((row, index) => {
+    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
+  });
+  temporalRelevanceRows.forEach((row, index) => {
     unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
   });
   semanticHits.forEach((hit, index) => {
@@ -924,9 +1006,10 @@ export async function searchTenantRetrievalUnitsV3(
       ? []
       : [...new Set(
           [
-            ...temporalLexicalRows,
-            ...temporalRows
-          ].map((row) => row.memory_id)
+            ...temporalLexicalRows.slice(0, 2).map((row) => row.memory_id),
+            ...temporalRelevanceRows.slice(0, 2).map((row) => row.memory_id),
+            ...temporalRows.map((row) => row.memory_id)
+          ]
         )].slice(0, 4);
   for (const memoryId of reservedTemporalMemoryIds) {
     if (parentIds.some((item) => item.memoryId === memoryId)) continue;

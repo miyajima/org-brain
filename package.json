@@ -41,7 +41,7 @@
     "build:standalone": "node ./scripts/build-standalone.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm run test:node && pnpm run test:scripts && pnpm -r --if-present test",
-    "test:node": "node --test ./scripts/agent-messages.test.mjs ./scripts/local-memory.test.mjs ./scripts/product-longmemeval-benchmark.test.mjs ./scripts/competitive-memory-benchmark.test.mjs ./scripts/cloud-operations.test.mjs ./scripts/connector-setup.test.mjs ./scripts/verify-cloud-restore-drill.test.mjs",
+    "test:node": "node --test ./scripts/agent-messages.test.mjs ./scripts/local-memory.test.mjs ./scripts/product-longmemeval-benchmark.test.mjs ./scripts/product-locomo-holdout.test.mjs ./scripts/competitive-memory-benchmark.test.mjs ./scripts/cloud-operations.test.mjs ./scripts/connector-setup.test.mjs ./scripts/verify-cloud-restore-drill.test.mjs",
     "test:scripts": "vitest run ./scripts/hook-memory-bridge.test.mjs ./scripts/memory-cleanup.test.mjs ./scripts/memory-quality-backfill.test.mjs ./scripts/memory-quality.test.mjs ./scripts/memory-rationale-backfill.test.mjs ./scripts/memory-token-benchmark.test.mjs ./scripts/sync-agents-memory.test.mjs",
     "lint": "pnpm -r --if-present lint",
     "local:memory": "node ./scripts/local-memory.mjs",
@@ -63,6 +63,7 @@
     "benchmark:tokens": "node ./scripts/memory-token-benchmark.mjs",
     "benchmark:competitive": "node ./scripts/competitive-memory-benchmark.mjs",
     "benchmark:product-longmemeval": "node ./scripts/product-longmemeval-benchmark.mjs",
+    "benchmark:product-locomo-holdout": "node ./scripts/product-locomo-holdout.mjs",
     "benchmark:scale": "node ./scripts/local-scale-benchmark.mjs",
     "restore:drill": "node ./scripts/restore-drill.mjs"
   },

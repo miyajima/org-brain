@@ -3,6 +3,7 @@ import {
   analyzeRetrievalIntent,
   buildRetrievalUnits,
   retrievalQueryTokens,
+  retrievalSubjectQueryTokens,
   retrievalUnitLexicalSpecificity
 } from "../src/retrieval-units";
 
@@ -109,5 +110,13 @@ describe("retrieval units", () => {
     expect(retrievalQueryTokens(
       "I am planning another theme park weekend; any suggestions?"
     )).toEqual(["theme", "park"]);
+    expect(retrievalSubjectQueryTokens("What is the total number of siblings I have?"))
+      .toEqual(expect.arrayContaining(["sibling", "brother", "sister"]));
+    expect(retrievalSubjectQueryTokens("What was my previous occupation?"))
+      .toEqual(expect.arrayContaining(["occupation", "job", "role", "career"]));
+    expect(retrievalSubjectQueryTokens("What type of cocktail recipe did I try last weekend?"))
+      .toEqual(["cocktail", "recipe"]);
+    expect(retrievalSubjectQueryTokens("What is the name of my hamster?"))
+      .toEqual(expect.arrayContaining(["hamster", "pet", "rodent"]));
   });
 });
