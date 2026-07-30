@@ -144,11 +144,15 @@ function eventTimestamp(value: string | null | undefined, fallback: number): num
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-async function embed(text: string, env: Env): Promise<number[]> {
-  const output = await env.AI.run(EMBEDDING_MODEL, { text: [text.slice(0, 24_000)] });
+async function embedMany(texts: string[], env: Env): Promise<number[][]> {
+  const output = await env.AI.run(EMBEDDING_MODEL, {
+    text: texts.map((text) => text.slice(0, 24_000))
+  });
   const data = (output as unknown as { data?: unknown }).data;
-  if (!Array.isArray(data) || !Array.isArray(data[0])) throw new Error("embedding returned no vector");
-  return data[0].map(Number);
+  if (!Array.isArray(data) || data.some((vector) => !Array.isArray(vector))) {
+    throw new Error("embedding returned no vectors");
+  }
+  return data.map((vector) => (vector as unknown[]).map(Number));
 }
 
 async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
@@ -225,10 +229,11 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
     );
   }
   await env.OPEN_BRAIN_DB.batch(statements);
-  const vectors = await Promise.all(units.map(async (unit) => ({
+  const values = units.length > 0 ? await embedMany(units.map((unit) => unit.text), env) : [];
+  const vectors = units.map((unit, index) => ({
     id: unit.id,
     namespace: unit.tenant_id,
-    values: await embed(unit.text, env),
+    values: values[index],
     metadata: {
       tenant_id: unit.tenant_id,
       project_id: unit.project_id ?? "",
@@ -237,7 +242,7 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
       speaker: unit.speaker ?? "",
       updated_at: unit.created_at
     }
-  })));
+  }));
   if (vectors.length > 0) await env.MEMORY_VECTOR_INDEX_V3.upsert(vectors);
 }
 

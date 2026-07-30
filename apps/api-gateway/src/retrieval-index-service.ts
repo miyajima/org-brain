@@ -13,19 +13,23 @@ export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
 export const RERANKER_MODEL_V3 = "@cf/baai/bge-reranker-base" as const;
 const BATCH_SIZE = 64;
 
-function extractEmbedding(output: unknown): number[] {
+function extractEmbeddings(output: unknown): number[][] {
   if (!output || typeof output !== "object") {
     throw new Error("embedding provider returned an invalid response");
   }
   const data = (output as { data?: unknown }).data;
   if (
     !Array.isArray(data) ||
-    !Array.isArray(data[0]) ||
-    data[0].some((value) => typeof value !== "number" || !Number.isFinite(value))
+    data.length === 0 ||
+    data.some(
+      (vector) =>
+        !Array.isArray(vector) ||
+        vector.some((value) => typeof value !== "number" || !Number.isFinite(value))
+    )
   ) {
     throw new Error("embedding provider returned no numeric vector");
   }
-  return data[0] as number[];
+  return data as number[][];
 }
 
 export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
@@ -47,21 +51,25 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
   }
 
   protected async embed(text: string): Promise<number[]> {
+    return (await this.embedMany([text]))[0];
+  }
+
+  protected async embedMany(texts: string[]): Promise<number[][]> {
     const output = await this.ai.run(EMBEDDING_MODEL, {
-      text: [text.slice(0, 20_000)],
+      text: texts.map((text) => text.slice(0, 20_000)),
       pooling: "cls"
     });
-    return extractEmbedding(output);
+    return extractEmbeddings(output);
   }
 
   async upsert(documents: RetrievalIndexDocument[]): Promise<void> {
     for (let offset = 0; offset < documents.length; offset += BATCH_SIZE) {
       const batch = documents.slice(offset, offset + BATCH_SIZE);
-      const vectors = await Promise.all(
-        batch.map(async (document) => ({
+      const values = await this.embedMany(batch.map((document) => document.text));
+      const vectors = batch.map((document, index) => ({
           id: document.id,
           namespace: document.tenant_id,
-          values: await this.embed(document.text),
+          values: values[index],
           metadata: {
             tenant_id: document.tenant_id,
             project_id: document.project_id ?? "",
@@ -70,8 +78,7 @@ export class CloudflareVectorRetrievalIndex implements RetrievalIndex {
             speaker: document.speaker ?? "",
             updated_at: document.updated_at
           }
-        }))
-      );
+        }));
       await this.index.upsert(vectors);
     }
   }
@@ -128,10 +135,14 @@ class CloudflareVectorRetrievalIndexV3 extends CloudflareVectorRetrievalIndex {
   }
 
   protected override async embed(text: string): Promise<number[]> {
+    return (await this.embedMany([text]))[0];
+  }
+
+  protected override async embedMany(texts: string[]): Promise<number[][]> {
     const output = await this.v3Ai.run(EMBEDDING_MODEL_V3, {
-      text: [text.slice(0, 24_000)]
+      text: texts.map((text) => text.slice(0, 24_000))
     });
-    return extractEmbedding(output);
+    return extractEmbeddings(output);
   }
 }
 
