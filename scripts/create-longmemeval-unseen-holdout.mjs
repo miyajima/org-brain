@@ -38,7 +38,7 @@ function parseArgs(argv) {
     fillerSessions: null,
     output: null,
     manifest: null,
-    seed: "orgbrain-longmemeval-unseen-v1",
+    seed: "orgbrain-longmemeval-unseen-v2",
     fillers: 80
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -214,13 +214,36 @@ async function main() {
       ...deterministicPick(shareGptFillers, Math.floor(options.fillers * 0.25), `${options.seed}:${question.question_id}:sharegpt`),
       ...deterministicPick(ultraChatFillers, Math.floor(options.fillers * 0.25), `${options.seed}:${question.question_id}:ultrachat`)
     ];
-    const ordered = [...fillers, ...evidence].sort((left, right) =>
+    const fillerOrder = [...fillers].sort((left, right) =>
       sha256(`${options.seed}:${question.question_id}:order:${left.source_id}`)
         .localeCompare(sha256(`${options.seed}:${question.question_id}:order:${right.source_id}`))
     );
+    const ordered = question.question_type === "knowledge_update" && evidence.length === 2
+      ? [
+          ...fillerOrder.slice(0, Math.floor(fillerOrder.length / 3)),
+          evidence[0],
+          ...fillerOrder.slice(Math.floor(fillerOrder.length / 3), Math.floor(fillerOrder.length * 2 / 3)),
+          evidence[1],
+          ...fillerOrder.slice(Math.floor(fillerOrder.length * 2 / 3))
+        ]
+      : [...fillerOrder, ...evidence].sort((left, right) =>
+          sha256(`${options.seed}:${question.question_id}:combined:${left.source_id}`)
+            .localeCompare(sha256(`${options.seed}:${question.question_id}:combined:${right.source_id}`))
+        );
     const baseDate = question.question_content?.unified_date
       ?? question.question_content?.question_date
       ?? "2023/06/01";
+    const dates = ordered.map((_, index) => dateFor(baseDate, index));
+    if (
+      question.question_type === "temp_reasoning_implicit"
+      && Array.isArray(question.question_content?.facts)
+    ) {
+      for (const [index, evidenceEntry] of evidence.entries()) {
+        const position = ordered.findIndex((entry) => entry.source_id === evidenceEntry.source_id);
+        const factDate = question.question_content.facts[index]?.date;
+        if (position >= 0 && factDate) dates[position] = dateFor(factDate, 0);
+      }
+    }
     return {
       question_id: `unseen-${question.question_id}`,
       source_question_id: question.question_id,
@@ -229,7 +252,7 @@ async function main() {
       question: question.question_content?.question,
       answer: question.question_content?.answer,
       question_date: dateFor(baseDate, ordered.length + 1),
-      haystack_dates: ordered.map((_, index) => dateFor(baseDate, index)),
+      haystack_dates: dates,
       haystack_session_ids: ordered.map((entry) => entry.source_id),
       haystack_sessions: ordered.map((entry) => entry.session),
       answer_session_ids: evidence.map((entry) => entry.source_id)

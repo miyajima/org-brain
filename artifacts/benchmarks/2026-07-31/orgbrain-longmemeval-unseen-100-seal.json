@@ -1,7 +1,7 @@
 {
   "benchmark": "LongMemEval custom-history unseen holdout",
   "status": "sealed-before-evaluation",
-  "seed": "orgbrain-longmemeval-unseen-v1",
+  "seed": "orgbrain-longmemeval-unseen-v2",
   "question_count": 100,
   "filler_sessions_per_question": 80,
   "category_quotas": {
@@ -25,6 +25,6 @@
     "session_cache_sha256": "aa0501fbe12b41590f0a25dd162b89a685171c95c0f037cba7195fd47e7c7a8f",
     "filler_sessions_sha256": "fe8e7f43a0338d221bd6c9587c74f91ef838be930375c6dbca71922cd81cd755"
   },
-  "selected_question_ids_sha256": "73bd719fe4e8142a4c3e8aa57dfb18bfe0a06b08ff345c7093bb7bf47fd4ed8c",
-  "dataset_sha256": "181ba9ec0409040ad0f3afa5e13d28b75747ff30e641ed71a1f15eee783df963"
+  "selected_question_ids_sha256": "96bb8a0b57a9745293952189daa1ca2e43a99b5b64134f241b9fd3f502e160ac",
+  "dataset_sha256": "8aa532fe3e52de3e61b005fd1f0f8716fbf83da8c6049ee8dc8cbf0a2004b5ec"
 }

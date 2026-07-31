@@ -300,6 +300,12 @@ async function main() {
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
+    rows = [...new Map(rows.map((row) => [row.evaluation_id, row])).values()];
+    await writeFile(
+      options.output,
+      rows.map((row) => `${JSON.stringify(row)}\n`).join(""),
+      { mode: 0o600 }
+    );
   } else {
     await writeFile(options.output, "", { mode: 0o600 });
   }
