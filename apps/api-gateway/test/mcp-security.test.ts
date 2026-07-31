@@ -34,6 +34,47 @@ describe("authorizeMcpRequest", () => {
     });
   });
 
+  it("accepts an additional service token without replacing the primary token set", () => {
+    const primaryHeaders = {
+      "cf-access-client-id": "primary-token",
+      "cf-access-client-secret": "primary-secret"
+    };
+    const additionalHeaders = {
+      "cf-access-client-id": "additional-token",
+      "cf-access-client-secret": "additional-secret"
+    };
+    const env = {
+      MCP_SERVICE_TOKENS_JSON: JSON.stringify({
+        tokens: [
+          {
+            client_id: "primary-token",
+            client_secret: "primary-secret",
+            tenants: ["default"]
+          }
+        ]
+      }),
+      MCP_SERVICE_TOKENS_ADDITIONAL_JSON: JSON.stringify({
+        tokens: [
+          {
+            client_id: "additional-token",
+            client_secret: "additional-secret",
+            principal: "service:codex-orgbrain",
+            tenants: ["default"]
+          }
+        ]
+      })
+    };
+
+    expect(authorizeMcpRequest(new Request("https://example.com/mcp", { headers: primaryHeaders }), env)).toMatchObject({
+      principal: "service:primary-token"
+    });
+    expect(
+      authorizeMcpRequest(new Request("https://example.com/mcp", { headers: additionalHeaders }), env)
+    ).toMatchObject({
+      principal: "service:codex-orgbrain"
+    });
+  });
+
   it("rejects when service token tenant is not in the allowed list", () => {
     const req = new Request("https://example.com/mcp", {
       headers: {

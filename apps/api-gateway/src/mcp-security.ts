@@ -109,6 +109,21 @@ function resolveServiceToken(headers: Headers, rawConfig: string | undefined): P
   throw new HttpError(403, "forbidden", "Invalid service token");
 }
 
+function mergeServiceTokenConfigs(
+  primaryRawConfig: string | undefined,
+  additionalRawConfig: string | undefined
+): string | undefined {
+  if (!additionalRawConfig?.trim()) return primaryRawConfig;
+  const primary = parseServiceTokenConfig(primaryRawConfig);
+  const additional = parseServiceTokenConfig(additionalRawConfig);
+  return JSON.stringify({
+    tokens: [
+      ...(Array.isArray(primary.tokens) ? primary.tokens : []),
+      ...(Array.isArray(additional.tokens) ? additional.tokens : [])
+    ]
+  });
+}
+
 function resolveAllowedTenants(
   policy: TenantPolicy | null,
   principal: string,
@@ -139,9 +154,17 @@ function pickTenant(requestedTenant: string | null, allowedTenants: string[]): s
 
 export function authorizeMcpRequest(
   request: Request,
-  env: { MCP_TENANT_POLICY_JSON?: string; MCP_ACCESS_AUD?: string; MCP_SERVICE_TOKENS_JSON?: string }
+  env: {
+    MCP_TENANT_POLICY_JSON?: string;
+    MCP_ACCESS_AUD?: string;
+    MCP_SERVICE_TOKENS_JSON?: string;
+    MCP_SERVICE_TOKENS_ADDITIONAL_JSON?: string;
+  }
 ): McpAuthResult {
-  const serviceToken = resolveServiceToken(request.headers, env.MCP_SERVICE_TOKENS_JSON);
+  const serviceToken = resolveServiceToken(
+    request.headers,
+    mergeServiceTokenConfigs(env.MCP_SERVICE_TOKENS_JSON, env.MCP_SERVICE_TOKENS_ADDITIONAL_JSON)
+  );
   if (serviceToken) {
     const policy = parseTenantPolicy(env.MCP_TENANT_POLICY_JSON);
     const allowedTenants = resolveAllowedTenants(policy, serviceToken.principal, serviceToken.inlineAllowedTenants);

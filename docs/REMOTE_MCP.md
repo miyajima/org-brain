@@ -15,6 +15,8 @@
 ## Required Worker Settings
 Set on `apps/api-gateway`:
 - `MCP_SERVICE_TOKENS_JSON` (JSON)
+- optional `MCP_SERVICE_TOKENS_ADDITIONAL_JSON` (JSON) for adding credentials
+  without replacing an existing write-only Cloudflare secret
 - optional `MCP_TENANT_POLICY_JSON` (JSON)
 
 Example service token config:
@@ -58,6 +60,8 @@ pnpm wrangler deploy
 ## Auth Configuration
 1. Generate a service token pair for your MCP client.
 2. Store it in `MCP_SERVICE_TOKENS_JSON`.
+   If the existing secret cannot be retrieved for a safe merge, store only the
+   new credential in `MCP_SERVICE_TOKENS_ADDITIONAL_JSON`.
 3. Configure the MCP client to send the same headers.
 4. If you later want interactive browser login, add Cloudflare Access in front of the MCP hostname and extend the Worker with Access JWT verification.
 

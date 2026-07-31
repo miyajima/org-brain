@@ -26,6 +26,7 @@ export type Env = {
   MCP_TENANT_POLICY_JSON?: string;
   MCP_ACCESS_AUD?: string;
   MCP_SERVICE_TOKENS_JSON?: string;
+  MCP_SERVICE_TOKENS_ADDITIONAL_JSON?: string;
   AI?: Ai;
   MEMORY_VECTOR_INDEX?: Vectorize;
   MEMORY_VECTOR_INDEX_V3?: Vectorize;
