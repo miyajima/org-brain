@@ -1,0 +1,30 @@
+{
+  "benchmark": "LongMemEval custom-history unseen holdout",
+  "status": "sealed-before-evaluation",
+  "seed": "orgbrain-longmemeval-unseen-v1",
+  "question_count": 100,
+  "filler_sessions_per_question": 80,
+  "category_quotas": {
+    "single-session-user": 14,
+    "single-session-assistant": 11,
+    "single-session-preference": 6,
+    "temporal-reasoning": 27,
+    "knowledge-update": 16,
+    "multi-session": 26
+  },
+  "public_question_overlap": 0,
+  "source_human_validation": {
+    "validated_true": 31,
+    "unreviewed": 69,
+    "rejected_false": 0
+  },
+  "source": {
+    "repository": "https://github.com/xiaowu0162/LongMemEval",
+    "custom_history_questions_sha256": "5f3d92aa98deb76412c00daa56ed8ebfde1a998cf200329d109baa444ee2d40b",
+    "public_500_questions_sha256": "9f18a13a0640e004007b0e7dd585d912487c24314360f40eda3ab9f00bfccb6d",
+    "session_cache_sha256": "aa0501fbe12b41590f0a25dd162b89a685171c95c0f037cba7195fd47e7c7a8f",
+    "filler_sessions_sha256": "fe8e7f43a0338d221bd6c9587c74f91ef838be930375c6dbca71922cd81cd755"
+  },
+  "selected_question_ids_sha256": "73bd719fe4e8142a4c3e8aa57dfb18bfe0a06b08ff345c7093bb7bf47fd4ed8c",
+  "dataset_sha256": "181ba9ec0409040ad0f3afa5e13d28b75747ff30e641ed71a1f15eee783df963"
+}

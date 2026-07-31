@@ -12,9 +12,11 @@ function parseArgs(argv) {
     datasetRoot: null,
     chatSize: "100K",
     output: null,
+    summaryOutput: null,
     topK: 5,
     limit: null,
-    concurrency: 4
+    concurrency: 4,
+    resume: false
   };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
@@ -27,9 +29,11 @@ function parseArgs(argv) {
     if (value === "--dataset-root") options.datasetRoot = next();
     else if (value === "--chat-size") options.chatSize = next();
     else if (value === "--output") options.output = next();
+    else if (value === "--summary-output") options.summaryOutput = next();
     else if (value === "--top-k") options.topK = Number(next());
     else if (value === "--limit") options.limit = Number(next());
     else if (value === "--concurrency") options.concurrency = Number(next());
+    else if (value === "--resume") options.resume = true;
     else throw new Error(`unknown argument: ${value}`);
   }
   if (!options.datasetRoot) throw new Error("--dataset-root is required");
@@ -43,6 +47,7 @@ function parseArgs(argv) {
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1 || options.concurrency > 16) {
     throw new Error("--concurrency must be between 1 and 16");
   }
+  if (options.output) options.summaryOutput ??= options.output.replace(/\.jsonl$/u, "-summary.json");
   return options;
 }
 
@@ -93,12 +98,12 @@ export function normalizeBeamChat(chatRaw, questionsRaw, chatId, chatSize = "100
       const expectedMessageIds = [...new Set(flattenSourceIds(entry.source_chat_ids))];
       if (expectedMessageIds.length === 0) {
         excludedQuestions[category] = (excludedQuestions[category] ?? 0) + 1;
-        continue;
       }
       questions.push({
         evaluation_id: `${chatSize}-${chatId}-${category}-${questionIndex + 1}`,
         category,
         question: String(entry.question ?? ""),
+        scorable: expectedMessageIds.length > 0,
         expected_message_ids: expectedMessageIds
       });
     }
@@ -187,16 +192,18 @@ function percentile(values, quantile) {
 }
 
 function summarize(rows, metadata) {
-  const scored = rows.filter((row) => !row.error);
+  const scored = rows.filter((row) => row.scorable && !row.error);
   const categories = {};
   for (const row of rows) {
     const category = categories[row.category] ?? {
-      total: 0,
+      scored_total: 0,
+      unscored_total: 0,
       any_hits: 0,
       all_hits: 0,
       errors: 0
     };
-    category.total += 1;
+    category.scored_total += row.scorable ? 1 : 0;
+    category.unscored_total += row.scorable ? 0 : 1;
     category.any_hits += row.recall_any_at_k ? 1 : 0;
     category.all_hits += row.recall_all_at_k ? 1 : 0;
     category.errors += row.error ? 1 : 0;
@@ -208,6 +215,7 @@ function summarize(rows, metadata) {
     chat_size: metadata.chatSize,
     chat_count: metadata.chatCount,
     question_count: rows.length,
+    scored_question_count: scored.length,
     excluded_unscored_questions: metadata.excludedUnscoredQuestions,
     excluded_questions_by_category: metadata.excludedQuestionsByCategory,
     recall_any_at_k: scored.filter((row) => row.recall_any_at_k).length / scored.length,
@@ -246,20 +254,44 @@ async function main() {
       questions: chat.questions.filter((question) => selectedIds.has(question.evaluation_id))
     }))
     .filter((chat) => chat.questions.length > 0);
+  const selectedChatCount = selectedChats.length;
   const output = options.output ?? join(
     process.cwd(),
     "artifacts",
     `product-beam-${options.chatSize.toLowerCase()}-${Date.now()}.jsonl`
   );
   await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, "", { mode: 0o600 });
-  const rows = [];
+  const summaryOutput = options.summaryOutput ?? output.replace(/\.jsonl$/u, "-summary.json");
+  let rows = [];
+  if (options.resume) {
+    try {
+      rows = (await readFile(output, "utf8"))
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  const expectedByChat = new Map(selectedChats.map((chat) => [chat.chat_id, chat.questions.length]));
+  const rowCountByChat = new Map();
+  for (const row of rows) rowCountByChat.set(row.chat_id, (rowCountByChat.get(row.chat_id) ?? 0) + 1);
+  const completeChatIds = new Set(
+    [...expectedByChat].filter(([chatId, count]) => rowCountByChat.get(chatId) === count).map(([chatId]) => chatId)
+  );
+  rows = rows.filter((row) => completeChatIds.has(row.chat_id));
+  await writeFile(
+    output,
+    rows.map((row) => `${JSON.stringify(row)}\n`).join(""),
+    { mode: 0o600 }
+  );
+  const pendingChats = selectedChats.filter((chat) => !completeChatIds.has(chat.chat_id));
   let appendQueue = Promise.resolve();
   let nextChatIndex = 0;
   const worker = async () => {
-    while (nextChatIndex < selectedChats.length) {
+    while (nextChatIndex < pendingChats.length) {
       const chatIndex = nextChatIndex++;
-      const chat = selectedChats[chatIndex];
+      const chat = pendingChats[chatIndex];
       const directory = await mkdtemp(join(tmpdir(), "orgbrain-beam-"));
       try {
         const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
@@ -284,11 +316,12 @@ async function main() {
               evaluation_id: question.evaluation_id,
               chat_id: chat.chat_id,
               category: question.category,
+              scorable: question.scorable,
               expected_source_count: expected.size,
               retrieved_message_ids: retrieval.message_ids,
               recalled_message_ids: recalled,
-              recall_any_at_k: recalled.length > 0,
-              recall_all_at_k: recalled.length === expected.size,
+              recall_any_at_k: question.scorable ? recalled.length > 0 : null,
+              recall_all_at_k: question.scorable ? recalled.length === expected.size : null,
               latency_ms: Number(retrieval.latency_ms.toFixed(3)),
               error: null
             };
@@ -297,11 +330,12 @@ async function main() {
               evaluation_id: question.evaluation_id,
               chat_id: chat.chat_id,
               category: question.category,
+              scorable: question.scorable,
               expected_source_count: question.expected_message_ids.length,
               retrieved_message_ids: [],
               recalled_message_ids: [],
-              recall_any_at_k: false,
-              recall_all_at_k: false,
+              recall_any_at_k: question.scorable ? false : null,
+              recall_all_at_k: question.scorable ? false : null,
               latency_ms: null,
               error: error instanceof Error ? error.message : String(error)
             };
@@ -317,7 +351,7 @@ async function main() {
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(options.concurrency, selectedChats.length) }, () => worker())
+    Array.from({ length: Math.min(options.concurrency, pendingChats.length) }, () => worker())
   );
   await appendQueue;
   const excludedQuestionsByCategory = {};
@@ -329,8 +363,9 @@ async function main() {
   }
   const excludedUnscoredQuestions = Object.values(excludedQuestionsByCategory)
     .reduce((sum, count) => sum + count, 0);
-  process.stdout.write(`${JSON.stringify({
+  const report = {
     output,
+    summary_output: summaryOutput,
     dataset_sha256: sha256(hashParts.join("\n")),
     selected_ids_sha256: sha256(
       selectedQuestions.map(({ question }) => question.evaluation_id).join("\n")
@@ -338,15 +373,18 @@ async function main() {
     runner: {
       search_mode: "hybrid_v3",
       top_k: options.topK,
-      concurrency: options.concurrency
+      concurrency: options.concurrency,
+      resume: options.resume
     },
     summary: summarize(rows, {
       chatSize: options.chatSize,
-      chatCount: selectedChats.length,
+      chatCount: selectedChatCount,
       excludedUnscoredQuestions,
       excludedQuestionsByCategory
     })
-  }, null, 2)}\n`);
+  };
+  await writeFile(summaryOutput, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

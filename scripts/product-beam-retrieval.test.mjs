@@ -6,7 +6,7 @@ import {
   seedBeamChat
 } from "./product-beam-retrieval.mjs";
 
-test("normalizeBeamChat flattens nested evidence labels and excludes abstention", () => {
+test("normalizeBeamChat flattens nested evidence labels and retains unscored abstention", () => {
   const normalized = normalizeBeamChat(
     JSON.stringify([{
       batch_number: 1,
@@ -31,6 +31,8 @@ test("normalizeBeamChat flattens nested evidence labels and excludes abstention"
   assert.equal(normalized.turns.length, 1);
   assert.deepEqual(normalized.turns[0].message_ids, ["10", "11"]);
   assert.deepEqual(normalized.questions[0].expected_message_ids, ["10", "11"]);
+  assert.equal(normalized.questions[0].scorable, true);
+  assert.equal(normalized.questions[1].scorable, false);
   assert.deepEqual(normalized.excluded_questions_by_category, { abstention: 1 });
 });
 
