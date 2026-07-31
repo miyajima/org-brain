@@ -94,6 +94,50 @@ test("capture, revise, search, suppress, verify and delete share one record cont
   }
 });
 
+test("captureBatch preserves capture projections and rolls back atomically", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const results = await store.captureBatch([
+      captureInput({
+        external_key: "batch:first",
+        content: "The first batched memory discusses alpine routes."
+      }),
+      captureInput({
+        external_key: "batch:second",
+        content: "The second batched memory discusses coastal routes."
+      })
+    ]);
+    assert.equal(results.length, 2);
+    assert.ok(results.every((result) => result.created && result.version === 1));
+    const search = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "coastal route",
+      search_mode: "hybrid_v3"
+    });
+    assert.equal(search[0].memory.id, results[1].memory_id);
+    const before = await store.verify();
+    assert.equal(before.record_count, 2);
+    assert.equal(before.version_count, 2);
+    assert.equal(before.ok, true);
+
+    await assert.rejects(
+      store.captureBatch([
+        captureInput({ external_key: "batch:rollback", content: "This row must roll back." }),
+        captureInput({ external_key: "batch:invalid", content: "" })
+      ]),
+      /content must not be empty/u
+    );
+    const after = await store.verify();
+    assert.equal(after.record_count, 2);
+    assert.equal(after.version_count, 2);
+    assert.equal(after.ok, true);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("local sparse embeddings retrieve a synonym without external services", async () => {
   const ctx = await fixture();
   try {

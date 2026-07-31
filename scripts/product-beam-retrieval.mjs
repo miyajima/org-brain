@@ -130,9 +130,9 @@ export function normalizeBeamChat(chatRaw, questionsRaw, chatId, chatSize = "100
 export async function seedBeamChat(runtimeInput, { store }) {
   if (!store) throw new Error("seedBeamChat requires a MemoryStore");
   const principalId = "beam-retrieval-reader";
-  for (const [turnIndex, turn] of runtimeInput.turns.entries()) {
+  const captures = runtimeInput.turns.map((turn, turnIndex) => {
     const eventAt = 1_600_000_000_000 + turnIndex;
-    await store.capture({
+    return {
       tenant_id: runtimeInput.tenant_id,
       project_id: "beam-retrieval",
       kind: "episodic",
@@ -166,7 +166,12 @@ export async function seedBeamChat(runtimeInput, { store }) {
         principal_id: principalId,
         permissions: ["read"]
       }]
-    });
+    };
+  });
+  if (typeof store.captureBatch === "function") {
+    await store.captureBatch(captures);
+  } else {
+    for (const capture of captures) await store.capture(capture);
   }
 }
 

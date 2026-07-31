@@ -1213,51 +1213,77 @@ export class LocalMemoryStore {
     await this.init();
     const db = this.open();
     try {
-      const now = Date.now();
-      const tenantId = nullableString(input.tenant_id, 128) || "default";
-      const source = nullableString(input.source, 64) || "local";
-      const externalKey = nullableString(input.external_key, 256);
-      const existing = externalKey
-        ? db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND source = ? AND external_key = ?").get(
-            tenantId,
-            source,
-            externalKey
-          )
-        : null;
-      const id = existing?.id || nullableString(input.id, 128) || randomUUID();
-      const createdAt = existing?.created_at || finiteNumber(input.created_at) || now;
-      const record = this.normalizeRecord(
-        {
-          ...input,
-          id,
-          tenant_id: tenantId,
-          source,
-          external_key: externalKey,
-          created_at: createdAt,
-          updated_at: finiteNumber(input.updated_at) || now,
-          current_version: Number(existing?.current_version || 0) + 1
-        },
-        existing ? memoryFromRow(existing) : null
-      );
       db.exec("BEGIN IMMEDIATE");
       try {
-        this.writeRecord(db, record, Boolean(existing));
-        this.writeVersion(db, record, "capture");
+        const result = this.captureIntoDatabase(db, input);
         db.exec("COMMIT");
+        return result;
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;
       }
-      return {
-        memory_id: record.id,
-        version: record.current_version,
-        operation: "capture",
-        created: !existing
-      };
     } finally {
       db.close();
       await enforcePrivatePermissions(this.dbPath);
     }
+  }
+
+  async captureBatch(inputs) {
+    if (!Array.isArray(inputs)) throw new Error("captureBatch inputs must be an array");
+    if (inputs.length === 0) return [];
+    await this.init();
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const results = inputs.map((input) => this.captureIntoDatabase(db, input));
+        db.exec("COMMIT");
+        return results;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.close();
+      await enforcePrivatePermissions(this.dbPath);
+    }
+  }
+
+  captureIntoDatabase(db, input) {
+    const now = Date.now();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const source = nullableString(input.source, 64) || "local";
+    const externalKey = nullableString(input.external_key, 256);
+    const existing = externalKey
+      ? db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND source = ? AND external_key = ?").get(
+          tenantId,
+          source,
+          externalKey
+        )
+      : null;
+    const id = existing?.id || nullableString(input.id, 128) || randomUUID();
+    const createdAt = existing?.created_at || finiteNumber(input.created_at) || now;
+    const record = this.normalizeRecord(
+      {
+        ...input,
+        id,
+        tenant_id: tenantId,
+        source,
+        external_key: externalKey,
+        created_at: createdAt,
+        updated_at: finiteNumber(input.updated_at) || now,
+        current_version: Number(existing?.current_version || 0) + 1
+      },
+      existing ? memoryFromRow(existing) : null
+    );
+    this.writeRecord(db, record, Boolean(existing));
+    this.writeVersion(db, record, "capture");
+    return {
+      memory_id: record.id,
+      version: record.current_version,
+      operation: "capture",
+      created: !existing
+    };
   }
 
   async revise(tenantId, memoryId, input) {
