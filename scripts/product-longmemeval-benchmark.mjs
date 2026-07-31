@@ -23,6 +23,7 @@ function parseArgs(argv) {
   const options = {
     datasetPath: null,
     datasetUrl: DEFAULT_DATASET_URL,
+    sealManifest: null,
     output: null,
     summaryOutput: null,
     limit: 0,
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     };
     if (value === "--dataset-path") options.datasetPath = next();
     else if (value === "--dataset-url") options.datasetUrl = next();
+    else if (value === "--seal-manifest") options.sealManifest = next();
     else if (value === "--output") options.output = next();
     else if (value === "--summary-output") options.summaryOutput = next();
     else if (value === "--limit") options.limit = Number(next());
@@ -54,6 +56,7 @@ function parseArgs(argv) {
           "Usage: node scripts/product-longmemeval-benchmark.mjs [options]",
           "  --dataset-path <path>  Read an existing LongMemEval-S JSON file",
           "  --dataset-url <url>    Dataset URL when no local path is supplied",
+          "  --seal-manifest <path> Verify an external pre-evaluation dataset seal",
           "  --output <path>        Raw JSONL output path",
           "  --summary-output <path> Summary JSON output path",
           "  --limit <n>            Run the first n hash-ordered items",
@@ -225,7 +228,7 @@ function percentile(values, quantile) {
   return ordered[Math.min(ordered.length - 1, Math.ceil(ordered.length * quantile) - 1)];
 }
 
-function summarize(rows, datasetHash, repeatCount) {
+export function summarize(rows, datasetHash, repeatCount, provenance = {}) {
   const byRepeat = [];
   for (let repeat = 1; repeat <= repeatCount; repeat += 1) {
     const selected = rows.filter((row) => row.repeat === repeat);
@@ -259,37 +262,43 @@ function summarize(rows, datasetHash, repeatCount) {
       total: Math.max(...perRepeat.map((row) => row.total))
     };
   }
+  const fullSize = byRepeat.every((row) => row.total === 500);
   const categoryGates = Object.fromEntries(
     Object.entries(CATEGORY_GATES).map(([category, gate]) => [
       category,
       {
         ...gate,
         actual: categories[category]?.minimum_hits ?? 0,
+        applicable: fullSize,
         passed:
+          fullSize &&
           (categories[category]?.minimum_hits ?? 0) >= gate.minimum &&
           (categories[category]?.total ?? 0) === gate.total
       }
     ])
   );
-  const fullSize = byRepeat.every((row) => row.total === 500);
   return {
     dataset_sha256: datasetHash,
     repeat_count: repeatCount,
     scoring: "question-level hit when at least one expected source session appears in top-k",
+    provenance,
     by_repeat: byRepeat,
     categories,
     gates: {
       full_500_recall_at_5: {
         target: 0.986,
         actual: minimumRecall,
+        applicable: fullSize,
         passed: fullSize && minimumRecall >= 0.986
       },
       hash_100_recall_at_5: {
         target: 0.98,
         actual: minimumHoldoutRecall,
-        passed: fullSize && minimumHoldoutRecall >= 0.98,
-        sealed: false,
-        note: "Deterministic hash partition only; unseen status requires an external provenance record."
+        applicable: fullSize || provenance.sealed === true,
+        passed: (fullSize || provenance.sealed === true) && minimumHoldoutRecall >= 0.98,
+        sealed: provenance.sealed === true,
+        note: provenance.note
+          ?? "Deterministic hash partition only; unseen status requires an external provenance record."
       },
       category_gates: categoryGates
     }
@@ -399,6 +408,24 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const rawDataset = await loadDataset(options);
   const datasetHash = sha256(rawDataset);
+  let provenance = {
+    sealed: false,
+    note: "No external pre-evaluation seal manifest was supplied."
+  };
+  if (options.sealManifest) {
+    const seal = JSON.parse(await readFile(options.sealManifest, "utf8"));
+    if (seal.dataset_sha256 !== datasetHash) {
+      throw new Error(`seal dataset hash mismatch: ${seal.dataset_sha256} != ${datasetHash}`);
+    }
+    provenance = {
+      sealed: seal.status === "sealed-before-evaluation",
+      manifest: options.sealManifest,
+      selected_question_ids_sha256: seal.selected_question_ids_sha256,
+      public_question_overlap: seal.public_question_overlap,
+      source_human_validation: seal.source_human_validation,
+      note: "External manifest hash matched before this evaluation."
+    };
+  }
   let items = splitItems(normalizeRows(rawDataset));
   if (options.limit > 0) items = items.slice(0, options.limit);
   const output = options.output ?? join(process.cwd(), "artifacts", `product-longmemeval-${Date.now()}.jsonl`);
@@ -438,7 +465,7 @@ async function main() {
     );
   });
   await appendQueue;
-  const summary = summarize(rows, datasetHash, options.repeat);
+  const summary = summarize(rows, datasetHash, options.repeat, provenance);
   const report = {
     output,
     summary_output: summaryOutput,

@@ -132,9 +132,13 @@ result. PrecisionMemBench's exposed official external-provider tests improved
 from 16/77 to 49/77 passed after using `minimum_total_score=0.065`.
 
 The retrieval and category gates pass, but canary and first-place claims remain
-blocked by the lack of an unseen LongMemEval holdout, missing same-harness
-eligible runs for Cognee, Supermemory, and MemPalace, and incomplete weighted
-capability evidence. AgentMemory, Mem0, and GBrain keyword have completed
+blocked. A sealed 100-question custom-history LongMemEval holdout has now been
+executed, but its repeat-five R@5 is 92.0% against a 98.0% target and its
+Gemini 3.6 Flash answer/judge accuracy is 74.0% against a 96.8% target.
+BEAM 500K/1M/10M answer and official-rubric judge runs are also complete and
+show material quality and latency degradation at scale. Same-harness eligible
+runs for Cognee, Supermemory, and MemPalace and weighted capability evidence
+remain incomplete. AgentMemory, Mem0, and GBrain keyword have completed
 `competitive-memory-v1` repeat-five runs. MemPalace additionally completed its
 native LongMemEval-S `hybrid_v4` runner at 491/500 (98.2%), below OrgBrain's
 499/500 (99.8%). See `docs/OSS_MEMORY_COMPARISON_2026-07-30.md`.

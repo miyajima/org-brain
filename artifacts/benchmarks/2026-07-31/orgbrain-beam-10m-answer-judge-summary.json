@@ -1,0 +1,93 @@
+{
+  "dataset": {
+    "repository": "https://github.com/mohammadtavakoli78/BEAM",
+    "sha256": "a95be257daff7939dd08241df7e52dccd390fcfcb922ac76f6c5898b551d354e",
+    "retrieval_artifact": "artifacts/benchmarks/2026-07-31/orgbrain-beam-10m-retrieval.jsonl",
+    "retrieval_sha256": "0dff4cda8f1490c078b503aefb9f806fb5bbb6c0644cb88b322ff3b5a72453e9"
+  },
+  "protocol": {
+    "answer_prompt": "BEAM answer_generation_for_rag",
+    "judge_prompt": "BEAM unified_llm_judge_base_prompt",
+    "answer_context": "OrgBrain hybrid_v3 top-5 product-path retrieval",
+    "scorer_labels_visible_to_answer_model": false,
+    "failed_rows_excluded": false,
+    "resume": false
+  },
+  "summary": {
+    "benchmark": "BEAM official-rubric answer evaluation",
+    "benchmark_track": "OrgBrain product retrieval; Gemini answer and rubric judge",
+    "chat_size": "10M",
+    "question_count": 200,
+    "completed_questions": 200,
+    "rubric_item_count": 621,
+    "rubric_score": 0.20933977455716588,
+    "question_full_compliance": 0.255,
+    "errors": 0,
+    "models": {
+      "answer": "gemini-3.6-flash",
+      "judge": "gemini-3.6-flash"
+    },
+    "categories": {
+      "information_extraction": {
+        "questions": 20,
+        "rubric_items": 23,
+        "errors": 0,
+        "score": 0.6521739130434783
+      },
+      "abstention": {
+        "questions": 20,
+        "rubric_items": 20,
+        "errors": 0,
+        "score": 0.8
+      },
+      "instruction_following": {
+        "questions": 20,
+        "rubric_items": 33,
+        "errors": 0,
+        "score": 0.3484848484848485
+      },
+      "knowledge_update": {
+        "questions": 20,
+        "rubric_items": 26,
+        "errors": 0,
+        "score": 0.6923076923076923
+      },
+      "preference_following": {
+        "questions": 20,
+        "rubric_items": 35,
+        "errors": 0,
+        "score": 0.44285714285714284
+      },
+      "multi_session_reasoning": {
+        "questions": 20,
+        "rubric_items": 36,
+        "errors": 0,
+        "score": 0.09722222222222222
+      },
+      "temporal_reasoning": {
+        "questions": 20,
+        "rubric_items": 40,
+        "errors": 0,
+        "score": 0.075
+      },
+      "contradiction_resolution": {
+        "questions": 20,
+        "rubric_items": 80,
+        "errors": 0,
+        "score": 0.04375
+      },
+      "summarization": {
+        "questions": 20,
+        "rubric_items": 106,
+        "errors": 0,
+        "score": 0.08490566037735849
+      },
+      "event_ordering": {
+        "questions": 20,
+        "rubric_items": 222,
+        "errors": 0,
+        "score": 0.15765765765765766
+      }
+    }
+  }
+}

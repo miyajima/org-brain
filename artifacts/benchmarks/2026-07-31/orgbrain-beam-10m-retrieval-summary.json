@@ -1,0 +1,101 @@
+{
+  "output": "artifacts/benchmarks/2026-07-31/orgbrain-beam-10m-retrieval.jsonl",
+  "summary_output": "artifacts/benchmarks/2026-07-31/orgbrain-beam-10m-retrieval-summary.json",
+  "dataset_sha256": "a95be257daff7939dd08241df7e52dccd390fcfcb922ac76f6c5898b551d354e",
+  "selected_ids_sha256": "b406d84eeeb3deef224cdde1e625936a941bdc60f4419f97a52a71f2058c678e",
+  "runner": {
+    "search_mode": "hybrid_v3",
+    "top_k": 5,
+    "concurrency": 10,
+    "resume": false
+  },
+  "summary": {
+    "benchmark": "BEAM product-path evidence retrieval",
+    "benchmark_track": "retrieval-only; not official LLM answer accuracy",
+    "chat_size": "10M",
+    "chat_count": 10,
+    "question_count": 200,
+    "scored_question_count": 176,
+    "excluded_unscored_questions": 24,
+    "excluded_questions_by_category": {
+      "abstention": 20,
+      "summarization": 4
+    },
+    "recall_any_at_k": 0.4375,
+    "recall_all_at_k": 0.14772727272727273,
+    "p95_latency_ms": 25536.242,
+    "errors": 0,
+    "categories": {
+      "abstention": {
+        "scored_total": 0,
+        "unscored_total": 20,
+        "any_hits": 0,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "contradiction_resolution": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 19,
+        "all_hits": 5,
+        "errors": 0
+      },
+      "event_ordering": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 5,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "information_extraction": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 11,
+        "all_hits": 10,
+        "errors": 0
+      },
+      "instruction_following": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 1,
+        "all_hits": 1,
+        "errors": 0
+      },
+      "knowledge_update": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 17,
+        "all_hits": 6,
+        "errors": 0
+      },
+      "multi_session_reasoning": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 6,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "preference_following": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 7,
+        "all_hits": 2,
+        "errors": 0
+      },
+      "summarization": {
+        "scored_total": 16,
+        "unscored_total": 4,
+        "any_hits": 3,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "temporal_reasoning": {
+        "scored_total": 20,
+        "unscored_total": 0,
+        "any_hits": 8,
+        "all_hits": 2,
+        "errors": 0
+      }
+    }
+  }
+}

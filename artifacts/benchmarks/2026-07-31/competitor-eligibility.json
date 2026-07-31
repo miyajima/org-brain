@@ -39,6 +39,67 @@
       "official_answer_accuracy": false,
       "errors": 0
     },
+    "beam_scale_product_path": {
+      "status": "complete_retrieval_and_official_rubric_answer_judge",
+      "answer_model": "gemini-3.6-flash",
+      "judge_model": "gemini-3.6-flash",
+      "failed_rows_excluded": false,
+      "results": {
+        "500K": {
+          "questions": 700,
+          "retrieval_scored_questions": 629,
+          "retrieval_any_recall_at_5": 58.3466,
+          "retrieval_all_recall_at_5": 34.0223,
+          "search_p95_ms": 193.211,
+          "official_rubric_score": 32.2358,
+          "question_full_compliance": 29.4286,
+          "errors": 0
+        },
+        "1M": {
+          "questions": 700,
+          "retrieval_scored_questions": 625,
+          "retrieval_any_recall_at_5": 57.12,
+          "retrieval_all_recall_at_5": 16.32,
+          "search_p95_ms": 1235.124,
+          "official_rubric_score": 30.3313,
+          "question_full_compliance": 22.1429,
+          "errors": 0
+        },
+        "10M": {
+          "questions": 200,
+          "retrieval_scored_questions": 176,
+          "retrieval_any_recall_at_5": 43.75,
+          "retrieval_all_recall_at_5": 14.7727,
+          "search_p95_ms": 25536.242,
+          "official_rubric_score": 20.934,
+          "question_full_compliance": 25.5,
+          "errors": 0
+        }
+      }
+    },
+    "longmemeval_custom_history_unseen_100": {
+      "status": "complete_sealed_before_evaluation_repeat_5",
+      "dataset_sha256": "8aa532fe3e52de3e61b005fd1f0f8716fbf83da8c6049ee8dc8cbf0a2004b5ec",
+      "public_question_overlap": 0,
+      "source_human_validation": {
+        "validated_true": 31,
+        "unreviewed": 69,
+        "rejected_false": 0
+      },
+      "retrieval_hits_per_repeat": 92,
+      "questions_per_repeat": 100,
+      "minimum_recall_at_5": 92.0,
+      "holdout_gate_target": 98.0,
+      "holdout_gate_passed": false,
+      "answer_model": "gemini-3.6-flash",
+      "judge_model": "gemini-3.6-flash",
+      "answer_correct": 74,
+      "answer_accuracy": 74.0,
+      "answer_gate_target": 96.8,
+      "answer_gate_passed": false,
+      "errors": 0,
+      "official_unpublished_holdout": false
+    },
     "precisionmembench_product_path": {
       "status": "complete_development_evidence",
       "retrieval_passed": 49,
@@ -61,9 +122,13 @@
       "mempalace": "Native LongMemEval run is complete, but the organization and ACL same-harness bridge is not."
     }
   },
+  "failed_acceptance_gates": [
+    "sealed custom-history LongMemEval 100 retrieval: 92.0% < 98.0%",
+    "sealed custom-history LongMemEval 100 Gemini answer/judge: 74.0% < 96.8%",
+    "BEAM 1M and 10M search p95 exceed 500 ms",
+    "BEAM scale answer quality falls as low as 20.934% official-rubric score"
+  ],
   "remaining_ranking_blockers": [
-    "unseen sealed LongMemEval holdout",
-    "BEAM official answer/judge evaluation and 500K/1M/10M scale runs",
     "eligible same-harness Cognee, Supermemory, and MemPalace coverage",
     "complete evidence-backed personal and organization capability scorecards",
     "five complete repeats for every adapter included in the strict ranking"

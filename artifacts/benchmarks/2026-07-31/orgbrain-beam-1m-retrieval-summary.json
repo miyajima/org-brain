@@ -1,0 +1,102 @@
+{
+  "output": "artifacts/benchmarks/2026-07-31/orgbrain-beam-1m-retrieval.jsonl",
+  "summary_output": "artifacts/benchmarks/2026-07-31/orgbrain-beam-1m-retrieval-summary.json",
+  "dataset_sha256": "ea206a88b3945c0a17d3c2d6f87e9f6742e30e1a4fb154b08982d9e0777f8e59",
+  "selected_ids_sha256": "daed20cf2604ab60b9c06ac6eeb30477e987f22f1ca295aecf77209eeb719268",
+  "runner": {
+    "search_mode": "hybrid_v3",
+    "top_k": 5,
+    "concurrency": 8,
+    "resume": true
+  },
+  "summary": {
+    "benchmark": "BEAM product-path evidence retrieval",
+    "benchmark_track": "retrieval-only; not official LLM answer accuracy",
+    "chat_size": "1M",
+    "chat_count": 35,
+    "question_count": 700,
+    "scored_question_count": 625,
+    "excluded_unscored_questions": 75,
+    "excluded_questions_by_category": {
+      "abstention": 70,
+      "preference_following": 1,
+      "summarization": 4
+    },
+    "recall_any_at_k": 0.5712,
+    "recall_all_at_k": 0.1632,
+    "p95_latency_ms": 1235.124,
+    "errors": 0,
+    "categories": {
+      "abstention": {
+        "scored_total": 0,
+        "unscored_total": 70,
+        "any_hits": 0,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "contradiction_resolution": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 63,
+        "all_hits": 15,
+        "errors": 0
+      },
+      "event_ordering": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 24,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "information_extraction": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 30,
+        "all_hits": 21,
+        "errors": 0
+      },
+      "instruction_following": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 13,
+        "all_hits": 10,
+        "errors": 0
+      },
+      "knowledge_update": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 65,
+        "all_hits": 23,
+        "errors": 0
+      },
+      "multi_session_reasoning": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 48,
+        "all_hits": 3,
+        "errors": 0
+      },
+      "preference_following": {
+        "scored_total": 69,
+        "unscored_total": 1,
+        "any_hits": 30,
+        "all_hits": 11,
+        "errors": 0
+      },
+      "summarization": {
+        "scored_total": 66,
+        "unscored_total": 4,
+        "any_hits": 24,
+        "all_hits": 0,
+        "errors": 0
+      },
+      "temporal_reasoning": {
+        "scored_total": 70,
+        "unscored_total": 0,
+        "any_hits": 60,
+        "all_hits": 19,
+        "errors": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,155 @@
+{
+  "output": "artifacts/benchmarks/2026-07-31/orgbrain-longmemeval-unseen-100-repeat5.jsonl",
+  "summary_output": "artifacts/benchmarks/2026-07-31/orgbrain-longmemeval-unseen-100-repeat5-summary.json",
+  "runner": {
+    "search_mode": "hybrid_v3",
+    "top_k": 5,
+    "concurrency": 8,
+    "resume": true
+  },
+  "summary": {
+    "dataset_sha256": "8aa532fe3e52de3e61b005fd1f0f8716fbf83da8c6049ee8dc8cbf0a2004b5ec",
+    "repeat_count": 5,
+    "scoring": "question-level hit when at least one expected source session appears in top-k",
+    "provenance": {
+      "sealed": true,
+      "manifest": "artifacts/benchmarks/2026-07-31/orgbrain-longmemeval-unseen-100-seal.json",
+      "selected_question_ids_sha256": "96bb8a0b57a9745293952189daa1ca2e43a99b5b64134f241b9fd3f502e160ac",
+      "public_question_overlap": 0,
+      "source_human_validation": {
+        "validated_true": 31,
+        "unreviewed": 69,
+        "rejected_false": 0
+      },
+      "note": "External manifest hash matched before this evaluation."
+    },
+    "by_repeat": [
+      {
+        "repeat": 1,
+        "hits": 92,
+        "total": 100,
+        "recall_at_k": 0.92,
+        "hash_holdout_recall_at_k": 0.92,
+        "p95_latency_ms": 270.927
+      },
+      {
+        "repeat": 2,
+        "hits": 92,
+        "total": 100,
+        "recall_at_k": 0.92,
+        "hash_holdout_recall_at_k": 0.92,
+        "p95_latency_ms": 739.996
+      },
+      {
+        "repeat": 3,
+        "hits": 92,
+        "total": 100,
+        "recall_at_k": 0.92,
+        "hash_holdout_recall_at_k": 0.92,
+        "p95_latency_ms": 244.885
+      },
+      {
+        "repeat": 4,
+        "hits": 92,
+        "total": 100,
+        "recall_at_k": 0.92,
+        "hash_holdout_recall_at_k": 0.92,
+        "p95_latency_ms": 218.954
+      },
+      {
+        "repeat": 5,
+        "hits": 92,
+        "total": 100,
+        "recall_at_k": 0.92,
+        "hash_holdout_recall_at_k": 0.92,
+        "p95_latency_ms": 466.528
+      }
+    ],
+    "categories": {
+      "multi-session": {
+        "minimum_hits": 25,
+        "total": 26
+      },
+      "knowledge-update": {
+        "minimum_hits": 16,
+        "total": 16
+      },
+      "single-session-assistant": {
+        "minimum_hits": 11,
+        "total": 11
+      },
+      "temporal-reasoning": {
+        "minimum_hits": 26,
+        "total": 27
+      },
+      "single-session-user": {
+        "minimum_hits": 13,
+        "total": 14
+      },
+      "preference": {
+        "minimum_hits": 1,
+        "total": 6
+      }
+    },
+    "gates": {
+      "full_500_recall_at_5": {
+        "target": 0.986,
+        "actual": 0.92,
+        "applicable": false,
+        "passed": false
+      },
+      "hash_100_recall_at_5": {
+        "target": 0.98,
+        "actual": 0.92,
+        "applicable": true,
+        "passed": false,
+        "sealed": true,
+        "note": "External manifest hash matched before this evaluation."
+      },
+      "category_gates": {
+        "knowledge-update": {
+          "minimum": 78,
+          "total": 78,
+          "actual": 16,
+          "applicable": false,
+          "passed": false
+        },
+        "multi-session": {
+          "minimum": 132,
+          "total": 133,
+          "actual": 25,
+          "applicable": false,
+          "passed": false
+        },
+        "single-session-assistant": {
+          "minimum": 56,
+          "total": 56,
+          "actual": 11,
+          "applicable": false,
+          "passed": false
+        },
+        "preference": {
+          "minimum": 29,
+          "total": 30,
+          "actual": 1,
+          "applicable": false,
+          "passed": false
+        },
+        "single-session-user": {
+          "minimum": 69,
+          "total": 70,
+          "actual": 13,
+          "applicable": false,
+          "passed": false
+        },
+        "temporal-reasoning": {
+          "minimum": 129,
+          "total": 133,
+          "actual": 26,
+          "applicable": false,
+          "passed": false
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildAnswerPrompt,
+  buildContext,
   buildJudgePrompt,
+  flattenMessages,
   summarizeBeamAnswers
 } from "./product-beam-answer-judge.mjs";
 
@@ -28,6 +30,33 @@ test("BEAM judge prompt evaluates exactly one rubric item", () => {
   assert.match(prompt, /The response states Tuesday/u);
   assert.match(prompt, /Tuesday\./u);
   assert.match(prompt, /0\.5/u);
+});
+
+test("BEAM answer context supports 10M plan-grouped batches", () => {
+  const turns = flattenMessages([
+    {
+      "plan-1": [{
+        batch_number: 1,
+        turns: [[
+          { id: 101, role: "user", content: "The launch is Tuesday." },
+          { id: 102, role: "assistant", content: "Noted." }
+        ]]
+      }]
+    },
+    {
+      "plan-2": [{
+        batch_number: 1,
+        turns: [[
+          { id: 201, role: "user", content: "The venue is Tokyo." }
+        ]]
+      }]
+    }
+  ]);
+
+  assert.equal(turns.length, 2);
+  assert.equal(turns[0].turn_id, "plan-1-batch-1-turn-1");
+  assert.equal(turns[1].turn_id, "plan-2-batch-1-turn-1");
+  assert.equal(buildContext(turns, ["201"]), "user: The venue is Tokyo.");
 });
 
 test("BEAM answer summary retains errors and averages rubric items", () => {

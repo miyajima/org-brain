@@ -1,0 +1,61 @@
+{
+  "output": "artifacts/benchmarks/2026-07-31/orgbrain-longmemeval-unseen-100-answer-judge.jsonl",
+  "protocol": {
+    "answer_prompt": "LongMemEval official retrieved-chat generation prompt",
+    "judge_prompt": "LongMemEval official category-specific answer check",
+    "scorer_labels_visible_to_answer_model": false,
+    "retrieval_repeat": 1,
+    "dataset_sha256": "8aa532fe3e52de3e61b005fd1f0f8716fbf83da8c6049ee8dc8cbf0a2004b5ec",
+    "retrieval_sha256": "5dfdfeb562a157e454eae2b34264b277fcf9779d3e04b6613426accbdc9b0504"
+  },
+  "summary": {
+    "benchmark": "LongMemEval unseen product-path answer accuracy",
+    "question_count": 100,
+    "correct": 74,
+    "accuracy": 0.74,
+    "errors": 0,
+    "failed_rows_excluded": false,
+    "models": {
+      "answer": "gemini-3.6-flash",
+      "judge": "gemini-3.6-flash"
+    },
+    "categories": {
+      "single-session-user": {
+        "correct": 12,
+        "total": 14,
+        "errors": 0,
+        "accuracy": 0.8571428571428571
+      },
+      "multi-session": {
+        "correct": 17,
+        "total": 26,
+        "errors": 0,
+        "accuracy": 0.6538461538461539
+      },
+      "single-session-assistant": {
+        "correct": 10,
+        "total": 11,
+        "errors": 0,
+        "accuracy": 0.9090909090909091
+      },
+      "temporal-reasoning": {
+        "correct": 20,
+        "total": 27,
+        "errors": 0,
+        "accuracy": 0.7407407407407407
+      },
+      "knowledge-update": {
+        "correct": 14,
+        "total": 16,
+        "errors": 0,
+        "accuracy": 0.875
+      },
+      "single-session-preference": {
+        "correct": 1,
+        "total": 6,
+        "errors": 0,
+        "accuracy": 0.16666666666666666
+      }
+    }
+  }
+}

@@ -69,10 +69,20 @@ function parseJsonl(raw) {
     .map((line) => JSON.parse(line));
 }
 
-function flattenMessages(batches) {
+export function flattenMessages(parsedBatches) {
+  if (!Array.isArray(parsedBatches)) throw new Error("BEAM chat.json must be an array");
+  const batches = parsedBatches.flatMap((entry) => {
+    if (entry && Array.isArray(entry.turns)) return [entry];
+    if (!entry || typeof entry !== "object") return [];
+    return Object.entries(entry).flatMap(([groupKey, value]) =>
+      Array.isArray(value)
+        ? value.map((batch) => ({ ...batch, __group_key: groupKey }))
+        : []
+    );
+  });
   return batches.flatMap((batch, batchIndex) =>
     (Array.isArray(batch.turns) ? batch.turns : []).map((messages, turnIndex) => ({
-      turn_id: `batch-${batch.batch_number ?? batchIndex + 1}-turn-${turnIndex + 1}`,
+      turn_id: `${batch.__group_key ? `${batch.__group_key}-` : ""}batch-${batch.batch_number ?? batchIndex + 1}-turn-${turnIndex + 1}`,
       messages: (Array.isArray(messages) ? messages : [])
         .filter((message) => message && typeof message === "object")
         .map((message) => ({
@@ -84,7 +94,7 @@ function flattenMessages(batches) {
   );
 }
 
-function buildContext(turns, retrievedMessageIds) {
+export function buildContext(turns, retrievedMessageIds) {
   const turnByMessageId = new Map();
   for (const turn of turns) {
     for (const message of turn.messages) turnByMessageId.set(message.id, turn);

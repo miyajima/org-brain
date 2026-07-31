@@ -4,7 +4,8 @@ import test from "node:test";
 import {
   normalizeRows,
   runProductRetrieval,
-  splitItems
+  splitItems,
+  summarize
 } from "./product-longmemeval-benchmark.mjs";
 
 test("normalizes the dataset preference category to the acceptance gate name", () => {
@@ -27,6 +28,28 @@ test("deterministic benchmark partition is not labeled as a sealed holdout", () 
   assert.equal(split.filter((item) => item.split === "development").length, 1);
   assert.equal(split.filter((item) => item.split === "hash_holdout").length, 100);
   assert.equal(split.some((item) => item.split.includes("sealed")), false);
+});
+
+test("sealed custom 100 applies only the holdout gate", () => {
+  const rows = Array.from({ length: 5 }, (_, repeatIndex) =>
+    Array.from({ length: 100 }, (_, itemIndex) => ({
+      repeat: repeatIndex + 1,
+      hit_at_k: itemIndex < 98,
+      split: "hash_holdout",
+      category: "multi-session",
+      latency_ms: 10
+    }))
+  ).flat();
+  const summary = summarize(rows, "dataset-hash", 5, {
+    sealed: true,
+    note: "manifest matched"
+  });
+
+  assert.equal(summary.gates.hash_100_recall_at_5.applicable, true);
+  assert.equal(summary.gates.hash_100_recall_at_5.passed, true);
+  assert.equal(summary.gates.hash_100_recall_at_5.sealed, true);
+  assert.equal(summary.gates.full_500_recall_at_5.applicable, false);
+  assert.equal(summary.gates.category_gates["multi-session"].applicable, false);
 });
 
 test("product retrieval runtime never receives evaluation labels or question identifiers", async () => {

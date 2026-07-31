@@ -1,4 +1,4 @@
-# OSS memory-layer comparison — 2026-07-30
+# OSS memory-layer comparison — updated 2026-07-31
 
 ## Conclusion
 
@@ -13,9 +13,14 @@ first-place claim.
 | GBrain upstream keyword-only, 500 questions × 1 | 99/500 (R@5 19.8%) | complete native-runner comparison |
 | LongMemEval-S category minimums across 5 repeats | all six gates pass | category gate pass |
 | Hash-selected LongMemEval 100 partition | 100/100 in every repeat | not sealed; excluded from unseen claim |
+| Sealed custom-history LongMemEval 100 × 5 | 92/100 in every repeat | holdout retrieval gate fail (target 98/100) |
+| Sealed custom-history LongMemEval answer/judge | 74/100 | Gemini 3.6 Flash gate fail (target 96.8%) |
 | Independent LoCoMo evidence-session holdout | 92/100 (R@5 92.0%) | unseen cross-benchmark result |
 | Full LoCoMo evidence-session set | 1,820/1,982 (R@5 91.83%) | complete exposed development run |
 | BEAM 100K evidence retrieval | 245/355 any-source R@5 (69.01%) | complete retrieval-only run; not answer accuracy |
+| BEAM 500K retrieval / answer | any R@5 58.35%; rubric 32.24% | 700 questions, error-free |
+| BEAM 1M retrieval / answer | any R@5 57.12%; rubric 30.33% | 700 questions, p95 1,235 ms |
+| BEAM 10M retrieval / answer | any R@5 43.75%; rubric 20.93% | 200 questions, p95 25,536 ms |
 | PrecisionMemBench retrieval | 49/77 passed (63.64%) | official external-provider tests; exposed development evidence |
 | PrecisionMemBench session turns | 7/12 passed (58.33%) | official external-provider session tests |
 | `competitive-memory-v1`, OrgBrain, 200 tasks × 5 | accuracy/pass^5 94.5%, R@5 100% | complete |
@@ -29,6 +34,11 @@ and MemPalace 98.4% public retrieval anchors. It is development-exposed and
 therefore not presented as an unseen leaderboard result. The independent
 LoCoMo holdout was opened once after commit `d9f9844` froze the retrieval
 implementation; its 92.0% result was not used for further tuning.
+
+The sealed custom-history LongMemEval and scaled BEAM runs close two prior
+evidence gaps, but they do not strengthen the ranking claim: both unseen
+LongMemEval gates fail, and BEAM shows significant quality and latency
+degradation at scale.
 
 ## Frozen LongMemEval-S run
 
@@ -115,6 +125,23 @@ without changing PrecisionMemBench's 49/77 result. Knowledge update was 39/40,
 temporal reasoning 40/40, and contradiction resolution 40/40. Instruction
 following remains the clearest gap at 6/40. This is evidence retrieval, not
 BEAM's official generated-answer accuracy.
+
+BEAM 500K, 1M, and 10M were subsequently executed through the same product
+retrieval path and then evaluated with BEAM's official answer prompt and
+per-rubric-item judge prompt. Gemini `gemini-3.6-flash` was used for both
+answer and judge roles. Any-source R@5 was 58.35%, 57.12%, and 43.75%;
+official-rubric score was 32.24%, 30.33%, and 20.93%, respectively. All
+1,600 answer rows completed with zero API errors. The 10M parser preserves
+plan-group keys in source IDs, preventing repeated batch numbers from
+colliding.
+
+A 100-question custom-history LongMemEval set was also sealed before
+evaluation with zero public-final-500 overlap. It scored 92/100 in every one
+of five retrieval repeats and 74/100 under the official category-specific
+answer judge, both below their acceptance thresholds. Thirty-one selected
+source questions are human-validated and 69 are marked unreviewed, so this
+artifact is reported as a reproducible custom-history holdout rather than an
+official unpublished LongMemEval-S test set.
 
 PrecisionMemBench was executed through its unmodified 77-case retrieval and
 12-turn session evaluation files using a loopback bridge over OrgBrain's
@@ -221,8 +248,9 @@ Competitor revisions inspected:
 
 The earlier 500-question answer-generation and judge run used
 `gemini-3.6-flash` for both roles and scored 96.8% (484/500). The current
-retrieval rerun did not invoke Gemini. `gemini-3.5-flash-lite` remains limited
-to asynchronous structured extraction when configured; the search loop itself
+scaled BEAM and sealed custom-history LongMemEval answer/judge runs also used
+`gemini-3.6-flash` for both roles. `gemini-3.5-flash-lite` remains limited to
+asynchronous structured extraction when configured; the search loop itself
 does not use a generation model.
 
 ## Reproduction artifacts
@@ -250,6 +278,14 @@ Committed under `artifacts/benchmarks/2026-07-30/`:
 - `../2026-07-31/orgbrain-beam-100k-retrieval.jsonl` and
   `orgbrain-beam-100k-retrieval-v4.jsonl` — BEAM retrieval baseline and
   instruction-intent improvement
+- `../2026-07-31/orgbrain-beam-{500k,1m,10m}-retrieval.jsonl` and summaries —
+  scaled product-path retrieval rows
+- `../2026-07-31/orgbrain-beam-{500k,1m,10m}-answer-judge.jsonl` and summaries
+  — Gemini 3.6 Flash answers and official-rubric judgments
+- `../2026-07-31/orgbrain-longmemeval-unseen-100-seal.json`, repeat-five
+  retrieval, answer/judge, and summaries — sealed custom-history evidence
+- `../2026-07-31/beam-scale-unseen-longmemeval-report.md` — consolidated
+  protocol, integrity notes, results, and failed gates
 - `../2026-07-31/precisionmem-orgbrain/` — official upstream retrieval and
   session reports plus revision, hashes, and the exposed-development boundary
 
