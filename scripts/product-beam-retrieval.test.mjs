@@ -97,5 +97,6 @@ test("normalizeBeamChat supports 10M plan-grouped batches", () => {
     "10M"
   );
   assert.equal(normalized.turns.length, 1);
+  assert.equal(normalized.turns[0].source_id, "plan-1-batch-1-turn-1");
   assert.deepEqual(normalized.turns[0].message_ids, ["10", "11"]);
 });

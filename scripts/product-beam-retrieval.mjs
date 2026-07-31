@@ -74,7 +74,11 @@ export function normalizeBeamChat(chatRaw, questionsRaw, chatId, chatSize = "100
   const batches = parsedBatches.flatMap((entry) => {
     if (entry && Array.isArray(entry.turns)) return [entry];
     if (!entry || typeof entry !== "object") return [];
-    return Object.values(entry).flatMap((value) => Array.isArray(value) ? value : []);
+    return Object.entries(entry).flatMap(([groupKey, value]) =>
+      Array.isArray(value)
+        ? value.map((batch) => ({ ...batch, __group_key: groupKey }))
+        : []
+    );
   });
   if (!categories || typeof categories !== "object" || Array.isArray(categories)) {
     throw new Error("BEAM probing_questions.json must be an object");
@@ -89,7 +93,7 @@ export function normalizeBeamChat(chatRaw, questionsRaw, chatId, chatSize = "100
           content: String(message.content ?? "")
         }));
       return {
-        source_id: `batch-${batch.batch_number ?? batchIndex + 1}-turn-${turnIndex + 1}`,
+        source_id: `${batch.__group_key ? `${batch.__group_key}-` : ""}batch-${batch.batch_number ?? batchIndex + 1}-turn-${turnIndex + 1}`,
         message_ids: normalizedMessages.map((message) => message.id),
         content: normalizedMessages
           .map((message) => `${message.role}: ${message.content}`)
