@@ -112,6 +112,7 @@ export type MemorySearchInput = {
   project_id?: string | null;
   query: string;
   limit?: number;
+  minimum_total_score?: number | null;
   include_suppressed?: boolean;
   principal_id?: string | null;
   search_mode?: "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3";

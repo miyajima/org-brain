@@ -703,6 +703,7 @@ function searchRetrievalUnitsV3(db, {
   projectId,
   query,
   limit,
+  minimumTotalScore,
   includeSuppressed,
   principalId,
   at
@@ -885,6 +886,36 @@ function searchRetrievalUnitsV3(db, {
       relativeTargetAt,
       temporalCandidateLimit
     );
+  const intentCandidateTypes = intent.unit_types.filter(
+    (unitType) => unitType === "instruction"
+  );
+  const intentRows = intentCandidateTypes.length === 0
+    ? []
+    : db.prepare(
+      `SELECT u.*, NULL AS raw_rank
+       FROM memory_retrieval_units u
+       JOIN memories m
+         ON m.id = u.memory_id
+        AND m.tenant_id = u.tenant_id
+       WHERE u.tenant_id = ?
+         AND u.unit_type IN (${intentCandidateTypes.map(() => "?").join(",")})
+         AND (u.speaker IS NULL OR u.speaker IN ('user', 'unknown'))
+         AND (? IS NULL OR u.project_id = ?)
+         AND (? = 1 OR m.lifecycle_state != 'suppressed')
+         AND (u.valid_from IS NULL OR u.valid_from <= ?)
+         AND (u.valid_until IS NULL OR u.valid_until > ?)
+       ORDER BY COALESCE(u.event_at, u.created_at) DESC, u.content_hash ASC
+       LIMIT ?`
+    ).all(
+      tenantId,
+      ...intentCandidateTypes,
+      projectId,
+      projectId,
+      includeSuppressed ? 1 : 0,
+      at,
+      at,
+      candidateLimit
+    );
 
   const rawQueryFeatures = embedLocalText(query);
   let queryFeatures = rawQueryFeatures;
@@ -942,6 +973,7 @@ function searchRetrievalUnitsV3(db, {
   for (const row of temporalLexicalRows) unitById.set(row.id, row);
   for (const row of temporalRelevanceRows) unitById.set(row.id, row);
   for (const row of temporalRows) unitById.set(row.id, row);
+  for (const row of intentRows) unitById.set(row.id, row);
   const missingUnitIds = semanticRows.map((row) => row.unitId).filter((id) => !unitById.has(id));
   if (missingUnitIds.length > 0) {
     const placeholders = missingUnitIds.map(() => "?").join(",");
@@ -989,6 +1021,9 @@ function searchRetrievalUnitsV3(db, {
   });
   temporalRows.forEach((row, index) => {
     fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 0.75 / (60 + index + 1));
+  });
+  intentRows.forEach((row, index) => {
+    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 0.8 / (60 + index + 1));
   });
   const lexicalSpecificity = retrievalUnitLexicalSpecificity([...unitById.values()], query);
   const parentScores = new Map();
@@ -1070,7 +1105,8 @@ function searchRetrievalUnitsV3(db, {
         String(left.memory.source_references[0]?.ref ?? "").localeCompare(
           String(right.memory.source_references[0]?.ref ?? "")
         )
-    );
+    )
+    .filter((entry) => minimumTotalScore === null || entry.score.total >= minimumTotalScore);
   const selected = ranked.slice(0, limit);
   if (relativeTargetAt !== null) {
     const reservedMemoryIds = [...new Set(
@@ -1457,6 +1493,7 @@ export class LocalMemoryStore {
     project_id: projectId = null,
     query,
     limit = 10,
+    minimum_total_score: minimumTotalScoreInput = null,
     include_suppressed = false,
     principal_id: principalId = null,
     search_mode: searchMode = "memories",
@@ -1467,11 +1504,22 @@ export class LocalMemoryStore {
       const db = this.open({ readOnly: true });
       try {
         const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
+        const parsedMinimumTotalScore =
+          minimumTotalScoreInput === null || minimumTotalScoreInput === undefined
+            ? null
+            : Number(minimumTotalScoreInput);
+        if (
+          parsedMinimumTotalScore !== null &&
+          (!Number.isFinite(parsedMinimumTotalScore) || parsedMinimumTotalScore < 0)
+        ) {
+          throw new Error("minimum_total_score must be a non-negative finite number");
+        }
         return searchRetrievalUnitsV3(db, {
           tenantId,
           projectId,
           query,
           limit: safeLimit,
+          minimumTotalScore: parsedMinimumTotalScore,
           includeSuppressed: include_suppressed,
           principalId,
           at

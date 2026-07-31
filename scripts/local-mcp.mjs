@@ -34,6 +34,7 @@ const TOOL_DEFINITIONS = [
         tenant_id: { type: "string" },
         project_id: { type: ["string", "null"] },
         limit: { type: "integer", minimum: 1, maximum: 50 },
+        minimum_total_score: { type: ["number", "null"], minimum: 0 },
         principal_id: { type: ["string", "null"] },
         search_mode: {
           type: "string",
@@ -128,6 +129,7 @@ async function callTool(store, name, input) {
       project_id: input.project_id || null,
       query: input.query,
       limit: input.limit || 10,
+      minimum_total_score: input.minimum_total_score ?? null,
       principal_id: input.principal_id || null,
       search_mode: input.search_mode || "memories"
     });

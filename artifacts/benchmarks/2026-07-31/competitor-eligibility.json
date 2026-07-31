@@ -23,6 +23,29 @@
       "hits": 99,
       "recall_at_5": 19.8,
       "published_hybrid_reproduced": false
+    },
+    "locomo_full_product_path": {
+      "status": "complete_exposed_development_set",
+      "questions": 1982,
+      "hits": 1820,
+      "recall_at_5": 91.8264,
+      "errors": 0
+    },
+    "beam_100k_product_path": {
+      "status": "complete_retrieval_only",
+      "scored_questions": 355,
+      "any_source_hits": 245,
+      "recall_any_at_5": 69.0141,
+      "official_answer_accuracy": false,
+      "errors": 0
+    },
+    "precisionmembench_product_path": {
+      "status": "complete_development_evidence",
+      "retrieval_passed": 49,
+      "retrieval_total": 77,
+      "session_turns_passed": 7,
+      "session_turns_total": 12,
+      "sealed": false
     }
   },
   "competitive_memory_v1": {
@@ -40,6 +63,7 @@
   },
   "remaining_ranking_blockers": [
     "unseen sealed LongMemEval holdout",
+    "BEAM official answer/judge evaluation and 500K/1M/10M scale runs",
     "eligible same-harness Cognee, Supermemory, and MemPalace coverage",
     "complete evidence-backed personal and organization capability scorecards",
     "five complete repeats for every adapter included in the strict ranking"

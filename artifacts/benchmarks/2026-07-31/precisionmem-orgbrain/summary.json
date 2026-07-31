@@ -1,0 +1,53 @@
+{
+  "benchmark": "PrecisionMemBench",
+  "track": "official external-provider retrieval and session evaluations",
+  "status": "development evidence; exposed retrieval cases used to select the score floor",
+  "upstream": {
+    "repository": "https://github.com/tenurehq/precisionMemBench",
+    "revision": "b95d6abb471c0d591c440172283dd74e7af000df",
+    "test_files_modified": false,
+    "provider_registration_added": true,
+    "fixture_sha256": {
+      "beliefs.seed.json": "35659b3b9a581b644fc6746e1b4e902c3e7b56c0973b546bf7b0816a69e3de98",
+      "retrieval.cases.json": "09e99f0852280538abe34b03570f65583fdb10df3c554b7150f0f665d5db709c",
+      "session-retrieval.cases.json": "f24a359cdb2bf50237e1ab463af938cd54a81917f64c8d97304de318aed4cc1c"
+    }
+  },
+  "runner": {
+    "adapter": "scripts/benchmark-bridges/precisionmem-orgbrain.mjs",
+    "product_path": "LocalMemoryStore.capture/search(search_mode=hybrid_v3)",
+    "minimum_total_score": 0.065,
+    "minimum_score_selection": "selected on the exposed 77-case retrieval set",
+    "network": "loopback only",
+    "llm_calls": 0
+  },
+  "retrieval_baseline_before_score_floor": {
+    "passed": 16,
+    "total": 77,
+    "pass_rate": 0.2078,
+    "mean_precision": 0.2064,
+    "mean_recall": 0.9612,
+    "p95_latency_ms": 6.01
+  },
+  "retrieval_after_score_floor": {
+    "passed": 49,
+    "total": 77,
+    "pass_rate": 0.6364,
+    "mean_precision": 0.6101,
+    "mean_recall": 0.8372,
+    "p95_latency_ms": 8.71
+  },
+  "session": {
+    "passed_turns": 7,
+    "total_turns": 12,
+    "pass_rate": 0.5833,
+    "mean_precision": 0.8148,
+    "mean_recall": 0.6667,
+    "p95_latency_ms": 26.34
+  },
+  "known_contract_boundary": "The static retrieval adapter sends only beliefId and scope to external providers. It does not send pinned, type, superseded_by, or resolved_at metadata, so those structural semantics cannot be implemented by the provider without scorer-side fixture access. Session ingestion sends type, pinned, and superseded_by and the bridge maps inactive/open-question records to suppressed.",
+  "artifacts": [
+    "retrieval-report-orgbrain.json",
+    "session-retrieval-report-orgbrain.json"
+  ]
+}

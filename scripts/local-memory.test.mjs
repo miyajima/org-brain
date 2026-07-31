@@ -223,6 +223,83 @@ test("hybrid_v3 keeps exact lexical evidence above generic intent matches", asyn
   }
 });
 
+test("hybrid_v3 optionally removes results below a caller-selected total score", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.capture(captureInput({
+      kind: "fact",
+      external_key: "fact:redis",
+      content: "Redis is the session store for the web application.",
+      summary: "Redis session store"
+    }));
+    await store.capture(captureInput({
+      kind: "fact",
+      external_key: "fact:unrelated",
+      content: "The design system uses a blue accessibility palette.",
+      summary: "Design system colors"
+    }));
+    const unfiltered = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "Which Redis session store does the web application use?",
+      search_mode: "hybrid_v3",
+      limit: 5
+    });
+    assert.ok(unfiltered.length > 0);
+    const threshold = unfiltered[0].score.total + 0.000001;
+    const filtered = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "Which Redis session store does the web application use?",
+      search_mode: "hybrid_v3",
+      minimum_total_score: threshold,
+      limit: 5
+    });
+    assert.equal(filtered.length, 0);
+    await assert.rejects(
+      store.search({
+        tenant_id: "personal",
+        query: "Redis",
+        search_mode: "hybrid_v3",
+        minimum_total_score: -1
+      }),
+      /minimum_total_score/
+    );
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("hybrid_v3 retrieves standing instructions for generic implementation requests", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const instruction = await store.capture(captureInput({
+      kind: "constraint",
+      external_key: "constraint:code-format",
+      content: "user: Always format all code snippets with syntax highlighting.",
+      summary: "Code formatting instruction"
+    }));
+    await store.capture(captureInput({
+      kind: "fact",
+      external_key: "fact:unrelated-deployment",
+      content: "assistant: The deployment completed on Tuesday.",
+      summary: "Deployment status"
+    }));
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "Could you show me how to implement a login feature?",
+      search_mode: "hybrid_v3",
+      limit: 5
+    });
+    assert.ok(results.some((result) => result.memory.id === instruction.memory_id));
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("hybrid_v3 ranks explicit relative-time targets without global recency bias", async () => {
   const ctx = await fixture();
   try {
@@ -392,6 +469,8 @@ test("local MCP exposes capture and search over the same MemoryStore", async () 
     const store = new LocalMemoryStore(ctx.dbPath);
     const tools = await handleLocalMcpRequest(store, { method: "tools/list" });
     assert.ok(tools.tools.some((tool) => tool.name === "orgbrain_memory_capture"));
+    const searchTool = tools.tools.find((tool) => tool.name === "orgbrain_memory_search");
+    assert.equal(searchTool.inputSchema.properties.minimum_total_score.minimum, 0);
     const captured = await handleLocalMcpRequest(store, {
       method: "tools/call",
       params: {

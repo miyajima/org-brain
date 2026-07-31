@@ -14,6 +14,10 @@ first-place claim.
 | LongMemEval-S category minimums across 5 repeats | all six gates pass | category gate pass |
 | Hash-selected LongMemEval 100 partition | 100/100 in every repeat | not sealed; excluded from unseen claim |
 | Independent LoCoMo evidence-session holdout | 92/100 (R@5 92.0%) | unseen cross-benchmark result |
+| Full LoCoMo evidence-session set | 1,820/1,982 (R@5 91.83%) | complete exposed development run |
+| BEAM 100K evidence retrieval | 245/355 any-source R@5 (69.01%) | complete retrieval-only run; not answer accuracy |
+| PrecisionMemBench retrieval | 49/77 passed (63.64%) | official external-provider tests; exposed development evidence |
+| PrecisionMemBench session turns | 7/12 passed (58.33%) | official external-provider session tests |
 | `competitive-memory-v1`, OrgBrain, 200 tasks × 5 | accuracy/pass^5 94.5%, R@5 100% | complete |
 | `competitive-memory-v1`, AgentMemory, 200 tasks × 5 | accuracy/pass^5 30.0%, R@5 100% | complete |
 | `competitive-memory-v1`, Mem0, 200 tasks × 5 | accuracy 80.0%, pass^5 70.0%, R@5 100% | complete |
@@ -90,6 +94,43 @@ not inspected before commit `d9f9844`.
 This is a genuine unseen cross-benchmark holdout, but it is not a substitute
 for an unseen LongMemEval-S partition and is not compared directly with the
 LongMemEval 98% holdout target.
+
+## Cross-benchmark expansion
+
+The complete evidence-bearing LoCoMo set contains 1,982 questions. The normal
+`LocalMemoryStore.capture()` → `search(search_mode="hybrid_v3")` path retrieved
+at least one evidence session for 1,820 questions (R@5 91.83%), with zero
+errors and 27.073 ms p95 search latency. This full-set score differs from the
+previously unopened 100-question result by only -0.17 percentage points,
+providing evidence that the 92/100 result was not caused by favorable
+selection.
+
+BEAM 100K was run across all 20 conversations. Forty abstention questions and
+five questions without `source_chat_ids` were excluded from retrieval scoring;
+the remaining 355 questions were scored only against their source-message
+annotations. The initial product path retrieved any required source for
+243/355 questions. A generic standing-instruction retrieval unit and limited
+implementation-intent candidate path improved that to 245/355 (R@5 69.01%)
+without changing PrecisionMemBench's 49/77 result. Knowledge update was 39/40,
+temporal reasoning 40/40, and contradiction resolution 40/40. Instruction
+following remains the clearest gap at 6/40. This is evidence retrieval, not
+BEAM's official generated-answer accuracy.
+
+PrecisionMemBench was executed through its unmodified 77-case retrieval and
+12-turn session evaluation files using a loopback bridge over OrgBrain's
+normal local product path. A caller-selected `minimum_total_score=0.065`
+removed the low-relevance result tail: retrieval passed cases improved from
+16/77 to 49/77, mean precision from 20.64% to 61.01%, while mean recall moved
+from 96.12% to 83.72%. The session evaluation passed 7/12 turns with 81.48%
+mean precision and 66.67% mean recall.
+
+The PrecisionMem score floor was selected on the exposed retrieval cases, so
+the result is development evidence. In addition, the static upstream external
+adapter sends only `beliefId` and `scope` during seeding; it does not send
+`pinned`, `type`, `superseded_by`, or `resolved_at`. OrgBrain cannot reproduce
+those structural semantics without improperly reading scorer fixtures.
+Session ingestion does send the available type and supersession metadata, and
+the bridge maps inactive/open-question records to suppressed.
 
 ## Same-harness competitor rerun
 
@@ -204,6 +245,13 @@ Committed under `artifacts/benchmarks/2026-07-30/`:
   keyword-only's 500 normalized native-runner rows
 - `../2026-07-31/gbrain-keyword-longmemeval-500/summary.json` — strict
   completeness, latency, category, and failure summary
+- `../2026-07-31/orgbrain-locomo-full-1982.jsonl` and its summary — all 1,982
+  full-set product-path retrieval rows
+- `../2026-07-31/orgbrain-beam-100k-retrieval.jsonl` and
+  `orgbrain-beam-100k-retrieval-v4.jsonl` — BEAM retrieval baseline and
+  instruction-intent improvement
+- `../2026-07-31/precisionmem-orgbrain/` — official upstream retrieval and
+  session reports plus revision, hashes, and the exposed-development boundary
 
 No dataset files or secrets are committed.
 

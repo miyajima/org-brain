@@ -5,6 +5,7 @@ export const RETRIEVAL_UNIT_EXTRACTOR = "deterministic-retrieval-units-v1";
 const ROLE_LINE_RE = /^(user|assistant|system|tool)\s*:\s*/iu;
 const UPDATE_RE = /\b(?:now|currently|latest|recently|changed|switched|replaced|no longer|instead|updated|moved|started|stopped)\b|(?:現在|最近|変更|切り替え|更新|やめた|始めた)/iu;
 const PREFERENCE_RE = /\b(?:prefer|like|love|enjoy|want|would like|favorite|favourite|rather|avoid|dislike|interested in|looking (?:for|at)|thinking (?:of|about)|planning to|plan to|decided|chose|go with)\b|(?:好み|好き|嫌い|優先|避ける|欲しい|探して|考えて|予定)/iu;
+const INSTRUCTION_RE = /\b(?:always|never|must|should|please|make sure|remember to|do not|don't|avoid)\b|(?:必ず|決して|してはいけない|してください|忘れず|避ける)/iu;
 const EVENT_RE = /\b(?:went|visited|attended|bought|sold|started|finished|completed|graduated|married|born|traveled|travelled|returned|joined|left|met|worked|ran|drove|watched|read|made|paid|spent)\b|(?:行った|訪れた|参加|購入|売却|開始|完了|卒業|結婚|生まれ|旅行|帰った|入社|退社|会った|支払)/iu;
 const QUANTITY_RE = /(?:[$€£¥]\s?\d)|(?:\b\d+(?:\.\d+)?\s*(?:%|percent|minutes?|hours?|days?|weeks?|months?|years?|miles?|kilometers?|km|pages?|times?|people|items?|dollars?)\b)|(?:\d+\s*(?:分|時間|日|週間|か月|ヶ月|年|回|人|個|円))/iu;
 const DATE_RE = /\b(?:19|20)\d{2}\b|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|(?:月曜|火曜|水曜|木曜|金曜|土曜|日曜|\d{1,2}月\d{0,2}日?)/iu;
@@ -193,6 +194,7 @@ function sentenceUnits(text) {
 
 function classifyAtomicUnit(text) {
   if (UPDATE_RE.test(text)) return "update";
+  if (INSTRUCTION_RE.test(text)) return "instruction";
   if (PREFERENCE_RE.test(text)) return "preference";
   if (EVENT_RE.test(text) || DATE_RE.test(text)) return "event";
   if (QUANTITY_RE.test(text)) return "quantity";
@@ -310,6 +312,9 @@ export function analyzeRetrievalIntent(query) {
     PREFERENCE_RE.test(text) ||
     /\b(?:recommend|recommendation|suggestions?|ideas?(?:\s+on|\s+for)?|what should i)\b|(?:おすすめ|提案|アイデア)/u.test(text)
   ) unitTypes.push("preference", "fact");
+  if (
+    /\b(?:implement|implementation|show me how|code snippets?|format(?:ting)?|write (?:code|a function)|generate (?:code|an example))\b|(?:実装|コード|書き方|形式)/u.test(text)
+  ) unitTypes.push("instruction");
   if (UPDATE_RE.test(text)) unitTypes.push("update");
   if (/\bhow many\b|(?:いくつ|何回)/u.test(text)) unitTypes.push("fact", "event");
   if (QUANTITY_RE.test(text) || /\b(?:how much|total|average|percentage)\b|(?:合計|平均|割合)/u.test(text)) {

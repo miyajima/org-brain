@@ -1,0 +1,61 @@
+{
+  "benchmark": "BEAM",
+  "track": "product-path evidence retrieval",
+  "official_answer_accuracy": false,
+  "upstream": {
+    "repository": "https://github.com/mohammadtavakoli78/BEAM",
+    "revision": "3e12035532eb85768f1a7cd779832b650c4b2ef9",
+    "dataset_subset": "100K",
+    "dataset_sha256": "3d7753bcb2564d1b11824b27dde487dafa75cb0c2dd1f59e6131c95c3d36bc02"
+  },
+  "runner": {
+    "script": "scripts/product-beam-retrieval.mjs",
+    "product_path": "LocalMemoryStore.capture/search(search_mode=hybrid_v3)",
+    "top_k": 5,
+    "concurrency": 4,
+    "llm_calls": 0,
+    "integrity_boundary": "evaluation IDs and source_chat_ids remain scorer-side"
+  },
+  "coverage": {
+    "chat_count": 20,
+    "all_questions": 400,
+    "scored_questions": 355,
+    "excluded_unscored_questions": 45,
+    "excluded_questions_by_category": {
+      "abstention": 40,
+      "summarization": 4,
+      "preference_following": 1
+    }
+  },
+  "baseline": {
+    "any_source_hits": 243,
+    "recall_any_at_5": 0.6845070422535211,
+    "all_source_hits": 140,
+    "recall_all_at_5": 0.39436619718309857,
+    "p95_latency_ms": 92.755,
+    "errors": 0
+  },
+  "result_after_instruction_intent": {
+    "any_source_hits": 245,
+    "recall_any_at_5": 0.6901408450704225,
+    "all_source_hits": 141,
+    "recall_all_at_5": 0.3971830985915493,
+    "p95_latency_ms": 57.041,
+    "errors": 0
+  },
+  "categories": {
+    "contradiction_resolution": { "total": 40, "any_hits": 40, "all_hits": 25 },
+    "event_ordering": { "total": 40, "any_hits": 23, "all_hits": 1 },
+    "information_extraction": { "total": 40, "any_hits": 27, "all_hits": 27 },
+    "instruction_following": { "total": 40, "any_hits": 6, "all_hits": 4 },
+    "knowledge_update": { "total": 40, "any_hits": 39, "all_hits": 30 },
+    "multi_session_reasoning": { "total": 40, "any_hits": 31, "all_hits": 9 },
+    "preference_following": { "total": 39, "any_hits": 20, "all_hits": 20 },
+    "summarization": { "total": 36, "any_hits": 19, "all_hits": 0 },
+    "temporal_reasoning": { "total": 40, "any_hits": 40, "all_hits": 25 }
+  },
+  "raw_rows": {
+    "baseline": "orgbrain-beam-100k-retrieval.jsonl",
+    "after_instruction_intent": "orgbrain-beam-100k-retrieval-v4.jsonl"
+  }
+}

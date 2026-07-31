@@ -12,6 +12,29 @@ Bridges may translate the competitor's native identifier or tenant mechanism,
 but must not add retrieval, ACL, or governance behavior that the competitor
 does not implement.
 
+## PrecisionMemBench
+
+`precisionmem-orgbrain.mjs` exposes the upstream PrecisionMemBench `/add`,
+`/search`, `/update`, and `/reset` contract over OrgBrain's normal local
+`capture()` and `search(search_mode="hybrid_v3")` path. `user_id` maps to an
+isolated tenant and the first benchmark scope maps to `project_id`. Gold
+required/prohibited belief IDs remain exclusively in the upstream scorer.
+
+```bash
+node scripts/benchmark-bridges/precisionmem-orgbrain.mjs \
+  --port 8085 \
+  --db /tmp/orgbrain-precisionmem.sqlite \
+  --minimum-score 0.065
+```
+
+Register the loopback URL as an `orgbrain` provider in a pinned
+PrecisionMemBench checkout, then run its unmodified retrieval and session
+evaluation files. The bridge enables the product-level
+`minimum_total_score` option to avoid returning a low-relevance tail in
+high-precision retrieval. The default `0.065` value was selected on the
+exposed PrecisionMemBench retrieval set, so this run is development evidence,
+not a sealed-holdout claim.
+
 ## Cognee
 
 The Cognee bridge buffers native `cognee.add` captures, runs `cognee.cognify`

@@ -11,8 +11,8 @@ suppression, deletion, backup restore, and index rebuild maintain a rebuildable
 `memory_retrieval_units` projection.
 
 The projection contains session text; user, assistant, system, and tool turns;
-deterministic fact, update, preference, event, and quantity fallback units; and
-a short synopsis. Units keep their parent memory, project, speaker, validity,
+deterministic fact, update, preference, instruction, event, and quantity
+fallback units; and a short synopsis. Units keep their parent memory, project, speaker, validity,
 event time, source reference, extractor/version, content hash, extraction
 state, and degraded reason.
 
@@ -41,6 +41,11 @@ terms are not displaced by conversational phrasing. Bounded morphology and a
 small general concept lexicon improve the network-free sparse fallback.
 Explicit relative-time queries add time-windowed lexical candidates and rank
 them by temporal distance before BM25; ordinary queries remain relevance-first.
+Generic implementation requests may also reserve user-authored standing
+instruction units. A caller can set `minimum_total_score` for high-precision
+uses that prefer an empty result to a low-relevance tail; omitting it preserves
+the previous result behavior. The option is available through
+`MemoryStore.search()` and the local MCP search tool.
 
 `meta.retrieval` reports provider versions, lexical/semantic/parent candidate
 counts, projection lag, and degraded reasons while preserving the existing
@@ -118,6 +123,13 @@ The LongMemEval dataset was inspected during tuning, so its hash-selected
 100/100 in every repeat. A separately selected, previously unopened LoCoMo
 100-question evidence-session holdout scored 92/100 with zero errors and
 84.285 ms p95. It was not used for post-result tuning.
+
+The full 1,982-question evidence-bearing LoCoMo set subsequently scored
+1,820/1,982 (91.83% R@5), within 0.17 percentage points of the unopened
+100-question result. BEAM 100K evidence retrieval scored 245/355 any-source
+R@5 (69.01%); instruction-intent retrieval improved the initial 243/355
+result. PrecisionMemBench's exposed official external-provider tests improved
+from 16/77 to 49/77 passed after using `minimum_total_score=0.065`.
 
 The retrieval and category gates pass, but canary and first-place claims remain
 blocked by the lack of an unseen LongMemEval holdout, missing same-harness
