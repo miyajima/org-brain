@@ -68,9 +68,14 @@ function flattenSourceIds(value, output = []) {
 }
 
 export function normalizeBeamChat(chatRaw, questionsRaw, chatId, chatSize = "100K") {
-  const batches = JSON.parse(chatRaw);
+  const parsedBatches = JSON.parse(chatRaw);
   const categories = JSON.parse(questionsRaw);
-  if (!Array.isArray(batches)) throw new Error("BEAM chat.json must be an array");
+  if (!Array.isArray(parsedBatches)) throw new Error("BEAM chat.json must be an array");
+  const batches = parsedBatches.flatMap((entry) => {
+    if (entry && Array.isArray(entry.turns)) return [entry];
+    if (!entry || typeof entry !== "object") return [];
+    return Object.values(entry).flatMap((value) => Array.isArray(value) ? value : []);
+  });
   if (!categories || typeof categories !== "object" || Array.isArray(categories)) {
     throw new Error("BEAM probing_questions.json must be an object");
   }

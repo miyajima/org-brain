@@ -73,3 +73,29 @@ test("BEAM runtime keeps scorer labels out of capture and search", async () => {
     assert.equal("source_chat_ids" in payload, false);
   }
 });
+
+test("normalizeBeamChat supports 10M plan-grouped batches", () => {
+  const normalized = normalizeBeamChat(
+    JSON.stringify([
+      {
+        "plan-1": [{
+          batch_number: 1,
+          turns: [[
+            { id: 10, role: "user", content: "Grouped question" },
+            { id: 11, role: "assistant", content: "Grouped answer" }
+          ]]
+        }]
+      }
+    ]),
+    JSON.stringify({
+      information_extraction: [{
+        question: "What was answered?",
+        source_chat_ids: [11]
+      }]
+    }),
+    "1",
+    "10M"
+  );
+  assert.equal(normalized.turns.length, 1);
+  assert.deepEqual(normalized.turns[0].message_ids, ["10", "11"]);
+});
