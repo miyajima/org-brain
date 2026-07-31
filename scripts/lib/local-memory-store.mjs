@@ -435,14 +435,17 @@ function rebuildRetrievalUnitsFts(db) {
   `);
 }
 
-function deleteLocalEmbedding(db, tenantId, memoryId) {
-  const oldFeatures = db.prepare(
-    "SELECT feature_hash FROM memory_embedding_features WHERE tenant_id = ? AND memory_id = ?"
-  ).all(tenantId, memoryId);
+function deleteLocalEmbedding(db, tenantId, memoryId, updateFeatureStats = true) {
+  const oldFeatures = updateFeatureStats
+    ? db.prepare(
+        "SELECT feature_hash FROM memory_embedding_features WHERE tenant_id = ? AND memory_id = ?"
+      ).all(tenantId, memoryId)
+    : [];
   db.prepare("DELETE FROM memory_embedding_features WHERE tenant_id = ? AND memory_id = ?")
     .run(tenantId, memoryId);
   db.prepare("DELETE FROM memory_embeddings WHERE tenant_id = ? AND memory_id = ?")
     .run(tenantId, memoryId);
+  if (!updateFeatureStats) return;
   const decrement = db.prepare(
     `UPDATE memory_embedding_feature_stats
      SET document_count = document_count - 1
@@ -458,8 +461,8 @@ function deleteLocalEmbedding(db, tenantId, memoryId) {
   }
 }
 
-function writeLocalEmbedding(db, record) {
-  deleteLocalEmbedding(db, record.tenant_id, record.id);
+function writeLocalEmbedding(db, record, updateFeatureStats = true) {
+  deleteLocalEmbedding(db, record.tenant_id, record.id, updateFeatureStats);
   if (record.lifecycle_state === "suppressed") return;
   const features = embedLocalText(localEmbeddingText(record));
   const insertFeature = db.prepare(
@@ -473,7 +476,7 @@ function writeLocalEmbedding(db, record) {
   );
   for (const feature of features) {
     insertFeature.run(record.id, record.tenant_id, feature.feature_hash, feature.weight);
-    incrementFeatureCount.run(record.tenant_id, feature.feature_hash);
+    if (updateFeatureStats) incrementFeatureCount.run(record.tenant_id, feature.feature_hash);
   }
   db.prepare(
     `INSERT INTO memory_embeddings(memory_id, tenant_id, provider, feature_count, updated_at)
@@ -489,14 +492,17 @@ function rebuildLocalEmbeddings(db) {
   for (const row of rows) writeLocalEmbedding(db, memoryFromRow(row));
 }
 
-function deleteRetrievalUnitEmbedding(db, tenantId, unitId) {
-  const oldFeatures = db.prepare(
-    "SELECT feature_hash FROM memory_retrieval_unit_features WHERE tenant_id = ? AND unit_id = ?"
-  ).all(tenantId, unitId);
+function deleteRetrievalUnitEmbedding(db, tenantId, unitId, updateFeatureStats = true) {
+  const oldFeatures = updateFeatureStats
+    ? db.prepare(
+        "SELECT feature_hash FROM memory_retrieval_unit_features WHERE tenant_id = ? AND unit_id = ?"
+      ).all(tenantId, unitId)
+    : [];
   db.prepare("DELETE FROM memory_retrieval_unit_features WHERE tenant_id = ? AND unit_id = ?")
     .run(tenantId, unitId);
   db.prepare("DELETE FROM memory_retrieval_unit_embeddings WHERE tenant_id = ? AND unit_id = ?")
     .run(tenantId, unitId);
+  if (!updateFeatureStats) return;
   const decrement = db.prepare(
     `UPDATE memory_retrieval_unit_feature_stats
      SET document_count = document_count - 1
@@ -512,8 +518,8 @@ function deleteRetrievalUnitEmbedding(db, tenantId, unitId) {
   }
 }
 
-function writeRetrievalUnitEmbedding(db, unit) {
-  deleteRetrievalUnitEmbedding(db, unit.tenant_id, unit.id);
+function writeRetrievalUnitEmbedding(db, unit, updateFeatureStats = true) {
+  deleteRetrievalUnitEmbedding(db, unit.tenant_id, unit.id, updateFeatureStats);
   const features = embedLocalText(unit.text);
   const insertFeature = db.prepare(
     `INSERT INTO memory_retrieval_unit_features(unit_id, tenant_id, feature_hash, weight)
@@ -527,7 +533,7 @@ function writeRetrievalUnitEmbedding(db, unit) {
   );
   for (const feature of features) {
     insertFeature.run(unit.id, unit.tenant_id, feature.feature_hash, feature.weight);
-    incrementFeatureCount.run(unit.tenant_id, feature.feature_hash);
+    if (updateFeatureStats) incrementFeatureCount.run(unit.tenant_id, feature.feature_hash);
   }
   db.prepare(
     `INSERT INTO memory_retrieval_unit_embeddings(unit_id, tenant_id, provider, feature_count, updated_at)
@@ -535,19 +541,19 @@ function writeRetrievalUnitEmbedding(db, unit) {
   ).run(unit.id, unit.tenant_id, LOCAL_EMBEDDING_PROVIDER, features.length, unit.created_at);
 }
 
-function deleteRetrievalUnits(db, tenantId, memoryId) {
+function deleteRetrievalUnits(db, tenantId, memoryId, updateFeatureStats = true) {
   const units = db.prepare(
     "SELECT id FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?"
   ).all(tenantId, memoryId);
-  for (const unit of units) deleteRetrievalUnitEmbedding(db, tenantId, unit.id);
+  for (const unit of units) deleteRetrievalUnitEmbedding(db, tenantId, unit.id, updateFeatureStats);
   db.prepare("DELETE FROM memory_retrieval_units_fts WHERE tenant_id = ? AND memory_id = ?")
     .run(tenantId, memoryId);
   db.prepare("DELETE FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?")
     .run(tenantId, memoryId);
 }
 
-function writeRetrievalUnits(db, record) {
-  deleteRetrievalUnits(db, record.tenant_id, record.id);
+function writeRetrievalUnits(db, record, updateFeatureStats = true) {
+  deleteRetrievalUnits(db, record.tenant_id, record.id, updateFeatureStats);
   if (record.lifecycle_state === "suppressed") return;
   const units = buildRetrievalUnits(record);
   const insertUnit = db.prepare(
@@ -584,8 +590,25 @@ function writeRetrievalUnits(db, record) {
       unit.created_at
     );
     insertFts.run(unit.id, unit.memory_id, unit.tenant_id, unit.text);
-    writeRetrievalUnitEmbedding(db, unit);
+    writeRetrievalUnitEmbedding(db, unit, updateFeatureStats);
   }
+}
+
+function rebuildEmbeddingFeatureStats(db) {
+  db.prepare("DELETE FROM memory_embedding_feature_stats").run();
+  db.exec(`
+    INSERT INTO memory_embedding_feature_stats(tenant_id, feature_hash, document_count)
+    SELECT tenant_id, feature_hash, COUNT(*)
+    FROM memory_embedding_features
+    GROUP BY tenant_id, feature_hash
+  `);
+  db.prepare("DELETE FROM memory_retrieval_unit_feature_stats").run();
+  db.exec(`
+    INSERT INTO memory_retrieval_unit_feature_stats(tenant_id, feature_hash, document_count)
+    SELECT tenant_id, feature_hash, COUNT(*)
+    FROM memory_retrieval_unit_features
+    GROUP BY tenant_id, feature_hash
+  `);
 }
 
 function rebuildRetrievalUnits(db) {
@@ -1236,7 +1259,10 @@ export class LocalMemoryStore {
     try {
       db.exec("BEGIN IMMEDIATE");
       try {
-        const results = inputs.map((input) => this.captureIntoDatabase(db, input));
+        const results = inputs.map((input) =>
+          this.captureIntoDatabase(db, input, { updateFeatureStats: false })
+        );
+        rebuildEmbeddingFeatureStats(db);
         db.exec("COMMIT");
         return results;
       } catch (error) {
@@ -1249,7 +1275,7 @@ export class LocalMemoryStore {
     }
   }
 
-  captureIntoDatabase(db, input) {
+  captureIntoDatabase(db, input, { updateFeatureStats = true } = {}) {
     const now = Date.now();
     const tenantId = nullableString(input.tenant_id, 128) || "default";
     const source = nullableString(input.source, 64) || "local";
@@ -1276,7 +1302,7 @@ export class LocalMemoryStore {
       },
       existing ? memoryFromRow(existing) : null
     );
-    this.writeRecord(db, record, Boolean(existing));
+    this.writeRecord(db, record, Boolean(existing), updateFeatureStats);
     this.writeVersion(db, record, "capture");
     return {
       memory_id: record.id,
@@ -1439,7 +1465,7 @@ export class LocalMemoryStore {
     };
   }
 
-  writeRecord(db, record, exists) {
+  writeRecord(db, record, exists, updateFeatureStats = true) {
     const columns = [
       "id", "tenant_id", "project_id", "kind", "lifecycle_state", "scope_type", "scope_key", "content",
       "summary", "tags_json", "entities_json", "source", "source_refs_json", "external_key", "actor_type",
@@ -1475,8 +1501,8 @@ export class LocalMemoryStore {
         "INSERT INTO memories_fts(memory_id, tenant_id, content, summary, tags, entities) VALUES(?,?,?,?,?,?)"
       ).run(record.id, record.tenant_id, record.content, record.summary || "", json(record.tags), json(record.entities));
     }
-    writeLocalEmbedding(db, record);
-    writeRetrievalUnits(db, record);
+    writeLocalEmbedding(db, record, updateFeatureStats);
+    writeRetrievalUnits(db, record, updateFeatureStats);
   }
 
   writeVersion(db, record, operation) {
