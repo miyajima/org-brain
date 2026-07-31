@@ -489,7 +489,13 @@ function rebuildLocalEmbeddings(db) {
   db.prepare("DELETE FROM memory_embeddings").run();
   db.prepare("DELETE FROM memory_embedding_feature_stats").run();
   const rows = db.prepare("SELECT * FROM memories WHERE lifecycle_state != 'suppressed'").all();
-  for (const row of rows) writeLocalEmbedding(db, memoryFromRow(row));
+  for (const row of rows) writeLocalEmbedding(db, memoryFromRow(row), false);
+  db.exec(`
+    INSERT INTO memory_embedding_feature_stats(tenant_id, feature_hash, document_count)
+    SELECT tenant_id, feature_hash, COUNT(*)
+    FROM memory_embedding_features
+    GROUP BY tenant_id, feature_hash
+  `);
 }
 
 function deleteRetrievalUnitEmbedding(db, tenantId, unitId, updateFeatureStats = true) {
@@ -552,8 +558,14 @@ function deleteRetrievalUnits(db, tenantId, memoryId, updateFeatureStats = true)
     .run(tenantId, memoryId);
 }
 
-function writeRetrievalUnits(db, record, updateFeatureStats = true) {
-  deleteRetrievalUnits(db, record.tenant_id, record.id, updateFeatureStats);
+function writeRetrievalUnits(
+  db,
+  record,
+  updateFeatureStats = true,
+  writeFts = true,
+  deleteExisting = true
+) {
+  if (deleteExisting) deleteRetrievalUnits(db, record.tenant_id, record.id, updateFeatureStats);
   if (record.lifecycle_state === "suppressed") return;
   const units = buildRetrievalUnits(record);
   const insertUnit = db.prepare(
@@ -563,10 +575,12 @@ function writeRetrievalUnits(db, record, updateFeatureStats = true) {
       content_hash, extractor, extractor_version, extraction_state, degraded_reason, created_at
     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   );
-  const insertFts = db.prepare(
-    `INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text)
-     VALUES(?,?,?,?)`
-  );
+  const insertFts = writeFts
+    ? db.prepare(
+        `INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text)
+         VALUES(?,?,?,?)`
+      )
+    : null;
   for (const unit of units) {
     insertUnit.run(
       unit.id,
@@ -589,26 +603,9 @@ function writeRetrievalUnits(db, record, updateFeatureStats = true) {
       unit.degraded_reason,
       unit.created_at
     );
-    insertFts.run(unit.id, unit.memory_id, unit.tenant_id, unit.text);
+    if (insertFts) insertFts.run(unit.id, unit.memory_id, unit.tenant_id, unit.text);
     writeRetrievalUnitEmbedding(db, unit, updateFeatureStats);
   }
-}
-
-function rebuildEmbeddingFeatureStats(db) {
-  db.prepare("DELETE FROM memory_embedding_feature_stats").run();
-  db.exec(`
-    INSERT INTO memory_embedding_feature_stats(tenant_id, feature_hash, document_count)
-    SELECT tenant_id, feature_hash, COUNT(*)
-    FROM memory_embedding_features
-    GROUP BY tenant_id, feature_hash
-  `);
-  db.prepare("DELETE FROM memory_retrieval_unit_feature_stats").run();
-  db.exec(`
-    INSERT INTO memory_retrieval_unit_feature_stats(tenant_id, feature_hash, document_count)
-    SELECT tenant_id, feature_hash, COUNT(*)
-    FROM memory_retrieval_unit_features
-    GROUP BY tenant_id, feature_hash
-  `);
 }
 
 function rebuildRetrievalUnits(db) {
@@ -616,9 +613,15 @@ function rebuildRetrievalUnits(db) {
   db.prepare("DELETE FROM memory_retrieval_unit_embeddings").run();
   db.prepare("DELETE FROM memory_retrieval_unit_feature_stats").run();
   db.prepare("DELETE FROM memory_retrieval_units").run();
-  rebuildRetrievalUnitsFts(db);
   const rows = db.prepare("SELECT * FROM memories WHERE lifecycle_state != 'suppressed'").all();
-  for (const row of rows) writeRetrievalUnits(db, memoryFromRow(row));
+  for (const row of rows) writeRetrievalUnits(db, memoryFromRow(row), false, false, false);
+  rebuildRetrievalUnitsFts(db);
+  db.exec(`
+    INSERT INTO memory_retrieval_unit_feature_stats(tenant_id, feature_hash, document_count)
+    SELECT tenant_id, feature_hash, COUNT(*)
+    FROM memory_retrieval_unit_features
+    GROUP BY tenant_id, feature_hash
+  `);
 }
 
 function addIndexes(db) {
@@ -1260,9 +1263,14 @@ export class LocalMemoryStore {
       db.exec("BEGIN IMMEDIATE");
       try {
         const results = inputs.map((input) =>
-          this.captureIntoDatabase(db, input, { updateFeatureStats: false })
+          this.captureIntoDatabase(db, input, {
+            updateFeatureStats: false,
+            writeProjections: false
+          })
         );
-        rebuildEmbeddingFeatureStats(db);
+        rebuildFts(db);
+        rebuildLocalEmbeddings(db);
+        rebuildRetrievalUnits(db);
         db.exec("COMMIT");
         return results;
       } catch (error) {
@@ -1275,7 +1283,11 @@ export class LocalMemoryStore {
     }
   }
 
-  captureIntoDatabase(db, input, { updateFeatureStats = true } = {}) {
+  captureIntoDatabase(
+    db,
+    input,
+    { updateFeatureStats = true, writeProjections = true } = {}
+  ) {
     const now = Date.now();
     const tenantId = nullableString(input.tenant_id, 128) || "default";
     const source = nullableString(input.source, 64) || "local";
@@ -1302,7 +1314,7 @@ export class LocalMemoryStore {
       },
       existing ? memoryFromRow(existing) : null
     );
-    this.writeRecord(db, record, Boolean(existing), updateFeatureStats);
+    this.writeRecord(db, record, Boolean(existing), updateFeatureStats, writeProjections);
     this.writeVersion(db, record, "capture");
     return {
       memory_id: record.id,
@@ -1465,7 +1477,7 @@ export class LocalMemoryStore {
     };
   }
 
-  writeRecord(db, record, exists, updateFeatureStats = true) {
+  writeRecord(db, record, exists, updateFeatureStats = true, writeProjections = true) {
     const columns = [
       "id", "tenant_id", "project_id", "kind", "lifecycle_state", "scope_type", "scope_key", "content",
       "summary", "tags_json", "entities_json", "source", "source_refs_json", "external_key", "actor_type",
@@ -1495,14 +1507,16 @@ export class LocalMemoryStore {
          VALUES(${columns.map(() => "?").join(",")})`
       ).run(...columns.map((column) => values[column]));
     }
-    db.prepare("DELETE FROM memories_fts WHERE tenant_id = ? AND memory_id = ?").run(record.tenant_id, record.id);
-    if (record.lifecycle_state !== "suppressed") {
-      db.prepare(
-        "INSERT INTO memories_fts(memory_id, tenant_id, content, summary, tags, entities) VALUES(?,?,?,?,?,?)"
-      ).run(record.id, record.tenant_id, record.content, record.summary || "", json(record.tags), json(record.entities));
+    if (writeProjections) {
+      db.prepare("DELETE FROM memories_fts WHERE tenant_id = ? AND memory_id = ?").run(record.tenant_id, record.id);
+      if (record.lifecycle_state !== "suppressed") {
+        db.prepare(
+          "INSERT INTO memories_fts(memory_id, tenant_id, content, summary, tags, entities) VALUES(?,?,?,?,?,?)"
+        ).run(record.id, record.tenant_id, record.content, record.summary || "", json(record.tags), json(record.entities));
+      }
+      writeLocalEmbedding(db, record, updateFeatureStats);
+      writeRetrievalUnits(db, record, updateFeatureStats);
     }
-    writeLocalEmbedding(db, record, updateFeatureStats);
-    writeRetrievalUnits(db, record, updateFeatureStats);
   }
 
   writeVersion(db, record, operation) {
