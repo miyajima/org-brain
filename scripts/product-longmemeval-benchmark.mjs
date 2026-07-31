@@ -24,10 +24,12 @@ function parseArgs(argv) {
     datasetPath: null,
     datasetUrl: DEFAULT_DATASET_URL,
     output: null,
+    summaryOutput: null,
     limit: 0,
     repeat: 1,
     topK: 5,
-    concurrency: 1
+    concurrency: 1,
+    resume: false
   };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
@@ -40,10 +42,12 @@ function parseArgs(argv) {
     if (value === "--dataset-path") options.datasetPath = next();
     else if (value === "--dataset-url") options.datasetUrl = next();
     else if (value === "--output") options.output = next();
+    else if (value === "--summary-output") options.summaryOutput = next();
     else if (value === "--limit") options.limit = Number(next());
     else if (value === "--repeat") options.repeat = Number(next());
     else if (value === "--top-k") options.topK = Number(next());
     else if (value === "--concurrency") options.concurrency = Number(next());
+    else if (value === "--resume") options.resume = true;
     else if (value === "--help") {
       process.stdout.write(
         [
@@ -51,10 +55,12 @@ function parseArgs(argv) {
           "  --dataset-path <path>  Read an existing LongMemEval-S JSON file",
           "  --dataset-url <url>    Dataset URL when no local path is supplied",
           "  --output <path>        Raw JSONL output path",
+          "  --summary-output <path> Summary JSON output path",
           "  --limit <n>            Run the first n hash-ordered items",
           "  --repeat <n>           Full independent repetitions (acceptance: 5)",
           "  --top-k <n>            Retrieval depth (acceptance: 5)",
-          "  --concurrency <n>      Independent product-path evaluations in parallel"
+          "  --concurrency <n>      Independent product-path evaluations in parallel",
+          "  --resume               Resume complete question/repeat rows"
         ].join("\n") + "\n"
       );
       process.exit(0);
@@ -343,6 +349,7 @@ async function evaluateItem(item, repeat, itemIndex, topK) {
 }
 
 async function runWorkerTasks(tasks, concurrency, onRow) {
+  if (tasks.length === 0) return;
   if (concurrency === 1) {
     for (const task of tasks) onRow(await evaluateItem(task.item, task.repeat, task.itemIndex, task.topK));
     return;
@@ -395,14 +402,33 @@ async function main() {
   let items = splitItems(normalizeRows(rawDataset));
   if (options.limit > 0) items = items.slice(0, options.limit);
   const output = options.output ?? join(process.cwd(), "artifacts", `product-longmemeval-${Date.now()}.jsonl`);
+  const summaryOutput = options.summaryOutput ?? output.replace(/\.jsonl$/u, "-summary.json");
   await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, "", { mode: 0o600 });
-  const rows = [];
+  let rows = [];
+  if (options.resume) {
+    try {
+      rows = (await readFile(output, "utf8"))
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    rows = [...new Map(rows.map((row) => [`${row.repeat}:${row.evaluation_id}`, row])).values()];
+  }
+  await writeFile(
+    output,
+    rows.map((row) => `${JSON.stringify(row)}\n`).join(""),
+    { mode: 0o600 }
+  );
+  const completed = new Set(rows.map((row) => `${row.repeat}:${row.evaluation_id}`));
   let appendQueue = Promise.resolve();
   const tasks = [];
   for (let repeat = 1; repeat <= options.repeat; repeat += 1) {
     for (const [itemIndex, item] of items.entries()) {
-      tasks.push({ item, repeat, itemIndex, topK: options.topK });
+      if (!completed.has(`${repeat}:${item.evaluation_id}`)) {
+        tasks.push({ item, repeat, itemIndex, topK: options.topK });
+      }
     }
   }
   await runWorkerTasks(tasks, options.concurrency, (row) => {
@@ -413,17 +439,21 @@ async function main() {
   });
   await appendQueue;
   const summary = summarize(rows, datasetHash, options.repeat);
-  process.stdout.write(`${JSON.stringify({
+  const report = {
     output,
+    summary_output: summaryOutput,
     runner: {
       search_mode: "hybrid_v3",
       top_k: options.topK,
-      concurrency: options.concurrency
+      concurrency: options.concurrency,
+      resume: options.resume
     },
     summary
-  }, null, 2)}\n`);
+  };
+  await writeFile(summaryOutput, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (
-    options.limit === 0 &&
+    items.length === 500 &&
     options.repeat >= 5 &&
     (!summary.gates.full_500_recall_at_5.passed ||
       !summary.gates.hash_100_recall_at_5.passed ||
