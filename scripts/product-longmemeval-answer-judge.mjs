@@ -147,9 +147,16 @@ async function generate({ apiKey, model, prompt, json = false, attempts = 7 }) {
 
 function normalizeJudge(raw) {
   const cleaned = raw.replace(/^```json\s*|\s*```$/gu, "").trim();
+  const parseJson = (value) => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return JSON.parse(value.replace(/\\(?!["\\/bfnrtu])/gu, "\\\\"));
+    }
+  };
   let parsed;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = parseJson(cleaned);
   } catch {
     let depth = 0;
     let inString = false;
@@ -168,7 +175,7 @@ function normalizeJudge(raw) {
         break;
       }
     }
-    parsed = JSON.parse(cleaned.slice(0, end));
+    parsed = parseJson(cleaned.slice(0, end));
   }
   if (typeof parsed.label !== "boolean") throw new Error("judge label must be boolean");
   return { label: parsed.label, reason: String(parsed.reason ?? "") };

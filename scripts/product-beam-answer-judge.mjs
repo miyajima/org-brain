@@ -200,9 +200,16 @@ async function geminiGenerate({ apiKey, model, prompt, json = false, attempts = 
 
 function normalizeJudge(raw) {
   const cleaned = raw.replace(/^```json\s*|\s*```$/gu, "").trim();
+  const parseJson = (value) => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return JSON.parse(value.replace(/\\(?!["\\/bfnrtu])/gu, "\\\\"));
+    }
+  };
   let parsed;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = parseJson(cleaned);
   } catch {
     let depth = 0;
     let inString = false;
@@ -221,7 +228,7 @@ function normalizeJudge(raw) {
         break;
       }
     }
-    parsed = JSON.parse(cleaned.slice(0, end));
+    parsed = parseJson(cleaned.slice(0, end));
   }
   const score = Number(parsed.score);
   if (![0, 0.5, 1].includes(score)) throw new Error(`invalid judge score: ${parsed.score}`);
