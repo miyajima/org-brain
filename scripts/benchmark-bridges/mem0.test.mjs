@@ -20,5 +20,6 @@ test("Mem0 bridge preserves tenant filtering and does not synthesize ACL filteri
 test("Mem0 bridge declares the fixed extractor boundary and local embedder", () => {
   assert.match(source, /gemini-3\.5-flash-lite/);
   assert.match(source, /BAAI\/bge-small-en-v1\.5/);
+  assert.match(source, /760dca6f391277d79c3c7d2096c1bf1d037526c3/);
   assert.match(source, /"cost_usd": 0/);
 });

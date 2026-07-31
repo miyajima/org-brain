@@ -19,6 +19,7 @@ import {
   type MemorySourceReference
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
 
 type LifecycleWriteItem = {
   external_key?: string | null;
@@ -407,6 +408,21 @@ async function saveCurrentSnapshot(
           valid_until: snapshot.valid_until,
           source_references: snapshot.source_references as MemorySourceReference[]
         });
+  const retrievalUnitsV4 =
+    lifecycleState === "suppressed"
+      ? []
+      : await extractRetrievalUnitsV4(env, {
+          id: args.memoryId,
+          tenant_id: args.tenantId,
+          project_id: snapshot.project_id,
+          content: snapshot.content,
+          summary: snapshot.summary,
+          created_at: snapshot.created_at,
+          updated_at: updatedAt,
+          valid_from: snapshot.valid_from,
+          valid_until: snapshot.valid_until,
+          source_references: snapshot.source_references as MemorySourceReference[]
+        });
   const statements: D1PreparedStatement[] = [];
 
   if (args.rowExists) {
@@ -521,6 +537,14 @@ async function saveCurrentSnapshot(
   );
   statements.push(
     env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_v4_fts WHERE memory_id = ? AND tenant_id = ?"
+    ).bind(args.memoryId, args.tenantId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_v4 WHERE memory_id = ? AND tenant_id = ?"
+    ).bind(args.memoryId, args.tenantId)
+  );
+  statements.push(
+    env.OPEN_BRAIN_DB.prepare(
       "DELETE FROM memory_retrieval_units_fts WHERE memory_id = ? AND tenant_id = ?"
     ).bind(args.memoryId, args.tenantId),
     env.OPEN_BRAIN_DB.prepare(
@@ -559,6 +583,43 @@ async function saveCurrentSnapshot(
       ),
       env.OPEN_BRAIN_DB.prepare(
         "INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
+      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
+    );
+  }
+  for (const unit of retrievalUnitsV4) {
+    statements.push(
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO memory_retrieval_units_v4(
+          id, memory_id, tenant_id, project_id, unit_type, speaker, text,
+          event_at, valid_from, valid_until, source_ref_json, source_span_start,
+          source_span_end, content_hash, metadata_json, segment_id, extractor,
+          extractor_version, extraction_state, degraded_reason, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        unit.id,
+        unit.memory_id,
+        unit.tenant_id,
+        unit.project_id,
+        unit.unit_type,
+        unit.speaker,
+        unit.text,
+        unit.event_at,
+        unit.valid_from,
+        unit.valid_until,
+        unit.source_ref_json,
+        unit.source_span_start,
+        unit.source_span_end,
+        unit.content_hash,
+        unit.metadata_json,
+        unit.segment_id,
+        unit.extractor,
+        unit.extractor_version,
+        unit.extraction_state,
+        unit.degraded_reason,
+        unit.created_at
+      ),
+      env.OPEN_BRAIN_DB.prepare(
+        "INSERT INTO memory_retrieval_units_v4_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
       ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
     );
   }

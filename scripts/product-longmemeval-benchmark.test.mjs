@@ -59,14 +59,17 @@ test("product retrieval runtime never receives evaluation labels or question ide
       observed.push({ operation: "capture", input });
       return { memory_id: `m-${observed.length}`, version: 1, operation: "capture", created: true };
     },
-    async search(input) {
-      observed.push({ operation: "search", input });
-      return [{
-        memory: {
-          source_references: [{ type: "session", ref: "source-1" }]
-        },
-        score: { total: 1 }
-      }];
+    async retrieveContext(input) {
+      observed.push({ operation: "retrieveContext", input });
+      return {
+        results: [{
+          memory: {
+            source_references: [{ type: "session", ref: "source-1" }]
+          },
+          score: { total: 1 }
+        }],
+        evidence_bundle: { estimated_tokens: 10, abstention_recommended: false }
+      };
     }
   };
   const runtimeInput = {
@@ -91,7 +94,7 @@ test("product retrieval runtime never receives evaluation labels or question ide
   ]) {
     assert.equal(serialized.includes(forbidden), false, forbidden);
   }
-  assert.equal(observed.at(-1).input.search_mode, "hybrid_v3");
+  assert.equal(observed.at(-1).input.search_mode, "hybrid_v4");
   assert.equal(observed[0].input.valid_from, null);
   assert.equal(observed[0].input.created_at, Date.parse("2026-01-01"));
 });
@@ -101,12 +104,17 @@ test("product retrieval modules contain no LongMemEval-specific routing", async 
     new URL("./lib/retrieval-units.mjs", import.meta.url),
     new URL("./lib/local-memory-store.mjs", import.meta.url),
     new URL("../packages/shared/src/retrieval-units.ts", import.meta.url),
-    new URL("../packages/shared/src/memory-retrieval.ts", import.meta.url)
+    new URL("../packages/shared/src/memory-retrieval.ts", import.meta.url),
+    new URL("../apps/api-gateway/src/memory-service.ts", import.meta.url)
   ];
   for (const path of paths) {
     const source = (await readFile(path, "utf8")).toLowerCase();
-    assert.equal(source.includes("longmemeval"), false, path.pathname);
+    for (const benchmarkName of ["longmemeval", "beam", "locomo", "precisionmembench"]) {
+      assert.equal(source.includes(benchmarkName), false, `${path.pathname}: ${benchmarkName}`);
+    }
     assert.equal(source.includes("answer_session_ids"), false, path.pathname);
     assert.equal(source.includes("gold_session_ids"), false, path.pathname);
+    assert.equal(source.includes("generatecontent"), false, path.pathname);
+    assert.equal(source.includes("gemini_api_key"), false, path.pathname);
   }
 });

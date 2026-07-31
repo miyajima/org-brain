@@ -4,6 +4,12 @@ All notable changes to Org Brain are documented here. Releases use semantic vers
 
 ## 0.1.0 - Initial public release target
 
+- Add the non-breaking `hybrid_v4` projection, SQLite/D1 weighted-RRF search,
+  versioned Vectorize namespace, bounded evidence bundles, checkpointed v4
+  backfill, shadow telemetry, and public benchmark-runner retrieval contract.
+- Add an independently audited final-200 sealing gate and expand strict
+  same-harness ranking to Mem0, Hindsight, Mnemosyne, MemPalace, Cognee,
+  Supermemory, GBrain, AgentMemory, Total Agent Memory, and Memori.
 - Add rebuildable retrieval units and opt-in `hybrid_v3` search across local
   SQLite, D1 FTS, Qwen3 Vectorize, and BGE reranking.
 - Improve `hybrid_v3` with event-time/validity separation, query-specific

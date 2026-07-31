@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-07-31T20:29:00+09:00",
+  "route": "inline_current_agent",
+  "shared_harness": {
+    "status": "unavailable",
+    "detail": "org-brain is not registered in pr-team-harness; no external reviewer result is represented here."
+  },
+  "checks": [
+    {
+      "name": "benchmark-label isolation",
+      "status": "pass",
+      "evidence": "Static and runtime tests reject benchmark names, question identifiers, gold answers, and scorer labels in retrieval calls."
+    },
+    {
+      "name": "v3 coexistence",
+      "status": "pass",
+      "evidence": "Local and shared tests keep hybrid_v3 behavior while exercising hybrid_v4."
+    },
+    {
+      "name": "ACL and suppression",
+      "status": "pass",
+      "evidence": "Local adapter and hybrid_v4 tests cover tenant, permission, validity, suppression, rebuild, and deletion behavior."
+    },
+    {
+      "name": "claim integrity",
+      "status": "pass",
+      "evidence": "Only Mem0, Hindsight, and Mnemosyne are ranked; the other seven remain reference-only. OrgBrain now records 100% accuracy and pass^5 on the development 200, while the status artifact still blocks the scoped claim until repeat-5 competitor and weighted scorecard evidence is complete."
+    }
+  ],
+  "open_risks": [
+    "The 1,000-record performance smoke is not evidence for the 10M acceptance gate.",
+    "The ONNX model winner is intentionally unset until the frozen lexicographic selection can run.",
+    "D1 and Vectorize changes have dry-run build coverage but no production smoke in this change.",
+    "Hindsight completed one 200-task readiness run; its repeat-5 final result is still missing.",
+    "OrgBrain average context is 1158.33 tokens, above the current competitive-memory-v1 target of 713.25 tokens.",
+    "Weighted personal and organization capability scorecards are still incomplete for all four adapters.",
+    "The allowed claim is scoped to the three ranked competitors and is not a universal OSS claim."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "benchmark": "orgbrain-final-sealed-200-v1",
+  "status": "awaiting-independent-audit",
+  "question_count_required": 200,
+  "payload_committed": false,
+  "dataset_sha256": null,
+  "selected_ids_sha256": null,
+  "development_overlap": null,
+  "reason": "No independently audited 200-row payload was available in the workspace. The seal command now rejects missing audit evidence, quota drift, duplicate IDs, and development overlap.",
+  "next_command": "pnpm benchmark:seal-final-200 -- --payload <isolated-reviewed-payload.json> --development <public-500.json> --development <opened-100.json> --output artifacts/benchmarks/<date>/orgbrain-final-sealed-200-seal.json"
+}

@@ -1,0 +1,44 @@
+{
+  "benchmark": "orgbrain-local-scale-v1",
+  "generated_at": "2026-07-31T08:46:00.260Z",
+  "settings": {
+    "record_count": 1000,
+    "query_count": 30,
+    "search_mode": "hybrid_v4",
+    "embedding_provider": "local-sparse-feature-hash-v2-degraded",
+    "quality_embedding_contract": "pinned ONNX float16 BLOB",
+    "segment_candidate_limit": 24,
+    "parent_candidate_limit": 50,
+    "target_p95_ms": 500
+  },
+  "metrics": {
+    "seed_duration_ms": 32,
+    "index_duration_ms": 678.54,
+    "cold_search_latency_ms": 42.61,
+    "warm_search_latency_p50_ms": 35.03,
+    "warm_search_latency_p95_ms": 35.6,
+    "warm_search_latency_max_ms": 37.01,
+    "segment_count": 1000,
+    "memory_rss_bytes": 109395968,
+    "memory_heap_used_bytes": 14844352,
+    "retrieval_failures": 0,
+    "database_bytes": 13254656
+  },
+  "verification": {
+    "ok": true,
+    "schema_version": 17,
+    "record_count": 1000,
+    "version_count": 1000,
+    "fts_count": 1000,
+    "embedding_count": 1000,
+    "retrieval_unit_count": 3000,
+    "retrieval_unit_fts_count": 3000,
+    "retrieval_unit_embedding_count": 3000,
+    "retrieval_unit_v4_count": 1000,
+    "retrieval_unit_v4_fts_count": 1000,
+    "retrieval_unit_v4_embedding_count": 1000,
+    "errors": []
+  },
+  "passed": true,
+  "scope_note": "Regression evidence only; this is not the required 10M acceptance run."
+}

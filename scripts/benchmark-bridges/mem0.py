@@ -32,6 +32,9 @@ PORT = int(os.environ.get("PORT", "8790"))
 EMBED_MODEL = os.environ.get("MEM0_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 EMBED_DIMS = int(os.environ.get("MEM0_EMBED_DIMS", "384"))
 EXTRACTOR_MODEL = os.environ.get("MEM0_EXTRACTOR_MODEL", "gemini-3.5-flash-lite")
+REVISION = os.environ.get(
+    "MEM0_REVISION", "760dca6f391277d79c3c7d2096c1bf1d037526c3"
+)
 
 memory: Memory | None = None
 run_directory: tempfile.TemporaryDirectory[str] | None = None
@@ -106,7 +109,11 @@ def capture(record: dict[str, Any]) -> dict[str, Any]:
         mem0_id = str(row.get("id") or "")
         if mem0_id:
             records_by_mem0_id[mem0_id] = dict(record)
-    return {"id": str(record.get("id") or ""), "mem0_ids": [row.get("id") for row in rows]}
+    return {
+        "id": str(record.get("id") or ""),
+        "mem0_ids": [row.get("id") for row in rows],
+        "meta": {"provider": "mem0", "revision": REVISION},
+    }
 
 
 def search(query: dict[str, Any]) -> dict[str, Any]:
@@ -133,6 +140,7 @@ def search(query: dict[str, Any]) -> dict[str, Any]:
         "usage": {"turns": 1, "cost_usd": 0},
         "meta": {
             "provider": "mem0",
+            "revision": REVISION,
             "embedder": EMBED_MODEL,
             "extractor": EXTRACTOR_MODEL,
             "inference_enabled": False,

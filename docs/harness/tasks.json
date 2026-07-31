@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-31T20:29:00+09:00",
+  "tasks": [
+    {
+      "id": "hybrid-v4-contract",
+      "status": "completed",
+      "evidence": [
+        "scripts/lib/retrieval-units.mjs",
+        "scripts/lib/local-memory-store.mjs",
+        "packages/shared/src/memory-retrieval.ts"
+      ]
+    },
+    {
+      "id": "d1-vectorize-projection",
+      "status": "completed",
+      "evidence": [
+        "migrations/0017_retrieval_units_v4.sql",
+        "apps/retrieval-projector/src/index.ts",
+        "apps/api-gateway/src/retrieval-index-service.ts"
+      ]
+    },
+    {
+      "id": "evidence-bundle-api",
+      "status": "completed",
+      "evidence": [
+        "packages/shared/src/memory-store.ts",
+        "apps/api-gateway/src/index.ts",
+        "apps/api-gateway/src/memory-service.ts"
+      ]
+    },
+    {
+      "id": "reduced-three-competitor-contract",
+      "status": "completed",
+      "evidence": [
+        "config/memory-leadership-v1.json",
+        "config/competitive-memory-revisions-2026-07-31.json",
+        "scripts/lib/competitive-memory-benchmark-core.mjs"
+      ]
+    },
+    {
+      "id": "ranked-native-bridges",
+      "status": "completed",
+      "evidence": [
+        "scripts/benchmark-bridges/mem0.py",
+        "scripts/benchmark-bridges/hindsight.py",
+        "scripts/benchmark-bridges/mnemosyne.py"
+      ]
+    },
+    {
+      "id": "competitive-memory-orgbrain-regression",
+      "status": "completed",
+      "evidence": [
+        "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-orgbrain-v4-fixed-repeat5.json",
+        "scripts/local-memory.test.mjs",
+        "packages/shared/test/retrieval-units.test.ts"
+      ]
+    },
+    {
+      "id": "sealed-final-200",
+      "status": "blocked_external",
+      "reason": "The independently audited 200-item payload is not present in the workspace. The sealing validator and hash-only status artifact are implemented."
+    },
+    {
+      "id": "onnx-model-selection",
+      "status": "blocked_external",
+      "reason": "Pinned candidate artifacts and the required development datasets are not present; the implementation degrades explicitly instead of inventing a winner."
+    },
+    {
+      "id": "same-harness-leadership-run",
+      "status": "blocked_external",
+      "reason": "OrgBrain now passes the 200-task repeat-5 local gate, but Hindsight still has only a repeat-1 readiness result and all four weighted scorecards plus the audited final dataset remain incomplete."
+    },
+    {
+      "id": "production-rollout",
+      "status": "not_started",
+      "reason": "The benchmark gates are intentionally prerequisites for 10/50/100 percent rollout."
+    }
+  ]
+}

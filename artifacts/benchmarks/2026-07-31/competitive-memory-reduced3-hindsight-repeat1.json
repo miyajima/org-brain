@@ -1,0 +1,4999 @@
+{
+  "benchmark": "competitive-memory-v1",
+  "comparison_scope": {
+    "ranked_adapters": [
+      "orgbrain-local",
+      "mem0",
+      "hindsight",
+      "mnemosyne"
+    ],
+    "claim": "same-harness leader among Mem0, Hindsight, and Mnemosyne",
+    "universal_oss_first_place_claim_allowed": false
+  },
+  "generated_at": "2026-07-31T10:54:48.048Z",
+  "acceptance_targets": {
+    "minimum_tasks_per_mode": 100,
+    "minimum_accuracy": 97.22,
+    "minimum_recall_at_5": 91.67,
+    "maximum_average_context_tokens": 713.25,
+    "maximum_local_100k_p95_ms": 500,
+    "maximum_cross_tenant_leakage_count": 0,
+    "minimum_decision_grade_provenance_rate": 100
+  },
+  "harness": {
+    "model_id": "gemini-3.5-flash-lite",
+    "budget_usd": 5,
+    "hardware_id": "mac-arm64-local"
+  },
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "darwin",
+    "os_release": "25.5.0",
+    "cpu_model": "Apple M2",
+    "cpu_count": 8,
+    "total_memory_bytes": 17179869184,
+    "free_memory_bytes": 73416704
+  },
+  "dataset": {
+    "tasks": 200,
+    "personal": 100,
+    "organization": 100,
+    "families": {
+      "longmemeval_style": 50,
+      "locomo_style": 50,
+      "state_bench_style": 100
+    },
+    "categories": {
+      "coding": 20,
+      "preference": 20,
+      "staleness": 20,
+      "contradiction": 20,
+      "temporal": 20,
+      "decision": 20,
+      "permission": 20,
+      "cross_tenant": 20,
+      "evidence": 20,
+      "policy": 20
+    }
+  },
+  "unavailable": [],
+  "results": [
+    {
+      "adapter": "hindsight",
+      "generated_at": "2026-07-31T10:54:48.045Z",
+      "settings": {
+        "repeat": 1,
+        "task_turn_definition": "one adapter search interaction; pass^5 repeats are independent trials",
+        "cost_definition": "adapter-reported search cost in USD; local offline retrieval is zero",
+        "result_limit": 5,
+        "task_count": 200,
+        "personal_task_count": 100,
+        "organization_task_count": 100,
+        "dataset_version": "competitive-memory-v1",
+        "harness": {
+          "model_id": "gemini-3.5-flash-lite",
+          "budget_usd": 5,
+          "hardware_id": "mac-arm64-local"
+        }
+      },
+      "metrics": {
+        "accuracy": 50,
+        "recall_at_5": 100,
+        "pass_5": 50,
+        "task_completion_rate": 50,
+        "average_turns": 1,
+        "total_cost_usd": null,
+        "total_ingest_cost_usd": null,
+        "average_cost_per_attempt_usd": null,
+        "average_ingest_cost_usd": null,
+        "amortized_100_search_cost_usd": null,
+        "cost_samples": 0,
+        "unknown_cost_samples": 200,
+        "ingest_cost_samples": 0,
+        "unknown_ingest_cost_samples": 620,
+        "cross_tenant_or_permission_leakage_count": 20,
+        "decision_grade_provenance_rate": 100,
+        "average_context_tokens": 609.64,
+        "search_latency_p50_ms": 333.8,
+        "search_latency_p95_ms": 660.25,
+        "ingest_latency_p50_ms": 1261.24,
+        "ingest_latency_p95_ms": 1610.62,
+        "failed_rows": 0
+      },
+      "personal": {
+        "tasks": 100,
+        "accuracy": 100,
+        "recall_at_5": 100,
+        "pass_5": 100,
+        "task_completion_rate": 100,
+        "average_turns": 1,
+        "average_cost_usd": null
+      },
+      "organization": {
+        "tasks": 100,
+        "accuracy": 0,
+        "recall_at_5": 100,
+        "pass_5": 0,
+        "task_completion_rate": 0,
+        "average_turns": 1,
+        "average_cost_usd": null
+      },
+      "scorecards": {
+        "personal": {
+          "components": {
+            "search_quality": {
+              "weight": 30,
+              "score": 100,
+              "evidence": [
+                "competitive-memory-v1 personal accuracy and recall@5"
+              ]
+            },
+            "setup_and_daily_ux": {
+              "weight": 20,
+              "score": null,
+              "evidence": []
+            },
+            "privacy_and_offline": {
+              "weight": 15,
+              "score": null,
+              "evidence": []
+            },
+            "automatic_extraction": {
+              "weight": 15,
+              "score": null,
+              "evidence": []
+            },
+            "latency_and_context": {
+              "weight": 10,
+              "score": 0,
+              "evidence": [
+                "competitive-memory-v1 measured p95 latency and average context"
+              ]
+            },
+            "interoperability": {
+              "weight": 10,
+              "score": null,
+              "evidence": []
+            }
+          },
+          "measured_weight": 40,
+          "partial_weighted_score": 30,
+          "weighted_score": null,
+          "ranking_eligible": false,
+          "missing_components": [
+            "setup_and_daily_ux",
+            "privacy_and_offline",
+            "automatic_extraction",
+            "interoperability"
+          ]
+        },
+        "organization": {
+          "components": {
+            "security_and_governance": {
+              "weight": 25,
+              "score": 0,
+              "evidence": [
+                "competitive-memory-v1 permission and cross-tenant leakage tasks"
+              ]
+            },
+            "search_and_update_quality": {
+              "weight": 20,
+              "score": 50,
+              "evidence": [
+                "competitive-memory-v1 organization accuracy and recall@5"
+              ]
+            },
+            "availability_and_recovery": {
+              "weight": 15,
+              "score": null,
+              "evidence": []
+            },
+            "decision_and_collaboration": {
+              "weight": 15,
+              "score": 50,
+              "evidence": [
+                "competitive-memory-v1 decision, evidence, policy, and provenance tasks"
+              ]
+            },
+            "integration_ease": {
+              "weight": 10,
+              "score": null,
+              "evidence": []
+            },
+            "operability": {
+              "weight": 10,
+              "score": null,
+              "evidence": []
+            },
+            "cost": {
+              "weight": 5,
+              "score": null,
+              "evidence": []
+            }
+          },
+          "measured_weight": 60,
+          "partial_weighted_score": 17.5,
+          "weighted_score": null,
+          "ranking_eligible": false,
+          "missing_components": [
+            "availability_and_recovery",
+            "integration_ease",
+            "operability",
+            "cost"
+          ]
+        }
+      },
+      "capability_evidence": {},
+      "ranking": {
+        "eligible": false,
+        "first_place_claim_allowed": false,
+        "reason": "one or more weighted dimensions are unmeasured"
+      },
+      "categories": {
+        "coding": {
+          "tasks": 20,
+          "accuracy": 100,
+          "recall_at_5": 100,
+          "pass_5": 100,
+          "task_completion_rate": 100,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "preference": {
+          "tasks": 20,
+          "accuracy": 100,
+          "recall_at_5": 100,
+          "pass_5": 100,
+          "task_completion_rate": 100,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "staleness": {
+          "tasks": 20,
+          "accuracy": 100,
+          "recall_at_5": 100,
+          "pass_5": 100,
+          "task_completion_rate": 100,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "contradiction": {
+          "tasks": 20,
+          "accuracy": 100,
+          "recall_at_5": 100,
+          "pass_5": 100,
+          "task_completion_rate": 100,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "temporal": {
+          "tasks": 20,
+          "accuracy": 100,
+          "recall_at_5": 100,
+          "pass_5": 100,
+          "task_completion_rate": 100,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "decision": {
+          "tasks": 20,
+          "accuracy": 0,
+          "recall_at_5": 100,
+          "pass_5": 0,
+          "task_completion_rate": 0,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "permission": {
+          "tasks": 20,
+          "accuracy": 0,
+          "recall_at_5": 100,
+          "pass_5": 0,
+          "task_completion_rate": 0,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "cross_tenant": {
+          "tasks": 20,
+          "accuracy": 0,
+          "recall_at_5": 100,
+          "pass_5": 0,
+          "task_completion_rate": 0,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "evidence": {
+          "tasks": 20,
+          "accuracy": 0,
+          "recall_at_5": 100,
+          "pass_5": 0,
+          "task_completion_rate": 0,
+          "average_turns": 1,
+          "average_cost_usd": null
+        },
+        "policy": {
+          "tasks": 20,
+          "accuracy": 0,
+          "recall_at_5": 100,
+          "pass_5": 0,
+          "task_completion_rate": 0,
+          "average_turns": 1,
+          "average_cost_usd": null
+        }
+      },
+      "task_results": [
+        {
+          "id": "personal-coding-1",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding001-expected",
+                "pcontradiction001-expected",
+                "ppreference001-expected",
+                "pstaleness001-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 590.8767499999376
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-2",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding002-expected",
+                "pcontradiction002-expected",
+                "ppreference002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 331.3518749999348
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-3",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding003-expected",
+                "pcontradiction003-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 323.03341700008605
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-4",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding004-expected",
+                "pcontradiction004-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 316.3666250000242
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-5",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding005-expected",
+                "pcontradiction005-expected",
+                "pcontradiction005-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 325.0682080000406
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-6",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding006-expected",
+                "pcontradiction006-expected",
+                "pcontradiction006-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.53629200009163
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-7",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding007-expected",
+                "pcontradiction007-expected",
+                "ppreference007-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 323.0844160000561
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-8",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding008-expected",
+                "pcontradiction008-expected",
+                "ppreference008-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 314.0257500000298
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-9",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding009-expected",
+                "pcontradiction009-expected",
+                "ppreference009-expected",
+                "pstaleness009-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 312.7631250000559
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-10",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding010-expected",
+                "pcontradiction010-expected",
+                "ppreference010-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 315.01887499995064
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-11",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding011-expected",
+                "pcontradiction011-expected",
+                "pcontradiction011-distractor",
+                "ptemporal011-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 316.80220799997915
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-12",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding012-expected",
+                "pcontradiction012-expected",
+                "pcontradiction012-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 321.39274999999907
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-13",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding013-expected",
+                "pcontradiction013-expected",
+                "ptemporal013-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 298.95758299995214
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-14",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding014-expected",
+                "pcontradiction014-expected",
+                "ptemporal014-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.407125000027
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-15",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding015-expected",
+                "pcontradiction015-expected",
+                "ptemporal015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 311.57566699991
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-16",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding016-expected",
+                "pcontradiction016-expected",
+                "pcontradiction016-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 327.8199579999782
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-17",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding017-expected",
+                "pcontradiction017-expected",
+                "ptemporal017-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 315.28987500001676
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-18",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding018-expected",
+                "pcontradiction018-expected",
+                "ptemporal018-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 310.4486250000773
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-19",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding019-expected",
+                "pcontradiction019-expected",
+                "ptemporal019-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 317.6735000000335
+            }
+          ]
+        },
+        {
+          "id": "personal-coding-20",
+          "mode": "personal",
+          "category": "coding",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcoding020-expected",
+                "pcontradiction020-expected",
+                "pcontradiction020-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 322.3911670000525
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-1",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference001-expected",
+                "pcontradiction001-expected",
+                "ptemporal001-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 316.83887500001583
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-2",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference002-expected",
+                "pcontradiction002-expected",
+                "ptemporal002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 305.4607090000063
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-3",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference003-expected",
+                "pcontradiction003-expected",
+                "pcoding003-expected",
+                "ptemporal003-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 330.17504200001713
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-4",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference004-expected",
+                "pcontradiction004-expected",
+                "ptemporal004-expected",
+                "ptemporal004-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 316.2969999999041
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-5",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference005-expected",
+                "pcontradiction005-expected",
+                "ptemporal005-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.28129199997056
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-6",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference006-expected",
+                "pcontradiction006-expected",
+                "ptemporal006-expected",
+                "pstaleness006-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 330.8337499999907
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-7",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference007-expected",
+                "pcontradiction007-expected",
+                "ptemporal007-expected",
+                "pstaleness007-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 317.8402500000084
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-8",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference008-expected",
+                "pcontradiction008-expected",
+                "ptemporal008-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.07345900009386
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-9",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference009-expected",
+                "pcontradiction009-expected",
+                "ptemporal009-expected",
+                "pstaleness009-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 312.83849999995437
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-10",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference010-expected",
+                "pcontradiction010-expected",
+                "ptemporal010-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 309.77745799999684
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-11",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference011-expected",
+                "pcontradiction011-expected",
+                "ptemporal011-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 318.87724999990314
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-12",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference012-expected",
+                "pcontradiction012-expected",
+                "ptemporal012-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.08337500004563
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-13",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference013-expected",
+                "ptemporal013-expected",
+                "pcontradiction013-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 308.12712499999907
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-14",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference014-expected",
+                "pcontradiction014-expected",
+                "ptemporal014-expected",
+                "ptemporal014-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 320.17995799996424
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-15",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference015-expected",
+                "pcontradiction015-expected",
+                "ptemporal015-expected",
+                "ptemporal015-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 306.3049170000013
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-16",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference016-expected",
+                "ptemporal016-expected",
+                "pcontradiction016-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 322.2064590000082
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-17",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference017-expected",
+                "ptemporal017-expected",
+                "pcontradiction017-expected",
+                "ptemporal017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 310.21662500000093
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-18",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference018-expected",
+                "ptemporal018-expected",
+                "pcontradiction018-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 317.8510000000242
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-19",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference019-expected",
+                "pcontradiction019-expected",
+                "ptemporal019-expected",
+                "ptemporal019-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 314.3387919999659
+            }
+          ]
+        },
+        {
+          "id": "personal-preference-20",
+          "mode": "personal",
+          "category": "preference",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ppreference020-expected",
+                "ptemporal020-expected",
+                "pcontradiction020-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.7065420000581
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-1",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness001-expected",
+                "pcontradiction001-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 300.6187080000527
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-2",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness002-expected",
+                "pstaleness002-distractor",
+                "pcontradiction002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 437.94241699995473
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-3",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness003-expected",
+                "pstaleness003-distractor",
+                "pcontradiction003-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 320.07475000002887
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-4",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness004-expected",
+                "pstaleness004-distractor",
+                "ptemporal004-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.06783299997915
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-5",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness005-expected",
+                "pstaleness005-distractor",
+                "ptemporal005-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 315.65058300003875
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-6",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness006-expected",
+                "pstaleness006-distractor",
+                "ptemporal006-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.91158299997915
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-7",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness007-expected",
+                "pstaleness007-distractor",
+                "ptemporal007-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 308.40237500006333
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-8",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness008-expected",
+                "ptemporal008-expected",
+                "pcontradiction008-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 312.90300000004936
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-9",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness009-expected",
+                "pstaleness009-distractor",
+                "pcontradiction009-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.545749999932
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-10",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness010-expected",
+                "pstaleness010-distractor",
+                "pcontradiction010-expected",
+                "ptemporal010-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 305.05495799996424
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-11",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness011-expected",
+                "pstaleness011-distractor",
+                "ptemporal011-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 320.06362499995157
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-12",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness012-expected",
+                "pstaleness012-distractor",
+                "pcontradiction012-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 323.2856249999022
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-13",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness013-expected",
+                "pstaleness013-distractor",
+                "ptemporal013-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 301.25204199994914
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-14",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness014-expected",
+                "pstaleness014-distractor",
+                "ptemporal014-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.13166700000875
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-15",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness015-expected",
+                "ptemporal015-expected",
+                "pcontradiction015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 316.9929580000462
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-16",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness016-expected",
+                "pstaleness016-distractor",
+                "ptemporal016-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 331.8321669999277
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-17",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness017-expected",
+                "pstaleness017-distractor",
+                "ptemporal017-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.8273749999935
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-18",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness018-expected",
+                "pstaleness018-distractor",
+                "ptemporal018-expected",
+                "pcontradiction018-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 311.1989159999648
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-19",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness019-expected",
+                "ptemporal019-expected",
+                "pcontradiction019-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 306.77183400001377
+            }
+          ]
+        },
+        {
+          "id": "personal-staleness-20",
+          "mode": "personal",
+          "category": "staleness",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pstaleness020-expected",
+                "pstaleness020-distractor",
+                "ptemporal020-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.3977090000408
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-1",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction001-expected",
+                "pcoding001-expected",
+                "pstaleness001-expected",
+                "ppreference001-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 304.8575420000125
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-2",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction002-expected",
+                "pcoding002-expected",
+                "ppreference002-expected",
+                "pstaleness002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 307.4682909999974
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-3",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction003-expected",
+                "pcontradiction003-distractor",
+                "pcoding003-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 325.5719579999568
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-4",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction004-expected",
+                "pcoding004-expected",
+                "pstaleness004-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.3015000000596
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-5",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction005-expected",
+                "pcontradiction005-distractor",
+                "pcoding005-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 317.7879589999793
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-6",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction006-expected",
+                "pcontradiction006-distractor",
+                "pcoding006-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 314.8612499999581
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-7",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction007-expected",
+                "pcoding007-expected",
+                "ptemporal007-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.9610409999732
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-8",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction008-expected",
+                "pcoding008-expected",
+                "pstaleness008-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 315.94083300000057
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-9",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction009-expected",
+                "pcoding009-expected",
+                "pstaleness009-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 303.2941670001019
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-10",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction010-expected",
+                "pcoding010-expected",
+                "pstaleness010-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 315.88870800007135
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-11",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction011-expected",
+                "pcontradiction011-distractor",
+                "pcoding011-expected",
+                "ptemporal011-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 321.47354200005066
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-12",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction012-expected",
+                "pcontradiction012-distractor",
+                "pcoding012-expected",
+                "pstaleness012-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 321.6811250000028
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-13",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction013-expected",
+                "pcoding013-expected",
+                "ptemporal013-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 312.57245900004636
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-14",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction014-expected",
+                "pcoding014-expected",
+                "ptemporal014-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 321.95812500000466
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-15",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction015-expected",
+                "pcoding015-expected",
+                "ptemporal015-expected",
+                "pstaleness015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.0374160000356
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-16",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction016-expected",
+                "pcontradiction016-distractor",
+                "pcoding016-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 332.0995000000112
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-17",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction017-expected",
+                "pcoding017-expected",
+                "ptemporal017-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 321.3209589999169
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-18",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction018-expected",
+                "pcoding018-expected",
+                "ptemporal018-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 323.88241699989885
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-19",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction019-expected",
+                "pcoding019-expected",
+                "ptemporal019-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 328.43029199994635
+            }
+          ]
+        },
+        {
+          "id": "personal-contradiction-20",
+          "mode": "personal",
+          "category": "contradiction",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "pcontradiction020-expected",
+                "pcontradiction020-distractor",
+                "pcoding020-expected",
+                "ptemporal020-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 333.967874999973
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-1",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal001-expected",
+                "pstaleness001-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 319.31099999998696
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-2",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal002-expected",
+                "ptemporal002-distractor",
+                "pstaleness002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 326.8573750000214
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-3",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal003-expected",
+                "ptemporal003-distractor",
+                "pstaleness003-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 340.18974999990314
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-4",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal004-expected",
+                "ptemporal004-distractor",
+                "pstaleness004-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 333.20504200004507
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-5",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal005-expected",
+                "ptemporal005-distractor",
+                "pstaleness005-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 347.0791250000475
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-6",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal006-expected",
+                "ptemporal006-distractor",
+                "pstaleness006-expected",
+                "pstaleness006-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 356.35337500006426
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-7",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal007-expected",
+                "ptemporal007-distractor",
+                "pstaleness007-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 342.98670799995307
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-8",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal008-expected",
+                "ptemporal008-distractor",
+                "pstaleness008-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 355.4115410000086
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-9",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal009-expected",
+                "pstaleness009-expected",
+                "pstaleness009-distractor",
+                "pcontradiction009-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 333.7967920000665
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-10",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal010-expected",
+                "ptemporal010-distractor",
+                "pstaleness010-expected",
+                "pstaleness010-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 313.4622920000693
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-11",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal011-expected",
+                "ptemporal011-distractor",
+                "pstaleness011-expected",
+                "pstaleness011-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 349.52383299998473
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-12",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal012-expected",
+                "ptemporal012-distractor",
+                "pstaleness012-expected",
+                "pstaleness012-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 362.4570839999942
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-13",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal013-expected",
+                "ptemporal013-distractor",
+                "pstaleness013-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 346.33600000001024
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-14",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal014-expected",
+                "ptemporal014-distractor",
+                "pstaleness014-expected",
+                "pstaleness014-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 361.858041999978
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-15",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal015-expected",
+                "ptemporal015-distractor",
+                "pstaleness015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 353.4295839999104
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-16",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal016-expected",
+                "ptemporal016-distractor",
+                "pstaleness016-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 373.1926659999881
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-17",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal017-expected",
+                "ptemporal017-distractor",
+                "pstaleness017-expected",
+                "pstaleness017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 391.42008300009184
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-18",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal018-expected",
+                "ptemporal018-distractor",
+                "pstaleness018-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 522.1468330000062
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-19",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "longmemeval_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal019-expected",
+                "ptemporal019-distractor",
+                "pstaleness019-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 387.8365000000922
+            }
+          ]
+        },
+        {
+          "id": "personal-temporal-20",
+          "mode": "personal",
+          "category": "temporal",
+          "dataset_family": "locomo_style",
+          "attempts": [
+            {
+              "top1": true,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": true,
+              "provenance": true,
+              "ids": [
+                "ptemporal020-expected",
+                "ptemporal020-distractor",
+                "pstaleness020-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 405.0766669999575
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-1",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision001-distractor",
+                "odecision001-expected",
+                "oevidence001-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 395.28195800003596
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-2",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision002-distractor",
+                "odecision002-expected",
+                "oevidence002-distractor",
+                "opermission002-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 379.4802919999929
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-3",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision003-distractor",
+                "odecision003-expected",
+                "opermission003-distractor",
+                "oevidence003-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 387.56945799989626
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-4",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision004-distractor",
+                "odecision004-expected",
+                "oevidence004-distractor",
+                "opermission004-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 398.6587910000235
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-5",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision005-distractor",
+                "odecision005-expected",
+                "opermission005-distractor",
+                "oevidence005-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 375.86599999992177
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-6",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision006-distractor",
+                "odecision006-expected",
+                "oevidence006-distractor",
+                "opermission006-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 377.03845800005365
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-7",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision007-distractor",
+                "odecision007-expected",
+                "oevidence007-distractor",
+                "opermission007-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 394.1923340000212
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-8",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision008-distractor",
+                "odecision008-expected",
+                "oevidence008-distractor",
+                "opermission008-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 378.14474999997765
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-9",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision009-distractor",
+                "odecision009-expected",
+                "oevidence009-distractor",
+                "opermission009-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 378.5029580000555
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-10",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision010-distractor",
+                "odecision010-expected",
+                "opermission010-distractor",
+                "oevidence010-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 399.63329199992586
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-11",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision011-distractor",
+                "odecision011-expected",
+                "oevidence011-distractor",
+                "opermission011-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 395.2218329999596
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-12",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision012-distractor",
+                "odecision012-expected",
+                "opermission012-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 633.0728329999838
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-13",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision013-distractor",
+                "odecision013-expected",
+                "oevidence013-distractor",
+                "opermission013-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 629.6825829999289
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-14",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision014-distractor",
+                "odecision014-expected",
+                "opermission014-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 557.6940000000177
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-15",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision015-distractor",
+                "odecision015-expected",
+                "opermission015-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 572.018415999948
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-16",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision016-distractor",
+                "odecision016-expected",
+                "opermission016-distractor",
+                "oevidence016-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 534.2584579999093
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-17",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision017-distractor",
+                "odecision017-expected",
+                "oevidence017-distractor",
+                "opermission017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 572.8560829999624
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-18",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision018-distractor",
+                "odecision018-expected",
+                "oevidence018-distractor",
+                "opermission018-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 532.7924170000479
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-19",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision019-distractor",
+                "odecision019-expected",
+                "opermission019-distractor",
+                "oevidence019-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 1036.8987499999348
+            }
+          ]
+        },
+        {
+          "id": "organization-decision-20",
+          "mode": "organization",
+          "category": "decision",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "odecision020-distractor",
+                "odecision020-expected",
+                "oevidence020-distractor",
+                "opermission020-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 651.5632500000065
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-1",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission001-distractor",
+                "opermission001-expected",
+                "opolicy001-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 555.2157080000034
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-2",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission002-distractor",
+                "opermission002-expected",
+                "opolicy002-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 532.9645840000594
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-3",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission003-distractor",
+                "opermission003-expected",
+                "opolicy003-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 526.1769169999752
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-4",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission004-distractor",
+                "opermission004-expected",
+                "opolicy004-distractor",
+                "oevidence004-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 594.6817909999518
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-5",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission005-distractor",
+                "opermission005-expected",
+                "opolicy005-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 640.9289580000332
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-6",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission006-distractor",
+                "opermission006-expected",
+                "opolicy006-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 979.4424170000711
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-7",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission007-distractor",
+                "opermission007-expected",
+                "opolicy007-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 698.9572090000147
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-8",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission008-distractor",
+                "opermission008-expected",
+                "opolicy008-distractor",
+                "oevidence008-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 671.4196250000969
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-9",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission009-distractor",
+                "opermission009-expected",
+                "opolicy009-distractor",
+                "oevidence009-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 683.3763749999925
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-10",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission010-distractor",
+                "opermission010-expected",
+                "opolicy010-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 678.9307920000283
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-11",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission011-distractor",
+                "opermission011-expected",
+                "opolicy011-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 616.0883339999709
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-12",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission012-distractor",
+                "opermission012-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 587.6366249999264
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-13",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission013-distractor",
+                "opermission013-expected",
+                "opolicy013-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 616.2023330000229
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-14",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission014-distractor",
+                "opermission014-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 691.7765000000363
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-15",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission015-distractor",
+                "opermission015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 660.2496660000179
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-16",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission016-distractor",
+                "opermission016-expected",
+                "opolicy016-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 664.060541999992
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-17",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission017-distractor",
+                "opermission017-expected",
+                "opolicy017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 708.0607919999165
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-18",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission018-distractor",
+                "opermission018-expected",
+                "opolicy018-distractor",
+                "oevidence018-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 675.2894160000142
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-19",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission019-distractor",
+                "opermission019-expected",
+                "opolicy019-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 626.9074169999221
+            }
+          ]
+        },
+        {
+          "id": "organization-permission-20",
+          "mode": "organization",
+          "category": "permission",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": true,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opermission020-distractor",
+                "opermission020-expected",
+                "opolicy020-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 600.4787919999799
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-1",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant001-distractor",
+                "ocross_tenant001-expected",
+                "oevidence001-distractor",
+                "oevidence001-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 490.547540999949
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-2",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant002-distractor",
+                "ocross_tenant002-expected",
+                "oevidence002-distractor",
+                "oevidence002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 483.3450000000885
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-3",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant003-distractor",
+                "ocross_tenant003-expected",
+                "oevidence003-distractor",
+                "oevidence003-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 458.5883749999339
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-4",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant004-distractor",
+                "ocross_tenant004-expected",
+                "oevidence004-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 477.37012500001583
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-5",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant005-distractor",
+                "ocross_tenant005-expected",
+                "oevidence005-distractor",
+                "oevidence005-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 470.04220899997745
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-6",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant006-distractor",
+                "ocross_tenant006-expected",
+                "oevidence006-distractor",
+                "oevidence006-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 579.2697499999776
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-7",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant007-distractor",
+                "ocross_tenant007-expected",
+                "oevidence007-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 604.2607500000158
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-8",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant008-distractor",
+                "ocross_tenant008-expected",
+                "oevidence008-distractor",
+                "oevidence008-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 498.9007500000298
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-9",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant009-distractor",
+                "ocross_tenant009-expected",
+                "oevidence009-distractor",
+                "oevidence009-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 602.7675840000156
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-10",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant010-distractor",
+                "ocross_tenant010-expected",
+                "oevidence010-distractor",
+                "oevidence010-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 488.3225000000093
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-11",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant011-distractor",
+                "ocross_tenant011-expected",
+                "oevidence011-distractor",
+                "oevidence011-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 474.6633750000037
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-12",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant012-distractor",
+                "ocross_tenant012-expected",
+                "oevidence012-distractor",
+                "oevidence012-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 459.2357909999555
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-13",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant013-distractor",
+                "ocross_tenant013-expected",
+                "oevidence013-distractor",
+                "oevidence013-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 419.00124999997206
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-14",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant014-distractor",
+                "ocross_tenant014-expected",
+                "oevidence014-distractor",
+                "oevidence014-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 372.74470900010783
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-15",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant015-distractor",
+                "ocross_tenant015-expected",
+                "oevidence015-distractor",
+                "oevidence015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 365.0904579999624
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-16",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant016-distractor",
+                "ocross_tenant016-expected",
+                "oevidence016-distractor",
+                "oevidence016-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 352.14279200008605
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-17",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant017-distractor",
+                "ocross_tenant017-expected",
+                "oevidence017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 331.8239169999724
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-18",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant018-distractor",
+                "ocross_tenant018-expected",
+                "oevidence018-distractor",
+                "oevidence018-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 336.12075000000186
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-19",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant019-distractor",
+                "ocross_tenant019-expected",
+                "oevidence019-distractor",
+                "oevidence019-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 347.5787090000231
+            }
+          ]
+        },
+        {
+          "id": "organization-cross_tenant-20",
+          "mode": "organization",
+          "category": "cross_tenant",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "ocross_tenant020-distractor",
+                "ocross_tenant020-expected",
+                "oevidence020-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 354.16529099992476
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-1",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence001-distractor",
+                "oevidence001-expected",
+                "ocross_tenant001-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 320.49025000003166
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-2",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence002-distractor",
+                "oevidence002-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 326.0509580000071
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-3",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence003-distractor",
+                "oevidence003-expected",
+                "ocross_tenant003-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 340.205333000049
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-4",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence004-distractor",
+                "oevidence004-expected",
+                "ocross_tenant004-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 341.2605419999454
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-5",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence005-distractor",
+                "oevidence005-expected",
+                "ocross_tenant005-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 345.8097500000149
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-6",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence006-distractor",
+                "oevidence006-expected",
+                "ocross_tenant006-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 360.68091599992476
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-7",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence007-distractor",
+                "oevidence007-expected",
+                "ocross_tenant007-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 345.8530830000527
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-8",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence008-distractor",
+                "oevidence008-expected",
+                "ocross_tenant008-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 345.7016660000663
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-9",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence009-distractor",
+                "oevidence009-expected",
+                "ocross_tenant009-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 325.6649589999579
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-10",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence010-distractor",
+                "oevidence010-expected",
+                "ocross_tenant010-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 337.83458399993833
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-11",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence011-distractor",
+                "oevidence011-expected",
+                "ocross_tenant011-distractor",
+                "opermission011-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 344.03645899996627
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-12",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence012-distractor",
+                "oevidence012-expected",
+                "ocross_tenant012-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 325.0050830000546
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-13",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence013-distractor",
+                "oevidence013-expected",
+                "ocross_tenant013-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 336.8592920000665
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-14",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence014-distractor",
+                "oevidence014-expected",
+                "ocross_tenant014-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 335.6473750000587
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-15",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence015-distractor",
+                "oevidence015-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 329.06483299995307
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-16",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence016-distractor",
+                "oevidence016-expected",
+                "ocross_tenant016-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 345.48937500000466
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-17",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence017-distractor",
+                "oevidence017-expected",
+                "ocross_tenant017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 342.08337500004563
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-18",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence018-distractor",
+                "oevidence018-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 338.5389580000192
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-19",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence019-distractor",
+                "oevidence019-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 326.86991700006183
+            }
+          ]
+        },
+        {
+          "id": "organization-evidence-20",
+          "mode": "organization",
+          "category": "evidence",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "oevidence020-distractor",
+                "oevidence020-expected"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 332.5210000000661
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-1",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy001-distractor",
+                "opolicy001-expected",
+                "opermission001-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 326.00874999992084
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-2",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy002-distractor",
+                "opolicy002-expected",
+                "opermission002-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 324.1298340000212
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-3",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy003-distractor",
+                "opolicy003-expected",
+                "opermission003-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 325.6250829999335
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-4",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy004-distractor",
+                "opolicy004-expected",
+                "opermission004-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 338.3682920000283
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-5",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy005-distractor",
+                "opolicy005-expected",
+                "opermission005-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 339.83595799992327
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-6",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy006-distractor",
+                "opolicy006-expected",
+                "opermission006-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 346.4362080000574
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-7",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy007-distractor",
+                "opolicy007-expected",
+                "opermission007-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 337.68499999993946
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-8",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy008-distractor",
+                "opolicy008-expected",
+                "opermission008-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 338.8095420000609
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-9",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy009-distractor",
+                "opolicy009-expected",
+                "opermission009-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 329.6297499999637
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-10",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy010-distractor",
+                "opolicy010-expected",
+                "opermission010-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 341.5817920000991
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-11",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy011-distractor",
+                "opolicy011-expected",
+                "opermission011-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 330.0090410000412
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-12",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy012-distractor",
+                "opolicy012-expected",
+                "opermission012-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 323.59375
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-13",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy013-distractor",
+                "opolicy013-expected",
+                "opermission013-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 537.328167000087
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-14",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy014-distractor",
+                "opolicy014-expected",
+                "opermission014-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 328.6526249999879
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-15",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy015-distractor",
+                "opolicy015-expected",
+                "opermission015-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 339.3171250000596
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-16",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy016-distractor",
+                "opolicy016-expected",
+                "opermission016-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 331.838708999916
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-17",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy017-distractor",
+                "opolicy017-expected",
+                "opermission017-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 331.8799580000341
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-18",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy018-distractor",
+                "opolicy018-expected",
+                "opermission018-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 336.4276250000112
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-19",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy019-distractor",
+                "opolicy019-expected",
+                "opermission019-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 323.5555419999873
+            }
+          ]
+        },
+        {
+          "id": "organization-policy-20",
+          "mode": "organization",
+          "category": "policy",
+          "dataset_family": "state_bench_style",
+          "attempts": [
+            {
+              "top1": false,
+              "recall_at_5": true,
+              "leaked": false,
+              "task_completed": false,
+              "provenance": true,
+              "ids": [
+                "opolicy020-distractor",
+                "opolicy020-expected",
+                "opermission020-distractor"
+              ],
+              "turns": 1,
+              "cost_usd": null,
+              "latency_ms": 349.6648330000462
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "ranking": {
+    "eligible": false,
+    "first_place_claim_allowed": false,
+    "required_adapters": [
+      "orgbrain-local",
+      "mem0",
+      "hindsight",
+      "mnemosyne"
+    ],
+    "claim_scope": "OrgBrain is the strict personal and organization leader in a same-harness comparison with Mem0, Hindsight, and Mnemosyne.",
+    "mode_wins": {},
+    "blockers": [
+      "missing adapter result: orgbrain-local",
+      "missing adapter result: mem0",
+      "missing adapter result: mnemosyne",
+      "hindsight personal scorecard is incomplete",
+      "hindsight organization scorecard is incomplete"
+    ]
+  }
+}

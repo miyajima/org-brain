@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "project": "org-brain",
+  "created_at": "2026-07-31T00:00:00+09:00",
+  "objective": "Complete hybrid_v4 and evaluate it reproducibly against the fixed ranked set Mem0, Hindsight, and Mnemosyne, with personal and organization claims kept separate.",
+  "scope": [
+    "hybrid_v4 projection and retrieval",
+    "SQLite sparse and segment retrieval",
+    "D1 and Vectorize projection",
+    "retrieveContext evidence bundle",
+    "Mem0, Hindsight, and Mnemosyne native benchmark bridges",
+    "benchmark runtime isolation and final-200 sealing",
+    "shadow rollout and rollback telemetry"
+  ],
+  "out_of_scope": [
+    "PostgreSQL support",
+    "universal first-place claims across every OSS memory system",
+    "fabricating or selecting an ONNX model before the specified evaluation",
+    "claiming benchmark leadership before audited payloads and competitors are run"
+  ],
+  "acceptance_source": "config/memory-leadership-v1.json"
+}

@@ -10,7 +10,11 @@ import {
   sendAgentMessage
 } from "./agent-message-service";
 import { appendAuditEvent, listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
-import { backfillV3RetrievalUnits, rebuildSemanticIndex } from "./retrieval-index-service";
+import {
+  backfillV3RetrievalUnits,
+  backfillV4RetrievalUnits,
+  rebuildSemanticIndex
+} from "./retrieval-index-service";
 import { getOperationsStatus } from "./operations-service";
 import { assertRequestRateLimit } from "./rate-limit-service";
 import { extractMemoryCandidates } from "./memory-extraction-service";
@@ -42,6 +46,7 @@ import {
   listMemoriesPage,
   refreshMemoryByRequest,
   reviseMemoryByRequest,
+  retrieveMemoryContext,
   searchMemories,
   suppressMemoryByRequest,
   upsertMemories
@@ -271,6 +276,22 @@ app.post("/v1/retrieval-index/v3/backfill", async (c) => {
   }>();
   const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
   return jsonOk(c, await backfillV3RetrievalUnits(c.env, {
+    tenantId,
+    projectId: body.project_id,
+    cursor: body.cursor,
+    limit: body.limit
+  }));
+});
+
+app.post("/v1/retrieval-index/v4/backfill", async (c) => {
+  const body = await c.req.json<{
+    tenant_id?: string;
+    project_id?: string | null;
+    cursor?: string | null;
+    limit?: number;
+  }>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await backfillV4RetrievalUnits(c.env, {
     tenantId,
     projectId: body.project_id,
     cursor: body.cursor,
@@ -563,6 +584,15 @@ app.post("/v1/memories/search", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
   const result = await searchMemories(c.env, body, { actorPrincipal: getApiPrincipal(c) });
+  return jsonOk(c, result);
+});
+
+app.post("/v1/memories/retrieve-context", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await retrieveMemoryContext(c.env, body, {
+    actorPrincipal: getApiPrincipal(c)
+  });
   return jsonOk(c, result);
 });
 

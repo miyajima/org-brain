@@ -3,6 +3,8 @@ import type { MemoryRecordV2, MemorySourceReference } from "./memory-store";
 
 export const RETRIEVAL_UNIT_EXTRACTOR = "deterministic-retrieval-units-v1";
 export const RETRIEVAL_UNIT_EXTRACTOR_VERSION = "1";
+export const RETRIEVAL_UNIT_EXTRACTOR_V4 = "deterministic-retrieval-units-v4";
+export const RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION = "4";
 
 export type RetrievalUnitType =
   | "session"
@@ -12,7 +14,13 @@ export type RetrievalUnitType =
   | "preference"
   | "event"
   | "quantity"
-  | "synopsis";
+  | "synopsis"
+  | "instruction"
+  | "atomic"
+  | "profile"
+  | "ledger"
+  | "timeline"
+  | "segment";
 
 export type RetrievalUnit = {
   id: string;
@@ -44,6 +52,11 @@ export type RetrievalProjectionJob = {
   requested_at: number;
 };
 
+export type RetrievalUnitV4 = RetrievalUnit & {
+  metadata_json: string;
+  segment_id: string | null;
+};
+
 type RetrievalUnitRecord = Pick<
   MemoryRecordV2,
   | "id"
@@ -56,7 +69,7 @@ type RetrievalUnitRecord = Pick<
   | "valid_from"
   | "valid_until"
   | "source_references"
->;
+> & Partial<Pick<MemoryRecordV2, "kind">>;
 
 const ROLE_LINE_RE = /^(user|assistant|system|tool)\s*:\s*/iu;
 const UPDATE_RE = /\b(?:now|currently|latest|recently|changed|switched|replaced|no longer|instead|updated|moved|started|stopped)\b|(?:現在|最近|変更|切り替え|更新|やめた|始めた)/iu;
@@ -65,6 +78,7 @@ const EVENT_RE = /\b(?:went|visited|attended|bought|sold|started|finished|comple
 const QUANTITY_RE = /(?:[$€£¥]\s?\d)|(?:\b\d+(?:\.\d+)?\s*(?:%|percent|minutes?|hours?|days?|weeks?|months?|years?|miles?|kilometers?|km|pages?|times?|people|items?|dollars?)\b)|(?:\d+\s*(?:分|時間|日|週間|か月|ヶ月|年|回|人|個|円))/iu;
 const DATE_RE = /\b(?:19|20)\d{2}\b|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|(?:月曜|火曜|水曜|木曜|金曜|土曜|日曜|\d{1,2}月\d{0,2}日?)/iu;
 const FACT_RE = /\b(?:am|is|are|was|were|have|has|had|use|uses|live|work|own|graduated|degree|brand|name|role)\b|(?:です|である|持って|使って|住んで|働いて|卒業|学位|名前|役職)/iu;
+const INSTRUCTION_RE = /\b(?:always|never|must|should|please|make sure|remember to|do not|don't|avoid)\b|(?:必ず|決して|してはいけない|してください|忘れず|避ける)/iu;
 const QUERY_STOP_WORDS = new Set([
   "about", "after", "again", "ago", "also", "am", "and", "another", "any", "are", "been", "before",
   "can", "could", "current", "currently", "did", "do", "does", "first", "for", "from",
@@ -204,11 +218,139 @@ export function retrievalUnitLexicalSpecificity(
 
 function classifyAtomicUnit(text: string): RetrievalUnitType | null {
   if (UPDATE_RE.test(text)) return "update";
+  if (INSTRUCTION_RE.test(text)) return "instruction";
   if (PREFERENCE_RE.test(text)) return "preference";
   if (EVENT_RE.test(text) || DATE_RE.test(text)) return "event";
   if (QUANTITY_RE.test(text)) return "quantity";
   if (FACT_RE.test(text)) return "fact";
   return null;
+}
+
+function unitTypeFromRecordKind(kind: string | undefined): RetrievalUnitType | null {
+  if (["constraint", "pitfall"].includes(kind ?? "")) return "instruction";
+  if (kind === "preference") return "preference";
+  if (["decision", "fact", "semantic", "org_knowledge"].includes(kind ?? "")) return "fact";
+  if (["episodic", "event"].includes(kind ?? "")) return "event";
+  if (kind === "update") return "update";
+  return null;
+}
+
+export async function buildRetrievalUnitsV4(
+  record: RetrievalUnitRecord,
+  options: {
+    structuredUnits?: Array<{
+      text: string;
+      speaker?: RetrievalUnit["speaker"];
+      metadata: Record<string, unknown>;
+      unit_type?: "atomic" | "profile" | "ledger" | "timeline";
+      event_at?: number | null;
+    }>;
+  } = {}
+): Promise<RetrievalUnitV4[]> {
+  const base = await buildRetrievalUnits(record, {
+    extractor: RETRIEVAL_UNIT_EXTRACTOR_V4,
+    extractorVersion: RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION,
+    extractionState: options.structuredUnits ? "ready" : "degraded",
+    degradedReason: options.structuredUnits ? null : "gemini_structured_extractor_not_configured"
+  });
+  const fallbackCandidates: NonNullable<typeof options.structuredUnits> = [];
+  const semanticUnits = base.filter((item) =>
+    !["session", "synopsis", "turn"].includes(item.unit_type)
+  );
+  const kindUnitType = unitTypeFromRecordKind(record.kind);
+  if (kindUnitType && !semanticUnits.some((unit) => unit.unit_type === kindUnitType)) {
+    semanticUnits.push({
+      ...base.find((unit) => unit.unit_type === "turn") ?? base[0],
+      unit_type: kindUnitType,
+      speaker: "unknown",
+      text: collapseWhitespace(record.content),
+      event_at: retrievalUnitEventAt(record)
+    });
+  }
+  for (const unit of semanticUnits) {
+      const metadata = {
+        subject: unit.speaker === "user" ? "user" : unit.speaker ?? "unknown",
+        predicate: "mentions",
+        object: unit.text,
+        polarity: /\b(?:not|never|avoid|dislike)\b|(?:ない|禁止|避ける)/iu.test(unit.text)
+          ? "negative"
+          : "positive",
+        domain: unit.unit_type,
+        normalized_at: unit.event_at
+      };
+      const atomic = {
+        text: unit.text,
+        speaker: unit.speaker,
+        event_at: unit.event_at,
+        unit_type: "atomic" as const,
+        metadata
+      };
+      fallbackCandidates.push(atomic);
+      if (unit.unit_type === "event") {
+        fallbackCandidates.push({ ...atomic, unit_type: "timeline" });
+        continue;
+      }
+      if (["preference", "instruction", "update", "fact"].includes(unit.unit_type)) {
+        fallbackCandidates.push({ ...atomic, unit_type: "profile" });
+        if (unit.unit_type === "update") {
+          fallbackCandidates.push({ ...atomic, unit_type: "ledger" });
+        }
+      }
+  }
+  const candidates = options.structuredUnits ?? fallbackCandidates;
+  const output: RetrievalUnitV4[] = [];
+  for (const candidate of candidates) {
+    const contentHash = await sha256(candidate.text);
+    const idHash = await sha256(
+      `${record.id}\0${candidate.unit_type ?? "atomic"}\0${output.length}\0${candidate.text}`
+    );
+    output.push({
+      id: `rv4_${idHash.slice(0, 27)}`,
+      memory_id: record.id,
+      tenant_id: record.tenant_id,
+      project_id: record.project_id,
+      unit_type: candidate.unit_type ?? "atomic",
+      speaker: candidate.speaker ?? null,
+      text: candidate.text.slice(0, 64 * 1024),
+      event_at: candidate.event_at ?? retrievalUnitEventAt(record),
+      valid_from: record.valid_from,
+      valid_until: record.valid_until,
+      source_ref_json: JSON.stringify(firstSourceReference(record)),
+      source_span_start: null,
+      source_span_end: null,
+      content_hash: contentHash,
+      metadata_json: JSON.stringify(candidate.metadata),
+      segment_id: null,
+      extractor: RETRIEVAL_UNIT_EXTRACTOR_V4,
+      extractor_version: RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION,
+      extraction_state: options.structuredUnits ? "ready" : "degraded",
+      degraded_reason: options.structuredUnits ? null : "gemini_structured_extractor_not_configured",
+      created_at: record.updated_at
+    });
+  }
+  const sessionText = collapseWhitespace(`${record.summary ?? ""}\n${record.content}`).slice(0, 64 * 1024);
+  if (sessionText) {
+    const contentHash = await sha256(sessionText);
+    const idHash = await sha256(`${record.id}\0segment\0${sessionText}`);
+    output.push({
+      ...base[0],
+      id: `rv4_${idHash.slice(0, 27)}`,
+      unit_type: "segment",
+      text: sessionText,
+      content_hash: contentHash,
+      metadata_json: JSON.stringify({
+        level: "record",
+        record_count: 1,
+        max_records: 32,
+        max_chars: 64 * 1024,
+        overlap_ratio: 0.25
+      }),
+      segment_id: `seg_${idHash.slice(0, 28)}`,
+      extractor: RETRIEVAL_UNIT_EXTRACTOR_V4,
+      extractor_version: RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION
+    });
+  }
+  return output;
 }
 
 function splitTurns(content: string): Array<{ speaker: RetrievalUnit["speaker"]; text: string }> {

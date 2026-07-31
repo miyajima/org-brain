@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
 export const RETRIEVAL_UNIT_EXTRACTOR = "deterministic-retrieval-units-v1";
+export const RETRIEVAL_UNIT_EXTRACTOR_V4 = "deterministic-retrieval-units-v4";
+export const RETRIEVAL_SEGMENT_MAX_RECORDS = 32;
+export const RETRIEVAL_SEGMENT_MAX_CHARS = 64 * 1024;
+export const RETRIEVAL_SEGMENT_OVERLAP_RATIO = 0.25;
 
 const ROLE_LINE_RE = /^(user|assistant|system|tool)\s*:\s*/iu;
 const UPDATE_RE = /\b(?:now|currently|latest|recently|changed|switched|replaced|no longer|instead|updated|moved|started|stopped)\b|(?:現在|最近|変更|切り替え|更新|やめた|始めた)/iu;
@@ -10,6 +14,9 @@ const EVENT_RE = /\b(?:went|visited|attended|bought|sold|started|finished|comple
 const QUANTITY_RE = /(?:[$€£¥]\s?\d)|(?:\b\d+(?:\.\d+)?\s*(?:%|percent|minutes?|hours?|days?|weeks?|months?|years?|miles?|kilometers?|km|pages?|times?|people|items?|dollars?)\b)|(?:\d+\s*(?:分|時間|日|週間|か月|ヶ月|年|回|人|個|円))/iu;
 const DATE_RE = /\b(?:19|20)\d{2}\b|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|(?:月曜|火曜|水曜|木曜|金曜|土曜|日曜|\d{1,2}月\d{0,2}日?)/iu;
 const FACT_RE = /\b(?:am|is|are|was|were|have|has|had|use|uses|live|work|own|graduated|degree|brand|name|role)\b|(?:です|である|持って|使って|住んで|働いて|卒業|学位|名前|役職)/iu;
+const NEGATION_RE = /\b(?:not|never|no longer|don't|doesn't|didn't|cannot|can't|avoid|dislike)\b|(?:ない|ません|禁止|避ける|嫌い)/iu;
+const POLICY_RE = /\b(?:policy|rule|must|required|prohibited|approved|authority)\b|(?:方針|規則|必須|禁止|承認|権限)/iu;
+const DATE_VALUE_RE = /\b((?:19|20)\d{2}(?:[-/]\d{1,2}(?:[-/]\d{1,2})?)?)\b/u;
 const QUERY_STOP_WORDS = new Set([
   "about", "after", "again", "ago", "also", "am", "and", "another", "any", "are", "been", "before",
   "can", "could", "current", "currently", "did", "do", "does", "first", "for", "from",
@@ -202,6 +209,65 @@ function classifyAtomicUnit(text) {
   return null;
 }
 
+function unitTypeFromRecordKind(kind) {
+  if (["constraint", "pitfall"].includes(kind)) return "instruction";
+  if (kind === "preference") return "preference";
+  if (["decision", "fact", "semantic", "org_knowledge"].includes(kind)) return "fact";
+  if (["episodic", "event"].includes(kind)) return "event";
+  if (kind === "update") return "update";
+  return null;
+}
+
+function inferDomain(text) {
+  if (POLICY_RE.test(text)) return "policy";
+  if (PREFERENCE_RE.test(text)) return "preference";
+  if (INSTRUCTION_RE.test(text)) return "instruction";
+  if (EVENT_RE.test(text) || DATE_RE.test(text)) return "event";
+  return "general";
+}
+
+function normalizedDate(text) {
+  const match = String(text).match(DATE_VALUE_RE);
+  if (!match) return null;
+  const parsed = Date.parse(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function atomicMetadata(text, speaker) {
+  const normalized = collapseWhitespace(text);
+  const copula = normalized.match(
+    /^(.{1,160}?)\s+(?:is|are|was|were|has|have|uses?|prefers?|likes?|wants?|must|should|started|stopped|changed to)\s+(.{1,320})$/iu
+  );
+  const japanese = copula ? null : normalized.match(/^(.{1,160}?)(?:は|が)(.{1,320}?)(?:です|である|になった|を使う|が好き)$/u);
+  const match = copula ?? japanese;
+  return {
+    subject: collapseWhitespace(match?.[1] ?? (speaker === "user" ? "user" : speaker ?? "unknown")),
+    predicate: copula
+      ? collapseWhitespace(normalized.slice(match[1].length, normalized.length - match[2].length))
+      : japanese
+        ? "states"
+        : "mentions",
+    object: collapseWhitespace(match?.[2] ?? normalized),
+    polarity: NEGATION_RE.test(normalized) ? "negative" : "positive",
+    domain: inferDomain(normalized),
+    normalized_at: normalizedDate(normalized)
+  };
+}
+
+function segmentText(text) {
+  const normalized = collapseWhitespace(text);
+  if (!normalized) return [];
+  if (normalized.length <= RETRIEVAL_SEGMENT_MAX_CHARS) return [normalized];
+  const overlap = Math.floor(RETRIEVAL_SEGMENT_MAX_CHARS * RETRIEVAL_SEGMENT_OVERLAP_RATIO);
+  const step = RETRIEVAL_SEGMENT_MAX_CHARS - overlap;
+  const segments = [];
+  for (let offset = 0; offset < normalized.length; offset += step) {
+    segments.push(normalized.slice(offset, offset + RETRIEVAL_SEGMENT_MAX_CHARS));
+    if (offset + RETRIEVAL_SEGMENT_MAX_CHARS >= normalized.length) break;
+  }
+  return segments;
+}
+
 function sourceReference(record) {
   return Array.isArray(record.source_references) && record.source_references.length > 0
     ? record.source_references[0]
@@ -271,6 +337,128 @@ export function buildRetrievalUnits(record) {
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * Additive v4 projection. It is deliberately deterministic and network-free;
+ * callers may replace the metadata with Gemini structured extraction during
+ * ingestion, but retrieval never invokes a generative model.
+ */
+export function buildRetrievalUnitsV4(record) {
+  const base = buildRetrievalUnits(record);
+  const units = [];
+  const append = (unitType, text, options = {}) => {
+    const normalized = clip(text, RETRIEVAL_SEGMENT_MAX_CHARS);
+    if (!normalized) return;
+    const index = units.length;
+    const eventAt = options.event_at ?? retrievalUnitEventAt(record);
+    units.push({
+      id: `rv4_${hash(`${record.id}\0${unitType}\0${index}\0${normalized}`).slice(0, 27)}`,
+      memory_id: record.id,
+      tenant_id: record.tenant_id,
+      project_id: record.project_id ?? null,
+      unit_type: unitType,
+      speaker: options.speaker ?? null,
+      text: normalized,
+      event_at: eventAt,
+      valid_from: record.valid_from ?? null,
+      valid_until: record.valid_until ?? null,
+      source_ref_json: JSON.stringify(sourceReference(record)),
+      source_span_start: options.source_span_start ?? null,
+      source_span_end: options.source_span_end ?? null,
+      content_hash: hash(normalized),
+      metadata_json: JSON.stringify(options.metadata ?? {}),
+      segment_id: options.segment_id ?? null,
+      extractor: RETRIEVAL_UNIT_EXTRACTOR_V4,
+      extractor_version: "4",
+      extraction_state: "degraded",
+      degraded_reason: "gemini_structured_extractor_not_configured",
+      created_at: record.updated_at ?? record.created_at ?? Date.now()
+    });
+  };
+
+  const semanticUnitTypes = ["fact", "update", "preference", "instruction", "event", "quantity"];
+  const semanticUnits = base.filter((unit) => semanticUnitTypes.includes(unit.unit_type));
+  const kindUnitType = unitTypeFromRecordKind(record.kind);
+  if (kindUnitType && !semanticUnits.some((unit) => unit.unit_type === kindUnitType)) {
+    semanticUnits.push({
+      ...base.find((unit) => unit.unit_type === "turn") ?? base[0],
+      unit_type: kindUnitType,
+      speaker: "unknown",
+      text: collapseWhitespace(record.content),
+      event_at: retrievalUnitEventAt(record)
+    });
+  }
+
+  for (const unit of semanticUnits) {
+    if (semanticUnitTypes.includes(unit.unit_type)) {
+      const atomic = atomicMetadata(unit.text, unit.speaker);
+      append("atomic", unit.text, {
+        speaker: unit.speaker,
+        event_at: atomic.normalized_at,
+        metadata: atomic
+      });
+      if (["preference", "instruction", "update", "fact"].includes(unit.unit_type)) {
+        append("profile", unit.text, {
+          speaker: unit.speaker,
+          event_at: unit.event_at,
+          metadata: {
+            facet_kind:
+              unit.unit_type === "instruction"
+                ? "instruction"
+                : unit.unit_type === "update"
+                  ? "current_state"
+                  : unit.unit_type,
+            state_key: `${atomic.domain}:${atomic.subject}:${atomic.predicate}`.toLowerCase(),
+            authority: POLICY_RE.test(unit.text) ? "policy" : "ordinary",
+            ...atomic
+          }
+        });
+      }
+      if (unit.unit_type === "update") {
+        append("ledger", unit.text, {
+          speaker: unit.speaker,
+          event_at: unit.event_at,
+          metadata: {
+            state_key: `${atomic.domain}:${atomic.subject}:${atomic.predicate}`.toLowerCase(),
+            operation: "supersedes",
+            supersedes_unit_id: null,
+            ...atomic
+          }
+        });
+      }
+      if (unit.unit_type === "event" || atomic.normalized_at !== null) {
+        append("timeline", unit.text, {
+          speaker: unit.speaker,
+          event_at: atomic.normalized_at,
+          metadata: {
+            relation: "event",
+            starts_at: atomic.normalized_at,
+            ends_at: null,
+            causes: [],
+            follows: [],
+            ...atomic
+          }
+        });
+      }
+    }
+  }
+
+  segmentText(`${record.summary ?? ""}\n${record.content}`).forEach((text, index) => {
+    const segmentId = `seg_${hash(`${record.id}\0${index}\0${text}`).slice(0, 28)}`;
+    append("segment", text, {
+      segment_id: segmentId,
+      metadata: {
+        level: "record",
+        record_count: 1,
+        overlap_ratio: RETRIEVAL_SEGMENT_OVERLAP_RATIO,
+        max_records: RETRIEVAL_SEGMENT_MAX_RECORDS,
+        max_chars: RETRIEVAL_SEGMENT_MAX_CHARS
+      }
+    });
+  });
+
+  return units;
 }
 
 export function analyzeRetrievalIntent(query) {

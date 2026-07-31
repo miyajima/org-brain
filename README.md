@@ -551,6 +551,16 @@ unopened LoCoMo 100-question evidence-session holdout scored 92/100 and was not
 used for post-result tuning. Cross-benchmark and same-harness competitor gates
 still apply.
 
+An additive `hybrid_v4` path now layers generic atomic/profile/state/timeline
+projections, bounded segment retrieval, a separate Vectorize namespace, and
+the public `MemoryStore.retrieveContext()` evidence-bundle contract over v3.
+Its implementation, degradation behavior, sealed-evaluation boundary, and
+remaining leadership gates are documented in
+[`docs/HYBRID_V4_IMPLEMENTATION.md`](docs/HYBRID_V4_IMPLEMENTATION.md).
+No overall-first-place claim is emitted until the audited 200-row payload,
+10M performance run, ONNX model selection, and every eligible same-harness
+competitor scorecard are complete.
+
 The fixed `competitive-memory-v1` suite adds 100 personal and 100 organization
 tasks covering coding, preferences, permissions, staleness, contradictions,
 decisions, evidence, policy, and cross-tenant isolation. Personal cases are
@@ -572,14 +582,14 @@ The benchmark workflow also downloads the upstream LongMemEval-S dataset and
 publishes all 500 deterministic retrieval/context item rows plus its summary as
 a separate CI artifact.
 
-Reference bridges for AgentMemory, GBrain, and Mem0 live under
+Ranked bridges for Mem0, Hindsight, and Mnemosyne live under
 `scripts/benchmark-bridges/`. The Mem0 bridge uses the actual OSS `Memory`
 implementation with embedded Qdrant and FastEmbed. It captures raw memories
 with `infer=False`, maps tenant IDs to Mem0 `user_id` filters, and deliberately
 does not synthesize record ACL behavior that the provider does not enforce.
-The GBrain bridge uses its PGLite import path and keyword search without adding
-tenant or ACL filters; it is a keyword-only result unless a separate fixed
-embedding configuration is explicitly reported.
+Hindsight uses its native retain/recall client with one bank per tenant;
+Mnemosyne uses its native SQLite `remember`/`recall` APIs with one database per
+tenant. None of the bridges synthesize record ACL behavior.
 
 ```bash
 pnpm benchmark:competitive -- --adapter orgbrain-local
@@ -616,23 +626,26 @@ The evidence file is keyed by adapter. Each component uses the same
 }
 ```
 
-Current OrgBrain local baseline on the development machine (2026-07-30):
+OrgBrain local development baselines on this machine:
 
 | Suite | Accuracy | R@5 | pass^5 | Avg context | p95 | Leaks | Provenance |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| competitive-memory-v1, 200 tasks | 94.5% | 100% | 94.5% | 366.86 tokens | 33.38 ms | 0 | 100% |
+| competitive-memory-v1, hybrid_v3, 2026-07-30 | 94.5% | 100% | 94.5% | 366.86 tokens | 33.38 ms | 0 | 100% |
+| competitive-memory-v1, hybrid_v4, 2026-07-31 | 72.5% | 80% | 72.5% | 1,137.4 tokens | 13.45 ms | 0 | 100% |
 | local-scale-v1, 100,000 memories | 100% retrieval | 100% | n/a | n/a | 20.82 ms | 0 | 100% indexed |
 
-These are OrgBrain baselines, not a first-place claim. Supermemory, GBrain,
-Cognee, Mem0, MemPalace, and AgentMemory results are only comparable when their
-bridge URLs are configured and all adapters run on the same model budget and hardware. CI
+These are OrgBrain baselines, not a first-place claim. Mem0, Hindsight, and
+Mnemosyne results are only comparable when their bridge URLs are configured
+and all four adapters run on the same model budget and hardware. CI
 uploads the complete settings and per-task JSON as artifacts. The JSON also
 contains the plan's personal and organization weighted scorecards. Any
 unmeasured dimension is `null`, the complete weighted score stays `null`, and
 ranking remains ineligible until every dimension and every same-harness
-competitor is measured. A first-place claim is emitted only when all seven
-adapters are complete, OrgBrain has a strict lead in both weighted scorecards,
+competitor is measured. A scoped first-place claim is emitted only when all
+four adapters are complete, OrgBrain has a strict lead in both weighted scorecards,
 and it does not trail any competitor in a critical dimension.
+The allowed wording is limited to the same-harness comparison with these three
+competitors; the harness never emits a universal all-OSS first-place claim.
 
 Token-only smoke:
 

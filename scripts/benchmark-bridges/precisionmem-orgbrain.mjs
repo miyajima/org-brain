@@ -124,15 +124,17 @@ export function createPrecisionMemOperations({ store, reset, minimumScore = 0.06
         ? Math.max(0, Math.min(50, requestedLimit))
         : 20;
       const results = query.trim() && limit > 0
-        ? await store.search({
+        ? (await store.retrieveContext({
           tenant_id: userId,
           project_id: scope,
           principal_id: `precisionmembench:${userId}`,
           query,
-          limit,
-          search_mode: "hybrid_v3",
+          limit: 50,
+          top_k: limit,
+          token_budget: 8_000,
+          search_mode: "hybrid_v4",
           minimum_total_score: minimumScore
-        })
+        })).results.slice(0, limit)
         : [];
       return {
         status: 200,

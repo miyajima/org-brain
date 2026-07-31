@@ -2,12 +2,60 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeRetrievalIntent,
   buildRetrievalUnits,
+  buildRetrievalUnitsV4,
   retrievalQueryTokens,
   retrievalSubjectQueryTokens,
   retrievalUnitLexicalSpecificity
 } from "../src/retrieval-units";
 
 describe("retrieval units", () => {
+  it("builds generic v4 profile, timeline, atomic, and segment channels", async () => {
+    const units = await buildRetrievalUnitsV4({
+      id: "memory-v4",
+      tenant_id: "tenant-1",
+      project_id: "project-1",
+      content: [
+        "user: I used to prefer coffee.",
+        "user: I now prefer jasmine tea.",
+        "system: Always use the approved release policy.",
+        "user: I attended the launch in 2025."
+      ].join("\n"),
+      summary: "Preference and policy changed",
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_100,
+      valid_from: null,
+      valid_until: null,
+      source_references: [{ type: "session", ref: "session-v4" }]
+    });
+    expect(units.map((unit) => unit.unit_type)).toEqual(expect.arrayContaining([
+      "atomic", "profile", "timeline", "segment"
+    ]));
+    expect(units.every((unit) => unit.extractor_version === "4")).toBe(true);
+    expect(units.every((unit) => JSON.parse(unit.metadata_json))).toBeTruthy();
+    expect(units.find((unit) => unit.unit_type === "segment")?.segment_id).toMatch(/^seg_/);
+  });
+
+  it("uses record kind as a deterministic fallback without inventing timeline events", async () => {
+    const units = await buildRetrievalUnitsV4({
+      id: "memory-kind-fallback",
+      tenant_id: "tenant-1",
+      project_id: "project-1",
+      kind: "constraint",
+      content: "release001 durable answer: run backend validation after migration",
+      summary: "Backend validation requirement",
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_100,
+      valid_from: null,
+      valid_until: null,
+      source_references: [{ type: "file", ref: "docs/release.md" }]
+    });
+    expect(units.map((unit) => unit.unit_type)).toEqual(expect.arrayContaining([
+      "atomic", "profile", "segment"
+    ]));
+    expect(units.some((unit) => unit.unit_type === "timeline")).toBe(false);
+    expect(units.find((unit) => unit.unit_type === "atomic")?.text).toContain("release001");
+  });
+
   it("builds session, turn, and generic atomic fallback units without query input", async () => {
     const units = await buildRetrievalUnits({
       id: "memory-1",

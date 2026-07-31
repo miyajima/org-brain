@@ -23,7 +23,7 @@ const TAG_PRIORITY_ORDER = ["policy", "diagnosis", "command-result", "workaround
 const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest"] as const;
 const LOW_SIGNAL_TITLES = new Set(["起動", "修正", "削除", "空け", "実装完了", "修正完了", "実行結果です", "変更しました", "1"]);
 
-export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3";
+export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3" | "hybrid_v4";
 export type MemorySearchKind = "memory" | "doc";
 export type MemorySearchStrategy =
   | "bm25_v1"
@@ -31,6 +31,7 @@ export type MemorySearchStrategy =
   | "hybrid_memory_docs_v1"
   | "hybrid_v2"
   | "hybrid_v3"
+  | "hybrid_v4"
   | "fallback_recent_v1";
 
 export type StoredMemory = {
@@ -741,7 +742,7 @@ export async function searchTenantRetrievalUnitsV3(
   const tenantId = options.tenantId;
   const projectId = options.projectId?.trim() || null;
   const q = collapseWhitespace(options.q);
-  const limit = Math.max(1, Math.min(20, options.limit ?? 5));
+  const limit = Math.max(1, Math.min(50, options.limit ?? 5));
   const intent = analyzeRetrievalIntent(q);
   const referenceAt = Date.now();
   const relativeWeekdayAgeMs = Number.isInteger(intent.relative_weekday)
@@ -1136,6 +1137,124 @@ export async function searchTenantRetrievalUnitsV3(
         parent_candidate_count: parentIds.length,
         projection_lag_ms: latestProjectionAt === null ? null : Math.max(0, Date.now() - latestProjectionAt),
         degraded_reasons: [...new Set(degradedReasons)]
+      }
+    }
+  };
+}
+
+/**
+ * Generic v4 fusion over the independent atomic/profile/timeline/segment
+ * projection. The v3 result set remains untouched and is used as one candidate
+ * channel, so callers can shadow v4 without changing v3 behavior.
+ */
+export async function searchTenantRetrievalUnitsV4(
+  db: D1Database,
+  options: MemorySearchOptions
+): Promise<MemorySearchResponse> {
+  const limit = Math.max(1, Math.min(50, options.limit ?? 5));
+  const base = await searchTenantRetrievalUnitsV3(db, {
+    ...options,
+    limit: 50,
+    semanticHits: undefined,
+    semanticProvider: null
+  });
+  const ftsQuery = buildMemoryFtsQuery(options.q);
+  const intent = analyzeRetrievalIntent(options.q);
+  const projectId = options.projectId?.trim() || null;
+  const rows = ftsQuery
+    ? await db.prepare(
+        `SELECT u.memory_id, u.unit_type,
+                bm25(memory_retrieval_units_v4_fts) AS raw_rank
+         FROM memory_retrieval_units_v4_fts
+         JOIN memory_retrieval_units_v4 u
+           ON u.id = memory_retrieval_units_v4_fts.unit_id
+          AND u.tenant_id = memory_retrieval_units_v4_fts.tenant_id
+         JOIN memories m
+           ON m.id = u.memory_id
+          AND m.tenant_id = u.tenant_id
+         WHERE memory_retrieval_units_v4_fts.tenant_id = ?
+           AND memory_retrieval_units_v4_fts.text MATCH ?
+           AND (? IS NULL OR u.project_id = ?)
+           AND ${searchableFilterSql("m")}
+         ORDER BY bm25(memory_retrieval_units_v4_fts), u.content_hash
+         LIMIT 200`
+      )
+        .bind(options.tenantId, ftsQuery, projectId, projectId)
+        .all<{ memory_id: string; unit_type: string; raw_rank: number }>()
+    : { results: [] as Array<{ memory_id: string; unit_type: string; raw_rank: number }> };
+  const scores = new Map<string, number>();
+  base.results.forEach((result, index) => scores.set(result.id, 1 / (60 + index + 1)));
+  const semanticHits = (options.semanticHits ?? []).slice(0, 50);
+  const semanticParents = semanticHits.length === 0
+    ? { results: [] as Array<{ id: string; memory_id: string }> }
+    : await db.prepare(
+        `SELECT id, memory_id
+         FROM memory_retrieval_units_v4
+         WHERE tenant_id = ? AND id IN (${semanticHits.map(() => "?").join(",")})`
+      ).bind(options.tenantId, ...semanticHits.map((hit) => hit.id))
+        .all<{ id: string; memory_id: string }>();
+  const semanticParentByUnit = new Map(
+    semanticParents.results.map((row) => [row.id, row.memory_id])
+  );
+  semanticHits.forEach((hit, index) => {
+    const memoryId = semanticParentByUnit.get(hit.id);
+    if (!memoryId) return;
+    scores.set(memoryId, (scores.get(memoryId) ?? 0) + 0.9 / (60 + index + 1));
+  });
+  const channelRanks = new Map<string, number>();
+  for (const row of rows.results) {
+    const key = `${row.unit_type}\0${row.memory_id}`;
+    if (channelRanks.has(key)) continue;
+    const rank = [...channelRanks.keys()].filter((candidate) =>
+      candidate.startsWith(`${row.unit_type}\0`)
+    ).length;
+    channelRanks.set(key, rank);
+    const profileIntent = intent.unit_types.some((type) =>
+      ["preference", "instruction", "update", "fact"].includes(type)
+    );
+    const temporalIntent = intent.temporal_direction !== null || intent.relative_age_ms !== null;
+    const weight =
+      row.unit_type === "profile" || row.unit_type === "ledger"
+        ? profileIntent ? 1.35 : 0.55
+        : row.unit_type === "timeline"
+          ? temporalIntent ? 1.35 : 0.5
+          : row.unit_type === "atomic"
+            ? 1.2
+            : 0.65;
+    scores.set(row.memory_id, (scores.get(row.memory_id) ?? 0) + weight / (60 + rank + 1));
+  }
+  const results = [...base.results]
+    .sort((left, right) =>
+      (scores.get(right.id) ?? 0) - (scores.get(left.id) ?? 0) ||
+      (right.score ?? 0) - (left.score ?? 0) ||
+      left.id.localeCompare(right.id)
+    )
+    .slice(0, limit)
+    .map((result) => ({ ...result, score: Number((scores.get(result.id) ?? 0).toFixed(6)) }));
+  const degradedReasons = [
+    ...(base.meta.retrieval?.degraded_reasons ?? []),
+    ...(rows.results.some((row) => row.unit_type === "segment")
+      ? []
+      : ["segment_candidates_unavailable"])
+  ];
+  return {
+    ...base,
+    search_mode: "hybrid_v4",
+    results,
+    meta: {
+      ...base.meta,
+      search_strategy: "hybrid_v4",
+      matched_count: scores.size,
+      returned_count: results.length,
+      top_result_ids: results.map((result) => result.id),
+      top_result_ranks: results.map((result) => result.score),
+      retrieval: {
+        ...base.meta.retrieval!,
+        degraded: degradedReasons.length > 0,
+        degraded_reasons: [...new Set(degradedReasons)],
+        parent_candidate_count: base.results.length,
+        semantic_candidate_count: semanticHits.length,
+        embedding_version: options.semanticProvider ?? null
       }
     }
   };

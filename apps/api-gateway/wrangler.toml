@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 HYBRID_V3_MODE = "shadow"
+HYBRID_V4_MODE = "shadow"
 
 [ai]
 binding = "AI"

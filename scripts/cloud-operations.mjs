@@ -193,9 +193,16 @@ async function inspectLocalConfig(root) {
   const migrationFiles = migrationsPresent
     ? (await readdir(migrationsPath)).filter((name) => /^\d{4}_.+\.sql$/u.test(name)).sort()
     : [];
+  const migrationNumbers = migrationFiles.map((name) => Number(name.slice(0, 4)));
+  const migrationsContiguous =
+    migrationNumbers.length > 0 &&
+    migrationNumbers.every((number, index) => number === index + 1);
   checks.push({
     id: "migrations",
-    ok: migrationsPresent && migrationFiles.at(-1)?.startsWith("0016_"),
+    ok:
+      migrationsPresent &&
+      migrationsContiguous &&
+      (migrationNumbers.at(-1) ?? 0) >= 17,
     value: migrationsPresent ? migrationFiles.at(-1) ?? "empty" : "missing"
   });
   const apiConfig = configText.get("apps/api-gateway/wrangler.toml") ?? "";

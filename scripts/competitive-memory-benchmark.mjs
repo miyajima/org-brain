@@ -5,6 +5,7 @@ import { cpus, freemem, platform, release, totalmem } from "node:os";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 import {
+  COMPETITIVE_RANKED_ADAPTERS,
   COMPETITIVE_ACCEPTANCE_TARGETS,
   buildCompetitiveTasks,
   evaluateCompetitiveRanking,
@@ -13,12 +14,15 @@ import {
 import { LocalMemoryStore } from "./lib/local-memory-store.mjs";
 
 const ADAPTER_ENV = {
-  supermemory: "SUPERMEMORY_BENCHMARK_URL",
-  gbrain: "GBRAIN_BENCHMARK_URL",
-  cognee: "COGNEE_BENCHMARK_URL",
   mem0: "MEM0_BENCHMARK_URL",
-  mempalace: "MEMPALACE_BENCHMARK_URL",
-  agentmemory: "AGENTMEMORY_BENCHMARK_URL"
+  hindsight: "HINDSIGHT_BENCHMARK_URL",
+  mnemosyne: "MNEMOSYNE_BENCHMARK_URL"
+};
+
+const ADAPTER_REVISIONS = {
+  mem0: "760dca6f391277d79c3c7d2096c1bf1d037526c3",
+  hindsight: "a90f9223765af3c8ad5692ce2b9fa22efbb656ba",
+  mnemosyne: "22c60e2af2335e05864dfc32b803d7bb6439ed62"
 };
 
 function parseArgs(argv) {
@@ -38,7 +42,7 @@ function parseArgs(argv) {
     if (arg === "--adapter" || arg.startsWith("--adapter=")) {
       const value = arg.includes("=") ? arg.split("=", 2)[1] : argv[++index];
       options.adapters = value === "all"
-        ? ["orgbrain-local", ...Object.keys(ADAPTER_ENV)]
+        ? [...COMPETITIVE_RANKED_ADAPTERS]
         : value.split(",").map((item) => item.trim()).filter(Boolean);
     } else if (arg === "--output" || arg.startsWith("--output=")) {
       options.output = resolve(arg.includes("=") ? arg.split("=", 2)[1] : argv[++index]);
@@ -60,7 +64,7 @@ function parseArgs(argv) {
       console.log(`Usage: node scripts/competitive-memory-benchmark.mjs [options]
 
 Options:
-  --adapter orgbrain-local|supermemory|gbrain|cognee|mem0|mempalace|agentmemory|all
+  --adapter orgbrain-local|mem0|hindsight|mnemosyne|all
   --output <path>   Raw settings and results JSON
   --db <path>       Isolated OrgBrain local benchmark database
   --repeat <n>      Attempts used for pass^5 (default: 5)
@@ -100,6 +104,11 @@ class OrgBrainLocalAdapter {
         DELETE FROM memories_fts;
         DELETE FROM memory_retrieval_units_fts;
         DELETE FROM memory_retrieval_units;
+        DELETE FROM memory_retrieval_units_v4_fts;
+        DELETE FROM memory_retrieval_units_v4;
+        DELETE FROM memory_retrieval_unit_features_v4;
+        DELETE FROM memory_retrieval_unit_feature_stats_v4;
+        DELETE FROM memory_retrieval_unit_embeddings_v4;
         DELETE FROM memory_embedding_features;
         DELETE FROM memory_embedding_feature_stats;
         DELETE FROM memory_embeddings;
@@ -118,7 +127,12 @@ class OrgBrainLocalAdapter {
   }
 
   async search(query) {
-    return this.store.search(query);
+    return this.store.retrieveContext({
+      ...query,
+      search_mode: "hybrid_v4",
+      top_k: 5,
+      token_budget: 8_000
+    });
   }
 }
 
@@ -203,6 +217,13 @@ async function main() {
   const ranking = evaluateCompetitiveRanking(results, unavailable, harness);
   const report = {
     benchmark: "competitive-memory-v1",
+    comparison_scope: {
+      ranked_adapters: COMPETITIVE_RANKED_ADAPTERS,
+      adapter_revisions: ADAPTER_REVISIONS,
+      revision_manifest: "config/competitive-memory-revisions-2026-07-31.json",
+      claim: "same-harness leader among Mem0, Hindsight, and Mnemosyne",
+      universal_oss_first_place_claim_allowed: false
+    },
     generated_at: new Date().toISOString(),
     acceptance_targets: COMPETITIVE_ACCEPTANCE_TARGETS,
     harness,

@@ -43,13 +43,16 @@ test("BEAM runtime keeps scorer labels out of capture and search", async () => {
     async capture(input) {
       captures.push(input);
     },
-    async search(input) {
+    async retrieveContext(input) {
       searchInput = input;
-      return [{
-        memory: {
-          source_references: [{ type: "beam-message", ref: "10" }]
-        }
-      }];
+      return {
+        results: [{
+          memory: {
+            source_references: [{ type: "beam-message", ref: "10" }]
+          }
+        }],
+        evidence_bundle: { estimated_tokens: 10, abstention_recommended: false }
+      };
     }
   };
   await seedBeamChat({
@@ -66,7 +69,7 @@ test("BEAM runtime keeps scorer labels out of capture and search", async () => {
   }, { store, topK: 5 });
   assert.deepEqual(result.message_ids, ["10"]);
   assert.equal(searchInput.query, "What was slow?");
-  assert.equal(searchInput.search_mode, "hybrid_v3");
+  assert.equal(searchInput.search_mode, "hybrid_v4");
   for (const payload of [...captures, searchInput]) {
     assert.equal("evaluation_id" in payload, false);
     assert.equal("expected_message_ids" in payload, false);

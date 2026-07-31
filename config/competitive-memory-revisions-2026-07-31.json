@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "resolved_at": "2026-07-31T17:52:00+09:00",
+  "policy": {
+    "source": "official public GitHub repository head",
+    "eligibility": "A resolved revision is necessary but not sufficient. Ranking eligibility requires a successful same-harness run with no excluded failures.",
+    "ambiguous_names": {
+      "agentmemory": "JordanMcCann/agentmemory is selected because it publishes a memory-benchmark implementation; the similarly named rohitg00/agentmemory is not silently substituted.",
+      "memori": "MemoriLabs/Memori is the current canonical repository; historical GibsonAI URLs redirect to it."
+    }
+  },
+  "competitors": [
+    {
+      "id": "mem0",
+      "ranking_status": "ranked",
+      "repository": "https://github.com/mem0ai/mem0",
+      "branch": "main",
+      "revision": "760dca6f391277d79c3c7d2096c1bf1d037526c3"
+    },
+    {
+      "id": "hindsight",
+      "ranking_status": "ranked",
+      "repository": "https://github.com/vectorize-io/hindsight",
+      "benchmark_repository": "https://github.com/vectorize-io/hindsight-benchmarks",
+      "branch": "main",
+      "revision": "a90f9223765af3c8ad5692ce2b9fa22efbb656ba"
+    },
+    {
+      "id": "mnemosyne",
+      "ranking_status": "ranked",
+      "repository": "https://github.com/mnemosyne-oss/mnemosyne",
+      "branch": "main",
+      "revision": "22c60e2af2335e05864dfc32b803d7bb6439ed62"
+    },
+    {
+      "id": "mempalace",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/MemPalace/mempalace",
+      "branch": "develop",
+      "revision": "aa89bd82272f55381206c83b6f306e79351824eb"
+    },
+    {
+      "id": "cognee",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/topoteretes/cognee",
+      "branch": "main",
+      "revision": "6d550845383111b2e5c316f99cfe7c6448fb1e51"
+    },
+    {
+      "id": "supermemory",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/supermemoryai/supermemory",
+      "branch": "main",
+      "revision": "e8ed80f76895da63870a4d35b4403b0df23b2257"
+    },
+    {
+      "id": "gbrain",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/garrytan/gbrain",
+      "branch": "master",
+      "revision": "c6dc0adf26a2d20df1147d2ec87c8922ca86d410"
+    },
+    {
+      "id": "agentmemory",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/JordanMcCann/agentmemory",
+      "branch": "main",
+      "revision": "3aa3b8389896f81dd813fdf9176ef3ca122d809e"
+    },
+    {
+      "id": "total-agent-memory",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/vbcherepanov/total-agent-memory",
+      "branch": "main",
+      "revision": "616d9a6f8b507c16b4cdfef4e823af59d949cc09"
+    },
+    {
+      "id": "memori",
+      "ranking_status": "reference_only",
+      "repository": "https://github.com/MemoriLabs/Memori",
+      "branch": "main",
+      "revision": "538b61f245295aa1a43df8033879f8293627f74d"
+    }
+  ]
+}

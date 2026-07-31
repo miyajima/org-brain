@@ -203,18 +203,22 @@ export async function runProductRetrieval(runtimeInput, options = {}) {
     });
   }
   const startedAt = performance.now();
-  const results = await store.search({
+  const context = await store.retrieveContext({
     tenant_id: runtimeInput.tenant_id,
     project_id: "product-retrieval-evaluation",
     query: runtimeInput.question,
-    limit: options.topK ?? 5,
+    limit: 50,
+    top_k: options.topK ?? 5,
+    token_budget: 8_000,
     principal_id: principalId,
-    search_mode: "hybrid_v3",
+    search_mode: "hybrid_v4",
     at: parseTimestamp(runtimeInput.question_date, Date.now())
   });
   return {
     latency_ms: performance.now() - startedAt,
-    source_ids: results.flatMap((result) =>
+    evidence_tokens: context.evidence_bundle.estimated_tokens,
+    abstention_recommended: context.evidence_bundle.abstention_recommended,
+    source_ids: context.results.slice(0, options.topK ?? 5).flatMap((result) =>
       result.memory.source_references
         .filter((reference) => reference.type === "session")
         .map((reference) => reference.ref)
@@ -470,7 +474,8 @@ async function main() {
     output,
     summary_output: summaryOutput,
     runner: {
-      search_mode: "hybrid_v3",
+      search_mode: "hybrid_v4",
+      retrieval_contract: "MemoryStore.retrieveContext",
       top_k: options.topK,
       concurrency: options.concurrency,
       resume: options.resume

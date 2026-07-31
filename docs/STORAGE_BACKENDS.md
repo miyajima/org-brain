@@ -6,8 +6,8 @@ OrgBrain keeps two supported source-of-truth modes:
 
 | Use case | Authoritative store | Retrieval projections |
 | --- | --- | --- |
-| Private local use | SQLite | SQLite FTS and rebuildable local sparse units |
-| Shared/self-hosted use | Cloudflare D1 | D1 FTS plus optional Vectorize units |
+| Private local use | SQLite | SQLite FTS and rebuildable v3/v4 local units |
+| Shared/self-hosted use | Cloudflare D1 | D1 FTS plus versioned Vectorize namespaces |
 
 SQLite remains the zero-service local default. D1 remains the shared Cloudflare
 default because it keeps deployment, tenancy, queues, Workers, and operational

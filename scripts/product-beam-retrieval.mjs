@@ -182,17 +182,21 @@ export async function seedBeamChat(runtimeInput, { store }) {
 export async function runBeamRetrieval(runtimeInput, { store, topK = 5 }) {
   if (!store) throw new Error("runBeamRetrieval requires a MemoryStore");
   const startedAt = performance.now();
-  const results = await store.search({
+  const context = await store.retrieveContext({
     tenant_id: runtimeInput.tenant_id,
     project_id: "beam-retrieval",
     query: runtimeInput.question,
-    limit: topK,
+    limit: 50,
+    top_k: topK,
+    token_budget: 8_000,
     principal_id: "beam-retrieval-reader",
-    search_mode: "hybrid_v3"
+    search_mode: "hybrid_v4"
   });
   return {
     latency_ms: performance.now() - startedAt,
-    message_ids: [...new Set(results.flatMap((result) =>
+    evidence_tokens: context.evidence_bundle.estimated_tokens,
+    abstention_recommended: context.evidence_bundle.abstention_recommended,
+    message_ids: [...new Set(context.results.slice(0, topK).flatMap((result) =>
       result.memory.source_references
         .filter((reference) => reference.type === "beam-message")
         .map((reference) => String(reference.ref))
@@ -428,7 +432,8 @@ async function main() {
       selectedQuestions.map(({ question }) => question.evaluation_id).join("\n")
     ),
     runner: {
-      search_mode: "hybrid_v3",
+      search_mode: "hybrid_v4",
+      retrieval_contract: "MemoryStore.retrieveContext",
       top_k: options.topK,
       concurrency: options.concurrency,
       resume: options.resume

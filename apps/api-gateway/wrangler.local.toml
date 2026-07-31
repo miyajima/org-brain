@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-03-03"
 compatibility_flags = ["nodejs_compat"]
 
+[vars]
+HYBRID_V4_MODE = "shadow"
+
 # Optional real semantic retrieval:
 # [ai]
 # binding = "AI"

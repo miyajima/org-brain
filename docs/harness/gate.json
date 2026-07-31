@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "evaluated_at": "2026-07-31T20:29:00+09:00",
+  "implementation_gate": "pass",
+  "leadership_gate": "blocked",
+  "evidence": {
+    "tests": {
+      "command": "pnpm test",
+      "status": "pass",
+      "counts": {
+        "node": "63/63",
+        "scripts_vitest": "87/87",
+        "shared": "23/23",
+        "api_gateway": "66/66"
+      }
+    },
+    "typecheck": {
+      "command": "pnpm -r --if-present typecheck",
+      "status": "pass"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "pass"
+    },
+    "build": {
+      "command": "pnpm build",
+      "status": "pass",
+      "mode": "Cloudflare dry run"
+    },
+    "scale_smoke": {
+      "records": 1000,
+      "queries": 30,
+      "status": "pass",
+      "cold_p95_ms": 42.61,
+      "warm_p95_ms": 35.6,
+      "artifact": "artifacts/benchmarks/2026-07-31/orgbrain-hybrid-v4-scale-1000.json"
+    },
+    "reduced_competitor_evaluation": {
+      "status": "orgbrain_local_gate_pass_competitor_gate_incomplete",
+      "ranked_competitors": ["mem0", "hindsight", "mnemosyne"],
+      "orgbrain_accuracy": 100,
+      "orgbrain_pass_5": 100,
+      "orgbrain_recall_at_5": 100,
+      "orgbrain_personal_accuracy": 100,
+      "orgbrain_organization_accuracy": 100,
+      "best_competitor_accuracy": 80,
+      "best_competitor": "mem0",
+      "hindsight_readiness_repeat": 1,
+      "orgbrain_search_p95_ms": 13.39,
+      "orgbrain_average_context_tokens": 1158.33,
+      "failed_rows": 0,
+      "artifact": "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-orgbrain-v4-fixed-repeat5.json"
+    }
+  },
+  "blocked_acceptance": [
+    "LongMemEval five-run gate",
+    "new audited and sealed 200 five-run gate",
+    "BEAM 500K/1M/10M same-harness gate",
+    "LoCoMo and PrecisionMemBench gates",
+    "competitive-memory-v1 strict lead over Mem0, Hindsight, and Mnemosyne",
+    "10M p95 and memory regression",
+    "production shadow and staged rollout"
+  ]
+}

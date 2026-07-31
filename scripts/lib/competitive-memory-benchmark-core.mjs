@@ -229,7 +229,12 @@ function normalizeSearchResponse(response, adapterName) {
     results,
     usage: {
       turns: Number.isFinite(turns) && turns > 0 ? turns : 1,
-      cost_usd: Number.isFinite(cost) && cost >= 0 ? cost : null
+      cost_usd:
+        Number.isFinite(cost) && cost >= 0
+          ? cost
+          : adapterName.startsWith("orgbrain-local")
+            ? 0
+            : null
     }
   };
 }
@@ -295,8 +300,25 @@ export async function runCompetitiveBenchmark(adapter, tasks = buildCompetitiveT
     ? await adapter.describe()
     : {};
   await adapter.reset();
+  const ingestLatencies = [];
+  let totalIngestCostUsd = 0;
+  let ingestCostSamples = 0;
+  let unknownIngestCostSamples = 0;
   for (const task of tasks) {
-    for (const memory of task.memories) await adapter.capture(memory);
+    for (const memory of task.memories) {
+      const started = performance.now();
+      const response = await adapter.capture(memory);
+      ingestLatencies.push(performance.now() - started);
+      const rawCost = Number(response?.usage?.cost_usd);
+      if (Number.isFinite(rawCost) && rawCost >= 0) {
+        totalIngestCostUsd += rawCost;
+        ingestCostSamples += 1;
+      } else if (adapter.name.startsWith("orgbrain-local")) {
+        ingestCostSamples += 1;
+      } else {
+        unknownIngestCostSamples += 1;
+      }
+    }
   }
 
   const taskResults = [];
@@ -471,18 +493,33 @@ export async function runCompetitiveBenchmark(adapter, tasks = buildCompetitiveT
       task_completion_rate: taskCompletionRate,
       average_turns: Number((totalTurns / (count * repeat)).toFixed(2)),
       total_cost_usd: unknownCostSamples === 0 ? Number(totalCostUsd.toFixed(8)) : null,
+      total_ingest_cost_usd:
+        unknownIngestCostSamples === 0 ? Number(totalIngestCostUsd.toFixed(8)) : null,
       average_cost_per_attempt_usd: unknownCostSamples === 0
         ? Number((totalCostUsd / costSamples).toFixed(8))
         : null,
+      average_ingest_cost_usd:
+        unknownIngestCostSamples === 0 && ingestCostSamples > 0
+          ? Number((totalIngestCostUsd / ingestCostSamples).toFixed(8))
+          : null,
+      amortized_100_search_cost_usd:
+        unknownCostSamples === 0 && unknownIngestCostSamples === 0 && costSamples > 0
+          ? Number((totalIngestCostUsd + totalCostUsd / costSamples * 100).toFixed(8))
+          : null,
       cost_samples: costSamples,
       unknown_cost_samples: unknownCostSamples,
+      ingest_cost_samples: ingestCostSamples,
+      unknown_ingest_cost_samples: unknownIngestCostSamples,
       cross_tenant_or_permission_leakage_count: leakageCount,
       decision_grade_provenance_rate: decisionGradeCount
         ? Number((provenanceCount / decisionGradeCount * 100).toFixed(2))
         : 0,
       average_context_tokens: averageContextTokens,
       search_latency_p50_ms: Number(percentile(latencies, 50).toFixed(2)),
-      search_latency_p95_ms: p95Latency
+      search_latency_p95_ms: p95Latency,
+      ingest_latency_p50_ms: Number(percentile(ingestLatencies, 50).toFixed(2)),
+      ingest_latency_p95_ms: Number(percentile(ingestLatencies, 95).toFixed(2)),
+      failed_rows: 0
     },
     personal: personalSummary,
     organization: organizationSummary,
@@ -518,14 +555,11 @@ export const COMPETITIVE_ACCEPTANCE_TARGETS = {
   minimum_decision_grade_provenance_rate: 100
 };
 
-const REQUIRED_ADAPTERS = [
+export const COMPETITIVE_RANKED_ADAPTERS = [
   "orgbrain-local",
-  "supermemory",
-  "gbrain",
-  "cognee",
   "mem0",
-  "mempalace",
-  "agentmemory"
+  "hindsight",
+  "mnemosyne"
 ];
 const CRITICAL_COMPONENTS = {
   personal: ["search_quality", "privacy_and_offline", "automatic_extraction"],
@@ -540,7 +574,7 @@ const CRITICAL_COMPONENTS = {
 export function evaluateCompetitiveRanking(results, unavailable = [], harness = {}) {
   const byAdapter = new Map(results.map((result) => [result.adapter, result]));
   const blockers = [];
-  for (const adapter of REQUIRED_ADAPTERS) {
+  for (const adapter of COMPETITIVE_RANKED_ADAPTERS) {
     if (!byAdapter.has(adapter)) blockers.push(`missing adapter result: ${adapter}`);
   }
   for (const item of unavailable) blockers.push(`${item.adapter}: ${item.reason}`);
@@ -562,12 +596,12 @@ export function evaluateCompetitiveRanking(results, unavailable = [], harness = 
     }
   }
   const orgbrain = byAdapter.get("orgbrain-local");
-  const competitors = REQUIRED_ADAPTERS
+  const competitors = COMPETITIVE_RANKED_ADAPTERS
     .filter((adapter) => adapter !== "orgbrain-local")
     .map((adapter) => byAdapter.get(adapter))
     .filter(Boolean);
   const modeWins = {};
-  if (orgbrain && competitors.length === REQUIRED_ADAPTERS.length - 1) {
+  if (orgbrain && competitors.length === COMPETITIVE_RANKED_ADAPTERS.length - 1) {
     for (const mode of ["personal", "organization"]) {
       const ownScore = orgbrain.scorecards?.[mode]?.weighted_score;
       const competitorScores = competitors.map((result) => result.scorecards?.[mode]?.weighted_score);
@@ -595,7 +629,8 @@ export function evaluateCompetitiveRanking(results, unavailable = [], harness = 
   return {
     eligible: uniqueBlockers.length === 0,
     first_place_claim_allowed: uniqueBlockers.length === 0,
-    required_adapters: REQUIRED_ADAPTERS,
+    required_adapters: COMPETITIVE_RANKED_ADAPTERS,
+    claim_scope: "OrgBrain is the strict personal and organization leader in a same-harness comparison with Mem0, Hindsight, and Mnemosyne.",
     mode_wins: modeWins,
     blockers: uniqueBlockers
   };

@@ -127,16 +127,19 @@ test("ranking requires every configured complete same-harness report and a stric
   });
   const results = [
     makeResult("orgbrain-local", 95),
-    makeResult("supermemory", 90),
-    makeResult("gbrain", 89),
-    makeResult("cognee", 88),
-    makeResult("mem0", 87),
-    makeResult("mempalace", 86),
-    makeResult("agentmemory", 85)
+    makeResult("mem0", 90),
+    makeResult("hindsight", 89),
+    makeResult("mnemosyne", 88)
   ];
   const ranking = evaluateCompetitiveRanking(results, [], harness);
   assert.equal(ranking.first_place_claim_allowed, true);
   assert.deepEqual(ranking.blockers, []);
+  assert.deepEqual(ranking.required_adapters, [
+    "orgbrain-local",
+    "mem0",
+    "hindsight",
+    "mnemosyne"
+  ]);
 
   const incomplete = evaluateCompetitiveRanking(
     results.filter((result) => result.adapter !== "mem0"),

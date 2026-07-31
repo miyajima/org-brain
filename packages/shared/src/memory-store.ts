@@ -5,7 +5,7 @@ import type {
   MemoryScopeType
 } from "./memory-lifecycle-types";
 
-export const MEMORY_SCHEMA_VERSION = 16;
+export const MEMORY_SCHEMA_VERSION = 17;
 
 export type MemorySourceReference = {
   type: string;
@@ -115,7 +115,7 @@ export type MemorySearchInput = {
   minimum_total_score?: number | null;
   include_suppressed?: boolean;
   principal_id?: string | null;
-  search_mode?: "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3";
+  search_mode?: "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3" | "hybrid_v4";
   at?: number;
 };
 
@@ -130,6 +130,10 @@ export type MemoryVerification = {
   retrieval_unit_fts_count?: number;
   retrieval_unit_embedding_count?: number;
   retrieval_unit_digest?: string;
+  retrieval_unit_v4_count?: number;
+  retrieval_unit_v4_fts_count?: number;
+  retrieval_unit_v4_embedding_count?: number;
+  retrieval_unit_v4_digest?: string;
   errors: string[];
 };
 
@@ -157,8 +161,44 @@ export interface MemoryStore {
   ): Promise<MemoryMutationResult>;
   get(tenantId: string, memoryId: string): Promise<MemoryRecordV2 | null>;
   search(input: MemorySearchInput): Promise<MemorySearchResultV2[]>;
+  retrieveContext(input: MemoryRetrieveContextInput): Promise<MemoryRetrieveContextResult>;
   versions(tenantId: string, memoryId: string): Promise<MemoryRecordV2[]>;
   export(tenantId: string, projectId?: string | null): AsyncIterable<MemoryRecordV2>;
   rebuildIndex(): Promise<void>;
   verify(): Promise<MemoryVerification>;
 }
+
+export type MemoryRetrieveContextInput = MemorySearchInput & {
+  top_k?: number;
+  token_budget?: number;
+};
+
+export type MemoryEvidenceBundleItem = {
+  memory_id: string;
+  text: string;
+  speaker: string | null;
+  session_date: number | null;
+  source_reference: MemorySourceReference | null;
+  source_span: { start: number | null; end: number | null };
+  score: number;
+  extraction_state: string;
+};
+
+export type MemoryEvidenceBundle = {
+  query_at: number;
+  token_budget: number;
+  estimated_tokens: number;
+  answer_template: "profile" | "timeline" | "multi_session" | "abstention" | "evidence";
+  evidence: MemoryEvidenceBundleItem[];
+  current_state: Array<Record<string, unknown>>;
+  timeline: Array<Record<string, unknown>>;
+  conflicts: Array<{ memory_id: string; conflict: string }>;
+  missing_evidence: string[];
+  abstention_recommended: boolean;
+  degraded_reasons: string[];
+};
+
+export type MemoryRetrieveContextResult = {
+  results: MemorySearchResultV2[];
+  evidence_bundle: MemoryEvidenceBundle;
+};

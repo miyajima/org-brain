@@ -29,13 +29,16 @@ test("runLocomoRetrieval does not pass evaluation labels into capture or search"
     async capture(input) {
       captured.push(input);
     },
-    async search(input) {
+    async retrieveContext(input) {
       searchInput = input;
-      return [{
-        memory: {
-          source_references: [{ type: "session", ref: "session_1" }]
-        }
-      }];
+      return {
+        results: [{
+          memory: {
+            source_references: [{ type: "session", ref: "session_1" }]
+          }
+        }],
+        evidence_bundle: { estimated_tokens: 10 }
+      };
     }
   };
   const result = await runLocomoRetrieval({

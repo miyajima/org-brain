@@ -38,8 +38,25 @@ const TOOL_DEFINITIONS = [
         principal_id: { type: ["string", "null"] },
         search_mode: {
           type: "string",
-          enum: ["memories", "hybrid_v3"]
+          enum: ["memories", "hybrid_v3", "hybrid_v4"]
         }
+      }
+    }
+  },
+  {
+    name: "orgbrain_memory_retrieve_context",
+    description: "Retrieve a bounded evidence bundle from the local OrgBrain store.",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string" },
+        tenant_id: { type: "string" },
+        project_id: { type: ["string", "null"] },
+        top_k: { type: "integer", minimum: 1, maximum: 50 },
+        token_budget: { type: "integer", minimum: 512, maximum: 16000 },
+        principal_id: { type: ["string", "null"] },
+        search_mode: { type: "string", enum: ["hybrid_v3", "hybrid_v4"] }
       }
     }
   },
@@ -132,6 +149,17 @@ async function callTool(store, name, input) {
       minimum_total_score: input.minimum_total_score ?? null,
       principal_id: input.principal_id || null,
       search_mode: input.search_mode || "memories"
+    });
+  }
+  if (name === "orgbrain_memory_retrieve_context") {
+    return store.retrieveContext({
+      tenant_id: tenantId,
+      project_id: input.project_id || null,
+      query: input.query,
+      top_k: input.top_k || 5,
+      token_budget: input.token_budget || 8_000,
+      principal_id: input.principal_id || null,
+      search_mode: input.search_mode || "hybrid_v4"
     });
   }
   if (name === "orgbrain_memory_revise") {

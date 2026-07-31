@@ -1,4 +1,4 @@
-import type { RetrievalProjectionJob } from "@org-brain/shared";
+import { buildRetrievalUnitsV4, type RetrievalProjectionJob } from "@org-brain/shared";
 
 const EXTRACTION_MODEL = "gemini-3.5-flash-lite";
 const EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b" as const;
@@ -31,6 +31,11 @@ type ExtractedAtomicUnit = {
   text: string;
   speaker?: string | null;
   event_at?: string | null;
+  subject?: string;
+  predicate?: string;
+  object?: string;
+  polarity?: "positive" | "negative";
+  domain?: string;
 };
 
 type ExtractionPayload = {
@@ -65,7 +70,12 @@ function parseExtractionResponse(value: unknown): ExtractionPayload {
           type: atom.type,
           text: atom.text.trim().slice(0, 8_000),
           speaker: typeof atom.speaker === "string" ? atom.speaker : null,
-          event_at: typeof atom.event_at === "string" ? atom.event_at : null
+          event_at: typeof atom.event_at === "string" ? atom.event_at : null,
+          subject: typeof atom.subject === "string" ? atom.subject : "unknown",
+          predicate: typeof atom.predicate === "string" ? atom.predicate : "mentions",
+          object: typeof atom.object === "string" ? atom.object : atom.text,
+          polarity: atom.polarity === "negative" ? "negative" : "positive",
+          domain: typeof atom.domain === "string" ? atom.domain : atom.type
         }];
       })
       .filter((atom) => ATOMIC_TYPES.has(atom.type) && atom.text.length >= 2)
@@ -94,7 +104,7 @@ async function extract(memory: StoredMemory, apiKey: string): Promise<Extraction
             text: [
               "Extract only explicit durable facts from this session.",
               "Do not infer missing values. Preserve updates, preferences, events, quantities, dates, and speaker.",
-              "Return a short neutral synopsis plus atomic statements.",
+              "Return a short neutral synopsis plus atomic subject/predicate/object statements.",
               "<session>",
               memory.content.slice(0, 60_000),
               "</session>"
@@ -113,7 +123,7 @@ async function extract(memory: StoredMemory, apiKey: string): Promise<Extraction
                 type: "array",
                 items: {
                   type: "object",
-                  required: ["type", "text"],
+                  required: ["type", "text", "subject", "predicate", "object", "polarity", "domain"],
                   properties: {
                     type: {
                       type: "string",
@@ -125,6 +135,12 @@ async function extract(memory: StoredMemory, apiKey: string): Promise<Extraction
                       enum: ["user", "assistant", "system", "tool", "unknown", null]
                     },
                     event_at: { type: ["string", "null"] }
+                    ,
+                    subject: { type: "string" },
+                    predicate: { type: "string" },
+                    object: { type: "string" },
+                    polarity: { type: "string", enum: ["positive", "negative"] },
+                    domain: { type: "string" }
                   }
                 }
               }
@@ -183,6 +199,10 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
      WHERE tenant_id = ? AND memory_id = ?
        AND unit_type IN ('synopsis','fact','update','preference','event','quantity')`
   ).bind(row.tenant_id, row.id).all<{ id: string }>();
+  const previousV4Units = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id FROM memory_retrieval_units_v4
+     WHERE tenant_id = ? AND memory_id = ?`
+  ).bind(row.tenant_id, row.id).all<{ id: string }>();
   const extraction = await extract(row, env.GEMINI_API_KEY);
   const candidates: Array<ExtractedAtomicUnit & { type: string }> = [
     ...(extraction.synopsis ? [{ type: "synopsis", text: extraction.synopsis, speaker: null, event_at: null }] : []),
@@ -208,6 +228,50 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
       created_at: row.updated_at ?? row.created_at
     });
   }
+  const structuredUnits: Array<{
+    text: string;
+    speaker: "user" | "assistant" | "system" | "tool" | "unknown" | null;
+    unit_type: "atomic" | "profile" | "ledger" | "timeline";
+    event_at: number;
+    metadata: Record<string, unknown>;
+  }> = [];
+  for (const atom of extraction.atoms) {
+    const eventAt = eventTimestamp(atom.event_at, sourceEventTimestamp(row));
+    const metadata = {
+      subject: atom.subject,
+      predicate: atom.predicate,
+      object: atom.object,
+      polarity: atom.polarity,
+      domain: atom.domain,
+      normalized_at: eventAt
+    };
+    const atomic = {
+      text: atom.text,
+      speaker: atom.speaker as "user" | "assistant" | "system" | "tool" | "unknown" | null,
+      unit_type: "atomic" as const,
+      event_at: eventAt,
+      metadata
+    };
+    structuredUnits.push(atomic);
+    if (atom.type === "event") {
+      structuredUnits.push({ ...atomic, unit_type: "timeline" });
+    } else if (["preference", "update", "fact"].includes(atom.type)) {
+      structuredUnits.push({ ...atomic, unit_type: "profile" });
+      if (atom.type === "update") structuredUnits.push({ ...atomic, unit_type: "ledger" });
+    }
+  }
+  const v4Units = await buildRetrievalUnitsV4({
+    id: row.id,
+    tenant_id: row.tenant_id,
+    project_id: row.project_id,
+    content: row.content,
+    summary: row.summary,
+    created_at: row.created_at,
+    updated_at: row.updated_at ?? row.created_at,
+    valid_from: row.valid_from,
+    valid_until: row.valid_until,
+    source_references: [firstSourceReference(row)].filter(Boolean) as never
+  }, { structuredUnits });
   const statements: D1PreparedStatement[] = [
     env.OPEN_BRAIN_DB.prepare(
       `DELETE FROM memory_retrieval_units_fts
@@ -226,6 +290,13 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
       `UPDATE memory_retrieval_units
        SET extraction_state = 'ready', degraded_reason = NULL
        WHERE tenant_id = ? AND memory_id = ?`
+    ).bind(row.tenant_id, row.id)
+    ,
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_v4_fts WHERE tenant_id = ? AND memory_id = ?"
+    ).bind(row.tenant_id, row.id),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_v4 WHERE tenant_id = ? AND memory_id = ?"
     ).bind(row.tenant_id, row.id)
   ];
   for (const unit of units) {
@@ -248,9 +319,34 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
       ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
     );
   }
+  for (const unit of v4Units) {
+    statements.push(
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO memory_retrieval_units_v4(
+          id, memory_id, tenant_id, project_id, unit_type, speaker, text,
+          event_at, valid_from, valid_until, source_ref_json, source_span_start,
+          source_span_end, content_hash, metadata_json, segment_id, extractor,
+          extractor_version, extraction_state, degraded_reason, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        unit.id, unit.memory_id, unit.tenant_id, unit.project_id, unit.unit_type,
+        unit.speaker, unit.text, unit.event_at, unit.valid_from, unit.valid_until,
+        unit.source_ref_json, unit.source_span_start, unit.source_span_end,
+        unit.content_hash, unit.metadata_json, unit.segment_id, unit.extractor,
+        unit.extractor_version, "ready", null, unit.created_at
+      ),
+      env.OPEN_BRAIN_DB.prepare(
+        "INSERT INTO memory_retrieval_units_v4_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
+      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
+    );
+  }
   const staleVectorIds = previousAtomicUnits.results.map((unit) => unit.id);
   if (staleVectorIds.length > 0) {
     await env.MEMORY_VECTOR_INDEX_V3.deleteByIds(staleVectorIds);
+  }
+  const staleV4VectorIds = previousV4Units.results.map((unit) => unit.id);
+  if (staleV4VectorIds.length > 0) {
+    await env.MEMORY_VECTOR_INDEX_V3.deleteByIds(staleV4VectorIds);
   }
   await env.OPEN_BRAIN_DB.batch(statements);
   const values = units.length > 0 ? await embedMany(units.map((unit) => unit.text), env) : [];
@@ -268,6 +364,21 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
     }
   }));
   if (vectors.length > 0) await env.MEMORY_VECTOR_INDEX_V3.upsert(vectors);
+  const v4Values = v4Units.length > 0 ? await embedMany(v4Units.map((unit) => unit.text), env) : [];
+  const v4Vectors = v4Units.map((unit, index) => ({
+    id: unit.id,
+    namespace: `${unit.tenant_id}:hybrid_v4`,
+    values: v4Values[index],
+    metadata: {
+      tenant_id: unit.tenant_id,
+      project_id: unit.project_id ?? "",
+      memory_id: unit.memory_id,
+      unit_type: unit.unit_type,
+      speaker: unit.speaker ?? "",
+      updated_at: unit.created_at
+    }
+  }));
+  if (v4Vectors.length > 0) await env.MEMORY_VECTOR_INDEX_V3.upsert(v4Vectors);
 }
 
 export default {

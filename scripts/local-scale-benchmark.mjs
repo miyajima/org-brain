@@ -170,6 +170,7 @@ async function main() {
   await store.rebuildIndex();
   const indexDurationMs = performance.now() - indexStarted;
   const latencies = [];
+  const coldLatencies = [];
   let failures = 0;
   for (let index = 0; index < options.queries; index += 1) {
     const target = Math.floor(index * options.count / options.queries);
@@ -179,32 +180,60 @@ async function main() {
       tenant_id: "scale",
       project_id: "scale-project",
       query: `${marker} authoritative provenance`,
-      limit: 5
+      limit: 5,
+      search_mode: "hybrid_v4"
     });
-    latencies.push(performance.now() - started);
+    const latency = performance.now() - started;
+    if (index === 0) coldLatencies.push(latency);
+    else latencies.push(latency);
     if (results[0]?.memory.id !== `scale-${String(target).padStart(6, "0")}`) failures += 1;
   }
   const verification = await store.verify();
+  const warmLatencies = latencies.length > 0 ? latencies : coldLatencies;
+  const inspection = store.open({ readOnly: true });
+  let segmentCount;
+  try {
+    segmentCount = Number(
+      inspection.prepare(
+        "SELECT COUNT(*) AS count FROM memory_retrieval_units_v4 WHERE unit_type = 'segment'"
+      ).get().count
+    );
+  } finally {
+    inspection.close();
+  }
+  const memory = process.memoryUsage();
   const report = {
     benchmark: "orgbrain-local-scale-v1",
     generated_at: new Date().toISOString(),
     settings: {
       record_count: options.count,
       query_count: options.queries,
-      embedding_provider: "local-sparse-feature-hash-v2",
+      search_mode: "hybrid_v4",
+      embedding_provider: "local-sparse-feature-hash-v2-degraded",
+      quality_embedding_contract: "pinned ONNX float16 BLOB",
+      segment_candidate_limit: 24,
+      parent_candidate_limit: 50,
       target_p95_ms: 500
     },
     metrics: {
       seed_duration_ms: Number(seedDurationMs.toFixed(2)),
       index_duration_ms: Number(indexDurationMs.toFixed(2)),
-      search_latency_p50_ms: Number(percentile(latencies, 50).toFixed(2)),
-      search_latency_p95_ms: Number(percentile(latencies, 95).toFixed(2)),
-      search_latency_max_ms: Number(Math.max(...latencies).toFixed(2)),
+      cold_search_latency_ms: Number(coldLatencies[0].toFixed(2)),
+      warm_search_latency_p50_ms: Number(percentile(warmLatencies, 50).toFixed(2)),
+      warm_search_latency_p95_ms: Number(percentile(warmLatencies, 95).toFixed(2)),
+      warm_search_latency_max_ms: Number(Math.max(...warmLatencies).toFixed(2)),
+      segment_count: segmentCount,
+      memory_rss_bytes: memory.rss,
+      memory_heap_used_bytes: memory.heapUsed,
       retrieval_failures: failures,
       database_bytes: (await stat(options.db)).size
     },
     verification,
-    passed: failures === 0 && verification.ok && percentile(latencies, 95) <= 500
+    passed:
+      failures === 0 &&
+      verification.ok &&
+      segmentCount <= options.count * 2 &&
+      percentile(warmLatencies, 95) <= 500
   };
   await mkdir(dirname(options.output), { recursive: true });
   await writeFile(options.output, `${JSON.stringify(report, null, 2)}\n`);

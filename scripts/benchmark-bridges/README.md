@@ -90,6 +90,45 @@ MEM0_BENCHMARK_URL=http://127.0.0.1:8790 \
 OrgBrain tenant IDs map to Mem0 `user_id` filters. The bridge does not add
 same-tenant record ACL filtering, so permission failures remain visible.
 
+## Hindsight
+
+Run a pinned Hindsight OSS server, then point the bridge at its native Python
+client and API. Retain cost is deliberately unknown until the server reports
+the configured Gemini usage; it must not be treated as zero.
+
+```bash
+HINDSIGHT_ROOT=/path/to/hindsight \
+HINDSIGHT_API_URL=http://127.0.0.1:8888 PORT=8792 \
+  /path/to/python scripts/benchmark-bridges/hindsight.py
+
+HINDSIGHT_BENCHMARK_URL=http://127.0.0.1:8792 \
+  pnpm benchmark:competitive -- --adapter hindsight \
+  --repeat 5 --model-id shared-gemini --budget-usd 5 \
+  --hardware-id shared-runner
+```
+
+Tenant IDs map to native Hindsight banks. The bridge uses `retain` and
+`recall`, preserves native document metadata, and does not add principal ACLs.
+
+## Mnemosyne
+
+The Mnemosyne bridge imports the pinned checkout directly and creates one
+SQLite database per tenant. It uses native `remember(..., extract=False)` and
+`recall()` with the fixed `BAAI/bge-small-en-v1.5` local embedding contract.
+
+```bash
+MNEMOSYNE_ROOT=/path/to/mnemosyne PORT=8793 \
+  /path/to/python scripts/benchmark-bridges/mnemosyne.py
+
+MNEMOSYNE_BENCHMARK_URL=http://127.0.0.1:8793 \
+  pnpm benchmark:competitive -- --adapter mnemosyne \
+  --repeat 5 --model-id none-retrieval-only --budget-usd 0 \
+  --hardware-id shared-runner
+```
+
+The local track makes no network call and adds no ACL feature not implemented
+by Mnemosyne itself.
+
 ## Upstream LongMemEval runners
 
 The upstream GBrain and MemPalace LongMemEval runners are kept separate from

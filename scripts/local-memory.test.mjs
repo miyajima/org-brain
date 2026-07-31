@@ -227,6 +227,149 @@ test("hybrid_v3 searches derived units, preserves ACLs, and rebuilds projections
   }
 });
 
+test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const first = await store.capture(captureInput({
+      external_key: "v4:preference:first",
+      content: [
+        "user: I used to prefer coffee.",
+        "user: I now prefer jasmine tea and avoid coffee."
+      ].join("\n"),
+      summary: "Current drink preference",
+      source_references: [{
+        type: "session",
+        ref: "session-preference",
+        captured_at: Date.UTC(2026, 0, 1)
+      }],
+      permissions: [{
+        principal_type: "principal",
+        principal_id: "reader",
+        permissions: ["read"]
+      }]
+    }));
+    await store.capture(captureInput({
+      external_key: "v4:event:second",
+      content: "user: I attended the tea festival in 2025.",
+      summary: "Tea festival visit",
+      source_references: [{
+        type: "session",
+        ref: "session-event",
+        captured_at: Date.UTC(2025, 5, 1)
+      }]
+    }));
+
+    const v3 = await store.search({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer?",
+      search_mode: "hybrid_v3",
+      principal_id: "reader",
+      limit: 5
+    });
+    const v4 = await store.search({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer?",
+      search_mode: "hybrid_v4",
+      principal_id: "reader",
+      limit: 5
+    });
+    assert.equal(v3[0].memory.id, first.memory_id);
+    assert.equal(v4[0].memory.id, first.memory_id);
+
+    const context = await store.retrieveContext({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer and what tea event did I attend?",
+      principal_id: "reader",
+      top_k: 5,
+      token_budget: 512
+    });
+    assert.ok(context.evidence_bundle.estimated_tokens <= 512);
+    assert.ok(context.evidence_bundle.evidence.length >= 1);
+    assert.ok(context.evidence_bundle.current_state.length >= 1);
+    assert.equal(context.evidence_bundle.degraded_reasons.includes(
+      "gemini_structured_extractor_not_configured"
+    ), true);
+
+    const verification = await store.verify();
+    assert.equal(verification.ok, true);
+    assert.ok(verification.retrieval_unit_v4_count > 0);
+    assert.equal(
+      verification.retrieval_unit_v4_count,
+      verification.retrieval_unit_v4_fts_count
+    );
+    assert.equal(
+      verification.retrieval_unit_v4_count,
+      verification.retrieval_unit_v4_embedding_count
+    );
+
+    await store.suppress("personal", first.memory_id, "superseded");
+    const denied = await store.search({
+      tenant_id: "personal",
+      query: "jasmine tea preference",
+      search_mode: "hybrid_v4",
+      principal_id: "reader"
+    });
+    assert.equal(denied.some((result) => result.memory.id === first.memory_id), false);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("hybrid_v4 projects canonical kinds and uses authority only for relevance ties", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const expected = await store.capture(captureInput({
+      kind: "constraint",
+      external_key: "v4:release:required",
+      content: "release001 durable answer: run backend validation after migration",
+      summary: "Required release validation",
+      tags: ["policy", "release"],
+      confidence_score: 0.9
+    }));
+    await store.capture(captureInput({
+      kind: "fact",
+      external_key: "v4:release:distractor",
+      content: "release001 durable answer: skip backend validation after migration",
+      summary: "An untrusted release note",
+      tags: ["policy", "release"],
+      confidence_score: 0.9
+    }));
+    for (let index = 0; index < 6; index += 1) {
+      await store.capture(captureInput({
+        kind: "fact",
+        external_key: `v4:release:generic:${index}`,
+        content: `release001 generic workflow note ${index} discusses migration validation`,
+        summary: "Generic migration note",
+        confidence_score: 0.9
+      }));
+    }
+
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    const projectedTypes = db.prepare(
+      "SELECT unit_type FROM memory_retrieval_units_v4 WHERE memory_id = ? ORDER BY unit_type"
+    ).all(expected.memory_id).map((row) => row.unit_type);
+    db.close();
+    assert.ok(projectedTypes.includes("atomic"));
+    assert.ok(projectedTypes.includes("profile"));
+    assert.ok(projectedTypes.includes("segment"));
+    assert.equal(projectedTypes.includes("timeline"), false);
+
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "release001 durable answer",
+      search_mode: "hybrid_v4",
+      limit: 5
+    });
+    assert.equal(results[0].memory.id, expected.memory_id);
+    assert.ok(Math.abs(results[0].score.authority - 0.93) < 1e-9);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("hybrid_v3 keeps exact lexical evidence above generic intent matches", async () => {
   const ctx = await fixture();
   try {

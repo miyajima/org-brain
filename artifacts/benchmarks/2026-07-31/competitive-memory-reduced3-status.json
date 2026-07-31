@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "evaluated_at": "2026-07-31T20:29:00+09:00",
+  "benchmark": "competitive-memory-v1",
+  "scope": {
+    "ranked_competitors": [
+      "mem0",
+      "hindsight",
+      "mnemosyne"
+    ],
+    "allowed_claim": "Mem0, Hindsight, and Mnemosyneとの同一ハーネス比較で総合一位",
+    "universal_oss_claim_allowed": false
+  },
+  "revisions": {
+    "mem0": "760dca6f391277d79c3c7d2096c1bf1d037526c3",
+    "hindsight": "a90f9223765af3c8ad5692ce2b9fa22efbb656ba",
+    "mnemosyne": "22c60e2af2335e05864dfc32b803d7bb6439ed62"
+  },
+  "runs": [
+    {
+      "adapter": "orgbrain-local",
+      "repeat": 5,
+      "accuracy": 100,
+      "recall_at_5": 100,
+      "pass_5": 100,
+      "personal_accuracy": 100,
+      "organization_accuracy": 100,
+      "leakage_count": 0,
+      "search_p95_ms": 13.39,
+      "average_context_tokens": 1158.33,
+      "failed_rows": 0,
+      "artifact": "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-orgbrain-v4-fixed-repeat5.json"
+    },
+    {
+      "adapter": "mem0",
+      "repeat": 5,
+      "accuracy": 80,
+      "recall_at_5": 100,
+      "pass_5": 70,
+      "personal_accuracy": 80,
+      "organization_accuracy": 80,
+      "leakage_count": 20,
+      "search_p95_ms": 51.07,
+      "average_context_tokens": 967.1,
+      "failed_rows": 0,
+      "artifact": "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-local-repeat5.json"
+    },
+    {
+      "adapter": "hindsight",
+      "repeat": 1,
+      "accuracy": 50,
+      "recall_at_5": 100,
+      "pass_5": 50,
+      "personal_accuracy": 100,
+      "organization_accuracy": 0,
+      "leakage_count": 20,
+      "search_p95_ms": 660.25,
+      "average_context_tokens": 609.64,
+      "failed_rows": 0,
+      "artifact": "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-hindsight-repeat1.json"
+    },
+    {
+      "adapter": "mnemosyne",
+      "repeat": 5,
+      "accuracy": 56,
+      "recall_at_5": 100,
+      "pass_5": 51,
+      "personal_accuracy": 53,
+      "organization_accuracy": 59,
+      "leakage_count": 20,
+      "search_p95_ms": 1.98,
+      "average_context_tokens": 951.52,
+      "failed_rows": 0,
+      "artifact": "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-local-repeat5.json"
+    }
+  ],
+  "gate": {
+    "eligible": false,
+    "first_place_claim_allowed": false,
+    "fail_fast_applied": false,
+    "reason": "OrgBrain passes the development 200 repeat-5 quality gate and exceeds the recorded competitor accuracy values, but the scoped leadership claim remains blocked until Hindsight repeat-5, complete weighted scorecards, and the audited final evaluation are available.",
+    "blockers": [
+      "OrgBrain average context is 1158.33 tokens, above the 713.25-token target",
+      "Hindsight has only a repeat-1 readiness run, not a repeat-5 final run",
+      "all four personal and organization capability scorecards remain incomplete",
+      "the independently audited and sealed final 200-row dataset is unavailable",
+      "the 10M BEAM and SQLite performance gates are unmeasured",
+      "ONNX embedding selection is incomplete"
+    ]
+  }
+}

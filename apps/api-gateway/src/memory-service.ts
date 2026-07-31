@@ -7,6 +7,7 @@ import {
   parseTagsJson,
   searchTenantMemories,
   searchTenantRetrievalUnitsV3,
+  searchTenantRetrievalUnitsV4,
   type MemoryProfileResponse,
   type MemoryKind,
   type MemoryLifecycleState,
@@ -26,12 +27,15 @@ import {
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import {
   removeMemoryIdsFromV3SemanticIndex,
+  removeMemoryIdsFromV4SemanticIndex,
   removeMemoryIdsFromSemanticIndex,
   rerankV3MemoryCandidates,
   searchSemanticIndex,
   searchV3SemanticIndex,
+  searchV4SemanticIndex,
   syncMemoryIdsToSemanticIndex,
-  syncMemoryIdsToV3SemanticIndex
+  syncMemoryIdsToV3SemanticIndex,
+  syncMemoryIdsToV4SemanticIndex
 } from "./retrieval-index-service";
 import { assertMemoryNotOnLegalHold } from "./retention-service";
 import type { Env } from "./types";
@@ -329,11 +333,17 @@ function parseOptionalFiniteNumber(value: unknown, field: string): number | null
 
 function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySearchMode): MemorySearchMode {
   if (value === undefined) return fallback;
-  if (value !== "memories" && value !== "hybrid" && value !== "hybrid_v2" && value !== "hybrid_v3") {
+  if (
+    value !== "memories" &&
+    value !== "hybrid" &&
+    value !== "hybrid_v2" &&
+    value !== "hybrid_v3" &&
+    value !== "hybrid_v4"
+  ) {
     throw new HttpError(
       400,
       "invalid_payload",
-      `${field} must be 'memories', 'hybrid', 'hybrid_v2', or 'hybrid_v3'`
+      `${field} must be 'memories', 'hybrid', 'hybrid_v2', 'hybrid_v3', or 'hybrid_v4'`
     );
   }
   return value;
@@ -454,7 +464,7 @@ function parseSearchRequest(raw: unknown): {
     tenantId: body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default",
     projectId: parseOptionalString(body.project_id, "project_id", 128),
     q: parseString(body.q, "q").slice(0, 500),
-    limit: parseOptionalInteger(body.limit, "limit", 5, 1, 20),
+    limit: parseOptionalInteger(body.limit, "limit", 5, 1, 50),
     rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
     searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "memories"),
     includeHistory: parseOptionalBoolean(body.include_history, "include_history", false)
@@ -518,8 +528,17 @@ export async function upsertMemories(env: Env, rawBody: unknown, options: Princi
     tenantId,
     [...existingByKey.values()]
   );
-  if (previousV3Projection.error) {
-    throw new HttpError(503, "retrieval_projection_failed", previousV3Projection.error);
+  const previousV4Projection = await removeMemoryIdsFromV4SemanticIndex(
+    env,
+    tenantId,
+    [...existingByKey.values()]
+  );
+  if (previousV3Projection.error || previousV4Projection.error) {
+    throw new HttpError(
+      503,
+      "retrieval_projection_failed",
+      previousV3Projection.error ?? previousV4Projection.error ?? "retrieval projection failed"
+    );
   }
   const result = await captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
   const retrieval_projection = await syncMemoryIdsToSemanticIndex(
@@ -532,7 +551,12 @@ export async function upsertMemories(env: Env, rawBody: unknown, options: Princi
     tenantId,
     result.items.map((item) => item.memory_id)
   );
-  return { ...result, retrieval_projection, retrieval_projection_v3 };
+  const retrieval_projection_v4 = await syncMemoryIdsToV4SemanticIndex(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id)
+  );
+  return { ...result, retrieval_projection, retrieval_projection_v3, retrieval_projection_v4 };
 }
 
 export async function listMemories(env: Env, tenantId: string, options: ListMemoriesOptions = {}) {
@@ -633,8 +657,10 @@ export async function searchMemories(
           query: request.q,
           limit: widenedLimit
         })
-      : request.searchMode === "hybrid_v3"
-        ? await searchV3SemanticIndex(env, {
+      : request.searchMode === "hybrid_v3" || request.searchMode === "hybrid_v4"
+        ? await (request.searchMode === "hybrid_v4"
+          ? searchV4SemanticIndex
+          : searchV3SemanticIndex)(env, {
             tenant_id: request.tenantId,
             project_id: request.projectId,
             query: request.q,
@@ -643,7 +669,7 @@ export async function searchMemories(
         : null;
   const principalId = normalizeActorPrincipal(options.actorPrincipal);
   let base: MemorySearchResponse;
-  if (request.searchMode === "hybrid_v3") {
+  if (request.searchMode === "hybrid_v3" || request.searchMode === "hybrid_v4") {
     const preliminary = await searchTenantRetrievalUnitsV3(env.OPEN_BRAIN_DB, {
       ...request,
       limit: 20,
@@ -673,7 +699,11 @@ export async function searchMemories(
         reranker = null;
       }
     }
-    base = await searchTenantRetrievalUnitsV3(env.OPEN_BRAIN_DB, {
+    const searchUnits =
+      request.searchMode === "hybrid_v4"
+        ? searchTenantRetrievalUnitsV4
+        : searchTenantRetrievalUnitsV3;
+    base = await searchUnits(env.OPEN_BRAIN_DB, {
       ...request,
       limit: widenedLimit,
       principalId,
@@ -743,6 +773,61 @@ export async function searchMemories(
       // Shadow observability must never break the primary retrieval response.
     });
   }
+  if (env.HYBRID_V4_MODE === "shadow" && request.searchMode !== "hybrid_v4") {
+    const shadowStartedAt = performance.now();
+    let shadowError: string | null = null;
+    let shadow: MemorySearchResponse | null = null;
+    try {
+      const shadowSemantic = await searchV3SemanticIndex(env, {
+        tenant_id: request.tenantId,
+        project_id: request.projectId,
+        query: request.q,
+        limit: 50
+      });
+      shadow = await searchTenantRetrievalUnitsV4(env.OPEN_BRAIN_DB, {
+        ...request,
+        searchMode: "hybrid_v4",
+        limit: request.limit,
+        principalId,
+        semanticHits: shadowSemantic?.hits,
+        semanticProvider: shadowSemantic?.provider
+      });
+    } catch (error) {
+      shadowError = error instanceof Error ? error.message.slice(0, 500) : "v4 shadow retrieval failed";
+    }
+    const v3Ids = new Set(base.results.map((result) => result.id));
+    const v4Ids = shadow?.results.map((result) => result.id) ?? [];
+    const queryHash = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(request.q)
+    ).then((digest) =>
+      [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+    );
+    await env.OPEN_BRAIN_DB.prepare(
+      `INSERT INTO retrieval_v4_shadow_events(
+         id, tenant_id, project_id, query_hash, v3_result_count, v4_result_count,
+         overlap_count, empty, degraded, evidence_tokens, projection_lag_ms,
+         latency_ms, error, created_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      crypto.randomUUID(),
+      request.tenantId,
+      request.projectId,
+      queryHash,
+      base.results.length,
+      v4Ids.length,
+      v4Ids.filter((id) => v3Ids.has(id)).length,
+      v4Ids.length === 0 ? 1 : 0,
+      shadow?.meta.retrieval?.degraded ? 1 : 0,
+      null,
+      shadow?.meta.retrieval?.projection_lag_ms ?? null,
+      Number((performance.now() - shadowStartedAt).toFixed(3)),
+      shadowError,
+      Date.now()
+    ).run().catch(() => {
+      // Shadow observability must never break the primary retrieval response.
+    });
+  }
   const filters = parseSearchFilters(rawBody);
   const allowedIds = await filterMemorySearchResults(
     env,
@@ -781,6 +866,208 @@ export async function searchMemories(
   };
   await bestEffortRefreshMemoryResults(env, request.tenantId, filteredResults.map((item) => item.id), "api-memory-search");
   return response;
+}
+
+export async function retrieveMemoryContext(
+  env: Env,
+  rawBody: unknown,
+  options: PrincipalActorOptions = {}
+) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as Record<string, unknown>;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const topK = parseOptionalInteger(body.top_k, "top_k", 5, 1, 50);
+  const tokenBudget = parseOptionalInteger(body.token_budget, "token_budget", 8_000, 512, 16_000);
+  const queryAt =
+    typeof body.at === "number" && Number.isFinite(body.at)
+      ? body.at
+      : Date.now();
+  const search = await searchMemories(
+    env,
+    {
+      ...body,
+      tenant_id: tenantId,
+      limit: Math.max(topK, Number(body.limit) || 50),
+      search_mode: body.search_mode ?? "hybrid_v4"
+    },
+    options
+  );
+  const selected = search.results.filter((result) => result.kind === "memory").slice(0, topK);
+  const ids = selected.map((result) => result.id);
+  const unitRows = ids.length === 0
+    ? { results: [] as Array<{
+        memory_id: string;
+        unit_type: string;
+        speaker: string | null;
+        text: string;
+        event_at: number | null;
+        source_ref_json: string | null;
+        source_span_start: number | null;
+        source_span_end: number | null;
+        metadata_json: string;
+        extraction_state: string;
+      }> }
+    : await env.OPEN_BRAIN_DB.prepare(
+        `SELECT memory_id, unit_type, speaker, text, event_at, source_ref_json,
+                source_span_start, source_span_end, metadata_json, extraction_state
+         FROM memory_retrieval_units_v4
+         WHERE tenant_id = ? AND memory_id IN (${ids.map(() => "?").join(",")})
+         ORDER BY memory_id,
+           CASE unit_type
+             WHEN 'atomic' THEN 0 WHEN 'profile' THEN 1 WHEN 'timeline' THEN 2
+             WHEN 'ledger' THEN 3 ELSE 4
+           END,
+           event_at DESC`
+      ).bind(tenantId, ...ids).all<{
+        memory_id: string;
+        unit_type: string;
+        speaker: string | null;
+        text: string;
+        event_at: number | null;
+        source_ref_json: string | null;
+        source_span_start: number | null;
+        source_span_end: number | null;
+        metadata_json: string;
+        extraction_state: string;
+      }>();
+  const grouped = new Map<string, typeof unitRows.results>();
+  for (const unit of unitRows.results) {
+    const rows = grouped.get(unit.memory_id) ?? [];
+    if (rows.length < 8) rows.push(unit);
+    grouped.set(unit.memory_id, rows);
+  }
+  const versionRows = ids.length === 0
+    ? { results: [] as Array<{ memory_id: string; version: number; snapshot_json: string }> }
+    : await env.OPEN_BRAIN_DB.prepare(
+        `SELECT memory_id, version, snapshot_json
+         FROM memory_versions
+         WHERE tenant_id = ? AND memory_id IN (${ids.map(() => "?").join(",")})
+         ORDER BY memory_id, version DESC`
+      ).bind(tenantId, ...ids).all<{
+        memory_id: string;
+        version: number;
+        snapshot_json: string;
+      }>();
+  const previousValues = new Map<string, string[]>();
+  for (const version of versionRows.results) {
+    const values = previousValues.get(version.memory_id) ?? [];
+    if (values.length >= 3) continue;
+    try {
+      const snapshot = JSON.parse(version.snapshot_json) as { content?: unknown };
+      if (typeof snapshot.content === "string" && snapshot.content.trim()) {
+        values.push(snapshot.content);
+        previousValues.set(version.memory_id, values);
+      }
+    } catch {
+      // Version snapshots are canonical but may predate the current JSON shape.
+    }
+  }
+  const charBudget = tokenBudget * 4;
+  let usedChars = 0;
+  const evidence: Array<Record<string, unknown>> = [];
+  const currentState: Array<Record<string, unknown>> = [];
+  const timeline: Array<Record<string, unknown>> = [];
+  const conflicts: Array<{ memory_id: string; conflict: string }> = [];
+  for (const result of selected) {
+    if (usedChars >= charBudget) break;
+    const units = grouped.get(result.id) ?? [];
+    const unit = units[0];
+    const remaining = charBudget - usedChars;
+    const text = String(unit?.text ?? result.content_preview).slice(0, Math.min(4_000, remaining));
+    usedChars += text.length;
+    let sourceReference = result.source_references?.[0] ?? null;
+    try {
+      sourceReference = unit?.source_ref_json ? JSON.parse(unit.source_ref_json) : sourceReference;
+    } catch {
+      // Keep canonical response provenance if a rebuildable projection is malformed.
+    }
+    evidence.push({
+      memory_id: result.id,
+      text,
+      speaker: unit?.speaker ?? null,
+      session_date: unit?.event_at ?? sourceReference?.captured_at ?? result.created_at,
+      source_reference: sourceReference,
+      source_span: {
+        start: unit?.source_span_start ?? null,
+        end: unit?.source_span_end ?? null
+      },
+      score: result.score,
+      extraction_state: unit?.extraction_state ?? "degraded"
+    });
+    for (const candidate of units) {
+      let metadata: Record<string, unknown> = {};
+      try {
+        metadata = JSON.parse(candidate.metadata_json || "{}") as Record<string, unknown>;
+      } catch {
+        metadata = {};
+      }
+      if (candidate.unit_type === "profile" || candidate.unit_type === "ledger") {
+        currentState.push({
+          memory_id: result.id,
+          current: candidate.text,
+          previous_values: (previousValues.get(result.id) ?? []).slice(1),
+          ...metadata
+        });
+      }
+      if (candidate.unit_type === "timeline") {
+        timeline.push({
+          memory_id: result.id,
+          event_at: candidate.event_at,
+          delta_from_question_ms: candidate.event_at === null ? null : queryAt - candidate.event_at,
+          ...metadata
+        });
+      }
+    }
+    for (const conflict of result.conflicts ?? []) conflicts.push({ memory_id: result.id, conflict });
+  }
+  const query = parseString(body.q, "q");
+  const multiSession = /\b(?:and|compare|both|between|combined|together|how many)\b|(?:かつ|両方|比較|合計|複数)/iu.test(query);
+  const missingEvidence: string[] = [];
+  if (evidence.length === 0) missingEvidence.push("no_relevant_evidence");
+  if (
+    multiSession &&
+    new Set(evidence.map((item) =>
+      (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id)
+    )).size < 2
+  ) {
+    missingEvidence.push("insufficient_independent_sessions");
+  }
+  if (evidence.some((item) => item.extraction_state !== "ready")) {
+    missingEvidence.push("structured_extractor_degraded");
+  }
+  const answerTemplate =
+    missingEvidence.length > 0 || conflicts.length > 0
+      ? "abstention"
+      : timeline.length > 0
+        ? "timeline"
+        : currentState.length > 0
+          ? "profile"
+          : multiSession
+            ? "multi_session"
+            : "evidence";
+  return {
+    ...search,
+    evidence_bundle: {
+      query_at: queryAt,
+      token_budget: tokenBudget,
+      estimated_tokens: Math.ceil(usedChars / 4),
+      answer_template: answerTemplate,
+      evidence,
+      current_state: currentState,
+      timeline,
+      conflicts,
+      missing_evidence: missingEvidence,
+      abstention_recommended: missingEvidence.length > 0 || conflicts.length > 0,
+      degraded_reasons: [
+        ...(search.meta.retrieval?.degraded_reasons ?? []),
+        ...(evidence.some((item) => item.extraction_state !== "ready")
+          ? ["gemini_structured_extractor_not_configured"]
+          : [])
+      ]
+    }
+  };
 }
 
 export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<MemoryProfileResponse> {
@@ -941,8 +1228,17 @@ export async function captureMemories(env: Env, rawBody: unknown, options: Princ
     tenantId,
     [...existingByKey.values()]
   );
-  if (previousV3Projection.error) {
-    throw new HttpError(503, "retrieval_projection_failed", previousV3Projection.error);
+  const previousV4Projection = await removeMemoryIdsFromV4SemanticIndex(
+    env,
+    tenantId,
+    [...existingByKey.values()]
+  );
+  if (previousV3Projection.error || previousV4Projection.error) {
+    throw new HttpError(
+      503,
+      "retrieval_projection_failed",
+      previousV3Projection.error ?? previousV4Projection.error ?? "retrieval projection failed"
+    );
   }
   const result = await captureMemoryItems(env, { tenantId, source, items: body.items, operation: "capture" });
   const retrieval_projection = await syncMemoryIdsToSemanticIndex(
@@ -955,7 +1251,12 @@ export async function captureMemories(env: Env, rawBody: unknown, options: Princ
     tenantId,
     result.items.map((item) => item.memory_id)
   );
-  return { ...result, retrieval_projection, retrieval_projection_v3 };
+  const retrieval_projection_v4 = await syncMemoryIdsToV4SemanticIndex(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id)
+  );
+  return { ...result, retrieval_projection, retrieval_projection_v3, retrieval_projection_v4 };
 }
 
 export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
@@ -967,8 +1268,13 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   const memoryId = parseString(body.memory_id, "memory_id");
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   const previousV3Projection = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
-  if (previousV3Projection.error) {
-    throw new HttpError(503, "retrieval_projection_failed", previousV3Projection.error);
+  const previousV4Projection = await removeMemoryIdsFromV4SemanticIndex(env, tenantId, [memoryId]);
+  if (previousV3Projection.error || previousV4Projection.error) {
+    throw new HttpError(
+      503,
+      "retrieval_projection_failed",
+      previousV3Projection.error ?? previousV4Projection.error ?? "retrieval projection failed"
+    );
   }
   const result = await reviseMemory(env, {
     tenantId,
@@ -994,7 +1300,8 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   return {
     ...result,
     retrieval_projection: await syncMemoryIdsToSemanticIndex(env, tenantId, [memoryId]),
-    retrieval_projection_v3: await syncMemoryIdsToV3SemanticIndex(env, tenantId, [memoryId])
+    retrieval_projection_v3: await syncMemoryIdsToV3SemanticIndex(env, tenantId, [memoryId]),
+    retrieval_projection_v4: await syncMemoryIdsToV4SemanticIndex(env, tenantId, [memoryId])
   };
 }
 
@@ -1023,12 +1330,16 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   const memoryId = parseString(body.memory_id, "memory_id");
   const retrievalProjectionV3 = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
+  const retrievalProjectionV4 = await removeMemoryIdsFromV4SemanticIndex(env, tenantId, [memoryId]);
   const retrievalProjection = await removeMemoryIdsFromSemanticIndex(env, tenantId, [memoryId]);
-  if (retrievalProjection.error || retrievalProjectionV3.error) {
+  if (retrievalProjection.error || retrievalProjectionV3.error || retrievalProjectionV4.error) {
     throw new HttpError(
       503,
       "retrieval_projection_failed",
-      retrievalProjection.error ?? retrievalProjectionV3.error ?? "retrieval projection failed"
+      retrievalProjection.error ??
+        retrievalProjectionV3.error ??
+        retrievalProjectionV4.error ??
+        "retrieval projection failed"
     );
   }
   const result = await suppressMemory(env, {
@@ -1041,7 +1352,8 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   return {
     ...result,
     retrieval_projection: retrievalProjection,
-    retrieval_projection_v3: retrievalProjectionV3
+    retrieval_projection_v3: retrievalProjectionV3,
+    retrieval_projection_v4: retrievalProjectionV4
   };
 }
 
@@ -1060,16 +1372,24 @@ export async function deleteMemoryById(
     normalizedTenantId,
     [normalizedMemoryId]
   );
+  const retrievalProjectionV4 = await removeMemoryIdsFromV4SemanticIndex(
+    env,
+    normalizedTenantId,
+    [normalizedMemoryId]
+  );
   const retrievalProjection = await removeMemoryIdsFromSemanticIndex(
     env,
     normalizedTenantId,
     [normalizedMemoryId]
   );
-  if (retrievalProjection.error || retrievalProjectionV3.error) {
+  if (retrievalProjection.error || retrievalProjectionV3.error || retrievalProjectionV4.error) {
     throw new HttpError(
       503,
       "retrieval_projection_failed",
-      retrievalProjection.error ?? retrievalProjectionV3.error ?? "retrieval projection failed"
+      retrievalProjection.error ??
+        retrievalProjectionV3.error ??
+        retrievalProjectionV4.error ??
+        "retrieval projection failed"
     );
   }
   const result = await deleteMemory(env, {
@@ -1081,6 +1401,7 @@ export async function deleteMemoryById(
   return {
     ...result,
     retrieval_projection: retrievalProjection,
-    retrieval_projection_v3: retrievalProjectionV3
+    retrieval_projection_v3: retrievalProjectionV3,
+    retrieval_projection_v4: retrievalProjectionV4
   };
 }

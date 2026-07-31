@@ -24,6 +24,7 @@ import {
   getMemoryProfile,
   listMemories,
   refreshMemoryByRequest,
+  retrieveMemoryContext,
   searchMemories,
   suppressMemoryByRequest,
   upsertMemories
@@ -307,9 +308,9 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         tenant_id: z.string().optional(),
         project_id: z.string().nullable().optional(),
         q: z.string().min(1).max(500),
-        limit: z.number().int().min(1).max(20).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
         rewrite_query: z.boolean().optional(),
-        search_mode: z.enum(["memories", "hybrid", "hybrid_v2", "hybrid_v3"]).optional(),
+        search_mode: z.enum(["memories", "hybrid", "hybrid_v2", "hybrid_v3", "hybrid_v4"]).optional(),
         include_history: z.boolean().optional(),
         entity_id: z.string().optional(),
         entity_role: z.string().optional(),
@@ -341,6 +342,30 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
     );
 
     this.server.tool(
+      "orgbrain_memories_retrieve_context",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().nullable().optional(),
+        q: z.string().min(1).max(500),
+        top_k: z.number().int().min(1).max(50).optional(),
+        token_budget: z.number().int().min(512).max(16000).optional(),
+        search_mode: z.enum(["hybrid_v3", "hybrid_v4"]).optional()
+      },
+      async ({ tenant_id, project_id, q, top_k, token_budget, search_mode }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", project_id);
+        return toContent(await retrieveMemoryContext(this.env, {
+          tenant_id: tenantId,
+          project_id,
+          q,
+          top_k,
+          token_budget,
+          search_mode
+        }, { actorPrincipal: this.props?.principal }));
+      }
+    );
+
+    this.server.tool(
       "orgbrain_memories_profile",
       {
         tenant_id: z.string().optional(),
@@ -349,7 +374,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         limit_durable: z.number().int().min(1).max(16).optional(),
         limit_recent: z.number().int().min(1).max(16).optional(),
         rewrite_query: z.boolean().optional(),
-        search_mode: z.enum(["memories", "hybrid", "hybrid_v2"]).optional()
+        search_mode: z.enum(["memories", "hybrid", "hybrid_v2", "hybrid_v3", "hybrid_v4"]).optional()
       },
       async ({ tenant_id, project_id, q, limit_durable, limit_recent, rewrite_query, search_mode }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);

@@ -31,5 +31,8 @@ export type Env = {
   MEMORY_VECTOR_INDEX?: Vectorize;
   MEMORY_VECTOR_INDEX_V3?: Vectorize;
   HYBRID_V3_MODE?: "off" | "shadow" | "canary" | "on";
+  HYBRID_V4_MODE?: "off" | "shadow" | "canary" | "on";
+  GEMINI_API_KEY?: string;
+  RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;
 };

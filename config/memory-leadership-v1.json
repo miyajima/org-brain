@@ -1,0 +1,125 @@
+{
+  "contract": "memory-leadership-v1",
+  "retrieval": {
+    "search_mode": "hybrid_v4",
+    "candidate_limits": {
+      "segment": 24,
+      "parent": 50
+    },
+    "output_tracks": [5, 50],
+    "evidence_token_default": 8000,
+    "evidence_token_maximum": 16000,
+    "ingestion_extractor": "gemini-3.5-flash-lite",
+    "answer_model": "gemini-3.6-flash",
+    "judge_model": "gemini-3.6-flash",
+    "embedding_candidates": [
+      "BAAI/bge-small-en-v1.5",
+      "BAAI/bge-m3",
+      "Qwen/Qwen3-Embedding-0.6B"
+    ],
+    "embedding_selection_order": [
+      "development_recall_at_5",
+      "beam_10m_official_rubric",
+      "temporal_preference_score",
+      "search_p95_ms",
+      "cost_and_model_size"
+    ],
+    "local_quality_artifact": {
+      "format": "ONNX",
+      "vector_storage": "float16-sqlite-blob",
+      "selected_model": null,
+      "model_sha256": null,
+      "status": "unmeasured"
+    },
+    "offline_degrade": ["fts", "segment"]
+  },
+  "final_evaluation": {
+    "development_sets": ["LongMemEval-S-public-500", "custom-history-opened-100"],
+    "sealed_set": "orgbrain-final-sealed-200-v1",
+    "sealed_payload_status": "awaiting-independent-audit",
+    "quotas": {
+      "user": 28,
+      "assistant": 22,
+      "preference": 12,
+      "temporal": 54,
+      "update": 32,
+      "multi-session": 52
+    }
+  },
+  "same_harness_competitors": [
+    "mem0",
+    "hindsight",
+    "mnemosyne"
+  ],
+  "reference_only_competitors": [
+    "mempalace",
+    "cognee",
+    "supermemory",
+    "gbrain",
+    "agentmemory",
+    "total-agent-memory",
+    "memori"
+  ],
+  "claim_scope": {
+    "allowed": "Mem0, Hindsight, Mnemosyneとの同一ハーネス比較でpersonal/organization総合一位",
+    "disallowed": "全OSSメモリ層で世界一",
+    "requires_strict_lead_in_both_scorecards": true
+  },
+  "competitor_revision_manifest": "config/competitive-memory-revisions-2026-07-31.json",
+  "acceptance_gates": {
+    "longmemeval_public_500": {
+      "repeats": 5,
+      "minimum_hits_each_repeat": 499
+    },
+    "sealed_200": {
+      "repeats": 5,
+      "minimum_hits_each_repeat": 196,
+      "category_minimums": {
+        "update": 32,
+        "multi-session": 51,
+        "assistant": 22,
+        "preference": 11,
+        "user": 27,
+        "temporal": 52
+      },
+      "minimum_gemini_answer_judge": 194
+    },
+    "beam_top_50": {
+      "500K": { "minimum_rubric": 0.65, "minimum_pass_rate": 0.70 },
+      "1M": { "minimum_rubric": 0.65, "minimum_pass_rate": 0.71 },
+      "10M": { "minimum_rubric": 0.50, "minimum_pass_rate": 0.51 }
+    },
+    "beam_top_5": {
+      "500K": { "minimum_rubric": 0.55 },
+      "1M": { "minimum_rubric": 0.50 },
+      "10M": { "minimum_rubric": 0.40 },
+      "maximum_search_p95_ms": 500
+    },
+    "competitive_memory_v1": {
+      "strict_lead_over": ["mem0", "hindsight", "mnemosyne"],
+      "personal_accuracy": 1.0,
+      "personal_pass_5": 1.0,
+      "organization_accuracy": 1.0,
+      "organization_pass_5": 1.0,
+      "policy_hits": 20,
+      "acl_leakage": 0,
+      "cross_tenant_leakage": 0
+    },
+    "locomo_minimum_percent": 91.83,
+    "precisionmembench_minimum": {
+      "retrieval": "49/77",
+      "session_turns": "7/12"
+    },
+    "maximum_query_cost_usd": 0.0001,
+    "llm_api_errors": 0,
+    "excluded_failure_rows": 0,
+    "best_of_n": false
+  },
+  "ranking_policy": {
+    "published_values_are_reference_only": true,
+    "requires_same_model_top_k_budget_hardware": true,
+    "requires_personal_and_organization_strict_lead": true,
+    "unmeasured_items_are_ineligible": true,
+    "hosted_only_or_unreproducible_are_reference_only": true
+  }
+}
