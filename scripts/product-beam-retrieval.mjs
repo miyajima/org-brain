@@ -5,6 +5,7 @@ import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "no
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 import { LocalMemoryStore } from "./lib/local-memory-store.mjs";
 
 function parseArgs(argv) {
@@ -226,6 +227,98 @@ function summarize(rows, metadata) {
   };
 }
 
+async function evaluateBeamChat(chat, chatSize, topK) {
+  const directory = await mkdtemp(join(tmpdir(), "orgbrain-beam-"));
+  const rows = [];
+  try {
+    const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
+    const tenantId = `beam-${chatSize}-${chat.chat_id}`;
+    await seedBeamChat({ tenant_id: tenantId, turns: chat.turns }, { store });
+    for (const question of chat.questions) {
+      try {
+        const retrieval = await runBeamRetrieval({
+          tenant_id: tenantId,
+          question: question.question
+        }, { store, topK });
+        const expected = new Set(question.expected_message_ids);
+        const recalled = retrieval.message_ids.filter((id) => expected.has(id));
+        rows.push({
+          evaluation_id: question.evaluation_id,
+          chat_id: chat.chat_id,
+          category: question.category,
+          scorable: question.scorable,
+          expected_source_count: expected.size,
+          retrieved_message_ids: retrieval.message_ids,
+          recalled_message_ids: recalled,
+          recall_any_at_k: question.scorable ? recalled.length > 0 : null,
+          recall_all_at_k: question.scorable ? recalled.length === expected.size : null,
+          latency_ms: Number(retrieval.latency_ms.toFixed(3)),
+          error: null
+        });
+      } catch (error) {
+        rows.push({
+          evaluation_id: question.evaluation_id,
+          chat_id: chat.chat_id,
+          category: question.category,
+          scorable: question.scorable,
+          expected_source_count: question.expected_message_ids.length,
+          retrieved_message_ids: [],
+          recalled_message_ids: [],
+          recall_any_at_k: question.scorable ? false : null,
+          recall_all_at_k: question.scorable ? false : null,
+          latency_ms: null,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    return rows;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function runChatWorkers(chats, chatSize, topK, concurrency, onRows) {
+  if (chats.length === 0) return;
+  await new Promise((resolvePromise, rejectPromise) => {
+    let nextChat = 0;
+    let completed = 0;
+    let settled = false;
+    const workers = [];
+    const stop = async (error = null) => {
+      if (settled) return;
+      settled = true;
+      await Promise.all(workers.map((worker) => worker.terminate()));
+      if (error) rejectPromise(error);
+      else resolvePromise();
+    };
+    const dispatch = (worker) => {
+      if (nextChat < chats.length) worker.postMessage({ chat: chats[nextChat++], chatSize, topK });
+    };
+    for (let index = 0; index < Math.min(concurrency, chats.length); index += 1) {
+      const worker = new Worker(new URL(import.meta.url), {
+        workerData: { productBeamRetrievalWorker: true }
+      });
+      workers.push(worker);
+      worker.on("message", (message) => {
+        if (settled) return;
+        if (message?.error) {
+          void stop(new Error(message.error));
+          return;
+        }
+        onRows(message.rows);
+        completed += 1;
+        if (completed === chats.length) void stop();
+        else dispatch(worker);
+      });
+      worker.on("error", (error) => void stop(error));
+      worker.on("exit", (code) => {
+        if (!settled && code !== 0) void stop(new Error(`BEAM worker exited with code ${code}`));
+      });
+      dispatch(worker);
+    }
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const chatRoot = join(options.datasetRoot, "chats", options.chatSize);
@@ -287,71 +380,21 @@ async function main() {
   );
   const pendingChats = selectedChats.filter((chat) => !completeChatIds.has(chat.chat_id));
   let appendQueue = Promise.resolve();
-  let nextChatIndex = 0;
-  const worker = async () => {
-    while (nextChatIndex < pendingChats.length) {
-      const chatIndex = nextChatIndex++;
-      const chat = pendingChats[chatIndex];
-      const directory = await mkdtemp(join(tmpdir(), "orgbrain-beam-"));
-      try {
-        const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
-        const tenantId = `beam-${options.chatSize}-${chat.chat_id}`;
-        await seedBeamChat({
-          tenant_id: tenantId,
-          turns: chat.turns
-        }, { store });
-        for (const question of chat.questions) {
-          let row;
-          try {
-            const retrieval = await runBeamRetrieval({
-              tenant_id: tenantId,
-              question: question.question
-            }, {
-              store,
-              topK: options.topK
-            });
-            const expected = new Set(question.expected_message_ids);
-            const recalled = retrieval.message_ids.filter((id) => expected.has(id));
-            row = {
-              evaluation_id: question.evaluation_id,
-              chat_id: chat.chat_id,
-              category: question.category,
-              scorable: question.scorable,
-              expected_source_count: expected.size,
-              retrieved_message_ids: retrieval.message_ids,
-              recalled_message_ids: recalled,
-              recall_any_at_k: question.scorable ? recalled.length > 0 : null,
-              recall_all_at_k: question.scorable ? recalled.length === expected.size : null,
-              latency_ms: Number(retrieval.latency_ms.toFixed(3)),
-              error: null
-            };
-          } catch (error) {
-            row = {
-              evaluation_id: question.evaluation_id,
-              chat_id: chat.chat_id,
-              category: question.category,
-              scorable: question.scorable,
-              expected_source_count: question.expected_message_ids.length,
-              retrieved_message_ids: [],
-              recalled_message_ids: [],
-              recall_any_at_k: question.scorable ? false : null,
-              recall_all_at_k: question.scorable ? false : null,
-              latency_ms: null,
-              error: error instanceof Error ? error.message : String(error)
-            };
-          }
-          rows.push(row);
-          appendQueue = appendQueue.then(() =>
-            appendFile(output, `${JSON.stringify(row)}\n`, { mode: 0o600 })
-          );
-        }
-      } finally {
-        await rm(directory, { recursive: true, force: true });
-      }
+  await runChatWorkers(
+    pendingChats,
+    options.chatSize,
+    options.topK,
+    options.concurrency,
+    (chatRows) => {
+      rows.push(...chatRows);
+      appendQueue = appendQueue.then(() =>
+        appendFile(
+          output,
+          chatRows.map((row) => `${JSON.stringify(row)}\n`).join(""),
+          { mode: 0o600 }
+        )
+      );
     }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(options.concurrency, pendingChats.length) }, () => worker())
   );
   await appendQueue;
   const excludedQuestionsByCategory = {};
@@ -387,6 +430,16 @@ async function main() {
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (!isMainThread && workerData?.productBeamRetrievalWorker) {
+  parentPort.on("message", async ({ chat, chatSize, topK }) => {
+    try {
+      parentPort.postMessage({ rows: await evaluateBeamChat(chat, chatSize, topK) });
+    } catch (error) {
+      parentPort.postMessage({
+        error: error instanceof Error ? error.stack || error.message : String(error)
+      });
+    }
+  });
+} else if (isMainThread && process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }
