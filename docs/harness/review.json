@@ -1,40 +1,119 @@
 {
-  "schema_version": 1,
-  "reviewed_at": "2026-07-31T20:29:00+09:00",
-  "route": "inline_current_agent",
-  "shared_harness": {
-    "status": "unavailable",
-    "detail": "org-brain is not registered in pr-team-harness; no external reviewer result is represented here."
+  "automation": {
+    "auto_improve": true,
+    "auto_review": true,
+    "final_needs_improvement": false,
+    "improvement_reports": []
   },
-  "checks": [
-    {
-      "name": "benchmark-label isolation",
-      "status": "pass",
-      "evidence": "Static and runtime tests reject benchmark names, question identifiers, gold answers, and scorer labels in retrieval calls."
-    },
-    {
-      "name": "v3 coexistence",
-      "status": "pass",
-      "evidence": "Local and shared tests keep hybrid_v3 behavior while exercising hybrid_v4."
-    },
-    {
-      "name": "ACL and suppression",
-      "status": "pass",
-      "evidence": "Local adapter and hybrid_v4 tests cover tenant, permission, validity, suppression, rebuild, and deletion behavior."
-    },
-    {
-      "name": "claim integrity",
-      "status": "pass",
-      "evidence": "Only Mem0, Hindsight, and Mnemosyne are ranked; the other seven remain reference-only. OrgBrain now records 100% accuracy and pass^5 on the development 200, while the status artifact still blocks the scoped claim until repeat-5 competitor and weighted scorecard evidence is complete."
-    }
+  "docs_review": [
+    "Governed docs check passed without missing required documents."
   ],
-  "open_risks": [
-    "The 1,000-record performance smoke is not evidence for the 10M acceptance gate.",
-    "The ONNX model winner is intentionally unset until the frozen lexicographic selection can run.",
-    "D1 and Vectorize changes have dry-run build coverage but no production smoke in this change.",
-    "Hindsight completed one 200-task readiness run; its repeat-5 final result is still missing.",
-    "OrgBrain average context is 1158.33 tokens, above the current competitive-memory-v1 target of 713.25 tokens.",
-    "Weighted personal and organization capability scorecards are still incomplete for all four adapters.",
-    "The allowed claim is scoped to the three ranked competitors and is not a universal OSS claim."
-  ]
+  "exact_blockers": [],
+  "gate_attempt_id": "20260801T074635.399312Z-557e22cb",
+  "gate_change": {
+    "final": {
+      "score": 100,
+      "status": "pass"
+    },
+    "initial": {
+      "score": 100,
+      "status": "pass"
+    },
+    "score_delta": 0
+  },
+  "generated_at": "2026-08-01T07:47:13.593580+00:00",
+  "manual_notes": {},
+  "overall_review": [
+    "Quality gate completed with status pass.",
+    "Quality score is 100 with deductions: []."
+  ],
+  "reliability_review": [
+    "Manifest command stage has no blocked or failed commands."
+  ],
+  "repo": "org-brain",
+  "residual_risk": [
+    "No residual risk detected by deterministic gate stages."
+  ],
+  "reviewer_evidence": {
+    "actor": "Linnaeus",
+    "completed_at": "2026-08-01T07:43:15Z",
+    "diff_fingerprint": "8736d60e2b655e85e12ffcc97ec0481a47a8a48372bf6287ddfd5b185815032c",
+    "findings": [
+      "The implementation review found no blocking runtime findings; the prior gate artifact state required one final managed gate refresh."
+    ],
+    "independent": true,
+    "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+    "scope": [
+      "benchmark database reset and v3/v4 projection isolation",
+      "SQL bindings, tenant/project/lifecycle filters, and FTS fallback",
+      "rebuild transaction and index lifecycle",
+      "regression tests, package test wiring, and governed documentation"
+    ],
+    "source": "subagent",
+    "status": "passed",
+    "summary": "Independent review found the runtime implementation clean after the stale v3 reuse fix; final gate refresh remains the only workflow-state action.",
+    "task_id": "review-final-019fbc3d"
+  },
+  "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+  "schema_version": 2,
+  "security_review": [
+    "The automated loop records deterministic gate metadata and does not collect secrets.",
+    "Command output remains scoped to gate and improvement artifacts."
+  ],
+  "self_review": [
+    "Final gate status is pass with score 100/85."
+  ],
+  "verifier_evidence": {
+    "actor": "Tesla",
+    "checks": [
+      {
+        "command": "pnpm test",
+        "completed_at": "2026-08-01T07:35:26.280Z",
+        "name": "pnpm test",
+        "output_sha256": "111ec52fcd9bce72b6ff4e788b6b5a61a8c4f3b0cc0ec2e6f0a28dd6488a7f9a",
+        "returncode": 0,
+        "status": "passed"
+      },
+      {
+        "command": "pnpm run lint",
+        "completed_at": "2026-08-01T07:35:34.833Z",
+        "name": "pnpm run lint",
+        "output_sha256": "3ff0a6047cf3623b232f1cf2233496a704b4081ae2f2eab0d0362990fee5d6dc",
+        "returncode": 0,
+        "status": "passed"
+      },
+      {
+        "command": "git diff --check",
+        "completed_at": "2026-08-01T07:35:41.484Z",
+        "name": "git diff --check",
+        "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "returncode": 0,
+        "status": "passed"
+      },
+      {
+        "command": "node --test scripts/local-scale-benchmark.test.mjs",
+        "completed_at": "2026-08-01T07:35:50.307Z",
+        "name": "local scale reuse regression",
+        "output_sha256": "2399142343e0dba93c4b44e79f98d52c48725d1a4f1efdbe6d7ee993a32aaedb",
+        "returncode": 0,
+        "status": "passed"
+      }
+    ],
+    "completed_at": "2026-08-01T07:36:21Z",
+    "diff_fingerprint": "8736d60e2b655e85e12ffcc97ec0481a47a8a48372bf6287ddfd5b185815032c",
+    "independent": true,
+    "required_check_fields": [
+      "name",
+      "command",
+      "status",
+      "returncode",
+      "completed_at",
+      "output_sha256"
+    ],
+    "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+    "source": "subagent",
+    "status": "passed",
+    "summary": "Independent verifier passed the full test suite, lint, diff check, and the reused-database regression; the clean 100k benchmark report also passed with p95 190.09ms and zero retrieval failures.",
+    "task_id": "verify-final-019fbc3d"
+  }
 }

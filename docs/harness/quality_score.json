@@ -1,8 +1,11 @@
 {
-  "schema_version": 1,
-  "evaluated_at": "2026-07-31T20:29:00+09:00",
-  "status": "implementation_verified_orgbrain_local_gate_passed_leadership_blocked",
-  "score": null,
-  "reason": "OrgBrain now scores 100% accuracy, recall@5, and pass^5 for both personal and organization across five runs of the development 200, but Hindsight is readiness-only at repeat 1, the 713.25-token context target is not met, and weighted capability scorecards remain incomplete. A numeric overall quality score would still be misleading before the audited final dataset, 10M corpus, pinned ONNX selection, and complete repeat-5 same-harness comparison.",
-  "eligible_for_overall_first_place_claim": false
+  "deductions": [],
+  "gate_attempt_id": "20260801T074635.399312Z-557e22cb",
+  "minimum_score": 85,
+  "profile": "full",
+  "repo": "org-brain",
+  "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+  "schema_version": 2,
+  "score": 100,
+  "status": "pass"
 }

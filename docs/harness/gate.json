@@ -1,64 +1,174 @@
 {
-  "schema_version": 1,
-  "evaluated_at": "2026-07-31T20:29:00+09:00",
-  "implementation_gate": "pass",
-  "leadership_gate": "blocked",
-  "evidence": {
-    "tests": {
-      "command": "pnpm test",
-      "status": "pass",
-      "counts": {
-        "node": "63/63",
-        "scripts_vitest": "87/87",
-        "shared": "23/23",
-        "api_gateway": "66/66"
-      }
-    },
-    "typecheck": {
-      "command": "pnpm -r --if-present typecheck",
+  "dry_run": false,
+  "gate_attempt_id": "20260801T074635.399312Z-557e22cb",
+  "profile": "full",
+  "repo": "org-brain",
+  "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+  "schema_version": 2,
+  "stages": [
+    {
+      "detail": {
+        "manifest": "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml",
+        "missing": [],
+        "repo_path": "/Users/0300815938/projects/org-brain"
+      },
+      "id": "context",
       "status": "pass"
     },
-    "lint": {
-      "command": "pnpm lint",
+    {
+      "detail": {
+        "message": "RTK is available and telemetry is not enabled.",
+        "telemetry_enabled": false
+      },
+      "id": "rtk",
       "status": "pass"
     },
-    "build": {
-      "command": "pnpm build",
-      "status": "pass",
-      "mode": "Cloudflare dry run"
+    {
+      "detail": {
+        "commands": [
+          {
+            "command": "rtk pnpm -r --if-present typecheck",
+            "cwd": "/Users/0300815938/projects/org-brain",
+            "env": {},
+            "name": "pnpm typecheck",
+            "reason": "",
+            "returncode": 0,
+            "status": "pass"
+          },
+          {
+            "command": "rtk pnpm test",
+            "cwd": "/Users/0300815938/projects/org-brain",
+            "env": {},
+            "name": "pnpm test",
+            "reason": "",
+            "returncode": 0,
+            "status": "pass"
+          },
+          {
+            "command": "rtk pnpm lint",
+            "cwd": "/Users/0300815938/projects/org-brain",
+            "env": {},
+            "name": "pnpm lint",
+            "reason": "",
+            "returncode": 0,
+            "status": "pass"
+          },
+          {
+            "command": "rtk pnpm build",
+            "cwd": "/Users/0300815938/projects/org-brain",
+            "env": {},
+            "name": "pnpm build",
+            "reason": "",
+            "returncode": 0,
+            "status": "pass"
+          }
+        ],
+        "profile": "full"
+      },
+      "id": "commands",
+      "status": "pass"
     },
-    "scale_smoke": {
-      "records": 1000,
-      "queries": 30,
-      "status": "pass",
-      "cold_p95_ms": 42.61,
-      "warm_p95_ms": 35.6,
-      "artifact": "artifacts/benchmarks/2026-07-31/orgbrain-hybrid-v4-scale-1000.json"
+    {
+      "detail": {
+        "lowercase_supporting": [
+          "DESIGN.md",
+          "HYBRID_V3_IMPLEMENTATION.md",
+          "HYBRID_V4_IMPLEMENTATION.md",
+          "LOCAL_MIGRATION.md",
+          "OSS_MEMORY_COMPARISON_2026-07-30.md",
+          "REMOTE_MCP.md",
+          "SPEC.md",
+          "STORAGE_BACKENDS.md",
+          "SYSTEM_DESIGN.md",
+          "THREAT_MODEL.md",
+          "assets/decision-editor-desktop.png",
+          "assets/decision-editor-mobile-create.png",
+          "harness/gate.json",
+          "harness/plan.json",
+          "harness/quality_score.json",
+          "harness/review.json",
+          "harness/tasks.json"
+        ],
+        "message": "Governed docs are present.",
+        "missing_important": [],
+        "missing_required": [],
+        "present_important": [
+          "STORAGE_BACKENDS.md",
+          "THREAT_MODEL.md",
+          "LOCAL_MIGRATION.md",
+          "HYBRID_V4_IMPLEMENTATION.md"
+        ],
+        "present_required": [
+          "SPEC.md",
+          "SYSTEM_DESIGN.md",
+          "DESIGN.md"
+        ],
+        "status": "pass"
+      },
+      "id": "docs",
+      "status": "pass"
     },
-    "reduced_competitor_evaluation": {
-      "status": "orgbrain_local_gate_pass_competitor_gate_incomplete",
-      "ranked_competitors": ["mem0", "hindsight", "mnemosyne"],
-      "orgbrain_accuracy": 100,
-      "orgbrain_pass_5": 100,
-      "orgbrain_recall_at_5": 100,
-      "orgbrain_personal_accuracy": 100,
-      "orgbrain_organization_accuracy": 100,
-      "best_competitor_accuracy": 80,
-      "best_competitor": "mem0",
-      "hindsight_readiness_repeat": 1,
-      "orgbrain_search_p95_ms": 13.39,
-      "orgbrain_average_context_tokens": 1158.33,
-      "failed_rows": 0,
-      "artifact": "artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-orgbrain-v4-fixed-repeat5.json"
+    {
+      "detail": {
+        "difficulty_assessment": {
+          "diff": {
+            "additions": 228,
+            "available": true,
+            "base_ref": "21a9de6eead1252b11ca3461a670240e612873e3",
+            "binary_files": 0,
+            "changed_file_count": 6,
+            "changed_files": [
+              "docs/HYBRID_V4_IMPLEMENTATION.md",
+              "package.json",
+              "scripts/lib/local-memory-store.mjs",
+              "scripts/local-memory.test.mjs",
+              "scripts/local-scale-benchmark.mjs",
+              "scripts/local-scale-benchmark.test.mjs"
+            ],
+            "changed_files_truncated": 0,
+            "component_count": 3,
+            "components": [
+              "<root>",
+              "docs",
+              "scripts"
+            ],
+            "components_truncated": 0,
+            "content_sha256": "72b885caf443a01145d2660fc0e0520418513dfc79a1aa015a4d9f8a4d3b3a0e",
+            "deletions": 120,
+            "fingerprint": "8736d60e2b655e85e12ffcc97ec0481a47a8a48372bf6287ddfd5b185815032c",
+            "head_sha": "21a9de6eead1252b11ca3461a670240e612873e3",
+            "line_changes": 348
+          },
+          "level": "moderate",
+          "reasons": [
+            "cross-file diff touches 6 files",
+            "line delta is 348",
+            "manifest declares 3 risks",
+            "diff spans 3 top-level components"
+          ],
+          "risk_count": 3,
+          "score": 6,
+          "sensitive_files": [],
+          "sensitive_files_truncated": 0
+        },
+        "effective_difficulty": "moderate",
+        "enforced": true,
+        "errors": [],
+        "message": "Workflow artifacts satisfy completion and evidence requirements.",
+        "planned_difficulty": "simple"
+      },
+      "id": "workflow",
+      "status": "pass"
+    },
+    {
+      "detail": {
+        "deductions": [],
+        "minimum_score": 85,
+        "score": 100
+      },
+      "id": "score",
+      "status": "pass"
     }
-  },
-  "blocked_acceptance": [
-    "LongMemEval five-run gate",
-    "new audited and sealed 200 five-run gate",
-    "BEAM 500K/1M/10M same-harness gate",
-    "LoCoMo and PrecisionMemBench gates",
-    "competitive-memory-v1 strict lead over Mem0, Hindsight, and Mnemosyne",
-    "10M p95 and memory regression",
-    "production shadow and staged rollout"
-  ]
+  ],
+  "status": "pass"
 }

@@ -63,6 +63,9 @@ payload, so no dataset hash has been fabricated. Current status is recorded in
 
 - SQLite schema 17 rebuild, v3/v4 coexistence, ACL, suppression, delete, hash,
   FTS, and embedding-count verification.
+- The isolated 100k local v4 scale benchmark rebuilds only the v4 projection
+  (`legacy_v3_projection: false`) and clears any reused v3/v4 derived rows;
+  normal local index rebuilds retain the additive v3/v4 coexistence default.
 - Shared and API typechecks; shared, API, MCP, projector, and Node tests.
 - Static checks excluding benchmark names, scorer IDs, gold sources, and
   generative calls from product retrieval.

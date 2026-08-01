@@ -72,6 +72,16 @@ async function seed(store, count, progress) {
       DELETE FROM memory_edges;
       DELETE FROM memory_versions;
       DELETE FROM memory_deletions;
+      DELETE FROM memory_retrieval_units_fts;
+      DELETE FROM memory_retrieval_unit_embeddings;
+      DELETE FROM memory_retrieval_unit_features;
+      DELETE FROM memory_retrieval_unit_feature_stats;
+      DELETE FROM memory_retrieval_units;
+      DELETE FROM memory_retrieval_units_v4_fts;
+      DELETE FROM memory_retrieval_unit_embeddings_v4;
+      DELETE FROM memory_retrieval_unit_features_v4;
+      DELETE FROM memory_retrieval_unit_feature_stats_v4;
+      DELETE FROM memory_retrieval_units_v4;
       DELETE FROM memories;
     `);
     const now = Date.now();
@@ -167,7 +177,7 @@ async function main() {
   const store = new LocalMemoryStore(options.db);
   const seedDurationMs = await seed(store, options.count, options.progress);
   const indexStarted = performance.now();
-  await store.rebuildIndex();
+  await store.rebuildIndex({ includeLegacyV3: false });
   const indexDurationMs = performance.now() - indexStarted;
   const latencies = [];
   const coldLatencies = [];
@@ -209,6 +219,7 @@ async function main() {
       record_count: options.count,
       query_count: options.queries,
       search_mode: "hybrid_v4",
+      legacy_v3_projection: false,
       embedding_provider: "local-sparse-feature-hash-v2-degraded",
       quality_embedding_contract: "pinned ONNX float16 BLOB",
       segment_candidate_limit: 24,

@@ -370,6 +370,34 @@ test("hybrid_v4 projects canonical kinds and uses authority only for relevance t
   }
 });
 
+test("v4-only rebuilds preserve an existing legacy projection for rollback", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.capture(captureInput({
+      kind: "fact",
+      external_key: "v4:rebuild:preserve-v3",
+      content: "The additive v4 rebuild keeps the legacy retrieval projection available.",
+      summary: "Additive v4 rebuild"
+    }));
+    const before = await store.verify();
+    await store.rebuildIndex({ includeLegacyV3: false });
+    const after = await store.verify();
+    assert.equal(after.ok, true);
+    assert.equal(after.retrieval_unit_count, before.retrieval_unit_count);
+    assert.ok(after.retrieval_unit_v4_count > 0);
+    const results = await store.search({
+      tenant_id: "personal",
+      query: "additive v4 rebuild",
+      search_mode: "hybrid_v4",
+      limit: 1
+    });
+    assert.equal(results[0].memory.external_key, "v4:rebuild:preserve-v3");
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("hybrid_v3 keeps exact lexical evidence above generic intent matches", async () => {
   const ctx = await fixture();
   try {
