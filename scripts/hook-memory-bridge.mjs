@@ -552,6 +552,21 @@ function buildCodexRecord(payloadText, parsed) {
   });
 }
 
+function buildCodexStopRecord(payloadText, parsed) {
+  const sessionId = firstString(parsed?.session_id);
+  const turnId = firstString(parsed?.turn_id);
+  return buildCommonRecord("codex", payloadText, parsed, {
+    eventType: firstString(parsed?.hook_event_name, "Stop"),
+    externalKey: `codex:${turnId || sessionId || sha256(payloadText)}`,
+    assistantText: firstString(parsed?.last_assistant_message),
+    metadata: {
+      sessionId,
+      turnId,
+      transcriptPath: firstString(parsed?.transcript_path)
+    }
+  });
+}
+
 function buildClaudeRecord(payloadText, parsed) {
   const sessionId = firstString(parsed?.session_id);
   const payloadHash = sha256(payloadText).slice(0, 16);
@@ -622,6 +637,9 @@ export function normalizeRecord(sourceName, payloadText) {
     case "codex":
       if (parsed && typeof parsed === "object") return buildCodexRecord(payloadText, parsed);
       break;
+    case "codex-stop":
+      if (parsed && typeof parsed === "object") return buildCodexStopRecord(payloadText, parsed);
+      break;
     case "claude":
       if (parsed && typeof parsed === "object") return buildClaudeRecord(payloadText, parsed);
       break;
@@ -653,7 +671,7 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
   }
 
   const tags = dedupeTags([
-    sourceName,
+    record.sourceName,
     "hook",
     "promoted",
     record.eventType,
@@ -919,30 +937,31 @@ async function captureLocalMemory(sourceName, tenantId, record) {
   });
 }
 
-export async function ingestHookEvent(sourceInput, payloadInput) {
-  const sourceName = firstString(sourceInput, "unknown");
+export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
+  const inputSourceName = firstString(sourceInput, "unknown");
+  const sourceName = inputSourceName === "codex-stop" ? "codex" : inputSourceName;
+  const finish = (result) => {
+    if (options.emit !== false) console.log(JSON.stringify(result));
+    return result;
+  };
   const payloadText = await readPayload(payloadInput);
   if (!payloadText.trim()) {
-    console.log(JSON.stringify({ ok: true, skipped: "empty-payload", source: sourceName }));
-    return;
+    return finish({ ok: true, skipped: "empty-payload", source: sourceName });
   }
 
   await loadEnvFallbacks();
 
   const memoryMode = resolveMemoryMode();
   let tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
-  const prepared = prepareMemoryRecordForUpsert(sourceName, payloadText);
+  const prepared = prepareMemoryRecordForUpsert(inputSourceName, payloadText);
   if (prepared.action === "skip") {
-    console.log(
-      JSON.stringify({
-        ok: true,
-        source: sourceName,
-        tenant_id: tenantId,
-        skipped: "low-signal-memory",
-        ...memoryModeFields(memoryMode)
-      })
-    );
-    return;
+    return finish({
+      ok: true,
+      source: sourceName,
+      tenant_id: tenantId,
+      skipped: "low-signal-memory",
+      ...memoryModeFields(memoryMode)
+    });
   }
   const workspace = await resolveWorkspaceContext(prepared.record, { memoryMode });
   tenantId = workspace.tenantId;
@@ -950,58 +969,47 @@ export async function ingestHookEvent(sourceInput, payloadInput) {
 
   if (!memoryMode.cloudWritesAllowed) {
     if (process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE === "false") {
-      console.log(
-        JSON.stringify({
-          ok: true,
-          skipped: "local-hook-capture-disabled",
-          source: sourceName,
-          ...memoryModeFields(memoryMode)
-        })
-      );
-      return;
+      return finish({
+        ok: true,
+        skipped: "local-hook-capture-disabled",
+        source: sourceName,
+        ...memoryModeFields(memoryMode)
+      });
     }
     const result = await captureLocalMemory(sourceName, tenantId, prepared.record);
-    console.log(
-      JSON.stringify({
-        ok: true,
-        source: sourceName,
-        tenant_id: tenantId,
-        mode: "local",
-        external_key: prepared.record.externalKey,
-        memory_id: result.memory_id,
-        created: result.created
-      })
-    );
-    return;
+    return finish({
+      ok: true,
+      source: sourceName,
+      tenant_id: tenantId,
+      mode: "local",
+      external_key: prepared.record.externalKey,
+      memory_id: result.memory_id,
+      created: result.created
+    });
   }
 
   const apiBase = resolveApiBase();
   const apiKey = ensureRequiredEnv("ORGBRAIN_API_KEY");
 
   if (!apiBase || !apiKey) {
-    console.log(
-      JSON.stringify({
-        ok: true,
-        skipped: "missing-orgbrain-env",
-        source: sourceName,
-        ...memoryModeFields(memoryMode)
-      })
-    );
-    return;
+    return finish({
+      ok: true,
+      skipped: "missing-orgbrain-env",
+      source: sourceName,
+      ...memoryModeFields(memoryMode)
+    });
   }
 
   const result = await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
-  console.log(
-    JSON.stringify({
-      ok: true,
-      source: sourceName,
-      tenant_id: tenantId,
-      external_key: prepared.record.externalKey,
-      inserted: Number(result?.inserted ?? 0),
-      updated: Number(result?.updated ?? 0),
-      ...memoryModeFields(memoryMode)
-    })
-  );
+  return finish({
+    ok: true,
+    source: sourceName,
+    tenant_id: tenantId,
+    external_key: prepared.record.externalKey,
+    inserted: Number(result?.inserted ?? 0),
+    updated: Number(result?.updated ?? 0),
+    ...memoryModeFields(memoryMode)
+  });
 }
 
 export async function main() {

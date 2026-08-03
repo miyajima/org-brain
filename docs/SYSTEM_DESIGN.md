@@ -50,10 +50,13 @@
   it is not expected to improve retrieval quality by storage substitution
   alone. The backend contract, activation criteria, migration rules, and parity
   gates are defined in [`STORAGE_BACKENDS.md`](STORAGE_BACKENDS.md).
-- Local SQLite uses the Node-bundled driver, WAL, schema version 15 (aligned
-  with Cloud D1), SHA-256 content hashes, immutable JSON version snapshots,
+- Local SQLite uses the Node-bundled driver, WAL, schema version 17, SHA-256
+  content hashes, immutable JSON version snapshots,
   verified backup/restore, `quick_check`, read-only query connections, and
   POSIX-private file modes.
+- Startup removes obsolete legacy FTS triggers after creating a private backup,
+  then rebuilds the derived FTS projection so the application remains its sole
+  writer.
 - Local SQLite maintains a reconstructable sparse-vector feature projection and
   feature-frequency catalog for offline semantic candidates. Search fuses FTS,
   sparse-vector similarity, memory edges, time, authority, and utility; delete,
@@ -109,6 +112,7 @@
 - `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
 - `pnpm agmsg` is the local CLI for sending, listing, reading, and acking agent messages through the API Gateway.
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
+- `orgbrain maintenance run` applies the same deterministic consolidation policy to personal local SQLite. On macOS, the opt-in `connector setup codex --mode minimal-hooks --maintenance daily --execute` path installs a user LaunchAgent; it never installs from package lifecycle scripts, makes no LLM or cloud calls, excludes manual-source memories from automatic compaction, and retains suppressed originals.
 - `pnpm memories:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
 - `pnpm memories:quality-backfill`, cleanup, hook ingestion, usage reporting, and Cloud maintenance share the same memory quality classifier; changing its policy requires parity tests for the Cloud and Node entry points.
 - `pnpm memories:backfill-rationales` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing memories, skipping memories that already have rationale rows.

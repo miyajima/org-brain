@@ -27,6 +27,10 @@ All notable changes to Org Brain are documented here. Releases use semantic vers
 - Add the `orgbrain` CLI with Node-bundled SQLite, MemoryRecord v2, migration,
   lifecycle history, integrity verification, index rebuild, backup/restore, and
   loopback-only serving.
+- Add an opt-in minimal Codex hook installer plus macOS personal daily
+  maintenance. The user LaunchAgent performs deterministic local consolidation
+  without LLM or cloud calls, preserves manual memories, and supports status
+  and recoverable uninstall commands.
 - Add Cloud D1 MemoryRecord v2 fields and hard-delete propagation with a
   content-free tombstone.
 - Add npm provenance, build attestation, CycloneDX SBOM, Docker Compose,

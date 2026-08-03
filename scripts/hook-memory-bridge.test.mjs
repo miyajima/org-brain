@@ -161,6 +161,22 @@ describe("hook-memory-bridge promotion", () => {
     expect(classifyMemoryRecord(record).action).toBe("skip");
   });
 
+  it("normalizes Codex Stop lifecycle payloads to the canonical Codex source", () => {
+    const payload = JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      turn_id: "turn-1",
+      last_assistant_message:
+        "原因は設定の競合でした。対処としてローカル専用設定へ統一し、テストで再発しないことを確認しました。"
+    });
+
+    const record = normalizeRecord("codex-stop", payload);
+    expect(record.sourceName).toBe("codex");
+    expect(record.externalKey).toBe("codex:turn-1");
+    expect(record.projectId).toBe("org-brain");
+    expect(record.assistantText).toContain("ローカル専用設定");
+  });
+
   it("respects explicit global project scope from payload", () => {
     const payload = JSON.stringify({
       type: "agent-turn-complete",

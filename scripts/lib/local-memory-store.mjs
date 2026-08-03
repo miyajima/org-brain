@@ -194,6 +194,29 @@ function hasTable(db, table) {
   );
 }
 
+const LEGACY_FTS_TRIGGER_NAMES = [
+  "memories_fts_ai",
+  "memories_fts_ad",
+  "memories_fts_au"
+];
+
+function hasLegacyFtsTriggers(db) {
+  const placeholders = LEGACY_FTS_TRIGGER_NAMES.map(() => "?").join(",");
+  return Boolean(
+    db.prepare(
+      `SELECT 1 AS found FROM sqlite_master
+       WHERE type = 'trigger' AND name IN (${placeholders})
+       LIMIT 1`
+    ).get(...LEGACY_FTS_TRIGGER_NAMES)
+  );
+}
+
+function dropLegacyFtsTriggers(db) {
+  for (const name of LEGACY_FTS_TRIGGER_NAMES) {
+    db.exec(`DROP TRIGGER IF EXISTS "${name}"`);
+  }
+}
+
 function tableColumns(db, table) {
   if (!hasTable(db, table)) return new Set();
   return new Set(db.prepare(`PRAGMA table_info("${table}")`).all().map((row) => row.name));
@@ -881,6 +904,11 @@ function migrateSchema(db) {
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL");
   db.exec("BEGIN IMMEDIATE");
   try {
+    // Databases upgraded through older releases may retain content-only FTS
+    // triggers. Current writes maintain the richer FTS projection explicitly,
+    // so keeping both writers creates orphan rows and eventually colliding FTS
+    // rowids.
+    dropLegacyFtsTriggers(db);
     createCanonicalTables(db);
     upgradeLegacyMemories(db);
     addIndexes(db);
@@ -1588,7 +1616,11 @@ export class LocalMemoryStore {
       const probe = new DatabaseSync(this.dbPath);
       try {
         const currentVersion = Number(probe.prepare("PRAGMA user_version").get().user_version);
-        if (currentVersion < MEMORY_SCHEMA_VERSION && hasTable(probe, "memories")) {
+        const needsLegacyFtsRepair = hasLegacyFtsTriggers(probe);
+        if (
+          (currentVersion < MEMORY_SCHEMA_VERSION || needsLegacyFtsRepair) &&
+          hasTable(probe, "memories")
+        ) {
           const backupDirectory = join(dirname(this.dbPath), "backups");
           await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
           await chmod(backupDirectory, 0o700);
@@ -1608,6 +1640,7 @@ export class LocalMemoryStore {
       const currentVersion = Number(db.prepare("PRAGMA user_version").get().user_version);
       if (
         currentVersion !== MEMORY_SCHEMA_VERSION ||
+        hasLegacyFtsTriggers(db) ||
         !hasTable(db, "memory_versions") ||
         !hasTable(db, "memories_fts") ||
         !hasTable(db, "memory_embeddings") ||

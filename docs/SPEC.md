@@ -187,6 +187,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - hook/bridge 由来の自動保存は非対話 path として扱い、propose/confirm を要求しない。代わりに `/v1/memories/capture-rationale` で `decision_rationales` / `decision_evidence` を `inferred_unconfirmed` として保存する。
 - `pnpm docs:seed` upserts the minimal stable knowledge-doc set via the Pages/API proxy.
 - `pnpm memories:maintain` compacts old raw hook memories into digest rows and collapses old duplicates.
+- 個人ローカルSQLiteでは `orgbrain maintenance run` が同じ決定的な整理方針を適用する。macOSの日次LaunchAgent登録は `connector setup codex --mode minimal-hooks --maintenance daily --execute` の明示指定時だけ行い、LLM・Cloud書き込み・manual sourceの自動抑制・物理削除は行わない。`status` とrecoverableな `uninstall --execute` を提供する。
 - `pnpm memories:cleanup` dry-runs by default, can export a JSONL backup, physically removes low-signal memory rows and related memory tables on `--apply`, and promotes structured `project-fact` rows to curated semantic memory.
 - `pnpm memories:backfill-rationales` dry-runs by default and can add inferred unconfirmed rationale/evidence rows for active high-value memories (`project-fact`, `curated-memory`, `promoted`, `canonical-memory`) with `--apply`.
 - `pnpm metrics:report` reports retrieval hit/fallback/latency plus service outcomes from D1 telemetry.

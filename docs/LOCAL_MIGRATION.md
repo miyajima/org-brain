@@ -1,7 +1,7 @@
 # Local memory migration and recovery
 
 OrgBrain local memory uses the same MemoryRecord v2 logical contract as the
-Cloud D1 service. The authoritative SQLite schema version is `14`. Full-text and
+Cloud D1 service. The authoritative SQLite schema version is `17`. Full-text and
 future vector indexes are derived data and can be rebuilt from authoritative
 records.
 
@@ -10,6 +10,12 @@ records.
 Back up the database, then run `init`. Initialization detects the legacy
 `memories` columns, adds v2 fields, computes missing SHA-256 content hashes,
 creates initial version snapshots, and rebuilds FTS.
+
+Initialization also detects obsolete `memories_fts_ai`, `memories_fts_ad`, and
+`memories_fts_au` triggers left by older local databases. Before removing them
+and rebuilding FTS, OrgBrain creates a private timestamped backup under
+`~/.org-brain/backups/`. Current writes maintain FTS explicitly, so the legacy
+triggers must not remain as a second projection writer.
 
 ```bash
 orgbrain backup create

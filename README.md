@@ -229,6 +229,67 @@ surface. References: [Codex MCP](https://developers.openai.com/codex/mcp/),
 [OpenCode MCP](https://opencode.ai/v2/docs/mcp-servers), and
 [OpenClaw MCP](https://docs.openclaw.ai/cli/mcp).
 
+For the smallest Codex installation, use local lifecycle hooks instead of MCP.
+The command is a reviewable dry run unless `--execute` is supplied:
+
+```bash
+# From a checkout; creates the reusable `orgbrain` command.
+npm install --global .
+
+orgbrain connector setup codex --mode minimal-hooks \
+  --workspace "$PWD" \
+  --project-id "$(basename "$PWD")"
+
+orgbrain connector setup codex --mode minimal-hooks \
+  --workspace "$PWD" \
+  --project-id "$(basename "$PWD")" \
+  --maintenance daily \
+  --execute
+```
+
+This mode installs two bounded command hooks and no resident process:
+
+- `UserPromptSubmit` searches local SQLite and adds at most two short, redacted
+  historical summaries as untrusted reference context.
+- `Stop` stores only reusable, high-signal conclusions through the existing
+  deterministic quality filter.
+
+The installer makes no LLM calls and does not register an MCP server. It safely
+merges `~/.config/org-brain/hooks.env`,
+`~/.config/org-brain/workspaces.json`, and `~/.codex/hooks.json`, initializes
+`~/.org-brain/memory.sqlite`, preserves unrelated hooks, creates timestamped
+backups, and is idempotent. Existing cloud-enabled settings fail closed unless
+`--force` is explicitly supplied. Restart Codex after installation, open
+`/hooks`, and trust the OrgBrain `UserPromptSubmit` and `Stop` commands once.
+See the official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
+for the lifecycle event and trust model.
+
+On macOS, `--maintenance daily` also installs the user-owned LaunchAgent
+`com.orgbrain.personal-maintenance`. It runs at 03:17 local time and invokes the
+same packaged CLI against local SQLite. The job makes no LLM calls or cloud
+writes. It creates deterministic canonical summaries and digests, suppresses
+old automatic-hook duplicates without deleting them, repairs indexes only when
+verification fails, and never automatically compacts manually captured rows.
+Plain `npm install` does not register the job; it is installed only by the
+explicit `--maintenance daily --execute` option.
+
+```bash
+# Preview or apply the same maintenance manually.
+orgbrain maintenance run
+orgbrain maintenance run --apply
+
+# Inspect the LaunchAgent and last run, or remove it recoverably.
+orgbrain maintenance status
+orgbrain maintenance uninstall --execute
+```
+
+The LaunchAgent lives at
+`~/Library/LaunchAgents/com.orgbrain.personal-maintenance.plist`. Last-run state
+and bounded stdout/stderr logs live under `~/.config/org-brain/`. Installation
+is idempotent; replacement and uninstall preserve the previous plist under
+`~/.config/org-brain/backups/`. Linux and Windows schedulers are not installed
+by this personal macOS mode.
+
 The common hook bridge accepts Codex, Claude, OpenCode, and OpenClaw events.
 When cloud memory is disabled (the default), distilled durable entries are
 written directly to local SQLite; raw transcripts are not stored:
@@ -733,6 +794,8 @@ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` before running LLM judging.
 ## What Is Included
 
 - `scripts/local-memory.mjs`: personal SQLite memory CLI.
+- `scripts/codex-memory-context.mjs`: bounded local context lookup for the
+  Codex `UserPromptSubmit` hook.
 - `scripts/hook-memory-bridge.mjs`: reusable-memory capture from local agent hooks.
 - `scripts/sync-agents-memory.mjs`: import/export bridge for local agent memory.
 - `apps/api-gateway`: Hono API Worker for memory, docs, tasks, measurement, and Remote MCP.

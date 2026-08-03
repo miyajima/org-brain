@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -645,6 +645,76 @@ test("init upgrades a legacy local database in place without losing records", as
     assert.equal(record.project_id, "legacy-project");
     assert.equal(record.current_version, 1);
     assert.equal((await store.verify()).schema_version, MEMORY_SCHEMA_VERSION);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("init removes legacy FTS triggers and repairs their duplicate projection", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.capture(captureInput({ external_key: "legacy-fts:first" }));
+
+    const legacy = new DatabaseSync(ctx.dbPath);
+    legacy.exec(`
+      CREATE TRIGGER memories_fts_ai AFTER INSERT ON memories BEGIN
+        INSERT INTO memories_fts(rowid, content, summary)
+        VALUES (new.rowid, new.content, COALESCE(new.summary, ''));
+      END;
+      CREATE TRIGGER memories_fts_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, summary)
+        VALUES ('delete', old.rowid, old.content, COALESCE(old.summary, ''));
+      END;
+      CREATE TRIGGER memories_fts_au AFTER UPDATE OF content, summary ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, summary)
+        VALUES ('delete', old.rowid, old.content, COALESCE(old.summary, ''));
+        INSERT INTO memories_fts(rowid, content, summary)
+        VALUES (new.rowid, new.content, COALESCE(new.summary, ''));
+      END;
+    `);
+    legacy.close();
+
+    const second = await store.capture(captureInput({
+      external_key: "legacy-fts:second",
+      content: "A second durable record exposes the duplicate FTS writer."
+    }));
+    const polluted = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    assert.equal(polluted.prepare("SELECT COUNT(*) AS count FROM memories").get().count, 2);
+    assert.equal(polluted.prepare("SELECT COUNT(*) AS count FROM memories_fts").get().count, 3);
+    polluted.close();
+
+    const repaired = new LocalMemoryStore(ctx.dbPath);
+    await repaired.init();
+    const backups = await readdir(join(ctx.directory, "backups"));
+    assert.ok(backups.some((name) => name.startsWith(`pre-v${MEMORY_SCHEMA_VERSION}-`)));
+    const inspected = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    assert.equal(
+      inspected.prepare(
+        "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'memories_fts_a%'"
+      ).get().count,
+      0
+    );
+    assert.equal(inspected.prepare("SELECT COUNT(*) AS count FROM memories_fts").get().count, 2);
+    inspected.close();
+
+    const updated = await repaired.capture(captureInput({
+      external_key: "legacy-fts:second",
+      content: "The repaired FTS projection supports idempotent updates."
+    }));
+    assert.equal(updated.memory_id, second.memory_id);
+    assert.equal(updated.created, false);
+    assert.equal(updated.version, 2);
+
+    const distinct = await repaired.capture(captureInput({
+      external_key: "legacy-fts:third",
+      content: "A distinct event also persists after the legacy repair."
+    }));
+    assert.equal(distinct.created, true);
+    const verification = await repaired.verify();
+    assert.equal(verification.ok, true);
+    assert.equal(verification.record_count, 3);
+    assert.equal(verification.fts_count, 3);
   } finally {
     await ctx.cleanup();
   }
