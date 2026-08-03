@@ -1,0 +1,23 @@
+{
+  "summary": "The code unification changes future quality output but must not mutate production data, weaken tenant isolation, or broaden destructive cleanup.",
+  "artifact_refs": [
+    "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml",
+    "apps/cap-runner/src/memory-maintenance.ts",
+    "apps/api-gateway/src/memory-lifecycle-service.ts",
+    "scripts/memory-cleanup.mjs"
+  ],
+  "decision_refs": [
+    "adopt the richer ingestion and operator classifier as canonical",
+    "keep all production validation read-only"
+  ],
+  "evidence": [
+    {
+      "type": "review",
+      "ref": "docs/harness/context_risks.md"
+    }
+  ],
+  "residual_risks": [
+    "A later deployment will change future maintenance scoring and summaries",
+    "A separate export-gated backfill is required to reconcile existing production rows"
+  ]
+}

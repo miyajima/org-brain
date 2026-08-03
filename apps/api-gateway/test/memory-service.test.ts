@@ -443,7 +443,7 @@ describe("memory-service", () => {
     expect(listed[0]).toMatchObject({
       external_key: "openclaw:c1",
       content: "updated content",
-      summary: "openclaw | general | second",
+      summary: "(global) | workaround | second updated content",
       source: "openclaw"
     });
     expect(listed[0].utility_score).toEqual(expect.any(Number));
@@ -507,7 +507,7 @@ describe("memory-service", () => {
       summary: expect.stringContaining("harness-todo-webapp-new-20260524 | artifact |"),
       utility_score: expect.any(Number),
       confidence_score: expect.any(Number),
-      expires_at: Date.parse("2026-06-07T00:00:00.000Z")
+      expires_at: Date.parse("2026-06-23T00:00:00.000Z")
     });
   });
 

@@ -32,6 +32,7 @@
 ## Memory and Retrieval
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
 - Shared rationale inference heuristics live in `packages/shared/src/rationale-extraction.ts`.
+- Runtime-neutral memory quality assessment lives in `packages/shared/src/memory-quality-runtime.mjs`; the Cloud TypeScript facade and Node compatibility entry point both execute this single classifier.
 - Context Engine MVP logic lives in `apps/api-gateway/src/context-engine-service.ts`.
 - Lifecycle-aware write logic lives in `apps/api-gateway/src/memory-lifecycle-service.ts`.
 - Interactive rationale confirmation lives in `apps/api-gateway/src/rationale-service.ts`.
@@ -66,7 +67,8 @@
 - Minimal conflict detection groups same-title decision memories and reports active versus deprecated/superseded/expired contradictions in the enrich response.
 - Decision editor provenance is opt-in for agent APIs: `includeProvenance`, `authorityScoring`, and `verificationView` default to false so compact benchmark retrieval remains unchanged.
 - Decision memory edit/confirm flows update the current `decision_memories` snapshot and append `decision_memory_versions` rows for reviewability.
-- Hook ingestion derives a default project name from `basename(cwd)` and, on first use per workspace, can confirm and cache a user-provided project name locally for later upserts.
+- Hook ingestion resolves tenant and project together from the versioned local `workspaces.json`. A mapped workspace wins over the single-tenant environment fallback, while an explicit payload project applies only to that event. First reusable use can confirm `basename(cwd)` and writes the private mapping atomically; low-signal skips do not create it.
+- Organization sharing fails closed when neither a workspace mapping nor `ORGBRAIN_TENANT_ID` resolves a tenant. Legacy `project-names.json` entries migrate without source deletion, and operator backfill/snapshot/usage-status jobs consume the same workspace-to-project roots.
 - Retrieval refresh is best-effort: cap-runner and API memory search/profile update `last_accessed_at` and append a `memory_versions` refresh snapshot for top memory hits without blocking task execution.
 - Measurement mode is isolated from normal execution. API task creation expands one logical request into raw-context control and compact-memory treatment task variants, cap-runner records estimated token/cost/duration usage per variant, and both variants run with memory writes disabled so measurement does not pollute future recall. Shared `measurement_session_id` values group multiple measured turns into one session report.
 
@@ -108,6 +110,7 @@
 - `pnpm agmsg` is the local CLI for sending, listing, reading, and acking agent messages through the API Gateway.
 - `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
 - `pnpm memories:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
+- `pnpm memories:quality-backfill`, cleanup, hook ingestion, usage reporting, and Cloud maintenance share the same memory quality classifier; changing its policy requires parity tests for the Cloud and Node entry points.
 - `pnpm memories:backfill-rationales` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing memories, skipping memories that already have rationale rows.
 - `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
 - `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.

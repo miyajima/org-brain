@@ -1,0 +1,12 @@
+{
+  "summary": "Implement a private atomic workspace config module, connect hook tenant/project resolution and operator root lookup, preserve legacy and environment fallbacks, then update tests and governed docs.",
+  "artifact_refs": ["docs/harness/plan.json"],
+  "decision_refs": [
+    "workspaces.json is the canonical local mapping and contains no credentials",
+    "organization sharing requires an explicit workspace or environment tenant",
+    "legacy project-names.json remains untouched and is migrated as compatibility input",
+    "server-side API and MCP grants remain authoritative"
+  ],
+  "evidence": [{"type": "artifact", "ref": "docs/harness/plan.json"}],
+  "residual_risks": ["Existing users with an invalid workspaces.json will fail closed until they repair the file."]
+}

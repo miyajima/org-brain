@@ -1,0 +1,7 @@
+{
+  "summary": "README, SPEC, SYSTEM_DESIGN, and the environment example must describe one workspace mapping file and the trust boundary between local routing and server authorization.",
+  "artifact_refs": ["README.md", "docs/SPEC.md", "docs/SYSTEM_DESIGN.md", ".env.example"],
+  "decision_refs": [],
+  "evidence": [{"type": "document", "ref": "docs/harness/context_docs_workspace_mapping.md"}],
+  "residual_risks": ["Examples must not contain production credentials or imply that tenant IDs are authorization credentials."]
+}

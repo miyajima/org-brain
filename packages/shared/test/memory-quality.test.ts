@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { assessMemoryUsefulness } from "../src/memory-quality";
+import { assessMemoryUsefulness, classifyMemoryQuality } from "../src/memory-quality";
+import {
+  assessMemoryUsefulness as assessMemoryUsefulnessRuntime,
+  classifyMemoryQuality as classifyMemoryQualityRuntime
+} from "../src/memory-quality-runtime.mjs";
 
 describe("memory quality assessment", () => {
   it("rewrites low-signal completion summaries into project/category/action titles", () => {
@@ -29,7 +33,40 @@ describe("memory quality assessment", () => {
     });
 
     expect(assessed.summary).toContain("harness-todo-webapp-new-20260524 | artifact |");
-    expect(assessed.expires_at).toBe(Date.parse("2026-06-07T00:00:00.000Z"));
-    expect(assessed.expires_reason).toBe("temporary-artifact-or-runtime-state");
+    expect(assessed.expires_at).toBe(Date.parse("2026-06-23T00:00:00.000Z"));
+    expect(assessed.expires_reason).toBe("temporary-artifact-or-uncommitted");
+  });
+
+  it("keeps typed Cloud and runtime-neutral Node assessments identical", () => {
+    const input = {
+      project_id: "consentside",
+      summary:
+        "consentside | command-result | # Reusable Memory - Source: codex - Event: agent-turn-complete ## Takeaway 原因はcron未設定でした。",
+      content:
+        "# Reusable Memory\n\n## Takeaway\n原因はcron未設定でした。対応として `wrangler deploy` を実行し、成功を確認しました。",
+      tags: ["codex", "hook", "promoted", "diagnosis", "consentside"],
+      created_at: Date.parse("2026-08-01T00:00:00.000Z")
+    };
+
+    expect(assessMemoryUsefulness(input)).toEqual(assessMemoryUsefulnessRuntime(input));
+    expect(classifyMemoryQuality(input)).toEqual(classifyMemoryQualityRuntime(input));
+  });
+
+  it("exposes the richer low-signal suppression decision to Cloud callers", () => {
+    const input = {
+      project_id: "smart-block",
+      summary: "smart-block | promoted-memory | 実施しました。",
+      content: "実施しました。",
+      tags: ["codex", "hook", "promoted", "smart-block"]
+    };
+
+    expect(classifyMemoryQuality(input)).toMatchObject({
+      action: "delete",
+      reason: "promoted-without-reuse-signal"
+    });
+    expect(assessMemoryUsefulness(input)).toMatchObject({
+      risky_low_signal: true,
+      suppression_candidate: true
+    });
   });
 });

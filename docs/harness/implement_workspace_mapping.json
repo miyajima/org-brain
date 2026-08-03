@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "task": "Unify local workspace tenant and project mapping in workspaces.json",
+  "status": "completed",
+  "artifact_ref": "docs/harness/implement.json"
+}

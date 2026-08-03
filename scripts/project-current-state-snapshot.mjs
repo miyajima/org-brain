@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { assessMemoryUsefulness } from "./lib/memory-quality.mjs";
+import { loadProjectRootMappings } from "./lib/workspace-config.mjs";
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,22 +19,6 @@ const PROJECT_ROOT_OVERRIDES = new Map([
   [".codex", path.join(os.homedir(), ".codex")],
   ["org-brain", repoRoot]
 ]);
-
-function configuredProjectRootOverrides() {
-  const raw = process.env.ORGBRAIN_PROJECT_ROOTS;
-  if (!raw) return new Map();
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return new Map();
-    return new Map(
-      Object.entries(parsed)
-        .filter((entry) => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[0].trim() && entry[1].trim())
-        .map(([key, value]) => [key.trim(), value.trim()])
-    );
-  } catch {
-    return new Map();
-  }
-}
 
 function printHelp() {
   console.log(`Org Brain project current-state snapshot
@@ -107,10 +92,9 @@ function sqlNullable(value) {
   return value === null || value === undefined ? "NULL" : sqlString(value);
 }
 
-function resolveProjectRoot(projectId) {
+function resolveProjectRoot(projectId, projectRoots = new Map()) {
   if (!projectId) return null;
-  const configured = configuredProjectRootOverrides();
-  if (configured.has(projectId)) return configured.get(projectId);
+  if (projectRoots.has(projectId)) return projectRoots.get(projectId);
   if (PROJECT_ROOT_OVERRIDES.has(projectId)) return PROJECT_ROOT_OVERRIDES.get(projectId);
   return null;
 }
@@ -128,8 +112,8 @@ async function runD1(options, command) {
   return first.results ?? [];
 }
 
-async function inspectRepo(projectId) {
-  const root = resolveProjectRoot(projectId);
+async function inspectRepo(projectId, projectRoots) {
+  const root = resolveProjectRoot(projectId, projectRoots);
   const docs = root
     ? ["README.md", "AGENTS.md", "CLAUDE.md", "docs/SPEC.md", "docs/SYSTEM_DESIGN.md", "docs/DESIGN.md"].filter((file) => existsSync(path.resolve(root, file)))
     : [];
@@ -193,7 +177,7 @@ function buildContent(options, projectId, rows, repo) {
   ].join("\n");
 }
 
-async function buildSnapshots(options) {
+async function buildSnapshots(options, projectRoots) {
   const rows = await runD1(
     options,
     `SELECT id, project_id, source, summary, content, tags_json, created_at, utility_score, confidence_score, expires_at
@@ -205,7 +189,7 @@ async function buildSnapshots(options) {
   const projectIds = options.projects ?? [...new Set(rows.map((row) => row.project_id).filter(Boolean))].sort();
   const snapshots = [];
   for (const projectId of projectIds) {
-    const repo = await inspectRepo(projectId);
+    const repo = await inspectRepo(projectId, projectRoots);
     const content = buildContent(options, projectId, rows, repo);
     const tags = ["org-brain", "maintenance", "canonical-memory", "project-current-state", "project-health", "quality-v2", projectId];
     const assessment = assessMemoryUsefulness({ project_id: projectId, source: "org-brain", summary: `${projectId} current-state snapshot`, content, tags });
@@ -292,7 +276,8 @@ async function main() {
     printHelp();
     return;
   }
-  const snapshots = await buildSnapshots(options);
+  const projectRoots = await loadProjectRootMappings({ tenantId: options.tenant });
+  const snapshots = await buildSnapshots(options, projectRoots);
   if (options.apply && snapshots.length > 0) {
     await runD1(options, buildApplySql(options, snapshots));
   }

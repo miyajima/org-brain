@@ -2,7 +2,7 @@
 
 import crypto from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
@@ -10,6 +10,18 @@ import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { memoryModeFields, resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
+import {
+  configuredTenantFromEnv,
+  legacyProjectNamesFileFromEnv,
+  loadLegacyProjectNames,
+  loadWorkspaceConfig,
+  migrateLegacyProjectNames,
+  normalizeWorkspaceRoot,
+  saveWorkspaceConfig,
+  tenantFallbackFromEnv,
+  withWorkspaceConfigLock,
+  workspacesFileFromEnv
+} from "./lib/workspace-config.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -20,7 +32,6 @@ const DEFAULT_ENV_FILES = [
   path.join(ROOT, ".env.local"),
   path.join(ROOT, ".env")
 ];
-const DEFAULT_PROJECT_NAMES_FILE = "~/.config/org-brain/project-names.json";
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
@@ -667,30 +678,6 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
   };
 }
 
-function projectNamesFileFromEnv() {
-  return resolveHome(firstString(process.env.ORGBRAIN_PROJECT_NAMES_FILE, DEFAULT_PROJECT_NAMES_FILE));
-}
-
-async function loadProjectNames(file = projectNamesFileFromEnv()) {
-  try {
-    const raw = await readFile(file, "utf8");
-    const parsed = safeJsonParse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed)
-        .map(([key, value]) => [firstString(key), normalizeProjectName(value)])
-        .filter(([key, value]) => key && value)
-    );
-  } catch {
-    return {};
-  }
-}
-
-async function saveProjectNames(file, names) {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(names, null, 2)}\n`, "utf8");
-}
-
 async function promptForProjectName(cwd, fallbackProjectId, input = process.stdin, output = process.stderr) {
   if (!input?.isTTY || !output?.isTTY) return fallbackProjectId;
   const rl = readline.createInterface({ input, output });
@@ -719,36 +706,127 @@ async function openTtyStreams() {
   }
 }
 
-export async function resolveProjectNameForWorkspace(record, options = {}) {
-  const cwd = firstString(record?.cwd);
-  if (record?.projectIdExplicit) return record.projectId ?? null;
+async function selectProjectName(cwd, fallbackProjectId, options) {
+  if (options.prompt === false) return fallbackProjectId;
+  if (typeof options.prompt === "function") {
+    return normalizeProjectName(await options.prompt(cwd, fallbackProjectId), fallbackProjectId);
+  }
+  const tty = await openTtyStreams();
+  if (!tty) return fallbackProjectId;
+  try {
+    return await promptForProjectName(cwd, fallbackProjectId, tty.input, tty.output);
+  } finally {
+    tty.close();
+  }
+}
+
+export async function resolveWorkspaceContext(record, options = {}) {
+  const env = options.env ?? process.env;
+  const memoryMode = options.memoryMode ?? resolveMemoryMode(env);
+  const cwd = normalizeWorkspaceRoot(firstString(record?.cwd));
+  const workspacesFile = options.workspacesFile ?? options.file ?? workspacesFileFromEnv(env);
+  const legacyFile = options.legacyFile ?? legacyProjectNamesFileFromEnv(env);
   const fallbackProjectId = normalizeProjectName(record?.projectId, basenameOrEmpty(cwd));
-  if (!cwd || !fallbackProjectId) return fallbackProjectId;
+  let promptedProjectId;
 
-  const file = options.file ?? projectNamesFileFromEnv();
-  const names = options.names ?? await loadProjectNames(file);
-  const existing = normalizeProjectName(names[cwd]);
-  if (existing) return existing;
-
-  let selected = fallbackProjectId;
-  if (options.prompt !== false) {
-    if (typeof options.prompt === "function") {
-      selected = normalizeProjectName(await options.prompt(cwd, fallbackProjectId), fallbackProjectId);
-    } else {
-      const tty = await openTtyStreams();
-      if (tty) {
-        try {
-          selected = await promptForProjectName(cwd, fallbackProjectId, tty.input, tty.output);
-        } finally {
-          tty.close();
-        }
-      }
+  if (
+    !options.config &&
+    !record?.projectIdExplicit &&
+    cwd &&
+    fallbackProjectId &&
+    options.prompt !== false
+  ) {
+    const previewConfig = await loadWorkspaceConfig(workspacesFile);
+    const previewMapped = previewConfig.workspaces[cwd];
+    const previewLegacy =
+      options.migrateLegacy === false
+        ? {}
+        : options.legacyNames ?? await loadLegacyProjectNames(legacyFile);
+    const legacyMapped = Object.prototype.hasOwnProperty.call(previewLegacy, cwd);
+    const tenantResolvable =
+      !memoryMode.orgSharingEnabled ||
+      Boolean(previewMapped?.tenant_id) ||
+      Boolean(configuredTenantFromEnv(env));
+    if (!previewMapped && !legacyMapped && tenantResolvable) {
+      promptedProjectId = await selectProjectName(cwd, fallbackProjectId, options);
     }
   }
 
-  names[cwd] = selected;
-  await saveProjectNames(file, names);
-  return selected;
+  const resolveLocked = async () => {
+    const config = options.config ?? await loadWorkspaceConfig(workspacesFile);
+    const configuredTenantId = configuredTenantFromEnv(env);
+    let changed = false;
+    let mapped = cwd ? config.workspaces[cwd] : null;
+
+    let tenantId = mapped?.tenant_id ?? tenantFallbackFromEnv(env, {
+      organizationSharing: memoryMode.orgSharingEnabled
+    });
+
+    if (!mapped && options.migrateLegacy !== false) {
+      const legacyNames = options.legacyNames ?? await loadLegacyProjectNames(legacyFile);
+      const migration = migrateLegacyProjectNames(config, legacyNames, configuredTenantId);
+      changed = migration.changed;
+      mapped = cwd ? config.workspaces[cwd] : null;
+      tenantId = mapped?.tenant_id ?? tenantId;
+    }
+
+    if (mapped && !mapped.tenant_id && configuredTenantId) {
+      mapped.tenant_id = configuredTenantId;
+      tenantId = configuredTenantId;
+      changed = true;
+    }
+
+    if (record?.projectIdExplicit) {
+      if (changed) await saveWorkspaceConfig(workspacesFile, config);
+      return {
+        tenantId,
+        projectId: record.projectId ?? null,
+        workspaceRoot: cwd || null,
+        source: mapped ? "workspace+explicit-project" : "explicit-project"
+      };
+    }
+
+    if (mapped) {
+      if (changed) await saveWorkspaceConfig(workspacesFile, config);
+      return {
+        tenantId,
+        projectId: mapped.project_id,
+        workspaceRoot: cwd,
+        source: "workspace"
+      };
+    }
+
+    if (!cwd || !fallbackProjectId) {
+      if (changed) await saveWorkspaceConfig(workspacesFile, config);
+      return {
+        tenantId,
+        projectId: fallbackProjectId,
+        workspaceRoot: cwd || null,
+        source: "fallback"
+      };
+    }
+
+    const selected = options.config
+      ? await selectProjectName(cwd, fallbackProjectId, options)
+      : promptedProjectId ?? fallbackProjectId;
+
+    config.workspaces[cwd] = { tenant_id: configuredTenantId, project_id: selected };
+    await saveWorkspaceConfig(workspacesFile, config);
+    return {
+      tenantId,
+      projectId: selected,
+      workspaceRoot: cwd,
+      source: "created"
+    };
+  };
+
+  if (options.config) return resolveLocked();
+  return withWorkspaceConfigLock(workspacesFile, resolveLocked, options.lock);
+}
+
+export async function resolveProjectNameForWorkspace(record, options = {}) {
+  const resolved = await resolveWorkspaceContext(record, options);
+  return resolved.projectId;
 }
 
 async function readPayload(argvPayload) {
@@ -852,7 +930,7 @@ export async function ingestHookEvent(sourceInput, payloadInput) {
   await loadEnvFallbacks();
 
   const memoryMode = resolveMemoryMode();
-  const tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
+  let tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
   const prepared = prepareMemoryRecordForUpsert(sourceName, payloadText);
   if (prepared.action === "skip") {
     console.log(
@@ -866,7 +944,9 @@ export async function ingestHookEvent(sourceInput, payloadInput) {
     );
     return;
   }
-  prepared.record.projectId = await resolveProjectNameForWorkspace(prepared.record);
+  const workspace = await resolveWorkspaceContext(prepared.record, { memoryMode });
+  tenantId = workspace.tenantId;
+  prepared.record.projectId = workspace.projectId;
 
   if (!memoryMode.cloudWritesAllowed) {
     if (process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE === "false") {

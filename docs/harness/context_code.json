@@ -1,0 +1,22 @@
+{
+  "summary": "Cloud runtime and Node operator paths use divergent memory quality classifiers; unify them behind one runtime-neutral shared implementation.",
+  "artifact_refs": [
+    "packages/shared/src/memory-quality.ts",
+    "scripts/lib/memory-quality.mjs",
+    "apps/cap-runner/src/memory-maintenance.ts",
+    "apps/api-gateway/src/memory-lifecycle-service.ts"
+  ],
+  "decision_refs": [
+    "single shared classifier with typed and Node compatibility facades"
+  ],
+  "evidence": [
+    {
+      "type": "review",
+      "ref": "docs/harness/context_code.md"
+    }
+  ],
+  "residual_risks": [
+    "Changing the canonical classifier changes future production maintenance output",
+    "Existing D1 rows require a separate reviewed backfill after deployment"
+  ]
+}

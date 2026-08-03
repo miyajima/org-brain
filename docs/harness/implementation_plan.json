@@ -1,0 +1,21 @@
+{
+  "summary": "Unify memory quality behavior around the richer runtime-neutral implementation, prove cross-runtime parity, document the contract, and pass the full gate without production mutation.",
+  "artifact_refs": [
+    "docs/harness/plan.json"
+  ],
+  "decision_refs": [
+    "packages/shared owns the runtime-neutral implementation",
+    "scripts/lib/memory-quality.mjs remains a compatibility re-export",
+    "existing production reconciliation is out of scope"
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/plan.json"
+    }
+  ],
+  "residual_risks": [
+    "Cloudflare bundling of the runtime-neutral ESM module must be verified",
+    "Historical D1 values remain divergent until a separately approved backfill"
+  ]
+}

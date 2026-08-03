@@ -1,0 +1,7 @@
+{
+  "summary": "The primary risks are cross-tenant misrouting, config corruption, insecure local permissions, and destructive legacy migration.",
+  "artifact_refs": ["AGENTS.md", "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml", "scripts/hook-memory-bridge.mjs"],
+  "decision_refs": [],
+  "evidence": [{"type": "review", "ref": "docs/harness/context_risks_workspace_mapping.md"}],
+  "residual_risks": ["Multi-user tenant membership management remains future work outside this local mapping change."]
+}

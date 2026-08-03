@@ -1,10 +1,10 @@
 {
   "deductions": [],
-  "gate_attempt_id": "20260801T074635.399312Z-557e22cb",
+  "gate_attempt_id": "20260803T104419.542575Z-0403fe99",
   "minimum_score": 85,
   "profile": "full",
   "repo": "org-brain",
-  "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+  "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
   "schema_version": 2,
   "score": 100,
   "status": "pass"

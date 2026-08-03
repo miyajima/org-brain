@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
+import {
+  assessMemoryUsefulness,
+  classifyMemoryQuality,
+  isLowSignalMemory
+} from "./lib/memory-quality.mjs";
+import {
+  assessMemoryUsefulness as sharedAssessMemoryUsefulness,
+  classifyMemoryQuality as sharedClassifyMemoryQuality,
+  isLowSignalMemory as sharedIsLowSignalMemory
+} from "../packages/shared/src/memory-quality-runtime.mjs";
 
 describe("memory-quality classifier", () => {
+  it("keeps the legacy Node entry point as a direct shared-runtime re-export", () => {
+    expect(assessMemoryUsefulness).toBe(sharedAssessMemoryUsefulness);
+    expect(classifyMemoryQuality).toBe(sharedClassifyMemoryQuality);
+    expect(isLowSignalMemory).toBe(sharedIsLowSignalMemory);
+  });
+
   it("deletes route-only and meta-only hook summaries", () => {
     expect(
       classifyMemoryQuality({

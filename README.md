@@ -371,6 +371,60 @@ ORGBRAIN_ENABLE_CLOUD_MEMORY=false
 ORGBRAIN_ENABLE_ORG_SHARING=false
 ```
 
+Hook processes load `~/.config/org-brain/hooks.env` first. Keep only connection, authentication,
+and global fallback values there; workspace routing belongs in `workspaces.json`:
+
+```dotenv
+ORGBRAIN_ENABLE_CLOUD_MEMORY=false
+ORGBRAIN_ENABLE_ORG_SHARING=false
+ORGBRAIN_API_URL=https://<your-worker>.<account>.workers.dev
+ORGBRAIN_API_KEY=<api-key>
+ORGBRAIN_TENANT_ID=<single-tenant-fallback>
+```
+
+`ORGBRAIN_TENANT_ID` is optional when every workspace has an explicit tenant mapping. It remains the
+convenient fallback for a current single-tenant installation. Do not put repository names or paths in
+`hooks.env`.
+
+The first reusable (non-low-signal) hook event for a workspace creates
+`~/.config/org-brain/workspaces.json`. The directory is written with mode `0700`, the file with mode
+`0600`, and replacement is atomic and lock-serialized so concurrent first-use hooks do not lose mappings.
+Interactive project confirmation happens outside that lock, so one unanswered prompt does not block other
+hook events. Generic completion events that are skipped do not create it.
+
+```json
+{
+  "version": 1,
+  "workspaces": {
+    "/absolute/path/to/org-brain": {
+      "tenant_id": "team-platform",
+      "project_id": "org-brain"
+    }
+  }
+}
+```
+
+For local-only use without `ORGBRAIN_TENANT_ID`, the file keeps `tenant_id: null` while runtime storage
+continues to use the local `default` scope. This deliberately avoids pinning an implicit tenant. When an
+explicit tenant is later supplied, the next reusable hook assigns it; organization sharing without that
+assignment still fails closed.
+
+Resolution is workspace mapping first, then `ORGBRAIN_TENANT_ID` as the tenant fallback. An explicit
+`project_id` in a hook payload applies only to that event; otherwise the mapped project is used. A new
+workspace defaults its project to `basename(cwd)` and can confirm it interactively. When organization
+sharing is enabled, a missing workspace tenant and missing `ORGBRAIN_TENANT_ID` stop ingestion instead
+of writing to `default` or another tenant. The API still enforces tenant grants server-side; the local
+file selects routing but does not grant access.
+
+Older `~/.config/org-brain/project-names.json` entries are imported on the first eligible hook event
+using the resolved tenant. The old file is kept unchanged for rollback. `ORGBRAIN_WORKSPACES_FILE` and
+`ORGBRAIN_PROJECT_NAMES_FILE` can override the two paths. Operator jobs such as memory quality backfill
+project current-state snapshots, and usage status derive project roots from the same `workspaces.json`;
+`ORGBRAIN_PROJECT_ROOTS` remains an explicit compatibility override.
+
+If `ORGBRAIN_WORKSPACES_FILE` points outside the default dedicated directory, Org Brain keeps the
+existing parent directory permissions unchanged and applies `0600` only to the mapping and lock files.
+
 To use personal portable memory on your own Cloudflare deployment, enable Cloudflare memory but keep organization sharing OFF:
 
 ```bash

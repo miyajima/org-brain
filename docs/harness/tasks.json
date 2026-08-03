@@ -1,11 +1,11 @@
 {
   "backend": "json",
-  "difficulty": "simple",
+  "difficulty": "complex",
   "execution_policy_ref": "plan.json#/execution_policy",
-  "graph_contract": "task-graph-v1",
+  "graph_contract": "task-graph-v2",
   "max_parallelism": 4,
   "primary_agent": "copilot",
-  "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+  "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
   "schema_version": 2,
   "stages": [
     {
@@ -13,14 +13,56 @@
         "Relevant implementation paths and call relationships are recorded."
       ],
       "actor": "investigator",
-      "claimed_by": "investigator",
-      "completed_at": "2026-08-01T06:17:24.914405+00:00",
+      "attempt_count": 1,
+      "attempt_id": "77b06d43a27144b8b7ffd03241433fd1",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:19:44.697129+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "Evidence: .github/workflows/ci.yml; scripts/local-scale-benchmark.mjs; scripts/lib/local-memory-store.mjs; scripts/lib/retrieval-units.mjs"
+        "Code paths and call relationships recorded"
       ],
+      "evidence_requirements": [
+        "review"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "scripts/hook-memory-bridge.mjs",
+          "scripts/memory-quality-backfill.mjs",
+          "scripts/project-current-state-snapshot.mjs"
+        ],
+        "decision_refs": [],
+        "evidence": [
+          {
+            "ref": "docs/harness/context_code_workspace_mapping.md",
+            "type": "review"
+          }
+        ],
+        "residual_risks": [
+          "Local mapping selection must never bypass server-side tenant grants."
+        ],
+        "summary": "Hook ingestion currently separates tenant environment selection from a legacy cwd-to-project JSON map; operator scripts separately maintain the reverse project-root map."
+      },
       "id": "context_code",
+      "input_refs": [
+        "request",
+        "repository"
+      ],
+      "input_sha256": "5a2697cad16650ce17c4bc73a2e1b8c27f7e9e011e932df6f4cf14b644828027",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "f03cc065dddcbd29390f5c9312ad2567a95eb5b88d950aa3b3e0a55f415e20f8",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "write_artifacts"
+      ],
       "read_set": [
         "src/**",
         "app/**",
@@ -29,9 +71,16 @@
       "required_artifacts": [
         "docs/harness/plan.json"
       ],
-      "started_at": "2026-08-01T06:17:24.558036+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "code-reviewer",
+      "started_at": "2026-08-03T10:19:07.905726+00:00",
       "status": "completed",
       "title": "Inspect implementation paths and call relationships",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "@context/code"
       ]
@@ -41,14 +90,57 @@
         "Relevant tests and manifest verification commands are recorded."
       ],
       "actor": "investigator",
-      "claimed_by": "investigator",
-      "completed_at": "2026-08-01T06:17:25.522288+00:00",
+      "attempt_count": 1,
+      "attempt_id": "926272b4682340adb4e52d82e93fd8c7",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:19:45.025706+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "Evidence: package.json manifest commands; scripts/local-memory.test.mjs hybrid_v3/hybrid_v4 coverage; GitHub run job steps"
+        "Focused and manifest verification coverage recorded"
       ],
+      "evidence_requirements": [
+        "artifact"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "scripts/hook-memory-bridge.test.mjs",
+          "scripts/memory-quality-backfill.test.mjs",
+          "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"
+        ],
+        "decision_refs": [],
+        "evidence": [
+          {
+            "ref": "docs/harness/context_tests_workspace_mapping.md",
+            "type": "artifact"
+          }
+        ],
+        "residual_risks": [
+          "Filesystem mode assertions are POSIX-specific and should be guarded where necessary."
+        ],
+        "summary": "Existing hook tests provide a compatibility baseline; workspace mapping needs security, migration, precedence, and operator-lookup coverage."
+      },
       "id": "context_tests",
+      "input_refs": [
+        "request",
+        "manifest commands"
+      ],
+      "input_sha256": "a11b544ca67ee4b2bb27c56698da8b8a4541b594b4ce4911225e0e4583a94cc6",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "39d76be053113887682b6b6329caa60d52d6fdb3ef12d255b91b7fe23e36fccc",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "run_commands",
+        "write_artifacts"
+      ],
       "read_set": [
         "tests/**",
         "spec/**",
@@ -58,9 +150,16 @@
       "required_artifacts": [
         "docs/harness/plan.json"
       ],
-      "started_at": "2026-08-01T06:17:25.213606+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "evidence-collector",
+      "started_at": "2026-08-03T10:19:08.214795+00:00",
       "status": "completed",
       "title": "Inspect tests and verification commands",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "@context/tests"
       ]
@@ -70,14 +169,57 @@
         "Governed docs and behavior contracts affected by the task are recorded."
       ],
       "actor": "investigator",
-      "claimed_by": "investigator",
-      "completed_at": "2026-08-01T06:17:26.134360+00:00",
+      "attempt_count": 1,
+      "attempt_id": "18d01bd0c00640138e535a67df2d92ec",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:19:45.342994+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "Evidence: docs/HYBRID_V4_IMPLEMENTATION.md; docs/STORAGE_BACKENDS.md; required docs from org-brain manifest"
+        "Governed documentation impacts recorded"
       ],
+      "evidence_requirements": [
+        "document"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "README.md",
+          "docs/SPEC.md",
+          "docs/SYSTEM_DESIGN.md",
+          ".env.example"
+        ],
+        "decision_refs": [],
+        "evidence": [
+          {
+            "ref": "docs/harness/context_docs_workspace_mapping.md",
+            "type": "document"
+          }
+        ],
+        "residual_risks": [
+          "Examples must not contain production credentials or imply that tenant IDs are authorization credentials."
+        ],
+        "summary": "README, SPEC, SYSTEM_DESIGN, and the environment example must describe one workspace mapping file and the trust boundary between local routing and server authorization."
+      },
       "id": "context_docs",
+      "input_refs": [
+        "request",
+        "governed docs"
+      ],
+      "input_sha256": "249ce75a955d33fe4fa7cb4234d9d3777930d0b4e7a97048332b9fd7ee5febff",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "7d6ac7d2f69f753994128612249f7439b6080e5e611629f156a81b0b52caf9c2",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "write_artifacts"
+      ],
       "read_set": [
         "README.md",
         "docs/**"
@@ -85,9 +227,16 @@
       "required_artifacts": [
         "docs/harness/plan.json"
       ],
-      "started_at": "2026-08-01T06:17:25.826848+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "scope-planner",
+      "started_at": "2026-08-03T10:19:08.521642+00:00",
       "status": "completed",
       "title": "Inspect governed docs and repository contracts",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "@context/docs"
       ]
@@ -97,14 +246,57 @@
         "Manifest risks, repository instructions, and sensitive paths are recorded."
       ],
       "actor": "investigator",
-      "claimed_by": "investigator",
-      "completed_at": "2026-08-01T06:17:26.733741+00:00",
+      "attempt_count": 1,
+      "attempt_id": "5c9478dc36da432fa792c478b656790a",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:19:45.699515+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "Evidence: org-brain.toml risks; GitHub Checks API for main SHA; benchmark timeout and artifact comparison"
+        "Tenant routing, filesystem, compatibility, and production boundaries recorded"
       ],
+      "evidence_requirements": [
+        "review"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "AGENTS.md",
+          "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml",
+          "scripts/hook-memory-bridge.mjs"
+        ],
+        "decision_refs": [],
+        "evidence": [
+          {
+            "ref": "docs/harness/context_risks_workspace_mapping.md",
+            "type": "review"
+          }
+        ],
+        "residual_risks": [
+          "Multi-user tenant membership management remains future work outside this local mapping change."
+        ],
+        "summary": "The primary risks are cross-tenant misrouting, config corruption, insecure local permissions, and destructive legacy migration."
+      },
       "id": "context_risks",
+      "input_refs": [
+        "request",
+        "manifest risks",
+        "repository instructions"
+      ],
+      "input_sha256": "f68371f1f72830387de91ca2cf247f78aeafb45ad400ccb331471b037430e3e4",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "38743a1a2ee7b88bdd52edb8cce9a1875bab0822723bcdc7d7a3438cfdbd6253",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "write_artifacts"
+      ],
       "read_set": [
         "AGENTS.md",
         "repos/**",
@@ -114,9 +306,16 @@
       "required_artifacts": [
         "docs/harness/plan.json"
       ],
-      "started_at": "2026-08-01T06:17:26.439217+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "security-reviewer",
+      "started_at": "2026-08-03T10:19:08.839678+00:00",
       "status": "completed",
       "title": "Inspect manifests, instructions, and sensitive paths",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "@context/risks"
       ]
@@ -126,8 +325,10 @@
         "Context is bounded, reconciled, and captured in plan.json."
       ],
       "actor": "primary",
+      "attempt_count": 1,
+      "attempt_id": "60c9bb1567b54bd1bf24161690c725af",
       "claimed_by": "primary",
-      "completed_at": "2026-08-01T06:17:42.447075+00:00",
+      "completed_at": "2026-08-03T10:20:21.594554+00:00",
       "decision_scope": "plan",
       "depends_on": [
         "context_code",
@@ -136,10 +337,57 @@
         "context_risks"
       ],
       "evidence_refs": [
-        "Evidence: reconciled GitHub Checks API, workflow, benchmark source, local measurements, test coverage, manifest risks, and governed docs."
+        "Bounded workspace configuration context captured in plan"
       ],
+      "evidence_requirements": [
+        "artifact"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "docs/harness/context_code_workspace_mapping.json",
+          "docs/harness/context_tests_workspace_mapping.json",
+          "docs/harness/context_docs_workspace_mapping.json",
+          "docs/harness/context_risks_workspace_mapping.json",
+          "docs/harness/plan.json"
+        ],
+        "decision_refs": [
+          "docs/harness/plan.json"
+        ],
+        "evidence": [
+          {
+            "ref": "docs/harness/plan.json",
+            "type": "artifact"
+          }
+        ],
+        "residual_risks": [
+          "Tenant membership and invitations remain outside this local configuration scope."
+        ],
+        "summary": "The bounded change is a local workspace configuration layer shared by hook ingestion and operator mapping, with backward-compatible environment and legacy file inputs and no Cloudflare mutation."
+      },
       "id": "context",
+      "input_refs": [
+        "context_code",
+        "context_tests",
+        "context_docs",
+        "context_risks"
+      ],
+      "input_sha256": "37e1a9fd5acbf0b191442d66a69e2448e6b3493762d3b5780def4fa15447885e",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "a01332e74031223b5f6d7c558a9a0d278376f2755199ec1e86d61140269523fc",
       "parallel_safe": false,
+      "permission_scope": [
+        "repo_read",
+        "write_artifacts",
+        "memory_read"
+      ],
       "read_set": [
         "@context/code",
         "@context/tests",
@@ -149,9 +397,16 @@
       "required_artifacts": [
         "docs/harness/plan.json"
       ],
-      "started_at": "2026-08-01T06:17:42.147381+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "scope-planner",
+      "started_at": "2026-08-03T10:19:58.131993+00:00",
       "status": "completed",
       "title": "Synthesize recalled and inspected context",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "docs/harness/plan.json"
       ]
@@ -161,26 +416,80 @@
         "The plan has concrete scope, risks, and measurable success criteria."
       ],
       "actor": "primary",
+      "attempt_count": 1,
+      "attempt_id": "719003c54ec24cdc833c1df2604b9d33",
       "claimed_by": "primary",
-      "completed_at": "2026-08-01T06:17:43.064607+00:00",
+      "completed_at": "2026-08-03T10:20:34.371865+00:00",
       "decision_scope": "plan",
       "depends_on": [
         "context"
       ],
       "evidence_refs": [
-        "Plan: optimize or scope local hybrid_v4 100k benchmark so it completes within CI and remains under 500ms p95; add regression coverage; run manifest gates; update docs only if operational behavior changes."
+        "Concrete workspace mapping scope, precedence, security, migration, tests, and docs defined"
       ],
+      "evidence_requirements": [
+        "artifact"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "docs/harness/plan.json"
+        ],
+        "decision_refs": [
+          "workspaces.json is the canonical local mapping and contains no credentials",
+          "organization sharing requires an explicit workspace or environment tenant",
+          "legacy project-names.json remains untouched and is migrated as compatibility input",
+          "server-side API and MCP grants remain authoritative"
+        ],
+        "evidence": [
+          {
+            "ref": "docs/harness/plan.json",
+            "type": "artifact"
+          }
+        ],
+        "residual_risks": [
+          "Existing users with an invalid workspaces.json will fail closed until they repair the file."
+        ],
+        "summary": "Implement a private atomic workspace config module, connect hook tenant/project resolution and operator root lookup, preserve legacy and environment fallbacks, then update tests and governed docs."
+      },
       "id": "plan",
+      "input_refs": [
+        "context",
+        "request",
+        "success criteria"
+      ],
+      "input_sha256": "bcbde8dba40edd103824eac608a2ae05389d46d76252d56af75775aa8b349cde",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "705f757405e1986ae71c807492b2b417d8d11d0b5404c2c17eff84d50fe81206",
       "parallel_safe": false,
+      "permission_scope": [
+        "repo_read",
+        "write_artifacts",
+        "memory_read"
+      ],
       "read_set": [
         "docs/harness/plan.json"
       ],
       "required_artifacts": [
         "docs/harness/plan.json"
       ],
-      "started_at": "2026-08-01T06:17:42.749231+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "scope-planner",
+      "started_at": "2026-08-03T10:20:21.905998+00:00",
       "status": "completed",
       "title": "Create implementation plan and acceptance criteria",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "docs/harness/plan.json"
       ]
@@ -190,26 +499,76 @@
         "Implementation work is split only where dependencies and write sets are explicit."
       ],
       "actor": "primary",
+      "attempt_count": 1,
+      "attempt_id": "be3fec7c40fe40c3b29f46d597490e87",
       "claimed_by": "primary",
-      "completed_at": "2026-08-01T06:17:43.701362+00:00",
+      "completed_at": "2026-08-03T10:20:45.428859+00:00",
       "decision_scope": "task_split",
       "depends_on": [
         "plan"
       ],
       "evidence_refs": [
-        "Split: single integration owner for benchmark/search change; verifier runs focused benchmark plus typecheck/test/lint/build; no parallel write sets required for simple difficulty."
+        "Shared schema and precedence require one integration owner"
       ],
+      "evidence_requirements": [
+        "artifact"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "docs/harness/tasks.json",
+          "docs/harness/implementation_plan_workspace_mapping.json"
+        ],
+        "decision_refs": [
+          "single integration owner for shared workspace schema and precedence"
+        ],
+        "evidence": [
+          {
+            "ref": "docs/harness/tasks.json",
+            "type": "artifact"
+          }
+        ],
+        "residual_risks": [
+          "Independent review and verification remain required because the accumulated diff is complex."
+        ],
+        "summary": "Keep implementation under one integration owner because the config module, hook resolution, operator lookup, and compatibility tests share one schema and precedence contract."
+      },
       "id": "split",
+      "input_refs": [
+        "plan"
+      ],
+      "input_sha256": "e3ab17fccb1284cb710391e6321f1d144be9c433027f72ab2e1dc4892384066f",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "fc5e72fc31ec99e74170074b3095baeb091ca90e42c2024a4d0e96d5dbb95801",
       "parallel_safe": false,
+      "permission_scope": [
+        "repo_read",
+        "write_artifacts",
+        "memory_read"
+      ],
       "read_set": [
         "docs/harness/plan.json"
       ],
       "required_artifacts": [
         "docs/harness/tasks.json"
       ],
-      "started_at": "2026-08-01T06:17:43.372287+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "workflow-architect",
+      "started_at": "2026-08-03T10:20:34.693561+00:00",
       "status": "completed",
       "title": "Split work into dependency and resource-bounded tasks",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "docs/harness/tasks.json"
       ]
@@ -219,26 +578,108 @@
         "Implementation and near-unit tests satisfy the planned behavior."
       ],
       "actor": "integration_owner",
-      "claimed_by": "integration_owner",
-      "completed_at": "2026-08-01T07:07:02.722883+00:00",
+      "attempt_count": 1,
+      "attempt_id": "9b7e9a1258a34e23a7f97a3332123401",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:30:52.949901+00:00",
       "decision_scope": "implementation",
       "depends_on": [
         "split"
       ],
       "evidence_refs": [
-        "local-memory-store.mjs: indexed v3 feature lookup, AND-first FTS with OR fallback, strict v4 channel fallback, and batched rebuild indexes; local-scale-benchmark.mjs: isolated v4-only projection; pnpm test and 100k/200 benchmark passed"
+        "/Users/0300815938/projects/org-brain/docs/harness/implement.json"
       ],
+      "evidence_requirements": [
+        "diff",
+        "test"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "scripts/lib/workspace-config.mjs",
+          "scripts/hook-memory-bridge.mjs",
+          "scripts/memory-quality-backfill.mjs",
+          "scripts/project-current-state-snapshot.mjs",
+          "scripts/workspace-config.test.mjs",
+          "scripts/hook-memory-bridge.test.mjs",
+          "README.md",
+          ".env.example"
+        ],
+        "decision_refs": [
+          "workspaces.json is the single local workspace routing source",
+          "workspace tenant mapping wins over the single-tenant environment fallback",
+          "organization sharing fails closed when no tenant can be resolved",
+          "legacy project-names.json is a read-only migration source",
+          "ORGBRAIN_PROJECT_ROOTS remains an explicit operator compatibility override"
+        ],
+        "evidence": [
+          {
+            "ref": "focused workspace and hook suites: 23 passed",
+            "type": "test"
+          },
+          {
+            "ref": "pnpm test exit 0: node 65, script 95, workspace suites all passed",
+            "type": "test"
+          },
+          {
+            "ref": "pnpm -r --if-present typecheck exit 0",
+            "type": "command"
+          },
+          {
+            "ref": "pnpm run build exit 0; all Cloudflare builds were dry-run only",
+            "type": "command"
+          },
+          {
+            "ref": "git diff --check exit 0",
+            "type": "diff"
+          }
+        ],
+        "residual_risks": [
+          "Tenant membership and invitation management remain future product work",
+          "No production Cloudflare deployment or D1 mutation was performed"
+        ],
+        "summary": "Unified local workspace routing in one versioned workspaces.json that stores tenant_id and project_id together, migrates the legacy project-name map without deletion, and supplies the same repository roots to hook and operator workflows."
+      },
       "id": "implement",
+      "input_refs": [
+        "plan",
+        "split",
+        "repository"
+      ],
+      "input_sha256": "3bf7aac44a0704ea97c9ae0638e039f7d41efcb736b5000acbbf297ecc0e1e26",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "2afb790df8f9ce1eae35c3b3062bef5ac52f8e6216f967da5deba36cf6297518",
       "parallel_safe": false,
+      "permission_scope": [
+        "repo_read",
+        "repo_write",
+        "run_commands",
+        "write_artifacts",
+        "memory_read"
+      ],
       "read_set": [
         "**"
       ],
       "required_artifacts": [
         "docs/harness/tasks.json"
       ],
-      "started_at": "2026-08-01T06:19:11.152000+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "split",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "minimal-change-implementer",
+      "started_at": "2026-08-03T10:20:45.752730+00:00",
       "status": "completed",
       "title": "Implement changes under one integration owner",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "**"
       ]
@@ -248,16 +689,75 @@
         "Manifest-driven verification completes with recorded evidence."
       ],
       "actor": "verifier",
-      "claimed_by": "verifier",
-      "completed_at": "2026-08-01T07:07:17.768634+00:00",
+      "attempt_count": 1,
+      "attempt_id": "ba86ddba511740dd8ef858dadb9bf6ac",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:31:24.663167+00:00",
       "depends_on": [
         "implement"
       ],
       "evidence_refs": [
-        "pnpm test: Node 64 tests and Vitest/workspace suites passed; pnpm run lint passed; pnpm run typecheck passed; pnpm run build passed; benchmark 100000 records/200 queries passed=true with warm p95 190.01ms, index 64735.77ms, retrieval_failures 0"
+        "/Users/0300815938/projects/org-brain/docs/harness/test.json"
       ],
+      "evidence_requirements": [
+        "test"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "scripts/workspace-config.test.mjs",
+          "scripts/hook-memory-bridge.test.mjs"
+        ],
+        "decision_refs": [],
+        "evidence": [
+          {
+            "ref": "pnpm exec vitest run focused suites exit 0: 23 tests passed",
+            "type": "test"
+          },
+          {
+            "ref": "pnpm test exit 0: all node, script, and workspace suites passed",
+            "type": "test"
+          },
+          {
+            "ref": "pnpm -r --if-present typecheck exit 0; 0 Astro diagnostics",
+            "type": "command"
+          },
+          {
+            "ref": "pnpm lint exit 0",
+            "type": "command"
+          },
+          {
+            "ref": "pnpm run build exit 0; Wrangler deploy commands were dry-run",
+            "type": "command"
+          }
+        ],
+        "residual_risks": [
+          "No production deployment or remote D1 mutation was part of verification"
+        ],
+        "summary": "Validated the unified workspace routing with focused unit tests and the full manifest test, typecheck, lint, and build commands."
+      },
       "id": "test",
+      "input_refs": [
+        "implement",
+        "manifest commands",
+        "acceptance criteria"
+      ],
+      "input_sha256": "cda90d5afa17c5061f36b9cfcf8da4e18a3d07639aa8f0ac64be082a77caca3a",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "793ec0f1cd335ca6ef325427550038491332c7b4e0518ce4c3d343640d186747",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "run_commands",
+        "write_artifacts"
+      ],
       "read_set": [
         "src/**",
         "app/**",
@@ -270,9 +770,16 @@
       "required_artifacts": [
         "docs/harness/gate.json"
       ],
-      "started_at": "2026-08-01T07:07:11.346552+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "evidence-collector",
+      "started_at": "2026-08-03T10:31:24.425315+00:00",
       "status": "completed",
       "title": "Run manifest-driven tests",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "@evidence/tests"
       ]
@@ -282,16 +789,71 @@
         "Governed docs describe the final behavior and operational contract."
       ],
       "actor": "docs_owner",
-      "claimed_by": "docs_owner",
-      "completed_at": "2026-08-01T07:07:26.982350+00:00",
+      "attempt_count": 1,
+      "attempt_id": "cc2d85d5abeb4b97a966370c9f840596",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-03T10:31:25.102266+00:00",
       "depends_on": [
         "implement"
       ],
       "evidence_refs": [
-        "docs/HYBRID_V4_IMPLEMENTATION.md records isolated 100k v4-only benchmark projection and preserves normal additive v3/v4 rebuild behavior"
+        "/Users/0300815938/projects/org-brain/docs/harness/docs.json"
       ],
+      "evidence_requirements": [
+        "document"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "README.md",
+          ".env.example",
+          "docs/SPEC.md",
+          "docs/SYSTEM_DESIGN.md"
+        ],
+        "decision_refs": [
+          "connection and global fallback values stay in hooks.env",
+          "tenant and project workspace routing stays in workspaces.json"
+        ],
+        "evidence": [
+          {
+            "ref": "README Agent Integrations workspace routing section",
+            "type": "document"
+          },
+          {
+            "ref": "SPEC Memory Source of Truth workspace routing contract",
+            "type": "document"
+          },
+          {
+            "ref": "SYSTEM_DESIGN hook ingestion and operator mapping contract",
+            "type": "document"
+          }
+        ],
+        "residual_risks": [
+          "Tenant invitation and membership administration remain intentionally out of scope"
+        ],
+        "summary": "Documented hooks.env responsibilities, the workspaces.json schema and creation timing, routing precedence, fail-closed organization sharing, legacy migration, permissions, and operator compatibility."
+      },
       "id": "docs",
+      "input_refs": [
+        "implement",
+        "governed docs"
+      ],
+      "input_sha256": "02038e6264e8810c221c2d8f50ac4fc8268c2623fdd9e86ea82975abcf86e255",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "fc2b471398e57eaf85eebfade62bb38be2ea55d53f753f5efc8d8ec63cf0035f",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "repo_write",
+        "write_artifacts"
+      ],
       "read_set": [
         "src/**",
         "app/**",
@@ -302,9 +864,16 @@
       "required_artifacts": [
         "docs/harness/review.json"
       ],
-      "started_at": "2026-08-01T07:07:23.563661+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "minimal-change-implementer",
+      "started_at": "2026-08-03T10:31:24.878579+00:00",
       "status": "completed",
       "title": "Update governed docs when behavior changes",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "README.md",
         "docs/**"
@@ -315,17 +884,97 @@
         "Overall, security, reliability, and docs review evidence matches the final diff."
       ],
       "actor": "reviewer",
-      "claimed_by": "reviewer",
-      "completed_at": "2026-08-01T07:07:48.401661+00:00",
+      "attempt_count": 1,
+      "attempt_id": "4b64c51225574ff4b52e09ac029ab4fb",
+      "claimed_by": "independent_review",
+      "completed_at": "2026-08-03T10:40:08.164447+00:00",
       "depends_on": [
         "implement",
         "docs"
       ],
       "evidence_refs": [
-        "Reviewed final diff for query binding, tenant/project/suppression filters, FTS fallback behavior, v3/v4 projection coexistence, index rebuild transaction, and documentation; no blocking findings"
+        "/Users/0300815938/projects/org-brain/docs/harness/review.json"
       ],
+      "evidence_requirements": [
+        "review"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "scripts/lib/workspace-config.mjs",
+          "scripts/hook-memory-bridge.mjs",
+          "scripts/memory-quality-backfill.mjs",
+          "scripts/project-current-state-snapshot.mjs",
+          "skills/org-brain-usage-status/scripts/report-usage-status.mjs",
+          "scripts/workspace-config.test.mjs",
+          "scripts/hook-memory-bridge.test.mjs",
+          "README.md",
+          "docs/SPEC.md",
+          "docs/SYSTEM_DESIGN.md"
+        ],
+        "decision_refs": [
+          "implicit local default remains tenant_id null until an explicit tenant is supplied",
+          "all repository-inspecting operator jobs use loadProjectRootMappings",
+          "existing custom parent directory permissions are preserved",
+          "interactive project selection occurs outside the workspace file lock"
+        ],
+        "evidence": [
+          {
+            "ref": "actor=/root/independent_review completed=2026-08-03T10:38:31Z independent=true fingerprint=1db5d10c20833e93596d5f1aac3eb69bfdb055a93064b7164f2d3625b739621f findings=none scope=tenant-isolation,migration,concurrency,permissions,operator-parity,docs",
+            "type": "review"
+          },
+          {
+            "ref": "actor=/root/independent_verify command=focused-three-suites exit=0 time=2026-08-03T10:38:03Z output_sha256=981ba9809e08a3f10f3d289490f5f8d78a1cbe4d564916f76ef74279e3d7a2fb tests=27",
+            "type": "test"
+          },
+          {
+            "ref": "actor=/root/independent_verify command=pnpm-run-test-scripts exit=0 time=2026-08-03T10:38:14Z output_sha256=574b8b394522d469ea491ec12e3e23a5c98b004d7de3de0eaa4116ad54c50d20 tests=99",
+            "type": "test"
+          },
+          {
+            "ref": "actor=/root/independent_verify command=targeted-review-regressions exit=0 time=2026-08-03T10:38:48Z output_sha256=175936094a0d73d81fcf4e199b82e5fef10094e42bca2d5bd927777f2b98f5f2",
+            "type": "test"
+          },
+          {
+            "ref": "actor=/root/independent_verify command=git-diff-check exit=0 time=2026-08-03T10:38:21Z output_sha256=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+            "type": "command"
+          },
+          {
+            "ref": "actor=/root/independent_verify command=usage-status-help exit=0 time=2026-08-03T10:38:32Z output_sha256=9d75f1dca96cd2a5a6b857addcc5ee35cdc07c38d49652bad3636c56225e6bde",
+            "type": "command"
+          }
+        ],
+        "residual_risks": [
+          "Simultaneous first-use hooks for one workspace can show duplicate prompts, but lock re-read prevents overwrite or tenant divergence",
+          "POSIX file modes are not equivalent on Windows",
+          "Usage-status shared-loader wiring is statically verified and import-tested but not D1-integration-tested",
+          "No production Cloudflare deployment or D1 mutation was performed"
+        ],
+        "summary": "Independent final review found no remaining blocking or nonblocking findings after fixes for implicit-default tenant pinning, operator mapping parity, custom parent permissions, and prompt lock contention. Independent verification passed without production access."
+      },
       "id": "review",
+      "input_refs": [
+        "implement",
+        "docs",
+        "acceptance criteria"
+      ],
+      "input_sha256": "365ae19101cd6b0f2eed81988bfe18196f0fe4dd36fa682d1d0703d2279f9023",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "df8aec50e6efcf1a10d2fb1cf74d8a6d034a1c57a27cb7f0a7834e5f893cb3c2",
       "parallel_safe": true,
+      "permission_scope": [
+        "repo_read",
+        "run_commands",
+        "write_artifacts",
+        "memory_read"
+      ],
       "read_set": [
         "src/**",
         "app/**",
@@ -338,9 +987,16 @@
       "required_artifacts": [
         "docs/harness/review.json"
       ],
-      "started_at": "2026-08-01T07:07:34.554759+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "escalate",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "code-reviewer",
+      "started_at": "2026-08-03T10:39:37.525266+00:00",
       "status": "completed",
       "title": "Review the final implementation and governed docs",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "docs/harness/review.json"
       ]
@@ -350,8 +1006,10 @@
         "The full gate passes and the score meets the manifest threshold."
       ],
       "actor": "primary",
+      "attempt_count": 1,
+      "attempt_id": "95b27187826b4c398fa30b7e3413ec99",
       "claimed_by": "primary",
-      "completed_at": "2026-08-01T07:45:47.613842+00:00",
+      "completed_at": "2026-08-03T10:40:24.443051+00:00",
       "decision_scope": "final_gate",
       "depends_on": [
         "test",
@@ -359,10 +1017,62 @@
         "review"
       ],
       "evidence_refs": [
-        "Gate attempt 2026-08-01T07:44Z passed manifest command, docs, and RTK stages; the only workflow blocker was the quality_gate task itself, now completed so the final gate rerun can evaluate the score."
+        "/Users/0300815938/projects/org-brain/docs/harness/quality_gate_task.json"
       ],
+      "evidence_requirements": [
+        "review",
+        "test"
+      ],
+      "handoff": {
+        "artifact_refs": [
+          "docs/harness/test.json",
+          "docs/harness/review.json",
+          "docs/harness/docs.json",
+          "docs/harness/implement.json"
+        ],
+        "decision_refs": [
+          "run the manifest full profile without production writes"
+        ],
+        "evidence": [
+          {
+            "ref": "independent final review completed with no remaining findings",
+            "type": "review"
+          },
+          {
+            "ref": "full pnpm test exit 0 plus independent focused 27 and script 99 test passes",
+            "type": "test"
+          }
+        ],
+        "residual_risks": [
+          "Production Cloudflare and D1 behavior remains intentionally outside this local implementation gate"
+        ],
+        "summary": "Prepared the final quality gate with independently reviewed tenant isolation, migration, concurrency, permissions, operator parity, documentation, and passing full local validation evidence."
+      },
       "id": "quality_gate",
+      "input_refs": [
+        "test",
+        "docs",
+        "review",
+        "gate policy"
+      ],
+      "input_sha256": "9fd9b5c93ecac1021d03dbceec61a71ffd7da945018335a0957a0ddd9a34413b",
+      "output_contract": {
+        "required_fields": [
+          "summary",
+          "artifact_refs",
+          "decision_refs",
+          "evidence",
+          "residual_risks"
+        ]
+      },
+      "output_sha256": "f3c2a6f893c73c5486b71fcb0ba947ccc3f5aa45b1df8eaf0ab0c32a8e6e7baa",
       "parallel_safe": false,
+      "permission_scope": [
+        "repo_read",
+        "run_commands",
+        "write_artifacts",
+        "memory_read"
+      ],
       "read_set": [
         "docs/harness/plan.json",
         "docs/harness/tasks.json",
@@ -372,9 +1082,16 @@
       "required_artifacts": [
         "docs/harness/quality_score.json"
       ],
-      "started_at": "2026-08-01T07:44:49.928931+00:00",
+      "retry_policy": {
+        "max_attempts": 3,
+        "on_exhausted": "defer",
+        "stop_on_repeated_external_blocker": true
+      },
+      "role_ref": "readiness-verifier",
+      "started_at": "2026-08-03T10:40:24.184193+00:00",
       "status": "completed",
       "title": "Compute final quality score",
+      "trace_id": "org-brain-20260803T101754.465241Z-131a8d39",
       "write_set": [
         "docs/harness/gate.json",
         "docs/harness/quality_score.json"

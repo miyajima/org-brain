@@ -1,0 +1,23 @@
+{
+  "summary": "Existing tests cover both divergent classifiers and their Cloud and Node consumers; add parity tests and run focused suites before the manifest full gate.",
+  "artifact_refs": [
+    "scripts/memory-quality.test.mjs",
+    "packages/shared/test/memory-quality.test.ts",
+    "apps/cap-runner/test/memory-maintenance.test.ts",
+    "apps/api-gateway/test/memory-service.test.ts"
+  ],
+  "decision_refs": [
+    "add cross-runtime parity coverage for the canonical classifier",
+    "run recursive typecheck, tests, lint, and build"
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/context_tests.md"
+    }
+  ],
+  "residual_risks": [
+    "Production D1 data will not be mutated during validation",
+    "A remote dry-run is needed to prove Cloud and operator assessment convergence on current data"
+  ]
+}

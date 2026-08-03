@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import process from "node:process";
 import { assessMemoryUsefulness } from "../../../scripts/lib/memory-quality.mjs";
+import { loadProjectRootMappings } from "../../../scripts/lib/workspace-config.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,22 +21,6 @@ const projectRootOverrides = new Map([
   [".codex", resolve(os.homedir(), ".codex")],
   ["org-brain", repoRoot]
 ]);
-
-function configuredProjectRootOverrides() {
-  const raw = process.env.ORGBRAIN_PROJECT_ROOTS;
-  if (!raw) return new Map();
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return new Map();
-    return new Map(
-      Object.entries(parsed)
-        .filter((entry) => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[0].trim() && entry[1].trim())
-        .map(([key, value]) => [key.trim(), value.trim()])
-    );
-  } catch {
-    return new Map();
-  }
-}
 
 function printHelp() {
   console.log(`Org Brain usage status
@@ -175,16 +160,15 @@ function stageSort(stage) {
   }[stage] ?? 99;
 }
 
-function resolveProjectRoot(projectId) {
+function resolveProjectRoot(projectId, projectRoots = new Map()) {
   if (!projectId) return null;
-  const configured = configuredProjectRootOverrides();
-  if (configured.has(projectId)) return configured.get(projectId);
+  if (projectRoots.has(projectId)) return projectRoots.get(projectId);
   if (projectRootOverrides.has(projectId)) return projectRootOverrides.get(projectId);
   return null;
 }
 
-async function inspectProjectRepo(projectId) {
-  const root = resolveProjectRoot(projectId);
+async function inspectProjectRepo(projectId, projectRoots) {
+  const root = resolveProjectRoot(projectId, projectRoots);
   if (!root || !existsSync(root)) {
     return { root, repo_state: "missing", branch: null, dirty_count: null, docs_count: null };
   }
@@ -363,7 +347,7 @@ function buildQueries(options) {
   };
 }
 
-async function buildProjectHealth(qualityRows, qualityAssessments) {
+async function buildProjectHealth(qualityRows, qualityAssessments, projectRoots) {
   const byProject = new Map();
   for (let index = 0; index < qualityRows.length; index += 1) {
     const row = qualityRows[index];
@@ -412,7 +396,7 @@ async function buildProjectHealth(qualityRows, qualityAssessments) {
       right.total_memories - left.total_memories ||
       String(left.project_id ?? "").localeCompare(String(right.project_id ?? ""))
   );
-  const repoStates = await Promise.all(entries.map((entry) => inspectProjectRepo(entry.project_id)));
+  const repoStates = await Promise.all(entries.map((entry) => inspectProjectRepo(entry.project_id, projectRoots)));
   const now = Date.now();
   return entries.map((entry, index) => {
     const repo = repoStates[index];
@@ -434,7 +418,8 @@ async function buildSnapshot(options, data) {
   const qualityRows = data.memoryQuality ?? [];
   const latestRows = data.memoryStageLatest ?? [];
   const qualityAssessments = qualityRows.map((row) => assessMemoryUsefulness(row));
-  const projectHealth = await buildProjectHealth(qualityRows, qualityAssessments);
+  const projectRoots = await loadProjectRootMappings({ tenantId: options.tenant });
+  const projectHealth = await buildProjectHealth(qualityRows, qualityAssessments, projectRoots);
   const quality = {
     short_summary_lt80: qualityRows.filter((row) => String(row.summary ?? "").length < 80).length,
     very_short_summary_lt60: qualityRows.filter((row) => String(row.summary ?? "").length < 60).length,

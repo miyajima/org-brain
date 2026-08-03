@@ -1,0 +1,7 @@
+{
+  "summary": "Keep implementation under one integration owner because the config module, hook resolution, operator lookup, and compatibility tests share one schema and precedence contract.",
+  "artifact_refs": ["docs/harness/tasks.json", "docs/harness/implementation_plan_workspace_mapping.json"],
+  "decision_refs": ["single integration owner for shared workspace schema and precedence"],
+  "evidence": [{"type": "artifact", "ref": "docs/harness/tasks.json"}],
+  "residual_risks": ["Independent review and verification remain required because the accumulated diff is complex."]
+}

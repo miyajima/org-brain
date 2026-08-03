@@ -1,0 +1,20 @@
+{
+  "summary": "Keep implementation as one serial task because the shared runtime move, typed facade, compatibility wrapper, and parity tests touch one dependency seam and require one integration owner.",
+  "artifact_refs": [
+    "docs/harness/tasks.json",
+    "docs/harness/plan.json"
+  ],
+  "decision_refs": [
+    "do not split the simple implementation task",
+    "preserve a single writer across the shared classifier seam"
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/tasks.json"
+    }
+  ],
+  "residual_risks": [
+    "Focused tests must cover both Node ESM and Cloud TypeScript consumers before integration is considered complete"
+  ]
+}

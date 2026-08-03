@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
 import { assessMemoryUsefulness } from "./lib/memory-quality.mjs";
 import { parseLocationArgs, runD1Queries, sqlNullable, sqlString } from "./lib/metrics-common.mjs";
+import { loadProjectRootMappings } from "./lib/workspace-config.mjs";
 
 const DEFAULT_LIMIT = 5000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,22 +18,6 @@ const PROJECT_ROOT_OVERRIDES = new Map([
   [".codex", path.join(os.homedir(), ".codex")],
   ["org-brain", repoRoot]
 ]);
-
-function configuredProjectRootOverrides() {
-  const raw = process.env.ORGBRAIN_PROJECT_ROOTS;
-  if (!raw) return new Map();
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return new Map();
-    return new Map(
-      Object.entries(parsed)
-        .filter((entry) => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[0].trim() && entry[1].trim())
-        .map(([key, value]) => [key.trim(), value.trim()])
-    );
-  } catch {
-    return new Map();
-  }
-}
 
 function printHelp() {
   console.log(`Org Brain memory quality backfill
@@ -136,24 +121,24 @@ function shouldUpdate(row, assessed) {
   );
 }
 
-function resolveProjectRoot(projectId) {
+function resolveProjectRoot(projectId, projectRoots = new Map()) {
   if (!projectId) return null;
-  const configured = configuredProjectRootOverrides();
-  if (configured.has(projectId)) return configured.get(projectId);
+  if (projectRoots.has(projectId)) return projectRoots.get(projectId);
   if (PROJECT_ROOT_OVERRIDES.has(projectId)) return PROJECT_ROOT_OVERRIDES.get(projectId);
   return null;
 }
 
-function projectMappingWarning(row) {
+function projectMappingWarning(row, projectRoots) {
   const projectId = row.project_id ?? null;
   if (!projectId) return { type: "missing_project_id", root: null };
-  const root = resolveProjectRoot(projectId);
+  const root = resolveProjectRoot(projectId, projectRoots);
   if (!root || !existsSync(root)) return { type: "missing_repo_root", root };
   if (!existsSync(path.join(root, ".git"))) return { type: "non_git_repo_root", root };
   return null;
 }
 
 export function buildQualityBackfillPlan(rows, options = {}) {
+  const projectRoots = options.projectRoots ?? new Map();
   const updates = [];
   const unchanged = [];
   const riskyLowSignal = [];
@@ -164,7 +149,7 @@ export function buildQualityBackfillPlan(rows, options = {}) {
 
   for (const row of rows) {
     const assessed = assessMemoryUsefulness(row, { keepProjectFacts: true });
-    const mappingWarning = projectMappingWarning(row);
+    const mappingWarning = projectMappingWarning(row, projectRoots);
     const item = {
       row,
       assessment: assessed,
@@ -384,7 +369,8 @@ async function main() {
       LIMIT ${Number(options.limit)};
     `
   });
-  const plan = buildQualityBackfillPlan(data.memories);
+  const projectRoots = await loadProjectRootMappings({ tenantId: options.tenant });
+  const plan = buildQualityBackfillPlan(data.memories, { projectRoots });
   const exported = await exportReport(options, plan);
   if (options.apply && plan.updates.length > 0) await applyBackfill(options, plan);
 

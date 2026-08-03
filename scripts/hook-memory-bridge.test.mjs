@@ -8,7 +8,8 @@ import {
   prepareMemoryRecordForUpsert,
   redactHookMemoryText,
   resolveApiBase,
-  resolveProjectNameForWorkspace
+  resolveProjectNameForWorkspace,
+  resolveWorkspaceContext
 } from "./hook-memory-bridge.mjs";
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 
@@ -177,7 +178,8 @@ describe("hook-memory-bridge promotion", () => {
 
   it("prompts once per workspace and persists the chosen project name", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
-    const file = path.join(dir, "project-names.json");
+    const file = path.join(dir, "workspaces.json");
+    const legacyFile = path.join(dir, "project-names.json");
     const record = {
       cwd: "/tmp/workspaces/org-brain",
       projectId: "org-brain"
@@ -185,6 +187,8 @@ describe("hook-memory-bridge promotion", () => {
 
     const selected = await resolveProjectNameForWorkspace(record, {
       file,
+      legacyFile,
+      env: { ORGBRAIN_TENANT_ID: "tenant-a" },
       prompt: async (cwd, fallback) => {
         expect(cwd).toBe("/tmp/workspaces/org-brain");
         expect(fallback).toBe("org-brain");
@@ -194,10 +198,20 @@ describe("hook-memory-bridge promotion", () => {
 
     expect(selected).toBe("client-workspace");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved["/tmp/workspaces/org-brain"]).toBe("client-workspace");
+    expect(saved).toEqual({
+      version: 1,
+      workspaces: {
+        "/tmp/workspaces/org-brain": {
+          tenant_id: "tenant-a",
+          project_id: "client-workspace"
+        }
+      }
+    });
 
     const reused = await resolveProjectNameForWorkspace(record, {
       file,
+      legacyFile,
+      env: { ORGBRAIN_TENANT_ID: "wrong-tenant" },
       prompt: async () => {
         throw new Error("prompt should not be called for saved workspaces");
       }
@@ -207,7 +221,7 @@ describe("hook-memory-bridge promotion", () => {
 
   it("falls back to basename(cwd) when the first prompt is left blank", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
-    const file = path.join(dir, "project-names.json");
+    const file = path.join(dir, "workspaces.json");
 
     const selected = await resolveProjectNameForWorkspace(
       {
@@ -216,13 +230,157 @@ describe("hook-memory-bridge promotion", () => {
       },
       {
         file,
+        legacyFile: path.join(dir, "project-names.json"),
+        env: { ORGBRAIN_TENANT_ID: "tenant-a" },
         prompt: async () => ""
       }
     );
 
     expect(selected).toBe("demo-app");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved["/tmp/workspaces/demo-app"]).toBe("demo-app");
+    expect(saved.workspaces["/tmp/workspaces/demo-app"]).toEqual({
+      tenant_id: "tenant-a",
+      project_id: "demo-app"
+    });
+  });
+
+  it("uses the saved workspace tenant before the environment fallback", async () => {
+    const resolved = await resolveWorkspaceContext(
+      { cwd: "/tmp/workspaces/org-brain", projectId: "fallback" },
+      {
+        config: {
+          version: 1,
+          workspaces: {
+            "/tmp/workspaces/org-brain": {
+              tenant_id: "tenant-from-workspace",
+              project_id: "project-from-workspace"
+            }
+          }
+        },
+        env: { ORGBRAIN_TENANT_ID: "tenant-from-env" },
+        migrateLegacy: false
+      }
+    );
+
+    expect(resolved).toMatchObject({
+      tenantId: "tenant-from-workspace",
+      projectId: "project-from-workspace",
+      source: "workspace"
+    });
+  });
+
+  it("fails closed when organization sharing cannot resolve a tenant", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
+    await expect(
+      resolveWorkspaceContext(
+        { cwd: "/tmp/workspaces/org-brain", projectId: "org-brain" },
+        {
+          workspacesFile: path.join(dir, "workspaces.json"),
+          legacyFile: path.join(dir, "project-names.json"),
+          env: {
+            ORGBRAIN_ENABLE_CLOUD_MEMORY: "true",
+            ORGBRAIN_ENABLE_ORG_SHARING: "true"
+          },
+          prompt: false
+        }
+      )
+    ).rejects.toThrow("Organization sharing requires a workspace tenant mapping");
+  });
+
+  it("does not pin the implicit local default tenant before organization sharing is configured", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
+    const workspacesFile = path.join(dir, "workspaces.json");
+    const legacyFile = path.join(dir, "project-names.json");
+
+    const local = await resolveWorkspaceContext(
+      { cwd: "/tmp/workspaces/org-brain", projectId: "org-brain" },
+      { workspacesFile, legacyFile, env: {}, prompt: false }
+    );
+    expect(local.tenantId).toBe("default");
+    expect(JSON.parse(await readFile(workspacesFile, "utf8")).workspaces["/tmp/workspaces/org-brain"].tenant_id).toBeNull();
+
+    const organization = await resolveWorkspaceContext(
+      { cwd: "/tmp/workspaces/org-brain", projectId: "org-brain" },
+      {
+        workspacesFile,
+        legacyFile,
+        env: {
+          ORGBRAIN_ENABLE_CLOUD_MEMORY: "true",
+          ORGBRAIN_ENABLE_ORG_SHARING: "true",
+          ORGBRAIN_TENANT_ID: "team-tenant"
+        },
+        prompt: false
+      }
+    );
+    expect(organization.tenantId).toBe("team-tenant");
+    expect(JSON.parse(await readFile(workspacesFile, "utf8")).workspaces["/tmp/workspaces/org-brain"].tenant_id).toBe("team-tenant");
+  });
+
+  it("preserves both mappings when first-use hooks run concurrently", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
+    const workspacesFile = path.join(dir, "workspaces.json");
+    const options = {
+      workspacesFile,
+      legacyFile: path.join(dir, "project-names.json"),
+      env: { ORGBRAIN_TENANT_ID: "tenant-a" },
+      prompt: false
+    };
+
+    await Promise.all([
+      resolveWorkspaceContext({ cwd: "/tmp/workspaces/app-a", projectId: "app-a" }, options),
+      resolveWorkspaceContext({ cwd: "/tmp/workspaces/app-b", projectId: "app-b" }, options)
+    ]);
+
+    const saved = JSON.parse(await readFile(workspacesFile, "utf8"));
+    expect(Object.keys(saved.workspaces).sort()).toEqual([
+      "/tmp/workspaces/app-a",
+      "/tmp/workspaces/app-b"
+    ]);
+    await expect(readFile(`${workspacesFile}.lock`, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not hold the workspace lock while waiting for an interactive project choice", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "org-brain-project-map-"));
+    const workspacesFile = path.join(dir, "workspaces.json");
+    const legacyFile = path.join(dir, "project-names.json");
+    let releasePrompt;
+    let markPromptStarted;
+    const promptStarted = new Promise((resolve) => {
+      markPromptStarted = resolve;
+    });
+    const promptRelease = new Promise((resolve) => {
+      releasePrompt = resolve;
+    });
+
+    const waiting = resolveWorkspaceContext(
+      { cwd: "/tmp/workspaces/app-a", projectId: "app-a" },
+      {
+        workspacesFile,
+        legacyFile,
+        env: { ORGBRAIN_TENANT_ID: "tenant-a" },
+        prompt: async () => {
+          markPromptStarted();
+          await promptRelease;
+          return "chosen-a";
+        }
+      }
+    );
+    await promptStarted;
+
+    const concurrent = await resolveWorkspaceContext(
+      { cwd: "/tmp/workspaces/app-b", projectId: "app-b" },
+      {
+        workspacesFile,
+        legacyFile,
+        env: { ORGBRAIN_TENANT_ID: "tenant-a" },
+        prompt: false,
+        lock: { timeoutMs: 100 }
+      }
+    );
+    expect(concurrent.projectId).toBe("app-b");
+
+    releasePrompt();
+    expect((await waiting).projectId).toBe("chosen-a");
   });
 
   it("promotes structured project facts from learning-loop payloads", () => {

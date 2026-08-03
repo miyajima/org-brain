@@ -1,0 +1,20 @@
+{
+  "summary": "SPEC and SYSTEM_DESIGN govern quality-v2 summaries, tiering, maintenance, and cleanup; both need a single-classifier contract.",
+  "artifact_refs": [
+    "docs/SPEC.md",
+    "docs/SYSTEM_DESIGN.md"
+  ],
+  "decision_refs": [
+    "document one shared memory quality classifier for Cloud and Node runtimes"
+  ],
+  "evidence": [
+    {
+      "type": "document",
+      "ref": "docs/harness/context_docs.md"
+    }
+  ],
+  "residual_risks": [
+    "Do not imply that existing production rows are automatically backfilled by this code change",
+    "Keep manual cleanup export-gated and separate from daily maintenance"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "summary": "Validated the unified workspace routing with focused unit tests and the full manifest test, typecheck, lint, and build commands.",
+  "artifact_refs": [
+    "scripts/workspace-config.test.mjs",
+    "scripts/hook-memory-bridge.test.mjs"
+  ],
+  "decision_refs": [],
+  "evidence": [
+    {
+      "type": "test",
+      "ref": "pnpm exec vitest run focused suites exit 0: 27 tests passed"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm test exit 0: node 65, script 99, and all workspace suites passed"
+    },
+    {
+      "type": "command",
+      "ref": "pnpm -r --if-present typecheck exit 0; 0 Astro diagnostics"
+    },
+    {
+      "type": "command",
+      "ref": "pnpm lint exit 0"
+    },
+    {
+      "type": "command",
+      "ref": "pnpm run build exit 0; Wrangler deploy commands were dry-run"
+    }
+  ],
+  "residual_risks": [
+    "No production deployment or remote D1 mutation was part of verification"
+  ]
+}

@@ -386,7 +386,7 @@ describe("memory maintenance", () => {
     expect(memory?.summary).toContain("harness-todo-webapp-new-20260524 | artifact |");
     expect(memory?.utility_score).toEqual(expect.any(Number));
     expect(memory?.confidence_score).toEqual(expect.any(Number));
-    expect(memory?.expires_at).toBe(Date.parse("2026-06-07T00:00:00.000Z"));
+    expect(memory?.expires_at).toBe(Date.parse("2026-06-23T00:00:00.000Z"));
     expect(db.memoriesFts.find((row) => row.memory_id === "tmp-artifact")?.content).toContain("harness-todo-webapp-new-20260524 | artifact |");
   });
 

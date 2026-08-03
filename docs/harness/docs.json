@@ -1,0 +1,30 @@
+{
+  "summary": "Documented hooks.env responsibilities, the workspaces.json schema and creation timing, routing precedence, fail-closed organization sharing, legacy migration, permissions, and operator compatibility.",
+  "artifact_refs": [
+    "README.md",
+    ".env.example",
+    "docs/SPEC.md",
+    "docs/SYSTEM_DESIGN.md"
+  ],
+  "decision_refs": [
+    "connection and global fallback values stay in hooks.env",
+    "tenant and project workspace routing stays in workspaces.json"
+  ],
+  "evidence": [
+    {
+      "type": "document",
+      "ref": "README Agent Integrations workspace routing section"
+    },
+    {
+      "type": "document",
+      "ref": "SPEC Memory Source of Truth workspace routing contract"
+    },
+    {
+      "type": "document",
+      "ref": "SYSTEM_DESIGN hook ingestion and operator mapping contract"
+    }
+  ],
+  "residual_risks": [
+    "Tenant invitation and membership administration remain intentionally out of scope"
+  ]
+}

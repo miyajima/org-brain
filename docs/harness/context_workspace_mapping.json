@@ -1,0 +1,13 @@
+{
+  "summary": "The bounded change is a local workspace configuration layer shared by hook ingestion and operator mapping, with backward-compatible environment and legacy file inputs and no Cloudflare mutation.",
+  "artifact_refs": [
+    "docs/harness/context_code_workspace_mapping.json",
+    "docs/harness/context_tests_workspace_mapping.json",
+    "docs/harness/context_docs_workspace_mapping.json",
+    "docs/harness/context_risks_workspace_mapping.json",
+    "docs/harness/plan.json"
+  ],
+  "decision_refs": ["docs/harness/plan.json"],
+  "evidence": [{"type": "artifact", "ref": "docs/harness/plan.json"}],
+  "residual_risks": ["Tenant membership and invitations remain outside this local configuration scope."]
+}

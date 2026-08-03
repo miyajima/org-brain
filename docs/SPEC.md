@@ -77,8 +77,11 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - OpenClaw local DB (`~/.openclaw/memory/main.sqlite`) is cache/index only
 - Local agent hooks and sync scripts do not write to Cloudflare unless `ORGBRAIN_ENABLE_CLOUD_MEMORY=true`; organization sharing additionally requires `ORGBRAIN_ENABLE_ORG_SHARING=true`.
 - Agent hook連携はAPI (`/v1/memories*`) + hook bridge (`scripts/hook-memory-bridge.mjs`) で行う
-- hook bridge は新しい workspace で最初に reusable memory を保存する際、project 名を確認し、既定値には `basename(cwd)` を使う
+- hook bridge は新しい workspace で最初に reusable memory を保存する際、`~/.config/org-brain/workspaces.json` に `tenant_id` と `project_id` を一体で保存する。project の既定値は `basename(cwd)` とし、organization sharing では workspace mapping と `ORGBRAIN_TENANT_ID` のどちらからも tenant を解決できない場合は fail closed とする
+- local-only で tenant が明示されていない場合、runtime は互換上 `default` scope を使うが mapping には `tenant_id: null` を保存する。これにより後日 organization sharing を有効化した際に暗黙の `default` が明示 tenant より優先されることを防ぐ
+- 旧 `project-names.json` は最初の対象 hook で tenant fallback を付与して移行し、元ファイルは削除・変更しない。workspace 設定は directory `0700` / file `0600`、lock-serialized read-modify-write、atomic replace で保存する
 - Hook bridge は low-signal な会話終了ログを原則保存せず、再利用価値のある内容だけを distilled memory として upsert する
+- Memory quality の分類・要約・utility/confidence・expiry・suppression 判定は `packages/shared/src/memory-quality-runtime.mjs` を単一の実装元とし、Cloudflare Worker、hook bridge、backfill、cleanup、usage report は同じ判定を使う。TypeScript Worker は `memory-quality.ts` facade、Node operator script は `scripts/lib/memory-quality.mjs` compatibility re-export を経由する
 - Agent memory sync は API (`/v1/memories*`) + sync script (`scripts/sync-agents-memory.mjs`) で行う
 - `/v1/memories/upsert` は request 内 `external_key` を last-write-wins で dedupe し、既存 key lookup + `memories_fts` 更新を batch 化する
 - memory lifecycle v2 では `memories` を current snapshot、`memory_versions` を immutable 履歴、`memory_edges` を lightweight lineage relation として扱う

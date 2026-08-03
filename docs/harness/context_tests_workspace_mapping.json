@@ -1,0 +1,7 @@
+{
+  "summary": "Existing hook tests provide a compatibility baseline; workspace mapping needs security, migration, precedence, and operator-lookup coverage.",
+  "artifact_refs": ["scripts/hook-memory-bridge.test.mjs", "scripts/memory-quality-backfill.test.mjs", "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"],
+  "decision_refs": [],
+  "evidence": [{"type": "artifact", "ref": "docs/harness/context_tests_workspace_mapping.md"}],
+  "residual_risks": ["Filesystem mode assertions are POSIX-specific and should be guarded where necessary."]
+}

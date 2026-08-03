@@ -7,35 +7,64 @@
     "docs/harness/quality_score.json"
   ],
   "cycle": "full",
+  "context_summary": {
+    "code": "Hook ingestion currently combines ORGBRAIN_TENANT_ID with a legacy cwd-to-project map, while operator scripts use a separate reverse root map.",
+    "docs": "README, SPEC, SYSTEM_DESIGN, and .env.example govern the configuration and sharing contract.",
+    "risks": "Organization mode must not guess tenants; invalid config must fail closed; legacy data and current uncommitted changes must be preserved.",
+    "tests": "Focused hook/config/backfill tests plus the full manifest typecheck, test, lint, and build commands are required."
+  },
   "difficulty_assessment": {
     "diff": {
-      "additions": 0,
+      "additions": 560,
       "available": true,
-      "base_ref": "21a9de6eead1252b11ca3461a670240e612873e3",
+      "base_ref": "d305baf0c336d9d2011dc54ade110fd26c1a8345",
       "binary_files": 0,
-      "changed_file_count": 0,
-      "changed_files": [],
+      "changed_file_count": 14,
+      "changed_files": [
+        "apps/api-gateway/test/memory-service.test.ts",
+        "apps/cap-runner/test/memory-maintenance.test.ts",
+        "docs/SPEC.md",
+        "docs/SYSTEM_DESIGN.md",
+        "docs/harness/context_code.md",
+        "docs/harness/context_docs.md",
+        "docs/harness/context_risks.md",
+        "docs/harness/context_tests.md",
+        "packages/shared/src/memory-quality-runtime.d.mts",
+        "packages/shared/src/memory-quality-runtime.mjs",
+        "packages/shared/src/memory-quality.ts",
+        "packages/shared/test/memory-quality.test.ts",
+        "scripts/lib/memory-quality.mjs",
+        "scripts/memory-quality.test.mjs"
+      ],
       "changed_files_truncated": 0,
-      "component_count": 0,
-      "components": [],
+      "component_count": 4,
+      "components": [
+        "apps",
+        "docs",
+        "packages",
+        "scripts"
+      ],
       "components_truncated": 0,
-      "content_sha256": "8ce658ddd65dc47819e72bd5eaae0508e5025c299a92212ab00ca0c01b8e5a19",
-      "deletions": 0,
-      "fingerprint": "f83b3cc43c5756555fe90da64a98f7d0b01cb652ba84644d4cdff7ea53fba240",
-      "head_sha": "21a9de6eead1252b11ca3461a670240e612873e3",
-      "line_changes": 0
+      "content_sha256": "0d03afd712747596db555b2b15b2b21c1a0ca9b5d28bd4ee61c74faa56382849",
+      "deletions": 600,
+      "fingerprint": "81db5c67aa3e6d8a99dfd01cda783c2b6b58997d66bc11c7f67f7fd10badc9ab",
+      "head_sha": "d305baf0c336d9d2011dc54ade110fd26c1a8345",
+      "line_changes": 1160
     },
-    "level": "simple",
+    "level": "complex",
     "reasons": [
-      "manifest declares 3 risks"
+      "large diff touches 14 files",
+      "large line delta is 1160",
+      "manifest declares 3 risks",
+      "diff spans 4 top-level components"
     ],
     "risk_count": 3,
-    "score": 2,
+    "score": 8,
     "sensitive_files": [],
     "sensitive_files_truncated": 0
   },
   "execution_policy": {
-    "difficulty": "simple",
+    "difficulty": "complex",
     "difficulty_mode": "automatic",
     "improvement_policy": {
       "automation_command": "harness gate <repo> --profile full --write-harness-artifacts --auto-review --auto-improve",
@@ -58,8 +87,10 @@
       "simple": "Use the primary agent only."
     },
     "task_graph_policy": {
-      "contract": "task-graph-v1",
-      "selection_command": "harness taskgraph next <repo>",
+      "contract": "task-graph-v2",
+      "maximum_attempts": 3,
+      "role_routing": "task explicit role, then manifest route, then workflow default",
+      "selection_command": "harness taskgraph next <repo> --json-full",
       "single_writer": "Use harness taskgraph transitions for tasks.json state changes.",
       "transitions": [
         "start",
@@ -78,10 +109,10 @@
   "memory_recall": {
     "backend": "org_brain",
     "limit": 3,
-    "query": "GitHub Checks\u3067\u5931\u6557\u3057\u3066\u3044\u308b\u7b87\u6240\u3092\u7279\u5b9a\u3057\u3001\u539f\u56e0\u3092\u4fee\u6b63\u3057\u3066\u518d\u691c\u8a3c\u3059\u308b",
+    "query": "Unify local workspace tenant and project mapping in workspaces.json",
     "result_count": 0,
     "results": [],
-    "searched_at": "2026-08-01T06:10:52.476241+00:00",
+    "searched_at": "2026-08-03T10:17:54.613791+00:00",
     "status": "completed"
   },
   "repo": "org-brain",
@@ -96,11 +127,14 @@
     "Local SQLite schema migrations, retention, suppression, and permanent deletion are data-sensitive operations.",
     "Benchmark and leadership claims require pinned revisions, reproducible evidence, and complete acceptance gates."
   ],
-  "run_id": "org-brain-20260801T061052.357103Z-7c953d99",
+  "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
   "schema_version": 2,
   "success_criteria": [
-    "\u5bfe\u8c61\u306e\u5931\u6557Check\u304c\u518d\u73fe\u53ef\u80fd\u306a\u539f\u56e0\u4fee\u6b63\u3067\u89e3\u6d88\u3057\u3001manifest\u306etypecheck/test/lint/build\u3092\u901a\u904e\u3059\u308b"
+    "Hook ingestion uses one secure workspace mapping for tenant_id and project_id, migrates legacy project-names.json without data loss, fails closed for unresolved organization sharing, preserves single-tenant env compatibility, documents hooks.env, and passes affected tests plus the full manifest gate without production writes",
+    "workspaces.json is written atomically under a 0700 directory with 0600 file permissions",
+    "workspace mappings take precedence over environment fallback and remain subject to server-side tenant grants",
+    "project quality and current-state operator scripts can derive project roots from the same workspace mapping"
   ],
-  "task": "GitHub Checks\u3067\u5931\u6557\u3057\u3066\u3044\u308b\u7b87\u6240\u3092\u7279\u5b9a\u3057\u3001\u539f\u56e0\u3092\u4fee\u6b63\u3057\u3066\u518d\u691c\u8a3c\u3059\u308b",
+  "task": "Unify local workspace tenant and project mapping in workspaces.json",
   "workflow_contract": "strict-v1"
 }

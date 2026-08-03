@@ -1,0 +1,25 @@
+{
+  "summary": "Adopt the richer Node ingestion/operator classifier as one runtime-neutral implementation under packages/shared, consumed by typed Cloud and compatibility Node facades.",
+  "artifact_refs": [
+    "docs/harness/plan.json",
+    "docs/harness/context_code.json",
+    "docs/harness/context_tests.json",
+    "docs/harness/context_docs.json",
+    "docs/harness/context_risks.json"
+  ],
+  "decision_refs": [
+    "single canonical classifier under packages/shared",
+    "no production mutation or deployment",
+    "separate export-gated reconciliation for existing D1 rows"
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/plan.json"
+    }
+  ],
+  "residual_risks": [
+    "Cloudflare bundle and Node ESM resolution must both be verified",
+    "Existing production rows remain scored by historical implementations until a later backfill"
+  ]
+}

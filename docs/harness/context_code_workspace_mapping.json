@@ -1,0 +1,7 @@
+{
+  "summary": "Hook ingestion currently separates tenant environment selection from a legacy cwd-to-project JSON map; operator scripts separately maintain the reverse project-root map.",
+  "artifact_refs": ["scripts/hook-memory-bridge.mjs", "scripts/memory-quality-backfill.mjs", "scripts/project-current-state-snapshot.mjs"],
+  "decision_refs": [],
+  "evidence": [{"type": "review", "ref": "docs/harness/context_code_workspace_mapping.md"}],
+  "residual_risks": ["Local mapping selection must never bypass server-side tenant grants."]
+}
