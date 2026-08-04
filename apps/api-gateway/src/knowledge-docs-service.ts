@@ -1,6 +1,7 @@
 import {
   buildKnowledgeFtsQuery,
   deriveParentMocCandidates,
+  HttpError,
   KNOWLEDGE_CONTEXT_LIMITS,
   KNOWLEDGE_DOC_FTS_BODY_LIMIT,
   KNOWLEDGE_DOC_INLINE_BODY_LIMIT,
@@ -11,12 +12,12 @@ import {
   normalizeStringArray,
   parseKnowledgeMarkdown,
   renderKnowledgeMarkdown,
+  ulid,
   type KnowledgeDocFrontmatter,
   type KnowledgeDocKind,
   type KnowledgeDocScope,
   type KnowledgeLinkRelation
 } from "@org-brain/shared";
-import { HttpError, ulid } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import type { Env } from "./types";
 

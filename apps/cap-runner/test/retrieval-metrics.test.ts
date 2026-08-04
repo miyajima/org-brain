@@ -5,8 +5,8 @@ import {
   countTopMemoryIds,
   mergeRetrievalMetrics,
   summarizeReplayComparisons
-} from "../../../scripts/lib/retrieval-metrics-core.mjs";
-import { resolveReplayInput } from "../../../scripts/lib/retrieval-replay-core.mjs";
+} from "../../../packages/benchmarks/src/retrieval-metrics-core.mjs";
+import { resolveReplayInput } from "../../../packages/benchmarks/src/retrieval-replay-core.mjs";
 
 class FakeStatement {
   db: FakeD1;

@@ -10,8 +10,8 @@ import {
   resolveApiBase,
   resolveProjectNameForWorkspace,
   resolveWorkspaceContext
-} from "./hook-memory-bridge.mjs";
-import { resolveMemoryMode } from "./lib/memory-mode.mjs";
+} from "../packages/orgbrain-cli/src/hook-memory-bridge.mjs";
+import { resolveMemoryMode } from "../packages/orgbrain-cli/src/lib/memory-mode.mjs";
 
 describe("hook-memory-bridge promotion", () => {
   it("redacts credentials and personal contact data before persistence", () => {

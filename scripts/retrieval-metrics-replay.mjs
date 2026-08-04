@@ -8,9 +8,9 @@ import {
   parseLocationArgs,
   runD1Queries,
   sqlString
-} from "./lib/metrics-common.mjs";
-import { summarizeReplayComparisons } from "./lib/retrieval-metrics-core.mjs";
-import { overlapAtFive, resolveReplayInput } from "./lib/retrieval-replay-core.mjs";
+} from "../packages/benchmarks/src/metrics-common.mjs";
+import { summarizeReplayComparisons } from "../packages/benchmarks/src/retrieval-metrics-core.mjs";
+import { overlapAtFive, resolveReplayInput } from "../packages/benchmarks/src/retrieval-replay-core.mjs";
 
 const STRATEGIES = ["bm25_v1", "bm25_rewrite_v1", "hybrid_memory_docs_v1"];
 

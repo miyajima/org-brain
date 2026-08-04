@@ -793,17 +793,18 @@ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` before running LLM judging.
 
 ## What Is Included
 
-- `scripts/local-memory.mjs`: personal SQLite memory CLI.
+- `packages/orgbrain-cli/src/local-memory.mjs`: public SQLite memory CLI.
 - `scripts/codex-memory-context.mjs`: bounded local context lookup for the
   Codex `UserPromptSubmit` hook.
-- `scripts/hook-memory-bridge.mjs`: reusable-memory capture from local agent hooks.
+- `packages/orgbrain-cli/src/hook-memory-bridge.mjs`: reusable-memory capture from local agent hooks.
+- `packages/benchmarks`: private evaluation runners, fixtures, and competitor bridges.
 - `scripts/sync-agents-memory.mjs`: import/export bridge for local agent memory.
 - `apps/api-gateway`: Hono API Worker for memory, docs, tasks, measurement, and Remote MCP.
 - `apps/org-router`: queue router for the organization bus.
 - `apps/cap-runner`: capability workers, maintenance jobs, and Durable Objects.
 - `apps/mcp`: compatibility Remote MCP Worker.
 - `apps/console`: Astro console for browsing and operating memory.
-- `packages/shared`: shared schemas, retrieval helpers, lifecycle types, and knowledge-doc utilities.
+- `packages/shared`: shared schemas plus the deterministic retrieval-unit, intent, and lexical-scoring core used by both SQLite and D1 adapters.
 - `migrations`: D1 SQL migrations for the self-hosted Cloudflare stack.
 
 ### Console Preview

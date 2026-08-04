@@ -3,5 +3,5 @@
   "compilerOptions": {
     "composite": true
   },
-  "include": ["src/**/*.ts", "schemas/**/*.json"]
+  "include": ["src/**/*.ts", "src/**/*.d.mts", "schemas/**/*.json"]
 }

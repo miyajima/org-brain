@@ -23,6 +23,7 @@ jobs:
           node-version: "22"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
@@ -62,6 +63,31 @@ jobs:
             worker.log
           if-no-files-found: warn
           retention-days: 30
+
+  console-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @org-brain/console exec playwright install --with-deps chromium
+      - run: pnpm --filter @org-brain/console test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: console-e2e-report
+          path: |
+            apps/console/playwright-report
+            apps/console/test-results
+          if-no-files-found: ignore
+          retention-days: 14
 
   benchmark:
     runs-on: ubuntu-latest

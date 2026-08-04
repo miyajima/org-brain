@@ -1,7 +1,6 @@
 import { HttpError, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
-import type { MiddlewareHandler } from "hono";
 import {
   ackAgentMessage,
   getAgentMessage,

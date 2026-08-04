@@ -4,8 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import process from "node:process";
-import { addTags, classifyMemoryQuality, parseTagsJson } from "./lib/memory-quality.mjs";
-import { parseLocationArgs, runD1Queries, sqlString } from "./lib/metrics-common.mjs";
+import { addTags, classifyMemoryQuality, parseTagsJson } from "../packages/orgbrain-cli/src/lib/memory-quality.mjs";
+import { parseLocationArgs, runD1Queries, sqlString } from "../packages/benchmarks/src/metrics-common.mjs";
 
 const DEFAULT_LIMIT = 5000;
 

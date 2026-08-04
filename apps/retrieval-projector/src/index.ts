@@ -187,7 +187,6 @@ async function embedMany(texts: string[], env: Env): Promise<number[][]> {
 }
 
 async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
-  if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
   const row = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, content, summary, source_refs_json,
             created_at, updated_at, valid_from, valid_until, content_hash, lifecycle_state
@@ -203,7 +202,19 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
     `SELECT id FROM memory_retrieval_units_v4
      WHERE tenant_id = ? AND memory_id = ?`
   ).bind(row.tenant_id, row.id).all<{ id: string }>();
-  const extraction = await extract(row, env.GEMINI_API_KEY);
+  let degradedReason: string | null = null;
+  let extraction: ExtractionPayload;
+  try {
+    if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
+    extraction = await extract(row, env.GEMINI_API_KEY);
+  } catch (error) {
+    degradedReason = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+    extraction = {
+      synopsis: (row.summary?.trim() || row.content.trim()).slice(0, 4_000),
+      atoms: []
+    };
+  }
+  const extractionState = degradedReason ? "degraded" : "ready";
   const candidates: Array<ExtractedAtomicUnit & { type: string }> = [
     ...(extraction.synopsis ? [{ type: "synopsis", text: extraction.synopsis, speaker: null, event_at: null }] : []),
     ...extraction.atoms
@@ -260,7 +271,7 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
       if (atom.type === "update") structuredUnits.push({ ...atomic, unit_type: "ledger" });
     }
   }
-  const v4Units = await buildRetrievalUnitsV4({
+  const v4Record = {
     id: row.id,
     tenant_id: row.tenant_id,
     project_id: row.project_id,
@@ -271,7 +282,11 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
     valid_from: row.valid_from,
     valid_until: row.valid_until,
     source_references: [firstSourceReference(row)].filter(Boolean) as never
-  }, { structuredUnits });
+  };
+  const v4Units = await buildRetrievalUnitsV4(
+    v4Record,
+    structuredUnits.length > 0 ? { structuredUnits } : undefined
+  );
   const statements: D1PreparedStatement[] = [
     env.OPEN_BRAIN_DB.prepare(
       `DELETE FROM memory_retrieval_units_fts
@@ -288,9 +303,9 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
     ).bind(row.tenant_id, row.id),
     env.OPEN_BRAIN_DB.prepare(
       `UPDATE memory_retrieval_units
-       SET extraction_state = 'ready', degraded_reason = NULL
+       SET extraction_state = ?, degraded_reason = ?
        WHERE tenant_id = ? AND memory_id = ?`
-    ).bind(row.tenant_id, row.id)
+    ).bind(extractionState, degradedReason, row.tenant_id, row.id)
     ,
     env.OPEN_BRAIN_DB.prepare(
       "DELETE FROM memory_retrieval_units_v4_fts WHERE tenant_id = ? AND memory_id = ?"
@@ -312,7 +327,7 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
         unit.id, unit.memory_id, unit.tenant_id, unit.project_id, unit.unit_type,
         unit.speaker, unit.text, unit.event_at, unit.valid_from, unit.valid_until,
         unit.source_ref_json, null, null, unit.content_hash,
-        EXTRACTION_MODEL, "1", "ready", null, unit.created_at
+        EXTRACTION_MODEL, "1", extractionState, degradedReason, unit.created_at
       ),
       env.OPEN_BRAIN_DB.prepare(
         "INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
@@ -333,7 +348,7 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
         unit.speaker, unit.text, unit.event_at, unit.valid_from, unit.valid_until,
         unit.source_ref_json, unit.source_span_start, unit.source_span_end,
         unit.content_hash, unit.metadata_json, unit.segment_id, unit.extractor,
-        unit.extractor_version, "ready", null, unit.created_at
+        unit.extractor_version, extractionState, degradedReason, unit.created_at
       ),
       env.OPEN_BRAIN_DB.prepare(
         "INSERT INTO memory_retrieval_units_v4_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"

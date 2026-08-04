@@ -15,3 +15,8 @@ dbx-db/
 .omx/
 .benchmark/
 tmp/
+/plan.json
+/tasks.json
+/review.json
+/gate.json
+/quality_score.json

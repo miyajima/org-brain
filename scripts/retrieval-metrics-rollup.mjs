@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import process from "node:process";
-import { formatJst, formatUtcDay, parseLocationArgs, runD1Queries, sqlNullable, sqlString, utcDayBounds } from "./lib/metrics-common.mjs";
-import { computeRawRetrievalMetrics } from "./lib/retrieval-metrics-core.mjs";
+import { formatJst, formatUtcDay, parseLocationArgs, runD1Queries, sqlNullable, sqlString, utcDayBounds } from "../packages/benchmarks/src/metrics-common.mjs";
+import { computeRawRetrievalMetrics } from "../packages/benchmarks/src/retrieval-metrics-core.mjs";
 
 function printHelp() {
   console.log(`Org Brain retrieval metrics rollup

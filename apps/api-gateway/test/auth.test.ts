@@ -66,6 +66,20 @@ describe("api tenant auth", () => {
     expect(await response.json()).toMatchObject({ tenant: "default" });
   });
 
+  it("assigns the default API key a low-privilege service role", async () => {
+    const app = buildApp();
+    const response = await app.fetch(
+      new Request("https://example.test/principal", { headers: { "x-api-key": "secret" } }),
+      { API_KEY: "secret" } as Env
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      principal: "api-key:default",
+      defaultRole: "service_agent"
+    });
+  });
+
   it("rejects non-default tenant without an explicit policy", async () => {
     const app = buildApp();
     const response = await app.fetch(

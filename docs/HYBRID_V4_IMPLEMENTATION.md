@@ -2,8 +2,10 @@
 
 ## Product contract
 
-`hybrid_v4` is additive. `hybrid_v3`, its projection, and its Vectorize data
-remain available for immediate rollback.
+`hybrid_v4` is retained as the promotion candidate. `hybrid_v3` remains
+rebuildable for rollback during the policy window; this does not make both
+versions permanent shadows. See
+[`RETRIEVAL_ROLLOUT_POLICY.md`](RETRIEVAL_ROLLOUT_POLICY.md).
 
 The v4 ingestion projection contains generic atomic units, profile facets,
 state-ledger updates, timeline events, and bounded record segments. Gemini
@@ -19,11 +21,16 @@ feature. Segment search is capped at 24 and parent candidates at 50. Authority
 is only a final equal-relevance tie-break. Multi-evidence queries reserve
 different source sessions when possible.
 
-D1 uses the same v4 response contract. Its Qwen3 0.6B embeddings are stored in
+D1 uses the same deterministic v4 unit IDs, metadata, intent rules, and v4
+candidate channel as SQLite. Its Qwen3 0.6B embeddings are stored in
 the existing Vectorize binding under a distinct `tenant:hybrid_v4` namespace,
 and the BGE reranker is applied to the parent candidate set. Migration
 `0017_retrieval_units_v4.sql` is additive and the v4 backfill records a
 checkpoint, counts, and a unit digest.
+
+Production defaults to `HYBRID_V3_MODE=off`, `HYBRID_V4_MODE=shadow`, and a
+5% deterministic v4 shadow sample. The v4 shadow uses the v4 Vectorize
+namespace; it no longer queries the v3 semantic namespace by mistake.
 
 ## Evidence bundle
 

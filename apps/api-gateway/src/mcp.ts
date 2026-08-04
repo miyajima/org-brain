@@ -33,6 +33,7 @@ import { confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-s
 import { assertPermission } from "./rbac-service";
 import { appendAuditEvent } from "./audit-service";
 import { extractMemoryCandidates } from "./memory-extraction-service";
+import { assertRequestRateLimit } from "./rate-limit-service";
 
 type AgentProps = {
   tenantId: string;
@@ -834,9 +835,14 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
 }
 
 export function mountMcp(app: Hono<any>) {
-  app.mount("/mcp", (request, env, ctx) => {
+  app.mount("/mcp", async (request, env, ctx) => {
     try {
       const auth = authorizeMcpRequest(request, env);
+      await assertRequestRateLimit(env, {
+        tenantId: auth.tenantId,
+        principal: auth.principal,
+        path: "/mcp"
+      });
       const runtimeCtx = ctx as ExecutionContext & { props?: AgentProps };
       runtimeCtx.props = {
         tenantId: auth.tenantId,

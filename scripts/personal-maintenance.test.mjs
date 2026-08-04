@@ -3,14 +3,14 @@ import { mkdtemp, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { LocalMemoryStore } from "./lib/local-memory-store.mjs";
+import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import {
   installPersonalMaintenance,
   personalMaintenancePlan,
   personalMaintenanceStatus,
   runLocalMaintenance,
   uninstallPersonalMaintenance
-} from "./personal-maintenance.mjs";
+} from "../packages/orgbrain-cli/src/personal-maintenance.mjs";
 
 test("daily personal maintenance plan is local-only and contains no LLM or MCP command", () => {
   const plan = personalMaintenancePlan({

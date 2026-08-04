@@ -1,7 +1,7 @@
 # Hybrid v3 retrieval
 
-Status: additive shadow rollout. This implementation is not yet eligible for a
-first-place claim.
+Status: retained rollback path; production default `HYBRID_V3_MODE=off`.
+This implementation is not eligible for a first-place claim.
 
 ## Product path
 
@@ -59,7 +59,8 @@ result shape.
 - Dead letter queue: `orgbrain-retrieval-projection-v3-dlq`
 - Backfill: `POST /v1/retrieval-index/v3/backfill`
 - Runtime status: `GET /v1/ops/status`
-- Rollout mode: `HYBRID_V3_MODE=shadow`
+- Rollout mode: `HYBRID_V3_MODE=off`
+- Promotion/retirement policy: `docs/RETRIEVAL_ROLLOUT_POLICY.md`
 
 Backfill is checkpointed per tenant/project. Rebuilds delete prior Vectorize
 unit IDs before replacing D1 projections, so changed unit IDs cannot leave
@@ -84,9 +85,11 @@ overlap/empty/degraded/latency fields.
 - Runtime providers: `@cf/qwen/qwen3-embedding-0.6b` and
   `@cf/baai/bge-reranker-base`
 
-All 3,564 units are currently marked degraded because the Gemini extraction
-secret has not been uploaded to Cloudflare. Full-text and turn projections are
-available; quality-mode atomic extraction is not. Shadow mode remains enabled.
+At the time of the 2026-07-30 verification, all 3,564 units were marked
+degraded because the Gemini extraction secret had not been uploaded to
+Cloudflare. Full-text and turn projections were available; quality-mode atomic
+extraction was not. This historical snapshot does not describe the current
+rollout default.
 
 ## Reproducible benchmark
 

@@ -8,7 +8,6 @@ binding = "AI"
 [[d1_databases]]
 binding = "OPEN_BRAIN_DB"
 database_name = "open-brain"
-database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
 
 [[vectorize]]
 binding = "MEMORY_VECTOR_INDEX_V3"

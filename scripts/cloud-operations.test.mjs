@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCloudProvisionPlan, runCloudCommand } from "./cloud-operations.mjs";
+import { buildCloudProvisionPlan, runCloudCommand } from "../packages/orgbrain-cli/src/cloud-operations.mjs";
 
 test("cloud provision defaults to an inspectable non-mutating plan", async () => {
   const plan = buildCloudProvisionPlan({ root: process.cwd(), withVectorize: true });
@@ -16,7 +16,7 @@ test("cloud provision defaults to an inspectable non-mutating plan", async () =>
   assert.equal(plan.resources.vectorize, "orgbrain-memory-units-v3-1024");
   assert.ok(plan.steps.some((step) => step.id === "apply_migrations"));
   assert.ok(plan.steps.some((step) => step.id === "configure_vectorize_binding" && step.local_action));
-  assert.ok(plan.steps.some((step) => step.id === "synchronize_d1_bindings" && step.local_action));
+  assert.equal(plan.steps.some((step) => step.id === "synchronize_d1_bindings"), false);
   assert.deepEqual(
     plan.steps
       .filter((step) => step.id.startsWith("deploy_"))

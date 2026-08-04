@@ -1,5 +1,6 @@
 import { HttpError, collapseWhitespace, ulid } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
+import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1054,7 +1055,24 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
 }
 
 export async function createDecisionMemory(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
-  const memory = parseCreateDecisionRequest(rawBody, options.principal);
+  const parsedMemory = parseCreateDecisionRequest(rawBody, options.principal);
+  const memory: DecisionMemory = {
+    ...parsedMemory,
+    title: screenMemoryWriteText(parsedMemory.title, "title"),
+    decision: screenMemoryWriteText(parsedMemory.decision, "decision"),
+    rationale: screenMemoryWriteText(parsedMemory.rationale, "rationale"),
+    rejectedAlternatives: parsedMemory.rejectedAlternatives.map((alternative, index) => ({
+      alternative: screenMemoryWriteText(alternative.alternative, `rejectedAlternatives[${index}].alternative`),
+      reasonRejected: screenMemoryWriteText(alternative.reasonRejected, `rejectedAlternatives[${index}].reasonRejected`)
+    })),
+    constraints: parsedMemory.constraints.map((value, index) =>
+      screenMemoryWriteText(value, `constraints[${index}]`)
+    ),
+    knownPitfalls: parsedMemory.knownPitfalls.map((value, index) =>
+      screenMemoryWriteText(value, `knownPitfalls[${index}]`)
+    ),
+    confirmationNote: screenOptionalMemoryWriteText(parsedMemory.confirmationNote, "confirmationNote")
+  };
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO decision_memories(
        id, tenant_id, project_id, domain, title, decision, rationale,

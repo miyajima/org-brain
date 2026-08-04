@@ -8,7 +8,7 @@ import os from "node:os";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import process from "node:process";
-import { assessMemoryUsefulness } from "../../../scripts/lib/memory-quality.mjs";
+import { assessMemoryUsefulness } from "../../../packages/orgbrain-cli/src/lib/memory-quality.mjs";
 import { loadProjectRootMappings } from "../../../scripts/lib/workspace-config.mjs";
 
 const execFileAsync = promisify(execFile);

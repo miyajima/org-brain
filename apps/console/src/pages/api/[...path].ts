@@ -1,7 +1,13 @@
 import type { APIRoute } from "astro";
 import { env as cloudflareEnv } from "cloudflare:workers";
+import {
+  AccessJwtError,
+  accessJwtRequired,
+  verifyConsoleAccessJwt,
+  type ConsoleAccessEnv
+} from "../../lib/access-jwt";
 
-type ConsoleWorkerEnv = {
+type ConsoleWorkerEnv = ConsoleAccessEnv & {
   API?: Fetcher;
   INTERNAL_API_KEY?: string;
   API_BASE_URL?: string;
@@ -17,8 +23,19 @@ function getRuntimeEnv(): ConsoleWorkerEnv {
   return {
     API: runtimeEnv.API,
     INTERNAL_API_KEY: runtimeEnv.INTERNAL_API_KEY ?? processEnv.INTERNAL_API_KEY,
-    API_BASE_URL: runtimeEnv.API_BASE_URL ?? processEnv.API_BASE_URL
+    API_BASE_URL: runtimeEnv.API_BASE_URL ?? processEnv.API_BASE_URL,
+    ACCESS_TEAM_DOMAIN: runtimeEnv.ACCESS_TEAM_DOMAIN ?? processEnv.ACCESS_TEAM_DOMAIN,
+    ACCESS_AUD: runtimeEnv.ACCESS_AUD ?? processEnv.ACCESS_AUD,
+    ACCESS_JWKS_JSON: runtimeEnv.ACCESS_JWKS_JSON ?? processEnv.ACCESS_JWKS_JSON,
+    ACCESS_JWT_REQUIRED: runtimeEnv.ACCESS_JWT_REQUIRED ?? processEnv.ACCESS_JWT_REQUIRED
   };
+}
+
+function jsonError(status: number, code: string, message: string): Response {
+  return new Response(JSON.stringify({ ok: false, error: { code, message } }), {
+    status,
+    headers: { "content-type": "application/json" }
+  });
 }
 
 function stripHeaders(headers: Headers): Headers {
@@ -40,21 +57,21 @@ function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string):
 
 export const ALL: APIRoute = async ({ params, request }) => {
   const runtimeEnv = getRuntimeEnv();
+  if (accessJwtRequired(runtimeEnv)) {
+    const accessJwt = request.headers.get("cf-access-jwt-assertion")?.trim();
+    if (!accessJwt) return jsonError(401, "unauthorized", "Missing Cloudflare Access JWT");
+    try {
+      await verifyConsoleAccessJwt(runtimeEnv, accessJwt);
+    } catch (error) {
+      if (error instanceof AccessJwtError) {
+        return jsonError(error.status, error.status === 401 ? "unauthorized" : "misconfigured", error.message);
+      }
+      return jsonError(500, "access_verification_failed", "Cloudflare Access JWT verification failed");
+    }
+  }
   const apiBaseUrl = typeof runtimeEnv?.API_BASE_URL === "string" ? runtimeEnv.API_BASE_URL.trim() : "";
   if ((!runtimeEnv?.API && !apiBaseUrl) || !runtimeEnv?.INTERNAL_API_KEY) {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: {
-          code: "misconfigured",
-          message: "Missing API binding/API_BASE_URL or INTERNAL_API_KEY"
-        }
-      }),
-      {
-        status: 500,
-        headers: { "content-type": "application/json" }
-      }
-    );
+    return jsonError(500, "misconfigured", "Missing API binding/API_BASE_URL or INTERNAL_API_KEY");
   }
 
   const path = params.path ?? "";

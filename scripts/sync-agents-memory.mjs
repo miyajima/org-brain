@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { resolveMemoryMode } from "./lib/memory-mode.mjs";
+import { resolveMemoryMode } from "../packages/orgbrain-cli/src/lib/memory-mode.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));

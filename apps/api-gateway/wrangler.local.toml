@@ -4,28 +4,27 @@ compatibility_date = "2026-03-03"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
+HYBRID_V3_MODE = "off"
 HYBRID_V4_MODE = "shadow"
+HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
 
-# Optional real semantic retrieval:
-# [ai]
-# binding = "AI"
-#
-# [[vectorize]]
-# binding = "MEMORY_VECTOR_INDEX"
-# index_name = "orgbrain-memory-384-cosine"
+[ai]
+binding = "AI"
 
-# Optional production-equivalent rate limit binding:
-# [[ratelimits]]
-# name = "API_RATE_LIMITER"
-# namespace_id = "1002"
-# [ratelimits.simple]
-# limit = 1500
-# period = 60
+[[vectorize]]
+binding = "MEMORY_VECTOR_INDEX_V3"
+index_name = "orgbrain-memory-units-v3-1024"
+
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 1500
+period = 60
 
 [[d1_databases]]
 binding = "OPEN_BRAIN_DB"
 database_name = "open-brain"
-database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
 migrations_dir = "../../migrations"
 
 [[r2_buckets]]
@@ -35,6 +34,10 @@ bucket_name = "open-brain-bucket"
 [[queues.producers]]
 binding = "ORG_BUS_OUT"
 queue = "org-bus"
+
+[[queues.producers]]
+binding = "RETRIEVAL_PROJECTION_QUEUE"
+queue = "orgbrain-retrieval-projection-v3"
 
 [durable_objects]
 bindings = [

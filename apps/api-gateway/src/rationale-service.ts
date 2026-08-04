@@ -20,6 +20,7 @@ import {
 } from "@org-brain/shared";
 import { captureMemoryItems, runBatchChunks } from "./memory-lifecycle-service";
 import type { Env } from "./types";
+import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 
 const CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -409,7 +410,12 @@ async function persistInferredRationale(
 }
 
 export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
-  const { tenantId, source, actorType, actorId, item, entities, evidence } = parseProposeRequest(rawBody);
+  const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseProposeRequest(rawBody);
+  const item = {
+    ...parsedItem,
+    content: screenMemoryWriteText(parsedItem.content, "item.content"),
+    summary: screenOptionalMemoryWriteText(parsedItem.summary, "item.summary")
+  };
   const extracted = extractRationaleProposal({
     content: item.content,
     summary: item.summary,
@@ -443,7 +449,12 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
 }
 
 export async function captureMemoryWithInferredRationale(env: Env, rawBody: unknown) {
-  const { tenantId, source, actorType, actorId, item, entities, evidence } = parseCaptureWithRationaleRequest(rawBody);
+  const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseCaptureWithRationaleRequest(rawBody);
+  const item = {
+    ...parsedItem,
+    content: screenMemoryWriteText(parsedItem.content, "item.content"),
+    summary: screenOptionalMemoryWriteText(parsedItem.summary, "item.summary")
+  };
   const extracted = extractRationaleProposal({
     content: item.content,
     summary: item.summary,

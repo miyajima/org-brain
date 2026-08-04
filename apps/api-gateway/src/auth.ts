@@ -132,7 +132,7 @@ function resolveApiKeyGrant(env: Env, provided: string): ApiKeyGrant | null {
       principal: "api-key:default",
       allowedTenants: policy ? normalizeTenantList(policy.default_tenants) : ["default"],
       source: "api-key",
-      defaultRole: "tenant_admin"
+      defaultRole: "service_agent"
     };
   }
 

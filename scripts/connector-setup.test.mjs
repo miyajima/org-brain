@@ -8,7 +8,7 @@ import {
   connectorPlan,
   installCodexMinimalHooks,
   runConnectorCommand
-} from "./connector-setup.mjs";
+} from "../packages/orgbrain-cli/src/connector-setup.mjs";
 
 test("connector plans use one local stdio MemoryStore server across supported agents", () => {
   const codex = connectorPlan("codex");

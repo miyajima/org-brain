@@ -6,8 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
-import { assessMemoryUsefulness } from "./lib/memory-quality.mjs";
-import { parseLocationArgs, runD1Queries, sqlNullable, sqlString } from "./lib/metrics-common.mjs";
+import { assessMemoryUsefulness } from "../packages/orgbrain-cli/src/lib/memory-quality.mjs";
+import { parseLocationArgs, runD1Queries, sqlNullable, sqlString } from "../packages/benchmarks/src/metrics-common.mjs";
 import { loadProjectRootMappings } from "./lib/workspace-config.mjs";
 
 const DEFAULT_LIMIT = 5000;

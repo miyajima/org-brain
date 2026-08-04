@@ -2,7 +2,7 @@
 
 import process from "node:process";
 import { planMemoryMaintenance } from "./lib/memory-maintenance-core.mjs";
-import { parseLocationArgs, runD1Queries, sqlString } from "./lib/metrics-common.mjs";
+import { parseLocationArgs, runD1Queries, sqlString } from "../packages/benchmarks/src/metrics-common.mjs";
 
 function printHelp() {
   console.log(`Org Brain memory maintenance
