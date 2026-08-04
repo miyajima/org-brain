@@ -355,8 +355,10 @@ class FakeD1 {
   memoryVersions: MemoryVersionRecord[] = [];
   memoryDeletions: Array<Record<string, unknown>> = [];
   knowledgeDocs: KnowledgeDocRecord[] = [];
+  preparedSql: string[] = [];
 
   prepare(sql: string) {
+    this.preparedSql.push(sql);
     return new FakeStatement(this, sql);
   }
 
@@ -369,6 +371,24 @@ class FakeD1 {
 }
 
 describe("memory-service", () => {
+  it("applies at and include_suppressed to the regular lexical search", async () => {
+    const db = new FakeD1();
+    const at = Date.parse("2026-01-02T03:04:05.000Z");
+
+    await searchMemories({ OPEN_BRAIN_DB: db } as any, {
+      tenant_id: "default",
+      q: "deployment policy",
+      search_mode: "memories",
+      include_suppressed: true,
+      at
+    });
+
+    const lexicalSql = db.preparedSql.find((sql) => sql.includes("FROM memories_fts"));
+    expect(lexicalSql).toContain("AND 1 = 1");
+    expect(lexicalSql).toContain(`m.valid_from <= ${at}`);
+    expect(lexicalSql).toContain(`m.valid_until > ${at}`);
+  });
+
   it("hard-deletes authoritative, version, and retrieval rows while keeping a content-free tombstone", async () => {
     const db = new FakeD1();
     const env = { OPEN_BRAIN_DB: db } as any;

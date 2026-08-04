@@ -28,11 +28,19 @@ Use `.env.example` and `.dev.vars.example` for configuration shape only.
 
 For API-key authenticated endpoints, `API_TENANT_POLICY_JSON` `principal` values are treated as the canonical request identity. Use separate API keys for users, teams, and services when memory ownership or restricted memory access must be distinguishable. A shared API key is attributed only to that shared principal.
 
+The single fallback `API_KEY` receives the low-privilege `service_agent` role;
+administrative access requires an explicit policy grant.
+
 Cloudflare Access and generic OIDC login identity use the verified JWT subject
 as `user:<sub>`. Generic OIDC is restricted to RS256, an exact HTTPS issuer,
 configured audience, and trusted JWKS. Email, company name, and organization
 name are profile/display metadata only and must not be used for authorization.
 Resource sharing should use principals, tenant-scoped groups, or tenant-wide visibility.
+
+The Console Worker verifies the Cloudflare Access JWT signature, exact issuer,
+audience, `exp`, and `nbf` before adding its internal API key. Access checking
+is fail-closed by default; only local tests may explicitly set
+`ACCESS_JWT_REQUIRED=false`.
 
 ## Roles and permissions
 
@@ -42,6 +50,11 @@ separate `read`, `write`, `share`, `admin`, `delete`, and `export`. Project
 owners are valid only for an explicit project scope. API and Remote MCP
 operations both pass through this role/permission check after tenant grant
 validation.
+
+API and Remote MCP requests share the authenticated rate limiter. A missing
+production rate-limit binding returns `503` rather than disabling the limit.
+Direct memory upsert/propose and decision creation apply the same secret/PII
+redaction and prompt-injection rejection used by the extractor.
 
 Mutating API requests append a content-free audit event containing the
 authenticated principal, tenant/project, operation, resource, outcome, request

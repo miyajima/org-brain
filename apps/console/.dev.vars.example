@@ -2,3 +2,9 @@ INTERNAL_API_KEY=dev-org-brain-api-key
 # Optional fallback when the Cloudflare service binding is not available locally.
 # Point this to a local or remote api-gateway host.
 API_BASE_URL=http://127.0.0.1:8787
+# Production API proxying requires Cloudflare Access JWT verification.
+# ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
+# ACCESS_AUD=your-console-access-application-aud
+# ACCESS_JWKS_JSON={"keys":[]}
+# Local development only; never set this to false in production.
+ACCESS_JWT_REQUIRED=false

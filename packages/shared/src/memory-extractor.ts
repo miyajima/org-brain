@@ -117,6 +117,21 @@ function normalizeCanonical(value: string): string {
     .trim();
 }
 
+export type MemoryTextScreening = {
+  text: string;
+  unsafe_instruction: boolean;
+  redactions: MemoryExtractionResult["redactions"];
+};
+
+export function screenMemoryText(text: string): MemoryTextScreening {
+  const result = redact(text);
+  return {
+    text: result.text,
+    unsafe_instruction: UNSAFE_INSTRUCTION_PATTERN.test(result.text),
+    redactions: result.counts
+  };
+}
+
 function redact(
   text: string
 ): { text: string; counts: MemoryExtractionResult["redactions"] } {
@@ -169,11 +184,11 @@ export class DurableRuleMemoryExtractor implements MemoryExtractor {
     if (!event.event_id?.trim()) throw new Error("event_id is required");
     if (!event.tenant_id?.trim()) throw new Error("tenant_id is required");
     if (!event.text?.trim()) throw new Error("text is required");
-    const redacted = redact(event.text);
+    const screened = screenMemoryText(event.text);
     const excluded: MemoryExtractionResult["excluded"] = [];
     const candidates: ExtractedMemoryCandidate[] = [];
     const seen = new Set<string>();
-    for (const sentence of sentences(redacted.text)) {
+    for (const sentence of sentences(screened.text)) {
       const preview = clip(sentence, 120);
       if (sentence.length < 20 || /^(?:ok|done|thanks|heartbeat|success|完了|了解)[.!。]?$/iu.test(sentence)) {
         excluded.push({ reason: "low_signal", preview });
@@ -253,7 +268,7 @@ export class DurableRuleMemoryExtractor implements MemoryExtractor {
       extractor: "durable-rules-v1",
       candidates,
       excluded,
-      redactions: redacted.counts,
+      redactions: screened.redactions,
       raw_transcript_persisted: false
     };
   }

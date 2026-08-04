@@ -3,7 +3,7 @@ import {
   assessMemoryUsefulness,
   classifyMemoryQuality,
   isLowSignalMemory
-} from "./lib/memory-quality.mjs";
+} from "../packages/orgbrain-cli/src/lib/memory-quality.mjs";
 import {
   assessMemoryUsefulness as sharedAssessMemoryUsefulness,
   classifyMemoryQuality as sharedClassifyMemoryQuality,

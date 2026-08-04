@@ -28,14 +28,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build:standalone
       - run: sha256sum dist/orgbrain.mjs > orgbrain-${{ github.ref_name }}-standalone.sha256
-      - run: npm pack
+      - run: npm pack ./packages/orgbrain-cli
       - run: npm sbom --sbom-format cyclonedx > orgbrain-${{ github.ref_name }}.cdx.json
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             orgbrain-*.tgz
             dist/orgbrain.mjs
-      - run: npm publish --provenance --access public
+      - run: npm publish ./packages/orgbrain-cli --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: gh release create "${GITHUB_REF_NAME}" orgbrain-*.tgz orgbrain-*.cdx.json orgbrain-*-standalone.sha256 dist/orgbrain.mjs --generate-notes

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { LocalMemoryStore, MEMORY_SCHEMA_VERSION } from "./lib/local-memory-store.mjs";
-import { handleLocalMcpRequest } from "./local-mcp.mjs";
+import { LocalMemoryStore, MEMORY_SCHEMA_VERSION } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
+import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mjs";
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-local-test-"));
@@ -737,6 +737,8 @@ test("restore verifies backups and reapplies later deletion tombstones", async (
     assert.equal(restored.reapplied_deletions, 1);
     const actual = await store.verify();
     assert.equal(actual.record_count, 0);
+    assert.equal(actual.retrieval_unit_count, 0);
+    assert.equal(actual.retrieval_unit_v4_count, 0);
     assert.notEqual(actual.content_digest, expected.content_digest);
 
     const doctor = await store.doctor();

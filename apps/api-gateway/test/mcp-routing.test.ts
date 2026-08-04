@@ -59,6 +59,11 @@ describe("MCP routing under Hono mount path stripping", () => {
           }
         ]
       }),
+      API_RATE_LIMITER: {
+        async limit() {
+          return { success: true };
+        }
+      },
       MCP_OBJECT: {
         newUniqueId() {
           return {
@@ -82,5 +87,30 @@ describe("MCP routing under Hono mount path stripping", () => {
 
     expect(res.status).toBe(418);
     expect(text).toContain("mcp handler reached");
+  });
+
+  it("fails closed before the MCP handler when rate limiting is unavailable", async () => {
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+    const req = new Request("https://example.com/mcp", {
+      headers: {
+        "cf-access-client-id": "token-1",
+        "cf-access-client-secret": "secret-1"
+      }
+    });
+    const env = {
+      MCP_SERVICE_TOKENS_JSON: JSON.stringify({
+        tokens: [{
+          client_id: "token-1",
+          client_secret: "secret-1",
+          principal: "service:test",
+          tenants: ["default"]
+        }]
+      })
+    } as Env;
+
+    const res = await app.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(503);
+    expect(await res.text()).toContain("rate limiter is not configured");
   });
 });

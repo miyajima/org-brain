@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { DatabaseSync } from "node:sqlite";
-import { LocalMemoryStore } from "./lib/local-memory-store.mjs";
+import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 
 const RPO_TARGET_MS = 5 * 60 * 1000;
 const RTO_TARGET_MS = 60 * 60 * 1000;

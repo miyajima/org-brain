@@ -190,6 +190,8 @@ export type MemorySearchOptions = {
   rewriteQuery?: boolean;
   searchMode?: MemorySearchMode;
   includeHistory?: boolean;
+  includeSuppressed?: boolean;
+  at?: number;
   principalId?: string | null;
   semanticHits?: RetrievalIndexHit[];
   semanticProvider?: string | null;
@@ -440,12 +442,20 @@ function bindProjectArgs(projectId: string | null | undefined): unknown[] {
   return projectId ? [projectId] : [];
 }
 
-function searchableFilterSql(alias: string): string {
-  return `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')
-    AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > unixepoch('now') * 1000)
-    AND (${alias}.valid_from IS NULL OR ${alias}.valid_from <= unixepoch('now') * 1000)
-    AND (${alias}.valid_until IS NULL OR ${alias}.valid_until > unixepoch('now') * 1000)
+function searchableFilterSql(
+  alias: string,
+  options: { at?: number; includeSuppressed?: boolean } = {}
+): string {
+  return `${retrievalSearchableFilterSql(alias, options.at ?? Date.now(), options.includeSuppressed ?? false)}
     AND (${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"compacted"%')`;
+}
+
+function retrievalSearchableFilterSql(alias: string, at: number, includeSuppressed: boolean): string {
+  const timestamp = Math.trunc(Number.isFinite(at) ? at : Date.now());
+  return `${includeSuppressed ? "1 = 1" : `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`}
+    AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > ${timestamp})
+    AND (${alias}.valid_from IS NULL OR ${alias}.valid_from <= ${timestamp})
+    AND (${alias}.valid_until IS NULL OR ${alias}.valid_until > ${timestamp})`;
 }
 
 function primaryLexicalFilterSql(alias: string): string {
@@ -458,7 +468,8 @@ async function searchMemoryVariant(
   tenantId: string,
   projectId: string | null | undefined,
   ftsQuery: string,
-  limit: number
+  limit: number,
+  options: { at?: number; includeSuppressed?: boolean } = {}
 ): Promise<MemoryCandidateRow[]> {
   const result = await db.prepare(
     `SELECT m.id, m.tenant_id, m.project_id, m.content, m.summary, m.tags_json, m.source, m.external_key, m.created_at,
@@ -471,7 +482,7 @@ async function searchMemoryVariant(
      AND m.tenant_id = memories_fts.tenant_id
      WHERE memories_fts.tenant_id = ?
        AND memories_fts.content MATCH ?
-       AND ${searchableFilterSql("m")}
+       AND ${searchableFilterSql("m", options)}
        AND ${primaryLexicalFilterSql("m")}
      ORDER BY ${buildProjectOrderSql("m", projectId)}bm25(memories_fts) ASC, m.created_at DESC
      LIMIT ?`
@@ -489,7 +500,8 @@ async function loadRecentHistoryRows(
   db: D1Database,
   tenantId: string,
   projectId: string | null | undefined,
-  limit: number
+  limit: number,
+  options: { at?: number; includeSuppressed?: boolean } = {}
 ): Promise<StoredMemory[]> {
   const result = await db.prepare(
     `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at,
@@ -497,7 +509,7 @@ async function loadRecentHistoryRows(
             valid_from, valid_until, permissions_json, source_refs_json, conflicts_json
      FROM memories
      WHERE tenant_id = ?
-       AND ${searchableFilterSql("memories")}
+       AND ${searchableFilterSql("memories", options)}
      ORDER BY ${buildProjectOrderSql("memories", projectId)}created_at DESC
      LIMIT ?`
   )
@@ -697,7 +709,8 @@ async function loadGraphScores(
 async function loadMemoryRowsByIds(
   db: D1Database,
   tenantId: string,
-  ids: string[]
+  ids: string[],
+  options: { at?: number; includeSuppressed?: boolean } = {}
 ): Promise<MemoryCandidateRow[]> {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
@@ -706,7 +719,11 @@ async function loadMemoryRowsByIds(
             kind, lifecycle_state, current_version, last_accessed_at, confidence_score, utility_score, expires_at,
             valid_from, valid_until, permissions_json, source_refs_json, conflicts_json, NULL AS raw_rank
      FROM memories
-     WHERE tenant_id = ? AND id IN (${placeholders}) AND ${searchableFilterSql("memories")}`
+     WHERE tenant_id = ? AND id IN (${placeholders}) AND ${retrievalSearchableFilterSql(
+       "memories",
+       options.at ?? Date.now(),
+       options.includeSuppressed ?? false
+     )}`
   )
     .bind(tenantId, ...ids)
     .all<MemoryCandidateRow>();
@@ -744,7 +761,8 @@ export async function searchTenantRetrievalUnitsV3(
   const q = collapseWhitespace(options.q);
   const limit = Math.max(1, Math.min(50, options.limit ?? 5));
   const intent = analyzeRetrievalIntent(q);
-  const referenceAt = Date.now();
+  const referenceAt = options.at ?? Date.now();
+  const includeSuppressed = options.includeSuppressed ?? false;
   const relativeWeekdayAgeMs = Number.isInteger(intent.relative_weekday)
     ? ((new Date(referenceAt).getUTCDay() - Number(intent.relative_weekday) + 7) % 7 || 7) * DAY_MS
     : null;
@@ -769,9 +787,9 @@ export async function searchTenantRetrievalUnitsV3(
          WHERE memory_retrieval_units_fts.tenant_id = ?
            AND memory_retrieval_units_fts.text MATCH ?
            AND (? IS NULL OR u.project_id = ?)
-           AND ${searchableFilterSql("m")}
-           AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
-           AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+           AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+           AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
          ORDER BY bm25(memory_retrieval_units_fts) ASC,
                   u.content_hash ASC,
                   COALESCE(u.event_at, u.created_at) ASC
@@ -798,9 +816,9 @@ export async function searchTenantRetrievalUnitsV3(
            WHERE memory_retrieval_units_fts.tenant_id = ?
              AND memory_retrieval_units_fts.text MATCH ?
              AND (? IS NULL OR u.project_id = ?)
-             AND ${searchableFilterSql("m")}
-             AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
-             AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+             AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+             AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
            ORDER BY bm25(memory_retrieval_units_fts) ASC,
                     u.content_hash ASC,
                     COALESCE(u.event_at, u.created_at) ASC
@@ -835,9 +853,9 @@ export async function searchTenantRetrievalUnitsV3(
            WHERE memory_retrieval_units_fts.tenant_id = ?
              AND memory_retrieval_units_fts.text MATCH ?
              AND (? IS NULL OR u.project_id = ?)
-             AND ${searchableFilterSql("m")}
-             AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
-             AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+             AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+             AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
              AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
            ORDER BY ABS(COALESCE(u.event_at, u.created_at) - ?) ASC,
                     bm25(memory_retrieval_units_fts) ASC,
@@ -875,9 +893,9 @@ export async function searchTenantRetrievalUnitsV3(
            WHERE memory_retrieval_units_fts.tenant_id = ?
              AND memory_retrieval_units_fts.text MATCH ?
              AND (? IS NULL OR u.project_id = ?)
-             AND ${searchableFilterSql("m")}
-             AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
-             AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+             AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+             AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
              AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
            ORDER BY bm25(memory_retrieval_units_fts) ASC,
                     ABS(COALESCE(u.event_at, u.created_at) - ?) ASC,
@@ -912,9 +930,9 @@ export async function searchTenantRetrievalUnitsV3(
          WHERE u.tenant_id = ?
            AND u.unit_type = 'session'
            AND (? IS NULL OR u.project_id = ?)
-           AND ${searchableFilterSql("m")}
-           AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
-           AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+           AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+           AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
          ORDER BY ABS(COALESCE(u.event_at, u.created_at) - ?) ASC
          LIMIT 200`
       )
@@ -935,9 +953,9 @@ export async function searchTenantRetrievalUnitsV3(
        JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
        WHERE u.tenant_id = ? AND u.id IN (${placeholders})
          AND (? IS NULL OR u.project_id = ?)
-         AND ${searchableFilterSql("m")}
-         AND (u.valid_from IS NULL OR u.valid_from <= unixepoch('now') * 1000)
-         AND (u.valid_until IS NULL OR u.valid_until > unixepoch('now') * 1000)`
+         AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+         AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+         AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})`
     )
       .bind(tenantId, ...missingUnitIds, projectId, projectId)
       .all<RetrievalUnitCandidateRow>();
@@ -1018,7 +1036,10 @@ export async function searchTenantRetrievalUnitsV3(
     if (!reserved) continue;
     parentIds.splice(Math.max(0, parentIds.length - 1), 1, reserved);
   }
-  const parentRows = await loadMemoryRowsByIds(db, tenantId, parentIds.map((item) => item.memoryId));
+  const parentRows = await loadMemoryRowsByIds(db, tenantId, parentIds.map((item) => item.memoryId), {
+    at: referenceAt,
+    includeSuppressed
+  });
   const rowById = new Map(parentRows.map((row) => [row.id, row]));
   const rerankerScores = options.rerankerScores ?? new Map<string, number>();
   const eventTimes = parentIds.map(({ memoryId }) =>
@@ -1158,6 +1179,8 @@ export async function searchTenantRetrievalUnitsV4(
     semanticHits: undefined,
     semanticProvider: null
   });
+  const referenceAt = options.at ?? Date.now();
+  const includeSuppressed = options.includeSuppressed ?? false;
   const ftsQuery = buildMemoryFtsQuery(options.q);
   const intent = analyzeRetrievalIntent(options.q);
   const projectId = options.projectId?.trim() || null;
@@ -1175,7 +1198,7 @@ export async function searchTenantRetrievalUnitsV4(
          WHERE memory_retrieval_units_v4_fts.tenant_id = ?
            AND memory_retrieval_units_v4_fts.text MATCH ?
            AND (? IS NULL OR u.project_id = ?)
-           AND ${searchableFilterSql("m")}
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
          ORDER BY bm25(memory_retrieval_units_v4_fts), u.content_hash
          LIMIT 200`
       )
@@ -1188,10 +1211,13 @@ export async function searchTenantRetrievalUnitsV4(
   const semanticParents = semanticHits.length === 0
     ? { results: [] as Array<{ id: string; memory_id: string }> }
     : await db.prepare(
-        `SELECT id, memory_id
-         FROM memory_retrieval_units_v4
-         WHERE tenant_id = ? AND id IN (${semanticHits.map(() => "?").join(",")})`
-      ).bind(options.tenantId, ...semanticHits.map((hit) => hit.id))
+        `SELECT u.id, u.memory_id
+         FROM memory_retrieval_units_v4 u
+         JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
+         WHERE u.tenant_id = ? AND u.id IN (${semanticHits.map(() => "?").join(",")})
+           AND (? IS NULL OR u.project_id = ?)
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}`
+      ).bind(options.tenantId, ...semanticHits.map((hit) => hit.id), projectId, projectId)
         .all<{ id: string; memory_id: string }>();
   const semanticParentByUnit = new Map(
     semanticParents.results.map((row) => [row.id, row.memory_id])
@@ -1223,7 +1249,17 @@ export async function searchTenantRetrievalUnitsV4(
             : 0.65;
     scores.set(row.memory_id, (scores.get(row.memory_id) ?? 0) + weight / (60 + rank + 1));
   }
-  const results = [...base.results]
+  const baseIds = new Set(base.results.map((result) => result.id));
+  const missingParentIds = [...scores.keys()].filter((memoryId) => !baseIds.has(memoryId));
+  const missingRows = await loadMemoryRowsByIds(db, options.tenantId, missingParentIds, {
+    at: referenceAt,
+    includeSuppressed
+  });
+  const candidateResults = [
+    ...base.results,
+    ...missingRows.map((row) => toPublicResult(toMemorySearchCandidate(row)))
+  ];
+  const results = candidateResults
     .sort((left, right) =>
       (scores.get(right.id) ?? 0) - (scores.get(left.id) ?? 0) ||
       (right.score ?? 0) - (left.score ?? 0) ||
@@ -1276,7 +1312,10 @@ export async function searchTenantMemories(
   const lexicalById = new Map<string, MemoryCandidateRow>();
 
   for (const variant of variants) {
-    const rows = await searchMemoryVariant(db, tenantId, projectId, variant.ftsQuery, lexicalFetchLimit);
+    const rows = await searchMemoryVariant(db, tenantId, projectId, variant.ftsQuery, lexicalFetchLimit, {
+      at: options.at,
+      includeSuppressed: options.includeSuppressed
+    });
     for (const row of rows) {
       const existing = lexicalById.get(row.id);
       lexicalById.set(row.id, existing ? chooseBetterCandidate(existing, row) : row);
@@ -1296,7 +1335,10 @@ export async function searchTenantMemories(
     const projectionIds = [...new Set([...graphScores.keys(), ...semanticScores.keys()])]
       .filter((id) => !candidateById.has(id))
       .slice(0, lexicalFetchLimit);
-    const projectionRows = await loadMemoryRowsByIds(db, tenantId, projectionIds);
+    const projectionRows = await loadMemoryRowsByIds(db, tenantId, projectionIds, {
+      at: options.at,
+      includeSuppressed: options.includeSuppressed
+    });
     for (const row of projectionRows) {
       candidateById.set(row.id, toMemorySearchCandidate(row));
     }
@@ -1367,7 +1409,8 @@ export async function searchTenantMemories(
       db,
       tenantId,
       projectId,
-      Math.max(HISTORY_FETCH_LIMIT_FLOOR, limit * 4)
+      Math.max(HISTORY_FETCH_LIMIT_FLOOR, limit * 4),
+      { at: options.at, includeSuppressed: options.includeSuppressed }
     );
     for (const row of historyRows) {
       if (baseIds.has(row.id)) continue;
@@ -1469,7 +1512,7 @@ export async function buildTenantMemoryProfile(
   const limitRecent = Math.max(1, Math.min(16, options.limitRecent ?? 8));
   const now = options.now ?? Date.now();
 
-  const rows = await loadRecentHistoryRows(db, tenantId, projectId, PROFILE_SCAN_LIMIT);
+  const rows = await loadRecentHistoryRows(db, tenantId, projectId, PROFILE_SCAN_LIMIT, { at: now });
   const durableCutoff = now - DAY_MS;
   const recentCutoff = now - RECENT_WINDOW_DAYS * DAY_MS;
   const durableSeen = new Set<string>();

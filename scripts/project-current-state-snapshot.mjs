@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { assessMemoryUsefulness } from "./lib/memory-quality.mjs";
+import { assessMemoryUsefulness } from "../packages/orgbrain-cli/src/lib/memory-quality.mjs";
 import { loadProjectRootMappings } from "./lib/workspace-config.mjs";
 
 const execFileAsync = promisify(execFile);

@@ -32,7 +32,12 @@ export type Env = {
   MEMORY_VECTOR_INDEX_V3?: Vectorize;
   HYBRID_V3_MODE?: "off" | "shadow" | "canary" | "on";
   HYBRID_V4_MODE?: "off" | "shadow" | "canary" | "on";
+  HYBRID_V3_SHADOW_SAMPLE_RATE?: string;
+  HYBRID_V4_SHADOW_SAMPLE_RATE?: string;
+  HYBRID_V3_CANARY_SAMPLE_RATE?: string;
+  HYBRID_V4_CANARY_SAMPLE_RATE?: string;
   GEMINI_API_KEY?: string;
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;
+  API_RATE_LIMIT_FAIL_OPEN?: "true" | "false";
 };

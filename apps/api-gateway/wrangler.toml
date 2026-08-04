@@ -4,8 +4,9 @@ compatibility_date = "2026-03-03"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-HYBRID_V3_MODE = "shadow"
+HYBRID_V3_MODE = "off"
 HYBRID_V4_MODE = "shadow"
+HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
 
 [ai]
 binding = "AI"
@@ -18,19 +19,17 @@ binding = "AI"
 binding = "MEMORY_VECTOR_INDEX_V3"
 index_name = "orgbrain-memory-units-v3-1024"
 
-# Optional authenticated API rate limiting. Choose an account-unique positive
-# integer namespace before enabling.
-# [[ratelimits]]
-# name = "API_RATE_LIMITER"
-# namespace_id = "1001"
-# [ratelimits.simple]
-# limit = 1500
-# period = 60
+# Authenticated API rate limiting. Keep the namespace account-unique.
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "1001"
+[ratelimits.simple]
+limit = 1500
+period = 60
 
 [[d1_databases]]
 binding = "OPEN_BRAIN_DB"
 database_name = "open-brain"
-database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
 migrations_dir = "../../migrations"
 
 [[r2_buckets]]

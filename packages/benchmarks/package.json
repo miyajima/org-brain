@@ -1,0 +1,14 @@
+{
+  "name": "@org-brain/benchmarks",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./retrieval-metrics": "./src/retrieval-metrics-core.mjs",
+    "./retrieval-replay": "./src/retrieval-replay-core.mjs"
+  },
+  "scripts": {
+    "test": "vitest run ./scripts/memory-token-benchmark.test.mjs"
+  }
+}

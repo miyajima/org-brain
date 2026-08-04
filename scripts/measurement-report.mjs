@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import process from "node:process";
-import { formatJst, parseLocationArgs, runD1Queries, sqlString } from "./lib/metrics-common.mjs";
+import { formatJst, parseLocationArgs, runD1Queries, sqlString } from "../packages/benchmarks/src/metrics-common.mjs";
 
 function printHelp() {
   console.log(`Org Brain measurement report

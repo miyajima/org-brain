@@ -1,11 +1,11 @@
-import type {
-  MemorySourceReference,
-  RetrievalIndex,
-  RetrievalIndexDocument,
-  RetrievalIndexHit,
-  RetrievalIndexQuery
+import {
+  buildRetrievalUnits,
+  type MemorySourceReference,
+  type RetrievalIndex,
+  type RetrievalIndexDocument,
+  type RetrievalIndexHit,
+  type RetrievalIndexQuery
 } from "@org-brain/shared";
-import { buildRetrievalUnits } from "@org-brain/shared";
 import type { Env } from "./types";
 import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
 

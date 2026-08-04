@@ -3,8 +3,8 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildCodexMemoryContext } from "./codex-memory-context.mjs";
-import { LocalMemoryStore } from "./lib/local-memory-store.mjs";
+import { buildCodexMemoryContext } from "../packages/orgbrain-cli/src/codex-memory-context.mjs";
+import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 
 async function fixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-codex-context-"));

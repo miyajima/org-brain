@@ -2,7 +2,7 @@
 
 import { pathToFileURL } from "node:url";
 import process from "node:process";
-import { parseLocationArgs, runD1Queries, sqlString } from "./lib/metrics-common.mjs";
+import { parseLocationArgs, runD1Queries, sqlString } from "../packages/benchmarks/src/metrics-common.mjs";
 
 const DEFAULT_LIMIT = 5000;
 const HIGH_VALUE_TAGS = ["project-fact", "curated-memory", "promoted", "canonical-memory"];

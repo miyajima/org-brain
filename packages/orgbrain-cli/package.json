@@ -1,0 +1,24 @@
+{
+  "name": "orgbrain",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Local-first, auditable memory and decision CLI for AI agents",
+  "type": "module",
+  "bin": {
+    "orgbrain": "./dist/orgbrain.mjs"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepack": "node ../../scripts/build-standalone.mjs packages/orgbrain-cli/dist/orgbrain.mjs"
+  }
+}

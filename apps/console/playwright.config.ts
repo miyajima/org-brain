@@ -35,6 +35,7 @@ export default defineConfig({
       env: {
         API_BASE_URL: `http://127.0.0.1:${mockApiPort}`,
         INTERNAL_API_KEY: "dev-org-brain-api-key",
+        ACCESS_JWT_REQUIRED: "false",
         CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
       }
     }

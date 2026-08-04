@@ -1,5 +1,6 @@
 import {
   deriveParentMocCandidates,
+  HttpError,
   KNOWLEDGE_CONTEXT_LIMITS,
   normalizeDocKind,
   normalizeDocScope,
@@ -12,7 +13,6 @@ import {
   type KnowledgeDocScope,
   type KnowledgeLinkRelation
 } from "@org-brain/shared";
-import { HttpError } from "@org-brain/shared";
 import type { Env } from "../types";
 
 type KnowledgeDocRow = {

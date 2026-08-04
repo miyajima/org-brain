@@ -38,6 +38,7 @@ import {
   syncMemoryIdsToV4SemanticIndex
 } from "./retrieval-index-service";
 import { assertMemoryNotOnLegalHold } from "./retention-service";
+import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 
 type UpsertMemoryItem = {
@@ -73,6 +74,47 @@ type UpsertMemoryRequest = {
   items: UpsertMemoryItem[];
 };
 
+function shadowSampleRate(raw: string | undefined): number {
+  if (!raw?.trim()) return 1;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0;
+}
+
+export function shouldRunRetrievalShadow(rawRate: string | undefined, sampleKey: string): boolean {
+  const rate = shadowSampleRate(rawRate);
+  if (rate <= 0) return false;
+  if (rate >= 1) return true;
+  let hash = 2166136261;
+  for (let index = 0; index < sampleKey.length; index += 1) {
+    hash ^= sampleKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0x1_0000_0000 < rate;
+}
+
+export function resolveRetrievalSearchMode(
+  requested: MemorySearchMode,
+  env: Pick<Env,
+    | "HYBRID_V3_MODE"
+    | "HYBRID_V4_MODE"
+    | "HYBRID_V3_CANARY_SAMPLE_RATE"
+    | "HYBRID_V4_CANARY_SAMPLE_RATE">,
+  sampleKey: string
+): MemorySearchMode {
+  if (requested !== "memories") return requested;
+  if (env.HYBRID_V4_MODE === "on") return "hybrid_v4";
+  if (
+    env.HYBRID_V4_MODE === "canary" &&
+    shouldRunRetrievalShadow(env.HYBRID_V4_CANARY_SAMPLE_RATE ?? "0.05", sampleKey)
+  ) return "hybrid_v4";
+  if (env.HYBRID_V3_MODE === "on") return "hybrid_v3";
+  if (
+    env.HYBRID_V3_MODE === "canary" &&
+    shouldRunRetrievalShadow(env.HYBRID_V3_CANARY_SAMPLE_RATE ?? "0.05", sampleKey)
+  ) return "hybrid_v3";
+  return requested;
+}
+
 type MemoryRow = {
   id: string;
   project_id: string | null;
@@ -98,6 +140,8 @@ type MemorySearchRequest = {
   rewrite_query?: boolean;
   search_mode?: MemorySearchMode;
   include_history?: boolean;
+  include_suppressed?: boolean;
+  at?: number;
 };
 
 type MemoryProfileRequest = {
@@ -455,6 +499,8 @@ function parseSearchRequest(raw: unknown): {
   rewriteQuery: boolean;
   searchMode: MemorySearchMode;
   includeHistory: boolean;
+  includeSuppressed: boolean;
+  at: number;
 } {
   if (!raw || typeof raw !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
@@ -467,7 +513,9 @@ function parseSearchRequest(raw: unknown): {
     limit: parseOptionalInteger(body.limit, "limit", 5, 1, 50),
     rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
     searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "memories"),
-    includeHistory: parseOptionalBoolean(body.include_history, "include_history", false)
+    includeHistory: parseOptionalBoolean(body.include_history, "include_history", false),
+    includeSuppressed: parseOptionalBoolean(body.include_suppressed, "include_suppressed", false),
+    at: parseOptionalFiniteNumber(body.at, "at") ?? Date.now()
   };
 }
 
@@ -517,7 +565,12 @@ function buildMemoryListFilterSql(options: { source?: string; projectId?: string
 }
 
 export async function upsertMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
-  const { tenantId, source, items } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
+  const { tenantId, source, items: parsedItems } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
+  const items = parsedItems.map((item, index) => ({
+    ...item,
+    content: screenMemoryWriteText(item.content, `items[${index}].content`),
+    summary: screenOptionalMemoryWriteText(item.summary, `items[${index}].summary`) ?? undefined
+  }));
   const existingByKey = await loadExistingMemoryIdsByExternalKeys(
     env.OPEN_BRAIN_DB,
     tenantId,
@@ -647,7 +700,12 @@ export async function searchMemories(
   rawBody: unknown,
   options: PrincipalActorOptions = {}
 ): Promise<MemorySearchResponse> {
-  const request = parseSearchRequest(rawBody);
+  const parsedRequest = parseSearchRequest(rawBody);
+  const shadowSampleKey = `${parsedRequest.tenantId}\0${parsedRequest.projectId ?? ""}\0${parsedRequest.q}`;
+  const request = {
+    ...parsedRequest,
+    searchMode: resolveRetrievalSearchMode(parsedRequest.searchMode, env, shadowSampleKey)
+  };
   const widenedLimit = Math.max(request.limit, 20);
   const semantic =
     request.searchMode === "hybrid_v2"
@@ -721,7 +779,11 @@ export async function searchMemories(
       semanticProvider: semantic?.provider
     });
   }
-  if (env.HYBRID_V3_MODE === "shadow" && request.searchMode !== "hybrid_v3") {
+  if (
+    env.HYBRID_V3_MODE === "shadow" &&
+    request.searchMode !== "hybrid_v3" &&
+    shouldRunRetrievalShadow(env.HYBRID_V3_SHADOW_SAMPLE_RATE, shadowSampleKey)
+  ) {
     const shadowStartedAt = performance.now();
     let shadowError: string | null = null;
     let shadow: MemorySearchResponse | null = null;
@@ -773,12 +835,16 @@ export async function searchMemories(
       // Shadow observability must never break the primary retrieval response.
     });
   }
-  if (env.HYBRID_V4_MODE === "shadow" && request.searchMode !== "hybrid_v4") {
+  if (
+    env.HYBRID_V4_MODE === "shadow" &&
+    request.searchMode !== "hybrid_v4" &&
+    shouldRunRetrievalShadow(env.HYBRID_V4_SHADOW_SAMPLE_RATE, shadowSampleKey)
+  ) {
     const shadowStartedAt = performance.now();
     let shadowError: string | null = null;
     let shadow: MemorySearchResponse | null = null;
     try {
-      const shadowSemantic = await searchV3SemanticIndex(env, {
+      const shadowSemantic = await searchV4SemanticIndex(env, {
         tenant_id: request.tenantId,
         project_id: request.projectId,
         query: request.q,

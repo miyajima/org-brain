@@ -1,5 +1,4 @@
-import { ulid } from "@org-brain/shared";
-import type { CapabilityName } from "@org-brain/shared";
+import { ulid, type CapabilityName } from "@org-brain/shared";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export const RAW_RETENTION_DAYS = 90;

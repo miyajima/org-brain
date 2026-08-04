@@ -8,14 +8,14 @@ import {
   runD1Queries,
   sqlString,
   utcDayBounds
-} from "./lib/metrics-common.mjs";
+} from "../packages/benchmarks/src/metrics-common.mjs";
 import {
   computeRawRetrievalMetrics,
   computeServiceMetrics,
   countTopMemoryIds,
   mergeRetrievalMetrics,
   RAW_RETENTION_DAYS
-} from "./lib/retrieval-metrics-core.mjs";
+} from "../packages/benchmarks/src/retrieval-metrics-core.mjs";
 
 function printHelp() {
   console.log(`Org Brain retrieval metrics report
