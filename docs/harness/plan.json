@@ -7,64 +7,35 @@
     "docs/harness/quality_score.json"
   ],
   "cycle": "full",
-  "context_summary": {
-    "code": "Hook ingestion currently combines ORGBRAIN_TENANT_ID with a legacy cwd-to-project map, while operator scripts use a separate reverse root map.",
-    "docs": "README, SPEC, SYSTEM_DESIGN, and .env.example govern the configuration and sharing contract.",
-    "risks": "Organization mode must not guess tenants; invalid config must fail closed; legacy data and current uncommitted changes must be preserved.",
-    "tests": "Focused hook/config/backfill tests plus the full manifest typecheck, test, lint, and build commands are required."
-  },
   "difficulty_assessment": {
     "diff": {
-      "additions": 560,
+      "additions": 0,
       "available": true,
-      "base_ref": "d305baf0c336d9d2011dc54ade110fd26c1a8345",
+      "base_ref": "6c6dfccaac8f7810bfe6482033c86b536e6ff740",
       "binary_files": 0,
-      "changed_file_count": 14,
-      "changed_files": [
-        "apps/api-gateway/test/memory-service.test.ts",
-        "apps/cap-runner/test/memory-maintenance.test.ts",
-        "docs/SPEC.md",
-        "docs/SYSTEM_DESIGN.md",
-        "docs/harness/context_code.md",
-        "docs/harness/context_docs.md",
-        "docs/harness/context_risks.md",
-        "docs/harness/context_tests.md",
-        "packages/shared/src/memory-quality-runtime.d.mts",
-        "packages/shared/src/memory-quality-runtime.mjs",
-        "packages/shared/src/memory-quality.ts",
-        "packages/shared/test/memory-quality.test.ts",
-        "scripts/lib/memory-quality.mjs",
-        "scripts/memory-quality.test.mjs"
-      ],
+      "changed_file_count": 0,
+      "changed_files": [],
       "changed_files_truncated": 0,
-      "component_count": 4,
-      "components": [
-        "apps",
-        "docs",
-        "packages",
-        "scripts"
-      ],
+      "component_count": 0,
+      "components": [],
       "components_truncated": 0,
-      "content_sha256": "0d03afd712747596db555b2b15b2b21c1a0ca9b5d28bd4ee61c74faa56382849",
-      "deletions": 600,
-      "fingerprint": "81db5c67aa3e6d8a99dfd01cda783c2b6b58997d66bc11c7f67f7fd10badc9ab",
-      "head_sha": "d305baf0c336d9d2011dc54ade110fd26c1a8345",
-      "line_changes": 1160
+      "content_sha256": "8ce658ddd65dc47819e72bd5eaae0508e5025c299a92212ab00ca0c01b8e5a19",
+      "deletions": 0,
+      "fingerprint": "2b1111bba65cca7762c8c661029b762a117539cddb2366c70a8328120e16f5b0",
+      "head_sha": "6c6dfccaac8f7810bfe6482033c86b536e6ff740",
+      "line_changes": 0
     },
-    "level": "complex",
+    "level": "simple",
     "reasons": [
-      "large diff touches 14 files",
-      "large line delta is 1160",
-      "manifest declares 3 risks",
-      "diff spans 4 top-level components"
+      "manifest declares 3 risks"
     ],
     "risk_count": 3,
-    "score": 8,
+    "score": 2,
     "sensitive_files": [],
     "sensitive_files_truncated": 0
   },
   "execution_policy": {
-    "difficulty": "complex",
+    "difficulty": "simple",
     "difficulty_mode": "automatic",
     "improvement_policy": {
       "automation_command": "harness gate <repo> --profile full --write-harness-artifacts --auto-review --auto-improve",
@@ -109,10 +80,10 @@
   "memory_recall": {
     "backend": "org_brain",
     "limit": 3,
-    "query": "Unify local workspace tenant and project mapping in workspaces.json",
+    "query": "Fix failing GitHub Actions checks for run 30936641689 job 92084340187",
     "result_count": 0,
     "results": [],
-    "searched_at": "2026-08-03T10:17:54.613791+00:00",
+    "searched_at": "2026-08-05T01:58:20.565225+00:00",
     "status": "completed"
   },
   "repo": "org-brain",
@@ -127,14 +98,11 @@
     "Local SQLite schema migrations, retention, suppression, and permanent deletion are data-sensitive operations.",
     "Benchmark and leadership claims require pinned revisions, reproducible evidence, and complete acceptance gates."
   ],
-  "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
+  "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
   "schema_version": 2,
   "success_criteria": [
-    "Hook ingestion uses one secure workspace mapping for tenant_id and project_id, migrates legacy project-names.json without data loss, fails closed for unresolved organization sharing, preserves single-tenant env compatibility, documents hooks.env, and passes affected tests plus the full manifest gate without production writes",
-    "workspaces.json is written atomically under a 0700 directory with 0600 file permissions",
-    "workspace mappings take precedence over environment fallback and remain subject to server-side tenant grants",
-    "project quality and current-state operator scripts can derive project roots from the same workspace mapping"
+    "The failing CI root cause is fixed and the matching local checks pass"
   ],
-  "task": "Unify local workspace tenant and project mapping in workspaces.json",
+  "task": "Fix failing GitHub Actions checks for run 30936641689 job 92084340187",
   "workflow_contract": "strict-v1"
 }

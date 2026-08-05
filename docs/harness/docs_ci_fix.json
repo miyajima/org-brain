@@ -1,0 +1,19 @@
+{
+  "summary": "No governed product documentation changed because runtime API behavior and production bindings are unchanged. The local Wrangler config contains an inline explanation of the intentional production-only binding exclusion.",
+  "artifact_refs": [
+    "apps/api-gateway/wrangler.local.toml",
+    "docs/SPEC.md",
+    "docs/SYSTEM_DESIGN.md",
+    "docs/DESIGN.md"
+  ],
+  "decision_refs": [
+    "Keep the explanation adjacent to the local binding boundary rather than changing product documentation."
+  ],
+  "evidence": [
+    {
+      "type": "document",
+      "ref": "apps/api-gateway/wrangler.local.toml"
+    }
+  ],
+  "residual_risks": []
+}

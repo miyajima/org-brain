@@ -1,0 +1,21 @@
+{
+  "summary": "The matching regression path is D1 local migration followed by wrangler dev readiness and scripts/api-integration-smoke.mjs. Manifest verification also requires typecheck, test, lint, and build.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "scripts/api-integration-smoke.mjs",
+    "scripts/wrangler-config-parity.test.mjs",
+    "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"
+  ],
+  "decision_refs": [
+    "Reproduce the Worker startup without CLOUDFLARE_API_TOKEN and run the full manifest gate."
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "https://github.com/miyajima/org-brain/actions/runs/30936641689/job/92084340187"
+    }
+  ],
+  "residual_risks": [
+    "Local port binding or sandbox restrictions may require an approved execution path for the smoke test."
+  ]
+}

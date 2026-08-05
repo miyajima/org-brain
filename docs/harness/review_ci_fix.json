@@ -1,0 +1,28 @@
+{
+  "summary": "Final review found no correctness, security, or maintainability issues in the three-file product diff. The fixed CI credential is local-only; production bindings and low-privilege default API key behavior are unchanged.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "scripts/wrangler-config-parity.test.mjs"
+  ],
+  "decision_refs": [
+    "Approve the local-safe binding split and explicit CI smoke authorization policy."
+  ],
+  "evidence": [
+    {
+      "type": "review",
+      "ref": "final diff review: no findings"
+    },
+    {
+      "type": "diff",
+      "ref": "git diff --check: exit 0"
+    },
+    {
+      "type": "test",
+      "ref": "manifest commands and fresh API integration smoke: passed"
+    }
+  ],
+  "residual_risks": [
+    "The hosted CI result is pending until the fix branch is pushed."
+  ]
+}

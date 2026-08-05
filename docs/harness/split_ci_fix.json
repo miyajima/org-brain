@@ -1,0 +1,18 @@
+{
+  "summary": "This is a single-writer atomic change across the workflow, local Wrangler config, and their regression assertion. No parallel split is safe or useful.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "scripts/wrangler-config-parity.test.mjs"
+  ],
+  "decision_refs": [
+    "Keep implementation and integration in one task because the test directly specifies the workflow change."
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/split_ci_fix.json"
+    }
+  ],
+  "residual_risks": []
+}

@@ -9,7 +9,7 @@
     "Governed docs check passed without missing required documents."
   ],
   "exact_blockers": [],
-  "gate_attempt_id": "20260803T104419.542575Z-0403fe99",
+  "gate_attempt_id": "20260805T023139.963028Z-7c127811",
   "gate_change": {
     "final": {
       "score": 100,
@@ -21,7 +21,7 @@
     },
     "score_delta": 0
   },
-  "generated_at": "2026-08-03T10:45:09.945134+00:00",
+  "generated_at": "2026-08-05T02:32:42.841403+00:00",
   "manual_notes": {},
   "overall_review": [
     "Quality gate completed with status pass.",
@@ -36,25 +36,24 @@
   ],
   "reviewer_evidence": {
     "actor": "/root/independent_review",
-    "completed_at": "2026-08-03T10:38:31Z",
-    "diff_fingerprint": "1db5d10c20833e93596d5f1aac3eb69bfdb055a93064b7164f2d3625b739621f",
+    "completed_at": "2026-08-05T02:28:32Z",
+    "diff_fingerprint": "a17be69e0f45362f2c71a50bf2f80426764b3e55e24d0e653cfa3a2b7d02a2cd",
     "findings": [],
     "independent": true,
-    "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
+    "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
     "scope": [
-      "tenant isolation and routing precedence",
-      "legacy migration and data preservation",
-      "atomic writes and concurrent hook behavior",
-      "filesystem permissions and custom paths",
-      "operator root mapping parity",
-      "tests packaging and governed documentation"
+      ".github/workflows/ci.yml",
+      "apps/api-gateway/wrangler.local.toml",
+      "scripts/wrangler-config-parity.test.mjs",
+      "CI shell and YAML behavior",
+      "API key policy and tenant RBAC boundary"
     ],
     "source": "subagent",
     "status": "passed",
-    "summary": "Reviewed tenant isolation, migration, concurrency, permissions, operator parity, packaging, tests, and governed docs; no findings remain.",
+    "summary": "Final independent review passed with no findings after the CI config-path regression assertion resolved the prior P3 finding.",
     "task_id": "independent_review"
   },
-  "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
+  "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
   "schema_version": 2,
   "security_review": [
     "The automated loop records deterministic gate metadata and does not collect secrets.",
@@ -64,56 +63,40 @@
     "Final gate status is pass with score 100/85."
   ],
   "verifier_evidence": {
-    "actor": "/root/independent_verify",
+    "actor": "/root/independent_verifier",
     "checks": [
       {
-        "command": "rtk pnpm exec vitest run ./scripts/workspace-config.test.mjs ./scripts/hook-memory-bridge.test.mjs ./scripts/memory-quality-backfill.test.mjs",
-        "completed_at": "2026-08-03T10:38:03Z",
-        "name": "focused workspace mapping suites",
-        "output_sha256": "981ba9809e08a3f10f3d289490f5f8d78a1cbe4d564916f76ef74279e3d7a2fb",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm run test:scripts",
-        "completed_at": "2026-08-03T10:38:14Z",
-        "name": "all script tests",
-        "output_sha256": "574b8b394522d469ea491ec12e3e23a5c98b004d7de3de0eaa4116ad54c50d20",
+        "command": "rtk node --test scripts/wrangler-config-parity.test.mjs",
+        "completed_at": "2026-08-05T02:28:40Z",
+        "name": "focused Wrangler CI contract tests",
+        "output_sha256": "881f19deb22873e0381d500b6599426feb4a8770a4e7d60faca74e005ca127bc",
         "returncode": 0,
         "status": "passed"
       },
       {
         "command": "rtk git diff --check",
-        "completed_at": "2026-08-03T10:38:21Z",
+        "completed_at": "2026-08-05T02:28:49Z",
         "name": "diff whitespace validation",
         "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
         "returncode": 0,
         "status": "passed"
-      },
-      {
-        "command": "rtk node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs --help",
-        "completed_at": "2026-08-03T10:38:32Z",
-        "name": "usage status module startup",
-        "output_sha256": "9d75f1dca96cd2a5a6b857addcc5ee35cdc07c38d49652bad3636c56225e6bde",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm exec vitest run ./scripts/workspace-config.test.mjs ./scripts/hook-memory-bridge.test.mjs --reporter=verbose -t 'does not change permissions on an existing custom parent directory|does not hold the workspace lock while waiting for an interactive project choice|does not pin the implicit local default tenant before organization sharing is configured'",
-        "completed_at": "2026-08-03T10:38:48Z",
-        "name": "targeted review regressions",
-        "output_sha256": "175936094a0d73d81fcf4e199b82e5fef10094e42bca2d5bd927777f2b98f5f2",
-        "returncode": 0,
-        "status": "passed"
       }
     ],
-    "completed_at": "2026-08-03T10:38:48Z",
-    "diff_fingerprint": "1db5d10c20833e93596d5f1aac3eb69bfdb055a93064b7164f2d3625b739621f",
+    "completed_at": "2026-08-05T02:28:49Z",
+    "diff_fingerprint": "a17be69e0f45362f2c71a50bf2f80426764b3e55e24d0e653cfa3a2b7d02a2cd",
     "independent": true,
-    "run_id": "org-brain-20260803T101754.465241Z-131a8d39",
+    "required_check_fields": [
+      "name",
+      "command",
+      "status",
+      "returncode",
+      "completed_at",
+      "output_sha256"
+    ],
+    "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
     "source": "subagent",
     "status": "passed",
-    "summary": "Re-ran focused and script tests, targeted regression tests, diff validation, and usage-status module startup without production access.",
-    "task_id": "independent_verify"
+    "summary": "Independent focused tests and diff validation passed on the final product diff.",
+    "task_id": "independent_verifier"
   }
 }

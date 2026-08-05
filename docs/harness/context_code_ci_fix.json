@@ -1,0 +1,20 @@
+{
+  "summary": "GitHub Actions job 92084340187 passed install, lint, typecheck, unit tests, build, and D1 migrations, then failed while starting the local API Gateway Worker because wrangler.local.toml declared an AI remote binding that requires CLOUDFLARE_API_TOKEN in non-interactive CI.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "apps/api-gateway/wrangler.toml"
+  ],
+  "decision_refs": [
+    "Keep production bindings unchanged and make the local integration config self-contained."
+  ],
+  "evidence": [
+    {
+      "type": "review",
+      "ref": "https://github.com/miyajima/org-brain/actions/runs/30936641689/job/92084340187"
+    }
+  ],
+  "residual_risks": [
+    "Removing optional bindings from the local config can reduce production parity, so parity tests must distinguish local-safe bindings from production-only bindings."
+  ]
+}

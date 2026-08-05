@@ -1,0 +1,29 @@
+{
+  "summary": "CI now starts Wrangler in explicit local mode, gives its deterministic smoke key an explicit tenant_admin grant, and keeps AI/Vectorize out of the local config because Wrangler cannot emulate them. Regression coverage distinguishes production-only bindings from local-safe parity and validates the CI launch contract.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "scripts/wrangler-config-parity.test.mjs"
+  ],
+  "decision_refs": [
+    "Production wrangler.toml remains unchanged.",
+    "Default API key remains low-privilege service_agent; only the CI smoke key receives an explicit tenant_admin policy."
+  ],
+  "evidence": [
+    {
+      "type": "diff",
+      "ref": ".github/workflows/ci.yml apps/api-gateway/wrangler.local.toml scripts/wrangler-config-parity.test.mjs"
+    },
+    {
+      "type": "test",
+      "ref": "node --test scripts/wrangler-config-parity.test.mjs: 2 passed"
+    },
+    {
+      "type": "test",
+      "ref": "fresh tokenless Wrangler local startup plus scripts/api-integration-smoke.mjs: passed"
+    }
+  ],
+  "residual_risks": [
+    "Hosted GitHub Actions execution remains to be observed after the branch is pushed."
+  ]
+}

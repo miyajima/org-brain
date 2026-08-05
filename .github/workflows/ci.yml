@@ -33,7 +33,10 @@ jobs:
       - name: Start local Worker
         working-directory: apps/api-gateway
         run: |
-          pnpm exec wrangler dev --port 8797 -c wrangler.local.toml --var API_KEY:dev-org-brain-api-key > "$GITHUB_WORKSPACE/worker.log" 2>&1 &
+          pnpm exec wrangler dev --local --port 8797 -c wrangler.local.toml \
+            --var API_KEY:dev-org-brain-api-key \
+            --var 'API_TENANT_POLICY_JSON:{"keys":[{"key":"dev-org-brain-api-key","principal":"service:ci-smoke","tenants":["default"],"role":"tenant_admin"}]}' \
+            > "$GITHUB_WORKSPACE/worker.log" 2>&1 &
           echo $! > /tmp/orgbrain-worker.pid
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8797/v1/tasks -H 'x-api-key: dev-org-brain-api-key' >/dev/null; then
