@@ -1,0 +1,22 @@
+{
+  "summary": "Patch the CI Worker start command to force local-only bindings and an explicit smoke admin grant, omit non-emulatable bindings from the local config, add regression coverage for both boundaries, then validate the focused test, tokenless Worker/API smoke, manifest commands, review, and full gate.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "scripts/wrangler-config-parity.test.mjs"
+  ],
+  "decision_refs": [
+    "Acceptance: no CLOUDFLARE_API_TOKEN is required for the local Worker readiness step.",
+    "Acceptance: API integration smoke succeeds against the locally started Worker.",
+    "Acceptance: manifest lint, typecheck, tests, build, and full quality gate pass."
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/implementation_plan_ci_fix.json"
+    }
+  ],
+  "residual_risks": [
+    "Hosted GitHub Actions is the final environment-specific confirmation after push."
+  ]
+}

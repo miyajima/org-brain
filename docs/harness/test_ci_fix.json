@@ -1,0 +1,36 @@
+{
+  "summary": "The focused regression, fresh tokenless Wrangler/D1/API smoke, and every manifest command passed. Initial typecheck/build failures were sandbox loopback restrictions and passed with the required permission; initial lint failure was stale dependencies and passed after frozen-lockfile install.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "scripts/wrangler-config-parity.test.mjs"
+  ],
+  "decision_refs": [
+    "Treat only the reruns after pnpm install --frozen-lockfile and permitted loopback binding as final manifest evidence."
+  ],
+  "evidence": [
+    {
+      "type": "test",
+      "ref": "pnpm test: exit 0; node 79 passed, script vitest 94 passed, all workspace suites passed"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm -r --if-present typecheck: exit 0"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm lint: exit 0"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm build: exit 0"
+    },
+    {
+      "type": "test",
+      "ref": "fresh local D1 migrations plus tokenless wrangler dev plus scripts/api-integration-smoke.mjs: passed"
+    }
+  ],
+  "residual_risks": [
+    "GitHub-hosted execution will be confirmed only after push."
+  ]
+}

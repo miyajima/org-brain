@@ -1,0 +1,21 @@
+{
+  "summary": "The touched paths are CI and Cloudflare local configuration. The fix must not add secrets, alter remote D1, deploy Workers, or change production binding behavior.",
+  "artifact_refs": [
+    ".github/workflows/ci.yml",
+    "apps/api-gateway/wrangler.local.toml",
+    "apps/api-gateway/wrangler.toml",
+    "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"
+  ],
+  "decision_refs": [
+    "Use local emulation only; do not provide CLOUDFLARE_API_TOKEN to this CI job."
+  ],
+  "evidence": [
+    {
+      "type": "review",
+      "ref": "https://github.com/miyajima/org-brain/actions/runs/30936641689/job/92084340187"
+    }
+  ],
+  "residual_risks": [
+    "A parity assertion that requires all production bindings locally would reintroduce the remote-auth failure."
+  ]
+}

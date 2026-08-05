@@ -1,0 +1,18 @@
+{
+  "summary": "The fix is limited to CI and local Wrangler behavior; no product contract or governed product documentation changes are expected.",
+  "artifact_refs": [
+    "docs/SPEC.md",
+    "docs/SYSTEM_DESIGN.md",
+    "docs/DESIGN.md"
+  ],
+  "decision_refs": [
+    "Do not update governed docs unless implementation changes product behavior."
+  ],
+  "evidence": [
+    {
+      "type": "document",
+      "ref": "docs/harness/context_docs_ci_fix.json"
+    }
+  ],
+  "residual_risks": []
+}

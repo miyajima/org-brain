@@ -1,0 +1,23 @@
+{
+  "summary": "The CI failure is caused by remote-only AI and Vectorize bindings being declared in the local Wrangler config. Explicit --local avoids token authentication, but the unusable Vectorize placeholder still causes deletion to fail. The safe boundary is explicit local mode plus omission of non-emulatable bindings from wrangler.local.toml.",
+  "artifact_refs": [
+    "docs/harness/context_code_ci_fix.json",
+    "docs/harness/context_tests_ci_fix.json",
+    "docs/harness/context_docs_ci_fix.json",
+    "docs/harness/context_risks_ci_fix.json"
+  ],
+  "decision_refs": [
+    "Add --local to the CI wrangler dev command instead of adding Cloudflare credentials.",
+    "Omit AI and Vectorize from wrangler.local.toml while keeping all local-safe bindings aligned with production.",
+    "Give the smoke key an explicit tenant_admin policy because the default API key is now intentionally service_agent."
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/context_ci_fix.json"
+    }
+  ],
+  "residual_risks": [
+    "The full smoke still needs an unrestricted loopback bind because the sandbox blocks local ports."
+  ]
+}

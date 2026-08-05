@@ -8,12 +8,9 @@ HYBRID_V3_MODE = "off"
 HYBRID_V4_MODE = "shadow"
 HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
 
-[ai]
-binding = "AI"
-
-[[vectorize]]
-binding = "MEMORY_VECTOR_INDEX_V3"
-index_name = "orgbrain-memory-units-v3-1024"
+# AI and Vectorize are intentionally omitted here. Wrangler cannot emulate
+# those bindings locally; declaring them makes the CI smoke require remote
+# credentials or expose bindings that fail when called.
 
 [[ratelimits]]
 name = "API_RATE_LIMITER"
