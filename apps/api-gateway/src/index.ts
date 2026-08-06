@@ -51,6 +51,12 @@ import {
   upsertMemories
 } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
+import {
+  getMemoryImpactExecution,
+  getMemoryImpactSummary,
+  reportMemoryImpact,
+  startMemoryImpact
+} from "./memory-impact-service";
 import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
 import {
   assertPermission,
@@ -471,6 +477,40 @@ app.get("/v1/tasks/:taskId/events", async (c) => {
   const cursor = cursorValue ? Number.parseInt(cursorValue, 10) : undefined;
   const events = await getTaskEvents(c.env, tenantId, taskId, Number.isNaN(limit) ? 50 : limit, cursor);
   return jsonOk(c, events);
+});
+
+app.post("/v1/memory-impact-executions", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await startMemoryImpact(c.env, tenantId, body, getApiPrincipal(c)), 201);
+});
+
+app.post("/v1/memory-impact-executions/:externalRunId/report", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await reportMemoryImpact(
+    c.env,
+    tenantId,
+    c.req.param("externalRunId"),
+    body,
+    getApiPrincipal(c)
+  ), 201);
+});
+
+app.get("/v1/memory-impact-executions/:externalRunId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getMemoryImpactExecution(c.env, tenantId, c.req.param("externalRunId")));
+});
+
+app.get("/v1/memory-impact-summary", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const from = Number.parseInt(c.req.query("from") ?? "", 10);
+  const to = Number.parseInt(c.req.query("to") ?? "", 10);
+  return jsonOk(c, await getMemoryImpactSummary(c.env, tenantId, {
+    from: Number.isNaN(from) ? undefined : from,
+    to: Number.isNaN(to) ? undefined : to,
+    projectId: c.req.query("project_id")
+  }));
 });
 
 app.get("/v1/memories", async (c) => {
