@@ -483,6 +483,54 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
     );
 
     this.server.tool(
+      "orgbrain_memory_impact_start",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().optional(),
+        task_id: z.string().optional(),
+        trace_id: z.string().optional(),
+        external_run_id: z.string().min(1).max(256),
+        idempotency_key: z.string().min(1).max(256),
+        agent_name: z.string().min(1).max(256).optional(),
+        model: z.string().min(1).max(256).optional(),
+        occurred_at: z.number().int().nonnegative().optional()
+      },
+      async (payload) => {
+        const tenantId = resolveTenant(payload.tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/memory-impact-executions", {
+          method: "POST",
+          body: { ...payload, tenant_id: tenantId }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memory_impact_report",
+      {
+        tenant_id: z.string().optional(),
+        external_run_id: z.string().min(1).max(256),
+        idempotency_key: z.string().min(1).max(256),
+        outcome: z.enum(["assessed", "failed"]).optional(),
+        memory_used: z.boolean().optional(),
+        avoided_lookup: z.enum(["source_search", "web_search", "past_context", "none"]).optional(),
+        memory_basis_ids: z.array(z.string().min(1).max(256)).max(20).optional(),
+        confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+        failure_category: z.enum(["agent_error", "tool_error", "cancelled", "unknown"]).optional(),
+        occurred_at: z.number().int().nonnegative().optional()
+      },
+      async ({ tenant_id, external_run_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(
+          this.env,
+          `/v1/memory-impact-executions/${encodeURIComponent(external_run_id)}/report`,
+          { method: "POST", body: { ...payload, tenant_id: tenantId } }
+        );
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
       "orgbrain_task_get",
       {
         tenant_id: z.string().optional(),

@@ -41,11 +41,14 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 - Create task: `orgbrain_task_create`
 - Get task: `orgbrain_task_get`
 - Get events: `orgbrain_task_events`
+- Start impact measurement: `orgbrain_memory_impact_start`
+- Report impact measurement: `orgbrain_memory_impact_report`
 
 ## Operational Notes
 - OrgBrain master memory is Cloudflare D1.
 - OpenClaw local memory remains cache/index.
 - Retrieval impact should be measured primarily with D1 `retrieval_events` and opt-in measurement mode; the final-report impact note is a lightweight self-report for cases where memory avoided another lookup.
+- For an eligible measured run, call `orgbrain_memory_impact_start` before retrieval and always call `orgbrain_memory_impact_report` at completion, including `memory_used=false`, `avoided_lookup=none`, or a failed outcome. Reuse stable `external_run_id` and idempotency keys across retries.
 - `orgbrain_memories_upsert` remains for compatibility and non-interactive flows, but interactive assistant flows should use propose/confirm.
 - For agent preflight, call `orgbrain_context_enrich` with `task.title`, `task.description`, `project_id`, and `task_type`; use returned `decisionContext`, `constraints`, and `knownPitfalls` as guidance, not as a replacement for source verification.
 - If MCP returns auth errors, ask for:

@@ -138,10 +138,28 @@ importers:
 
   packages/benchmarks: {}
 
+  packages/contracts:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+
+  packages/core:
+    dependencies:
+      '@org-brain/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/orgbrain-cli: {}
 
   packages/shared:
     dependencies:
+      '@org-brain/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@org-brain/core':
+        specifier: workspace:*
+        version: link:../core
       ajv:
         specifier: ^8.17.1
         version: 8.18.0
