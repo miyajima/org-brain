@@ -9,7 +9,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Event Bus: Cloudflare Queues (`org-bus`, `cap-plan`)
 - Coordination: Durable Objects (`LeaseDO`, `MailboxDO`)
 - MCP: Remote MCP endpoint on API Gateway (`/mcp`, service-token auth)
-- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `audit_events`, `retention_policies`) + R2 artifacts
+- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `memory_impact_events`, `memory_impact_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
 
 ## API
@@ -194,7 +194,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `pnpm metrics:replay` replays recent task inputs against `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` without persisting new rows.
 - `pnpm metrics:rollup` backfills or recomputes one UTC day into `retrieval_daily_metrics`.
 - `pnpm measurement:report` reports opt-in measurement runs comparing raw-context control tasks with compact-memory treatment tasks, with optional `--session-id` aggregation for multi-turn sessions.
-- Agent-facing memory impact notes (`memory_used`, `avoided_lookup`, `memory_basis`, `confidence`) are qualitative supplements only; quantitative evaluation remains `retrieval_events` plus measurement mode.
+- Agent-facing memory impact notes are persisted as `memory_impact_events` when the integration reports every eligible run. `avoided_lookup` remains an agent self-report and a qualitative supplement; causal quantitative evaluation remains measurement mode plus business outcome metrics.
 
 ## Out of Scope (MVP)
 - SCIM/SAML provisioning and arbitrary custom role definitions
