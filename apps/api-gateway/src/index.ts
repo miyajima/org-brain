@@ -56,8 +56,25 @@ import {
   reviseDecisionMemory,
   searchDecisionMemories
 } from "./context-engine-service";
-import { addGroupMember, createGroup, getGroup, listGroups, removeGroupMember, updateGroup } from "./group-service";
+import { addGroupMember, archiveGroup, createGroup, getGroup, listGroups, removeGroupMember, updateGroup } from "./group-service";
 import { getMyIdentity, updateUserProfile } from "./identity-service";
+import {
+  assertSessionCsrf,
+  logoutSession,
+  requestEmailCode,
+  revokeAllSessions,
+  SESSION_COOKIE,
+  SESSION_COOKIE_MAX_AGE,
+  verifyEmailCode
+} from "./email-auth-service";
+import {
+  createUser,
+  getOrganization,
+  listDirectory,
+  listUsers,
+  updateOrganization,
+  updateUser
+} from "./organization-user-service";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import {
   captureMemories,
@@ -149,7 +166,7 @@ app.use(
   "/v1/*",
   cors({
     origin: "*",
-    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key"],
+    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key", "x-csrf-token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     maxAge: 86400
   })
@@ -158,7 +175,7 @@ app.use(
   "/api/*",
   cors({
     origin: "*",
-    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key"],
+    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key", "x-csrf-token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     maxAge: 86400
   })
@@ -170,6 +187,8 @@ app.use("/api/*", apiKeyAuth);
 function permissionForRequest(method: string, path: string): OrgPermission {
   if (path.startsWith("/v1/auth/")) return method === "GET" ? "read" : "write";
   if (
+    path === "/v1/organization" ||
+    path.startsWith("/v1/users") ||
     path.startsWith("/v1/role-assignments") ||
     path.startsWith("/v1/groups") ||
     path.startsWith("/v1/scoped-tokens") ||
@@ -181,6 +200,7 @@ function permissionForRequest(method: string, path: string): OrgPermission {
     path.startsWith("/v1/retrieval-generation-assignments") ||
     path === "/v1/resources/backfill"
   ) return "admin";
+  if (path.startsWith("/v1/business-categories")) return method === "GET" ? "read" : "admin";
   if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
   if (path.startsWith("/v1/audit-events")) return "export";
   if (
@@ -199,6 +219,10 @@ function permissionForRequest(method: string, path: string): OrgPermission {
 
 const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   if (c.req.method === "OPTIONS") {
+    await next();
+    return;
+  }
+  if (c.req.path === "/v1/auth/email/request-code" || c.req.path === "/v1/auth/email/verify") {
     await next();
     return;
   }
@@ -229,6 +253,14 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
     metadata: { permission }
   } as const;
   try {
+    if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
+      if (auth.source === "session") {
+        const allowedOrigin = c.env.SESSION_ALLOWED_ORIGIN?.trim();
+        if (!allowedOrigin) throw new HttpError(500, "misconfigured", "SESSION_ALLOWED_ORIGIN is required for session mutations");
+        if (c.req.header("origin") !== allowedOrigin) throw new HttpError(403, "origin_failed", "Request origin is not allowed");
+      }
+      await assertSessionCsrf(auth, c.req.header("x-csrf-token"));
+    }
     await assertRequestRateLimit(c.env, {
       tenantId,
       principal: auth.principal,
@@ -268,6 +300,81 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
 
 app.use("/v1/*", rbacAuditMiddleware);
 app.use("/api/*", rbacAuditMiddleware);
+
+app.post("/v1/auth/email/request-code", async (c) => {
+  const body = await c.req.json<unknown>();
+  const requestIp = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || null;
+  const result = await requestEmailCode(c.env, body, requestIp);
+  return c.json({ ok: true as const, data: result }, 202);
+});
+
+app.post("/v1/auth/email/verify", async (c) => {
+  const body = await c.req.json<unknown>();
+  const result = await verifyEmailCode(c.env, body);
+  await appendAuditEvent(c.env, {
+    tenantId: result.user.tenant_id,
+    principal: result.user.principal,
+    action: "auth.email.verify",
+    resourceType: "session",
+    outcome: "succeeded",
+    requestId: c.req.header("x-request-id") || c.req.header("cf-ray") || null,
+    metadata: { auth_source: "email" }
+  });
+  c.header(
+    "set-cookie",
+    `${SESSION_COOKIE}=${encodeURIComponent(result.session_token)}; Max-Age=${SESSION_COOKIE_MAX_AGE}; Path=/; Secure; HttpOnly; SameSite=Lax`
+  );
+  return jsonOk(c, {
+    csrf_token: result.csrf_token,
+    expires_at: result.expires_at,
+    user: result.user
+  });
+});
+
+app.post("/v1/auth/logout", async (c) => {
+  const result = await logoutSession(c.env, getApiAuthContext(c));
+  c.header("set-cookie", `${SESSION_COOKIE}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`);
+  return jsonOk(c, result);
+});
+
+app.post("/v1/ops/auth-sessions/revoke-all", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await revokeAllSessions(c.env, tenantId));
+});
+
+app.get("/v1/organization", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getOrganization(c.env, tenantId));
+});
+
+app.patch("/v1/organization", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await updateOrganization(c.env, tenantId, body));
+});
+
+app.get("/v1/users", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, { users: await listUsers(c.env, tenantId, c.req.query("q")) });
+});
+
+app.post("/v1/users", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await createUser(c.env, tenantId, body, getApiPrincipal(c)), 201);
+});
+
+app.patch("/v1/users/:principal{.+}", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await updateUser(c.env, tenantId, decodeURIComponent(c.req.param("principal")), body, getApiPrincipal(c)));
+});
+
+app.get("/v1/directory", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, { users: await listDirectory(c.env, tenantId, c.req.query("q")) });
+});
 
 app.get("/v1/role-assignments", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
@@ -396,7 +503,7 @@ app.put("/v1/auth/me/profile", async (c) => {
 
 app.get("/v1/groups", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await listGroups(c.env, tenantId, getApiPrincipal(c));
+  const result = await listGroups(c.env, tenantId, getApiPrincipal(c), true);
   return jsonOk(c, result);
 });
 
@@ -409,21 +516,21 @@ app.post("/v1/groups", async (c) => {
 
 app.get("/v1/groups/:groupId", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await getGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c));
+  const result = await getGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), true);
   return jsonOk(c, result);
 });
 
 app.patch("/v1/groups/:groupId", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await updateGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), body);
+  const result = await updateGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), body, true);
   return jsonOk(c, result);
 });
 
 app.post("/v1/groups/:groupId/members", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await addGroupMember(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), body);
+  const result = await addGroupMember(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), body, true);
   return jsonOk(c, result);
 });
 
@@ -434,8 +541,15 @@ app.delete("/v1/groups/:groupId/members/:principal", async (c) => {
     tenantId,
     c.req.param("groupId"),
     getApiPrincipal(c),
-    decodeURIComponent(c.req.param("principal"))
+    decodeURIComponent(c.req.param("principal")),
+    true
   );
+  return jsonOk(c, result);
+});
+
+app.delete("/v1/groups/:groupId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await archiveGroup(c.env, tenantId, c.req.param("groupId"), getApiPrincipal(c), true);
   return jsonOk(c, result);
 });
 

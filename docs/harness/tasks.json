@@ -1,11 +1,11 @@
 {
   "backend": "json",
-  "difficulty": "complex",
+  "difficulty": "moderate",
   "execution_policy_ref": "plan.json#/execution_policy",
   "graph_contract": "task-graph-v2",
   "max_parallelism": 4,
   "primary_agent": "copilot",
-  "run_id": "org-brain-20260807T011318.571987Z-eca7a303",
+  "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
   "schema_version": 2,
   "stages": [
     {
@@ -14,38 +14,39 @@
       ],
       "actor": "investigator",
       "attempt_count": 1,
-      "attempt_id": "074b8ce8d9304d25a31f762908f2f44a",
+      "attempt_id": "5411f3f9971442c3a46ea09e117859e4",
       "claimed_by": "investigator",
-      "completed_at": "2026-08-07T04:06:36.421450+00:00",
+      "completed_at": "2026-08-07T11:14:08.241101+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "docs/harness/context_code.json"
+        "/Users/0300815938/projects/org-brain/migrations/0024_identity_organization.sql"
       ],
       "evidence_requirements": [
         "review"
       ],
       "handoff": {
         "artifact_refs": [
-          "apps/api-gateway/src/memory-service.ts",
-          "apps/api-gateway/src/context-engine-service.ts",
-          "apps/api-gateway/src/mcp.ts",
-          "packages/shared/src/memory-retrieval.ts",
-          "packages/orgbrain-cli/src/lib/local-memory-store.mjs"
+          "migrations/0024_identity_organization.sql",
+          "apps/api-gateway/src/auth.ts",
+          "apps/api-gateway/src/email-auth-service.ts",
+          "apps/api-gateway/src/organization-user-service.ts",
+          "packages/orgbrain-cli/src/lib/local-memory-store.mjs",
+          "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql"
         ],
         "decision_refs": [
           "docs/harness/plan.json"
         ],
         "evidence": [
           {
-            "ref": "codegraph search plus targeted repository reads",
+            "ref": "targeted repository reads, schema parity, typechecks, and live PostgreSQL migration/RLS probes",
             "type": "review"
           }
         ],
         "residual_risks": [
-          "The change crosses D1, Local SQLite, public API, MCP, projection, and reporting contracts.",
-          "Versioned retrieval tables must remain available until shadow and rollback gates pass."
+          "Email and SCIM remain feature-flagged off until an initial tenant_admin configures the organization.",
+          "Publishing the versioned OSS packages and OCI images is an external release action and is not performed by this repository-only implementation."
         ],
-        "summary": "Mapped the Cloud memory lifecycle, decision context, MCP, Local SQLite, retrieval projector, versioned retrieval, and telemetry seams required by the requested classification and impact work."
+        "summary": "Mapped the OSS D1/API/Console and Local SQLite/CLI identity seams plus the separate Enterprise PostgreSQL/Node/Helm repository required for additive user, organization, group, category, OTP, OIDC, and SCIM delivery."
       },
       "id": "context_code",
       "input_refs": [
@@ -62,7 +63,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "4223d8d5094900a9288cde03f3780a7759e3ac70e95a063b7473bcfbe97c7e11",
+      "output_sha256": "cb3b7b64c4154616aedef286a5a1174a007fe83755372d00e7750b95502073b5",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -82,10 +83,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "code-reviewer",
-      "started_at": "2026-08-07T04:05:59.065644+00:00",
+      "started_at": "2026-08-07T10:17:57.682588+00:00",
       "status": "completed",
       "title": "Inspect implementation paths and call relationships",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "@context/code"
       ]
@@ -96,23 +97,23 @@
       ],
       "actor": "investigator",
       "attempt_count": 1,
-      "attempt_id": "198325a752634428a8f24d56dfa404fd",
+      "attempt_id": "a342587077f14ac980584f4c6d017ddb",
       "claimed_by": "investigator",
-      "completed_at": "2026-08-07T04:06:36.667014+00:00",
+      "completed_at": "2026-08-07T11:14:13.355546+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "docs/harness/context_tests.json"
+        "/Users/0300815938/projects/org-brain/apps/api-gateway/test/identity-auth-service.test.ts"
       ],
       "evidence_requirements": [
         "artifact"
       ],
       "handoff": {
         "artifact_refs": [
-          "apps/api-gateway/test/memory-service.test.ts",
-          "apps/api-gateway/test/context-engine-service.test.ts",
-          "apps/api-gateway/test/mcp-tools.test.ts",
-          "scripts/local-memory.test.mjs",
-          "scripts/schema-parity.test.mjs"
+          "packages/contracts/test/identity-organization.test.ts",
+          "apps/api-gateway/test/identity-auth-service.test.ts",
+          "apps/console/e2e/identity-administration.spec.ts",
+          "scripts/schema-parity.test.mjs",
+          "/Users/0300815938/projects/org-brain-enterprise/src/identity-integration.test.ts"
         ],
         "decision_refs": [
           "docs/harness/plan.json"
@@ -124,10 +125,10 @@
           }
         ],
         "residual_risks": [
-          "Production shadow duration and traffic thresholds cannot be proven by local tests.",
-          "No production D1 mutation or Cloudflare deployment is authorized."
+          "No production D1/PostgreSQL mutation, deployment, registry publication, SMTP delivery, or real IdP SCIM call is authorized.",
+          "OIDC cryptographic verification and SCIM behavior are automated locally; live Okta evidence remains a rollout action."
         ],
-        "summary": "The repository has Vitest API suites, Node Local SQLite suites, schema parity tests, retrieval benchmark suites, and manifest-backed typecheck, test, lint, and build commands."
+        "summary": "Verification covers shared contracts, 97 API tests including OTP/privacy/isolation, Local SQLite schema parity and CLI smoke, Node Console type/build plus Playwright identity E2E, Enterprise type/test/build/Helm, full migrations, forced-RLS hostile probes, and a non-superuser PostgreSQL identity integration test."
       },
       "id": "context_tests",
       "input_refs": [
@@ -144,7 +145,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "9b265bf19c9b462392584174215abe4f4e3376a4affe7cec44ba9d3a311ebe74",
+      "output_sha256": "764e2863fc2486f18da21f2163c858999bfd70ada2a620711be1da764aa58a65",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -166,10 +167,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "evidence-collector",
-      "started_at": "2026-08-07T04:05:59.520086+00:00",
+      "started_at": "2026-08-07T10:18:03.866094+00:00",
       "status": "completed",
       "title": "Inspect tests and verification commands",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "@context/tests"
       ]
@@ -180,39 +181,37 @@
       ],
       "actor": "investigator",
       "attempt_count": 1,
-      "attempt_id": "d3ee9d8040124d999ecd4d7baa484114",
+      "attempt_id": "746ce9423b894707985a63dd11a60fc5",
       "claimed_by": "investigator",
-      "completed_at": "2026-08-07T04:06:36.902532+00:00",
+      "completed_at": "2026-08-07T11:14:16.940643+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "docs/harness/context_docs.json"
+        "/Users/0300815938/projects/org-brain/docs/IDENTITY_ADMINISTRATION.md"
       ],
       "evidence_requirements": [
         "document"
       ],
       "handoff": {
         "artifact_refs": [
-          "docs/SPEC.md",
-          "docs/SYSTEM_DESIGN.md",
-          "docs/DESIGN.md",
-          "docs/STORAGE_BACKENDS.md",
-          "docs/THREAT_MODEL.md",
-          "docs/LOCAL_MIGRATION.md",
-          "docs/RETRIEVAL_ROLLOUT_POLICY.md"
+          "docs/IDENTITY_ADMINISTRATION.md",
+          "README.md",
+          "apps/api-gateway/.dev.vars.example",
+          "/Users/0300815938/projects/org-brain-enterprise/README.md",
+          "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md"
         ],
         "decision_refs": [
           "docs/harness/plan.json"
         ],
         "evidence": [
           {
-            "ref": "docs/SYSTEM_DESIGN.md",
+            "ref": "docs/IDENTITY_ADMINISTRATION.md",
             "type": "document"
           }
         ],
         "residual_risks": [
-          "Docs must distinguish implemented local behavior from later production activation gates."
+          "Release documentation must still supply real package/image coordinates and IdP-specific setup after external publication."
         ],
-        "summary": "SPEC, SYSTEM_DESIGN, DESIGN, storage, threat, local migration, and retrieval rollout documents govern the changed behavior and must describe explicit classification, append-only impact evidence, and stable retrieval generations."
+        "summary": "Identity behavior is governed by the new OSS identity administration document plus README/runtime examples, with Enterprise README and architecture documenting forced RLS, SMTP, OIDC/SCIM, feature flags, versioned Console consumption, and rollback boundaries."
       },
       "id": "context_docs",
       "input_refs": [
@@ -229,7 +228,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "85af1760e8db2ac6a7f6cbaf07fcd54bcbd8836758aa9b2407a88258058e3789",
+      "output_sha256": "0a49745a9dbdf7a939ab9de94570f173346ae8f8c58b043707027df8005f190c",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -248,10 +247,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "scope-planner",
-      "started_at": "2026-08-07T04:05:59.989880+00:00",
+      "started_at": "2026-08-07T10:18:09.268039+00:00",
       "status": "completed",
       "title": "Inspect governed docs and repository contracts",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "@context/docs"
       ]
@@ -262,12 +261,12 @@
       ],
       "actor": "investigator",
       "attempt_count": 1,
-      "attempt_id": "1defce86dd094544801cbc1e2ac9194d",
+      "attempt_id": "ebd9e682f61e478aae3506db2f237c48",
       "claimed_by": "investigator",
-      "completed_at": "2026-08-07T04:06:37.146565+00:00",
+      "completed_at": "2026-08-07T11:14:20.283716+00:00",
       "depends_on": [],
       "evidence_refs": [
-        "docs/harness/context_risks.json"
+        "/Users/0300815938/projects/org-brain/apps/api-gateway/src/email-auth-service.ts"
       ],
       "evidence_requirements": [
         "review"
@@ -275,9 +274,10 @@
       "handoff": {
         "artifact_refs": [
           "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml",
-          "docs/THREAT_MODEL.md",
-          "packages/orgbrain-cli/src/lib/workspace-config.mjs",
-          "apps/api-gateway/src/authz-service.ts"
+          "docs/IDENTITY_ADMINISTRATION.md",
+          "apps/api-gateway/src/auth.ts",
+          "apps/api-gateway/src/email-auth-service.ts",
+          "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql"
         ],
         "decision_refs": [
           "docs/harness/plan.json"
@@ -289,10 +289,10 @@
           }
         ],
         "residual_risks": [
-          "Polymorphic retrieval sources require application-enforced tenant validation.",
-          "Indefinite telemetry retention requires privacy purge coverage and content-free event payloads."
+          "Email and SCIM must remain disabled until bootstrap administration and secrets are configured.",
+          "Production SMTP, OIDC discovery, and Okta SCIM must be canaried; local evidence does not establish external provider operation."
         ],
-        "summary": "The implementation must preserve tenant isolation, fail-closed workspace routing, rebuildable projection boundaries, append-only evidence, deletion propagation, and explicit authorization for production changes."
+        "summary": "The implementation preserves existing principals/ACL/API identities, keeps tenant provisioning operator-only, gates cookie mutations with Origin+CSRF, stores OTP/session/SCIM credentials as hashes, limits full_name to self/admin surfaces, forces Enterprise RLS, and isolates SCIM-owned membership/roles from local state."
       },
       "id": "context_risks",
       "input_refs": [
@@ -310,7 +310,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "6b5bcd15a431212bccd91b6269772b7bba6208585140ff574119e05d8d0262da",
+      "output_sha256": "0afbe80d1f8c89d1ec9245a017f655c43a54781ab851e9fe56f9d984d3138ee7",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -331,10 +331,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "security-reviewer",
-      "started_at": "2026-08-07T04:06:00.457724+00:00",
+      "started_at": "2026-08-07T10:18:15.420758+00:00",
       "status": "completed",
       "title": "Inspect manifests, instructions, and sensitive paths",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "@context/risks"
       ]
@@ -345,9 +345,9 @@
       ],
       "actor": "primary",
       "attempt_count": 1,
-      "attempt_id": "ff99c336d14a4541a6dfc69dde9e9cc0",
+      "attempt_id": "56ba788b35d64bc9b8e685ef439a6daa",
       "claimed_by": "primary",
-      "completed_at": "2026-08-07T04:06:58.356852+00:00",
+      "completed_at": "2026-08-07T11:17:05.697098+00:00",
       "decision_scope": "plan",
       "depends_on": [
         "context_code",
@@ -356,7 +356,7 @@
         "context_risks"
       ],
       "evidence_refs": [
-        "docs/harness/context.json"
+        "/Users/0300815938/projects/org-brain/docs/harness/plan.json"
       ],
       "evidence_requirements": [
         "artifact"
@@ -370,9 +370,10 @@
           "docs/harness/context_risks.json"
         ],
         "decision_refs": [
-          "separate canonical memories and decision memories",
-          "shared retrieval projection with separate evidence and governance channels",
-          "stable role-based table names with generation metadata"
+          "tenant remains the operator-provisioned isolation and contract unit",
+          "new users receive opaque stable principals while existing principals remain unchanged",
+          "full_name is private to self and tenant_admin while display_name is directory-safe",
+          "email and SCIM ship disabled until bootstrap administration is complete"
         ],
         "evidence": [
           {
@@ -381,10 +382,10 @@
           }
         ],
         "residual_risks": [
-          "Legacy projections must remain during dual-write and shadow validation.",
-          "Production activation criteria require later live evidence."
+          "Versioned packages and OCI images still require an explicitly authorized release operation.",
+          "Production SMTP, OIDC discovery, and Okta-compatible SCIM require post-deployment canary evidence."
         ],
-        "summary": "The requested implementation is bounded to additive classification and impact telemetry plus a staged replacement of version-named retrieval projections; production activation and deletion of legacy projections remain rollout steps, not local implementation side effects."
+        "summary": "The implementation adds a shared identity and organization contract across OSS and Enterprise, additive tenant-scoped persistence, email OTP and OIDC session flows, privacy-aware user administration, local and SCIM group coexistence, business-category administration, a shared Console, and Enterprise SCIM/RLS support while preserving existing principals, ACLs, API keys, and tenant provisioning boundaries."
       },
       "id": "context",
       "input_refs": [
@@ -393,7 +394,7 @@
         "context_docs",
         "context_risks"
       ],
-      "input_sha256": "931b5f7d336cac9da5c67f6e6bca1b8b89da26149e69f831e6ca5d5ad3d01076",
+      "input_sha256": "6deaf87682dac66ade94d24e143ddfb3f0264caba46a259af83eadf2aa93858d",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -403,7 +404,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "b607ea175ed2a85193c7a0f16b5951e6662e6c78915493dce79d86cb2f8ae60d",
+      "output_sha256": "720621df1619faec53c67248f76b5ab67fa8ca3bafda4d4cad81d898f6f7a2f0",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -425,10 +426,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "scope-planner",
-      "started_at": "2026-08-07T04:06:58.105283+00:00",
+      "started_at": "2026-08-07T11:14:46.250032+00:00",
       "status": "completed",
       "title": "Synthesize recalled and inspected context",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "docs/harness/plan.json"
       ]
@@ -439,15 +440,15 @@
       ],
       "actor": "primary",
       "attempt_count": 1,
-      "attempt_id": "d824b543bb1e43ea839f910d2f52b9de",
+      "attempt_id": "5951ecd088cf4ece9bb1a655c8841108",
       "claimed_by": "primary",
-      "completed_at": "2026-08-07T04:06:58.846905+00:00",
+      "completed_at": "2026-08-07T11:17:35.331704+00:00",
       "decision_scope": "plan",
       "depends_on": [
         "context"
       ],
       "evidence_refs": [
-        "docs/harness/implementation_plan.json"
+        "/Users/0300815938/projects/org-brain/docs/harness/plan.json"
       ],
       "evidence_requirements": [
         "artifact"
@@ -455,17 +456,17 @@
       "handoff": {
         "artifact_refs": [
           "docs/harness/plan.json",
-          "migrations/0018_business_classification.sql",
-          "migrations/0019_memory_impact_telemetry.sql",
-          "migrations/0020_retrieval_generations.sql",
-          "migrations/0021_retrieval_units_stable.sql"
+          "docs/IDENTITY_ADMINISTRATION.md",
+          "packages/contracts/src/index.ts",
+          "migrations/0024_identity_organization.sql",
+          "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql"
         ],
         "decision_refs": [
-          "explicit tenant-defined business categories and fixed work types",
-          "append-only impact observations with per-source attribution",
-          "stable retrieval tables keyed by generation",
-          "evidence and governance remain separate response channels",
-          "no production mutation or legacy projection deletion"
+          "all schema changes are additive and existing principals remain stable",
+          "tenant provisioning is excluded from general administration",
+          "tenant role is singular while project roles may be multiple",
+          "full_name is field-level private and excluded from audit metadata",
+          "email and SCIM are initially feature-flagged off"
         ],
         "evidence": [
           {
@@ -474,10 +475,10 @@
           }
         ],
         "residual_risks": [
-          "The repository-wide change requires focused and full regression suites.",
-          "Live seven-day shadow acceptance remains a post-deployment operational gate."
+          "External package and image publication is outside the authorized local implementation.",
+          "Live SMTP, OIDC-provider, and Okta SCIM acceptance require configured deployment credentials."
         ],
-        "summary": "Implement additive classification and impact telemetry first, then stable retrieval generations and shared projections, preserving legacy projections for rollback and compatibility until a later production rollout."
+        "summary": "Deliver one additive identity-administration contract across OSS and Enterprise: shared schemas first, then OSS D1/SQLite/API/Console/CLI, Enterprise PostgreSQL/Node/SMTP/RLS/SCIM, followed by privacy, isolation, migration, and compatibility gates."
       },
       "id": "plan",
       "input_refs": [
@@ -485,7 +486,7 @@
         "request",
         "success criteria"
       ],
-      "input_sha256": "21185d80fe5efcb9327083ea1532e9a0004334a142bd2219f316ae5c4d57437b",
+      "input_sha256": "3190ae8d04bdcf122c0bf9dd26e37a05f78881f6eae6c5496efd3ee53711d3cc",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -495,7 +496,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "42342ceb3776ffe9c7062da8233f208bd0a46f956da9f1fecc4e0c6bc48b885f",
+      "output_sha256": "850747d5a50db485e7d2d6bf4ff398eb382b1eeef1cc38ddf05eaed00f1069e0",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -514,10 +515,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "scope-planner",
-      "started_at": "2026-08-07T04:06:58.592465+00:00",
+      "started_at": "2026-08-07T11:17:15.180699+00:00",
       "status": "completed",
       "title": "Create implementation plan and acceptance criteria",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "docs/harness/plan.json"
       ]
@@ -528,15 +529,15 @@
       ],
       "actor": "primary",
       "attempt_count": 1,
-      "attempt_id": "fa41787f906a444eb5931b48b72426f4",
+      "attempt_id": "76a45cdeb5834f45a07573e83b75f7b7",
       "claimed_by": "primary",
-      "completed_at": "2026-08-07T04:06:59.401713+00:00",
+      "completed_at": "2026-08-07T11:17:59.824975+00:00",
       "decision_scope": "task_split",
       "depends_on": [
         "plan"
       ],
       "evidence_refs": [
-        "docs/harness/split.json"
+        "/Users/0300815938/projects/org-brain/docs/harness/tasks.json"
       ],
       "evidence_requirements": [
         "artifact"
@@ -548,7 +549,8 @@
         ],
         "decision_refs": [
           "single writer for all repository changes",
-          "legacy retrieval projections remain read-compatible during migration"
+          "Enterprise consumes the versioned OSS Console and contract packages rather than copied source",
+          "validation may run independently only after implementation converges"
         ],
         "evidence": [
           {
@@ -557,15 +559,15 @@
           }
         ],
         "residual_risks": [
-          "The single implementation task is large but avoids conflicting schema and API edits."
+          "The single implementation task is large but avoids cross-repository contract drift and conflicting schema edits."
         ],
-        "summary": "Keep one implementation owner because migrations, shared contracts, Cloud services, Local storage, MCP, and documentation overlap. Execute in four ordered slices: schema/types, Cloud APIs, Local parity/tooling, then tests/docs/rollout review."
+        "summary": "Keep one implementation owner because shared contracts, tenant role semantics, privacy rules, migrations, Console routes, and cross-repository API parity overlap. Execute ordered slices for contracts and schemas, OSS API/Console/CLI, Enterprise API/RLS/SCIM/Helm, then tests, documentation, and review."
       },
       "id": "split",
       "input_refs": [
         "plan"
       ],
-      "input_sha256": "830591da873139edcbeb13b567b6fb21d5d3693719847b8823a8262f86a0fd8a",
+      "input_sha256": "a5284fbe6007fa97d35186ef6bea8f38739839de29c41d9ccf2997fd4d64c830",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -575,7 +577,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "676da6fab9a7b670d1d83cba0a8db12078bf1364a4a17ded280848839b0a3fad",
+      "output_sha256": "6761f3fcdc3918f36959a1f2aed20a675f3e80bc4969ac25f1dcd6feaa07a28b",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -594,10 +596,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "workflow-architect",
-      "started_at": "2026-08-07T04:06:59.110272+00:00",
+      "started_at": "2026-08-07T11:17:54.326933+00:00",
       "status": "completed",
       "title": "Split work into dependency and resource-bounded tasks",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "docs/harness/tasks.json"
       ]
@@ -608,15 +610,17 @@
       ],
       "actor": "integration_owner",
       "attempt_count": 1,
-      "attempt_id": "425327a6b06e473da103fe7891a86c9a",
-      "claimed_by": "integration_owner",
-      "completed_at": "2026-08-07T04:06:59.908624+00:00",
+      "attempt_id": "4e2dfc35cd2149cb8a14472ed71696fb",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-07T11:18:31.093219+00:00",
       "decision_scope": "implementation",
       "depends_on": [
         "split"
       ],
       "evidence_refs": [
-        "docs/harness/implement.json"
+        "/Users/0300815938/projects/org-brain/migrations/0024_identity_organization.sql",
+        "/Users/0300815938/projects/org-brain/packages/contracts/test/identity-organization.test.ts",
+        "/Users/0300815938/projects/org-brain-enterprise/src/identity-integration.test.ts"
       ],
       "evidence_requirements": [
         "diff",
@@ -624,18 +628,20 @@
       ],
       "handoff": {
         "artifact_refs": [
-          "migrations/0018_business_classification.sql",
-          "migrations/0019_memory_impact_telemetry.sql",
-          "migrations/0020_retrieval_generations.sql",
-          "migrations/0021_retrieval_units_stable.sql",
-          "apps/api-gateway/src/memory-impact-service.ts",
-          "apps/api-gateway/src/retrieval-generation-service.ts",
+          "packages/contracts/src/index.ts",
+          "migrations/0024_identity_organization.sql",
+          "apps/api-gateway/src/email-auth-service.ts",
+          "apps/api-gateway/src/organization-user-service.ts",
+          "apps/console/src/pages/users.astro",
           "packages/orgbrain-cli/src/lib/local-memory-store.mjs",
-          "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+          "docs/IDENTITY_ADMINISTRATION.md",
+          "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql",
+          "/Users/0300815938/projects/org-brain-enterprise/src/server.ts",
+          "/Users/0300815938/projects/org-brain-enterprise/src/identity-service.ts"
         ],
         "decision_refs": [
           "docs/harness/plan.json",
-          "docs/harness/implementation_plan.json"
+          "docs/IDENTITY_ADMINISTRATION.md"
         ],
         "evidence": [
           {
@@ -643,19 +649,19 @@
             "type": "diff"
           },
           {
-            "ref": "pnpm test",
+            "ref": "pnpm test and Console Playwright identity administration E2E",
             "type": "test"
           },
           {
-            "ref": "pnpm lint && pnpm typecheck && pnpm build",
+            "ref": "Enterprise typecheck, test, build, Helm lint, migration, forced-RLS hostile probe, and non-superuser PostgreSQL integration",
             "type": "test"
           }
         ],
         "residual_risks": [
-          "Production D1 migrations, data backfill, assignment switching, and Cloudflare deployment remain intentionally operator-controlled.",
-          "Legacy retrieval projection tables remain during the compatibility window and require a later backup and restore drill before cleanup."
+          "Production D1/PostgreSQL migration and Cloudflare or Kubernetes deployment remain intentionally operator-controlled.",
+          "Real SMTP delivery, external OIDC discovery, and Okta SCIM require environment-specific rollout verification."
         ],
-        "summary": "Implemented explicit business classification, stable retrieval generations, evidence/governance search channels, memory usage and effect telemetry, daily impact metrics, and explicit local outbox synchronization without mutating production."
+        "summary": "Implemented the shared identity, organization, directory, group, role, and business-category contract; additive OSS D1 and Local SQLite persistence; email OTP, session, OIDC JIT, privacy-aware administration APIs; Console and CLI management; and Enterprise PostgreSQL/RLS, Node API, SMTP, SCIM, Helm, and operations support without deploying or publishing artifacts."
       },
       "id": "implement",
       "input_refs": [
@@ -663,7 +669,7 @@
         "split",
         "repository"
       ],
-      "input_sha256": "fe48d090603744127f388a6860bd143b7b258e0fd086f9084ec004e9981920fe",
+      "input_sha256": "f54b3648d697b89e3a5b5e72d5108554148591408e23287c8f571aa09b48cc66",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -673,7 +679,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "9e69bd4c7d1950ff9ae62ab0556617317cb1bfb2d0d9061d1db25b810b07548f",
+      "output_sha256": "1f0fa0b3354d22f27355f149a6ed56b9ecc9755658c937f929b8a438e7d515ca",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -694,10 +700,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "minimal-change-implementer",
-      "started_at": "2026-08-07T04:06:59.653279+00:00",
+      "started_at": "2026-08-07T11:18:25.691103+00:00",
       "status": "completed",
       "title": "Implement changes under one integration owner",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "**"
       ]
@@ -708,32 +714,36 @@
       ],
       "actor": "verifier",
       "attempt_count": 1,
-      "attempt_id": "f4258200da5649bdb16310bea9b02f13",
-      "claimed_by": "verifier",
-      "completed_at": "2026-08-07T04:07:12.708797+00:00",
+      "attempt_id": "eecbca4db7364a50ad9a74258ae89608",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-07T11:26:51.173125+00:00",
       "depends_on": [
         "implement"
       ],
       "evidence_refs": [
-        "docs/harness/gate.json"
+        "/Users/0300815938/projects/org-brain/apps/api-gateway/test/identity-auth-service.test.ts",
+        "/Users/0300815938/projects/org-brain/apps/console/e2e/identity-administration.spec.ts",
+        "/Users/0300815938/projects/org-brain-enterprise/src/identity-integration.test.ts"
       ],
       "evidence_requirements": [
         "test"
       ],
       "handoff": {
         "artifact_refs": [
-          "apps/api-gateway/test/memory-impact-service.test.ts",
-          "scripts/local-memory.test.mjs",
+          "apps/api-gateway/test/identity-auth-service.test.ts",
+          "apps/console/e2e/identity-administration.spec.ts",
+          "packages/contracts/test/identity-organization.test.ts",
           "scripts/schema-parity.test.mjs",
-          "packages/shared/test/memory-impact.test.ts",
-          "apps/api-gateway/test/retrieval-generation-service.test.ts"
+          "apps/console/Dockerfile",
+          "/Users/0300815938/projects/org-brain-enterprise/src/identity-integration.test.ts"
         ],
         "decision_refs": [
-          "docs/harness/implementation_plan.json"
+          "docs/harness/plan.json",
+          "docs/IDENTITY_ADMINISTRATION.md"
         ],
         "evidence": [
           {
-            "ref": "pnpm test: passed (Node 84 assertions, script 96, API 87, shared 28, cap-runner 23, org-router 2, all workspace suites); a subsequent API rerun also passed after one transient CORS timeout",
+            "ref": "OSS pnpm test passed: Node 86, scripts 96, contracts 9, Console 8, API Gateway 97, and all remaining workspace suites",
             "type": "test"
           },
           {
@@ -741,11 +751,19 @@
             "type": "test"
           },
           {
-            "ref": "pnpm typecheck: passed",
+            "ref": "pnpm -r --if-present typecheck passed",
             "type": "test"
           },
           {
-            "ref": "pnpm build: passed; all Astro and Wrangler dry-run builds completed after sandbox escalation",
+            "ref": "pnpm build passed; Cloudflare Astro and all Wrangler dry-run builds completed",
+            "type": "test"
+          },
+          {
+            "ref": "Console Playwright E2E passed 3/3; Node OCI built and /login returned HTTP 200",
+            "type": "test"
+          },
+          {
+            "ref": "Enterprise npm typecheck/test/build and Helm lint passed; PostgreSQL identity integration passed 1/1 as a non-superuser after applying migrations 0001 through 0006",
             "type": "test"
           },
           {
@@ -754,9 +772,9 @@
           }
         ],
         "residual_risks": [
-          "No production D1 migration or credentialed live smoke was run because deployment was not requested."
+          "No production migration, deployment, SMTP delivery, or live OIDC/Okta operation was run because external rollout was not requested."
         ],
-        "summary": "All manifest verification commands passed after the final fixes. Independent-review follow-ups added scope-specific active-assignment gates, failed-backfill reset enforcement, direct stable-backfill and FTS coverage, ranking-profile RRF application, idempotent late-rollup repair, NULL-project job uniqueness, superseding-attribution, hash-boundary, and stable-local-context coverage."
+        "summary": "All OSS and Enterprise manifest commands passed. Focused identity evidence also passed for OTP/privacy/isolation, Local SQLite parity, Console administration E2E, clean Node OCI build and HTTP smoke, all Enterprise PostgreSQL migrations, forced RLS with a non-superuser, SCIM/local coexistence, role mapping, and deprovision session revocation."
       },
       "id": "test",
       "input_refs": [
@@ -764,7 +782,7 @@
         "manifest commands",
         "acceptance criteria"
       ],
-      "input_sha256": "90168b47b41a214765b895b713d7fd0c85f3b44b40aef161a8f8ae8f99da703d",
+      "input_sha256": "a5a1946c6ffac16fb1b80b29b6853349d73efe32372be176f38f2b243f8f3ec9",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -774,7 +792,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "380526cc533403ea2e992a259b491f208aafd215615e8ba8edb2640fdab379e3",
+      "output_sha256": "f4304d68dcc1d0a76faeb11b1718f65dde088e6fbf2e5bace7fea8398424391b",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -799,10 +817,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "evidence-collector",
-      "started_at": "2026-08-07T04:07:12.464157+00:00",
+      "started_at": "2026-08-07T11:18:52.799905+00:00",
       "status": "completed",
       "title": "Run manifest-driven tests",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "@evidence/tests"
       ]
@@ -813,54 +831,54 @@
       ],
       "actor": "docs_owner",
       "attempt_count": 1,
-      "attempt_id": "2b4129134c2742a292326b766cc66c4d",
-      "claimed_by": "docs_owner",
-      "completed_at": "2026-08-07T04:07:13.164953+00:00",
+      "attempt_id": "a86af17129474c4ab0db4d2c8572c214",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-07T11:26:51.115566+00:00",
       "depends_on": [
         "implement"
       ],
       "evidence_refs": [
-        "docs/harness/docs_result.json"
+        "/Users/0300815938/projects/org-brain/docs/IDENTITY_ADMINISTRATION.md",
+        "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md"
       ],
       "evidence_requirements": [
         "document"
       ],
       "handoff": {
         "artifact_refs": [
-          "docs/SPEC.md",
-          "docs/SYSTEM_DESIGN.md",
-          "DESIGN.md",
-          "docs/STORAGE_BACKENDS.md",
-          "docs/THREAT_MODEL.md",
-          "docs/LOCAL_MIGRATION.md",
-          "docs/HYBRID_V4_IMPLEMENTATION.md",
-          "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+          "docs/IDENTITY_ADMINISTRATION.md",
+          "README.md",
+          "apps/api-gateway/.dev.vars.example",
+          "apps/console/.dev.vars.example",
+          "/Users/0300815938/projects/org-brain-enterprise/README.md",
+          "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md",
+          "/Users/0300815938/projects/org-brain-enterprise/.env.example"
         ],
         "decision_refs": [
           "docs/harness/plan.json",
-          "docs/harness/implementation_plan.json"
+          "docs/IDENTITY_ADMINISTRATION.md"
         ],
         "evidence": [
           {
-            "ref": "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md",
+            "ref": "docs/IDENTITY_ADMINISTRATION.md",
             "type": "document"
           },
           {
-            "ref": "docs/SPEC.md",
+            "ref": "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md",
             "type": "document"
           }
         ],
         "residual_risks": [
-          "The documented 47-table D1 and 31-table Local counts are post-compatibility cleanup targets; schema v18 intentionally keeps legacy projection tables."
+          "Release documentation must still provide real registry coordinates and provider-specific setup after packages and images are published."
         ],
-        "summary": "Updated governed specifications, system design, backend contract, threat model, local migration guide, and retrieval migration documentation for classification, stable generations, telemetry, reporting, and local outbox delivery."
+        "summary": "Documented identity and organization administration for OSS and Enterprise, including principal compatibility, profile privacy, OTP/session controls, OIDC JIT rules, local and SCIM group ownership, business categories, feature-flag bootstrap, Console runtime packaging, rollback, and live-rollout boundaries."
       },
       "id": "docs",
       "input_refs": [
         "implement",
         "governed docs"
       ],
-      "input_sha256": "e448d3a7bd26811d4743c5be1e51a1d6fd2c7da6d32a09289e92e52818497a2f",
+      "input_sha256": "d8b674d5f9624a5fe05fe7cfb615206ed0b3aaa4aa133305ccf716f722d345b0",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -870,7 +888,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "ee0de9f695ea0b5bd5982a7f991c00358e4821c6313c8185766971a6ac631aef",
+      "output_sha256": "5ca4de573221e47e73c0ce7ca98800f09b0da07a9e6a9ec093f45438c8642d61",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -893,10 +911,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "minimal-change-implementer",
-      "started_at": "2026-08-07T04:07:12.936623+00:00",
+      "started_at": "2026-08-07T11:18:52.854085+00:00",
       "status": "completed",
       "title": "Update governed docs when behavior changes",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "README.md",
         "docs/**"
@@ -908,24 +926,33 @@
       ],
       "actor": "reviewer",
       "attempt_count": 1,
-      "attempt_id": "a4c11a603c3f46d3946b066d4f41953e",
-      "claimed_by": "codex-independent-reviewer",
-      "completed_at": "2026-08-07T04:31:20.901014+00:00",
+      "attempt_id": "a57912d006fc4e338fb1c62318ab9afb",
+      "claimed_by": "primary",
+      "completed_at": "2026-08-07T11:34:01.767470+00:00",
       "depends_on": [
         "implement",
         "docs"
       ],
-      "evidence_refs": [],
+      "evidence_refs": [
+        "/Users/0300815938/projects/org-brain/docs/harness/test_result.json",
+        "/Users/0300815938/projects/org-brain/apps/api-gateway/src/email-auth-service.ts",
+        "/Users/0300815938/projects/org-brain-enterprise/src/server.ts"
+      ],
       "evidence_requirements": [
         "review"
       ],
       "handoff": {
         "artifact_refs": [
           "docs/harness/review.json",
-          "docs/harness/test_result.json"
+          "docs/harness/test_result.json",
+          "apps/api-gateway/src/email-auth-service.ts",
+          "apps/console/Dockerfile",
+          "/Users/0300815938/projects/org-brain-enterprise/src/server.ts",
+          "/Users/0300815938/projects/org-brain-enterprise/src/identity-service.ts"
         ],
         "decision_refs": [
-          "docs/harness/implementation_plan.json"
+          "docs/harness/plan.json",
+          "docs/IDENTITY_ADMINISTRATION.md"
         ],
         "evidence": [
           {
@@ -938,9 +965,9 @@
           }
         ],
         "residual_risks": [
-          "Production D1 migration, real-data backfill, shadow observation, assignment switch, and deployment were not run."
+          "Production migrations, package or OCI publication, deployment, real SMTP/OIDC, and live Okta SCIM were not run because they require external rollout authority and credentials."
         ],
-        "summary": "Independent reviewer and verifier passed the final diff with no remaining blocking findings."
+        "summary": "Final diff review found and fixed three release-blocking gaps: OTP delivery failures leaked whether a user was eligible, D1 OTP consumption was not atomic under concurrent verification, and the Node Console OCI could not build cleanly. Review also completed Enterprise session Origin fail-closed behavior, SCIM single-resource/filter/paging support, and immediate source-scoped role mapping. No blocking findings remain in the reviewed local diff."
       },
       "id": "review",
       "input_refs": [
@@ -948,7 +975,7 @@
         "docs",
         "acceptance criteria"
       ],
-      "input_sha256": "7f681ed8ebd3019b7858f772c8698c9dd918f641f29db92a35f2bbe490e1c19e",
+      "input_sha256": "347b02043f5c6d983610d1ae6afb8ca3cff7b9ffd7933f52c312ef4404524a73",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -958,7 +985,7 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "5fd945bf7e092209d3c51455b37baf7324160c6570cecb889f8d2f6a823a2d55",
+      "output_sha256": "945f376fedf7027bf7e61f205d0aa51f5012f5870813f8e6f576ba7e29c991e9",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -984,10 +1011,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "code-reviewer",
-      "started_at": "2026-08-07T04:31:20.650155+00:00",
+      "started_at": "2026-08-07T11:33:45.330050+00:00",
       "status": "completed",
       "title": "Review the final implementation and governed docs",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "docs/harness/review.json"
       ]
@@ -998,16 +1025,19 @@
       ],
       "actor": "primary",
       "attempt_count": 1,
-      "attempt_id": "635909bb66b54a58a89c5f03b6a8927a",
+      "attempt_id": "1f857368ac98467c8dadb9f13cf758c7",
       "claimed_by": "primary",
-      "completed_at": "2026-08-07T04:31:29.245315+00:00",
+      "completed_at": "2026-08-07T11:55:07.275405+00:00",
       "decision_scope": "final_gate",
       "depends_on": [
         "test",
         "docs",
         "review"
       ],
-      "evidence_refs": [],
+      "evidence_refs": [
+        "/Users/0300815938/projects/org-brain/docs/harness/gate.json",
+        "/Users/0300815938/projects/org-brain/docs/harness/review.json"
+      ],
       "evidence_requirements": [
         "review",
         "test"
@@ -1044,7 +1074,7 @@
         "review",
         "gate policy"
       ],
-      "input_sha256": "1f3a9c6d9b8591efef882a41acbbb9516024ab51a2fefc2364cb1a57aa453c91",
+      "input_sha256": "655e2a7453a69f0f127fa6204e2d78ea2a3e9c18d05198b8cb16fc52e3a91cc7",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -1077,10 +1107,10 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "readiness-verifier",
-      "started_at": "2026-08-07T04:31:28.982656+00:00",
+      "started_at": "2026-08-07T11:34:11.572800+00:00",
       "status": "completed",
       "title": "Compute final quality score",
-      "trace_id": "org-brain-20260807T011318.571987Z-eca7a303",
+      "trace_id": "org-brain-20260807T101724.031229Z-7eb68edb",
       "write_set": [
         "docs/harness/gate.json",
         "docs/harness/quality_score.json"

@@ -23,6 +23,11 @@ export type Env = {
   OIDC_AUD?: string;
   OIDC_JWKS_JSON?: string;
   OIDC_TENANT_POLICY_JSON?: string;
+  EMAIL_AUTH_ENABLED?: "true" | "false";
+  EMAIL_AUTH_PEPPER?: string;
+  EMAIL_WEBHOOK_URL?: string;
+  EMAIL_WEBHOOK_SECRET?: string;
+  SESSION_ALLOWED_ORIGIN?: string;
   MCP_TENANT_POLICY_JSON?: string;
   MCP_ACCESS_AUD?: string;
   MCP_SERVICE_TOKENS_JSON?: string;

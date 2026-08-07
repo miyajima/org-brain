@@ -14,6 +14,8 @@ type GroupRow = {
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
+  source: "local" | "scim";
+  external_id: string | null;
   role?: GroupRole | null;
 };
 
@@ -22,6 +24,7 @@ type MemberRow = {
   role: GroupRole;
   created_at: number;
   updated_at: number;
+  source: "local" | "scim";
 };
 
 function parseString(value: unknown, field: string, maxLength = 256): string {
@@ -60,6 +63,8 @@ function toGroup(row: GroupRow) {
     slug: row.slug,
     name: row.name,
     description: row.description,
+    source: row.source,
+    external_id: row.external_id,
     created_by_principal: row.created_by_principal,
     role: row.role ?? null,
     created_at: row.created_at,
@@ -69,7 +74,7 @@ function toGroup(row: GroupRow) {
 
 async function getGroupRow(env: Env, tenantId: string, groupId: string): Promise<GroupRow> {
   const row = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, slug, name, description, created_by_principal, created_at, updated_at, deleted_at
+    `SELECT id, tenant_id, slug, name, description, created_by_principal, created_at, updated_at, deleted_at, source, external_id
      FROM groups
      WHERE tenant_id = ? AND id = ? AND deleted_at IS NULL`
   )
@@ -81,7 +86,7 @@ async function getGroupRow(env: Env, tenantId: string, groupId: string): Promise
 
 async function getMembership(env: Env, tenantId: string, groupId: string, principal: string): Promise<MemberRow | null> {
   return env.OPEN_BRAIN_DB.prepare(
-    `SELECT principal, role, created_at, updated_at
+    `SELECT principal, role, created_at, updated_at, source
      FROM group_members
      WHERE tenant_id = ? AND group_id = ? AND principal = ?`
   )
@@ -89,17 +94,26 @@ async function getMembership(env: Env, tenantId: string, groupId: string, princi
     .first<MemberRow>();
 }
 
-async function assertGroupAdmin(env: Env, tenantId: string, groupId: string, principal: string): Promise<void> {
+async function assertGroupAdmin(env: Env, tenantId: string, groupId: string, principal: string, tenantAdmin = false): Promise<void> {
+  const group = await getGroupRow(env, tenantId, groupId);
+  if (group.source === "scim") throw new HttpError(409, "scim_managed", "SCIM groups are read-only");
+  if (tenantAdmin) return;
   const membership = await getMembership(env, tenantId, groupId, principal);
   if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
     throw new HttpError(403, "forbidden", "Group admin role is required");
   }
 }
 
-export async function listGroups(env: Env, tenantId: string, principal: string) {
-  const rows = await env.OPEN_BRAIN_DB.prepare(
+export async function listGroups(env: Env, tenantId: string, principal: string, includeAll = false) {
+  const rows = await env.OPEN_BRAIN_DB.prepare(includeAll
+    ? `SELECT g.id, g.tenant_id, g.slug, g.name, g.description, g.created_by_principal,
+              g.created_at, g.updated_at, g.deleted_at, g.source, g.external_id, gm.role
+       FROM groups g
+       LEFT JOIN group_members gm ON gm.tenant_id=g.tenant_id AND gm.group_id=g.id AND gm.principal=?
+       WHERE g.tenant_id=? AND g.deleted_at IS NULL ORDER BY g.updated_at DESC`
+    :
     `SELECT g.id, g.tenant_id, g.slug, g.name, g.description, g.created_by_principal,
-            g.created_at, g.updated_at, g.deleted_at, gm.role
+            g.created_at, g.updated_at, g.deleted_at, g.source, g.external_id, gm.role
      FROM groups g
      JOIN group_members gm
        ON gm.tenant_id = g.tenant_id
@@ -109,7 +123,7 @@ export async function listGroups(env: Env, tenantId: string, principal: string) 
        AND g.deleted_at IS NULL
      ORDER BY g.updated_at DESC`
   )
-    .bind(tenantId, principal)
+    .bind(includeAll ? principal : tenantId, includeAll ? tenantId : principal)
     .all<GroupRow>();
   return { tenant_id: tenantId, groups: rows.results.map(toGroup) };
 }
@@ -133,26 +147,26 @@ export async function createGroup(env: Env, tenantId: string, principal: string,
        VALUES(?,?,?,?,?,?)`
     ).bind(tenantId, id, principal, "owner", now, now)
   ]);
-  return { group: toGroup({ id, tenant_id: tenantId, slug, name, description, created_by_principal: principal, created_at: now, updated_at: now, deleted_at: null, role: "owner" }) };
+  return { group: toGroup({ id, tenant_id: tenantId, slug, name, description, created_by_principal: principal, created_at: now, updated_at: now, deleted_at: null, source: "local", external_id: null, role: "owner" }) };
 }
 
-export async function getGroup(env: Env, tenantId: string, groupId: string, principal: string) {
+export async function getGroup(env: Env, tenantId: string, groupId: string, principal: string, tenantAdmin = false) {
   const row = await getGroupRow(env, tenantId, groupId);
   const membership = await getMembership(env, tenantId, groupId, principal);
-  if (!membership) throw new HttpError(403, "forbidden", "Group membership is required");
+  if (!membership && !tenantAdmin) throw new HttpError(403, "forbidden", "Group membership is required");
   const members = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT principal, role, created_at, updated_at
+    `SELECT principal, role, created_at, updated_at, source
      FROM group_members
      WHERE tenant_id = ? AND group_id = ?
      ORDER BY role, principal`
   )
     .bind(tenantId, groupId)
     .all<MemberRow>();
-  return { group: toGroup({ ...row, role: membership.role }), members: members.results };
+  return { group: toGroup({ ...row, role: membership?.role ?? null }), members: members.results };
 }
 
-export async function updateGroup(env: Env, tenantId: string, groupId: string, principal: string, rawBody: unknown) {
-  await assertGroupAdmin(env, tenantId, groupId, principal);
+export async function updateGroup(env: Env, tenantId: string, groupId: string, principal: string, rawBody: unknown, tenantAdmin = false) {
+  await assertGroupAdmin(env, tenantId, groupId, principal, tenantAdmin);
   const current = await getGroupRow(env, tenantId, groupId);
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as Record<string, unknown>;
@@ -170,8 +184,8 @@ export async function updateGroup(env: Env, tenantId: string, groupId: string, p
   return { group: toGroup({ ...current, slug, name, description, updated_at: now }) };
 }
 
-export async function addGroupMember(env: Env, tenantId: string, groupId: string, principal: string, rawBody: unknown) {
-  await assertGroupAdmin(env, tenantId, groupId, principal);
+export async function addGroupMember(env: Env, tenantId: string, groupId: string, principal: string, rawBody: unknown, tenantAdmin = false) {
+  await assertGroupAdmin(env, tenantId, groupId, principal, tenantAdmin);
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as Record<string, unknown>;
   const memberPrincipal = parseString(body.principal, "principal", 128);
@@ -184,11 +198,11 @@ export async function addGroupMember(env: Env, tenantId: string, groupId: string
   )
     .bind(tenantId, groupId, memberPrincipal, role, now, now)
     .run();
-  return getGroup(env, tenantId, groupId, principal);
+  return getGroup(env, tenantId, groupId, principal, tenantAdmin);
 }
 
-export async function removeGroupMember(env: Env, tenantId: string, groupId: string, principal: string, memberPrincipal: string) {
-  await assertGroupAdmin(env, tenantId, groupId, principal);
+export async function removeGroupMember(env: Env, tenantId: string, groupId: string, principal: string, memberPrincipal: string, tenantAdmin = false) {
+  await assertGroupAdmin(env, tenantId, groupId, principal, tenantAdmin);
   const membership = await getMembership(env, tenantId, groupId, memberPrincipal);
   if (membership?.role === "owner" && memberPrincipal === principal) {
     throw new HttpError(400, "invalid_payload", "Group owner cannot remove themselves");
@@ -198,5 +212,14 @@ export async function removeGroupMember(env: Env, tenantId: string, groupId: str
   )
     .bind(tenantId, groupId, memberPrincipal)
     .run();
-  return getGroup(env, tenantId, groupId, principal);
+  return getGroup(env, tenantId, groupId, principal, tenantAdmin);
+}
+
+export async function archiveGroup(env: Env, tenantId: string, groupId: string, principal: string, tenantAdmin = false) {
+  await assertGroupAdmin(env, tenantId, groupId, principal, tenantAdmin);
+  const now = Date.now();
+  await env.OPEN_BRAIN_DB.prepare(
+    "UPDATE groups SET deleted_at = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND deleted_at IS NULL"
+  ).bind(now, now, tenantId, groupId).run();
+  return { archived: true, group_id: groupId };
 }

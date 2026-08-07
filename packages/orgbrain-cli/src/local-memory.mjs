@@ -25,6 +25,17 @@ Usage:
   orgbrain category list [--tenant-id <id>] [--include-inactive]
   orgbrain category create --slug <slug> --label <label> [--description <text>]
   orgbrain category update <category-id> [--slug <slug>] [--label <label>] [--active true|false]
+  orgbrain profile show [--principal <principal>]
+  orgbrain profile set --display-name <name> [--full-name <name>] [--email <email>] [--avatar-url <url>]
+  orgbrain organization show
+  orgbrain organization set [--slug <slug>] [--display-name <name>] [--allowed-email-domains <a,b>] [--self-registration true|false]
+  orgbrain user list
+  orgbrain user create --email <email> --display-name <name> [--full-name <name>] [--role <role>]
+  orgbrain user update <principal> [--display-name <name>] [--full-name <name>] [--status <status>]
+  orgbrain group list
+  orgbrain group create --name <name> [--slug <slug>] [--description <text>]
+  orgbrain group add-member <group-id> --principal <principal> [--role owner|admin|member]
+  orgbrain group archive <group-id>
   orgbrain usage record [json-payload]
   orgbrain usage state [json-payload]
   orgbrain effect record [json-payload]
@@ -332,6 +343,64 @@ async function handleCategory(store, action, rest, args) {
   throw new Error(`unknown category command: ${action || "(missing)"}`);
 }
 
+async function handleDirectory(store, command, action, rest, args) {
+  const tenantId = args.get("--tenant-id", "default");
+  const localPrincipal = args.get("--principal", `user:${process.env.USER || "local"}`);
+  if (command === "profile") {
+    if (action === "show") emit(await store.getProfile(tenantId, localPrincipal));
+    else if (action === "set") emit(await store.updateProfile(tenantId, localPrincipal, {
+      display_name: args.get("--display-name"), full_name: args.get("--full-name"),
+      email: args.get("--email"), avatar_url: args.get("--avatar-url")
+    }));
+    else throw new Error(`unknown profile command: ${action || "(missing)"}`);
+    return;
+  }
+  if (command === "organization") {
+    if (action === "show") emit(await store.getOrganization(tenantId));
+    else if (action === "set") emit(await store.updateOrganization(tenantId, {
+      slug: args.get("--slug"), display_name: args.get("--display-name"),
+      ...(args.get("--allowed-email-domains") !== undefined ? {
+        allowed_email_domains: args.get("--allowed-email-domains").split(",").map((value) => value.trim()).filter(Boolean)
+      } : {}),
+      ...(args.get("--self-registration") !== undefined ? {
+        email_self_registration_enabled: ["true", "1"].includes(args.get("--self-registration"))
+      } : {})
+    }));
+    else throw new Error(`unknown organization command: ${action || "(missing)"}`);
+    return;
+  }
+  if (command === "user") {
+    if (action === "list") emit(await store.listUsers(tenantId));
+    else if (action === "create") emit(await store.createUser(tenantId, {
+      email: args.get("--email"), display_name: args.get("--display-name"),
+      full_name: args.get("--full-name"), role: args.get("--role")
+    }, localPrincipal));
+    else if (action === "update") {
+      const principal = rest[0];
+      if (!principal) throw new Error("user update requires <principal>");
+      emit(await store.updateUser(tenantId, principal, {
+        display_name: args.get("--display-name"), full_name: args.get("--full-name"), status: args.get("--status")
+      }));
+    } else throw new Error(`unknown user command: ${action || "(missing)"}`);
+    return;
+  }
+  if (command === "group") {
+    if (action === "list") emit(await store.listGroups(tenantId));
+    else if (action === "create") emit(await store.createGroup(tenantId, {
+      name: args.get("--name"), slug: args.get("--slug"), description: args.get("--description")
+    }, localPrincipal));
+    else if (action === "add-member") {
+      const groupId = rest[0];
+      if (!groupId || !args.get("--principal")) throw new Error("group add-member requires <group-id> and --principal");
+      emit(await store.addGroupMember(tenantId, groupId, args.get("--principal"), args.get("--role", "member")));
+    } else if (action === "archive") {
+      const groupId = rest[0];
+      if (!groupId) throw new Error("group archive requires <group-id>");
+      emit(await store.archiveGroup(tenantId, groupId));
+    } else throw new Error(`unknown group command: ${action || "(missing)"}`);
+  }
+}
+
 async function readStructuredPayload(args, rest = []) {
   const raw = rest.join(" ").trim() || await readStdin();
   const payload = raw ? JSON.parse(raw) : {};
@@ -410,6 +479,27 @@ async function serve(store, args) {
         const categoryId = decodeURIComponent(path.slice("/v1/business-categories/".length));
         const body = await readRequestBody(request);
         sendJson(response, 200, await store.updateBusinessCategory(body.tenant_id || tenantId, categoryId, body));
+      } else if (request.method === "GET" && path === "/v1/auth/me") {
+        const principal = requestUrl.searchParams.get("principal") || "user:local";
+        sendJson(response, 200, { tenant_id: tenantId, profile: await store.getProfile(tenantId, principal) });
+      } else if (request.method === "PUT" && path === "/v1/auth/me/profile") {
+        const body = await readRequestBody(request);
+        sendJson(response, 200, await store.updateProfile(body.tenant_id || tenantId, body.principal || "user:local", body));
+      } else if (request.method === "GET" && path === "/v1/organization") {
+        sendJson(response, 200, await store.getOrganization(tenantId));
+      } else if (request.method === "PATCH" && path === "/v1/organization") {
+        const body = await readRequestBody(request);
+        sendJson(response, 200, await store.updateOrganization(body.tenant_id || tenantId, body));
+      } else if (request.method === "GET" && path === "/v1/users") {
+        sendJson(response, 200, { users: await store.listUsers(tenantId) });
+      } else if (request.method === "POST" && path === "/v1/users") {
+        const body = await readRequestBody(request);
+        sendJson(response, 201, await store.createUser(body.tenant_id || tenantId, body));
+      } else if (request.method === "GET" && path === "/v1/groups") {
+        sendJson(response, 200, { groups: await store.listGroups(tenantId) });
+      } else if (request.method === "POST" && path === "/v1/groups") {
+        const body = await readRequestBody(request);
+        sendJson(response, 201, await store.createGroup(body.tenant_id || tenantId, body));
       } else if (request.method === "POST" && path === "/v1/memory-usage") {
         sendJson(response, 201, await store.recordUsage(await readRequestBody(request)));
       } else if (request.method === "POST" && path === "/v1/memory-effects") {
@@ -506,6 +596,8 @@ async function main() {
     await handleMemory(store, action, rest, args);
   } else if (command === "category") {
     await handleCategory(store, action, rest, args);
+  } else if (["profile", "organization", "user", "group"].includes(command)) {
+    await handleDirectory(store, command, action, rest, args);
   } else if (command === "usage" && action === "record") {
     emit(await store.recordUsage(await readStructuredPayload(args, rest)));
   } else if (command === "usage" && action === "state") {

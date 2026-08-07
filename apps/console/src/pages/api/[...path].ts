@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-import { env as cloudflareEnv } from "cloudflare:workers";
 import {
   AccessJwtError,
   accessJwtRequired,
@@ -11,19 +10,28 @@ type ConsoleWorkerEnv = ConsoleAccessEnv & {
   API?: Fetcher;
   INTERNAL_API_KEY?: string;
   API_BASE_URL?: string;
+  SESSION_ONLY_API?: string;
 };
 
 type ProcessLike = {
   env?: Record<string, string | undefined>;
 };
 
-function getRuntimeEnv(): ConsoleWorkerEnv {
+async function getRuntimeEnv(): Promise<ConsoleWorkerEnv> {
   const processEnv = (globalThis as typeof globalThis & { process?: ProcessLike }).process?.env ?? {};
-  const runtimeEnv = cloudflareEnv as unknown as ConsoleWorkerEnv;
+  let runtimeEnv: ConsoleWorkerEnv = {};
+  if (!processEnv.API_BASE_URL && !processEnv.INTERNAL_API_KEY && processEnv.SESSION_ONLY_API !== "true") {
+    try {
+      runtimeEnv = (await import("cloudflare:workers")).env as unknown as ConsoleWorkerEnv;
+    } catch {
+      runtimeEnv = {};
+    }
+  }
   return {
     API: runtimeEnv.API,
     INTERNAL_API_KEY: runtimeEnv.INTERNAL_API_KEY ?? processEnv.INTERNAL_API_KEY,
     API_BASE_URL: runtimeEnv.API_BASE_URL ?? processEnv.API_BASE_URL,
+    SESSION_ONLY_API: runtimeEnv.SESSION_ONLY_API ?? processEnv.SESSION_ONLY_API,
     ACCESS_TEAM_DOMAIN: runtimeEnv.ACCESS_TEAM_DOMAIN ?? processEnv.ACCESS_TEAM_DOMAIN,
     ACCESS_AUD: runtimeEnv.ACCESS_AUD ?? processEnv.ACCESS_AUD,
     ACCESS_JWKS_JSON: runtimeEnv.ACCESS_JWKS_JSON ?? processEnv.ACCESS_JWKS_JSON,
@@ -56,7 +64,7 @@ function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string):
 }
 
 export const ALL: APIRoute = async ({ params, request }) => {
-  const runtimeEnv = getRuntimeEnv();
+  const runtimeEnv = await getRuntimeEnv();
   if (accessJwtRequired(runtimeEnv)) {
     const accessJwt = request.headers.get("cf-access-jwt-assertion")?.trim();
     if (!accessJwt) return jsonError(401, "unauthorized", "Missing Cloudflare Access JWT");
@@ -70,8 +78,8 @@ export const ALL: APIRoute = async ({ params, request }) => {
     }
   }
   const apiBaseUrl = typeof runtimeEnv?.API_BASE_URL === "string" ? runtimeEnv.API_BASE_URL.trim() : "";
-  if ((!runtimeEnv?.API && !apiBaseUrl) || !runtimeEnv?.INTERNAL_API_KEY) {
-    return jsonError(500, "misconfigured", "Missing API binding/API_BASE_URL or INTERNAL_API_KEY");
+  if ((!runtimeEnv?.API && !apiBaseUrl) || (!runtimeEnv?.INTERNAL_API_KEY && runtimeEnv.SESSION_ONLY_API !== "true")) {
+    return jsonError(500, "misconfigured", "Missing API binding/API_BASE_URL or API authentication mode");
   }
 
   const path = params.path ?? "";
@@ -79,7 +87,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
   targetUrl.search = new URL(request.url).search;
 
   const headers = stripHeaders(request.headers);
-  headers.set("x-api-key", runtimeEnv.INTERNAL_API_KEY);
+  if (runtimeEnv.INTERNAL_API_KEY) headers.set("x-api-key", runtimeEnv.INTERNAL_API_KEY);
 
   const init = {
     method: request.method,

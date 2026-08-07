@@ -1,12 +1,13 @@
 {
-  "summary": "Keep one implementation owner because migrations, shared contracts, Cloud services, Local storage, MCP, and documentation overlap. Execute in four ordered slices: schema/types, Cloud APIs, Local parity/tooling, then tests/docs/rollout review.",
+  "summary": "Keep one implementation owner because shared contracts, tenant role semantics, privacy rules, migrations, Console routes, and cross-repository API parity overlap. Execute ordered slices for contracts and schemas, OSS API/Console/CLI, Enterprise API/RLS/SCIM/Helm, then tests, documentation, and review.",
   "artifact_refs": [
     "docs/harness/tasks.json",
     "docs/harness/implementation_plan.json"
   ],
   "decision_refs": [
     "single writer for all repository changes",
-    "legacy retrieval projections remain read-compatible during migration"
+    "Enterprise consumes the versioned OSS Console and contract packages rather than copied source",
+    "validation may run independently only after implementation converges"
   ],
   "evidence": [
     {
@@ -15,6 +16,6 @@
     }
   ],
   "residual_risks": [
-    "The single implementation task is large but avoids conflicting schema and API edits."
+    "The single implementation task is large but avoids cross-repository contract drift and conflicting schema edits."
   ]
 }

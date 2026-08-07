@@ -1,30 +1,29 @@
 {
-  "summary": "Updated governed specifications, system design, backend contract, threat model, local migration guide, and retrieval migration documentation for classification, stable generations, telemetry, reporting, and local outbox delivery.",
+  "summary": "Documented identity and organization administration for OSS and Enterprise, including principal compatibility, profile privacy, OTP/session controls, OIDC JIT rules, local and SCIM group ownership, business categories, feature-flag bootstrap, Console runtime packaging, rollback, and live-rollout boundaries.",
   "artifact_refs": [
-    "docs/SPEC.md",
-    "docs/SYSTEM_DESIGN.md",
-    "DESIGN.md",
-    "docs/STORAGE_BACKENDS.md",
-    "docs/THREAT_MODEL.md",
-    "docs/LOCAL_MIGRATION.md",
-    "docs/HYBRID_V4_IMPLEMENTATION.md",
-    "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+    "docs/IDENTITY_ADMINISTRATION.md",
+    "README.md",
+    "apps/api-gateway/.dev.vars.example",
+    "apps/console/.dev.vars.example",
+    "/Users/0300815938/projects/org-brain-enterprise/README.md",
+    "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md",
+    "/Users/0300815938/projects/org-brain-enterprise/.env.example"
   ],
   "decision_refs": [
     "docs/harness/plan.json",
-    "docs/harness/implementation_plan.json"
+    "docs/IDENTITY_ADMINISTRATION.md"
   ],
   "evidence": [
     {
       "type": "document",
-      "ref": "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+      "ref": "docs/IDENTITY_ADMINISTRATION.md"
     },
     {
       "type": "document",
-      "ref": "docs/SPEC.md"
+      "ref": "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md"
     }
   ],
   "residual_risks": [
-    "The documented 47-table D1 and 31-table Local counts are post-compatibility cleanup targets; schema v18 intentionally keeps legacy projection tables."
+    "Release documentation must still provide real registry coordinates and provider-specific setup after packages and images are published."
   ]
 }

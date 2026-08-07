@@ -1,11 +1,11 @@
 {
-  "summary": "The repository has Vitest API suites, Node Local SQLite suites, schema parity tests, retrieval benchmark suites, and manifest-backed typecheck, test, lint, and build commands.",
+  "summary": "Verification covers shared contracts, 97 API tests including OTP/privacy/isolation, Local SQLite schema parity and CLI smoke, Node Console type/build plus Playwright identity E2E, Enterprise type/test/build/Helm, full migrations, forced-RLS hostile probes, and a non-superuser PostgreSQL identity integration test.",
   "artifact_refs": [
-    "apps/api-gateway/test/memory-service.test.ts",
-    "apps/api-gateway/test/context-engine-service.test.ts",
-    "apps/api-gateway/test/mcp-tools.test.ts",
-    "scripts/local-memory.test.mjs",
-    "scripts/schema-parity.test.mjs"
+    "packages/contracts/test/identity-organization.test.ts",
+    "apps/api-gateway/test/identity-auth-service.test.ts",
+    "apps/console/e2e/identity-administration.spec.ts",
+    "scripts/schema-parity.test.mjs",
+    "/Users/0300815938/projects/org-brain-enterprise/src/identity-integration.test.ts"
   ],
   "decision_refs": [
     "docs/harness/plan.json"
@@ -17,7 +17,7 @@
     }
   ],
   "residual_risks": [
-    "Production shadow duration and traffic thresholds cannot be proven by local tests.",
-    "No production D1 mutation or Cloudflare deployment is authorized."
+    "No production D1/PostgreSQL mutation, deployment, registry publication, SMTP delivery, or real IdP SCIM call is authorized.",
+    "OIDC cryptographic verification and SCIM behavior are automated locally; live Okta evidence remains a rollout action."
   ]
 }

@@ -7,10 +7,15 @@ type ProfileRow = {
   tenant_id: string;
   principal: string;
   display_name: string | null;
+  full_name: string | null;
   email: string | null;
   company_name: string | null;
   organization_name: string | null;
   avatar_url: string | null;
+  status: "invited" | "active" | "suspended" | "deprovisioned";
+  provision_source: "email" | "oidc" | "scim" | "legacy";
+  full_name_source: "email" | "oidc" | "scim" | "legacy";
+  email_verified: number;
   created_at: number;
   updated_at: number;
 };
@@ -27,10 +32,15 @@ function toProfile(row: ProfileRow | null, tenantId: string, auth: ApiAuthContex
     tenant_id: tenantId,
     principal: auth.principal,
     display_name: row?.display_name ?? auth.displayName ?? null,
+    full_name: row?.full_name ?? null,
     email: row?.email ?? auth.email ?? null,
     company_name: row?.company_name ?? null,
     organization_name: row?.organization_name ?? null,
     avatar_url: row?.avatar_url ?? null,
+    status: row?.status ?? "active",
+    provision_source: row?.provision_source ?? "legacy",
+    full_name_source: row?.full_name_source ?? "legacy",
+    email_verified: Boolean(row?.email_verified),
     created_at: row?.created_at ?? null,
     updated_at: row?.updated_at ?? null
   };
@@ -38,7 +48,8 @@ function toProfile(row: ProfileRow | null, tenantId: string, auth: ApiAuthContex
 
 export async function getUserProfile(env: Env, tenantId: string, auth: ApiAuthContext) {
   const row = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT tenant_id, principal, display_name, email, company_name, organization_name, avatar_url, created_at, updated_at
+    `SELECT tenant_id, principal, display_name, full_name, email, email_verified, company_name, organization_name, avatar_url,
+            status, provision_source, full_name_source, created_at, updated_at
      FROM user_profiles
      WHERE tenant_id = ? AND principal = ?`
   )
@@ -54,18 +65,27 @@ export async function updateUserProfile(env: Env, tenantId: string, auth: ApiAut
   const now = Date.now();
   const profile = {
     display_name: body.display_name === undefined ? current.display_name : parseOptionalString(body.display_name, "display_name", 120),
+    full_name: body.full_name === undefined ? current.full_name : parseOptionalString(body.full_name, "full_name", 200),
     email: body.email === undefined ? current.email : parseOptionalString(body.email, "email", 200),
     company_name: body.company_name === undefined ? current.company_name : parseOptionalString(body.company_name, "company_name", 160),
     organization_name: body.organization_name === undefined ? current.organization_name : parseOptionalString(body.organization_name, "organization_name", 160),
     avatar_url: body.avatar_url === undefined ? current.avatar_url : parseOptionalString(body.avatar_url, "avatar_url", 500)
   };
+  if (!profile.display_name) throw new HttpError(400, "display_name_required", "display_name is required");
+  if (current.full_name_source === "scim" && body.full_name !== undefined && profile.full_name !== current.full_name) {
+    throw new HttpError(409, "scim_managed_field", "full_name is managed by SCIM");
+  }
+  const emailVerified = profile.email === current.email ? current.email_verified : false;
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO user_profiles(
-       tenant_id, principal, display_name, email, company_name, organization_name, avatar_url, created_at, updated_at
-     ) VALUES(?,?,?,?,?,?,?,?,?)
+       tenant_id, principal, display_name, full_name, email, email_verified, company_name, organization_name, avatar_url,
+       status, provision_source, full_name_source, created_at, updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,'active','legacy','legacy',?,?)
      ON CONFLICT(tenant_id, principal) DO UPDATE SET
        display_name = excluded.display_name,
+       full_name = excluded.full_name,
        email = excluded.email,
+       email_verified = excluded.email_verified,
        company_name = excluded.company_name,
        organization_name = excluded.organization_name,
        avatar_url = excluded.avatar_url,
@@ -75,7 +95,9 @@ export async function updateUserProfile(env: Env, tenantId: string, auth: ApiAut
       tenantId,
       auth.principal,
       profile.display_name,
+      profile.full_name,
       profile.email,
+      emailVerified ? 1 : 0,
       profile.company_name,
       profile.organization_name,
       profile.avatar_url,

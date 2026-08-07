@@ -2,6 +2,78 @@ import { z } from "zod";
 
 export const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
 
+export const IDENTITY_CONTRACT_VERSION = "identity/v1" as const;
+export const USER_STATUSES = ["invited", "active", "suspended", "deprovisioned"] as const;
+export const USER_PROVISION_SOURCES = ["email", "oidc", "scim", "legacy"] as const;
+export const GROUP_SOURCES = ["local", "scim"] as const;
+export const BUSINESS_WORK_TYPES = [
+  "implementation",
+  "review",
+  "debug",
+  "proposal",
+  "support",
+  "research",
+  "operations",
+  "other"
+] as const;
+
+export type UserStatus = (typeof USER_STATUSES)[number];
+export type UserProvisionSource = (typeof USER_PROVISION_SOURCES)[number];
+export type GroupSource = (typeof GROUP_SOURCES)[number];
+export type BusinessWorkType = (typeof BUSINESS_WORK_TYPES)[number];
+
+const principalSchema = z.string().trim().min(1).max(128);
+const emailSchema = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
+
+export const userSummarySchema = z.object({
+  principal: principalSchema,
+  display_name: z.string().trim().min(1).max(120),
+  avatar_url: z.string().url().max(500).nullable().default(null),
+  status: z.enum(USER_STATUSES)
+});
+
+export const userPrivateProfileSchema = userSummarySchema.extend({
+  tenant_id: z.string().trim().min(1).max(128),
+  full_name: z.string().trim().min(1).max(200).nullable().default(null),
+  email: emailSchema.nullable().default(null),
+  email_verified: z.boolean().default(false),
+  provision_source: z.enum(USER_PROVISION_SOURCES),
+  full_name_source: z.enum(USER_PROVISION_SOURCES),
+  created_at: z.number().int().nonnegative().nullable(),
+  updated_at: z.number().int().nonnegative().nullable()
+});
+
+export const organizationSchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128),
+  slug: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/u),
+  display_name: z.string().trim().min(1).max(160),
+  allowed_email_domains: z.array(z.string().trim().toLowerCase().max(253)).max(50).default([]),
+  email_self_registration_enabled: z.boolean().default(false)
+});
+
+export const businessCategorySchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  tenant_id: z.string().trim().min(1).max(128),
+  slug: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/u),
+  label: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(1000).nullable().default(null),
+  is_active: z.boolean().default(true),
+  created_at: z.number().int().nonnegative(),
+  updated_at: z.number().int().nonnegative()
+});
+
+export const scimRoleMappingSchema = z.object({
+  group_id: z.string().trim().min(1).max(128),
+  role: z.enum(["tenant_admin", "project_owner", "contributor", "reader", "service_agent", "auditor"]),
+  project_id: z.string().trim().min(1).max(128).nullable().default(null)
+});
+
+export type UserSummary = z.infer<typeof userSummarySchema>;
+export type UserPrivateProfile = z.infer<typeof userPrivateProfileSchema>;
+export type Organization = z.infer<typeof organizationSchema>;
+export type BusinessCategory = z.infer<typeof businessCategorySchema>;
+export type ScimRoleMapping = z.infer<typeof scimRoleMappingSchema>;
+
 export const MEMORY_IMPACT_EVENT_TYPES = ["eligible", "assessed", "failed"] as const;
 export const AVOIDED_LOOKUP_TYPES = ["source_search", "web_search", "past_context", "none"] as const;
 export const MEMORY_IMPACT_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;

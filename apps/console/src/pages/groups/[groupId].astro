@@ -1,0 +1,87 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const groupId = Astro.params.groupId ?? "";
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+  ...init,
+  headers: { cookie, ...(init.headers ?? {}) }
+});
+let message = "";
+let error = "";
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = String(form.get("action") ?? "member");
+  const csrf = String(form.get("csrf_token") ?? "");
+  let path = `/api/v1/groups/${encodeURIComponent(groupId)}/members`;
+  let method = "POST";
+  let body: string | undefined = JSON.stringify({
+    tenant_id: tenantId,
+    principal: String(form.get("principal") ?? ""),
+    role: String(form.get("role") ?? "member")
+  });
+  if (action === "remove") {
+    path += `/${encodeURIComponent(String(form.get("principal") ?? ""))}?tenant_id=${encodeURIComponent(tenantId)}`;
+    method = "DELETE";
+    body = undefined;
+  } else if (action === "archive") {
+    path = `/api/v1/groups/${encodeURIComponent(groupId)}?tenant_id=${encodeURIComponent(tenantId)}`;
+    method = "DELETE";
+    body = undefined;
+  }
+  const response = await api(path, {
+    method,
+    headers: { "content-type": "application/json", "x-csrf-token": csrf },
+    body
+  });
+  if (response.ok) message = action === "archive" ? "Archived" : "Membership updated";
+  else {
+    const failure = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+    error = failure?.error?.message ?? "Group could not be updated";
+  }
+}
+
+const [groupResponse, directoryResponse] = await Promise.all([
+  api(`/api/v1/groups/${encodeURIComponent(groupId)}?tenant_id=${encodeURIComponent(tenantId)}`),
+  api(`/api/v1/directory?tenant_id=${encodeURIComponent(tenantId)}`)
+]);
+const groupPayload: any = await groupResponse.json().catch(() => null);
+const directoryPayload: any = await directoryResponse.json().catch(() => null);
+const group = groupPayload?.data?.group;
+const members = groupPayload?.data?.members ?? [];
+const directory = directoryPayload?.data?.users ?? [];
+if (!groupResponse.ok && !message) error = groupPayload?.error?.message ?? "Group could not be loaded";
+---
+<BaseLayout title="Group detail">
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
+      <p class="surface-label">{tenantId} · {group?.source ?? "local"}</p>
+      <h1 class="mt-2 text-3xl font-semibold">{group?.name ?? "Group"}</h1>
+      {group?.description && <p class="mt-2 text-zinc-400">{group.description}</p>}
+    </header>
+    {message && <p class="text-emerald-200">{message}</p>}{error && <p class="text-rose-200">{error}</p>}
+
+    {group?.source === "local" && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-[1fr_12rem_auto] md:items-end">
+      <input type="hidden" name="csrf_token" class="csrf-token" />
+      <input type="hidden" name="action" value="member" />
+      <label><span class="field-label">User</span><input name="principal" list="directory-users" required /></label>
+      <datalist id="directory-users">{directory.map((user: any) => <option value={user.principal}>{user.display_name}</option>)}</datalist>
+      <label><span class="field-label">Group role</span><select name="role"><option value="member">member</option><option value="admin">admin</option><option value="owner">owner</option></select></label>
+      <button type="submit">Add / update</button>
+    </form>}
+
+    <div class="overflow-x-auto rounded-[22px] border border-white/8">
+      <table><thead><tr><th>Principal</th><th>Role</th><th>Source</th><th></th></tr></thead><tbody>
+        {members.map((member: any) => <tr><td>{member.principal}</td><td>{member.role}</td><td>{member.source}</td><td>{group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><button type="submit">Remove</button></form>}</td></tr>)}
+      </tbody></table>
+    </div>
+    {group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">Archive group</button></form>}
+  </section>
+</BaseLayout>
+<script>
+  document.querySelectorAll<HTMLInputElement>(".csrf-token").forEach((input) => {
+    input.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  });
+</script>
