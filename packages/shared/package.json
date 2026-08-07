@@ -9,6 +9,8 @@
     "./schemas/*": "./schemas/*"
   },
   "dependencies": {
+    "@org-brain/contracts": "workspace:*",
+    "@org-brain/core": "workspace:*",
     "ajv": "^8.17.1",
     "yaml": "^2.8.2",
     "zod": "^3.24.2"

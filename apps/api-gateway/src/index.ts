@@ -23,7 +23,7 @@ import {
   recordMemoryUsageFromRequest,
   updateMemoryFailurePattern,
   updateMemoryUsageStates
-} from "./memory-impact-service";
+} from "./memory-effect-service";
 import {
   assignRetrievalGeneration,
   backfillRetrievalGeneration,
@@ -74,6 +74,12 @@ import {
   upsertMemories
 } from "./memory-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
+import {
+  getMemoryImpactExecution,
+  getMemoryImpactSummary,
+  reportMemoryImpact,
+  startMemoryImpact
+} from "./memory-impact-service";
 import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
 import {
   assertPermission,
@@ -512,6 +518,40 @@ app.get("/v1/tasks/:taskId/events", async (c) => {
   return jsonOk(c, events);
 });
 
+app.post("/v1/memory-impact-executions", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await startMemoryImpact(c.env, tenantId, body, getApiPrincipal(c)), 201);
+});
+
+app.post("/v1/memory-impact-executions/:externalRunId/report", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await reportMemoryImpact(
+    c.env,
+    tenantId,
+    c.req.param("externalRunId"),
+    body,
+    getApiPrincipal(c)
+  ), 201);
+});
+
+app.get("/v1/memory-impact-executions/:externalRunId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getMemoryImpactExecution(c.env, tenantId, c.req.param("externalRunId")));
+});
+
+app.get("/v1/memory-impact-summary", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const from = Number.parseInt(c.req.query("from") ?? "", 10);
+  const to = Number.parseInt(c.req.query("to") ?? "", 10);
+  return jsonOk(c, await getMemoryImpactSummary(c.env, tenantId, {
+    from: Number.isNaN(from) ? undefined : from,
+    to: Number.isNaN(to) ? undefined : to,
+    projectId: c.req.query("project_id")
+  }));
+});
+
 app.get("/v1/memories", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const source = c.req.query("source");
@@ -773,7 +813,10 @@ app.post("/v1/memories/search", async (c) => {
   const governanceResults = governance.results as Array<Record<string, unknown>>;
   const usage = await recordMemoryUsage(c.env, {
     tenant_id: evidence.tenant_id,
-    project_id: evidence.project_id,
+    project_id: evidence.project_id ?? undefined,
+    task_id: typeof payload.task_id === "string" ? payload.task_id : undefined,
+    trace_id: typeof payload.trace_id === "string" ? payload.trace_id : undefined,
+    external_run_id: typeof payload.external_run_id === "string" ? payload.external_run_id : undefined,
     capability: "memory_search_both",
     access_path: "search",
     request_source: "api",

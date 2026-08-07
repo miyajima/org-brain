@@ -20,10 +20,11 @@
 - `memory_confirmations`: short-lived propose/confirm state for interactive saves.
 - `agent_messages`: durable agmsg-style agent inbox rows with target, thread, read, and ack state.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
+- `memory_impact_events` / `memory_impact_daily_metrics`: run-level eligibility and terminal reporting. They provide the denominator for reporting, memory-use, and avoided-lookup rates.
 - `business_categories`: tenant-defined primary business classification; memories snapshot one category and one fixed work type.
 - `retrieval_generations` / `retrieval_generation_assignments` / `retrieval_ranking_profiles`: stable retrieval control plane.
 - `retrieval_units` / `retrieval_units_fts`: generation-scoped projection shared by evidence and governance sources.
-- `memory_usage_events` / `memory_usage_items`: deduplicated reference facts with classification snapshots.
+- `memory_usage_events` / `memory_usage_items`: deduplicated per-memory reference facts with classification snapshots. An optional `external_run_id` links this attribution layer to an eligible run without merging their different evidence semantics.
 - `memory_effect_events` / `memory_effect_attributions` / `memory_failure_patterns` / `memory_effect_daily_metrics`: append-only impact evidence and rebuildable rollups.
 - `measurement_runs` / `measurement_variants` / `measurement_comparisons`: opt-in memory savings AB measurements.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.

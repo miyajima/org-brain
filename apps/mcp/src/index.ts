@@ -252,9 +252,12 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         decision_type: z.string().optional(),
         decision_status: z.string().optional(),
         confirmation_state: z.string().optional(),
-        reason_text: z.string().max(240).optional()
+        reason_text: z.string().max(240).optional(),
+        task_id: z.string().max(128).nullable().optional(),
+        trace_id: z.string().max(128).nullable().optional(),
+        external_run_id: z.string().max(256).nullable().optional()
       },
-      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text }) => {
+      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, task_id, trace_id, external_run_id }) => {
         const tenantId = resolveTenant(tenant_id, this.props);
         const data = await callOrgBrainApi<unknown>(this.env, "/v1/memories/search", {
           method: "POST",
@@ -271,7 +274,10 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
             decision_type,
             decision_status,
             confirmation_state,
-            reason_text
+            reason_text,
+            task_id,
+            trace_id,
+            external_run_id
           }
         });
         return asJsonContent(data);
@@ -477,6 +483,54 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
               ...payload
             }
           }
+        );
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memory_impact_start",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().optional(),
+        task_id: z.string().optional(),
+        trace_id: z.string().optional(),
+        external_run_id: z.string().min(1).max(256),
+        idempotency_key: z.string().min(1).max(256),
+        agent_name: z.string().min(1).max(256).optional(),
+        model: z.string().min(1).max(256).optional(),
+        occurred_at: z.number().int().nonnegative().optional()
+      },
+      async (payload) => {
+        const tenantId = resolveTenant(payload.tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(this.env, "/v1/memory-impact-executions", {
+          method: "POST",
+          body: { ...payload, tenant_id: tenantId }
+        });
+        return asJsonContent(data);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memory_impact_report",
+      {
+        tenant_id: z.string().optional(),
+        external_run_id: z.string().min(1).max(256),
+        idempotency_key: z.string().min(1).max(256),
+        outcome: z.enum(["assessed", "failed"]).optional(),
+        memory_used: z.boolean().optional(),
+        avoided_lookup: z.enum(["source_search", "web_search", "past_context", "none"]).optional(),
+        memory_basis_ids: z.array(z.string().min(1).max(256)).max(20).optional(),
+        confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+        failure_category: z.enum(["agent_error", "tool_error", "cancelled", "unknown"]).optional(),
+        occurred_at: z.number().int().nonnegative().optional()
+      },
+      async ({ tenant_id, external_run_id, ...payload }) => {
+        const tenantId = resolveTenant(tenant_id, this.props);
+        const data = await callOrgBrainApi<unknown>(
+          this.env,
+          `/v1/memory-impact-executions/${encodeURIComponent(external_run_id)}/report`,
+          { method: "POST", body: { ...payload, tenant_id: tenantId } }
         );
         return asJsonContent(data);
       }

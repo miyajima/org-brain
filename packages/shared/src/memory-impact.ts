@@ -55,7 +55,7 @@ export function resolveMemoryTokenEstimate(input: Record<string, unknown>): {
 } {
   if (input.gross_saved_tokens_estimate !== undefined) {
     const value = Number(input.gross_saved_tokens_estimate);
-    if (!Number.isFinite(value)) throw new Error("invalid_token_estimate");
+    if (!Number.isFinite(value) || value < 0) throw new Error("invalid_token_estimate");
     return {
       gross_saved_tokens_estimate: Math.round(value),
       estimation_method: typeof input.estimation_method === "string" && input.estimation_method.trim()
@@ -67,7 +67,7 @@ export function resolveMemoryTokenEstimate(input: Record<string, unknown>): {
   if (candidates && typeof candidates === "object" && !Array.isArray(candidates)) {
     for (const [method, field] of MEMORY_TOKEN_ESTIMATION_PRIORITY) {
       const value = Number((candidates as Record<string, unknown>)[field]);
-      if (Number.isFinite(value)) {
+      if (Number.isFinite(value) && value >= 0) {
         return { gross_saved_tokens_estimate: Math.round(value), estimation_method: method };
       }
     }

@@ -43,6 +43,9 @@ const TOOL_DEFINITIONS = [
         limit: { type: "integer", minimum: 1, maximum: 50 },
         minimum_total_score: { type: ["number", "null"], minimum: 0 },
         principal_id: { type: ["string", "null"] },
+        task_id: { type: ["string", "null"] },
+        trace_id: { type: ["string", "null"] },
+        external_run_id: { type: ["string", "null"] },
         search_mode: {
           type: "string",
           enum: ["memories", "default", "lexical", "hybrid", "structured", "hybrid_v3", "hybrid_v4"]
@@ -238,7 +241,46 @@ const TOOL_DEFINITIONS = [
     }
   },
   {
+    name: "orgbrain_memory_impact_start",
+    description: "Start run-level Memory Impact measurement for an eligible local execution.",
+    inputSchema: {
+      type: "object",
+      required: ["external_run_id", "idempotency_key"],
+      properties: {
+        tenant_id: { type: "string" },
+        project_id: { type: "string" },
+        task_id: { type: "string" },
+        trace_id: { type: "string" },
+        external_run_id: { type: "string" },
+        idempotency_key: { type: "string" },
+        agent_name: { type: "string" },
+        model: { type: "string" },
+        occurred_at: { type: "number" }
+      }
+    }
+  },
+  {
     name: "orgbrain_memory_impact_report",
+    description: "Report the assessed or failed result for one eligible local execution.",
+    inputSchema: {
+      type: "object",
+      required: ["external_run_id", "idempotency_key"],
+      properties: {
+        tenant_id: { type: "string" },
+        external_run_id: { type: "string" },
+        idempotency_key: { type: "string" },
+        outcome: { type: "string", enum: ["assessed", "failed"] },
+        memory_used: { type: "boolean" },
+        avoided_lookup: { type: "string", enum: ["source_search", "web_search", "past_context", "none"] },
+        memory_basis_ids: { type: "array", items: { type: "string" }, maxItems: 20 },
+        confidence: { type: ["string", "null"], enum: ["low", "medium", "high", null] },
+        failure_category: { type: "string", enum: ["agent_error", "tool_error", "cancelled", "unknown"] },
+        occurred_at: { type: "number" }
+      }
+    }
+  },
+  {
+    name: "orgbrain_memory_impact_metrics",
     description: "Report durable memory reference and effect metrics without mixing evidence levels.",
     inputSchema: {
       type: "object",
@@ -296,7 +338,7 @@ async function callTool(store, name, input) {
   if (name === "orgbrain_memory_search") {
     const results = await store.search({
       tenant_id: tenantId,
-      project_id: input.project_id || null,
+      project_id: input.project_id || undefined,
       business_category_id: input.business_category_id || null,
       work_type: input.work_type || null,
       query: input.query,
@@ -307,7 +349,10 @@ async function callTool(store, name, input) {
     });
     const usage = await store.recordUsage({
       tenant_id: tenantId,
-      project_id: input.project_id || null,
+      project_id: input.project_id || undefined,
+      task_id: input.task_id || undefined,
+      trace_id: input.trace_id || undefined,
+      external_run_id: input.external_run_id || undefined,
       capability: "memory_search",
       access_path: "search",
       request_source: "mcp",
@@ -374,7 +419,18 @@ async function callTool(store, name, input) {
   }
   if (name === "orgbrain_memory_usage_state_update") return store.updateUsageStates(tenantId, input);
   if (name === "orgbrain_memory_effect_record") return store.recordEffect(input);
-  if (name === "orgbrain_memory_impact_report") return store.memoryImpactReport(tenantId, input);
+  if (name === "orgbrain_memory_impact_start") {
+    return store.startMemoryImpact(tenantId, input, process.env.USER || "local-user");
+  }
+  if (name === "orgbrain_memory_impact_report") {
+    return store.reportMemoryImpactExecution(
+      tenantId,
+      input.external_run_id,
+      input,
+      process.env.USER || "local-user"
+    );
+  }
+  if (name === "orgbrain_memory_impact_metrics") return store.memoryImpactReport(tenantId, input);
   throw new Error(`unknown tool: ${name}`);
 }
 

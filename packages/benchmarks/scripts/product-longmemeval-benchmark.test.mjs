@@ -99,6 +99,30 @@ test("product retrieval runtime never receives evaluation labels or question ide
   assert.equal(observed[0].input.created_at, Date.parse("2026-01-01"));
 });
 
+test("product retrieval accepts an explicit benchmark retrieval generation alias", async () => {
+  const observed = [];
+  const store = {
+    async captureBatch(inputs) {
+      observed.push({ operation: "captureBatch", inputs });
+    },
+    async retrieveContext(input) {
+      observed.push({ operation: "retrieveContext", input });
+      return {
+        results: [],
+        evidence_bundle: { estimated_tokens: 0, abstention_recommended: true }
+      };
+    }
+  };
+  await runProductRetrieval({
+    tenant_id: "tenant-1",
+    question: "What changed?",
+    question_date: "2026-01-02",
+    sessions: [{ source_id: "source-1", date: "2026-01-01", content: "user: changed" }]
+  }, { store, topK: 5, searchMode: "hybrid_v3" });
+  assert.equal(observed[0].operation, "captureBatch");
+  assert.equal(observed.at(-1).input.search_mode, "hybrid_v3");
+});
+
 test("product retrieval modules contain no LongMemEval-specific routing", async () => {
   const paths = [
     new URL("../../orgbrain-cli/src/lib/retrieval-units.mjs", import.meta.url),

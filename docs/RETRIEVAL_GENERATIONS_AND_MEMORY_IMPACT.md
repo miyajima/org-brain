@@ -196,8 +196,10 @@ Failure patterns are managed through `GET/POST/PATCH
 normalized identifiers/hashes; prompts, query text, and commands are rejected
 from this telemetry model.
 
-Reports are available from `GET /v1/metrics/memory-impact`,
-`orgbrain_memory_impact_report`, and `pnpm metrics:memory-impact`. Supported
+Per-memory reports are available from `GET /v1/metrics/memory-impact`,
+`orgbrain_memory_impact_metrics`, and `pnpm metrics:memory-impact`. Run-level
+completion is reported separately through `orgbrain_memory_impact_report`.
+Supported
 dimensions are memory, business category, work type, project, and day. A
 missing measurement is returned as `null`/unreported, never silently as zero.
 
@@ -214,17 +216,21 @@ client retry to repair a prior effect-commit/daily-rollup split failure.
 
 ## Rollout and table counts
 
-Migrations `0018` through `0021` are additive. They are committed for a later
+Migrations `0018` through `0022` are additive. `0018_memory_impact.sql` is the
+mainline run-level contract; business classification, detailed telemetry,
+retrieval generations, and stable units follow as `0019` through `0022`.
+They are committed for a later
 operator-controlled D1 apply; this implementation does not apply production
 migrations, backfill production data, switch assignments, or deploy Workers.
 
-The transitional D1 schema contains 55 logical tables because eight legacy
+The transitional D1 schema contains 57 logical tables because eight legacy
 versioned projection/backfill/shadow tables coexist with the stable projection.
 After the documented 30-day compatibility period and a successful backup and
-restore drill, removing those eight tables produces the planned 47-table D1
+restore drill, removing those eight tables produces the planned 49-table D1
 state. Local SQLite likewise retains legacy projection families during the
-compatibility window; the planned 31-table count is a post-cleanup target, not
-the schema-v18 transition count.
+compatibility window: 43 transitional tables and 33 after cleanup. These
+counts include the two run-level Memory Impact tables added by mainline and
+supersede the pre-merge 47/31 targets.
 
 Promotion requires source coverage and digest parity, zero tenant/ACL/category
 violations, no offline benchmark regression, empty/error rate within 0.5

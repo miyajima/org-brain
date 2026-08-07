@@ -1,0 +1,20 @@
+{
+  "start": {
+    "contract_version": "memory-impact/v1",
+    "tenant_id": "default",
+    "project_id": "project-a",
+    "external_run_id": "run-example-1",
+    "idempotency_key": "run-example-1:start",
+    "agent_name": "codex"
+  },
+  "assessment": {
+    "contract_version": "memory-impact/v1",
+    "tenant_id": "default",
+    "idempotency_key": "run-example-1:report",
+    "outcome": "assessed",
+    "memory_used": true,
+    "avoided_lookup": "source_search",
+    "memory_basis_ids": ["memory-example-1"],
+    "confidence": "high"
+  }
+}

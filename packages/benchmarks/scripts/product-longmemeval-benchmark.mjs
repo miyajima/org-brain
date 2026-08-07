@@ -10,6 +10,7 @@ import { LocalMemoryStore } from "../../orgbrain-cli/src/lib/local-memory-store.
 
 const DEFAULT_DATASET_URL =
   "https://huggingface.co/datasets/LIXINYI33/longmemeval-s/resolve/main/longmemeval_s_cleaned.json";
+const SEARCH_MODES = new Set(["hybrid_v3", "hybrid_v4"]);
 const CATEGORY_GATES = {
   "knowledge-update": { minimum: 78, total: 78 },
   "multi-session": { minimum: 132, total: 133 },
@@ -30,6 +31,7 @@ function parseArgs(argv) {
     repeat: 1,
     topK: 5,
     concurrency: 1,
+    searchMode: "hybrid_v4",
     resume: false
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -49,6 +51,7 @@ function parseArgs(argv) {
     else if (value === "--repeat") options.repeat = Number(next());
     else if (value === "--top-k") options.topK = Number(next());
     else if (value === "--concurrency") options.concurrency = Number(next());
+    else if (value === "--search-mode") options.searchMode = next();
     else if (value === "--resume") options.resume = true;
     else if (value === "--help") {
       process.stdout.write(
@@ -63,6 +66,7 @@ function parseArgs(argv) {
           "  --repeat <n>           Full independent repetitions (acceptance: 5)",
           "  --top-k <n>            Retrieval depth (acceptance: 5)",
           "  --concurrency <n>      Independent product-path evaluations in parallel",
+          "  --search-mode <mode>   hybrid_v3 (baseline) or hybrid_v4 (structured)",
           "  --resume               Resume complete question/repeat rows"
         ].join("\n") + "\n"
       );
@@ -73,6 +77,9 @@ function parseArgs(argv) {
   if (!Number.isInteger(options.topK) || options.topK < 1) throw new Error("--top-k must be >= 1");
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1 || options.concurrency > 16) {
     throw new Error("--concurrency must be between 1 and 16");
+  }
+  if (!SEARCH_MODES.has(options.searchMode)) {
+    throw new Error("--search-mode must be hybrid_v3 or hybrid_v4");
   }
   return options;
 }
@@ -168,9 +175,9 @@ export async function runProductRetrieval(runtimeInput, options = {}) {
   const store = options.store;
   if (!store) throw new Error("runProductRetrieval requires a MemoryStore");
   const principalId = "benchmark-reader";
-  for (const [sessionIndex, session] of runtimeInput.sessions.entries()) {
+  const captures = runtimeInput.sessions.map((session, sessionIndex) => {
     const eventAt = parseTimestamp(session.date, 1_600_000_000_000 + sessionIndex);
-    await store.capture({
+    return {
       tenant_id: runtimeInput.tenant_id,
       project_id: "product-retrieval-evaluation",
       kind: "episodic",
@@ -200,7 +207,12 @@ export async function runProductRetrieval(runtimeInput, options = {}) {
         principal_id: principalId,
         permissions: ["read"]
       }]
-    });
+    };
+  });
+  if (typeof store.captureBatch === "function") {
+    await store.captureBatch(captures);
+  } else {
+    for (const capture of captures) await store.capture(capture);
   }
   const startedAt = performance.now();
   const context = await store.retrieveContext({
@@ -211,7 +223,7 @@ export async function runProductRetrieval(runtimeInput, options = {}) {
     top_k: options.topK ?? 5,
     token_budget: 8_000,
     principal_id: principalId,
-    search_mode: "hybrid_v4",
+    search_mode: options.searchMode ?? "hybrid_v4",
     at: parseTimestamp(runtimeInput.question_date, Date.now())
   });
   return {
@@ -316,7 +328,7 @@ async function loadDataset(options) {
   return response.text();
 }
 
-async function evaluateItem(item, repeat, itemIndex, topK) {
+async function evaluateItem(item, repeat, itemIndex, topK, searchMode) {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-product-benchmark-"));
   try {
     const store = new LocalMemoryStore(join(directory, "memory.sqlite"));
@@ -326,11 +338,12 @@ async function evaluateItem(item, repeat, itemIndex, topK) {
       question_date: item.question_date,
       sessions: item.sessions
     };
-    const retrieval = await runProductRetrieval(runtimeInput, { store, topK });
+    const retrieval = await runProductRetrieval(runtimeInput, { store, topK, searchMode });
     const expected = new Set(item.expected_session_ids);
     const recalled = retrieval.source_ids.filter((id) => expected.has(id));
     return {
       repeat,
+      search_mode: searchMode,
       evaluation_id: item.evaluation_id,
       split: item.split,
       category: item.category,
@@ -345,6 +358,7 @@ async function evaluateItem(item, repeat, itemIndex, topK) {
   } catch (error) {
     return {
       repeat,
+      search_mode: searchMode,
       evaluation_id: item.evaluation_id,
       split: item.split,
       category: item.category,
@@ -458,7 +472,7 @@ async function main() {
   for (let repeat = 1; repeat <= options.repeat; repeat += 1) {
     for (const [itemIndex, item] of items.entries()) {
       if (!completed.has(`${repeat}:${item.evaluation_id}`)) {
-        tasks.push({ item, repeat, itemIndex, topK: options.topK });
+        tasks.push({ item, repeat, itemIndex, topK: options.topK, searchMode: options.searchMode });
       }
     }
   }
@@ -474,7 +488,7 @@ async function main() {
     output,
     summary_output: summaryOutput,
     runner: {
-      search_mode: "hybrid_v4",
+      search_mode: options.searchMode,
       retrieval_contract: "MemoryStore.retrieveContext",
       top_k: options.topK,
       concurrency: options.concurrency,
@@ -499,7 +513,7 @@ if (!isMainThread && workerData?.productLongMemEvalWorker) {
   parentPort.on("message", async (task) => {
     try {
       parentPort.postMessage({
-        row: await evaluateItem(task.item, task.repeat, task.itemIndex, task.topK)
+        row: await evaluateItem(task.item, task.repeat, task.itemIndex, task.topK, task.searchMode)
       });
     } catch (error) {
       parentPort.postMessage({

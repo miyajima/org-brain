@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS memory_usage_events (
   project_id TEXT,
   task_id TEXT,
   trace_id TEXT,
+  external_run_id TEXT,
   capability TEXT,
   access_path TEXT NOT NULL CHECK(access_path IN ('search', 'profile', 'context', 'direct')),
   request_source TEXT NOT NULL CHECK(request_source IN ('api', 'mcp', 'cap_runner', 'local')),
@@ -43,6 +44,9 @@ ON memory_usage_events(tenant_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_memory_usage_events_task
 ON memory_usage_events(tenant_id, task_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_memory_usage_events_external_run
+ON memory_usage_events(tenant_id, external_run_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS memory_usage_items (
   id TEXT PRIMARY KEY,
