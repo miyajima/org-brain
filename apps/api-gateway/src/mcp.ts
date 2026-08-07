@@ -47,7 +47,8 @@ import {
   recordMemoryUsage,
   updateMemoryFailurePattern,
   updateMemoryUsageStates
-} from "./memory-impact-service";
+} from "./memory-effect-service";
+import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
 
 type AgentProps = {
   tenantId: string;
@@ -401,9 +402,12 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         confirmation_state: z.string().optional(),
         reason_text: z.string().max(240).optional(),
         generation_id: z.string().max(128).nullable().optional(),
-        ranking_profile_id: z.string().max(128).nullable().optional()
+        ranking_profile_id: z.string().max(128).nullable().optional(),
+        task_id: z.string().max(128).nullable().optional(),
+        trace_id: z.string().max(128).nullable().optional(),
+        external_run_id: z.string().max(256).nullable().optional()
       },
-      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id }) => {
+      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, trace_id, external_run_id }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, generation_id || ranking_profile_id ? "admin" : "read", project_id);
         const request = {
@@ -424,7 +428,10 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           confirmation_state,
           reason_text,
           generation_id,
-          ranking_profile_id
+          ranking_profile_id,
+          task_id,
+          trace_id,
+          external_run_id
         };
         if (search_scope === "governance") {
           return toContent(await searchDecisionMemories(this.env, request, { principal: this.props?.principal }));
@@ -443,7 +450,10 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         const governanceResults = governance.results as Array<Record<string, unknown>>;
         const usage = await recordMemoryUsage(this.env, {
           tenant_id: tenantId,
-          project_id: project_id ?? null,
+          project_id: project_id ?? undefined,
+          task_id: task_id ?? undefined,
+          trace_id: trace_id ?? undefined,
+          external_run_id: external_run_id ?? undefined,
           capability: "memory_search_both",
           access_path: "search",
           request_source: "mcp",
@@ -836,7 +846,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
     );
 
     this.server.tool(
-      "orgbrain_memory_impact_report",
+      "orgbrain_memory_impact_metrics",
       {
         tenant_id: z.string().optional(),
         group_by: z.enum(["memory", "business_category", "work_type", "project", "day"]).optional()
@@ -1081,6 +1091,61 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
             tenant_id: tenantId,
             ...payload
           }, { principal })
+        );
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memory_impact_start",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().optional(),
+        task_id: z.string().optional(),
+        trace_id: z.string().optional(),
+        external_run_id: z.string().min(1).max(256),
+        idempotency_key: z.string().min(1).max(256),
+        agent_name: z.string().min(1).max(256).optional(),
+        model: z.string().min(1).max(256).optional(),
+        occurred_at: z.number().int().nonnegative().optional()
+      },
+      async (payload) => {
+        const tenantId = normalizeTenant(payload.tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", payload.project_id);
+        const principal = this.props?.principal ?? "mcp";
+        const result = await this.auditedMutation(
+          tenantId,
+          "mcp.orgbrain_memory_impact_start",
+          "memory_impact_execution",
+          () => startMemoryImpact(this.env, tenantId, { ...payload, tenant_id: tenantId }, principal)
+        );
+        return toContent(result);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_memory_impact_report",
+      {
+        tenant_id: z.string().optional(),
+        external_run_id: z.string().min(1).max(256),
+        idempotency_key: z.string().min(1).max(256),
+        outcome: z.enum(["assessed", "failed"]).optional(),
+        memory_used: z.boolean().optional(),
+        avoided_lookup: z.enum(["source_search", "web_search", "past_context", "none"]).optional(),
+        memory_basis_ids: z.array(z.string().min(1).max(256)).max(20).optional(),
+        confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+        failure_category: z.enum(["agent_error", "tool_error", "cancelled", "unknown"]).optional(),
+        occurred_at: z.number().int().nonnegative().optional()
+      },
+      async ({ tenant_id, external_run_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "write");
+        const principal = this.props?.principal ?? "mcp";
+        const result = await this.auditedMutation(
+          tenantId,
+          "mcp.orgbrain_memory_impact_report",
+          "memory_impact_execution",
+          () => reportMemoryImpact(this.env, tenantId, external_run_id, { ...payload, tenant_id: tenantId }, principal)
         );
         return toContent(result);
       }

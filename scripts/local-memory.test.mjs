@@ -967,6 +967,27 @@ test("v18 usage and effect telemetry deduplicates references and attributes toke
       }),
       /failure_pattern_id_required/u
     );
+    await assert.rejects(
+      store.recordEffect({
+        tenant_id: "personal",
+        usage_event_id: usage.usage_id,
+        idempotency_key: "effect:negative-gross",
+        effect_outcome: "neutral",
+        gross_saved_tokens_estimate: -1
+      }),
+      /invalid_token_estimate/u
+    );
+    await assert.rejects(
+      store.recordEffect({
+        tenant_id: "personal",
+        usage_event_id: usage.usage_id,
+        idempotency_key: "effect:negative-failure",
+        effect_outcome: "neutral",
+        gross_saved_tokens_estimate: 0,
+        failure_saved_tokens_estimate: -1
+      }),
+      /invalid_failure_saved_tokens_estimate/u
+    );
     const estimated = await store.recordEffect({
       tenant_id: "personal",
       usage_event_id: usage.usage_id,
@@ -1086,14 +1107,14 @@ test("v18 usage and effect telemetry deduplicates references and attributes toke
   }
 });
 
-test("v18 verification sampling matches the shared FNV-1a fixtures", () => {
+test("v19 verification sampling matches the shared FNV-1a fixtures", () => {
   assert.equal(verificationSampled("tenant-a", "usage-0"), false);
   assert.equal(verificationSampled("tenant-a", "usage-1"), true);
   assert.equal(verificationSampled("tenant-a", "usage-4"), true);
   assert.equal(verificationSampled("tenant-a", "usage-42"), false);
 });
 
-test("v18 effect marks only attributed memories as used", async () => {
+test("v19 effect marks only attributed memories as used", async () => {
   const ctx = await fixture();
   try {
     const store = new LocalMemoryStore(ctx.dbPath);
@@ -1140,6 +1161,84 @@ test("v18 effect marks only attributed memories as used", async () => {
       assert.equal(db.prepare(
         "SELECT positive_count FROM memory_effect_daily_metrics WHERE day = ? AND source_id = ?"
       ).get(new Date(usageCreatedAt).toISOString().slice(0, 10), second.memory_id).positive_count, 1);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("v19 links run-level impact measurement to per-memory usage", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const capture = await store.capture(captureInput({ external_key: "impact:linked" }));
+    const started = await store.startMemoryImpact("personal", {
+      external_run_id: "run-local-1",
+      idempotency_key: "impact:start:1",
+      project_id: "orgbrain"
+    }, "tester");
+    assert.equal(started.event.event_type, "eligible");
+    const usage = await store.recordUsage({
+      tenant_id: "personal",
+      external_run_id: "run-local-1",
+      access_path: "search",
+      request_source: "local",
+      items: [{ source_type: "memory", source_id: capture.memory_id }]
+    });
+    assert.equal(usage.created, true);
+    await assert.rejects(
+      () => store.recordUsage({
+        tenant_id: "personal",
+        project_id: "other-project",
+        external_run_id: "run-local-1",
+        access_path: "search",
+        request_source: "local",
+        items: [{ source_type: "memory", source_id: capture.memory_id }]
+      }),
+      /memory_impact_context_mismatch:project_id/
+    );
+    await assert.rejects(
+      () => store.recordUsage({
+        tenant_id: "personal",
+        external_run_id: "missing-run",
+        access_path: "search",
+        request_source: "local",
+        items: [{ source_type: "memory", source_id: capture.memory_id }]
+      }),
+      /memory_impact_execution_not_found/
+    );
+    const reported = await store.reportMemoryImpactExecution("personal", "run-local-1", {
+      idempotency_key: "impact:report:1",
+      outcome: "assessed",
+      memory_used: true,
+      avoided_lookup: "source_search",
+      memory_basis_ids: [capture.memory_id],
+      confidence: "high"
+    }, "tester");
+    assert.equal(reported.event.event_type, "assessed");
+    const summary = await store.memoryImpactSummary("personal", { project_id: "orgbrain" });
+    assert.deepEqual(
+      {
+        eligible_runs: summary.eligible_runs,
+        assessed_runs: summary.assessed_runs,
+        memory_used_runs: summary.memory_used_runs,
+        avoided_runs: summary.avoided_runs
+      },
+      { eligible_runs: 1, assessed_runs: 1, memory_used_runs: 1, avoided_runs: 1 }
+    );
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      assert.equal(db.prepare(
+        "SELECT external_run_id, project_id FROM memory_usage_events WHERE id = ?"
+      ).get(usage.usage_id).external_run_id, "run-local-1");
+      assert.equal(db.prepare(
+        "SELECT project_id FROM memory_usage_events WHERE id = ?"
+      ).get(usage.usage_id).project_id, "orgbrain");
+      assert.equal(db.prepare(
+        "SELECT reporting_rate FROM memory_impact_daily_metrics WHERE tenant_id = ? AND project_id = ?"
+      ).get("personal", "orgbrain").reporting_rate, 1);
     } finally {
       db.close();
     }

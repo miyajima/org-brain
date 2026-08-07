@@ -3,7 +3,7 @@ import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
-import { recordMemoryUsage } from "./memory-impact-service";
+import { recordMemoryUsage } from "./memory-effect-service";
 import { resolveRetrievalGenerationAssignment } from "./retrieval-generation-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -264,6 +264,9 @@ type DecisionMemorySearchRequest = {
   work_type?: MemoryWorkType | null;
   generation_id?: string | null;
   ranking_profile_id?: string | null;
+  task_id?: string | null;
+  trace_id?: string | null;
+  external_run_id?: string | null;
 };
 
 type DecisionMemoryReviseRequest = Partial<DecisionMemoryCreateRequest> & {
@@ -948,7 +951,10 @@ function parseSearchDecisionRequest(rawBody: unknown, principal?: string | null)
     businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
     workType: body.work_type ?? null,
     generationId: parseOptionalString(body.generation_id, "generation_id", 128),
-    rankingProfileId: parseOptionalString(body.ranking_profile_id, "ranking_profile_id", 128)
+    rankingProfileId: parseOptionalString(body.ranking_profile_id, "ranking_profile_id", 128),
+    taskId: parseOptionalString(body.task_id, "task_id", 128),
+    traceId: parseOptionalString(body.trace_id, "trace_id", 128),
+    externalRunId: parseOptionalString(body.external_run_id, "external_run_id", 256)
   };
 }
 
@@ -1462,7 +1468,10 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
   const selected = filtered.slice(0, request.limit);
   const usage = options.recordUsage === false ? null : await recordMemoryUsage(env, {
     tenant_id: request.tenantId,
-    project_id: request.projectId,
+    project_id: request.projectId ?? undefined,
+    task_id: request.taskId ?? undefined,
+    trace_id: request.traceId ?? undefined,
+    external_run_id: request.externalRunId ?? undefined,
     capability: "decision_memory_search",
     access_path: "search",
     request_source: "api",

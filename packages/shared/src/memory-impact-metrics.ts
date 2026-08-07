@@ -82,3 +82,57 @@ export async function rebuildMemoryImpactMetricsForDay(db: D1Database, day: stri
   else for (const statement of statements) await statement.run();
   return { day };
 }
+
+export async function rebuildMemoryImpactExecutionMetricsForDay(
+  db: D1Database,
+  day: string,
+  now = Date.now()
+) {
+  const start = Date.parse(`${day}T00:00:00.000Z`);
+  if (!Number.isFinite(start)) throw new Error("day must be YYYY-MM-DD");
+  const end = start + 86_400_000;
+  const statements = [
+    db.prepare("DELETE FROM memory_impact_daily_metrics WHERE day = ?").bind(day),
+    db.prepare(
+      `INSERT INTO memory_impact_daily_metrics(
+         day, tenant_id, project_id, eligible_runs, assessed_runs, failed_runs,
+         memory_used_runs, avoided_runs, reporting_rate, memory_usage_rate,
+         avoided_lookup_rate, source_search_count, web_search_count,
+         past_context_count, none_count, created_at, updated_at
+       )
+       WITH runs AS (
+         SELECT tenant_id, external_run_id, COALESCE(MAX(project_id), '') AS project_id,
+           MAX(CASE WHEN event_type = 'eligible' THEN 1 ELSE 0 END) AS eligible,
+           MAX(CASE WHEN event_type = 'assessed' THEN 1 ELSE 0 END) AS assessed,
+           MAX(CASE WHEN event_type = 'failed' THEN 1 ELSE 0 END) AS failed,
+           MAX(CASE WHEN event_type = 'assessed' AND memory_used = 1 THEN 1 ELSE 0 END) AS memory_used,
+           MAX(CASE WHEN event_type = 'assessed' THEN avoided_lookup END) AS avoided_lookup
+         FROM memory_impact_events
+         WHERE occurred_at >= ? AND occurred_at < ?
+         GROUP BY tenant_id, external_run_id
+       ), grouped AS (
+         SELECT tenant_id, project_id,
+           SUM(eligible) AS eligible_runs,
+           SUM(assessed) AS assessed_runs,
+           SUM(failed) AS failed_runs,
+           SUM(CASE WHEN assessed = 1 AND memory_used = 1 THEN 1 ELSE 0 END) AS memory_used_runs,
+           SUM(CASE WHEN assessed = 1 AND memory_used = 1 AND avoided_lookup != 'none' THEN 1 ELSE 0 END) AS avoided_runs,
+           SUM(CASE WHEN assessed = 1 AND avoided_lookup = 'source_search' THEN 1 ELSE 0 END) AS source_search_count,
+           SUM(CASE WHEN assessed = 1 AND avoided_lookup = 'web_search' THEN 1 ELSE 0 END) AS web_search_count,
+           SUM(CASE WHEN assessed = 1 AND avoided_lookup = 'past_context' THEN 1 ELSE 0 END) AS past_context_count,
+           SUM(CASE WHEN assessed = 1 AND avoided_lookup = 'none' THEN 1 ELSE 0 END) AS none_count
+         FROM runs GROUP BY tenant_id, project_id
+       )
+       SELECT ?, tenant_id, project_id, eligible_runs, assessed_runs, failed_runs,
+         memory_used_runs, avoided_runs,
+         CASE WHEN eligible_runs > 0 THEN CAST(assessed_runs + failed_runs AS REAL) / eligible_runs ELSE NULL END,
+         CASE WHEN assessed_runs > 0 THEN CAST(memory_used_runs AS REAL) / assessed_runs ELSE NULL END,
+         CASE WHEN memory_used_runs > 0 THEN CAST(avoided_runs AS REAL) / memory_used_runs ELSE NULL END,
+         source_search_count, web_search_count, past_context_count, none_count, ?, ?
+       FROM grouped`
+    ).bind(start, end, day, now, now)
+  ];
+  if (typeof db.batch === "function") await db.batch(statements);
+  else for (const statement of statements) await statement.run();
+  return { day };
+}

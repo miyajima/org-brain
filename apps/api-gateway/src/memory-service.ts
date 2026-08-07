@@ -43,7 +43,7 @@ import { assertMemoryNotOnLegalHold } from "./retention-service";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
-import { recordMemoryUsage } from "./memory-impact-service";
+import { recordMemoryUsage } from "./memory-effect-service";
 import { resolveRetrievalGenerationAssignment } from "./retrieval-generation-service";
 
 type UpsertMemoryItem = {
@@ -173,6 +173,9 @@ type MemorySearchRequest = {
   retrieval_profile?: "default" | "lexical" | "hybrid" | "structured";
   generation_id?: string;
   ranking_profile_id?: string;
+  task_id?: string | null;
+  trace_id?: string | null;
+  external_run_id?: string | null;
 };
 
 type MemoryProfileRequest = {
@@ -552,6 +555,9 @@ function parseSearchRequest(raw: unknown): {
   workType: MemoryWorkType | null;
   generationId: string | null;
   rankingProfileId: string | null;
+  taskId: string | null;
+  traceId: string | null;
+  externalRunId: string | null;
 } {
   if (!raw || typeof raw !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
@@ -579,7 +585,10 @@ function parseSearchRequest(raw: unknown): {
     businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
     workType: body.work_type ?? null,
     generationId: parseOptionalString(body.generation_id, "generation_id", 128),
-    rankingProfileId: parseOptionalString(body.ranking_profile_id, "ranking_profile_id", 128)
+    rankingProfileId: parseOptionalString(body.ranking_profile_id, "ranking_profile_id", 128),
+    taskId: parseOptionalString(body.task_id, "task_id", 128),
+    traceId: parseOptionalString(body.trace_id, "trace_id", 128),
+    externalRunId: parseOptionalString(body.external_run_id, "external_run_id", 256)
   };
 }
 
@@ -1127,7 +1136,10 @@ export async function searchMemories(
       .join(""));
     const usage = await recordMemoryUsage(env, {
       tenant_id: request.tenantId,
-      project_id: request.projectId,
+      project_id: request.projectId ?? undefined,
+      task_id: request.taskId ?? undefined,
+      trace_id: request.traceId ?? undefined,
+      external_run_id: request.externalRunId ?? undefined,
       capability: "memory_search",
       access_path: "search",
       request_source: "api",

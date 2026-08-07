@@ -26,6 +26,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm typecheck
+      - run: pnpm --filter @org-brain/contracts build
+      - run: pnpm --filter @org-brain/core build
       - run: pnpm build:standalone
       - run: sha256sum dist/orgbrain.mjs > orgbrain-${{ github.ref_name }}-standalone.sha256
       - run: npm pack ./packages/orgbrain-cli
@@ -36,6 +38,12 @@ jobs:
             orgbrain-*.tgz
             dist/orgbrain.mjs
       - run: npm publish ./packages/orgbrain-cli --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish ./packages/contracts --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish ./packages/core --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: gh release create "${GITHUB_REF_NAME}" orgbrain-*.tgz orgbrain-*.cdx.json orgbrain-*-standalone.sha256 dist/orgbrain.mjs --generate-notes

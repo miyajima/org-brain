@@ -28,6 +28,9 @@ Usage:
   orgbrain usage record [json-payload]
   orgbrain usage state [json-payload]
   orgbrain effect record [json-payload]
+  orgbrain impact start [json-payload]
+  orgbrain impact report <external-run-id> [json-payload]
+  orgbrain impact summary [--tenant-id <id>] [--project-id <id>]
   orgbrain failure-pattern list [--tenant-id <id>] [--project-id <id>]
   orgbrain failure-pattern create [json-payload]
   orgbrain failure-pattern update <pattern-id> [json-payload]
@@ -411,6 +414,28 @@ async function serve(store, args) {
         sendJson(response, 201, await store.recordUsage(await readRequestBody(request)));
       } else if (request.method === "POST" && path === "/v1/memory-effects") {
         sendJson(response, 201, await store.recordEffect(await readRequestBody(request)));
+      } else if (request.method === "POST" && path === "/v1/memory-impact-executions") {
+        const body = await readRequestBody(request);
+        sendJson(response, 201, await store.startMemoryImpact(
+          body.tenant_id || tenantId,
+          body,
+          "local-http"
+        ));
+      } else if (request.method === "POST" && /^\/v1\/memory-impact-executions\/[^/]+\/report$/.test(path)) {
+        const externalRunId = decodeURIComponent(path.split("/")[3]);
+        const body = await readRequestBody(request);
+        sendJson(response, 201, await store.reportMemoryImpactExecution(
+          body.tenant_id || tenantId,
+          externalRunId,
+          body,
+          "local-http"
+        ));
+      } else if (request.method === "GET" && path === "/v1/memory-impact-summary") {
+        sendJson(response, 200, await store.memoryImpactSummary(tenantId, {
+          project_id: requestUrl.searchParams.get("project_id"),
+          from: Number(requestUrl.searchParams.get("from")) || undefined,
+          to: Number(requestUrl.searchParams.get("to")) || undefined
+        }));
       } else if (request.method === "GET" && path === "/v1/metrics/memory-impact") {
         sendJson(response, 200, await store.memoryImpactReport(tenantId, {
           source_type: requestUrl.searchParams.get("source_type"),
@@ -488,6 +513,29 @@ async function main() {
     emit(await store.updateUsageStates(args.get("--tenant-id", payload.tenant_id || "default"), payload));
   } else if (command === "effect" && action === "record") {
     emit(await store.recordEffect(await readStructuredPayload(args, rest)));
+  } else if (command === "impact" && action === "start") {
+    const payload = await readStructuredPayload(args, rest);
+    emit(await store.startMemoryImpact(
+      args.get("--tenant-id", payload.tenant_id || "default"),
+      payload,
+      process.env.USER || "local-user"
+    ));
+  } else if (command === "impact" && action === "report") {
+    const externalRunId = rest[0];
+    if (!externalRunId) throw new Error("impact report requires external-run-id");
+    const payload = await readStructuredPayload(args, rest.slice(1));
+    emit(await store.reportMemoryImpactExecution(
+      args.get("--tenant-id", payload.tenant_id || "default"),
+      externalRunId,
+      payload,
+      process.env.USER || "local-user"
+    ));
+  } else if (command === "impact" && action === "summary") {
+    emit(await store.memoryImpactSummary(args.get("--tenant-id", "default"), {
+      project_id: args.get("--project-id"),
+      from: Number(args.get("--from")) || undefined,
+      to: Number(args.get("--to")) || undefined
+    }));
   } else if (command === "failure-pattern" && action === "list") {
     emit(await store.listFailurePatterns(args.get("--tenant-id", "default"), { projectId: args.get("--project-id") }));
   } else if (command === "failure-pattern" && action === "create") {

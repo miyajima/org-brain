@@ -1,0 +1,50 @@
+{
+  "benchmark": "LongMemEval-S product retrieval generation comparison",
+  "dataset_sha256": "35961662da991bec512124586e2e399a335e9e7c94272403e820eccc9946589e",
+  "top_k": 5,
+  "concurrency": 8,
+  "baseline": {
+    "artifact": "../2026-07-30/orgbrain-longmemeval-500-repeat5.jsonl",
+    "search_mode": "hybrid_v3",
+    "repeats": 5,
+    "rows_per_repeat": 500,
+    "hits_per_repeat": 499,
+    "worst_p95_latency_ms": 278.07
+  },
+  "merged_worktree": {
+    "hybrid_v3": {
+      "artifact": "orgbrain-longmemeval-v3-partial-38.jsonl",
+      "status": "partial",
+      "rows": 38,
+      "hits": 38,
+      "errors": 0,
+      "p50_latency_ms": 85.32,
+      "p95_latency_ms": 614.539,
+      "comparison_to_same_baseline_rows": {
+        "same_hit_outcome": 38,
+        "same_top_5_order": 15
+      },
+      "stop_reason": "The full run was stopped after the migration dual-write path made completion time unsuitable for an interactive verification run."
+    },
+    "hybrid_v4": {
+      "artifact": "orgbrain-longmemeval-v4-partial-640.jsonl",
+      "status": "one_complete_repeat_plus_140_rows",
+      "evaluated_repeat": 1,
+      "rows": 500,
+      "hits": 486,
+      "recall_at_5": 0.972,
+      "errors": 0,
+      "p50_latency_ms": 947.127,
+      "p95_latency_ms": 2464.967,
+      "p99_latency_ms": 3602.839,
+      "max_latency_ms": 9081.11,
+      "stop_reason": "The acceptance gate already failed after one complete repeat, so the remaining repetitions were not executed."
+    }
+  },
+  "interpretation": {
+    "accuracy_gate": "failed_for_hybrid_v4",
+    "latency_gate": "failed_for_hybrid_v4",
+    "hybrid_v3_full_gate": "not_completed",
+    "promotion_recommendation": "Keep hybrid_v3 active and hybrid_v4 shadow-only until retrieval quality and dual-write performance are corrected."
+  }
+}

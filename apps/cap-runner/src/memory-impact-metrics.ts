@@ -1,1 +1,5 @@
-export { previousMemoryImpactUtcDay, rebuildMemoryImpactMetricsForDay } from "@org-brain/shared";
+export {
+  previousMemoryImpactUtcDay,
+  rebuildMemoryImpactExecutionMetricsForDay,
+  rebuildMemoryImpactMetricsForDay
+} from "@org-brain/shared";

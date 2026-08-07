@@ -11,7 +11,11 @@ import { LeaseDO } from "./do/lease";
 import { MailboxDO } from "./do/mailbox";
 import { runScheduledMemoryMaintenance } from "./memory-maintenance";
 import { previousUtcDay, pruneRetrievalEvents, rawRetentionCutoff, rollupRetrievalMetricsForDay } from "./retrieval-metrics";
-import { previousMemoryImpactUtcDay, rebuildMemoryImpactMetricsForDay } from "./memory-impact-metrics";
+import {
+  previousMemoryImpactUtcDay,
+  rebuildMemoryImpactExecutionMetricsForDay,
+  rebuildMemoryImpactMetricsForDay
+} from "./memory-impact-metrics";
 import type { CapabilityContext, Env } from "./types";
 import {
   assertWithinCapabilityCostLimit,
@@ -380,7 +384,9 @@ export default {
 
     if (cron === METRICS_CRON) {
       await rollupRetrievalMetricsForDay(env.OPEN_BRAIN_DB, previousUtcDay(now), now);
-      await rebuildMemoryImpactMetricsForDay(env.OPEN_BRAIN_DB, previousMemoryImpactUtcDay(now), now);
+      const impactDay = previousMemoryImpactUtcDay(now);
+      await rebuildMemoryImpactExecutionMetricsForDay(env.OPEN_BRAIN_DB, impactDay, now);
+      await rebuildMemoryImpactMetricsForDay(env.OPEN_BRAIN_DB, impactDay, now);
       await pruneRetrievalEvents(env.OPEN_BRAIN_DB, rawRetentionCutoff(now));
       return;
     }

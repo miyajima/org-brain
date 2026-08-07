@@ -56,4 +56,13 @@ describe("task-result memory effect", () => {
     expect(db.effectBindings?.[23]).toBe("artifact:task-1");
     expect(db.attributionBindings).toHaveLength(1);
   });
+
+  it("rejects negative failure token savings", async () => {
+    await expect(recordTaskMemoryEffect({ OPEN_BRAIN_DB: new EffectDb() } as any, "tenant-a", {
+      usage_event_id: "usage-1",
+      idempotency_key: "negative-failure-savings",
+      effect_outcome: "positive",
+      failure_saved_tokens_estimate: -1
+    })).rejects.toThrow("invalid_failure_saved_tokens_estimate");
+  });
 });

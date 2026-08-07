@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -18,6 +18,8 @@ const SHARED_TABLES = [
   "memory_retrieval_units",
   "memory_retrieval_units_v4",
   "business_categories",
+  "memory_impact_events",
+  "memory_impact_daily_metrics",
   "memory_failure_patterns",
   "memory_usage_events",
   "memory_usage_items",
@@ -44,18 +46,12 @@ test("local SQLite shared tables stay in parity with D1 migrations", async () =>
     const store = new LocalMemoryStore(localPath);
     await store.init();
     const migrated = new DatabaseSync(migratedPath);
-    const files = [
-      "orgbus", "seed_capabilities", "memory_bridge", "retrieval_metrics",
-      "knowledge_docs", "memory_lifecycle_v2", "rationale_confirmation",
-      "measurement_mode", "remove_demo_capabilities", "context_engine_mvp",
-      "decision_memory_editor", "login_groups_acl", "agent_messages",
-      "memory_record_v2", "rbac_audit", "retrieval_units_v3", "retrieval_units_v4",
-      "business_classification", "memory_impact_telemetry",
-      "retrieval_generations", "retrieval_units_stable"
-    ];
-    for (let version = 1; version <= files.length; version += 1) {
-      const prefix = String(version).padStart(4, "0");
-      const sql = await readFile(new URL(`../migrations/${prefix}_${files[version - 1]}.sql`, import.meta.url), "utf8");
+    const migrationDirectory = new URL("../migrations/", import.meta.url);
+    const files = (await readdir(migrationDirectory))
+      .filter((file) => /^\d{4}_.+\.sql$/.test(file))
+      .sort();
+    for (const file of files) {
+      const sql = await readFile(new URL(file, migrationDirectory), "utf8");
       migrated.exec(sql);
     }
     const local = new DatabaseSync(localPath, { readOnly: true });

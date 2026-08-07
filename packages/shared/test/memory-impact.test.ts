@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveMemoryTokenEstimate,
   shouldSampleMemoryEffectVerification,
   validateAvoidedLookupCategories
 } from "../src/memory-impact";
@@ -12,6 +13,16 @@ describe("memory impact contracts", () => {
       .toThrow(/exclusive/);
     expect(() => validateAvoidedLookupCategories(["unsupported"]))
       .toThrow(/unsupported/);
+  });
+
+  it("rejects negative gross savings while preserving negative net savings", () => {
+    expect(() => resolveMemoryTokenEstimate({ gross_saved_tokens_estimate: -1 }))
+      .toThrow(/invalid_token_estimate/);
+    expect(() => resolveMemoryTokenEstimate({
+      token_estimation_candidates: { paired_control_tokens: -1 }
+    })).toThrow(/gross_saved_tokens_estimate_required/);
+    expect(resolveMemoryTokenEstimate({ gross_saved_tokens_estimate: 0 }))
+      .toMatchObject({ gross_saved_tokens_estimate: 0 });
   });
 
   it("selects the same deterministic ten percent cohort for the same tenant and usage", () => {

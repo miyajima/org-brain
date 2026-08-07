@@ -1,7 +1,7 @@
 # Local memory migration and recovery
 
 OrgBrain local memory uses the same MemoryRecord v2 logical contract as the
-Cloud D1 service. The authoritative SQLite schema version is `18`. Full-text and
+Cloud D1 service. The authoritative SQLite schema version is `19`. Full-text and
 future vector indexes are derived data and can be rebuilt from authoritative
 records.
 
@@ -79,9 +79,16 @@ orgbrain doctor
 and searchable-record counts, checks schema version, and verifies POSIX private
 permissions.
 
-## Schema v18 classification and impact telemetry
+## Schema v19 classification and impact telemetry
 
-Schema v18 adds explicit business categories, category/work snapshots on
+Schema v19 includes the schema-v18 business classification and detailed
+per-memory effect telemetry, then adds the merged run-level
+`memory_impact_events` / `memory_impact_daily_metrics` contract. It also adds
+nullable `memory_usage_events.external_run_id`, so one eligible execution can
+be associated with its deduplicated memory references without treating
+execution reporting and per-memory attribution as the same metric.
+
+The earlier schema-v18 work adds explicit business categories, category/work snapshots on
 memory history, stable retrieval generations and units, usage/effect/failure
 telemetry, a rebuildable daily impact projection, and a local telemetry outbox.
 The outbox is populated only when explicit Cloud synchronization is enabled
@@ -89,6 +96,11 @@ with `ORGBRAIN_ENABLE_CLOUD_MEMORY=true`. Deliver pending usage records before
 their dependent effect records with `orgbrain telemetry sync`; the command
 also requires `ORGBRAIN_API_URL` (or its compatibility alias) and
 `ORGBRAIN_API_KEY`, and retries failures with bounded exponential backoff.
+
+Run-level measurement uses `orgbrain impact start`, `orgbrain impact report`,
+or the matching `orgbrain_memory_impact_start` / `orgbrain_memory_impact_report`
+tools. The separate `orgbrain_memory_impact_metrics` tool reports per-memory
+references, effects, token estimates, and failure avoidance.
 
 Existing rows remain unclassified; initialization does not infer a category or
 work type from their content. Workspace config v2 can provide explicit defaults

@@ -80,6 +80,12 @@ class FakeStatement {
   }
 
   async all<T>() {
+    if (this.sql.includes("FROM memory_impact_events") && this.sql.includes("event_type = 'eligible'")) {
+      const row = this.db.executionContexts.find((item) =>
+        item.tenant_id === this.args[0] && item.external_run_id === this.args[1]
+      );
+      return { results: (row ? [row] : []) as T[] };
+    }
     if (this.sql.includes("FROM group_members") && this.sql.includes("principal = ?")) {
       const tenantId = String(this.args[0]);
       const principal = String(this.args[1]);
@@ -200,6 +206,8 @@ class FakeStatement {
         row.confirmed_at = this.args[20] === null ? null : Number(this.args[20]);
         row.updated_at = Number(this.args[21]);
       }
+    } else if (this.sql.includes("INSERT INTO memory_usage_events")) {
+      this.db.usageEventBindings.push(this.args);
     }
     return { success: true };
   }
@@ -210,6 +218,14 @@ class FakeD1 {
   decisionMemoryVersions: DecisionMemoryVersionRecord[] = [];
   groupMembers: GroupMemberRecord[] = [];
   resourceAcl: ResourceAclRecord[] = [];
+  usageEventBindings: unknown[][] = [];
+  executionContexts: Array<{
+    tenant_id: string;
+    external_run_id: string;
+    project_id: string | null;
+    task_id: string | null;
+    trace_id: string | null;
+  }> = [];
 
   prepare(sql: string) {
     return new FakeStatement(this, sql);
@@ -643,6 +659,49 @@ describe("context-engine-service", () => {
 
     expect(result.results.map((item: any) => item.id)).toEqual(["dm-reviewed"]);
     expect(result.results[0].trustSignals).toMatchObject({ confirmationState: "reviewed" });
+  });
+
+  it("propagates task and trace context into governance search usage", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [baseDecision({ id: "dm-context" })];
+
+    await searchDecisionMemories({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123",
+      projectId: "proj_abc",
+      q: "legacy_auth",
+      task_id: "task-123",
+      trace_id: "trace-456"
+    });
+
+    expect(db.usageEventBindings).toHaveLength(1);
+    expect(db.usageEventBindings[0]?.[3]).toBe("task-123");
+    expect(db.usageEventBindings[0]?.[4]).toBe("trace-456");
+  });
+
+  it("inherits omitted governance search context from an external run", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [baseDecision({ id: "dm-external-context" })];
+    db.executionContexts = [{
+      tenant_id: "org_123",
+      external_run_id: "run-789",
+      project_id: "proj_abc",
+      task_id: "task-from-run",
+      trace_id: "trace-from-run"
+    }];
+
+    await searchDecisionMemories({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123",
+      q: "legacy_auth",
+      external_run_id: "run-789"
+    });
+
+    expect(db.usageEventBindings).toHaveLength(1);
+    expect(db.usageEventBindings[0]?.slice(2, 6)).toEqual([
+      "proj_abc",
+      "task-from-run",
+      "trace-from-run",
+      "run-789"
+    ]);
   });
 
   it("compresses response below maxTokens", async () => {

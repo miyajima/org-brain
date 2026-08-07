@@ -166,8 +166,9 @@ export async function recordTaskMemoryEffect(
     throw new Error("net_saved_tokens_mismatch");
   }
   const failureSaved = Math.round(body.failure_saved_tokens_estimate ?? 0);
+  if (!Number.isFinite(failureSaved) || failureSaved < 0) throw new Error("invalid_failure_saved_tokens_estimate");
   if (failureSaved !== 0 && !body.failure_avoided) throw new Error("failure_saved_tokens_without_avoidance");
-  if (![gross, injected, net, failureSaved].every(Number.isFinite)) throw new Error("invalid_token_estimate");
+  if (![gross, injected, net].every(Number.isFinite)) throw new Error("invalid_token_estimate");
   const effectId = ulid();
   const now = Date.now();
   const statements: D1PreparedStatement[] = [env.OPEN_BRAIN_DB.prepare(

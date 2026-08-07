@@ -63,7 +63,7 @@
         "action_changed": { "type": "boolean" },
         "alternative_executed": { "type": "boolean" },
         "failure_avoided": { "type": "boolean" },
-        "failure_saved_tokens_estimate": { "type": "number" },
+        "failure_saved_tokens_estimate": { "type": "number", "minimum": 0 },
         "verification_ref_type": { "type": ["string", "null"] },
         "verification_ref_id": { "type": ["string", "null"] },
         "estimated_tool_calls_saved": { "type": ["number", "null"] },

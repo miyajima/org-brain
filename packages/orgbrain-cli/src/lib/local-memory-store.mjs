@@ -19,7 +19,7 @@ import {
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 18;
+export const MEMORY_SCHEMA_VERSION = 19;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -50,7 +50,7 @@ const TOKEN_ESTIMATION_PRIORITY = [
 function resolveLocalTokenEstimate(input) {
   if (input.gross_saved_tokens_estimate !== undefined) {
     const value = Number(input.gross_saved_tokens_estimate);
-    if (!Number.isFinite(value)) throw new Error("invalid_token_estimate");
+    if (!Number.isFinite(value) || value < 0) throw new Error("invalid_token_estimate");
     return {
       gross: Math.round(value),
       method: nullableString(input.estimation_method, 128) || "reported"
@@ -60,7 +60,7 @@ function resolveLocalTokenEstimate(input) {
   if (candidates && typeof candidates === "object" && !Array.isArray(candidates)) {
     for (const [method, field] of TOKEN_ESTIMATION_PRIORITY) {
       const value = Number(candidates[field]);
-      if (Number.isFinite(value)) return { gross: Math.round(value), method };
+      if (Number.isFinite(value) && value >= 0) return { gross: Math.round(value), method };
     }
   }
   throw new Error("gross_saved_tokens_estimate_required");
@@ -563,8 +563,49 @@ function createCanonicalTables(db) {
   `);
 }
 
-function createV18Tables(db) {
+function createCurrentTables(db) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_impact_events (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      task_id TEXT,
+      trace_id TEXT,
+      external_run_id TEXT NOT NULL,
+      event_type TEXT NOT NULL CHECK (event_type IN ('eligible', 'assessed', 'failed')),
+      memory_used INTEGER,
+      avoided_lookup TEXT CHECK (avoided_lookup IN ('source_search', 'web_search', 'past_context', 'none')),
+      memory_basis_ids_json TEXT NOT NULL DEFAULT '[]',
+      confidence TEXT CHECK (confidence IN ('low', 'medium', 'high')),
+      failure_category TEXT,
+      reporter_principal TEXT NOT NULL,
+      agent_name TEXT,
+      model TEXT,
+      idempotency_key TEXT NOT NULL,
+      payload_hash TEXT NOT NULL,
+      occurred_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memory_impact_daily_metrics (
+      day TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL DEFAULT '',
+      eligible_runs INTEGER NOT NULL DEFAULT 0,
+      assessed_runs INTEGER NOT NULL DEFAULT 0,
+      failed_runs INTEGER NOT NULL DEFAULT 0,
+      memory_used_runs INTEGER NOT NULL DEFAULT 0,
+      avoided_runs INTEGER NOT NULL DEFAULT 0,
+      reporting_rate REAL CHECK (reporting_rate IS NULL OR reporting_rate BETWEEN 0 AND 1),
+      memory_usage_rate REAL CHECK (memory_usage_rate IS NULL OR memory_usage_rate BETWEEN 0 AND 1),
+      avoided_lookup_rate REAL CHECK (avoided_lookup_rate IS NULL OR avoided_lookup_rate BETWEEN 0 AND 1),
+      source_search_count INTEGER NOT NULL DEFAULT 0,
+      web_search_count INTEGER NOT NULL DEFAULT 0,
+      past_context_count INTEGER NOT NULL DEFAULT 0,
+      none_count INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (day, tenant_id, project_id)
+    );
     CREATE TABLE IF NOT EXISTS business_categories (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,
@@ -597,6 +638,7 @@ function createV18Tables(db) {
       project_id TEXT,
       task_id TEXT,
       trace_id TEXT,
+      external_run_id TEXT,
       capability TEXT,
       access_path TEXT NOT NULL,
       request_source TEXT NOT NULL,
@@ -937,6 +979,13 @@ function upgradeMemoryUsageItems(db) {
   }
 }
 
+function upgradeMemoryUsageEvents(db) {
+  const columns = tableColumns(db, "memory_usage_events");
+  if (!columns.has("external_run_id")) {
+    db.exec("ALTER TABLE memory_usage_events ADD COLUMN external_run_id TEXT");
+  }
+}
+
 function rebuildFts(db) {
   db.exec("DROP TABLE IF EXISTS memories_fts");
   db.exec(`
@@ -1041,75 +1090,78 @@ function deleteStableRetrievalUnits(db, tenantId, sourceId) {
 function writeStableRetrievalUnits(db, record, writeFts = true, deleteExisting = true, updateFeatureStats = true) {
   if (deleteExisting) deleteStableRetrievalUnits(db, record.tenant_id, record.id);
   if (record.lifecycle_state === "suppressed") return;
-  const insertUnit = db.prepare(
-    `INSERT INTO retrieval_units(
-       id, generation_id, tenant_id, project_id, source_type, source_id,
-       business_category_id, work_type, unit_type, text, speaker, event_at,
-       valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
-       metadata_json, segment_id, content_hash, extractor_name, extractor_version,
-       extraction_state, degraded_reason, created_at
-     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  );
-  const insertFts = writeFts
-    ? db.prepare("INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)")
-    : null;
-  const insertFeature = db.prepare(
-    "INSERT INTO retrieval_unit_features(unit_id, generation_id, tenant_id, feature_hash, weight) VALUES(?,?,?,?,?)"
-  );
-  const insertEmbedding = db.prepare(
-    `INSERT INTO retrieval_unit_embeddings(
-       unit_id, generation_id, tenant_id, provider, feature_count, vector_format, vector_blob, updated_at
-     ) VALUES(?,?,?,?,?,?,?,?)`
-  );
   const generations = [
-    { id: "gen_baseline_units", units: buildRetrievalUnits(record) },
-    { id: "gen_structured_context", units: buildRetrievalUnitsV4(record) }
+    {
+      id: "gen_baseline_units",
+      units: "memory_retrieval_units",
+      features: "memory_retrieval_unit_features",
+      embeddings: "memory_retrieval_unit_embeddings",
+      metadata: "'{}'",
+      segment: "NULL",
+      vectorFormat: "'sparse-fallback'",
+      vectorBlob: "NULL"
+    },
+    {
+      id: "gen_structured_context",
+      units: "memory_retrieval_units_v4",
+      features: "memory_retrieval_unit_features_v4",
+      embeddings: "memory_retrieval_unit_embeddings_v4",
+      metadata: "u.metadata_json",
+      segment: "u.segment_id",
+      vectorFormat: "e.vector_format",
+      vectorBlob: "e.vector_blob"
+    }
   ];
   for (const generation of generations) {
-    for (const unit of generation.units) {
-      const stableId = `${generation.id}:${unit.id}`;
-      insertUnit.run(
-        stableId,
-        generation.id,
-        unit.tenant_id,
-        unit.project_id,
-        "memory",
-        unit.memory_id,
-        record.business_category_id ?? null,
-        record.work_type ?? null,
-        unit.unit_type,
-        unit.text,
-        unit.speaker,
-        unit.event_at,
-        unit.valid_from,
-        unit.valid_until,
-        unit.source_ref_json,
-        unit.source_span_start,
-        unit.source_span_end,
-        unit.metadata_json ?? "{}",
-        unit.segment_id ?? null,
-        unit.content_hash,
-        unit.extractor,
-        unit.extractor_version,
-        unit.extraction_state,
-        unit.degraded_reason,
-        unit.created_at
-      );
-      if (insertFts) insertFts.run(stableId, generation.id, unit.tenant_id, unit.text);
-      const features = embedLocalText(unit.text);
-      for (const feature of features) {
-        insertFeature.run(stableId, generation.id, unit.tenant_id, feature.feature_hash, feature.weight);
-      }
-      insertEmbedding.run(
-        stableId,
-        generation.id,
-        unit.tenant_id,
-        LOCAL_EMBEDDING_PROVIDER,
-        features.length,
-        "sparse-fallback",
-        null,
-        unit.created_at
-      );
+    db.prepare(
+      `INSERT INTO retrieval_units(
+         id, generation_id, tenant_id, project_id, source_type, source_id,
+         business_category_id, work_type, unit_type, text, speaker, event_at,
+         valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+         metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+         extraction_state, degraded_reason, created_at
+       )
+       SELECT ? || ':' || u.id, ?, u.tenant_id, u.project_id, 'memory', u.memory_id,
+              ?, ?, u.unit_type, u.text, u.speaker, u.event_at,
+              u.valid_from, u.valid_until, u.source_ref_json, u.source_span_start,
+              u.source_span_end, ${generation.metadata}, ${generation.segment},
+              u.content_hash, u.extractor, u.extractor_version,
+              u.extraction_state, u.degraded_reason, u.created_at
+       FROM ${generation.units} u
+       WHERE u.tenant_id = ? AND u.memory_id = ?`
+    ).run(
+      generation.id,
+      generation.id,
+      record.business_category_id ?? null,
+      record.work_type ?? null,
+      record.tenant_id,
+      record.id
+    );
+    db.prepare(
+      `INSERT INTO retrieval_unit_features(unit_id, generation_id, tenant_id, feature_hash, weight)
+       SELECT ? || ':' || f.unit_id, ?, f.tenant_id, f.feature_hash, f.weight
+       FROM ${generation.features} f
+       JOIN ${generation.units} u ON u.tenant_id = f.tenant_id AND u.id = f.unit_id
+       WHERE u.tenant_id = ? AND u.memory_id = ?`
+    ).run(generation.id, generation.id, record.tenant_id, record.id);
+    db.prepare(
+      `INSERT INTO retrieval_unit_embeddings(
+         unit_id, generation_id, tenant_id, provider, feature_count,
+         vector_format, vector_blob, updated_at
+       )
+       SELECT ? || ':' || e.unit_id, ?, e.tenant_id, e.provider, e.feature_count,
+              ${generation.vectorFormat}, ${generation.vectorBlob}, e.updated_at
+       FROM ${generation.embeddings} e
+       JOIN ${generation.units} u ON u.tenant_id = e.tenant_id AND u.id = e.unit_id
+       WHERE u.tenant_id = ? AND u.memory_id = ?`
+    ).run(generation.id, generation.id, record.tenant_id, record.id);
+    if (writeFts) {
+      db.prepare(
+        `INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text)
+         SELECT id, generation_id, tenant_id, text
+         FROM retrieval_units
+         WHERE generation_id = ? AND tenant_id = ? AND source_type = 'memory' AND source_id = ?`
+      ).run(generation.id, record.tenant_id, record.id);
     }
   }
   if (updateFeatureStats) rebuildStableRetrievalFeatureStats(db);
@@ -1422,6 +1474,21 @@ function rebuildRetrievalUnitsV4(db) {
 
 function addIndexes(db) {
   db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_impact_idempotency
+      ON memory_impact_events(tenant_id, reporter_principal, idempotency_key);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_impact_run_event
+      ON memory_impact_events(tenant_id, external_run_id, event_type);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_impact_run_terminal
+      ON memory_impact_events(tenant_id, external_run_id)
+      WHERE event_type IN ('assessed', 'failed');
+    CREATE INDEX IF NOT EXISTS idx_memory_impact_tenant_created
+      ON memory_impact_events(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_impact_project_created
+      ON memory_impact_events(tenant_id, project_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_impact_category_created
+      ON memory_impact_events(tenant_id, avoided_lookup, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_impact_daily_tenant_day
+      ON memory_impact_daily_metrics(tenant_id, day DESC);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_external_key_v2
       ON memories(tenant_id, source, external_key)
       WHERE external_key IS NOT NULL AND external_key != '';
@@ -1471,6 +1538,8 @@ function addIndexes(db) {
       ON business_categories(tenant_id, is_active, label);
     CREATE INDEX IF NOT EXISTS idx_memory_usage_events_tenant_created
       ON memory_usage_events(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_usage_events_external_run
+      ON memory_usage_events(tenant_id, external_run_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_usage_items_source
       ON memory_usage_items(tenant_id, source_type, source_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_effect_events_usage
@@ -1545,7 +1614,8 @@ function migrateSchema(db) {
     createCanonicalTables(db);
     upgradeLegacyMemories(db);
     upgradeLegacyMemoryVersions(db);
-    createV18Tables(db);
+    createCurrentTables(db);
+    upgradeMemoryUsageEvents(db);
     upgradeMemoryUsageItems(db);
     addIndexes(db);
     rebuildFts(db);
@@ -2384,6 +2454,89 @@ function rebuildMemoryImpactDay(db, tenantId, day) {
   return { day, row_count: groups.size };
 }
 
+function summarizeExecutionImpact(events) {
+  const runs = new Map();
+  for (const event of events) {
+    const run = runs.get(event.external_run_id) ?? {
+      eligible: false,
+      assessed: false,
+      failed: false,
+      memoryUsed: false,
+      avoidedLookup: "none"
+    };
+    if (event.event_type === "eligible") run.eligible = true;
+    if (event.event_type === "failed") run.failed = true;
+    if (event.event_type === "assessed") {
+      run.assessed = true;
+      run.memoryUsed = event.memory_used === 1;
+      run.avoidedLookup = event.avoided_lookup ?? "none";
+    }
+    runs.set(event.external_run_id, run);
+  }
+  const values = [...runs.values()];
+  const eligibleRuns = values.filter((run) => run.eligible).length;
+  const assessedRuns = values.filter((run) => run.assessed).length;
+  const failedRuns = values.filter((run) => run.failed).length;
+  const memoryUsedRuns = values.filter((run) => run.assessed && run.memoryUsed).length;
+  const avoidedRuns = values.filter((run) => run.assessed && run.memoryUsed && run.avoidedLookup !== "none").length;
+  const byAvoidedLookup = { source_search: 0, web_search: 0, past_context: 0, none: 0 };
+  for (const run of values.filter((item) => item.assessed)) byAvoidedLookup[run.avoidedLookup] += 1;
+  const ratio = (numerator, denominator) => denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
+  return {
+    eligible_runs: eligibleRuns,
+    assessed_runs: assessedRuns,
+    failed_runs: failedRuns,
+    memory_used_runs: memoryUsedRuns,
+    avoided_runs: avoidedRuns,
+    reporting_rate: ratio(assessedRuns + failedRuns, eligibleRuns),
+    memory_usage_rate: ratio(memoryUsedRuns, assessedRuns),
+    avoided_lookup_rate: ratio(avoidedRuns, memoryUsedRuns),
+    by_avoided_lookup: byAvoidedLookup
+  };
+}
+
+function rebuildExecutionImpactDay(db, tenantId, projectId, day) {
+  const { start, end } = dayBounds(day);
+  const projectKey = projectId ?? "";
+  const events = db.prepare(
+    `SELECT event_type, external_run_id, memory_used, avoided_lookup
+     FROM memory_impact_events
+     WHERE tenant_id = ? AND COALESCE(project_id, '') = ?
+       AND occurred_at >= ? AND occurred_at < ?`
+  ).all(tenantId, projectKey, start, end);
+  const summary = summarizeExecutionImpact(events);
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO memory_impact_daily_metrics(
+       day, tenant_id, project_id, eligible_runs, assessed_runs, failed_runs,
+       memory_used_runs, avoided_runs, reporting_rate, memory_usage_rate,
+       avoided_lookup_rate, source_search_count, web_search_count,
+       past_context_count, none_count, created_at, updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(day, tenant_id, project_id) DO UPDATE SET
+       eligible_runs = excluded.eligible_runs,
+       assessed_runs = excluded.assessed_runs,
+       failed_runs = excluded.failed_runs,
+       memory_used_runs = excluded.memory_used_runs,
+       avoided_runs = excluded.avoided_runs,
+       reporting_rate = excluded.reporting_rate,
+       memory_usage_rate = excluded.memory_usage_rate,
+       avoided_lookup_rate = excluded.avoided_lookup_rate,
+       source_search_count = excluded.source_search_count,
+       web_search_count = excluded.web_search_count,
+       past_context_count = excluded.past_context_count,
+       none_count = excluded.none_count,
+       updated_at = excluded.updated_at`
+  ).run(
+    day, tenantId, projectKey, summary.eligible_runs, summary.assessed_runs,
+    summary.failed_runs, summary.memory_used_runs, summary.avoided_runs,
+    summary.reporting_rate, summary.memory_usage_rate, summary.avoided_lookup_rate,
+    summary.by_avoided_lookup.source_search, summary.by_avoided_lookup.web_search,
+    summary.by_avoided_lookup.past_context, summary.by_avoided_lookup.none, now, now
+  );
+  return summary;
+}
+
 export class LocalMemoryStore {
   constructor(dbPath = DEFAULT_LOCAL_DB) {
     this.dbPath = resolve(dbPath);
@@ -2449,6 +2602,8 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_retrieval_unit_features_v4") ||
         !hasTable(db, "memory_retrieval_unit_feature_stats_v4") ||
         !hasTable(db, "business_categories") ||
+        !hasTable(db, "memory_impact_events") ||
+        !hasTable(db, "memory_impact_daily_metrics") ||
         !hasTable(db, "memory_usage_events") ||
         !hasTable(db, "memory_effect_events") ||
         !hasTable(db, "retrieval_generations") ||
@@ -2467,6 +2622,227 @@ export class LocalMemoryStore {
 
   open({ readOnly = false } = {}) {
     return new DatabaseSync(this.dbPath, { readOnly });
+  }
+
+  async startMemoryImpact(tenantId, input, principal = "local") {
+    await this.init();
+    const externalRunId = nullableString(input.external_run_id, 256);
+    const idempotencyKey = nullableString(input.idempotency_key, 256);
+    if (!externalRunId) throw new Error("external_run_id_required");
+    if (!idempotencyKey) throw new Error("idempotency_key_required");
+    return this.insertExecutionImpactEvent({
+      tenantId,
+      projectId: nullableString(input.project_id, 256),
+      taskId: nullableString(input.task_id, 256),
+      traceId: nullableString(input.trace_id, 256),
+      externalRunId,
+      eventType: "eligible",
+      principal,
+      agentName: nullableString(input.agent_name, 256),
+      model: nullableString(input.model, 256),
+      idempotencyKey,
+      occurredAt: finiteNumber(input.occurred_at) ?? Date.now()
+    });
+  }
+
+  async reportMemoryImpactExecution(tenantId, externalRunIdInput, input, principal = "local") {
+    await this.init();
+    const externalRunId = nullableString(externalRunIdInput, 256);
+    const idempotencyKey = nullableString(input.idempotency_key, 256);
+    if (!externalRunId) throw new Error("external_run_id_required");
+    if (!idempotencyKey) throw new Error("idempotency_key_required");
+    const outcome = input.outcome === "failed" ? "failed" : "assessed";
+    const db = this.open({ readOnly: true });
+    let eligible;
+    try {
+      eligible = db.prepare(
+        `SELECT * FROM memory_impact_events
+         WHERE tenant_id = ? AND external_run_id = ? AND event_type = 'eligible'`
+      ).get(tenantId, externalRunId);
+    } finally {
+      db.close();
+    }
+    if (!eligible) {
+      await this.startMemoryImpact(tenantId, {
+        external_run_id: externalRunId,
+        idempotency_key: `${idempotencyKey}:auto-start`,
+        occurred_at: input.occurred_at
+      }, principal);
+      const reopened = this.open({ readOnly: true });
+      try {
+        eligible = reopened.prepare(
+          `SELECT * FROM memory_impact_events
+           WHERE tenant_id = ? AND external_run_id = ? AND event_type = 'eligible'`
+        ).get(tenantId, externalRunId);
+      } finally {
+        reopened.close();
+      }
+    }
+    if (outcome === "failed") {
+      const failureCategory = ["agent_error", "tool_error", "cancelled", "unknown"].includes(input.failure_category)
+        ? input.failure_category
+        : "unknown";
+      return this.insertExecutionImpactEvent({
+        tenantId,
+        projectId: eligible?.project_id ?? null,
+        taskId: eligible?.task_id ?? null,
+        traceId: eligible?.trace_id ?? null,
+        externalRunId,
+        eventType: "failed",
+        failureCategory,
+        principal,
+        agentName: eligible?.agent_name ?? null,
+        model: eligible?.model ?? null,
+        idempotencyKey,
+        occurredAt: finiteNumber(input.occurred_at) ?? Date.now()
+      });
+    }
+    if (typeof input.memory_used !== "boolean") throw new Error("memory_used_required");
+    const avoidedLookup = input.avoided_lookup;
+    if (!["source_search", "web_search", "past_context", "none"].includes(avoidedLookup)) {
+      throw new Error("invalid_avoided_lookup");
+    }
+    const memoryBasisIds = Array.isArray(input.memory_basis_ids)
+      ? [...new Set(input.memory_basis_ids.map((id) => nullableString(id, 256)).filter(Boolean))]
+      : [];
+    const confidence = input.confidence == null ? null : input.confidence;
+    if (!input.memory_used && (avoidedLookup !== "none" || memoryBasisIds.length > 0 || confidence !== null)) {
+      throw new Error("invalid_unused_memory_impact");
+    }
+    if (input.memory_used && (memoryBasisIds.length === 0 || !["low", "medium", "high"].includes(confidence))) {
+      throw new Error("memory_basis_and_confidence_required");
+    }
+    if (memoryBasisIds.length > 20) throw new Error("too_many_memory_basis_ids");
+    if (memoryBasisIds.length > 0) {
+      const basisDb = this.open({ readOnly: true });
+      try {
+        const placeholders = memoryBasisIds.map(() => "?").join(",");
+        const rows = basisDb.prepare(
+          `SELECT id FROM memories WHERE tenant_id = ? AND id IN (${placeholders})`
+        ).all(tenantId, ...memoryBasisIds);
+        if (new Set(rows.map((row) => row.id)).size !== memoryBasisIds.length) {
+          throw new Error("invalid_memory_basis");
+        }
+      } finally {
+        basisDb.close();
+      }
+    }
+    return this.insertExecutionImpactEvent({
+      tenantId,
+      projectId: eligible?.project_id ?? null,
+      taskId: eligible?.task_id ?? null,
+      traceId: eligible?.trace_id ?? null,
+      externalRunId,
+      eventType: "assessed",
+      memoryUsed: input.memory_used,
+      avoidedLookup,
+      memoryBasisIds,
+      confidence,
+      principal,
+      agentName: eligible?.agent_name ?? null,
+      model: eligible?.model ?? null,
+      idempotencyKey,
+      occurredAt: finiteNumber(input.occurred_at) ?? Date.now()
+    });
+  }
+
+  async insertExecutionImpactEvent(input) {
+    const hashable = { ...input };
+    delete hashable.occurredAt;
+    const payloadHash = hashContent(JSON.stringify(hashable));
+    const db = this.open();
+    try {
+      const existing = db.prepare(
+        `SELECT * FROM memory_impact_events
+         WHERE tenant_id = ? AND reporter_principal = ? AND idempotency_key = ?`
+      ).get(input.tenantId, input.principal, input.idempotencyKey);
+      if (existing) {
+        if (existing.payload_hash !== payloadHash) throw new Error("idempotency_conflict");
+        return { event: existing, deduped: true };
+      }
+      const sameType = db.prepare(
+        `SELECT id FROM memory_impact_events
+         WHERE tenant_id = ? AND external_run_id = ? AND event_type = ?`
+      ).get(input.tenantId, input.externalRunId, input.eventType);
+      if (sameType) throw new Error("event_conflict");
+      if (input.eventType !== "eligible") {
+        const terminal = db.prepare(
+          `SELECT id FROM memory_impact_events
+           WHERE tenant_id = ? AND external_run_id = ? AND event_type IN ('assessed', 'failed')`
+        ).get(input.tenantId, input.externalRunId);
+        if (terminal) throw new Error("event_conflict");
+      }
+      const now = Date.now();
+      const id = randomUUID();
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.prepare(
+          `INSERT INTO memory_impact_events(
+             id, tenant_id, project_id, task_id, trace_id, external_run_id, event_type,
+             memory_used, avoided_lookup, memory_basis_ids_json, confidence, failure_category,
+             reporter_principal, agent_name, model, idempotency_key, payload_hash,
+             occurred_at, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).run(
+          id, input.tenantId, input.projectId ?? null, input.taskId ?? null,
+          input.traceId ?? null, input.externalRunId, input.eventType,
+          input.memoryUsed == null ? null : input.memoryUsed ? 1 : 0,
+          input.avoidedLookup ?? null, JSON.stringify(input.memoryBasisIds ?? []),
+          input.confidence ?? null, input.failureCategory ?? null, input.principal,
+          input.agentName ?? null, input.model ?? null, input.idempotencyKey,
+          payloadHash, input.occurredAt, now
+        );
+        rebuildExecutionImpactDay(db, input.tenantId, input.projectId ?? null, utcDay(input.occurredAt));
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+      const event = db.prepare("SELECT * FROM memory_impact_events WHERE id = ?").get(id);
+      return { event, deduped: false };
+    } finally {
+      db.close();
+    }
+  }
+
+  async getMemoryImpactExecution(tenantId, externalRunId) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const events = db.prepare(
+        `SELECT * FROM memory_impact_events
+         WHERE tenant_id = ? AND external_run_id = ? ORDER BY created_at, id`
+      ).all(tenantId, externalRunId);
+      if (events.length === 0) throw new Error("impact_run_not_found");
+      return { external_run_id: externalRunId, events };
+    } finally {
+      db.close();
+    }
+  }
+
+  async memoryImpactSummary(tenantId, filters = {}) {
+    await this.init();
+    const from = finiteNumber(filters.from) ?? Date.now() - 30 * 86_400_000;
+    const to = finiteNumber(filters.to) ?? Date.now();
+    if (from > to) throw new Error("invalid_range");
+    const projectId = nullableString(filters.project_id, 256);
+    const db = this.open({ readOnly: true });
+    try {
+      const events = projectId
+        ? db.prepare(
+          `SELECT event_type, external_run_id, memory_used, avoided_lookup
+           FROM memory_impact_events
+           WHERE tenant_id = ? AND occurred_at >= ? AND occurred_at <= ? AND project_id = ?`
+        ).all(tenantId, from, to, projectId)
+        : db.prepare(
+          `SELECT event_type, external_run_id, memory_used, avoided_lookup
+           FROM memory_impact_events
+           WHERE tenant_id = ? AND occurred_at >= ? AND occurred_at <= ?`
+        ).all(tenantId, from, to);
+      return summarizeExecutionImpact(events);
+    } finally {
+      db.close();
+    }
   }
 
   async listBusinessCategories(tenantId, { includeInactive = false } = {}) {
@@ -2710,20 +3086,43 @@ export class LocalMemoryStore {
           created: false
         };
       }
+      const externalRunId = nullableString(input.external_run_id, 256);
+      let linkedProjectId = nullableString(input.project_id, 128);
+      let linkedTaskId = nullableString(input.task_id, 128);
+      let linkedTraceId = nullableString(input.trace_id, 128);
+      if (externalRunId) {
+        const execution = db.prepare(
+          `SELECT external_run_id, project_id, task_id, trace_id FROM memory_impact_events
+           WHERE tenant_id = ? AND external_run_id = ? AND event_type = 'eligible'`
+        ).get(tenantId, externalRunId);
+        if (!execution) throw new Error("memory_impact_execution_not_found");
+        for (const [field, supplied, expected] of [
+          ["project_id", linkedProjectId, execution.project_id],
+          ["task_id", linkedTaskId, execution.task_id],
+          ["trace_id", linkedTraceId, execution.trace_id]
+        ]) {
+          if (supplied !== null && supplied !== expected) {
+            throw new Error(`memory_impact_context_mismatch:${field}`);
+          }
+        }
+        linkedProjectId ??= execution.project_id;
+        linkedTaskId ??= execution.task_id;
+        linkedTraceId ??= execution.trace_id;
+      }
       db.exec("BEGIN IMMEDIATE");
       try {
         db.prepare(
           `INSERT INTO memory_usage_events(
-             id, tenant_id, project_id, task_id, trace_id, capability,
+             id, tenant_id, project_id, task_id, trace_id, external_run_id, capability,
              access_path, request_source, query_hash,
              requested_business_category_id, requested_work_type,
              retrieval_generation_id, ranking_profile_id,
              verification_sampled, created_at
-           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).run(
-          usageId, tenantId, nullableString(input.project_id, 128),
-          nullableString(input.task_id, 128), nullableString(input.trace_id, 128),
-          nullableString(input.capability, 128), accessPath, requestSource,
+          usageId, tenantId, linkedProjectId,
+          linkedTaskId, linkedTraceId,
+          externalRunId, nullableString(input.capability, 128), accessPath, requestSource,
           normalizedQueryHash(input.query_hash), nullableString(input.requested_business_category_id, 128),
           WORK_TYPES.has(input.requested_work_type) ? input.requested_work_type : null,
           nullableString(input.retrieval_generation_id, 128),
@@ -2778,9 +3177,10 @@ export class LocalMemoryStore {
           const payload = {
             id: usageId,
             tenant_id: tenantId,
-            project_id: nullableString(input.project_id, 128),
-            task_id: nullableString(input.task_id, 128),
-            trace_id: nullableString(input.trace_id, 128),
+            project_id: linkedProjectId,
+            task_id: linkedTaskId,
+            trace_id: linkedTraceId,
+            external_run_id: externalRunId,
             capability: nullableString(input.capability, 128),
             access_path: input.access_path,
             request_source: input.request_source,
@@ -2893,7 +3293,11 @@ export class LocalMemoryStore {
         if (!pattern) throw new Error("invalid_failure_pattern_id");
       }
       if (opportunity === "applicable" && !failurePatternId) throw new Error("failure_pattern_id_required");
-      if (Number(input.failure_saved_tokens_estimate ?? 0) !== 0 && !failureAvoided) {
+      const failureSavedTokens = Number(input.failure_saved_tokens_estimate ?? 0);
+      if (!Number.isFinite(failureSavedTokens) || failureSavedTokens < 0) {
+        throw new Error("invalid_failure_saved_tokens_estimate");
+      }
+      if (failureSavedTokens !== 0 && !failureAvoided) {
         throw new Error("failure_saved_tokens_without_avoidance");
       }
       const usageItems = db.prepare(
@@ -3005,7 +3409,7 @@ export class LocalMemoryStore {
           nullableString(input.estimator_version, 64), finiteNumber(input.estimate_confidence),
           failurePatternId, opportunity,
           actionChanged ? 1 : 0, alternativeExecuted ? 1 : 0,
-          failureAvoided ? 1 : 0, Number(input.failure_saved_tokens_estimate ?? 0),
+          failureAvoided ? 1 : 0, failureSavedTokens,
           nullableString(input.verification_ref_type, 64), nullableString(input.verification_ref_id, 256),
           finiteNumber(input.estimated_tool_calls_saved), finiteNumber(input.estimated_seconds_saved), createdAt
         );
@@ -3023,7 +3427,7 @@ export class LocalMemoryStore {
           const last = index === attributions.length - 1;
           const attributedGross = last ? gross - allocatedGross : Math.round(gross * attribution.attribution_weight);
           const attributedNet = last ? net - allocatedNet : Math.round(net * attribution.attribution_weight);
-          const failureSaved = Number(input.failure_saved_tokens_estimate ?? 0);
+          const failureSaved = failureSavedTokens;
           const attributedFailure = last ? failureSaved - allocatedFailure : Math.round(failureSaved * attribution.attribution_weight);
           allocatedGross += attributedGross;
           allocatedNet += attributedNet;
@@ -3075,7 +3479,7 @@ export class LocalMemoryStore {
             action_changed: actionChanged,
             alternative_executed: alternativeExecuted,
             failure_avoided: failureAvoided,
-            failure_saved_tokens_estimate: Number(input.failure_saved_tokens_estimate ?? 0),
+            failure_saved_tokens_estimate: failureSavedTokens,
             verification_ref_type: nullableString(input.verification_ref_type, 64),
             verification_ref_id: nullableString(input.verification_ref_id, 256),
             estimated_tool_calls_saved: finiteNumber(input.estimated_tool_calls_saved),
@@ -3630,7 +4034,7 @@ export class LocalMemoryStore {
       writeLocalEmbedding(db, record, updateFeatureStats);
       writeRetrievalUnits(db, record, updateFeatureStats);
       writeRetrievalUnitsV4(db, record);
-      writeStableRetrievalUnits(db, record);
+      writeStableRetrievalUnits(db, record, true, true, updateFeatureStats);
     }
   }
 

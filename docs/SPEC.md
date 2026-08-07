@@ -9,7 +9,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Event Bus: Cloudflare Queues (`org-bus`, `cap-plan`)
 - Coordination: Durable Objects (`LeaseDO`, `MailboxDO`)
 - MCP: Remote MCP endpoint on API Gateway (`/mcp`, service-token auth)
-- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `audit_events`, `retention_policies`) + R2 artifacts
+- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `business_categories`, `memory_impact_events`, `memory_impact_daily_metrics`, `memory_usage_events`, `memory_usage_items`, `memory_effect_events`, `memory_effect_attributions`, `memory_failure_patterns`, `memory_effect_daily_metrics`, `retrieval_generations`, `retrieval_generation_assignments`, `retrieval_ranking_profiles`, `retrieval_units`, `retrieval_units_fts`, `retrieval_projection_jobs`, `retrieval_evaluation_events`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
 
 ## API
@@ -22,6 +22,11 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `GET /v1/agent-messages/:messageId`
 - `POST /v1/agent-messages/:messageId/read`
 - `POST /v1/agent-messages/:messageId/ack`
+- `POST /v1/memory-impact-executions`
+- `POST /v1/memory-impact-executions/:externalRunId/report`
+- `GET /v1/memory-impact-executions/:externalRunId`
+- `GET /v1/memory-impact-summary`
+- `GET /v1/metrics/memory-impact`
 - `GET /v1/memories`
 - `POST /v1/memories/upsert`
 - `POST /v1/memories/capture`
@@ -129,6 +134,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `hybrid_v3` / `hybrid_v4` は移行用aliasである。通常クライアントは `retrieval_profile` を使い、安定した `retrieval_generations` / `retrieval_units` 契約から実際のschema・extractor・ranking・embedding profileを `meta.retrieval` で受け取る
 - `search_scope=evidence|governance|both` は通常memoryとdecision memoryを別チャネルで返す。`both`でも両者を一つの順位へ混ぜない
 - 全検索・context結果は `meta.usage_id` を返し、効果はappend-only `memory_effect_events` と重み付きattributionへ記録する。詳細契約は [`RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md`](RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md) に定義する
+- `memory_impact_events`は実行単位のeligible/assessed/failedと報告率の正本、`memory_usage_*` / `memory_effect_*`はメモリ単位の参照・利用・効果帰属の正本とする。任意の`external_run_id`で接続するが、両者の分母やevidence semanticsは合算しない
 - `GET /v1/ops/status` はadmin専用で、memory競合・期限切れ、decision review、
   task失敗、監査、token、legal hold、検索品質、索引構成、RPO/RTO目標を返す。
   未計測の検索指標は0ではなくnullを返す
@@ -209,7 +215,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `pnpm metrics:replay` replays recent task inputs against `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` without persisting new rows.
 - `pnpm metrics:rollup` backfills or recomputes one UTC day into `retrieval_daily_metrics`.
 - `pnpm measurement:report` reports opt-in measurement runs comparing raw-context control tasks with compact-memory treatment tasks, with optional `--session-id` aggregation for multi-turn sessions.
-- Agent-facing memory impact notes (`memory_used`, `avoided_lookup`, `memory_basis`, `confidence`) are qualitative supplements only; quantitative evaluation remains `retrieval_events` plus measurement mode.
+- Agent-facing memory impact notes are persisted as `memory_impact_events` when the integration reports every eligible run. `avoided_lookup` remains an agent self-report and a qualitative supplement; causal quantitative evaluation remains measurement mode plus business outcome metrics.
 
 ## Out of Scope (MVP)
 - SCIM/SAML provisioning and arbitrary custom role definitions
