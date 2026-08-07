@@ -18,11 +18,13 @@ describe("workspace-config", () => {
     const file = path.join(configDir, "workspaces.json");
 
     await saveWorkspaceConfig(file, {
-      version: 1,
+      version: 2,
       workspaces: {
         "/tmp/workspaces/org-brain": {
           tenant_id: "tenant-a",
-          project_id: "org-brain"
+          project_id: "org-brain",
+          business_category_id: null,
+          default_work_type: null
         }
       }
     });
@@ -30,11 +32,13 @@ describe("workspace-config", () => {
     expect((await stat(configDir)).mode & 0o777).toBe(0o700);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
     expect(await loadWorkspaceConfig(file)).toEqual({
-      version: 1,
+      version: 2,
       workspaces: {
         "/tmp/workspaces/org-brain": {
           tenant_id: "tenant-a",
-          project_id: "org-brain"
+          project_id: "org-brain",
+          business_category_id: null,
+          default_work_type: null
         }
       }
     });
@@ -74,7 +78,9 @@ describe("workspace-config", () => {
     expect(await readFile(legacyFile, "utf8")).toBe(legacyText);
     expect((await loadWorkspaceConfig(workspacesFile)).workspaces["/tmp/workspaces/demo"]).toEqual({
       tenant_id: "tenant-a",
-      project_id: "demo-project"
+      project_id: "demo-project",
+      business_category_id: null,
+      default_work_type: null
     });
   });
 

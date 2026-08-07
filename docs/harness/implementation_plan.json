@@ -1,12 +1,18 @@
 {
-  "summary": "Unify memory quality behavior around the richer runtime-neutral implementation, prove cross-runtime parity, document the contract, and pass the full gate without production mutation.",
+  "summary": "Implement additive classification and impact telemetry first, then stable retrieval generations and shared projections, preserving legacy projections for rollback and compatibility until a later production rollout.",
   "artifact_refs": [
-    "docs/harness/plan.json"
+    "docs/harness/plan.json",
+    "migrations/0018_business_classification.sql",
+    "migrations/0019_memory_impact_telemetry.sql",
+    "migrations/0020_retrieval_generations.sql",
+    "migrations/0021_retrieval_units_stable.sql"
   ],
   "decision_refs": [
-    "packages/shared owns the runtime-neutral implementation",
-    "scripts/lib/memory-quality.mjs remains a compatibility re-export",
-    "existing production reconciliation is out of scope"
+    "explicit tenant-defined business categories and fixed work types",
+    "append-only impact observations with per-source attribution",
+    "stable retrieval tables keyed by generation",
+    "evidence and governance remain separate response channels",
+    "no production mutation or legacy projection deletion"
   ],
   "evidence": [
     {
@@ -15,7 +21,7 @@
     }
   ],
   "residual_risks": [
-    "Cloudflare bundling of the runtime-neutral ESM module must be verified",
-    "Historical D1 values remain divergent until a separately approved backfill"
+    "The repository-wide change requires focused and full regression suites.",
+    "Live seven-day shadow acceptance remains a post-deployment operational gate."
   ]
 }

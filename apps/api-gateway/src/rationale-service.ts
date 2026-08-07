@@ -17,10 +17,12 @@ import {
   type EvidenceType,
   type ProposedEntity,
   type ProposedEvidence
+  , type MemoryWorkType
 } from "@org-brain/shared";
 import { captureMemoryItems, runBatchChunks } from "./memory-lifecycle-service";
 import type { Env } from "./types";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
+import { validateBusinessClassification } from "./business-category-service";
 
 const CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -31,6 +33,8 @@ type ProposedMemoryInput = {
   tags?: string[];
   created_at?: number;
   project_id?: string | null;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
 };
 
 type ProposeMemoryRequest = {
@@ -78,6 +82,8 @@ type ConfirmationPayload = {
     tags: string[];
     created_at: number;
     project_id: string | null;
+    business_category_id: string | null;
+    work_type: MemoryWorkType | null;
   };
   proposed_rationale: {
     decision_type: DecisionType;
@@ -206,7 +212,9 @@ function parseProposeRequest(rawBody: unknown): {
       summary: parseOptionalString(item.summary, "item.summary", 1_000),
       tags: parseTags(item.tags, "item.tags"),
       created_at: parseOptionalNumber(item.created_at, "item.created_at") ?? Date.now(),
-      project_id: parseOptionalString(item.project_id, "item.project_id", 128)
+      project_id: parseOptionalString(item.project_id, "item.project_id", 128),
+      business_category_id: parseOptionalString(item.business_category_id, "item.business_category_id", 128),
+      work_type: item.work_type ?? null
     },
     entities: parseEntities(body.entities, "entities"),
     evidence: parseEvidence(body.evidence, "evidence")
@@ -411,8 +419,17 @@ async function persistInferredRationale(
 
 export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
   const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseProposeRequest(rawBody);
+  const classification = await validateBusinessClassification(
+    env,
+    tenantId,
+    parsedItem.business_category_id,
+    parsedItem.work_type,
+    { required: env.MEMORY_CLASSIFICATION_MODE === "require" }
+  );
   const item = {
     ...parsedItem,
+    business_category_id: classification.business_category_id,
+    work_type: classification.work_type,
     content: screenMemoryWriteText(parsedItem.content, "item.content"),
     summary: screenOptionalMemoryWriteText(parsedItem.summary, "item.summary")
   };
@@ -445,13 +462,25 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
     },
     proposed_entities: extracted.entities,
     proposed_evidence: extracted.evidence
+    , ...(classification.classification_warning
+      ? { classification_warning: classification.classification_warning }
+      : {})
   };
 }
 
 export async function captureMemoryWithInferredRationale(env: Env, rawBody: unknown) {
   const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseCaptureWithRationaleRequest(rawBody);
+  const classification = await validateBusinessClassification(
+    env,
+    tenantId,
+    parsedItem.business_category_id,
+    parsedItem.work_type,
+    { required: env.MEMORY_CLASSIFICATION_MODE === "require" }
+  );
   const item = {
     ...parsedItem,
+    business_category_id: classification.business_category_id,
+    work_type: classification.work_type,
     content: screenMemoryWriteText(parsedItem.content, "item.content"),
     summary: screenOptionalMemoryWriteText(parsedItem.summary, "item.summary")
   };
@@ -478,6 +507,8 @@ export async function captureMemoryWithInferredRationale(env: Env, rawBody: unkn
         actor_id: actorId,
         kind: "semantic",
         lifecycle_state: "active"
+        , business_category_id: item.business_category_id
+        , work_type: item.work_type
       }
     ],
     operation: "capture"
@@ -503,6 +534,9 @@ export async function captureMemoryWithInferredRationale(env: Env, rawBody: unkn
     rationale_skipped: rationale.skipped,
     rationale_skip_reason: rationale.reason ?? null,
     confirmation_state: rationale.skipped ? null : "inferred_unconfirmed"
+    , ...(classification.classification_warning
+      ? { classification_warning: classification.classification_warning }
+      : {})
   };
 }
 
@@ -525,6 +559,8 @@ export async function confirmProposedMemory(env: Env, rawBody: unknown) {
     tags: payload.proposed_memory.tags,
     created_at: payload.proposed_memory.created_at,
     project_id: payload.proposed_memory.project_id,
+    business_category_id: payload.proposed_memory.business_category_id,
+    work_type: payload.proposed_memory.work_type,
     actor_type: payload.actor_type,
     actor_id: payload.actor_id,
     kind: "semantic" as const,

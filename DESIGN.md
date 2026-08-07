@@ -114,6 +114,12 @@ Filter and search controls:
 - Search should surface recent memory context before the user types anything.
 - Search should offer suggestion chips or autocomplete derived from actual memory/tag data.
 - Metrics strip: visible rows, canonical rows, digest rows, compacted rows, durable count, recent count.
+- Impact metrics must label `reported`, `estimated`, `verified`, `unverifiable`,
+  and `unreported` separately. Never render a missing estimate as zero.
+- Business-category and work-type filters are independent AND filters. Show
+  legacy `NULL` rows as `未分類` and exclude them from category KPI denominators.
+- A `both` search renders governance and evidence as separate titled sections;
+  it must not imply one cross-channel rank.
 - Search results: rank, source, type, title, preview, created date, score.
 - Profile: durable lane and recent lane should feel parallel but distinct.
 - Maintenance: highlight structural change with counts and project footprint.

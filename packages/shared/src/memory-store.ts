@@ -4,8 +4,9 @@ import type {
   MemoryOperation,
   MemoryScopeType
 } from "./memory-lifecycle-types";
+import type { MemoryWorkType, RetrievalProfile } from "./memory-impact";
 
-export const MEMORY_SCHEMA_VERSION = 17;
+export const MEMORY_SCHEMA_VERSION = 18;
 
 export type MemorySourceReference = {
   type: string;
@@ -31,6 +32,8 @@ export type MemoryRecordV2 = {
   id: string;
   tenant_id: string;
   project_id: string | null;
+  business_category_id: string | null;
+  work_type: MemoryWorkType | null;
   kind: MemoryKind;
   lifecycle_state: MemoryLifecycleState;
   scope_type: MemoryScopeType;
@@ -60,14 +63,18 @@ export type MemoryRecordV2 = {
 
 export type MemoryCaptureInput = Omit<
   MemoryRecordV2,
-  "id" | "content_hash" | "current_version" | "created_at" | "updated_at"
+  "id" | "content_hash" | "current_version" | "created_at" | "updated_at" | "business_category_id" | "work_type"
 > & {
   id?: string;
   created_at?: number;
   updated_at?: number;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
 };
 
 export type MemoryRevisionInput = {
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
   content?: string;
   summary?: string | null;
   tags?: string[];
@@ -110,12 +117,15 @@ export type MemorySearchResultV2 = {
 export type MemorySearchInput = {
   tenant_id: string;
   project_id?: string | null;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
   query: string;
   limit?: number;
   minimum_total_score?: number | null;
   include_suppressed?: boolean;
   principal_id?: string | null;
   search_mode?: "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3" | "hybrid_v4";
+  retrieval_profile?: RetrievalProfile;
   at?: number;
 };
 

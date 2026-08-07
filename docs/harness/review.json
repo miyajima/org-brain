@@ -1,90 +1,33 @@
 {
-  "automation": {
-    "auto_improve": true,
-    "auto_review": true,
-    "final_needs_improvement": false,
-    "improvement_reports": []
-  },
-  "docs_review": [
-    "Governed docs check passed without missing required documents."
-  ],
-  "exact_blockers": [],
-  "gate_attempt_id": "20260805T023139.963028Z-7c127811",
-  "gate_change": {
-    "final": {
-      "score": 100,
-      "status": "pass"
-    },
-    "initial": {
-      "score": 100,
-      "status": "pass"
-    },
-    "score_delta": 0
-  },
-  "generated_at": "2026-08-05T02:32:42.841403+00:00",
+  "docs_review": [],
   "manual_notes": {},
-  "overall_review": [
-    "Quality gate completed with status pass.",
-    "Quality score is 100 with deductions: []."
-  ],
-  "reliability_review": [
-    "Manifest command stage has no blocked or failed commands."
-  ],
+  "overall_review": [],
+  "reliability_review": [],
   "repo": "org-brain",
-  "residual_risk": [
-    "No residual risk detected by deterministic gate stages."
-  ],
+  "residual_risk": [],
   "reviewer_evidence": {
-    "actor": "/root/independent_review",
-    "completed_at": "2026-08-05T02:28:32Z",
-    "diff_fingerprint": "a17be69e0f45362f2c71a50bf2f80426764b3e55e24d0e653cfa3a2b7d02a2cd",
+    "actor": "",
+    "completed_at": "",
+    "diff_fingerprint": "",
     "findings": [],
-    "independent": true,
-    "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
-    "scope": [
-      ".github/workflows/ci.yml",
-      "apps/api-gateway/wrangler.local.toml",
-      "scripts/wrangler-config-parity.test.mjs",
-      "CI shell and YAML behavior",
-      "API key policy and tenant RBAC boundary"
-    ],
-    "source": "subagent",
-    "status": "passed",
-    "summary": "Final independent review passed with no findings after the CI config-path regression assertion resolved the prior P3 finding.",
-    "task_id": "independent_review"
+    "independent": false,
+    "run_id": "",
+    "scope": [],
+    "source": "",
+    "status": "pending",
+    "summary": "",
+    "task_id": ""
   },
-  "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
+  "run_id": "org-brain-20260807T011318.571987Z-eca7a303",
   "schema_version": 2,
-  "security_review": [
-    "The automated loop records deterministic gate metadata and does not collect secrets.",
-    "Command output remains scoped to gate and improvement artifacts."
-  ],
-  "self_review": [
-    "Final gate status is pass with score 100/85."
-  ],
+  "security_review": [],
+  "self_review": [],
   "verifier_evidence": {
-    "actor": "/root/independent_verifier",
-    "checks": [
-      {
-        "command": "rtk node --test scripts/wrangler-config-parity.test.mjs",
-        "completed_at": "2026-08-05T02:28:40Z",
-        "name": "focused Wrangler CI contract tests",
-        "output_sha256": "881f19deb22873e0381d500b6599426feb4a8770a4e7d60faca74e005ca127bc",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk git diff --check",
-        "completed_at": "2026-08-05T02:28:49Z",
-        "name": "diff whitespace validation",
-        "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-        "returncode": 0,
-        "status": "passed"
-      }
-    ],
-    "completed_at": "2026-08-05T02:28:49Z",
-    "diff_fingerprint": "a17be69e0f45362f2c71a50bf2f80426764b3e55e24d0e653cfa3a2b7d02a2cd",
-    "independent": true,
+    "actor": "",
+    "checks": [],
+    "completed_at": "",
+    "diff_fingerprint": "",
+    "independent": false,
     "required_check_fields": [
       "name",
       "command",
@@ -93,10 +36,10 @@
       "completed_at",
       "output_sha256"
     ],
-    "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
-    "source": "subagent",
-    "status": "passed",
-    "summary": "Independent focused tests and diff validation passed on the final product diff.",
-    "task_id": "independent_verifier"
+    "run_id": "",
+    "source": "",
+    "status": "pending",
+    "summary": "",
+    "task_id": ""
   }
 }

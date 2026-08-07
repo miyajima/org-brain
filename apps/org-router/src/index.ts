@@ -7,6 +7,7 @@ import {
   validateTaskResultPayload
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import { recordTaskMemoryEffect } from "./memory-effect-service";
 
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
@@ -59,6 +60,9 @@ async function handleResult(env: Env, message: Envelope<TaskResultPayload>) {
     await appendEvent(env, message.tenant_id, message.payload.task_id, "completed", {
       output_ref: message.payload.output_ref
     });
+    if (message.payload.memory_effect) {
+      await recordTaskMemoryEffect(env, message.tenant_id, message.payload.memory_effect);
+    }
   } else {
     await env.OPEN_BRAIN_DB.prepare(
       "UPDATE tasks SET status = ?, updated_at = ? WHERE tenant_id = ? AND id = ?"

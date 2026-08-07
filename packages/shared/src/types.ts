@@ -41,6 +41,41 @@ export type TaskResultPayload = {
     message: string;
   };
   wait_event_type?: string;
+  memory_effect?: {
+    usage_event_id: string;
+    idempotency_key: string;
+    evidence_level?: "reported" | "estimated" | "verified" | "unverifiable";
+    supersedes_effect_id?: string | null;
+    effect_outcome: "positive" | "neutral" | "negative" | "unknown";
+    avoided_lookup_categories?: Array<"source_search" | "web_search" | "past_context" | "none">;
+    gross_saved_tokens_estimate?: number;
+    token_estimation_candidates?: {
+      paired_control_tokens?: number;
+      safe_replay_tokens?: number;
+      avoided_source_tokens?: number;
+      failure_pattern_median_tokens?: number;
+      category_median_tokens?: number;
+      text_size_heuristic_tokens?: number;
+    };
+    injected_tokens?: number;
+    net_saved_tokens_estimate?: number;
+    estimate_lower_bound?: number | null;
+    estimate_upper_bound?: number | null;
+    estimation_method?: string | null;
+    estimator_version?: string | null;
+    estimate_confidence?: number | null;
+    failure_pattern_id?: string | null;
+    failure_opportunity_state?: "applicable" | "not_applicable" | "unknown";
+    action_changed?: boolean;
+    alternative_executed?: boolean;
+    failure_avoided?: boolean;
+    failure_saved_tokens_estimate?: number;
+    verification_ref_type?: string | null;
+    verification_ref_id?: string | null;
+    estimated_tool_calls_saved?: number | null;
+    estimated_seconds_saved?: number | null;
+    attributions?: Array<{ usage_item_id: string; attribution_weight: number }>;
+  };
 };
 
 export type CreateTaskInput = {

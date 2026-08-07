@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { LocalMemoryStore, MEMORY_SCHEMA_VERSION } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
+import {
+  LocalMemoryStore,
+  MEMORY_SCHEMA_VERSION,
+  verificationSampled
+} from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mjs";
 
 async function fixture() {
@@ -780,6 +784,365 @@ test("local MCP exposes capture and search over the same MemoryStore", async () 
     });
     assert.equal(searched.isError, false);
     assert.match(searched.content[0].text, /Local MCP/);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("v18 classification is explicit, tenant-scoped, filterable, and snapshotted into stable units", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const category = await store.createBusinessCategory("personal", {
+      slug: "platform-engineering",
+      label: "Platform Engineering"
+    });
+    const capture = await store.capture(captureInput({
+      business_category_id: category.id,
+      work_type: "implementation"
+    }));
+    const record = await store.get("personal", capture.memory_id);
+    assert.equal(record.business_category_id, category.id);
+    assert.equal(record.work_type, "implementation");
+    assert.equal((await store.search({
+      tenant_id: "personal",
+      query: "authoritative contract",
+      business_category_id: category.id,
+      work_type: "implementation"
+    }))[0].memory.id, capture.memory_id);
+    assert.equal((await store.search({
+      tenant_id: "personal",
+      query: "authoritative contract",
+      work_type: "review"
+    })).length, 0);
+    await assert.rejects(
+      store.capture(captureInput({
+        external_key: "classification:cross-tenant",
+        business_category_id: category.id,
+        work_type: "debug",
+        tenant_id: "other"
+      })),
+      /business_category_not_found_or_inactive/u
+    );
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      const units = db.prepare(
+        "SELECT DISTINCT business_category_id, work_type FROM retrieval_units WHERE tenant_id = ? AND source_id = ?"
+      ).all("personal", capture.memory_id);
+      assert.equal(units.length, 1);
+      assert.equal(units[0].business_category_id, category.id);
+      assert.equal(units[0].work_type, "implementation");
+    } finally {
+      db.close();
+    }
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("v18 stable rebuild preserves synchronized decision-memory units", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.init();
+    const db = new DatabaseSync(ctx.dbPath);
+    try {
+      db.prepare(
+        `INSERT INTO retrieval_units(
+           id, generation_id, tenant_id, source_type, source_id, unit_type,
+           text, metadata_json, content_hash, extractor_name,
+           extractor_version, extraction_state, created_at
+         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).run(
+        "decision-unit-1", "gen_baseline_units", "personal", "decision_memory",
+        "decision-1", "decision", "Keep the synchronized decision projection.",
+        "{}", "decision-hash", "decision-memory-projector", "1", "ready", Date.now()
+      );
+    } finally {
+      db.close();
+    }
+    await store.captureBatch([captureInput({ external_key: "batch:preserve-decision" })]);
+    const usage = await store.recordUsage({
+      tenant_id: "personal",
+      id: "decision-usage-1",
+      access_path: "search",
+      request_source: "local",
+      items: [{ source_type: "decision_memory", source_id: "decision-1", rank: 1 }]
+    });
+    assert.equal(usage.created, true);
+    assert.equal(usage.usage_item_ids.length, 1);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("v18 usage and effect telemetry deduplicates references and attributes token and failure savings", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const category = await store.createBusinessCategory("personal", {
+      slug: "incident-response",
+      label: "Incident response"
+    });
+    const capture = await store.capture(captureInput({
+      business_category_id: category.id,
+      work_type: "debug"
+    }));
+    await assert.rejects(store.recordUsage({
+      tenant_id: "personal", access_path: "search", request_source: "local",
+      query_hash: "raw query text", items: [{ source_type: "memory", source_id: capture.memory_id }]
+    }), /invalid_query_hash/u);
+    const usage = await store.recordUsage({
+      id: "usage-local-telemetry-1",
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      capability: "memory_search",
+      access_path: "search",
+      request_source: "local",
+      enqueue_sync: true,
+      raw_query: "SECRET QUERY MUST NOT BE STORED",
+      prompt: "SECRET PROMPT MUST NOT BE STORED",
+      command: "SECRET COMMAND MUST NOT BE STORED",
+      items: [
+        {
+          source_type: "memory",
+          source_id: capture.memory_id,
+          rank: 1,
+          score: 0.9,
+          reference_type: "returned",
+          injected_token_estimate: 40
+        },
+        {
+          source_type: "memory",
+          source_id: capture.memory_id,
+          rank: 2,
+          score: 0.7,
+          reference_type: "returned",
+          injected_token_estimate: 40
+        }
+      ]
+    });
+    assert.equal(usage.usage_item_ids.length, 1);
+    const usageRetry = await store.recordUsage({
+      id: "usage-local-telemetry-1",
+      tenant_id: "personal",
+      access_path: "search",
+      request_source: "local",
+      items: [{ source_type: "memory", source_id: capture.memory_id }]
+    });
+    assert.equal(usageRetry.created, false);
+    assert.deepEqual(usageRetry.usage_item_ids, usage.usage_item_ids);
+    await store.updateUsageStates("personal", {
+      usage_event_id: usage.usage_id,
+      items: [{ usage_item_id: usage.usage_item_ids[0], used_state: "not_used" }]
+    });
+    await store.updateUsageStates("personal", {
+      usage_event_id: usage.usage_id,
+      items: [{ usage_item_id: usage.usage_item_ids[0], used_state: "unknown" }]
+    });
+    const pattern = await store.createFailurePattern("personal", {
+      id: "failure-1", project_id: "orgbrain", business_category_id: category.id,
+      work_type: "debug", pattern_key: "failed-command", label: "Known failing command",
+      action_fingerprint: "action-hash", failure_fingerprint: "failure-hash"
+    });
+    assert.equal((await store.listFailurePatterns("personal", { projectId: "orgbrain" }))[0].id, pattern.id);
+    assert.equal((await store.updateFailurePattern("personal", pattern.id, { label: "Known failing operation" })).label, "Known failing operation");
+    await assert.rejects(
+      store.recordEffect({
+        tenant_id: "personal",
+        usage_event_id: usage.usage_id,
+        idempotency_key: "effect:invalid-none",
+        effect_outcome: "positive",
+        avoided_lookup_categories: ["none", "web_search"]
+      }),
+      /avoided_lookup_none_is_exclusive/u
+    );
+    await assert.rejects(
+      store.recordEffect({
+        tenant_id: "personal",
+        usage_event_id: usage.usage_id,
+        idempotency_key: "effect:missing-pattern",
+        effect_outcome: "neutral",
+        failure_opportunity_state: "applicable"
+      }),
+      /failure_pattern_id_required/u
+    );
+    const estimated = await store.recordEffect({
+      tenant_id: "personal",
+      usage_event_id: usage.usage_id,
+      idempotency_key: "effect:estimated-1",
+      evidence_level: "estimated",
+      effect_outcome: "positive",
+      avoided_lookup_categories: ["source_search"],
+      gross_saved_tokens_estimate: 80,
+      injected_tokens: 40,
+      estimation_method: "historical_failure_median"
+    });
+    const effect = await store.recordEffect({
+      tenant_id: "personal",
+      usage_event_id: usage.usage_id,
+      idempotency_key: "effect:verified-1",
+      evidence_level: "verified",
+      supersedes_effect_id: estimated.effect_id,
+      verification_ref_type: "offline_replay",
+      verification_ref_id: "artifact:local-test-1",
+      effect_outcome: "positive",
+      avoided_lookup_categories: ["source_search", "past_context"],
+      gross_saved_tokens_estimate: 100,
+      injected_tokens: 40,
+      failure_opportunity_state: "applicable",
+      failure_pattern_id: "failure-1",
+      action_changed: true,
+      alternative_executed: true,
+      failure_avoided: true,
+      failure_saved_tokens_estimate: 75,
+      estimation_method: "paired_control",
+      enqueue_sync: true,
+      raw_query: "SECRET EFFECT QUERY MUST NOT BE STORED",
+      prompt: "SECRET EFFECT PROMPT MUST NOT BE STORED",
+      command: "SECRET EFFECT COMMAND MUST NOT BE STORED"
+    });
+    assert.equal(effect.net_saved_tokens_estimate, 60);
+    assert.equal((await store.recordEffect({
+      tenant_id: "personal",
+      usage_event_id: usage.usage_id,
+      idempotency_key: "effect:verified-1",
+      effect_outcome: "positive"
+    })).created, false);
+    const report = await store.memoryImpactReport("personal", { source_id: capture.memory_id });
+    assert.equal(report.groups.length, 1);
+    assert.equal(report.groups[0].evidence_level, "verified");
+    assert.equal(report.groups[0].reference_count, 1);
+    assert.equal(report.groups[0].used_count, 1);
+    assert.equal(report.groups[0].positive_count, 1);
+    assert.equal(report.groups[0].avoided_source_search_count, 1);
+    assert.equal(report.groups[0].avoided_past_context_count, 1);
+    assert.equal(report.groups[0].net_saved_tokens, 60);
+    assert.equal(report.groups[0].failure_opportunity_count, 1);
+    assert.equal(report.groups[0].failure_avoided_count, 1);
+    assert.equal(report.groups[0].estimator_absolute_error_sum, 20);
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      const daily = db.prepare(
+        "SELECT estimator_absolute_error_sum FROM memory_effect_daily_metrics WHERE tenant_id = ? AND source_id = ?"
+      ).get("personal", capture.memory_id);
+      assert.equal(daily.estimator_absolute_error_sum, 20);
+      const outboxPayloads = db.prepare(
+        "SELECT payload_json FROM memory_telemetry_outbox WHERE tenant_id = ? ORDER BY created_at"
+      ).all("personal");
+      assert.equal(outboxPayloads.length, 2);
+      for (const row of outboxPayloads) {
+        assert.doesNotMatch(row.payload_json, /SECRET|raw_query|prompt|command/u);
+      }
+    } finally {
+      db.close();
+    }
+    assert.equal(report.groups[0].failure_saved_tokens, 75);
+    const previousCloudSetting = process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY;
+    process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY = "true";
+    const deliveries = [];
+    try {
+      const sync = await store.syncTelemetryOutbox({
+        apiBase: "https://orgbrain.invalid",
+        apiKey: "test-key",
+        fetchImpl: async (url, options) => {
+          deliveries.push({ url, payload: JSON.parse(options.body) });
+          return { ok: true, status: 201 };
+        }
+      });
+      assert.deepEqual(sync, { attempted: 2, sent: 2, failed: 0, pending: 0 });
+    } finally {
+      if (previousCloudSetting === undefined) delete process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY;
+      else process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY = previousCloudSetting;
+    }
+    assert.match(deliveries[0].url, /\/v1\/memory-usages$/u);
+    assert.match(deliveries[1].url, /\/v1\/memory-effects$/u);
+    assert.equal(
+      deliveries[1].payload.attributions[0].usage_item_id,
+      deliveries[0].payload.items[0].id
+    );
+    const calibratedUsage = await store.recordUsage({
+      tenant_id: "personal", access_path: "search", request_source: "local",
+      items: [{ source_type: "memory", source_id: capture.memory_id }]
+    });
+    const calibratedEffect = await store.recordEffect({
+      tenant_id: "personal", usage_event_id: calibratedUsage.usage_id,
+      idempotency_key: "effect:historical-median", evidence_level: "estimated",
+      effect_outcome: "neutral", failure_pattern_id: "failure-1",
+      failure_opportunity_state: "applicable"
+    });
+    const calibrationDb = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      const calibrated = calibrationDb.prepare(
+        "SELECT gross_saved_tokens_estimate, estimation_method FROM memory_effect_events WHERE id = ?"
+      ).get(calibratedEffect.effect_id);
+      assert.equal(calibrated.gross_saved_tokens_estimate, 100);
+      assert.equal(calibrated.estimation_method, "failure_pattern_historical_median");
+    } finally {
+      calibrationDb.close();
+    }
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("v18 verification sampling matches the shared FNV-1a fixtures", () => {
+  assert.equal(verificationSampled("tenant-a", "usage-0"), false);
+  assert.equal(verificationSampled("tenant-a", "usage-1"), true);
+  assert.equal(verificationSampled("tenant-a", "usage-4"), true);
+  assert.equal(verificationSampled("tenant-a", "usage-42"), false);
+});
+
+test("v18 effect marks only attributed memories as used", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const first = await store.capture(captureInput({ external_key: "used:first" }));
+    const second = await store.capture(captureInput({
+      external_key: "used:second",
+      content: "A second memory must remain unknown when it receives no attribution."
+    }));
+    const usageCreatedAt = Date.now() - 86_400_000;
+    const usage = await store.recordUsage({
+      tenant_id: "personal",
+      created_at: usageCreatedAt,
+      access_path: "search",
+      request_source: "local",
+      items: [
+        { source_type: "memory", source_id: first.memory_id, rank: 1 },
+        { source_type: "memory", source_id: second.memory_id, rank: 2 }
+      ]
+    });
+    const initialEffect = await store.recordEffect({
+      tenant_id: "personal",
+      usage_event_id: usage.usage_id,
+      idempotency_key: "effect:partial-attribution",
+      effect_outcome: "positive",
+      attributions: [{ usage_item_id: usage.usage_item_ids[0], attribution_weight: 1 }]
+    });
+    await store.recordEffect({
+      tenant_id: "personal",
+      usage_event_id: usage.usage_id,
+      idempotency_key: "effect:corrected-attribution",
+      supersedes_effect_id: initialEffect.effect_id,
+      effect_outcome: "positive",
+      attributions: [{ usage_item_id: usage.usage_item_ids[1], attribution_weight: 1 }]
+    });
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      const states = db.prepare(
+        "SELECT source_id, used_state FROM memory_usage_items WHERE usage_event_id = ? ORDER BY rank"
+      ).all(usage.usage_id);
+      assert.deepEqual(states.map((row) => row.used_state), ["unknown", "used"]);
+      assert.equal(db.prepare(
+        "SELECT estimation_method FROM memory_effect_events WHERE id = ?"
+      ).get(initialEffect.effect_id).estimation_method, "text_size_heuristic");
+      assert.equal(db.prepare(
+        "SELECT positive_count FROM memory_effect_daily_metrics WHERE day = ? AND source_id = ?"
+      ).get(new Date(usageCreatedAt).toISOString().slice(0, 10), second.memory_id).positive_count, 1);
+    } finally {
+      db.close();
+    }
   } finally {
     await ctx.cleanup();
   }

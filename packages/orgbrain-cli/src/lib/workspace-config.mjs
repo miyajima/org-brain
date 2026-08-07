@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-export const WORKSPACE_CONFIG_VERSION = 1;
+export const WORKSPACE_CONFIG_VERSION = 2;
+export const WORK_TYPES = new Set([
+  "implementation", "review", "debug", "proposal",
+  "support", "research", "operations", "other"
+]);
 export const DEFAULT_WORKSPACES_FILE = "~/.config/org-brain/workspaces.json";
 export const DEFAULT_LEGACY_PROJECT_NAMES_FILE = "~/.config/org-brain/project-names.json";
 
@@ -34,21 +38,38 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
   }
   const tenantId = raw.tenant_id === null ? null : normalizeId(raw.tenant_id);
   const projectId = raw.project_id === null ? null : normalizeId(raw.project_id);
+  const businessCategoryId = raw.business_category_id === null || raw.business_category_id === undefined
+    ? null
+    : normalizeId(raw.business_category_id);
+  const defaultWorkType = raw.default_work_type === null || raw.default_work_type === undefined
+    ? null
+    : String(raw.default_work_type).trim();
   if (tenantId === null && raw.tenant_id !== null) {
     throw new Error(`workspace tenant_id is required or must be null: ${workspaceRoot}`);
   }
   if (projectId === null && raw.project_id !== null) {
     throw new Error(`workspace project_id is required or must be null: ${workspaceRoot}`);
   }
-  return { tenant_id: tenantId, project_id: projectId };
+  if (businessCategoryId === null && raw.business_category_id !== null && raw.business_category_id !== undefined) {
+    throw new Error(`workspace business_category_id is invalid: ${workspaceRoot}`);
+  }
+  if (defaultWorkType !== null && !WORK_TYPES.has(defaultWorkType)) {
+    throw new Error(`workspace default_work_type is invalid: ${workspaceRoot}`);
+  }
+  return {
+    tenant_id: tenantId,
+    project_id: projectId,
+    business_category_id: businessCategoryId,
+    default_work_type: defaultWorkType
+  };
 }
 
 export function normalizeWorkspaceConfig(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("workspace config must be an object");
   }
-  if (raw.version !== WORKSPACE_CONFIG_VERSION) {
-    throw new Error(`workspace config version must be ${WORKSPACE_CONFIG_VERSION}`);
+  if (![1, WORKSPACE_CONFIG_VERSION].includes(raw.version)) {
+    throw new Error(`workspace config version must be 1 or ${WORKSPACE_CONFIG_VERSION}`);
   }
   if (!raw.workspaces || typeof raw.workspaces !== "object" || Array.isArray(raw.workspaces)) {
     throw new Error("workspace config workspaces must be an object");
@@ -185,7 +206,9 @@ export function migrateLegacyProjectNames(config, legacyNames, tenantId) {
     if (!workspaceRoot || !projectId || config.workspaces[workspaceRoot]) continue;
     config.workspaces[workspaceRoot] = {
       tenant_id: normalizedTenantId,
-      project_id: projectId
+      project_id: projectId,
+      business_category_id: null,
+      default_work_type: null
     };
     changed = true;
   }

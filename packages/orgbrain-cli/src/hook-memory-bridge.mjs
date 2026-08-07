@@ -439,6 +439,8 @@ function prepareStructuredLearningEntry(record, parsed) {
       cwd: record.cwd,
       projectId: record.projectId,
       projectIdExplicit: record.projectIdExplicit,
+      businessCategoryId: record.businessCategoryId,
+      workType: record.workType,
       summary: clip(`${record.projectId || "(none)"} | ${type} | ${summaryBase}`, 1_000),
       tags,
       content: buildLearningEntryContent(record, entry),
@@ -520,6 +522,8 @@ function buildCommonRecord(sourceName, payloadText, parsed, extras = {}) {
     eventType: firstString(extras.eventType, parsed?.type, parsed?.event?.type, "hook"),
     projectId: projectId || null,
     projectIdExplicit: explicitProject.provided,
+    businessCategoryId: firstString(parsed?.business_category_id, parsed?.memory_entry?.business_category_id) || null,
+    workType: firstString(parsed?.work_type, parsed?.memory_entry?.work_type) || null,
     externalKey: firstString(extras.externalKey, `${sourceName}:${sha256(payloadText)}`),
     assistantText,
     userInputs,
@@ -686,6 +690,8 @@ export function prepareMemoryRecordForUpsert(sourceName, payloadText) {
       cwd: record.cwd,
       projectId: record.projectId,
       projectIdExplicit: record.projectIdExplicit,
+      businessCategoryId: record.businessCategoryId,
+      workType: record.workType,
       summary: buildPromotedSummary(record, classification.normalizedText),
       tags,
       content: buildPromotedContent(record, classification.category, classification.normalizedText),
@@ -798,6 +804,8 @@ export async function resolveWorkspaceContext(record, options = {}) {
       return {
         tenantId,
         projectId: record.projectId ?? null,
+        businessCategoryId: record.businessCategoryId ?? mapped?.business_category_id ?? null,
+        workType: record.workType ?? mapped?.default_work_type ?? null,
         workspaceRoot: cwd || null,
         source: mapped ? "workspace+explicit-project" : "explicit-project"
       };
@@ -808,6 +816,8 @@ export async function resolveWorkspaceContext(record, options = {}) {
       return {
         tenantId,
         projectId: mapped.project_id,
+        businessCategoryId: record.businessCategoryId ?? mapped.business_category_id ?? null,
+        workType: record.workType ?? mapped.default_work_type ?? null,
         workspaceRoot: cwd,
         source: "workspace"
       };
@@ -818,6 +828,8 @@ export async function resolveWorkspaceContext(record, options = {}) {
       return {
         tenantId,
         projectId: fallbackProjectId,
+        businessCategoryId: record.businessCategoryId ?? null,
+        workType: record.workType ?? null,
         workspaceRoot: cwd || null,
         source: "fallback"
       };
@@ -827,11 +839,18 @@ export async function resolveWorkspaceContext(record, options = {}) {
       ? await selectProjectName(cwd, fallbackProjectId, options)
       : promptedProjectId ?? fallbackProjectId;
 
-    config.workspaces[cwd] = { tenant_id: configuredTenantId, project_id: selected };
+    config.workspaces[cwd] = {
+      tenant_id: configuredTenantId,
+      project_id: selected,
+      business_category_id: null,
+      default_work_type: null
+    };
     await saveWorkspaceConfig(workspacesFile, config);
     return {
       tenantId,
       projectId: selected,
+      businessCategoryId: record.businessCategoryId ?? null,
+      workType: record.workType ?? null,
       workspaceRoot: cwd,
       source: "created"
     };
@@ -881,6 +900,8 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
         tags: record.tags,
         created_at: record.createdAt,
         project_id: record.projectId
+        , business_category_id: record.businessCategoryId ?? null
+        , work_type: record.workType ?? null
       }
     })
   });
@@ -907,6 +928,8 @@ async function captureLocalMemory(sourceName, tenantId, record) {
   return store.capture({
     tenant_id: tenantId,
     project_id: record.projectId,
+    business_category_id: record.businessCategoryId ?? null,
+    work_type: record.workType ?? null,
     kind,
     lifecycle_state: "active",
     scope_type: record.projectId ? "project" : "tenant",
@@ -965,6 +988,8 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const workspace = await resolveWorkspaceContext(prepared.record, { memoryMode });
   tenantId = workspace.tenantId;
   prepared.record.projectId = workspace.projectId;
+  prepared.record.businessCategoryId ??= workspace.businessCategoryId;
+  prepared.record.workType ??= workspace.workType;
 
   if (!memoryMode.cloudWritesAllowed) {
     if (process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE === "false") {

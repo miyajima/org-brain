@@ -10,6 +10,29 @@ import {
 } from "./agent-message-service";
 import { appendAuditEvent, listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
 import {
+  createBusinessCategory,
+  listBusinessCategories,
+  updateBusinessCategory
+} from "./business-category-service";
+import {
+  memoryImpactReport,
+  createMemoryFailurePattern,
+  listMemoryFailurePatterns,
+  recordMemoryEffect,
+  recordMemoryUsage,
+  recordMemoryUsageFromRequest,
+  updateMemoryFailurePattern,
+  updateMemoryUsageStates
+} from "./memory-impact-service";
+import {
+  assignRetrievalGeneration,
+  backfillRetrievalGeneration,
+  createRetrievalGeneration,
+  createRetrievalRankingProfile,
+  resolveRetrievalGenerationAssignment,
+  transitionRetrievalGeneration
+} from "./retrieval-generation-service";
+import {
   backfillV3RetrievalUnits,
   backfillV4RetrievalUnits,
   rebuildSemanticIndex
@@ -75,6 +98,19 @@ function withPrincipalActor(rawBody: unknown, principal: string): unknown {
   };
 }
 
+function assertRetrievalOperator(env: Env, principal: string) {
+  let operators: string[] = [];
+  try {
+    const parsed = JSON.parse(env.RETRIEVAL_OPERATOR_PRINCIPALS_JSON ?? "[]") as unknown;
+    operators = Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    operators = [];
+  }
+  if (!operators.includes(principal)) {
+    throw new HttpError(403, "retrieval_operator_required", "global retrieval generation operations require an explicit operator principal");
+  }
+}
+
 mountMcp(app);
 
 app.use(
@@ -107,7 +143,10 @@ function permissionForRequest(method: string, path: string): OrgPermission {
     path.startsWith("/v1/scoped-tokens") ||
     path.startsWith("/v1/retention-policies") ||
     path.startsWith("/v1/ops/") ||
-    path.startsWith("/v1/retrieval-index")
+    path.startsWith("/v1/retrieval-index") ||
+    path.startsWith("/v1/retrieval-ranking-profiles") ||
+    path.startsWith("/v1/retrieval-generations") ||
+    path.startsWith("/v1/retrieval-generation-assignments")
   ) return "admin";
   if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
   if (path.startsWith("/v1/audit-events")) return "export";
@@ -477,6 +516,8 @@ app.get("/v1/memories", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const source = c.req.query("source");
   const projectId = c.req.query("project_id");
+  const businessCategoryId = c.req.query("business_category_id");
+  const workType = c.req.query("work_type") as import("@org-brain/shared").MemoryWorkType | undefined;
   const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
   const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
   const paginated = c.req.query("paginated") === "1";
@@ -485,7 +526,9 @@ app.get("/v1/memories", async (c) => {
       limit: Number.isNaN(limit) ? 24 : limit,
       offset: Number.isNaN(offset) ? 0 : offset,
       source,
-      projectId
+      projectId,
+      businessCategoryId,
+      workType
     });
     return jsonOk(c, page);
   }
@@ -494,9 +537,120 @@ app.get("/v1/memories", async (c) => {
     limit: Number.isNaN(limit) ? 100 : limit,
     offset: Number.isNaN(offset) ? 0 : offset,
     source,
-    projectId
+    projectId,
+    businessCategoryId,
+    workType
   });
   return jsonOk(c, memories);
+});
+
+app.get("/v1/business-categories", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listBusinessCategories(
+    c.env,
+    tenantId,
+    c.req.query("include_inactive") === "true"
+  ));
+});
+
+app.post("/v1/business-categories", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await createBusinessCategory(c.env, tenantId, body), 201);
+});
+
+app.patch("/v1/business-categories/:id", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await updateBusinessCategory(c.env, tenantId, c.req.param("id"), body));
+});
+
+app.post("/v1/memory-effects", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await recordMemoryEffect(c.env, tenantId, body), 201);
+});
+
+app.post("/v1/memory-usages", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await recordMemoryUsageFromRequest(c.env, tenantId, body), 201);
+});
+
+app.post("/v1/memory-usages/state", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await updateMemoryUsageStates(c.env, tenantId, body));
+});
+
+app.get("/v1/memory-failure-patterns", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listMemoryFailurePatterns(c.env, tenantId, c.req.query("project_id")));
+});
+
+app.post("/v1/memory-failure-patterns", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await createMemoryFailurePattern(c.env, tenantId, body), 201);
+});
+
+app.patch("/v1/memory-failure-patterns/:id", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await updateMemoryFailurePattern(c.env, tenantId, c.req.param("id"), body));
+});
+
+app.get("/v1/metrics/memory-impact", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await memoryImpactReport(c.env, tenantId, {
+    group_by: c.req.query("group_by") ?? "memory"
+  }));
+});
+
+app.get("/v1/retrieval-generation-assignments/resolve", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await resolveRetrievalGenerationAssignment(
+    c.env,
+    tenantId,
+    c.req.query("project_id") ?? null
+  ));
+});
+
+app.put("/v1/retrieval-generation-assignments", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await assignRetrievalGeneration(c.env, tenantId, body));
+});
+
+app.post("/v1/retrieval-ranking-profiles", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  assertRetrievalOperator(c.env, getApiAuthContext(c).principal);
+  return jsonOk(c, await createRetrievalRankingProfile(c.env, body), 201);
+});
+
+app.post("/v1/retrieval-generations", async (c) => {
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  assertRetrievalOperator(c.env, getApiAuthContext(c).principal);
+  return jsonOk(c, await createRetrievalGeneration(c.env, body), 201);
+});
+
+app.post("/v1/retrieval-generations/:id/backfill", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  assertRetrievalOperator(c.env, getApiAuthContext(c).principal);
+  return jsonOk(c, await backfillRetrievalGeneration(c.env, tenantId, c.req.param("id"), body));
+});
+
+app.patch("/v1/retrieval-generations/:id", async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  assertRetrievalOperator(c.env, getApiAuthContext(c).principal);
+  if (typeof body.status !== "string") {
+    throw new HttpError(400, "status_required", "status is required");
+  }
+  return jsonOk(c, await transitionRetrievalGeneration(c.env, c.req.param("id"), body.status, body));
 });
 
 app.post("/v1/memories/upsert", async (c) => {
@@ -582,8 +736,96 @@ app.delete("/v1/memories/:memoryId", async (c) => {
 app.post("/v1/memories/search", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await searchMemories(c.env, body, { actorPrincipal: getApiPrincipal(c) });
-  return jsonOk(c, result);
+  const payload = body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : {};
+  if (payload.generation_id || payload.ranking_profile_id) {
+    const tenantId = tenantFromBody(body) ?? "default";
+    const auth = getApiAuthContext(c);
+    await assertPermission(c.env, {
+      tenantId,
+      projectId: typeof payload.project_id === "string" ? payload.project_id : null,
+      principal: getApiPrincipal(c),
+      permission: "admin",
+      fallbackRole: auth.defaultRole
+    });
+  }
+  const scope = payload.search_scope ?? "evidence";
+  if (!["evidence", "governance", "both"].includes(String(scope))) {
+    throw new HttpError(400, "invalid_search_scope", "search_scope must be evidence, governance, or both");
+  }
+  if (scope === "governance") {
+    return jsonOk(c, await searchDecisionMemories(c.env, body, { principal: getApiPrincipal(c) }));
+  }
+  const evidence = await searchMemories(c.env, body, {
+    actorPrincipal: getApiPrincipal(c),
+    recordUsage: scope !== "both"
+  });
+  if (scope === "evidence") return jsonOk(c, evidence);
+  const governance = await searchDecisionMemories(c.env, body, {
+    principal: getApiPrincipal(c),
+    recordUsage: false
+  });
+  const queryHash = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(typeof payload.q === "string" ? payload.q : "")
+  ).then((digest) => [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join(""));
+  const governanceResults = governance.results as Array<Record<string, unknown>>;
+  const usage = await recordMemoryUsage(c.env, {
+    tenant_id: evidence.tenant_id,
+    project_id: evidence.project_id,
+    capability: "memory_search_both",
+    access_path: "search",
+    request_source: "api",
+    query_hash: queryHash,
+    requested_business_category_id: typeof payload.business_category_id === "string" ? payload.business_category_id : null,
+    requested_work_type: typeof payload.work_type === "string"
+      ? payload.work_type as import("@org-brain/shared").MemoryWorkType
+      : null,
+    retrieval_generation_id: evidence.meta.retrieval?.generation_id === governance.meta.retrieval.generation_id
+      ? evidence.meta.retrieval?.generation_id
+      : null,
+    ranking_profile_id: evidence.meta.retrieval?.ranking_profile_id === governance.meta.retrieval.ranking_profile_id
+      ? evidence.meta.retrieval?.ranking_profile_id
+      : null,
+    items: [
+      ...evidence.results.filter((item) => item.kind === "memory").map((item, index) => ({
+        source_type: "memory" as const,
+        source_id: item.id,
+        source_version: item.current_version ?? null,
+        rank: index + 1,
+        score: item.score,
+        reference_type: "returned" as const,
+        used_state: "unknown" as const
+      })),
+      ...governanceResults.flatMap((item, index) => typeof item.id === "string" ? [{
+        source_type: "decision_memory" as const,
+        source_id: item.id,
+        rank: index + 1,
+        score: typeof (item.score as Record<string, unknown> | undefined)?.finalScore === "number"
+          ? Number((item.score as Record<string, unknown>).finalScore)
+          : null,
+        reference_type: "returned" as const,
+        used_state: "unknown" as const
+      }] : [])
+    ]
+  });
+  return jsonOk(c, {
+    tenant_id: evidence.tenant_id,
+    project_id: evidence.project_id,
+    q: evidence.q,
+    search_scope: "both",
+    governance,
+    evidence,
+    meta: {
+      usage_id: usage.usage_id,
+      verification_sampled: usage.verification_sampled,
+      channel_usage_ids: {
+        evidence: usage.usage_id,
+        governance: usage.usage_id
+      }
+    }
+  });
 });
 
 app.post("/v1/memories/retrieve-context", async (c) => {
@@ -617,7 +859,20 @@ app.post("/v1/decision-memories", async (c) => {
 
 app.post("/v1/decision-memories/search", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const payload = body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : {};
+  if (payload.generation_id || payload.ranking_profile_id) {
+    const auth = getApiAuthContext(c);
+    await assertPermission(c.env, {
+      tenantId,
+      projectId: typeof payload.project_id === "string" ? payload.project_id : null,
+      principal: getApiPrincipal(c),
+      permission: "admin",
+      fallbackRole: auth.defaultRole
+    });
+  }
   const result = await searchDecisionMemories(c.env, body, { principal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });

@@ -1,46 +1,35 @@
 {
-  "summary": "Unified local workspace routing in one versioned workspaces.json that stores tenant_id and project_id together, migrates the legacy project-name map without deletion, and supplies the same repository roots to hook and operator workflows.",
+  "summary": "Implemented explicit business classification, stable retrieval generations, evidence/governance search channels, memory usage and effect telemetry, daily impact metrics, and explicit local outbox synchronization without mutating production.",
   "artifact_refs": [
-    "scripts/lib/workspace-config.mjs",
-    "scripts/hook-memory-bridge.mjs",
-    "scripts/memory-quality-backfill.mjs",
-    "scripts/project-current-state-snapshot.mjs",
-    "scripts/workspace-config.test.mjs",
-    "scripts/hook-memory-bridge.test.mjs",
-    "README.md",
-    ".env.example"
+    "migrations/0018_business_classification.sql",
+    "migrations/0019_memory_impact_telemetry.sql",
+    "migrations/0020_retrieval_generations.sql",
+    "migrations/0021_retrieval_units_stable.sql",
+    "apps/api-gateway/src/memory-impact-service.ts",
+    "apps/api-gateway/src/retrieval-generation-service.ts",
+    "packages/orgbrain-cli/src/lib/local-memory-store.mjs",
+    "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
   ],
   "decision_refs": [
-    "workspaces.json is the single local workspace routing source",
-    "workspace tenant mapping wins over the single-tenant environment fallback",
-    "organization sharing fails closed when no tenant can be resolved",
-    "legacy project-names.json is a read-only migration source",
-    "ORGBRAIN_PROJECT_ROOTS remains an explicit operator compatibility override"
+    "docs/harness/plan.json",
+    "docs/harness/implementation_plan.json"
   ],
   "evidence": [
     {
-      "type": "test",
-      "ref": "focused workspace, hook, and backfill suites: 27 passed"
-    },
-    {
-      "type": "test",
-      "ref": "pnpm test exit 0: node 65, script 99, workspace suites all passed"
-    },
-    {
-      "type": "command",
-      "ref": "pnpm -r --if-present typecheck exit 0"
-    },
-    {
-      "type": "command",
-      "ref": "pnpm run build exit 0; all Cloudflare builds were dry-run only"
-    },
-    {
       "type": "diff",
-      "ref": "git diff --check exit 0"
+      "ref": "git diff --check"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm test"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm lint && pnpm typecheck && pnpm build"
     }
   ],
   "residual_risks": [
-    "Tenant membership and invitation management remain future product work",
-    "No production Cloudflare deployment or D1 mutation was performed"
+    "Production D1 migrations, data backfill, assignment switching, and Cloudflare deployment remain intentionally operator-controlled.",
+    "Legacy retrieval projection tables remain during the compatibility window and require a later backup and restore drill before cleanup."
   ]
 }

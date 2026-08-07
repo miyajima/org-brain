@@ -1,5 +1,10 @@
 # Hybrid v4 implementation and leadership gate
 
+> Compatibility note: `hybrid_v4` is now the migration alias for the
+> `structured_context` retrieval generation. New clients and operations use
+> stable generation/profile names. See
+> [`RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md`](RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md).
+
 ## Product contract
 
 `hybrid_v4` is retained as the promotion candidate. `hybrid_v3` remains

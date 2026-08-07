@@ -1,22 +1,23 @@
 {
-  "summary": "Cloud runtime and Node operator paths use divergent memory quality classifiers; unify them behind one runtime-neutral shared implementation.",
+  "summary": "Mapped the Cloud memory lifecycle, decision context, MCP, Local SQLite, retrieval projector, versioned retrieval, and telemetry seams required by the requested classification and impact work.",
   "artifact_refs": [
-    "packages/shared/src/memory-quality.ts",
-    "scripts/lib/memory-quality.mjs",
-    "apps/cap-runner/src/memory-maintenance.ts",
-    "apps/api-gateway/src/memory-lifecycle-service.ts"
+    "apps/api-gateway/src/memory-service.ts",
+    "apps/api-gateway/src/context-engine-service.ts",
+    "apps/api-gateway/src/mcp.ts",
+    "packages/shared/src/memory-retrieval.ts",
+    "packages/orgbrain-cli/src/lib/local-memory-store.mjs"
   ],
   "decision_refs": [
-    "single shared classifier with typed and Node compatibility facades"
+    "docs/harness/plan.json"
   ],
   "evidence": [
     {
       "type": "review",
-      "ref": "docs/harness/context_code.md"
+      "ref": "codegraph search plus targeted repository reads"
     }
   ],
   "residual_risks": [
-    "Changing the canonical classifier changes future production maintenance output",
-    "Existing D1 rows require a separate reviewed backfill after deployment"
+    "The change crosses D1, Local SQLite, public API, MCP, projection, and reporting contracts.",
+    "Versioned retrieval tables must remain available until shadow and rollback gates pass."
   ]
 }

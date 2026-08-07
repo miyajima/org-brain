@@ -15,13 +15,24 @@ function printHelp() {
 Usage:
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>]
-  orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--tag <tag>]
-  orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--limit <n>]
+  orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--tag <tag>]
+  orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--limit <n>]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>
   orgbrain memory delete <memory-id>
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
+  orgbrain category list [--tenant-id <id>] [--include-inactive]
+  orgbrain category create --slug <slug> --label <label> [--description <text>]
+  orgbrain category update <category-id> [--slug <slug>] [--label <label>] [--active true|false]
+  orgbrain usage record [json-payload]
+  orgbrain usage state [json-payload]
+  orgbrain effect record [json-payload]
+  orgbrain failure-pattern list [--tenant-id <id>] [--project-id <id>]
+  orgbrain failure-pattern create [json-payload]
+  orgbrain failure-pattern update <pattern-id> [json-payload]
+  orgbrain telemetry sync [--limit <n>]
+  orgbrain metrics memory-impact [--tenant-id <id>] [--group-by memory|business_category|work_type|project|day] [--day YYYY-MM-DD]
   orgbrain index rebuild
   orgbrain backup create [--output <path>]
   orgbrain backup verify --from <path>
@@ -45,6 +56,8 @@ Input:
 
 Environment:
   ORGBRAIN_LOCAL_DB  SQLite path (default: ~/.org-brain/memory.sqlite)
+  ORGBRAIN_ENABLE_CLOUD_MEMORY=true enables telemetry outbox and sync
+  ORGBRAIN_API_URL and ORGBRAIN_API_KEY are required by telemetry sync
 `);
 }
 
@@ -60,7 +73,7 @@ function parseArgs(argv) {
       continue;
     }
     const [name, inline] = arg.split("=", 2);
-    if (["--json", "--help", "--force", "--live", "--execute", "--with-vectorize", "--apply"].includes(name)) {
+    if (["--json", "--help", "--force", "--live", "--execute", "--with-vectorize", "--apply", "--include-inactive"].includes(name)) {
       flags.add(name);
       continue;
     }
@@ -110,6 +123,8 @@ async function readPayload(args) {
     ...(summary !== undefined ? { summary } : {}),
     ...(args.get("--tenant-id") ? { tenant_id: args.get("--tenant-id") } : {}),
     ...(args.get("--project-id") ? { project_id: args.get("--project-id") } : {}),
+    ...(args.get("--business-category-id") ? { business_category_id: args.get("--business-category-id") } : {}),
+    ...(args.get("--work-type") ? { work_type: args.get("--work-type") } : {}),
     ...(args.get("--source") ? { source: args.get("--source") } : {}),
     ...(args.get("--external-key") ? { external_key: args.get("--external-key") } : {}),
     ...(args.get("--kind") ? { kind: args.get("--kind") } : {}),
@@ -207,12 +222,33 @@ async function handleMemory(store, action, rest, args) {
   }
   if (action === "search") {
     const query = rest.join(" ").trim() || args.get("--query", "");
-    emit(await store.search({
+    const results = await store.search({
       tenant_id: tenantId,
       project_id: args.get("--project-id", null),
+      business_category_id: args.get("--business-category-id", null),
+      work_type: args.get("--work-type", null),
       query,
       limit: Number(args.get("--limit", 10))
-    }));
+    });
+    const usage = await store.recordUsage({
+      tenant_id: tenantId,
+      project_id: args.get("--project-id", null),
+      capability: "memory_search",
+      access_path: "search",
+      request_source: "local",
+      requested_business_category_id: args.get("--business-category-id", null),
+      requested_work_type: args.get("--work-type", null),
+      items: results.map((result, index) => ({
+        source_type: "memory",
+        source_id: result.memory.id,
+        source_version: result.memory.current_version,
+        rank: index + 1,
+        score: result.score?.total ?? null,
+        reference_type: "returned",
+        used_state: "unknown"
+      }))
+    });
+    emit({ results, meta: { usage_id: usage.usage_id, verification_sampled: usage.verification_sampled } });
     return;
   }
   if (action === "revise") {
@@ -260,6 +296,46 @@ async function handleMemory(store, action, rest, args) {
     return;
   }
   throw new Error(`unknown memory command: ${action || "(missing)"}`);
+}
+
+async function handleCategory(store, action, rest, args) {
+  const tenantId = args.get("--tenant-id", "default");
+  if (action === "list") {
+    emit(await store.listBusinessCategories(tenantId, {
+      includeInactive: args.flags.has("--include-inactive")
+    }));
+    return;
+  }
+  if (action === "create") {
+    emit(await store.createBusinessCategory(tenantId, {
+      slug: args.get("--slug"),
+      label: args.get("--label"),
+      description: args.get("--description")
+    }));
+    return;
+  }
+  if (action === "update") {
+    const categoryId = rest[0];
+    if (!categoryId) throw new Error("category update requires <category-id>");
+    const active = args.get("--active");
+    emit(await store.updateBusinessCategory(tenantId, categoryId, {
+      ...(args.get("--slug") !== undefined ? { slug: args.get("--slug") } : {}),
+      ...(args.get("--label") !== undefined ? { label: args.get("--label") } : {}),
+      ...(args.get("--description") !== undefined ? { description: args.get("--description") } : {}),
+      ...(active !== undefined ? { is_active: active === "true" || active === "1" } : {})
+    }));
+    return;
+  }
+  throw new Error(`unknown category command: ${action || "(missing)"}`);
+}
+
+async function readStructuredPayload(args, rest = []) {
+  const raw = rest.join(" ").trim() || await readStdin();
+  const payload = raw ? JSON.parse(raw) : {};
+  return {
+    ...payload,
+    ...(args.get("--tenant-id") ? { tenant_id: args.get("--tenant-id") } : {})
+  };
 }
 
 async function readRequestBody(request, maxBytes = 1_000_000) {
@@ -311,12 +387,39 @@ async function serve(store, args) {
   const initialBackup = automaticBackups ? await createAutomaticBackup() : null;
   const server = createServer(async (request, response) => {
     try {
-      if (request.method === "GET" && request.url === "/health") {
+      const requestUrl = new URL(request.url || "/", `http://${host}:${port}`);
+      const path = requestUrl.pathname;
+      const tenantId = requestUrl.searchParams.get("tenant_id") || "default";
+      if (request.method === "GET" && path === "/health") {
         sendJson(response, 200, { ok: true, schema_version: MEMORY_SCHEMA_VERSION, mode: "local" });
-      } else if (request.method === "POST" && request.url === "/v1/memories/capture") {
+      } else if (request.method === "POST" && path === "/v1/memories/capture") {
         sendJson(response, 201, await store.capture(await readRequestBody(request)));
-      } else if (request.method === "POST" && request.url === "/v1/memories/search") {
+      } else if (request.method === "POST" && path === "/v1/memories/search") {
         sendJson(response, 200, await store.search(await readRequestBody(request)));
+      } else if (request.method === "GET" && path === "/v1/business-categories") {
+        sendJson(response, 200, await store.listBusinessCategories(tenantId, {
+          includeInactive: requestUrl.searchParams.get("include_inactive") === "true"
+        }));
+      } else if (request.method === "POST" && path === "/v1/business-categories") {
+        const body = await readRequestBody(request);
+        sendJson(response, 201, await store.createBusinessCategory(body.tenant_id || tenantId, body));
+      } else if (request.method === "PATCH" && path.startsWith("/v1/business-categories/")) {
+        const categoryId = decodeURIComponent(path.slice("/v1/business-categories/".length));
+        const body = await readRequestBody(request);
+        sendJson(response, 200, await store.updateBusinessCategory(body.tenant_id || tenantId, categoryId, body));
+      } else if (request.method === "POST" && path === "/v1/memory-usage") {
+        sendJson(response, 201, await store.recordUsage(await readRequestBody(request)));
+      } else if (request.method === "POST" && path === "/v1/memory-effects") {
+        sendJson(response, 201, await store.recordEffect(await readRequestBody(request)));
+      } else if (request.method === "GET" && path === "/v1/metrics/memory-impact") {
+        sendJson(response, 200, await store.memoryImpactReport(tenantId, {
+          source_type: requestUrl.searchParams.get("source_type"),
+          source_id: requestUrl.searchParams.get("source_id"),
+          business_category_id: requestUrl.searchParams.get("business_category_id"),
+          work_type: requestUrl.searchParams.get("work_type"),
+          day: requestUrl.searchParams.get("day"),
+          group_by: requestUrl.searchParams.get("group_by")
+        }));
       } else {
         sendJson(response, 404, { error: "not_found" });
       }
@@ -376,6 +479,40 @@ async function main() {
     if (!result.ok) process.exitCode = 1;
   } else if (command === "memory") {
     await handleMemory(store, action, rest, args);
+  } else if (command === "category") {
+    await handleCategory(store, action, rest, args);
+  } else if (command === "usage" && action === "record") {
+    emit(await store.recordUsage(await readStructuredPayload(args, rest)));
+  } else if (command === "usage" && action === "state") {
+    const payload = await readStructuredPayload(args, rest);
+    emit(await store.updateUsageStates(args.get("--tenant-id", payload.tenant_id || "default"), payload));
+  } else if (command === "effect" && action === "record") {
+    emit(await store.recordEffect(await readStructuredPayload(args, rest)));
+  } else if (command === "failure-pattern" && action === "list") {
+    emit(await store.listFailurePatterns(args.get("--tenant-id", "default"), { projectId: args.get("--project-id") }));
+  } else if (command === "failure-pattern" && action === "create") {
+    const payload = await readStructuredPayload(args, rest);
+    emit(await store.createFailurePattern(args.get("--tenant-id", payload.tenant_id || "default"), payload));
+  } else if (command === "failure-pattern" && action === "update") {
+    const patternId = rest[0];
+    if (!patternId) throw new Error("failure-pattern update requires pattern-id");
+    const payload = await readStructuredPayload(args, rest.slice(1));
+    emit(await store.updateFailurePattern(args.get("--tenant-id", payload.tenant_id || "default"), patternId, payload));
+  } else if (command === "telemetry" && action === "sync") {
+    emit(await store.syncTelemetryOutbox({
+      apiBase: process.env.ORGBRAIN_API_URL || process.env.ORGBRAIN_API_BASE,
+      apiKey: process.env.ORGBRAIN_API_KEY,
+      limit: Number(args.get("--limit", "100"))
+    }));
+  } else if (command === "metrics" && action === "memory-impact") {
+    emit(await store.memoryImpactReport(args.get("--tenant-id", "default"), {
+      source_type: args.get("--source-type"),
+      source_id: args.get("--source-id"),
+      business_category_id: args.get("--business-category-id"),
+      work_type: args.get("--work-type"),
+      day: args.get("--day"),
+      group_by: args.get("--group-by")
+    }));
   } else if (command === "index" && action === "rebuild") {
     await store.rebuildIndex();
     emit({ ok: true, ...(await store.verify()) });

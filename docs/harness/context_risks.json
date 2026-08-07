@@ -1,23 +1,22 @@
 {
-  "summary": "The code unification changes future quality output but must not mutate production data, weaken tenant isolation, or broaden destructive cleanup.",
+  "summary": "The implementation must preserve tenant isolation, fail-closed workspace routing, rebuildable projection boundaries, append-only evidence, deletion propagation, and explicit authorization for production changes.",
   "artifact_refs": [
     "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml",
-    "apps/cap-runner/src/memory-maintenance.ts",
-    "apps/api-gateway/src/memory-lifecycle-service.ts",
-    "scripts/memory-cleanup.mjs"
+    "docs/THREAT_MODEL.md",
+    "packages/orgbrain-cli/src/lib/workspace-config.mjs",
+    "apps/api-gateway/src/authz-service.ts"
   ],
   "decision_refs": [
-    "adopt the richer ingestion and operator classifier as canonical",
-    "keep all production validation read-only"
+    "docs/harness/plan.json"
   ],
   "evidence": [
     {
       "type": "review",
-      "ref": "docs/harness/context_risks.md"
+      "ref": "manifest risks and repository instructions"
     }
   ],
   "residual_risks": [
-    "A later deployment will change future maintenance scoring and summaries",
-    "A separate export-gated backfill is required to reconcile existing production rows"
+    "Polymorphic retrieval sources require application-enforced tenant validation.",
+    "Indefinite telemetry retention requires privacy purge coverage and content-free event payloads."
   ]
 }

@@ -1,55 +1,27 @@
 {
   "backend": "json",
-  "difficulty": "simple",
+  "difficulty": "complex",
   "execution_policy_ref": "plan.json#/execution_policy",
   "graph_contract": "task-graph-v2",
-  "max_parallelism": 1,
+  "max_parallelism": 4,
   "primary_agent": "copilot",
-  "run_id": "org-brain-20260805T015820.391988Z-0971c97a",
+  "run_id": "org-brain-20260807T011318.571987Z-eca7a303",
   "schema_version": 2,
   "stages": [
     {
       "acceptance": [
         "Relevant implementation paths and call relationships are recorded."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "1eaae4c38d6249c5896b23863f76712e",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:04:07.073053+00:00",
+      "actor": "investigator",
       "depends_on": [],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/context_code_ci_fix.json"
-      ],
       "evidence_requirements": [
         "review"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "apps/api-gateway/wrangler.local.toml",
-          "apps/api-gateway/wrangler.toml"
-        ],
-        "decision_refs": [
-          "Keep production bindings unchanged and make the local integration config self-contained."
-        ],
-        "evidence": [
-          {
-            "ref": "https://github.com/miyajima/org-brain/actions/runs/30936641689/job/92084340187",
-            "type": "review"
-          }
-        ],
-        "residual_risks": [
-          "Removing optional bindings from the local config can reduce production parity, so parity tests must distinguish local-safe bindings from production-only bindings."
-        ],
-        "summary": "GitHub Actions job 92084340187 passed install, lint, typecheck, unit tests, build, and D1 migrations, then failed while starting the local API Gateway Worker because wrangler.local.toml declared an AI remote binding that requires CLOUDFLARE_API_TOKEN in non-interactive CI."
-      },
       "id": "context_code",
       "input_refs": [
         "request",
         "repository"
       ],
-      "input_sha256": "5a2697cad16650ce17c4bc73a2e1b8c27f7e9e011e932df6f4cf14b644828027",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -59,7 +31,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "d29a7d04d7ab588ef02205d337966d52ce1dc91e8efe652128d453ee9b6fee4b",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -79,10 +50,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "code-reviewer",
-      "started_at": "2026-08-05T02:01:31.618660+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Inspect implementation paths and call relationships",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "@context/code"
       ]
@@ -91,45 +60,16 @@
       "acceptance": [
         "Relevant tests and manifest verification commands are recorded."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "1a2a03d548ad41f38a112db85c553484",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:04:09.747161+00:00",
+      "actor": "investigator",
       "depends_on": [],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/context_tests_ci_fix.json"
-      ],
       "evidence_requirements": [
         "artifact"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "scripts/api-integration-smoke.mjs",
-          "scripts/wrangler-config-parity.test.mjs",
-          "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"
-        ],
-        "decision_refs": [
-          "Reproduce the Worker startup without CLOUDFLARE_API_TOKEN and run the full manifest gate."
-        ],
-        "evidence": [
-          {
-            "ref": "https://github.com/miyajima/org-brain/actions/runs/30936641689/job/92084340187",
-            "type": "artifact"
-          }
-        ],
-        "residual_risks": [
-          "Local port binding or sandbox restrictions may require an approved execution path for the smoke test."
-        ],
-        "summary": "The matching regression path is D1 local migration followed by wrangler dev readiness and scripts/api-integration-smoke.mjs. Manifest verification also requires typecheck, test, lint, and build."
-      },
       "id": "context_tests",
       "input_refs": [
         "request",
         "manifest commands"
       ],
-      "input_sha256": "a11b544ca67ee4b2bb27c56698da8b8a4541b594b4ce4911225e0e4583a94cc6",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -139,7 +79,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "04517fb4e92c7cbbd00ff30b733a13c3ff40168acb23b276e3fc98a05a1a9e13",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -161,10 +100,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "evidence-collector",
-      "started_at": "2026-08-05T02:01:37.866230+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Inspect tests and verification commands",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "@context/tests"
       ]
@@ -173,42 +110,16 @@
       "acceptance": [
         "Governed docs and behavior contracts affected by the task are recorded."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "a152ee2ab2544955977cc35cc9619eaa",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:04:12.478327+00:00",
+      "actor": "investigator",
       "depends_on": [],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/context_docs_ci_fix.json"
-      ],
       "evidence_requirements": [
         "document"
       ],
-      "handoff": {
-        "artifact_refs": [
-          "docs/SPEC.md",
-          "docs/SYSTEM_DESIGN.md",
-          "docs/DESIGN.md"
-        ],
-        "decision_refs": [
-          "Do not update governed docs unless implementation changes product behavior."
-        ],
-        "evidence": [
-          {
-            "ref": "docs/harness/context_docs_ci_fix.json",
-            "type": "document"
-          }
-        ],
-        "residual_risks": [],
-        "summary": "The fix is limited to CI and local Wrangler behavior; no product contract or governed product documentation changes are expected."
-      },
       "id": "context_docs",
       "input_refs": [
         "request",
         "governed docs"
       ],
-      "input_sha256": "249ce75a955d33fe4fa7cb4234d9d3777930d0b4e7a97048332b9fd7ee5febff",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -218,7 +129,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "3846be7c7b1ef8c6385ed1b132ac0c179e4e6151a0812137a5f2b04c3b60d4d8",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -237,10 +147,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "scope-planner",
-      "started_at": "2026-08-05T02:01:43.980974+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Inspect governed docs and repository contracts",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "@context/docs"
       ]
@@ -249,46 +157,17 @@
       "acceptance": [
         "Manifest risks, repository instructions, and sensitive paths are recorded."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "b47f15dfe20e4a7784ce83037d6be351",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:04:14.743142+00:00",
+      "actor": "investigator",
       "depends_on": [],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/context_risks_ci_fix.json"
-      ],
       "evidence_requirements": [
         "review"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "apps/api-gateway/wrangler.local.toml",
-          "apps/api-gateway/wrangler.toml",
-          "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"
-        ],
-        "decision_refs": [
-          "Use local emulation only; do not provide CLOUDFLARE_API_TOKEN to this CI job."
-        ],
-        "evidence": [
-          {
-            "ref": "https://github.com/miyajima/org-brain/actions/runs/30936641689/job/92084340187",
-            "type": "review"
-          }
-        ],
-        "residual_risks": [
-          "A parity assertion that requires all production bindings locally would reintroduce the remote-auth failure."
-        ],
-        "summary": "The touched paths are CI and Cloudflare local configuration. The fix must not add secrets, alter remote D1, deploy Workers, or change production binding behavior."
-      },
       "id": "context_risks",
       "input_refs": [
         "request",
         "manifest risks",
         "repository instructions"
       ],
-      "input_sha256": "f68371f1f72830387de91ca2cf247f78aeafb45ad400ccb331471b037430e3e4",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -298,7 +177,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "a4a0d3186a184cf7a2e1a8307286f38a302aa22d5749082fb9f3f8a6044100fb",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -319,10 +197,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "security-reviewer",
-      "started_at": "2026-08-05T02:01:52.423514+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Inspect manifests, instructions, and sensitive paths",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "@context/risks"
       ]
@@ -332,10 +208,6 @@
         "Context is bounded, reconciled, and captured in plan.json."
       ],
       "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "05c94b5475e04d3991fa4715bcc75411",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:06:32.991268+00:00",
       "decision_scope": "plan",
       "depends_on": [
         "context_code",
@@ -343,34 +215,9 @@
         "context_docs",
         "context_risks"
       ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/context_ci_fix.json"
-      ],
       "evidence_requirements": [
         "artifact"
       ],
-      "handoff": {
-        "artifact_refs": [
-          "docs/harness/context_code_ci_fix.json",
-          "docs/harness/context_tests_ci_fix.json",
-          "docs/harness/context_docs_ci_fix.json",
-          "docs/harness/context_risks_ci_fix.json"
-        ],
-        "decision_refs": [
-          "Add --local to the CI wrangler dev command instead of adding credentials or weakening wrangler.local.toml.",
-          "Add a regression assertion for the CI start command."
-        ],
-        "evidence": [
-          {
-            "ref": "docs/harness/context_ci_fix.json",
-            "type": "artifact"
-          }
-        ],
-        "residual_risks": [
-          "The full smoke still needs an unrestricted loopback bind because the sandbox blocks local ports."
-        ],
-        "summary": "The CI failure is isolated to Wrangler choosing remote-capable bindings during local Worker startup. The smallest safe fix is to pass Wrangler's explicit --local flag in CI, preserving local/production config parity while disabling remote bindings for the smoke process."
-      },
       "id": "context",
       "input_refs": [
         "context_code",
@@ -378,7 +225,6 @@
         "context_docs",
         "context_risks"
       ],
-      "input_sha256": "a48867b729bcbee9a2242f18133c720cb2f8992e702d3b04f4b14e69554b50c3",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -388,7 +234,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "e860b4cae3877f5cddc4569a30509b63f07879473577aea6a73f45d6e8207680",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -410,10 +255,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "scope-planner",
-      "started_at": "2026-08-05T02:06:30.026913+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Synthesize recalled and inspected context",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "docs/harness/plan.json"
       ]
@@ -423,48 +266,19 @@
         "The plan has concrete scope, risks, and measurable success criteria."
       ],
       "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "1137ba746d86422db1028a9fe5be8c1f",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:06:49.299594+00:00",
       "decision_scope": "plan",
       "depends_on": [
         "context"
       ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/implementation_plan_ci_fix.json"
-      ],
       "evidence_requirements": [
         "artifact"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "scripts/wrangler-config-parity.test.mjs"
-        ],
-        "decision_refs": [
-          "Acceptance: no CLOUDFLARE_API_TOKEN is required for the local Worker readiness step.",
-          "Acceptance: API integration smoke succeeds against the locally started Worker.",
-          "Acceptance: manifest lint, typecheck, tests, build, and full quality gate pass."
-        ],
-        "evidence": [
-          {
-            "ref": "docs/harness/implementation_plan_ci_fix.json",
-            "type": "artifact"
-          }
-        ],
-        "residual_risks": [
-          "Hosted GitHub Actions is the final environment-specific confirmation after push."
-        ],
-        "summary": "Patch the CI Worker start command to force local-only bindings, add a regression test, then validate the focused test, tokenless Worker/API smoke, manifest commands, review, and full gate."
-      },
       "id": "plan",
       "input_refs": [
         "context",
         "request",
         "success criteria"
       ],
-      "input_sha256": "00315cd8cf7e3d0ecc86174b7f5baa0e958fab663da60df510e48b2384c76bcb",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -474,7 +288,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "647f8f2be780a9927b7269c4e954277f4da88dc523fde4a5356db79ed95f78fc",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -493,10 +306,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "scope-planner",
-      "started_at": "2026-08-05T02:06:46.914379+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Create implementation plan and acceptance criteria",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "docs/harness/plan.json"
       ]
@@ -506,42 +317,17 @@
         "Implementation work is split only where dependencies and write sets are explicit."
       ],
       "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "32fffca9c5304513b5a82b4ec0b90583",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:06:54.122435+00:00",
       "decision_scope": "task_split",
       "depends_on": [
         "plan"
       ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/split_ci_fix.json"
-      ],
       "evidence_requirements": [
         "artifact"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "scripts/wrangler-config-parity.test.mjs"
-        ],
-        "decision_refs": [
-          "Keep implementation and integration in one task because the test directly specifies the workflow change."
-        ],
-        "evidence": [
-          {
-            "ref": "docs/harness/split_ci_fix.json",
-            "type": "artifact"
-          }
-        ],
-        "residual_risks": [],
-        "summary": "This is a single-writer, two-file atomic change: workflow flag plus its regression assertion. No parallel split is safe or useful."
-      },
       "id": "split",
       "input_refs": [
         "plan"
       ],
-      "input_sha256": "734fe1eae57331164b119c96ba25ff9b49e3317d70bb3848cf4fd8a0699aa68d",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -551,7 +337,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "c188a21109771bdea818908b277896d6e503b29eb2176700e83513a68b2a9f3c",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -570,10 +355,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "workflow-architect",
-      "started_at": "2026-08-05T02:06:51.509702+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Split work into dependency and resource-bounded tasks",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "docs/harness/tasks.json"
       ]
@@ -582,58 +365,21 @@
       "acceptance": [
         "Implementation and near-unit tests satisfy the planned behavior."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "dd931795d67b45eabb3f72b022067fba",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:14:30.284270+00:00",
+      "actor": "integration_owner",
       "decision_scope": "implementation",
       "depends_on": [
         "split"
-      ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/implement_ci_fix.json"
       ],
       "evidence_requirements": [
         "diff",
         "test"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "apps/api-gateway/wrangler.local.toml",
-          "scripts/wrangler-config-parity.test.mjs"
-        ],
-        "decision_refs": [
-          "Production wrangler.toml remains unchanged.",
-          "Default API key remains low-privilege service_agent; only the CI smoke key receives an explicit tenant_admin policy."
-        ],
-        "evidence": [
-          {
-            "ref": ".github/workflows/ci.yml apps/api-gateway/wrangler.local.toml scripts/wrangler-config-parity.test.mjs",
-            "type": "diff"
-          },
-          {
-            "ref": "node --test scripts/wrangler-config-parity.test.mjs: 2 passed",
-            "type": "test"
-          },
-          {
-            "ref": "fresh tokenless Wrangler local startup plus scripts/api-integration-smoke.mjs: passed",
-            "type": "test"
-          }
-        ],
-        "residual_risks": [
-          "Hosted GitHub Actions execution remains to be observed after the branch is pushed."
-        ],
-        "summary": "CI now starts Wrangler in explicit local mode, gives its deterministic smoke key an explicit tenant_admin grant, and keeps AI/Vectorize out of the local config because Wrangler cannot emulate them. Regression coverage distinguishes production-only bindings from local-safe parity and validates the CI launch contract."
-      },
       "id": "implement",
       "input_refs": [
         "plan",
         "split",
         "repository"
       ],
-      "input_sha256": "1c018028cb0c253569fb00de79d6d8820d18c6929880cf6893af821e7069fd32",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -643,7 +389,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "4d1117a668f015ebe0a1f6a46e6d9d4da12294c5be970ba0887e5f44d5f8480a",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -664,10 +409,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "minimal-change-implementer",
-      "started_at": "2026-08-05T02:07:04.655695+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Implement changes under one integration owner",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "**"
       ]
@@ -676,63 +419,19 @@
       "acceptance": [
         "Manifest-driven verification completes with recorded evidence."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "53dfb1f053584d699a2542d488780df0",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:18:15.110457+00:00",
+      "actor": "verifier",
       "depends_on": [
         "implement"
-      ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/test_ci_fix.json"
       ],
       "evidence_requirements": [
         "test"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "apps/api-gateway/wrangler.local.toml",
-          "scripts/wrangler-config-parity.test.mjs"
-        ],
-        "decision_refs": [
-          "Treat only the reruns after pnpm install --frozen-lockfile and permitted loopback binding as final manifest evidence."
-        ],
-        "evidence": [
-          {
-            "ref": "pnpm test: exit 0; node 79 passed, script vitest 94 passed, all workspace suites passed",
-            "type": "test"
-          },
-          {
-            "ref": "pnpm -r --if-present typecheck: exit 0",
-            "type": "test"
-          },
-          {
-            "ref": "pnpm lint: exit 0",
-            "type": "test"
-          },
-          {
-            "ref": "pnpm build: exit 0",
-            "type": "test"
-          },
-          {
-            "ref": "fresh local D1 migrations plus tokenless wrangler dev plus scripts/api-integration-smoke.mjs: passed",
-            "type": "test"
-          }
-        ],
-        "residual_risks": [
-          "GitHub-hosted execution will be confirmed only after push."
-        ],
-        "summary": "The focused regression, fresh tokenless Wrangler/D1/API smoke, and every manifest command passed. Initial typecheck/build failures were sandbox loopback restrictions and passed with the required permission; initial lint failure was stale dependencies and passed after frozen-lockfile install."
-      },
       "id": "test",
       "input_refs": [
         "implement",
         "manifest commands",
         "acceptance criteria"
       ],
-      "input_sha256": "c6413b6aa6202cf00ca52215e4c2ddac61e97dd0ac97098af654fd0192dfe241",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -742,7 +441,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "1c8843d41ffc2fd0ef2e0673924adff927d4ac2c23c1cb1e603112bc80836ed6",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -767,10 +465,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "evidence-collector",
-      "started_at": "2026-08-05T02:14:45.090448+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Run manifest-driven tests",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "@evidence/tests"
       ]
@@ -779,45 +475,18 @@
       "acceptance": [
         "Governed docs describe the final behavior and operational contract."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "aee7d317c6cc44988399573489731c34",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:18:40.053581+00:00",
+      "actor": "docs_owner",
       "depends_on": [
         "implement"
-      ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/docs_ci_fix.json"
       ],
       "evidence_requirements": [
         "document"
       ],
-      "handoff": {
-        "artifact_refs": [
-          "apps/api-gateway/wrangler.local.toml",
-          "docs/SPEC.md",
-          "docs/SYSTEM_DESIGN.md",
-          "docs/DESIGN.md"
-        ],
-        "decision_refs": [
-          "Keep the explanation adjacent to the local binding boundary rather than changing product documentation."
-        ],
-        "evidence": [
-          {
-            "ref": "apps/api-gateway/wrangler.local.toml",
-            "type": "document"
-          }
-        ],
-        "residual_risks": [],
-        "summary": "No governed product documentation changed because runtime API behavior and production bindings are unchanged. The local Wrangler config contains an inline explanation of the intentional production-only binding exclusion."
-      },
       "id": "docs",
       "input_refs": [
         "implement",
         "governed docs"
       ],
-      "input_sha256": "4a007a2015d6a92482f042f21044d22e14f437acb96dc064c029dfcbbbf169a1",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -827,7 +496,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "356a7bed7184433ee0c7014ee873ccf5639c02e87a883b27bc5700b5816a5d2a",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -850,10 +518,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "minimal-change-implementer",
-      "started_at": "2026-08-05T02:18:37.176879+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Update governed docs when behavior changes",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "README.md",
         "docs/**"
@@ -863,56 +529,20 @@
       "acceptance": [
         "Overall, security, reliability, and docs review evidence matches the final diff."
       ],
-      "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "766f41e1f3594f2c8d6277d7a0667ca8",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:19:33.006199+00:00",
+      "actor": "reviewer",
       "depends_on": [
         "implement",
         "docs"
       ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/review_ci_fix.json"
-      ],
       "evidence_requirements": [
         "review"
       ],
-      "handoff": {
-        "artifact_refs": [
-          ".github/workflows/ci.yml",
-          "apps/api-gateway/wrangler.local.toml",
-          "scripts/wrangler-config-parity.test.mjs"
-        ],
-        "decision_refs": [
-          "Approve the local-safe binding split and explicit CI smoke authorization policy."
-        ],
-        "evidence": [
-          {
-            "ref": "final diff review: no findings",
-            "type": "review"
-          },
-          {
-            "ref": "git diff --check: exit 0",
-            "type": "diff"
-          },
-          {
-            "ref": "manifest commands and fresh API integration smoke: passed",
-            "type": "test"
-          }
-        ],
-        "residual_risks": [
-          "The hosted CI result is pending until the fix branch is pushed."
-        ],
-        "summary": "Final review found no correctness, security, or maintainability issues in the three-file product diff. The fixed CI credential is local-only; production bindings and low-privilege default API key behavior are unchanged."
-      },
       "id": "review",
       "input_refs": [
         "implement",
         "docs",
         "acceptance criteria"
       ],
-      "input_sha256": "56cca1c066dfdb34f783e3cc3ec4ca7b5d225b208787d4491a820cba902cfdda",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -922,7 +552,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "ab565dc071258eecab02249eda1c0248cfd611ab388385977217619b38263f8b",
       "parallel_safe": true,
       "permission_scope": [
         "repo_read",
@@ -948,10 +577,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "code-reviewer",
-      "started_at": "2026-08-05T02:19:29.173619+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Review the final implementation and governed docs",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "docs/harness/review.json"
       ]
@@ -961,52 +588,16 @@
         "The full gate passes and the score meets the manifest threshold."
       ],
       "actor": "primary",
-      "attempt_count": 1,
-      "attempt_id": "4040b954407b4f3eb7abf9ccb3ab10f0",
-      "claimed_by": "primary",
-      "completed_at": "2026-08-05T02:30:28.112171+00:00",
       "decision_scope": "final_gate",
       "depends_on": [
         "test",
         "docs",
         "review"
       ],
-      "evidence_refs": [
-        "/Users/0300815938/projects/org-brain/docs/harness/quality_gate_ci_fix.json"
-      ],
       "evidence_requirements": [
         "review",
         "test"
       ],
-      "handoff": {
-        "artifact_refs": [
-          "docs/harness/gate.json",
-          "docs/harness/quality_score.json",
-          "docs/harness/review.json",
-          "docs/harness/tasks.json"
-        ],
-        "decision_refs": [
-          "Complete the quality_gate task after all command, review, and verifier preconditions, then rerun the full gate for final certification."
-        ],
-        "evidence": [
-          {
-            "ref": "docs/harness/review.json#/reviewer_evidence",
-            "type": "review"
-          },
-          {
-            "ref": "docs/harness/review.json#/verifier_evidence",
-            "type": "test"
-          },
-          {
-            "ref": "docs/harness/gate.json#/stages/commands: all passed",
-            "type": "test"
-          }
-        ],
-        "residual_risks": [
-          "Final gate status is recomputed after this task transition."
-        ],
-        "summary": "All full-gate command stages passed and the independent reviewer/verifier evidence is now bound to the final product diff fingerprint. The initial 80 score was solely the expected workflow-evidence deduction before these records and this task completion were present."
-      },
       "id": "quality_gate",
       "input_refs": [
         "test",
@@ -1014,7 +605,6 @@
         "review",
         "gate policy"
       ],
-      "input_sha256": "6c6b2a0fc6bc94ac2848f4cc4bd3b345a7dffabb29a702ee1a0cd08f7fa63ad0",
       "output_contract": {
         "required_fields": [
           "summary",
@@ -1024,7 +614,6 @@
           "residual_risks"
         ]
       },
-      "output_sha256": "6d723b055c0647fdfa7fd6914a71780b346792eb7a26e4da3f130cc381f204b8",
       "parallel_safe": false,
       "permission_scope": [
         "repo_read",
@@ -1047,10 +636,8 @@
         "stop_on_repeated_external_blocker": true
       },
       "role_ref": "readiness-verifier",
-      "started_at": "2026-08-05T02:19:45.195597+00:00",
-      "status": "completed",
+      "status": "pending",
       "title": "Compute final quality score",
-      "trace_id": "org-brain-20260805T015820.391988Z-0971c97a",
       "write_set": [
         "docs/harness/gate.json",
         "docs/harness/quality_score.json"

@@ -20,6 +20,11 @@
 - `memory_confirmations`: short-lived propose/confirm state for interactive saves.
 - `agent_messages`: durable agmsg-style agent inbox rows with target, thread, read, and ack state.
 - `retrieval_events` / `retrieval_daily_metrics`: telemetry and daily rollups.
+- `business_categories`: tenant-defined primary business classification; memories snapshot one category and one fixed work type.
+- `retrieval_generations` / `retrieval_generation_assignments` / `retrieval_ranking_profiles`: stable retrieval control plane.
+- `retrieval_units` / `retrieval_units_fts`: generation-scoped projection shared by evidence and governance sources.
+- `memory_usage_events` / `memory_usage_items`: deduplicated reference facts with classification snapshots.
+- `memory_effect_events` / `memory_effect_attributions` / `memory_failure_patterns` / `memory_effect_daily_metrics`: append-only impact evidence and rebuildable rollups.
 - `measurement_runs` / `measurement_variants` / `measurement_comparisons`: opt-in memory savings AB measurements.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
 - `threads`: review-oriented conversation capture.
@@ -50,7 +55,7 @@
   it is not expected to improve retrieval quality by storage substitution
   alone. The backend contract, activation criteria, migration rules, and parity
   gates are defined in [`STORAGE_BACKENDS.md`](STORAGE_BACKENDS.md).
-- Local SQLite uses the Node-bundled driver, WAL, schema version 17, SHA-256
+- Local SQLite uses the Node-bundled driver, WAL, schema version 18, SHA-256
   content hashes, immutable JSON version snapshots,
   verified backup/restore, `quick_check`, read-only query connections, and
   POSIX-private file modes.
@@ -70,6 +75,8 @@
 - Minimal conflict detection groups same-title decision memories and reports active versus deprecated/superseded/expired contradictions in the enrich response.
 - Decision editor provenance is opt-in for agent APIs: `includeProvenance`, `authorityScoring`, and `verificationView` default to false so compact benchmark retrieval remains unchanged.
 - Decision memory edit/confirm flows update the current `decision_memories` snapshot and append `decision_memory_versions` rows for reviewability.
+- Stable retrieval keeps evidence (`memories`) and governance (`decision_memories`) as separate ranked channels. Tenant/project generation assignment is fail-closed in enforce mode and can be rolled back without rebuilding source data.
+- Usage telemetry stores hashes and normalized identifiers, not prompt, query, or command bodies. Effect revisions supersede earlier evidence without destroying it; reports never mix evidence levels.
 - Hook ingestion resolves tenant and project together from the versioned local `workspaces.json`. A mapped workspace wins over the single-tenant environment fallback, while an explicit payload project applies only to that event. First reusable use can confirm `basename(cwd)` and writes the private mapping atomically; low-signal skips do not create it.
 - Organization sharing fails closed when neither a workspace mapping nor `ORGBRAIN_TENANT_ID` resolves a tenant. Legacy `project-names.json` entries migrate without source deletion, and operator backfill/snapshot/usage-status jobs consume the same workspace-to-project roots.
 - Retrieval refresh is best-effort: cap-runner and API memory search/profile update `last_accessed_at` and append a `memory_versions` refresh snapshot for top memory hits without blocking task execution.

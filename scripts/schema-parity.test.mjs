@@ -16,7 +16,20 @@ const SHARED_TABLES = [
   "audit_events",
   "retention_policies",
   "memory_retrieval_units",
-  "memory_retrieval_units_v4"
+  "memory_retrieval_units_v4",
+  "business_categories",
+  "memory_failure_patterns",
+  "memory_usage_events",
+  "memory_usage_items",
+  "memory_effect_events",
+  "memory_effect_attributions",
+  "memory_effect_daily_metrics",
+  "retrieval_ranking_profiles",
+  "retrieval_generations",
+  "retrieval_generation_assignments",
+  "retrieval_projection_jobs",
+  "retrieval_evaluation_events",
+  "retrieval_units"
 ];
 
 function columns(db, table) {
@@ -31,15 +44,17 @@ test("local SQLite shared tables stay in parity with D1 migrations", async () =>
     const store = new LocalMemoryStore(localPath);
     await store.init();
     const migrated = new DatabaseSync(migratedPath);
-    for (let version = 1; version <= MEMORY_SCHEMA_VERSION; version += 1) {
+    const files = [
+      "orgbus", "seed_capabilities", "memory_bridge", "retrieval_metrics",
+      "knowledge_docs", "memory_lifecycle_v2", "rationale_confirmation",
+      "measurement_mode", "remove_demo_capabilities", "context_engine_mvp",
+      "decision_memory_editor", "login_groups_acl", "agent_messages",
+      "memory_record_v2", "rbac_audit", "retrieval_units_v3", "retrieval_units_v4",
+      "business_classification", "memory_impact_telemetry",
+      "retrieval_generations", "retrieval_units_stable"
+    ];
+    for (let version = 1; version <= files.length; version += 1) {
       const prefix = String(version).padStart(4, "0");
-      const files = [
-        "orgbus", "seed_capabilities", "memory_bridge", "retrieval_metrics",
-        "knowledge_docs", "memory_lifecycle_v2", "rationale_confirmation",
-        "measurement_mode", "remove_demo_capabilities", "context_engine_mvp",
-        "decision_memory_editor", "login_groups_acl", "agent_messages",
-        "memory_record_v2", "rbac_audit", "retrieval_units_v3", "retrieval_units_v4"
-      ];
       const sql = await readFile(new URL(`../migrations/${prefix}_${files[version - 1]}.sql`, import.meta.url), "utf8");
       migrated.exec(sql);
     }

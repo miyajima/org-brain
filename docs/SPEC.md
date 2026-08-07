@@ -39,6 +39,16 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `POST /v1/decision-memories/:id/confirm`
 - `POST /v1/context/enrich`
 - `POST /api/context/enrich` (agent-facing alias)
+- `GET/POST/PATCH /v1/business-categories`
+- `POST /v1/memory-usages` (idempotent local outbox ingestion)
+- `POST /v1/memory-usages/state`
+- `POST /v1/memory-effects`
+- `GET/POST/PATCH /v1/memory-failure-patterns`
+- `GET /v1/metrics/memory-impact`
+- `POST /v1/retrieval-ranking-profiles`
+- `POST /v1/retrieval-generations`
+- `POST /v1/retrieval-generations/:id/backfill`
+- `PATCH /v1/retrieval-generations/:id`
 - `POST /v1/docs`
 - `GET /v1/docs/:slug`
 - `POST /v1/docs/search`
@@ -85,6 +95,8 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Agent memory sync は API (`/v1/memories*`) + sync script (`scripts/sync-agents-memory.mjs`) で行う
 - `/v1/memories/upsert` は request 内 `external_key` を last-write-wins で dedupe し、既存 key lookup + `memories_fts` 更新を batch 化する
 - memory lifecycle v2 では `memories` を current snapshot、`memory_versions` を immutable 履歴、`memory_edges` を lightweight lineage relation として扱う
+- `memories` と `decision_memories` は別の原本として維持し、自動同期しない。共通検索投影と効果計測だけを共有する
+- 新規保存はtenant定義の `business_category_id` と固定 `work_type` を明示入力し、内容から推論しない。移行中のNULLは未分類としてKPIから除外する
 - MemoryRecord v2 は local SQLite と Cloud D1 で tenant/project/kind/state/scope、content/summary/tags/entities、source references、actor、作成・更新・有効期間、confidence/utility/content hash/version、rationale/evidence/conflicts/permissions を共通の論理契約として持つ
 - `MemoryStore` は capture/revise/suppress/delete/get/search/version/export/rebuild/verify の正本インターフェースであり、FTS・embedding・graph retrieval index は再構築可能な派生データとして扱う
 - rationale confirmation v1 では `decision_rationales` を確認済み結論・理由の構造化層、`memory_confirmations` を propose/confirm の短期トークン保管として扱う
@@ -114,6 +126,9 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
   RRFで統合し、親memoryへ集約してからrerankする。会話の前置きを除いた主題語、
   限定的な形態・概念展開、明示された相対日時・話者・unit typeだけをboostし、
   通常質問にはrecencyを加えない
+- `hybrid_v3` / `hybrid_v4` は移行用aliasである。通常クライアントは `retrieval_profile` を使い、安定した `retrieval_generations` / `retrieval_units` 契約から実際のschema・extractor・ranking・embedding profileを `meta.retrieval` で受け取る
+- `search_scope=evidence|governance|both` は通常memoryとdecision memoryを別チャネルで返す。`both`でも両者を一つの順位へ混ぜない
+- 全検索・context結果は `meta.usage_id` を返し、効果はappend-only `memory_effect_events` と重み付きattributionへ記録する。詳細契約は [`RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md`](RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md) に定義する
 - `GET /v1/ops/status` はadmin専用で、memory競合・期限切れ、decision review、
   task失敗、監査、token、legal hold、検索品質、索引構成、RPO/RTO目標を返す。
   未計測の検索指標は0ではなくnullを返す

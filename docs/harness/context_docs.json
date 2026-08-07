@@ -1,20 +1,24 @@
 {
-  "summary": "SPEC and SYSTEM_DESIGN govern quality-v2 summaries, tiering, maintenance, and cleanup; both need a single-classifier contract.",
+  "summary": "SPEC, SYSTEM_DESIGN, DESIGN, storage, threat, local migration, and retrieval rollout documents govern the changed behavior and must describe explicit classification, append-only impact evidence, and stable retrieval generations.",
   "artifact_refs": [
     "docs/SPEC.md",
-    "docs/SYSTEM_DESIGN.md"
+    "docs/SYSTEM_DESIGN.md",
+    "docs/DESIGN.md",
+    "docs/STORAGE_BACKENDS.md",
+    "docs/THREAT_MODEL.md",
+    "docs/LOCAL_MIGRATION.md",
+    "docs/RETRIEVAL_ROLLOUT_POLICY.md"
   ],
   "decision_refs": [
-    "document one shared memory quality classifier for Cloud and Node runtimes"
+    "docs/harness/plan.json"
   ],
   "evidence": [
     {
       "type": "document",
-      "ref": "docs/harness/context_docs.md"
+      "ref": "docs/SYSTEM_DESIGN.md"
     }
   ],
   "residual_risks": [
-    "Do not imply that existing production rows are automatically backfilled by this code change",
-    "Keep manual cleanup export-gated and separate from daily maintenance"
+    "Docs must distinguish implemented local behavior from later production activation gates."
   ]
 }
