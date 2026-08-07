@@ -399,7 +399,8 @@ authentication separately.
 `.github/workflows/cloud-restore-drill.yml` provides the staging recovery gate.
 With the `cloud-staging` environment configured with
 `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and optionally
-`ORGBRAIN_STAGING_D1_NAME`, it exports the staging D1 database, restores into an
+`ORGBRAIN_STAGING_D1_NAME`, plus `OPS_ALERT_WEBHOOK_URL` for failure alerts, it
+resolves the D1 UUID, exports the staging database, restores into an
 isolated run-specific database, verifies counts and ordered content hashes,
 checks RPO ≤ 5 minutes and RTO ≤ 60 minutes, then deletes the drill database in
 an `always()` cleanup step. Until that workflow has a successful staging
@@ -553,6 +554,8 @@ The self-hosted API gateway exposes:
 - `GET|POST|DELETE /v1/scoped-tokens`
 - `GET|PUT /v1/retention-policies`
 - `POST /v1/retention-policies/apply` (dry-run unless `execute=true`)
+- `GET /v1/retention-queue`
+- `POST /v1/retention-queue/cancel` (up to 100 queued items)
 - `GET /v1/audit-events`
 - `GET /v1/audit-events/verify`
 - `GET /v1/groups`
@@ -584,6 +587,22 @@ The self-hosted API gateway exposes:
 - `POST /v1/context/review-check`
 - `POST /v1/context/debt/scan`
 - `/mcp` for Remote MCP clients
+
+Cloud deployments record every scheduled run in D1. The API Gateway retention
+cron runs daily at 04:15 JST. Production is initially deployed with
+`RETENTION_SWEEP_MODE=off`; switch it to `observe` only after the initial smoke
+tests. `enforce` suppresses at most 500 newly expired memories,
+waits seven days, then deletes at most 100 unchanged, non-held memories per
+run. Queue cancellation safely restores system-suppressed memories when they
+have not changed during the grace period.
+
+The hourly `.github/workflows/ops-watchdog.yml` workflow calls the protected
+`POST /internal/ops/watchdog/run` endpoint. Configure `OPS_WATCHDOG_TOKEN` and
+`OPS_ALERT_WEBHOOK_URL` as API Gateway secrets and mirror them, together with
+`ORGBRAIN_API_URL`, in the GitHub `ops-production` environment. Alerts are sent
+for stale scheduled jobs, failed/DLQ or stuck tasks, degraded retrieval
+projection, and retention queue failures. Active alerts repeat after six hours
+and emit one resolution notification.
 
 Memory search supports lexical query expansion, hybrid memory/docs retrieval, recent history,
 lifecycle states, and rationale-aware filters. `search_mode=hybrid_v2` fuses lexical,

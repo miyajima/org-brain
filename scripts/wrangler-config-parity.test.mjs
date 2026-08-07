@@ -20,6 +20,8 @@ test("API Gateway local and production Wrangler configs keep local-safe runtime 
   ]) {
     assert.deepEqual(quotedValues(local, variable), quotedValues(production, variable), `${variable} differs`);
   }
+  assert.deepEqual(quotedValues(local, "RETENTION_SWEEP_MODE"), ["observe"]);
+  assert.deepEqual(quotedValues(production, "RETENTION_SWEEP_MODE"), ["off"]);
   const productionOnlyBindings = ["AI", "MEMORY_VECTOR_INDEX_V3"];
   const productionBindings = quotedValues(production, "binding");
   const localBindings = quotedValues(local, "binding");
@@ -37,6 +39,7 @@ test("API Gateway local and production Wrangler configs keep local-safe runtime 
   assert.equal(quotedValues(production, "name").includes("API_RATE_LIMITER"), true);
   assert.equal(production.includes("database_id"), false);
   assert.equal(local.includes("database_id"), false);
+  assert.match(production, /crons\s*=\s*\["15 19 \* \* \*"\]/u);
 });
 
 test("CI starts the API integration Worker with remote bindings disabled", async () => {

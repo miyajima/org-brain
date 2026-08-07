@@ -1,4 +1,4 @@
-import { HttpError, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
+import { HttpError, runRecordedScheduledJob, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
 import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import {
@@ -38,6 +38,7 @@ import {
   rebuildSemanticIndex
 } from "./retrieval-index-service";
 import { getOperationsStatus } from "./operations-service";
+import { runOpsWatchdog } from "./ops-watchdog-service";
 import { assertRequestRateLimit } from "./rate-limit-service";
 import { extractMemoryCandidates } from "./memory-extraction-service";
 import {
@@ -45,6 +46,12 @@ import {
   listRetentionPolicies,
   upsertRetentionPolicy
 } from "./retention-service";
+import {
+  cancelRetentionQueue,
+  listRetentionQueue,
+  runScheduledRetentionSweep,
+  type RetentionQueueStatus
+} from "./retention-queue-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, getApiPrincipal, jsonOk, tenantFromBody, type ApiContextEnv } from "./auth";
 import {
   confirmDecisionMemory,
@@ -137,6 +144,15 @@ function requireIdempotencyKey(c: { req: { header(name: string): string | undefi
   return value;
 }
 
+app.post("/internal/ops/watchdog/run", async (c) => {
+  const expected = c.env.OPS_WATCHDOG_TOKEN?.trim();
+  if (!expected) throw new HttpError(503, "watchdog_not_configured", "OPS_WATCHDOG_TOKEN is not configured");
+  if (c.req.header("authorization") !== `Bearer ${expected}`) {
+    throw new HttpError(401, "unauthorized", "Invalid watchdog token");
+  }
+  return c.json(await runOpsWatchdog(c.env));
+});
+
 function withPrincipalActor(rawBody: unknown, principal: string): unknown {
   if (!rawBody || typeof rawBody !== "object") return rawBody;
   const body = rawBody as Record<string, unknown>;
@@ -193,6 +209,7 @@ function permissionForRequest(method: string, path: string): OrgPermission {
     path.startsWith("/v1/groups") ||
     path.startsWith("/v1/scoped-tokens") ||
     path.startsWith("/v1/retention-policies") ||
+    path.startsWith("/v1/retention-queue") ||
     path.startsWith("/v1/ops/") ||
     path.startsWith("/v1/retrieval-index") ||
     path.startsWith("/v1/retrieval-ranking-profiles") ||
@@ -427,6 +444,32 @@ app.post("/v1/retention-policies/apply", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
   return jsonOk(c, await applyRetentionPolicies(c.env, tenantId, body, getApiPrincipal(c)));
+});
+
+app.get("/v1/retention-queue", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const rawStatus = c.req.query("status");
+  const statuses: RetentionQueueStatus[] = ["pending", "deleted", "cancelled", "failed", "manual_review"];
+  if (rawStatus && !statuses.includes(rawStatus as RetentionQueueStatus)) {
+    throw new HttpError(400, "invalid_payload", "invalid retention queue status");
+  }
+  const rawLimit = Number(c.req.query("limit") ?? 100);
+  if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 500) {
+    throw new HttpError(400, "invalid_payload", "limit must be between 1 and 500");
+  }
+  return jsonOk(c, await listRetentionQueue(c.env, tenantId, {
+    status: rawStatus as RetentionQueueStatus | undefined,
+    limit: rawLimit
+  }));
+});
+
+app.post("/v1/retention-queue/cancel", async (c) => {
+  const body = await c.req.json<{ tenant_id?: string; ids?: unknown }>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  if (!Array.isArray(body.ids) || !body.ids.every((id) => typeof id === "string")) {
+    throw new HttpError(400, "invalid_payload", "ids must be an array of strings");
+  }
+  return jsonOk(c, await cancelRetentionQueue(c.env, tenantId, body.ids));
 });
 
 app.get("/v1/audit-events", async (c) => {
@@ -1326,5 +1369,15 @@ app.notFound((c) =>
   c.json({ ok: false, error: { code: "not_found", message: "Route not found" } }, { status: 404 })
 );
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    const scheduledFor = controller.scheduledTime ?? Date.now();
+    await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
+      jobName: "retention-sweep",
+      scheduledFor,
+      now: scheduledFor
+    }, async () => runScheduledRetentionSweep(env, scheduledFor));
+  }
+};
 export { OrgBrainMCP };

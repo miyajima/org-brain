@@ -1,0 +1,26 @@
+name: Operations watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ops-production
+    env:
+      ORGBRAIN_API_URL: ${{ secrets.ORGBRAIN_API_URL }}
+      ORGBRAIN_WATCHDOG_TOKEN: ${{ secrets.ORGBRAIN_WATCHDOG_TOKEN }}
+      OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+      - name: Run external operations watchdog
+        run: node scripts/ops-watchdog.mjs

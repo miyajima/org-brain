@@ -179,7 +179,10 @@ if (
   operations.status !== 200 ||
   typeof operations.body.data?.memories?.total !== "number" ||
   operations.body.data?.retrieval?.lexical !== "d1-fts5" ||
-  operations.body.data?.authorization?.roles?.length !== 6
+  operations.body.data?.authorization?.roles?.length !== 6 ||
+  !Array.isArray(operations.body.data?.scheduled_jobs) ||
+  operations.body.data.scheduled_jobs.length !== 3 ||
+  typeof operations.body.data?.retention_queue?.pending !== "number"
 ) {
   throw new Error("operations status smoke assertions failed");
 }
@@ -216,6 +219,8 @@ process.stdout.write(`${JSON.stringify({
     status: operations.status,
     memories: operations.body.data.memories,
     tasks: operations.body.data.tasks,
-    retrieval: operations.body.data.retrieval
+    retrieval: operations.body.data.retrieval,
+    scheduled_jobs: operations.body.data.scheduled_jobs,
+    retention_queue: operations.body.data.retention_queue
   }
 }, null, 2)}\n`);

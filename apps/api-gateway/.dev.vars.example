@@ -1,5 +1,9 @@
 API_KEY=dev-org-brain-api-key
 
+# Internal hourly operations watchdog. Use secrets in deployed environments.
+# OPS_WATCHDOG_TOKEN=replace-with-a-long-random-token
+# OPS_ALERT_WEBHOOK_URL=https://hooks.example.com/orgbrain
+
 # API key identity and tenant grants.
 # Each grant principal becomes the canonical identity for API-key requests.
 # API_TENANT_POLICY_JSON={"keys":[{"api_key":"dev-org-brain-api-key","principal":"user:local-dev","tenants":["default"],"role":"tenant_admin"}],"default_role":"service_agent"}

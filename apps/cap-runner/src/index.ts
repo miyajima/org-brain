@@ -4,7 +4,8 @@ import {
   type TaskCreatedPayload,
   type TaskResultPayload,
   ulid,
-  validateEnvelope
+  validateEnvelope,
+  runRecordedScheduledJob
 } from "@org-brain/shared";
 import { runCapability } from "./capabilities/runtime";
 import { LeaseDO } from "./do/lease";
@@ -383,16 +384,27 @@ export default {
     const cron = controller.cron ?? METRICS_CRON;
 
     if (cron === METRICS_CRON) {
-      await rollupRetrievalMetricsForDay(env.OPEN_BRAIN_DB, previousUtcDay(now), now);
-      const impactDay = previousMemoryImpactUtcDay(now);
-      await rebuildMemoryImpactExecutionMetricsForDay(env.OPEN_BRAIN_DB, impactDay, now);
-      await rebuildMemoryImpactMetricsForDay(env.OPEN_BRAIN_DB, impactDay, now);
-      await pruneRetrievalEvents(env.OPEN_BRAIN_DB, rawRetentionCutoff(now));
+      await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
+        jobName: "retrieval-metrics-rollup",
+        scheduledFor: now,
+        now
+      }, async () => {
+        const rollup = await rollupRetrievalMetricsForDay(env.OPEN_BRAIN_DB, previousUtcDay(now), now);
+        const impactDay = previousMemoryImpactUtcDay(now);
+        const impactExecution = await rebuildMemoryImpactExecutionMetricsForDay(env.OPEN_BRAIN_DB, impactDay, now);
+        const impact = await rebuildMemoryImpactMetricsForDay(env.OPEN_BRAIN_DB, impactDay, now);
+        const prune = await pruneRetrievalEvents(env.OPEN_BRAIN_DB, rawRetentionCutoff(now));
+        return { rollup, impact_execution: impactExecution, impact, prune };
+      });
       return;
     }
 
     if (cron === MEMORY_MAINTENANCE_CRON) {
-      await runScheduledMemoryMaintenance(env.OPEN_BRAIN_DB, now);
+      await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
+        jobName: "memory-maintenance",
+        scheduledFor: now,
+        now
+      }, async () => runScheduledMemoryMaintenance(env.OPEN_BRAIN_DB, now));
     }
   },
 
