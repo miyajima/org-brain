@@ -21,23 +21,30 @@ jobs:
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
       SOURCE_DATABASE: ${{ inputs.source_database || vars.ORGBRAIN_STAGING_D1_NAME || 'open-brain-staging' }}
       DRILL_DATABASE: orgbrain-restore-drill-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require staging credentials
+        run: test -n "$CLOUDFLARE_ACCOUNT_ID" -a -n "$CLOUDFLARE_API_TOKEN"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22.13"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Require staging credentials
-        run: test -n "$CLOUDFLARE_ACCOUNT_ID" -a -n "$CLOUDFLARE_API_TOKEN"
+      - name: Resolve source D1 database
+        run: |
+          pnpm -C apps/api-gateway exec wrangler d1 list --json > "$RUNNER_TEMP/d1-before.json"
+          node scripts/prepare-cloud-restore-drill.mjs \
+            --databases-json "$RUNNER_TEMP/d1-before.json" \
+            --source-name "$SOURCE_DATABASE" \
+            --output "$RUNNER_TEMP/wrangler.restore.toml"
       - name: Capture source state and export
-        working-directory: apps/api-gateway
         run: |
           date +%s%3N > /tmp/drill-started-ms
-          pnpm exec wrangler d1 execute "$SOURCE_DATABASE" --remote --json --command "
+          pnpm -C apps/api-gateway exec wrangler d1 execute SOURCE_DB --remote --config "$RUNNER_TEMP/wrangler.restore.toml" --json --command "
             SELECT
               (SELECT COUNT(*) FROM memories) AS memory_count,
               (SELECT COUNT(*) FROM memory_versions) AS version_count,
@@ -48,14 +55,23 @@ jobs:
                 (SELECT content_hash FROM memories ORDER BY id)) AS ordered_content_hashes,
               CAST(unixepoch('subsec') * 1000 AS INTEGER) AS snapshot_at,
               (SELECT MAX(updated_at) FROM memories) AS max_updated_at;
-          " > ../../source-state.json
-          pnpm exec wrangler d1 export "$SOURCE_DATABASE" --remote --output /tmp/orgbrain-staging-export.sql
-      - name: Create and restore isolated drill database
-        working-directory: apps/api-gateway
+          " > source-state.json
+          pnpm -C apps/api-gateway exec wrangler d1 export SOURCE_DB --remote --config "$RUNNER_TEMP/wrangler.restore.toml" --output /tmp/orgbrain-staging-export.sql
+      - name: Create isolated drill database
+        id: create-drill
         run: |
-          pnpm exec wrangler d1 create "$DRILL_DATABASE"
-          pnpm exec wrangler d1 execute "$DRILL_DATABASE" --remote --yes --file /tmp/orgbrain-staging-export.sql
-          pnpm exec wrangler d1 execute "$DRILL_DATABASE" --remote --json --command "
+          pnpm -C apps/api-gateway exec wrangler d1 create "$DRILL_DATABASE"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+      - name: Resolve and restore isolated drill database
+        run: |
+          pnpm -C apps/api-gateway exec wrangler d1 list --json > "$RUNNER_TEMP/d1-after.json"
+          node scripts/prepare-cloud-restore-drill.mjs \
+            --databases-json "$RUNNER_TEMP/d1-after.json" \
+            --source-name "$SOURCE_DATABASE" \
+            --drill-name "$DRILL_DATABASE" \
+            --output "$RUNNER_TEMP/wrangler.restore.toml"
+          pnpm -C apps/api-gateway exec wrangler d1 execute DRILL_DB --remote --config "$RUNNER_TEMP/wrangler.restore.toml" --yes --file /tmp/orgbrain-staging-export.sql
+          pnpm -C apps/api-gateway exec wrangler d1 execute DRILL_DB --remote --config "$RUNNER_TEMP/wrangler.restore.toml" --json --command "
             SELECT
               (SELECT COUNT(*) FROM memories) AS memory_count,
               (SELECT COUNT(*) FROM memory_versions) AS version_count,
@@ -66,7 +82,7 @@ jobs:
                 (SELECT content_hash FROM memories ORDER BY id)) AS ordered_content_hashes,
               CAST(unixepoch('subsec') * 1000 AS INTEGER) AS snapshot_at,
               (SELECT MAX(updated_at) FROM memories) AS max_updated_at;
-          " > ../../restored-state.json
+          " > restored-state.json
           date +%s%3N > /tmp/drill-finished-ms
       - name: Verify RPO, RTO, counts, and content hashes
         run: >
@@ -79,9 +95,15 @@ jobs:
           "$DRILL_DATABASE"
           > cloud-restore-drill.json
       - name: Delete isolated drill database
-        if: always()
-        working-directory: apps/api-gateway
-        run: pnpm exec wrangler d1 delete "$DRILL_DATABASE" --skip-confirmation
+        if: always() && steps.create-drill.outputs.created == 'true'
+        run: pnpm -C apps/api-gateway exec wrangler d1 delete "$DRILL_DATABASE" --skip-confirmation
+      - name: Notify restore drill failure
+        if: failure()
+        env:
+          OPS_ALERT_KEY: github:cloud-d1-restore-drill
+          OPS_ALERT_TITLE: Cloud D1 restore drill failed
+          OPS_ALERT_SUMMARY: The scheduled staging D1 restore drill did not complete successfully.
+        run: node scripts/send-ops-alert.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

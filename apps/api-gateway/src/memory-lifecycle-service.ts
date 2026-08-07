@@ -1088,6 +1088,80 @@ export async function suppressMemory(
   };
 }
 
+export async function restoreSuppressedMemory(
+  env: Env,
+  args: {
+    tenantId: string;
+    memoryId: string;
+    restoreVersion?: number;
+    actorType?: string | null;
+    actorId?: string | null;
+  }
+): Promise<LifecycleMutationResult> {
+  const existing = await loadMemoryById(env, args.tenantId, args.memoryId);
+  if (normalizeLifecycleState(existing.lifecycle_state) !== "suppressed") {
+    throw new HttpError(409, "memory_not_suppressed", "Only a suppressed memory can be restored");
+  }
+  const restorePoint = args.restoreVersion === undefined
+    ? null
+    : await env.OPEN_BRAIN_DB.prepare(
+        `SELECT summary, tags_json FROM memory_versions
+         WHERE tenant_id = ? AND memory_id = ? AND version = ?`
+      ).bind(args.tenantId, args.memoryId, args.restoreVersion).first<{
+        summary: string | null;
+        tags_json: string | null;
+      }>();
+  if (args.restoreVersion !== undefined && !restorePoint) {
+    throw new HttpError(409, "restore_point_missing", "The pre-suppression memory version is unavailable");
+  }
+  const tags = restorePoint
+    ? parseStoredTags(restorePoint.tags_json)
+    : parseStoredTags(existing.tags_json).filter((tag) => tag !== "compacted");
+  const version = (existing.current_version ?? 0) + 1;
+  const snapshot = normalizeWriteItem(args.tenantId, existing.source, {
+    ...v2FieldsFromStored(existing),
+    external_key: existing.external_key,
+    content: existing.content,
+    summary: restorePoint ? restorePoint.summary : existing.summary,
+    tags,
+    created_at: Date.now(),
+    project_id: existing.project_id,
+    actor_type: args.actorType ?? existing.actor_type,
+    actor_id: args.actorId ?? existing.actor_id,
+    kind: normalizeMemoryKind(existing.kind),
+    lifecycle_state: "active",
+    scope_type: normalizeScopeType(existing.scope_type),
+    scope_key: existing.scope_key,
+    confidence_score: existing.confidence_score ?? null,
+    utility_score: existing.utility_score ?? null,
+    canonical_key: existing.canonical_key,
+    expires_at: existing.expires_at
+  });
+
+  await saveCurrentSnapshot(env, {
+    tenantId: args.tenantId,
+    source: existing.source,
+    memoryId: existing.id,
+    rowExists: true,
+    rootMemoryId: existing.root_memory_id || existing.id,
+    version,
+    snapshot
+  });
+  await env.OPEN_BRAIN_DB.prepare(
+    "UPDATE memory_versions SET operation = ? WHERE tenant_id = ? AND memory_id = ? AND version = ?"
+  ).bind("revise", args.tenantId, existing.id, version).run();
+
+  return {
+    tenant_id: args.tenantId,
+    memory_id: existing.id,
+    version,
+    operation: "revise",
+    created: false,
+    kind: snapshot.kind,
+    lifecycle_state: "active"
+  };
+}
+
 export async function deriveMemoryEdge(
   env: Env,
   tenantId: string,

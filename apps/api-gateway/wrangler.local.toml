@@ -9,6 +9,7 @@ HYBRID_V4_MODE = "shadow"
 HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
 MEMORY_CLASSIFICATION_MODE = "observe"
 RETRIEVAL_GENERATION_ROUTING = "legacy"
+RETENTION_SWEEP_MODE = "observe"
 
 # AI and Vectorize are intentionally omitted here. Wrangler cannot emulate
 # those bindings locally; declaring them makes the CI smoke require remote

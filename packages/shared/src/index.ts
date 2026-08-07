@@ -18,4 +18,5 @@ export * from "./rbac";
 export * from "./retrieval-index";
 export * from "./retrieval-units";
 export * from "./schemas";
+export * from "./scheduled-jobs";
 export * from "./types";

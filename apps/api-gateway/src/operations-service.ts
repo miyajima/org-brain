@@ -1,10 +1,45 @@
 import { ORG_ROLES, ROLE_PERMISSIONS, type OrgRole } from "@org-brain/shared";
 import type { Env } from "./types";
 
+const SCHEDULED_JOB_UTC_TIMES: Record<string, { hour: number; minute: number }> = {
+  "retrieval-metrics-rollup": { hour: 0, minute: 5 },
+  "memory-maintenance": { hour: 18, minute: 30 },
+  "retention-sweep": { hour: 19, minute: 15 }
+};
+
+function nextScheduledAt(jobName: string, now: number): number | null {
+  const schedule = SCHEDULED_JOB_UTC_TIMES[jobName];
+  if (!schedule) return null;
+  const date = new Date(now);
+  let next = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    schedule.hour,
+    schedule.minute
+  );
+  if (next <= now) next += 86_400_000;
+  return next;
+}
+
 export async function getOperationsStatus(env: Env, tenantId: string) {
   const now = Date.now();
   const dayAgo = now - 86_400_000;
-  const [memories, decisions, tasks, failedTasks, audit, tokens, retention, retrieval, roles, retrievalUnits] = await Promise.all([
+  const [
+    memories,
+    decisions,
+    tasks,
+    failedTasks,
+    stuckTasks,
+    audit,
+    tokens,
+    retention,
+    retrieval,
+    roles,
+    retrievalUnits,
+    scheduledJobs,
+    retentionQueue
+  ] = await Promise.all([
     env.OPEN_BRAIN_DB.prepare(
       `SELECT
          COUNT(*) AS total,
@@ -43,6 +78,13 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
       updated_at: number;
     }>(),
     env.OPEN_BRAIN_DB.prepare(
+      `SELECT COUNT(*) AS stuck
+       FROM tasks
+       WHERE tenant_id = ?
+         AND status IN ('created', 'queued', 'leased', 'running')
+         AND updated_at < ?`
+    ).bind(tenantId, now - 30 * 60_000).first<Record<string, number | null>>(),
+    env.OPEN_BRAIN_DB.prepare(
       `SELECT
          COUNT(*) AS events_24h,
          SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied_24h,
@@ -79,12 +121,46 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
     env.OPEN_BRAIN_DB.prepare(
       `SELECT
          COUNT(*) AS total,
-         COUNT(DISTINCT memory_id) AS projected_memories,
-         SUM(CASE WHEN extraction_state != 'ready' THEN 1 ELSE 0 END) AS degraded,
-         MAX(created_at) AS latest_projection_at
-       FROM memory_retrieval_units
-       WHERE tenant_id = ?`
-    ).bind(tenantId).first<Record<string, number | null>>()
+         COUNT(DISTINCT units.memory_id) AS projected_memories,
+         SUM(CASE WHEN units.extraction_state != 'ready' THEN 1 ELSE 0 END) AS degraded,
+         MAX(units.created_at) AS latest_projection_at
+       FROM memory_retrieval_units units
+       INNER JOIN memories
+         ON memories.tenant_id = units.tenant_id AND memories.id = units.memory_id
+       WHERE units.tenant_id = ?
+         AND (memories.lifecycle_state IS NULL OR memories.lifecycle_state != 'suppressed')`
+    ).bind(tenantId).first<Record<string, number | null>>(),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT latest.job_name, latest.status AS latest_status,
+              latest.scheduled_for AS latest_scheduled_for,
+              latest.finished_at AS latest_finished_at,
+              latest.error_message AS latest_error,
+              (SELECT MAX(success.finished_at)
+                 FROM scheduled_job_runs success
+                WHERE success.job_name = latest.job_name AND success.status = 'succeeded') AS last_success_at
+       FROM scheduled_job_runs latest
+       WHERE latest.scheduled_for = (
+         SELECT MAX(candidate.scheduled_for)
+         FROM scheduled_job_runs candidate
+         WHERE candidate.job_name = latest.job_name
+       )
+       ORDER BY latest.job_name`
+    ).all<{
+      job_name: string;
+      latest_status: string;
+      latest_scheduled_for: number;
+      latest_finished_at: number | null;
+      latest_error: string | null;
+      last_success_at: number | null;
+    }>(),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT
+         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+         SUM(CASE WHEN status = 'manual_review' THEN 1 ELSE 0 END) AS manual_review,
+         SUM(CASE WHEN status IN ('pending', 'failed') AND delete_after <= ? THEN 1 ELSE 0 END) AS overdue
+       FROM retention_deletion_queue WHERE tenant_id = ?`
+    ).bind(now, tenantId).first<Record<string, number | null>>()
   ]);
   const numeric = (row: Record<string, number | null> | null, key: string) =>
     Number(row?.[key] ?? 0);
@@ -108,6 +184,7 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
     tasks: {
       total: numeric(tasks, "total"),
       active: numeric(tasks, "active"),
+      stuck: numeric(stuckTasks, "stuck"),
       failed: numeric(tasks, "failed"),
       failed_items: failedTasks.results
     },
@@ -139,6 +216,27 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
       policies: numeric(retention, "policies"),
       legal_holds: numeric(retention, "legal_holds")
     },
+    retention_queue: {
+      pending: numeric(retentionQueue, "pending"),
+      failed: numeric(retentionQueue, "failed"),
+      manual_review: numeric(retentionQueue, "manual_review"),
+      overdue: numeric(retentionQueue, "overdue")
+    },
+    scheduled_jobs: ["memory-maintenance", "retrieval-metrics-rollup", "retention-sweep"].map((jobName) => {
+      const row = scheduledJobs.results.find((candidate) => candidate.job_name === jobName);
+      const lastSuccessAt = row?.last_success_at ?? null;
+      return {
+        job_name: jobName,
+        latest_status: row?.latest_status ?? "never_run",
+        latest_scheduled_for: row?.latest_scheduled_for ?? null,
+        latest_finished_at: row?.latest_finished_at ?? null,
+        latest_error: row?.latest_error ?? null,
+        last_success_at: lastSuccessAt,
+        next_expected_at: nextScheduledAt(jobName, now),
+        success_age_ms: lastSuccessAt === null ? null : Math.max(0, now - lastSuccessAt),
+        stale: lastSuccessAt === null || now - lastSuccessAt > 36 * 60 * 60_000
+      };
+    }),
     retrieval: {
       semantic_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX),
       hybrid_v3_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX_V3),

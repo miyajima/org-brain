@@ -14,6 +14,16 @@ export type RetentionPolicy = {
   updated_at: number;
 };
 
+export type RetentionCandidate = {
+  id: string;
+  tenant_id: string;
+  project_id: string | null;
+  effective_at: number;
+  lifecycle_state: string;
+  current_version: number;
+  policy_id: string;
+};
+
 function parseProjectId(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string" || !value.trim()) {
@@ -119,6 +129,53 @@ export async function assertMemoryNotOnLegalHold(
   }
 }
 
+export function effectiveRetentionPolicy(
+  policies: RetentionPolicy[],
+  projectId: string | null
+): RetentionPolicy | null {
+  const tenantPolicy = policies.find((policy) => policy.project_id === null) ?? null;
+  const projectPolicy = projectId
+    ? policies.find((policy) => policy.project_id === projectId) ?? null
+    : null;
+  return projectPolicy ?? tenantPolicy;
+}
+
+export function isRetentionEligible(
+  policy: RetentionPolicy | null,
+  effectiveAt: number,
+  now: number,
+  tenantPolicy: RetentionPolicy | null
+): boolean {
+  if (!policy || policy.legal_hold === 1 || tenantPolicy?.legal_hold === 1) return false;
+  return effectiveAt < now - policy.retention_days * 86_400_000;
+}
+
+export async function loadRetentionCandidates(
+  env: Env,
+  tenantId: string,
+  policies: RetentionPolicy[],
+  options: { now?: number; limit?: number } = {}
+): Promise<RetentionCandidate[]> {
+  const now = options.now ?? Date.now();
+  const limit = Math.max(1, Math.min(5_000, options.limit ?? 5_000));
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, tenant_id, project_id, COALESCE(updated_at, created_at) AS effective_at,
+            COALESCE(lifecycle_state, 'active') AS lifecycle_state,
+            COALESCE(current_version, 1) AS current_version
+     FROM memories
+     WHERE tenant_id = ?
+     ORDER BY effective_at, id
+     LIMIT 5000`
+  ).bind(tenantId).all<Omit<RetentionCandidate, "policy_id">>();
+  const tenantPolicy = policies.find((policy) => policy.project_id === null) ?? null;
+  return rows.results.flatMap((row) => {
+    const policy = effectiveRetentionPolicy(policies, row.project_id);
+    return isRetentionEligible(policy, row.effective_at, now, tenantPolicy) && policy
+      ? [{ ...row, policy_id: policy.id }]
+      : [];
+  }).slice(0, limit);
+}
+
 export async function applyRetentionPolicies(
   env: Env,
   tenantId: string,
@@ -132,23 +189,7 @@ export async function applyRetentionPolicies(
       ? Math.max(1, Math.min(500, body.limit))
       : 100;
   const policies = await listRetentionPolicies(env, tenantId);
-  const tenantPolicy = policies.find((policy) => policy.project_id === null);
-  const projectPolicies = new Map(
-    policies.filter((policy) => policy.project_id !== null).map((policy) => [policy.project_id, policy])
-  );
-  const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, project_id, COALESCE(updated_at, created_at) AS effective_at
-     FROM memories
-     WHERE tenant_id = ?
-     ORDER BY effective_at
-     LIMIT 5000`
-  ).bind(tenantId).all<{ id: string; project_id: string | null; effective_at: number }>();
-  const now = Date.now();
-  const candidates = rows.results.filter((row) => {
-    const policy = (row.project_id ? projectPolicies.get(row.project_id) : undefined) ?? tenantPolicy;
-    if (!policy || tenantPolicy?.legal_hold === 1 || policy.legal_hold === 1) return false;
-    return row.effective_at < now - policy.retention_days * 86_400_000;
-  }).slice(0, limit);
+  const candidates = await loadRetentionCandidates(env, tenantId, policies, { limit });
 
   const deleted: string[] = [];
   if (execute) {

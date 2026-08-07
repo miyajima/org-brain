@@ -14,6 +14,7 @@ DECISION_RESOURCE_LINKS_ENABLED = "false"
 RESOURCE_RELATION_EXTRACTION_ENABLED = "false"
 EMAIL_AUTH_ENABLED = "false"
 KNOWLEDGE_RESOURCE_CONNECTORS_JSON = "[]"
+RETENTION_SWEEP_MODE = "off"
 
 [ai]
 binding = "AI"
@@ -59,3 +60,6 @@ bindings = [
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["OrgBrainMCP"]
+
+[triggers]
+crons = ["15 19 * * *"]
