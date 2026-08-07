@@ -1,0 +1,27 @@
+{
+  "summary": "Deliver one additive identity-administration contract across OSS and Enterprise: shared schemas first, then OSS D1/SQLite/API/Console/CLI, Enterprise PostgreSQL/Node/SMTP/RLS/SCIM, followed by privacy, isolation, migration, and compatibility gates.",
+  "artifact_refs": [
+    "docs/harness/plan.json",
+    "docs/IDENTITY_ADMINISTRATION.md",
+    "packages/contracts/src/index.ts",
+    "migrations/0024_identity_organization.sql",
+    "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql"
+  ],
+  "decision_refs": [
+    "all schema changes are additive and existing principals remain stable",
+    "tenant provisioning is excluded from general administration",
+    "tenant role is singular while project roles may be multiple",
+    "full_name is field-level private and excluded from audit metadata",
+    "email and SCIM are initially feature-flagged off"
+  ],
+  "evidence": [
+    {
+      "type": "artifact",
+      "ref": "docs/harness/plan.json"
+    }
+  ],
+  "residual_risks": [
+    "External package and image publication is outside the authorized local implementation.",
+    "Live SMTP, OIDC-provider, and Okta SCIM acceptance require configured deployment credentials."
+  ]
+}

@@ -1,11 +1,12 @@
 {
-  "summary": "Mapped the Cloud memory lifecycle, decision context, MCP, Local SQLite, retrieval projector, versioned retrieval, and telemetry seams required by the requested classification and impact work.",
+  "summary": "Mapped the OSS D1/API/Console and Local SQLite/CLI identity seams plus the separate Enterprise PostgreSQL/Node/Helm repository required for additive user, organization, group, category, OTP, OIDC, and SCIM delivery.",
   "artifact_refs": [
-    "apps/api-gateway/src/memory-service.ts",
-    "apps/api-gateway/src/context-engine-service.ts",
-    "apps/api-gateway/src/mcp.ts",
-    "packages/shared/src/memory-retrieval.ts",
-    "packages/orgbrain-cli/src/lib/local-memory-store.mjs"
+    "migrations/0024_identity_organization.sql",
+    "apps/api-gateway/src/auth.ts",
+    "apps/api-gateway/src/email-auth-service.ts",
+    "apps/api-gateway/src/organization-user-service.ts",
+    "packages/orgbrain-cli/src/lib/local-memory-store.mjs",
+    "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql"
   ],
   "decision_refs": [
     "docs/harness/plan.json"
@@ -13,11 +14,11 @@
   "evidence": [
     {
       "type": "review",
-      "ref": "codegraph search plus targeted repository reads"
+      "ref": "targeted repository reads, schema parity, typechecks, and live PostgreSQL migration/RLS probes"
     }
   ],
   "residual_risks": [
-    "The change crosses D1, Local SQLite, public API, MCP, projection, and reporting contracts.",
-    "Versioned retrieval tables must remain available until shadow and rollback gates pass."
+    "Email and SCIM remain feature-flagged off until an initial tenant_admin configures the organization.",
+    "Publishing the versioned OSS packages and OCI images is an external release action and is not performed by this repository-only implementation."
   ]
 }

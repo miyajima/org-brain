@@ -1,12 +1,13 @@
 {
   "name": "@org-brain/console",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "build:node": "ORGBRAIN_CONSOLE_RUNTIME=node astro build",
     "preview": "astro preview",
     "typecheck": "astro check",
     "test": "vitest run --passWithNoTests --exclude \"e2e/**\"",
@@ -14,7 +15,8 @@
   },
   "dependencies": {
     "@astrojs/cloudflare": "^13.1.7",
-    "astro": "^6.1.4"
+    "@astrojs/node": "^10.1.4",
+    "astro": "^6.4.8"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",

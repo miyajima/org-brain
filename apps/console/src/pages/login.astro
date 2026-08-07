@@ -1,0 +1,57 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+const organizationSlug = Astro.url.searchParams.get("organization")?.trim() || "default";
+---
+<BaseLayout title="Login">
+  <section class="mx-auto max-w-xl space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
+      <p class="surface-label">Identity</p>
+      <h1 class="mt-2 text-3xl font-semibold text-white">Email login</h1>
+      <p class="surface-muted mt-2">A six-digit one-time code will be sent to your email.</p>
+    </header>
+    <form id="request-code" class="space-y-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5">
+      <label><span class="field-label">Organization</span><input name="organization_slug" value={organizationSlug} required /></label>
+      <label><span class="field-label">Email</span><input name="email" type="email" autocomplete="email" required /></label>
+      <button type="submit">Send code</button>
+    </form>
+    <form id="verify-code" class="hidden space-y-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5">
+      <input name="organization_slug" type="hidden" />
+      <input name="email" type="hidden" />
+      <label><span class="field-label">One-time code</span><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required /></label>
+      <button type="submit">Sign in</button>
+    </form>
+    <p id="login-status" class="surface-muted text-sm" aria-live="polite"></p>
+  </section>
+</BaseLayout>
+<script>
+  const requestForm = document.querySelector<HTMLFormElement>("#request-code");
+  const verifyForm = document.querySelector<HTMLFormElement>("#verify-code");
+  const status = document.querySelector<HTMLElement>("#login-status");
+  requestForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(requestForm);
+    const body = { organization_slug: String(data.get("organization_slug") || ""), email: String(data.get("email") || "") };
+    const response = await fetch("/api/v1/auth/email/request-code", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (!response.ok) { if (status) status.textContent = "The code could not be requested."; return; }
+    if (verifyForm) {
+      verifyForm.classList.remove("hidden");
+      (verifyForm.elements.namedItem("organization_slug") as HTMLInputElement).value = body.organization_slug;
+      (verifyForm.elements.namedItem("email") as HTMLInputElement).value = body.email;
+    }
+    if (status) status.textContent = "If the account is eligible, a code has been sent.";
+  });
+  verifyForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(verifyForm);
+    const response = await fetch("/api/v1/auth/email/verify", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(data.entries()))
+    });
+    const payload = await response.json().catch(() => null) as { data?: { csrf_token?: string; tenant_id?: string; user?: { tenant_id?: string } } } | null;
+    if (!response.ok) { if (status) status.textContent = "The code is invalid or expired."; return; }
+    if (payload?.data?.csrf_token) sessionStorage.setItem("orgbrain_csrf", payload.data.csrf_token);
+    const tenantId = payload?.data?.tenant_id || payload?.data?.user?.tenant_id || "default";
+    localStorage.setItem("orgbrain_tenant", tenantId);
+    window.location.assign(`/profile?tenant_id=${encodeURIComponent(tenantId)}`);
+  });
+</script>

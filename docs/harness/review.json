@@ -9,7 +9,7 @@
     "Governed docs check passed without missing required documents."
   ],
   "exact_blockers": [],
-  "gate_attempt_id": "20260807T043301.151932Z-36511cf7",
+  "gate_attempt_id": "20260807T115902.456015Z-70eea5f1",
   "gate_change": {
     "final": {
       "score": 100,
@@ -21,7 +21,7 @@
     },
     "score_delta": 0
   },
-  "generated_at": "2026-08-07T04:36:04.925315+00:00",
+  "generated_at": "2026-08-07T12:00:08.600617+00:00",
   "manual_notes": {},
   "overall_review": [
     "Quality gate completed with status pass.",
@@ -35,29 +35,31 @@
     "No residual risk detected by deterministic gate stages."
   ],
   "reviewer_evidence": {
-    "actor": "codex-independent-reviewer",
-    "completed_at": "2026-08-07T04:28:35Z",
-    "diff_fingerprint": "9c2e7fd8a617098078161f629408aba8314c3cd505910f15d5a6ca5a06bd680a",
-    "findings": [],
+    "actor": "identity_reviewer",
+    "completed_at": "2026-08-07T11:50:26Z",
+    "diff_fingerprint": "e55e7904e305982c80379ce3d6ecebfb6769e051d04ae26be747e36c7f4b0743",
+    "findings": [
+      "Enterprise OTP failure attempts now commit before returning 401.",
+      "Enterprise local groups now use a partial external-ID uniqueness index.",
+      "Enterprise OIDC now claims an existing legacy user:<sub> tenant role principal.",
+      "OSS tenant admins can manage all local groups without becoming members."
+    ],
     "independent": true,
-    "run_id": "org-brain-20260807T011318.571987Z-eca7a303",
+    "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
     "scope": [
-      "origin/main merged staged result",
-      "run-level and per-memory telemetry sources of truth",
-      "D1 migrations 0018 through 0022",
-      "Local SQLite schema v19",
-      "stable retrieval SQL-copy and generation routing",
-      "evidence, governance, and both usage context propagation",
-      "API, MCP, task-result, and Local token validation",
-      "LongMemEval search-mode switch and benchmark artifacts",
-      "governed documentation"
+      "OSS identity and administration APIs",
+      "OTP and session security",
+      "profile privacy and tenant isolation",
+      "local and SCIM group ownership",
+      "Console, CLI, migrations, and compatibility",
+      "Enterprise OIDC, PostgreSQL RLS, and SCIM"
     ],
     "source": "subagent",
-    "status": "passed",
-    "summary": "All prior P1/P2 findings and follow-up edge cases are resolved; no blocking findings remain.",
-    "task_id": "/root/independent_reviewer"
+    "status": "completed",
+    "summary": "Focused read-only re-review passed with no remaining blockers after all four P1 findings were fixed.",
+    "task_id": "identity_reviewer"
   },
-  "run_id": "org-brain-20260807T011318.571987Z-eca7a303",
+  "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
   "schema_version": 2,
   "security_review": [
     "The automated loop records deterministic gate metadata and does not collect secrets.",
@@ -67,99 +69,19 @@
     "Final gate status is pass with score 100/85."
   ],
   "verifier_evidence": {
-    "actor": "codex-independent-verifier",
+    "actor": "identity_verifier",
     "checks": [
       {
-        "command": "rtk env PYTHONPATH=/Users/0300815938/projects/sie/pr-team-harness/src python3 -c '<calculate harness diff fingerprint>'",
-        "completed_at": "2026-08-07T04:29:06.926Z",
-        "name": "diff_fingerprint",
-        "output_sha256": "3d499259412ed0d6e7a11aeb904ee0e49ad4aa95bb1073e5005bfa64b91bc118",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk git diff --cached --check",
-        "completed_at": "2026-08-07T04:29:05.169Z",
-        "name": "staged_diff_check",
-        "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/api-gateway exec vitest run test/context-engine-service.test.ts test/memory-effect-service.test.ts",
-        "completed_at": "2026-08-07T04:29:26.852Z",
-        "name": "governance_external_run_context",
-        "output_sha256": "9da254a777e28efbeffd4009dbb84b82f75d5cfced08353b620fb749c4611d88",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/api-gateway exec vitest run test/memory-service.test.ts test/memory-impact-service.test.ts",
-        "completed_at": "2026-08-07T04:29:31.124Z",
-        "name": "rest_evidence_context",
-        "output_sha256": "755bf4736835980d33b345aa039cdfa15b001130bcfb289a589e76478de5700a",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/cap-runner exec vitest run test/memory-impact-metrics.test.ts",
-        "completed_at": "2026-08-07T04:29:26.317Z",
-        "name": "cloud_daily_rollup",
-        "output_sha256": "55c1ea1ad5f68839c9cd9954468e1359cd6d1304691684fe21a296d993d8d293",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/org-router exec vitest run test/memory-effect-service.test.ts",
-        "completed_at": "2026-08-07T04:29:26.160Z",
-        "name": "org_router_effect_validation",
-        "output_sha256": "6e6ccf046fd3c97a82cf75d51cfb4d04aba35a1ba7ad1014bad44c68054ed6fc",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/shared test",
-        "completed_at": "2026-08-07T04:29:26.685Z",
-        "name": "shared_memory_contracts",
-        "output_sha256": "5a3c5acc6458732396f9d37191ad4b0b2562248d2c516c9d53b6cb359a03a265",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/mcp test",
-        "completed_at": "2026-08-07T04:29:24.834Z",
-        "name": "mcp_tool_surface",
-        "output_sha256": "af95d040f6113fce47a17ed803b041ae8d1f350dadc74a8d8be0103e1bcf746f",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk node --input-type=module -e '<compile task_result schema and verify negative failure savings rejection>'",
-        "completed_at": "2026-08-07T04:29:06.059Z",
-        "name": "task_result_schema_negative_failure",
-        "output_sha256": "502feda3a46a546e09be517e15c023ddec08634f7159af876c0a2e7746177b15",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk pnpm --filter @org-brain/api-gateway --filter @org-brain/cap-runner --filter @org-brain/org-router --filter @org-brain/mcp --filter @org-brain/shared typecheck",
-        "completed_at": "2026-08-07T04:29:36.930Z",
-        "name": "focused_typecheck",
-        "output_sha256": "234f7d04f3ff3ab55b79445d3ef6f6fcee070e57032404195343649e1c84c4c9",
-        "returncode": 0,
-        "status": "passed"
-      },
-      {
-        "command": "rtk node --test scripts/schema-parity.test.mjs scripts/local-memory.test.mjs",
-        "completed_at": "2026-08-07T04:29:24.685Z",
-        "name": "local_v19_regression",
-        "output_sha256": "a397da0c70c015818c5d6bf98f8ada44ee4a4b6714c5aacfe7e934a7643cb82f",
+        "command": "rtk git diff --check",
+        "completed_at": "2026-08-07T11:52:24Z",
+        "name": "OSS diff check",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "returncode": 0,
         "status": "passed"
       }
     ],
-    "completed_at": "2026-08-07T04:29:36.930Z",
-    "diff_fingerprint": "9c2e7fd8a617098078161f629408aba8314c3cd505910f15d5a6ca5a06bd680a",
+    "completed_at": "2026-08-07T11:52:24Z",
+    "diff_fingerprint": "e55e7904e305982c80379ce3d6ecebfb6769e051d04ae26be747e36c7f4b0743",
     "independent": true,
     "required_check_fields": [
       "name",
@@ -169,10 +91,10 @@
       "completed_at",
       "output_sha256"
     ],
-    "run_id": "org-brain-20260807T011318.571987Z-eca7a303",
+    "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
     "source": "subagent",
-    "status": "passed",
-    "summary": "Final focused verification passed across context propagation, daily rollup, MCP, task-result schema, Local v19, and typecheck; the final fingerprint remained stable.",
-    "task_id": "/root/independent_verifier"
+    "status": "completed",
+    "summary": "Independent verification confirmed the new OTP expiry/hour-limit and tenant-admin group tests, 99 passing API tests, contract coverage, diff checks, and the recorded PostgreSQL integration evidence.",
+    "task_id": "identity_verifier"
   }
 }

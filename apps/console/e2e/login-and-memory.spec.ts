@@ -7,11 +7,11 @@ test.describe("authenticated console flows", () => {
     await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expect(page.getByText("user:e2e-login-sub · access-jwt")).toBeVisible();
     await expect(page.getByLabel("Display name")).toHaveValue("E2E Login User");
+    await expect(page.getByLabel("Full name")).toHaveValue("E2E Full Name");
     await expect(page.getByLabel("Company name")).toHaveValue("Example Holdings");
-    await expect(page.getByLabel("Organization name")).toHaveValue("Platform Lab");
 
+    await page.getByLabel("Full name").fill("Updated E2E Full Name");
     await page.getByLabel("Company name").fill("Cross Company Alliance");
-    await page.getByLabel("Organization name").fill("Memory Guild");
     await page.getByRole("button", { name: "Save" }).click();
 
     await expect(page.getByText("Saved")).toBeVisible();

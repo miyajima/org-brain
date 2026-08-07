@@ -10,17 +10,19 @@ type Group = {
   name: string;
   description: string | null;
   role: string | null;
+  source: "local" | "scim";
   updated_at: number;
 };
 
 const url = Astro.url;
 const params = url.searchParams;
 const tenantId = params.get("tenant_id")?.trim() || "default";
+const cookie = Astro.request.headers.get("cookie") ?? "";
 let message = "";
 let error = "";
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
-  const response = await fetch(new URL(path, url), init);
+  const response = await fetch(new URL(path, url), { ...init, headers: { cookie, ...(init?.headers ?? {}) } });
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) return payload ?? { ok: false, error: { message: `HTTP ${response.status}` } };
   return payload;
@@ -30,7 +32,10 @@ if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const saved = await fetchApi("/api/v1/groups", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "x-csrf-token": String(form.get("csrf_token") ?? "")
+    },
     body: JSON.stringify({
       tenant_id: tenantId,
       name: String(form.get("name") ?? ""),
@@ -57,6 +62,7 @@ if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? "Groups
     {error && <div class="rounded-lg border border-rose-300/20 bg-rose-400/10 p-3 text-sm text-rose-100">{error}</div>}
 
     <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 lg:grid-cols-[minmax(0,1fr)_14rem_auto] lg:items-end">
+      <input type="hidden" name="csrf_token" id="csrf-token" />
       <label>
         <span class="field-label">Name</span>
         <input name="name" required />
@@ -78,9 +84,9 @@ if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? "Groups
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-lg font-semibold text-white">{group.name}</h2>
-              <p class="mt-1 text-sm text-zinc-400">{group.slug} · {group.role ?? "member"}</p>
+              <p class="mt-1 text-sm text-zinc-400">{group.slug} · {group.role ?? "member"} · {group.source}</p>
             </div>
-            <code class="rounded bg-black/30 px-2 py-1 text-xs text-zinc-300">{group.id}</code>
+            <a href={`/groups/${encodeURIComponent(group.id)}?tenant_id=${encodeURIComponent(tenantId)}`} class="rounded bg-black/30 px-2 py-1 text-xs text-zinc-300">Details</a>
           </div>
           {group.description && <p class="mt-3 text-sm leading-6 text-zinc-300">{group.description}</p>}
         </article>
@@ -89,3 +95,7 @@ if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? "Groups
     </section>
   </section>
 </BaseLayout>
+<script>
+  const csrfInput = document.querySelector<HTMLInputElement>("#csrf-token");
+  if (csrfInput) csrfInput.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+</script>

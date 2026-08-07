@@ -1,11 +1,16 @@
 {
-  "summary": "Independent reviewer and verifier passed the final diff with no remaining blocking findings.",
+  "summary": "Final diff review found and fixed seven release-blocking gaps: OTP delivery failures leaked eligibility, D1 OTP consumption was not atomic, the Node Console OCI could not build cleanly, Enterprise failed OTP attempts rolled back, local Enterprise groups shared an invalid null uniqueness constraint, OIDC JIT did not claim an existing legacy principal, and OSS tenant administrators could not manage groups unless they were already members. Review also completed Enterprise session Origin fail-closed behavior, SCIM single-resource/filter/paging support, and immediate source-scoped role mapping. Focused independent re-review passed with no blocking findings.",
   "artifact_refs": [
     "docs/harness/review.json",
-    "docs/harness/test_result.json"
+    "docs/harness/test_result.json",
+    "apps/api-gateway/src/email-auth-service.ts",
+    "apps/console/Dockerfile",
+    "/Users/0300815938/projects/org-brain-enterprise/src/server.ts",
+    "/Users/0300815938/projects/org-brain-enterprise/src/identity-service.ts"
   ],
   "decision_refs": [
-    "docs/harness/implementation_plan.json"
+    "docs/harness/plan.json",
+    "docs/IDENTITY_ADMINISTRATION.md"
   ],
   "evidence": [
     {
@@ -18,6 +23,6 @@
     }
   ],
   "residual_risks": [
-    "Production D1 migration, real-data backfill, shadow observation, assignment switch, and deployment were not run."
+    "Production migrations, package or OCI publication, deployment, real SMTP/OIDC, and live Okta SCIM were not run because they require external rollout authority and credentials."
   ]
 }

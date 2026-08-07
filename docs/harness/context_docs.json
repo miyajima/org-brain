@@ -1,13 +1,11 @@
 {
-  "summary": "SPEC, SYSTEM_DESIGN, DESIGN, storage, threat, local migration, and retrieval rollout documents govern the changed behavior and must describe explicit classification, append-only impact evidence, and stable retrieval generations.",
+  "summary": "Identity behavior is governed by the new OSS identity administration document plus README/runtime examples, with Enterprise README and architecture documenting forced RLS, SMTP, OIDC/SCIM, feature flags, versioned Console consumption, and rollback boundaries.",
   "artifact_refs": [
-    "docs/SPEC.md",
-    "docs/SYSTEM_DESIGN.md",
-    "docs/DESIGN.md",
-    "docs/STORAGE_BACKENDS.md",
-    "docs/THREAT_MODEL.md",
-    "docs/LOCAL_MIGRATION.md",
-    "docs/RETRIEVAL_ROLLOUT_POLICY.md"
+    "docs/IDENTITY_ADMINISTRATION.md",
+    "README.md",
+    "apps/api-gateway/.dev.vars.example",
+    "/Users/0300815938/projects/org-brain-enterprise/README.md",
+    "/Users/0300815938/projects/org-brain-enterprise/docs/ARCHITECTURE.md"
   ],
   "decision_refs": [
     "docs/harness/plan.json"
@@ -15,10 +13,10 @@
   "evidence": [
     {
       "type": "document",
-      "ref": "docs/SYSTEM_DESIGN.md"
+      "ref": "docs/IDENTITY_ADMINISTRATION.md"
     }
   ],
   "residual_risks": [
-    "Docs must distinguish implemented local behavior from later production activation gates."
+    "Release documentation must still supply real package/image coordinates and IdP-specific setup after external publication."
   ]
 }

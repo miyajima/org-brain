@@ -8,3 +8,5 @@ API_BASE_URL=http://127.0.0.1:8787
 # ACCESS_JWKS_JSON={"keys":[]}
 # Local development only; never set this to false in production.
 ACCESS_JWT_REQUIRED=false
+# Enterprise Node/OCI mode uses browser session/OIDC auth without an internal admin key:
+# SESSION_ONLY_API=true

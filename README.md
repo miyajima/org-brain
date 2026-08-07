@@ -20,6 +20,11 @@ The future we are building is simple:
 
 OrgBrain includes reproducible memory retrieval benchmarks. See [Benchmarks](#benchmarks) for details.
 
+Human identity and tenant administration are documented in
+[`docs/IDENTITY_ADMINISTRATION.md`](docs/IDENTITY_ADMINISTRATION.md). OSS supports
+display/full names, organizations, users, local groups, business categories,
+email OTP, and OIDC JIT while preserving existing principals and API identities.
+
 ## What is OrgBrain?
 
 OrgBrain is local-first, self-hostable infrastructure for shared AI-agent memory.
@@ -201,6 +206,11 @@ pnpm exec orgbrain backup restore --from ~/.org-brain/backups/<backup>.sqlite
 pnpm exec orgbrain migrate --from /path/to/legacy-memory.sqlite
 pnpm exec orgbrain serve
 pnpm exec orgbrain mcp
+pnpm exec orgbrain profile set --display-name "Miya" --full-name "Miyajima Kazuhiro"
+pnpm exec orgbrain organization set --slug example --display-name "Example Inc."
+pnpm exec orgbrain user list
+pnpm exec orgbrain group list
+pnpm exec orgbrain category list --include-inactive
 ```
 
 `orgbrain serve` binds to `127.0.0.1` by default and local mode makes no external

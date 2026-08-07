@@ -1,18 +1,20 @@
 {
-  "summary": "Implemented explicit business classification, stable retrieval generations, evidence/governance search channels, memory usage and effect telemetry, daily impact metrics, and explicit local outbox synchronization without mutating production.",
+  "summary": "Implemented the shared identity, organization, directory, group, role, and business-category contract; additive OSS D1 and Local SQLite persistence; email OTP, session, OIDC JIT, privacy-aware administration APIs; Console and CLI management; and Enterprise PostgreSQL/RLS, Node API, SMTP, SCIM, Helm, and operations support without deploying or publishing artifacts.",
   "artifact_refs": [
-    "migrations/0018_business_classification.sql",
-    "migrations/0019_memory_impact_telemetry.sql",
-    "migrations/0020_retrieval_generations.sql",
-    "migrations/0021_retrieval_units_stable.sql",
-    "apps/api-gateway/src/memory-impact-service.ts",
-    "apps/api-gateway/src/retrieval-generation-service.ts",
+    "packages/contracts/src/index.ts",
+    "migrations/0024_identity_organization.sql",
+    "apps/api-gateway/src/email-auth-service.ts",
+    "apps/api-gateway/src/organization-user-service.ts",
+    "apps/console/src/pages/users.astro",
     "packages/orgbrain-cli/src/lib/local-memory-store.mjs",
-    "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+    "docs/IDENTITY_ADMINISTRATION.md",
+    "/Users/0300815938/projects/org-brain-enterprise/db/migrations/0006_identity_organization.sql",
+    "/Users/0300815938/projects/org-brain-enterprise/src/server.ts",
+    "/Users/0300815938/projects/org-brain-enterprise/src/identity-service.ts"
   ],
   "decision_refs": [
     "docs/harness/plan.json",
-    "docs/harness/implementation_plan.json"
+    "docs/IDENTITY_ADMINISTRATION.md"
   ],
   "evidence": [
     {
@@ -21,15 +23,15 @@
     },
     {
       "type": "test",
-      "ref": "pnpm test"
+      "ref": "pnpm test and Console Playwright identity administration E2E"
     },
     {
       "type": "test",
-      "ref": "pnpm lint && pnpm typecheck && pnpm build"
+      "ref": "Enterprise typecheck, test, build, Helm lint, migration, forced-RLS hostile probe, and non-superuser PostgreSQL integration"
     }
   ],
   "residual_risks": [
-    "Production D1 migrations, data backfill, assignment switching, and Cloudflare deployment remain intentionally operator-controlled.",
-    "Legacy retrieval projection tables remain during the compatibility window and require a later backup and restore drill before cleanup."
+    "Production D1/PostgreSQL migration and Cloudflare or Kubernetes deployment remain intentionally operator-controlled.",
+    "Real SMTP delivery, external OIDC discovery, and Okta SCIM require environment-specific rollout verification."
   ]
 }

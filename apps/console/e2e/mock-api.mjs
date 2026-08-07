@@ -76,6 +76,7 @@ const server = http.createServer(async (request, response) => {
       },
       profile: {
         display_name: "E2E Login User",
+        full_name: "E2E Full Name",
         email: "e2e@example.com",
         company_name: "Example Holdings",
         organization_name: "Platform Lab",
@@ -92,12 +93,62 @@ const server = http.createServer(async (request, response) => {
       tenant_id: body.tenant_id ?? "default",
       profile: {
         display_name: body.display_name ?? null,
+        full_name: body.full_name ?? null,
         email: body.email ?? null,
         company_name: body.company_name ?? null,
         organization_name: body.organization_name ?? null,
         avatar_url: body.avatar_url ?? null
       }
     }));
+    return;
+  }
+
+  if (path === "/v1/organization" && request.method === "GET") {
+    json(response, 200, ok({ tenant_id: "default", slug: "default", display_name: "E2E Organization", allowed_email_domains: ["example.com"], email_self_registration_enabled: true }));
+    return;
+  }
+  if (path === "/v1/organization" && request.method === "PATCH") {
+    json(response, 200, ok(await readJson(request)));
+    return;
+  }
+  if (path === "/v1/users" && request.method === "GET") {
+    json(response, 200, ok({ users: [{ principal: "user:e2e-login-sub", display_name: "E2E Login User", full_name: "E2E Full Name", email: "e2e@example.com", status: "active", provision_source: "legacy", full_name_source: "legacy", role: "tenant_admin" }] }));
+    return;
+  }
+  if (path === "/v1/users" && request.method === "POST") {
+    json(response, 201, ok({ ...(await readJson(request)), principal: "user:invited", status: "invited" }));
+    return;
+  }
+  if (path.startsWith("/v1/users/") && request.method === "PATCH") {
+    json(response, 200, ok(await readJson(request)));
+    return;
+  }
+  if (path === "/v1/directory" && request.method === "GET") {
+    json(response, 200, ok({ users: [{ principal: "user:e2e-login-sub", display_name: "E2E Login User", avatar_url: null, status: "active" }] }));
+    return;
+  }
+  if (path === "/v1/groups" && request.method === "GET") {
+    json(response, 200, ok({ tenant_id: "default", groups: [{ id: "group-e2e", slug: "reviewers", name: "Reviewers", description: "Local review group", source: "local", role: "owner", updated_at: now }] }));
+    return;
+  }
+  if (path === "/v1/groups" && request.method === "POST") {
+    json(response, 201, ok({ group: { ...(await readJson(request)), id: "group-created", source: "local" } }));
+    return;
+  }
+  if (path === "/v1/groups/group-e2e" && request.method === "GET") {
+    json(response, 200, ok({ group: { id: "group-e2e", slug: "reviewers", name: "Reviewers", description: "Local review group", source: "local", role: "owner" }, members: [{ principal: "user:e2e-login-sub", role: "owner", source: "local" }] }));
+    return;
+  }
+  if (path.startsWith("/v1/groups/group-e2e") && ["POST", "PATCH", "DELETE"].includes(request.method)) {
+    json(response, 200, ok({ updated: true }));
+    return;
+  }
+  if (path === "/v1/business-categories" && request.method === "GET") {
+    json(response, 200, ok([{ id: "category-e2e", tenant_id: "default", slug: "engineering", label: "Engineering", description: "Build work", is_active: true, created_at: now, updated_at: now }]));
+    return;
+  }
+  if ((path === "/v1/business-categories" && request.method === "POST") || (path.startsWith("/v1/business-categories/") && request.method === "PATCH")) {
+    json(response, request.method === "POST" ? 201 : 200, ok(await readJson(request)));
     return;
   }
 

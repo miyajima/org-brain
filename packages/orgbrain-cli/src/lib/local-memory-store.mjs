@@ -19,7 +19,7 @@ import {
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 19;
+export const MEMORY_SCHEMA_VERSION = 20;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -617,6 +617,80 @@ function createCurrentTables(db) {
       updated_at INTEGER NOT NULL,
       UNIQUE(tenant_id, slug)
     );
+    CREATE TABLE IF NOT EXISTS organizations (
+      tenant_id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      allowed_email_domains_json TEXT NOT NULL DEFAULT '[]',
+      email_self_registration_enabled INTEGER NOT NULL DEFAULT 0 CHECK(email_self_registration_enabled IN (0, 1)),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      tenant_id TEXT NOT NULL,
+      principal TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      full_name TEXT,
+      email TEXT,
+      email_verified INTEGER NOT NULL DEFAULT 0 CHECK(email_verified IN (0, 1)),
+      company_name TEXT,
+      organization_name TEXT,
+      avatar_url TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('invited', 'active', 'suspended', 'deprovisioned')),
+      provision_source TEXT NOT NULL DEFAULT 'legacy' CHECK(provision_source IN ('email', 'oidc', 'scim', 'legacy')),
+      full_name_source TEXT NOT NULL DEFAULT 'legacy' CHECK(full_name_source IN ('email', 'oidc', 'scim', 'legacy')),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, principal)
+    );
+    CREATE TABLE IF NOT EXISTS user_identities (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      principal TEXT NOT NULL,
+      provider_type TEXT NOT NULL CHECK(provider_type IN ('email', 'oidc', 'scim')),
+      issuer TEXT NOT NULL DEFAULT '',
+      subject TEXT NOT NULL,
+      external_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, provider_type, issuer, subject)
+    );
+    CREATE TABLE IF NOT EXISTS groups (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      source TEXT NOT NULL DEFAULT 'local' CHECK(source IN ('local', 'scim')),
+      external_id TEXT,
+      created_by_principal TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      deleted_at INTEGER,
+      UNIQUE(tenant_id, slug)
+    );
+    CREATE TABLE IF NOT EXISTS group_members (
+      tenant_id TEXT NOT NULL,
+      group_id TEXT NOT NULL,
+      principal TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('owner', 'admin', 'member')),
+      source TEXT NOT NULL DEFAULT 'local' CHECK(source IN ('local', 'scim')),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, group_id, principal)
+    );
+    CREATE TABLE IF NOT EXISTS principal_role_assignments (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      principal TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('reader', 'contributor', 'tenant_admin', 'auditor', 'service_agent')),
+      source TEXT NOT NULL DEFAULT 'local' CHECK(source IN ('local', 'scim')),
+      source_ref TEXT,
+      created_by_principal TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS memory_failure_patterns (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,
@@ -1005,6 +1079,16 @@ function rebuildFts(db) {
     FROM memories
     WHERE lifecycle_state != 'suppressed'
   `);
+}
+
+function upgradeIdentityTables(db) {
+  const roleColumns = tableColumns(db, "principal_role_assignments");
+  if (!roleColumns.has("source")) {
+    db.exec("ALTER TABLE principal_role_assignments ADD COLUMN source TEXT NOT NULL DEFAULT 'local'");
+  }
+  if (!roleColumns.has("source_ref")) {
+    db.exec("ALTER TABLE principal_role_assignments ADD COLUMN source_ref TEXT");
+  }
 }
 
 function rebuildRetrievalUnitsFts(db) {
@@ -1536,6 +1620,12 @@ function addIndexes(db) {
       ON memory_retrieval_unit_features_v4(tenant_id, feature_hash, unit_id);
     CREATE INDEX IF NOT EXISTS idx_business_categories_tenant_active
       ON business_categories(tenant_id, is_active, label);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_local_user_email
+      ON user_profiles(tenant_id, lower(email)) WHERE email IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_local_users_status
+      ON user_profiles(tenant_id, status, display_name);
+    CREATE INDEX IF NOT EXISTS idx_local_group_members_principal
+      ON group_members(tenant_id, principal);
     CREATE INDEX IF NOT EXISTS idx_memory_usage_events_tenant_created
       ON memory_usage_events(tenant_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_usage_events_external_run
@@ -1615,6 +1705,7 @@ function migrateSchema(db) {
     upgradeLegacyMemories(db);
     upgradeLegacyMemoryVersions(db);
     createCurrentTables(db);
+    upgradeIdentityTables(db);
     upgradeMemoryUsageEvents(db);
     upgradeMemoryUsageItems(db);
     addIndexes(db);
@@ -2602,6 +2693,10 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_retrieval_unit_features_v4") ||
         !hasTable(db, "memory_retrieval_unit_feature_stats_v4") ||
         !hasTable(db, "business_categories") ||
+        !hasTable(db, "organizations") ||
+        !hasTable(db, "user_profiles") ||
+        !hasTable(db, "groups") ||
+        !hasTable(db, "group_members") ||
         !hasTable(db, "memory_impact_events") ||
         !hasTable(db, "memory_impact_daily_metrics") ||
         !hasTable(db, "memory_usage_events") ||
@@ -2840,6 +2935,240 @@ export class LocalMemoryStore {
            WHERE tenant_id = ? AND occurred_at >= ? AND occurred_at <= ?`
         ).all(tenantId, from, to);
       return summarizeExecutionImpact(events);
+    } finally {
+      db.close();
+    }
+  }
+
+  async getProfile(tenantId, principal = "user:local") {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return db.prepare(
+        `SELECT tenant_id, principal, display_name, full_name, email, email_verified,
+                avatar_url, status, provision_source, full_name_source, created_at, updated_at
+         FROM user_profiles WHERE tenant_id = ? AND principal = ?`
+      ).get(tenantId, principal) ?? null;
+    } finally {
+      db.close();
+    }
+  }
+
+  async updateProfile(tenantId, principal, input) {
+    await this.init();
+    const current = await this.getProfile(tenantId, principal);
+    const displayName = nullableString(input.display_name, 120) ?? current?.display_name;
+    if (!displayName) throw new Error("display_name_required");
+    const fullName = input.full_name === undefined ? current?.full_name ?? null : nullableString(input.full_name, 200);
+    const email = input.email === undefined ? current?.email ?? null : nullableString(input.email, 254)?.toLowerCase() ?? null;
+    const avatarUrl = input.avatar_url === undefined ? current?.avatar_url ?? null : nullableString(input.avatar_url, 2048);
+    const now = Date.now();
+    const db = this.open();
+    try {
+      db.prepare(
+        `INSERT INTO user_profiles(tenant_id, principal, display_name, full_name, email,
+          email_verified, avatar_url, status, provision_source, full_name_source, created_at, updated_at)
+         VALUES(?,?,?,?,?,0,?,'active','legacy','legacy',?,?)
+         ON CONFLICT(tenant_id, principal) DO UPDATE SET
+           display_name=excluded.display_name, full_name=excluded.full_name, email=excluded.email,
+           avatar_url=excluded.avatar_url, updated_at=excluded.updated_at`
+      ).run(tenantId, principal, displayName, fullName, email, avatarUrl, current?.created_at ?? now, now);
+    } finally {
+      db.close();
+    }
+    return this.getProfile(tenantId, principal);
+  }
+
+  async getOrganization(tenantId) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const row = db.prepare("SELECT * FROM organizations WHERE tenant_id = ?").get(tenantId);
+      return row ? {
+        ...row,
+        allowed_email_domains: JSON.parse(row.allowed_email_domains_json),
+        email_self_registration_enabled: Boolean(row.email_self_registration_enabled)
+      } : {
+        tenant_id: tenantId,
+        slug: tenantId.toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "default",
+        display_name: tenantId,
+        allowed_email_domains: [],
+        email_self_registration_enabled: false,
+        configured: false
+      };
+    } finally {
+      db.close();
+    }
+  }
+
+  async updateOrganization(tenantId, input) {
+    await this.init();
+    const current = await this.getOrganization(tenantId);
+    const slug = (nullableString(input.slug, 80) ?? current.slug).toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(slug)) throw new Error("invalid_organization_slug");
+    const displayName = nullableString(input.display_name, 160) ?? current.display_name;
+    const domains = input.allowed_email_domains === undefined
+      ? current.allowed_email_domains
+      : [...new Set(input.allowed_email_domains.map((value) => String(value).trim().toLowerCase()).filter(Boolean))];
+    const selfRegistration = input.email_self_registration_enabled === undefined
+      ? current.email_self_registration_enabled
+      : Boolean(input.email_self_registration_enabled);
+    const now = Date.now();
+    const db = this.open();
+    try {
+      db.prepare(
+        `INSERT INTO organizations(tenant_id, slug, display_name, allowed_email_domains_json,
+          email_self_registration_enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?)
+         ON CONFLICT(tenant_id) DO UPDATE SET slug=excluded.slug, display_name=excluded.display_name,
+          allowed_email_domains_json=excluded.allowed_email_domains_json,
+          email_self_registration_enabled=excluded.email_self_registration_enabled, updated_at=excluded.updated_at`
+      ).run(tenantId, slug, displayName, JSON.stringify(domains), selfRegistration ? 1 : 0, current.created_at ?? now, now);
+    } finally {
+      db.close();
+    }
+    return this.getOrganization(tenantId);
+  }
+
+  async listUsers(tenantId) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return db.prepare(
+        `SELECT tenant_id, principal, display_name, full_name, email, email_verified,
+                avatar_url, status, provision_source, full_name_source, created_at, updated_at
+         FROM user_profiles WHERE tenant_id = ? ORDER BY status, display_name, principal`
+      ).all(tenantId);
+    } finally {
+      db.close();
+    }
+  }
+
+  async createUser(tenantId, input, actorPrincipal = "user:local") {
+    const email = nullableString(input.email, 254)?.toLowerCase() ?? null;
+    const displayName = nullableString(input.display_name, 120);
+    if (!displayName) throw new Error("display_name_required");
+    const role = ["reader", "contributor", "tenant_admin", "auditor"].includes(input.role) ? input.role : "reader";
+    const principal = nullableString(input.principal, 128) ?? `user:${randomUUID()}`;
+    const now = Date.now();
+    await this.init();
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      db.prepare(
+        `INSERT INTO user_profiles(tenant_id, principal, display_name, full_name, email,
+          email_verified, avatar_url, status, provision_source, full_name_source, created_at, updated_at)
+         VALUES(?,?,?,?,?,0,NULL,'invited','email','email',?,?)`
+      ).run(tenantId, principal, displayName, nullableString(input.full_name, 200), email, now, now);
+      db.prepare(
+        `INSERT INTO principal_role_assignments(id, tenant_id, project_id, principal, role,
+          source, source_ref, created_by_principal, created_at, updated_at)
+         VALUES(?,?,NULL,?,?,'local',NULL,?,?,?)`
+      ).run(randomUUID(), tenantId, principal, role, actorPrincipal, now, now);
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      db.close();
+    }
+    return this.getProfile(tenantId, principal);
+  }
+
+  async updateUser(tenantId, principal, input) {
+    await this.init();
+    const allowedStatuses = new Set(["invited", "active", "suspended", "deprovisioned"]);
+    const current = await this.getProfile(tenantId, principal);
+    if (!current) throw new Error("user_not_found");
+    const status = input.status === undefined ? current.status : String(input.status);
+    if (!allowedStatuses.has(status)) throw new Error("invalid_user_status");
+    const db = this.open();
+    try {
+      db.prepare(
+        `UPDATE user_profiles SET display_name=?, full_name=?, status=?, updated_at=?
+         WHERE tenant_id=? AND principal=?`
+      ).run(
+        nullableString(input.display_name, 120) ?? current.display_name,
+        input.full_name === undefined ? current.full_name : nullableString(input.full_name, 200),
+        status,
+        Date.now(),
+        tenantId,
+        principal
+      );
+    } finally {
+      db.close();
+    }
+    return this.getProfile(tenantId, principal);
+  }
+
+  async listGroups(tenantId) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return db.prepare("SELECT * FROM groups WHERE tenant_id=? AND deleted_at IS NULL ORDER BY name").all(tenantId);
+    } finally {
+      db.close();
+    }
+  }
+
+  async createGroup(tenantId, input, actorPrincipal = "user:local") {
+    await this.init();
+    const name = nullableString(input.name, 120);
+    if (!name) throw new Error("group_name_required");
+    const slug = (nullableString(input.slug, 80) ?? name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-")).replace(/^-+|-+$/g, "");
+    if (!slug) throw new Error("invalid_group_slug");
+    const now = Date.now();
+    const id = randomUUID();
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      db.prepare(
+        `INSERT INTO groups(id, tenant_id, slug, name, description, source, external_id,
+          created_by_principal, created_at, updated_at, deleted_at)
+         VALUES(?,?,?,?,?,'local',NULL,?,?,?,NULL)`
+      ).run(id, tenantId, slug, name, nullableString(input.description, 500), actorPrincipal, now, now);
+      db.prepare(
+        `INSERT INTO group_members(tenant_id, group_id, principal, role, source, created_at, updated_at)
+         VALUES(?,?,?,'owner','local',?,?)`
+      ).run(tenantId, id, actorPrincipal, now, now);
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      db.close();
+    }
+    return { id, tenant_id: tenantId, slug, name, source: "local" };
+  }
+
+  async addGroupMember(tenantId, groupId, principal, role = "member") {
+    await this.init();
+    if (!["owner", "admin", "member"].includes(role)) throw new Error("invalid_group_role");
+    const now = Date.now();
+    const db = this.open();
+    try {
+      const group = db.prepare("SELECT source FROM groups WHERE tenant_id=? AND id=? AND deleted_at IS NULL").get(tenantId, groupId);
+      if (!group) throw new Error("group_not_found");
+      if (group.source === "scim") throw new Error("scim_managed");
+      db.prepare(
+        `INSERT INTO group_members(tenant_id, group_id, principal, role, source, created_at, updated_at)
+         VALUES(?,?,?,?,'local',?,?) ON CONFLICT(tenant_id, group_id, principal)
+         DO UPDATE SET role=excluded.role, updated_at=excluded.updated_at`
+      ).run(tenantId, groupId, principal, role, now, now);
+      return db.prepare("SELECT * FROM group_members WHERE tenant_id=? AND group_id=? ORDER BY role, principal").all(tenantId, groupId);
+    } finally {
+      db.close();
+    }
+  }
+
+  async archiveGroup(tenantId, groupId) {
+    await this.init();
+    const db = this.open();
+    try {
+      const result = db.prepare(
+        "UPDATE groups SET deleted_at=?, updated_at=? WHERE tenant_id=? AND id=? AND source='local' AND deleted_at IS NULL"
+      ).run(Date.now(), Date.now(), tenantId, groupId);
+      if (!result.changes) throw new Error("group_not_found_or_scim_managed");
+      return { archived: true, group_id: groupId };
     } finally {
       db.close();
     }

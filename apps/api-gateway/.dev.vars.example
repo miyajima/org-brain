@@ -16,6 +16,13 @@ API_KEY=dev-org-brain-api-key
 # OIDC_TENANT_POLICY_JSON={"principals":{"user:<oidc-sub>":["default"]},"default_role":"reader"}
 # OIDC_JWKS_JSON={"keys":[]}
 
+# Email OTP is off until the organization and initial tenant_admin are configured.
+# EMAIL_AUTH_ENABLED=true
+# EMAIL_AUTH_PEPPER=replace-with-a-long-random-secret
+# EMAIL_WEBHOOK_URL=https://mailer.example.com/orgbrain
+# EMAIL_WEBHOOK_SECRET=replace-with-a-webhook-signing-secret
+# SESSION_ALLOWED_ORIGIN=https://console.example.com
+
 # Optional local development values if you want to exercise MCP or workflows
 # without setting secrets in production.
 # MCP_SERVICE_TOKENS_JSON={"tokens":[{"client_id":"example","client_secret":"replace-me","principal":"service:agent","tenants":["default"],"role":"service_agent"}]}

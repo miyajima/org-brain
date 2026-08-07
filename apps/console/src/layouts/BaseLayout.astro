@@ -12,6 +12,9 @@ const navCopy = {
     decisions: "Decisions",
     resources: "Resources",
     groups: "Groups",
+    users: "Users",
+    organization: "Organization",
+    categories: "Business Categories",
     profile: "Profile",
     operations: "Operations",
     newTask: "New Task",
@@ -23,6 +26,9 @@ const navCopy = {
     decisions: "判断",
     resources: "資料・成果物",
     groups: "グループ",
+    users: "ユーザー",
+    organization: "組織",
+    categories: "業務カテゴリ",
     profile: "プロフィール",
     operations: "運用",
     newTask: "Task作成",
@@ -34,6 +40,9 @@ const navCopy = {
     decisions: "决策",
     resources: "资料与成果",
     groups: "群组",
+    users: "用户",
+    organization: "组织",
+    categories: "业务类别",
     profile: "个人资料",
     operations: "运维",
     newTask: "新建任务",
@@ -41,6 +50,13 @@ const navCopy = {
   }
 }[locale];
 const decisionsHref = locale === "en" ? "/decisions" : `/decisions?lang=${locale}`;
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim();
+const withTenant = (href: string) => {
+  if (!tenantId) return href;
+  const target = new URL(href, Astro.url);
+  target.searchParams.set("tenant_id", tenantId);
+  return `${target.pathname}${target.search}`;
+};
 
 const isActive = (href: string) => {
   if (href === "/") return currentPath === "/";
@@ -49,6 +65,9 @@ const isActive = (href: string) => {
   if (href === "/decisions") return currentPath === "/decisions";
   if (href === "/resources") return currentPath === "/resources";
   if (href === "/groups") return currentPath === "/groups";
+  if (href === "/users") return currentPath === "/users";
+  if (href === "/organization") return currentPath === "/organization";
+  if (href === "/business-categories") return currentPath === "/business-categories";
   if (href === "/profile") return currentPath === "/profile";
   if (href === "/operations") return currentPath === "/operations";
   return currentPath === href;
@@ -72,8 +91,11 @@ const isActive = (href: string) => {
         <a class="console-nav-link" href="/memories" aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
         <a class="console-nav-link" href={decisionsHref} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
         <a class="console-nav-link" href="/resources" aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
-        <a class="console-nav-link" href="/groups" aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
-        <a class="console-nav-link" href="/profile" aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
+        <a class="console-nav-link" href={withTenant("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
+        <a class="console-nav-link" href={withTenant("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
+        <a class="console-nav-link" href={withTenant("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
+        <a class="console-nav-link" href={withTenant("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
+        <a class="console-nav-link" href={withTenant("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
         <a class="console-nav-link" href="/operations" aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
         <a class="console-nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
         <a class="console-nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>

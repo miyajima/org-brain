@@ -1,7 +1,8 @@
-import { HttpError, isOrgRole, type OrgRole } from "@org-brain/shared";
+import { HttpError, isOrgRole, ulid, type OrgRole } from "@org-brain/shared";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Env } from "./types";
 import { authenticateScopedToken } from "./token-service";
+import { authenticateSession, SESSION_COOKIE } from "./email-auth-service";
 
 type ApiTenantPolicy = {
   keys?: Array<{
@@ -25,12 +26,17 @@ type ApiTenantPolicy = {
 type ApiKeyGrant = {
   principal: string;
   allowedTenants: string[];
-  source: "api-key" | "access-jwt" | "oidc-jwt" | "scoped-token";
+  source: "api-key" | "access-jwt" | "oidc-jwt" | "scoped-token" | "session";
   email?: string | null;
   displayName?: string | null;
   defaultRole: OrgRole;
   scopes?: import("@org-brain/shared").OrgPermission[];
   projectId?: string | null;
+  sessionId?: string;
+  csrfHash?: string;
+  emailVerified?: boolean;
+  issuer?: string;
+  subject?: string;
 };
 
 export type ApiAuthContext = ApiKeyGrant;
@@ -41,6 +47,15 @@ export type ApiContextEnv = {
     apiAuth: ApiAuthContext;
   };
 };
+
+function cookieValue(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return decodeURIComponent(rest.join("="));
+  }
+  return null;
+}
 
 function normalizeTenantList(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -73,6 +88,7 @@ type AccessClaims = {
   iss?: string;
   exp?: number;
   nbf?: number;
+  email_verified?: boolean;
 };
 
 type AccessTenantPolicy = {
@@ -251,20 +267,136 @@ async function resolveAccessGrant(env: Env, token: string): Promise<ApiKeyGrant>
   const claims = await verifyAccessJwt(env, token);
   const tenantPolicy = parseAccessTenantPolicy(env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON);
   const email = claims.email?.trim().toLowerCase() || null;
-  const principal = `user:${claims.sub}`;
+  const legacyPrincipal = `user:${claims.sub}`;
+  const allowedTenants = resolveAccessTenantGrant(env, legacyPrincipal, email);
+  const source = env.OIDC_ISSUER ? "oidc-jwt" : "access-jwt";
+  const issuer = claims.iss?.replace(/\/+$/u, "") || (source === "access-jwt" ? "cloudflare-access" : "");
+  const principal = await ensureFederatedIdentity(env, {
+    legacyPrincipal,
+    issuer,
+    subject: claims.sub!,
+    email,
+    emailVerified: source === "access-jwt" || claims.email_verified === true,
+    displayName: claims.name?.trim() || email,
+    tenantIds: allowedTenants,
+    source
+  });
   return {
     principal,
-    allowedTenants: resolveAccessTenantGrant(env, principal, email),
-    source: env.OIDC_ISSUER ? "oidc-jwt" : "access-jwt",
+    allowedTenants,
+    source,
     email,
     displayName: claims.name?.trim() || email,
+    emailVerified: source === "access-jwt" || claims.email_verified === true,
+    issuer,
+    subject: claims.sub!,
     defaultRole: isOrgRole(tenantPolicy?.default_role)
       ? tenantPolicy.default_role
       : "reader"
   };
 }
 
+async function ensureFederatedIdentity(env: Env, input: {
+  legacyPrincipal: string;
+  issuer: string;
+  subject: string;
+  email: string | null;
+  emailVerified: boolean;
+  displayName: string | null;
+  tenantIds: string[];
+  source: "access-jwt" | "oidc-jwt";
+}): Promise<string> {
+  // Keep the pre-directory bearer path compatible for lightweight adapters and
+  // staged rollouts that have not bound D1 yet. Production Gateway bindings
+  // always provide OPEN_BRAIN_DB and therefore use issuer+subject identities.
+  if (!env.OPEN_BRAIN_DB) return input.legacyPrincipal;
+  let principal: string | null = null;
+  for (const tenantId of input.tenantIds) {
+    const identity = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT principal FROM user_identities
+       WHERE tenant_id=? AND provider_type='oidc' AND issuer=? AND subject=?`
+    ).bind(tenantId, input.issuer, input.subject).first<{ principal: string }>();
+    if (identity) {
+      if (principal && principal !== identity.principal) {
+        throw new HttpError(409, "identity_conflict", "Federated identity maps to different principals across tenants");
+      }
+      principal = identity.principal;
+    }
+  }
+  if (!principal) {
+    for (const tenantId of input.tenantIds) {
+      const legacy = await env.OPEN_BRAIN_DB.prepare(
+        "SELECT principal FROM user_profiles WHERE tenant_id=? AND principal=?"
+      ).bind(tenantId, input.legacyPrincipal).first<{ principal: string }>();
+      if (legacy) {
+        principal = legacy.principal;
+        break;
+      }
+    }
+  }
+  if (!principal && input.emailVerified && input.email) {
+    for (const tenantId of input.tenantIds) {
+      const invited = await env.OPEN_BRAIN_DB.prepare(
+        "SELECT principal FROM user_profiles WHERE tenant_id=? AND lower(email)=lower(?)"
+      ).bind(tenantId, input.email).first<{ principal: string }>();
+      if (invited) {
+        principal = invited.principal;
+        break;
+      }
+    }
+  }
+  if (!principal && (!input.emailVerified || !input.email)) {
+    throw new HttpError(403, "verified_email_required", "OIDC JIT registration requires a verified email");
+  }
+  const now = Date.now();
+  principal ??= `user:${ulid(now).toLowerCase()}`;
+  for (const [index, tenantId] of input.tenantIds.entries()) {
+    const existing = await env.OPEN_BRAIN_DB.prepare(
+      "SELECT status FROM user_profiles WHERE tenant_id=? AND principal=?"
+    ).bind(tenantId, principal).first<{ status: string }>();
+    if (existing?.status === "suspended" || existing?.status === "deprovisioned") {
+      throw new HttpError(403, "user_suspended", "User is not active");
+    }
+    if (!existing) {
+      await env.OPEN_BRAIN_DB.batch([
+        env.OPEN_BRAIN_DB.prepare(
+          `INSERT INTO user_profiles(tenant_id, principal, display_name, full_name, email,
+            email_verified, company_name, organization_name, avatar_url, status,
+            provision_source, full_name_source, created_at, updated_at)
+           VALUES(?,?,?,NULL,?,1,NULL,NULL,NULL,'active','oidc','oidc',?,?)`
+        ).bind(tenantId, principal, input.displayName || input.email || principal, input.email, now, now),
+        env.OPEN_BRAIN_DB.prepare(
+          `INSERT INTO principal_role_assignments(id, tenant_id, project_id, principal, role,
+            created_by_principal, created_at, updated_at, source, source_ref)
+           VALUES(?,?,NULL,?,'reader',?,?,?,'local','oidc-jit')`
+        ).bind(ulid(now + index + 1), tenantId, principal, principal, now, now)
+      ]);
+    }
+    await env.OPEN_BRAIN_DB.prepare(
+      `INSERT INTO user_identities(id, tenant_id, principal, provider_type, issuer, subject,
+        external_id, created_at, updated_at) VALUES(?,?,?,'oidc',?,?,NULL,?,?)
+       ON CONFLICT(tenant_id, provider_type, issuer, subject)
+       DO UPDATE SET principal=excluded.principal, updated_at=excluded.updated_at`
+    ).bind(ulid(now + input.tenantIds.length + index + 1), tenantId, principal, input.issuer, input.subject, now, now).run();
+  }
+  return principal;
+}
+
 export const apiKeyAuth: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
+  if (c.req.path === "/v1/auth/email/request-code" || c.req.path === "/v1/auth/email/verify") {
+    await next();
+    return;
+  }
+
+  const sessionToken = cookieValue(c.req.header("cookie"), SESSION_COOKIE);
+  if (sessionToken) {
+    const session = await authenticateSession(c.env, sessionToken);
+    if (!session) throw new HttpError(401, "unauthorized", "Invalid or expired session");
+    c.set("apiAuth", session);
+    await next();
+    return;
+  }
+
   const accessJwt = c.req.header("cf-access-jwt-assertion")?.trim();
   if (accessJwt) {
     const grant = await resolveAccessGrant(c.env, accessJwt);

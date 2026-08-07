@@ -12,6 +12,10 @@ type CategoryRow = {
   updated_at: number;
 };
 
+function categoryResponse(row: CategoryRow) {
+  return { ...row, is_active: Boolean(row.is_active) };
+}
+
 function objectBody(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
@@ -41,7 +45,7 @@ export async function listBusinessCategories(
      WHERE tenant_id = ? AND (? = 1 OR is_active = 1)
      ORDER BY label, slug`
   ).bind(tenantId, includeInactive ? 1 : 0).all<CategoryRow>();
-  return result.results;
+  return result.results.map(categoryResponse);
 }
 
 export async function createBusinessCategory(env: Env, tenantId: string, raw: unknown) {
@@ -74,7 +78,7 @@ export async function createBusinessCategory(env: Env, tenantId: string, raw: un
     }
     throw error;
   }
-  return category;
+  return categoryResponse(category);
 }
 
 export async function updateBusinessCategory(
@@ -109,7 +113,7 @@ export async function updateBusinessCategory(
      SET slug = ?, label = ?, description = ?, is_active = ?, updated_at = ?
      WHERE tenant_id = ? AND id = ?`
   ).bind(updated.slug, updated.label, updated.description, updated.is_active, updated.updated_at, tenantId, categoryId).run();
-  return updated;
+  return categoryResponse(updated);
 }
 
 export async function validateBusinessClassification(

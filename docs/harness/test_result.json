@@ -1,19 +1,21 @@
 {
-  "summary": "All manifest verification commands passed after the final fixes. Independent-review follow-ups added scope-specific active-assignment gates, failed-backfill reset enforcement, direct stable-backfill and FTS coverage, ranking-profile RRF application, idempotent late-rollup repair, NULL-project job uniqueness, superseding-attribution, hash-boundary, and stable-local-context coverage.",
+  "summary": "All OSS and Enterprise manifest commands passed. Focused identity evidence also passed for OTP/privacy/isolation, Local SQLite parity, Console administration E2E, clean Node OCI build and HTTP smoke, all Enterprise PostgreSQL migrations, forced RLS with a non-superuser, SCIM/local coexistence, role mapping, and deprovision session revocation.",
   "artifact_refs": [
-    "apps/api-gateway/test/memory-impact-service.test.ts",
-    "scripts/local-memory.test.mjs",
+    "apps/api-gateway/test/identity-auth-service.test.ts",
+    "apps/console/e2e/identity-administration.spec.ts",
+    "packages/contracts/test/identity-organization.test.ts",
     "scripts/schema-parity.test.mjs",
-    "packages/shared/test/memory-impact.test.ts",
-    "apps/api-gateway/test/retrieval-generation-service.test.ts"
+    "apps/console/Dockerfile",
+    "/Users/0300815938/projects/org-brain-enterprise/src/identity-integration.test.ts"
   ],
   "decision_refs": [
-    "docs/harness/implementation_plan.json"
+    "docs/harness/plan.json",
+    "docs/IDENTITY_ADMINISTRATION.md"
   ],
   "evidence": [
     {
       "type": "test",
-      "ref": "pnpm test: passed (Node 84 assertions, script 96, API 87, shared 28, cap-runner 23, org-router 2, all workspace suites); a subsequent API rerun also passed after one transient CORS timeout"
+      "ref": "OSS pnpm test passed: Node 86, scripts 96, contracts 9, Console 8, API Gateway 99, and all remaining workspace suites"
     },
     {
       "type": "test",
@@ -21,11 +23,19 @@
     },
     {
       "type": "test",
-      "ref": "pnpm typecheck: passed"
+      "ref": "pnpm -r --if-present typecheck passed"
     },
     {
       "type": "test",
-      "ref": "pnpm build: passed; all Astro and Wrangler dry-run builds completed after sandbox escalation"
+      "ref": "pnpm build passed; Cloudflare Astro and all Wrangler dry-run builds completed"
+    },
+    {
+      "type": "test",
+      "ref": "Console Playwright E2E passed 3/3; Node OCI built and /login returned HTTP 200"
+    },
+    {
+      "type": "test",
+      "ref": "Enterprise npm typecheck/test/build and Helm lint passed; PostgreSQL identity integration passed 1/1 as a non-superuser after applying migrations 0001 through 0006"
     },
     {
       "type": "test",
@@ -33,6 +43,6 @@
     }
   ],
   "residual_risks": [
-    "No production D1 migration or credentialed live smoke was run because deployment was not requested."
+    "No production migration, deployment, SMTP delivery, or live OIDC/Okta operation was run because external rollout was not requested."
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "summary": "The requested implementation is bounded to additive classification and impact telemetry plus a staged replacement of version-named retrieval projections; production activation and deletion of legacy projections remain rollout steps, not local implementation side effects.",
+  "summary": "The implementation adds a shared identity and organization contract across OSS and Enterprise, additive tenant-scoped persistence, email OTP and OIDC session flows, privacy-aware user administration, local and SCIM group coexistence, business-category administration, a shared Console, and Enterprise SCIM/RLS support while preserving existing principals, ACLs, API keys, and tenant provisioning boundaries.",
   "artifact_refs": [
     "docs/harness/plan.json",
     "docs/harness/context_code.json",
@@ -8,9 +8,10 @@
     "docs/harness/context_risks.json"
   ],
   "decision_refs": [
-    "separate canonical memories and decision memories",
-    "shared retrieval projection with separate evidence and governance channels",
-    "stable role-based table names with generation metadata"
+    "tenant remains the operator-provisioned isolation and contract unit",
+    "new users receive opaque stable principals while existing principals remain unchanged",
+    "full_name is private to self and tenant_admin while display_name is directory-safe",
+    "email and SCIM ship disabled until bootstrap administration is complete"
   ],
   "evidence": [
     {
@@ -19,7 +20,7 @@
     }
   ],
   "residual_risks": [
-    "Legacy projections must remain during dual-write and shadow validation.",
-    "Production activation criteria require later live evidence."
+    "Versioned packages and OCI images still require an explicitly authorized release operation.",
+    "Production SMTP, OIDC discovery, and Okta-compatible SCIM require post-deployment canary evidence."
   ]
 }
