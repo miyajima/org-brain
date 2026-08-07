@@ -33,6 +33,9 @@ describe("OrgBrainMCP tool surface", () => {
     expect(registeredTools).toContain("orgbrain_memories_extract");
     expect(registeredTools).toContain("orgbrain_decision_memories_create");
     expect(registeredTools).toContain("orgbrain_decision_memories_search");
+    expect(registeredTools).toContain("orgbrain_resource_search");
+    expect(registeredTools).toContain("orgbrain_resource_decisions");
+    expect(registeredTools).toContain("orgbrain_decision_resources");
     expect(registeredTools).toContain("orgbrain_messages_send");
     expect(registeredTools).toContain("orgbrain_handoff_send");
     expect(registeredTools).toContain("orgbrain_messages_inbox");

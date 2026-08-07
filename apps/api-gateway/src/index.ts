@@ -88,11 +88,37 @@ import {
   upsertRoleAssignment
 } from "./rbac-service";
 import { getResourceShare, updateResourceShare } from "./share-service";
+import {
+  addKnowledgeResourceLocation,
+  backfillKnowledgeResources,
+  captureKnowledgeResourceVersion,
+  confirmDecisionResourceLinkProposal,
+  createDecisionResourceLink,
+  getDecisionResources,
+  getResourceDecisions,
+  listDecisionResourceLinkProposals,
+  resolveKnowledgeResource,
+  retireDecisionResourceLink,
+  searchKnowledgeResources,
+  upsertKnowledgeResource
+} from "./resource-decision-service";
 import { createTask, getTask, getTaskEvents, listTasks, replayFailedTask } from "./task-service";
 import { issueScopedToken, listScopedTokens, revokeScopedToken } from "./token-service";
 import type { Env } from "./types";
 
 const app = new Hono<ApiContextEnv>();
+
+function assertFeatureEnabled(env: Env, key: "KNOWLEDGE_RESOURCE_INGESTION_ENABLED" | "DECISION_RESOURCE_LINKS_ENABLED" | "RESOURCE_RELATION_EXTRACTION_ENABLED") {
+  if (env[key] !== "true") throw new HttpError(404, "feature_disabled", "Feature is not enabled for this deployment");
+}
+
+function requireIdempotencyKey(c: { req: { header(name: string): string | undefined } }): string {
+  const value = c.req.header("x-idempotency-key")?.trim();
+  if (!value || value.length > 256) {
+    throw new HttpError(400, "idempotency_key_required", "x-idempotency-key is required");
+  }
+  return value;
+}
 
 function withPrincipalActor(rawBody: unknown, principal: string): unknown {
   if (!rawBody || typeof rawBody !== "object") return rawBody;
@@ -123,7 +149,7 @@ app.use(
   "/v1/*",
   cors({
     origin: "*",
-    allowHeaders: ["content-type", "x-api-key", "authorization"],
+    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     maxAge: 86400
   })
@@ -132,7 +158,7 @@ app.use(
   "/api/*",
   cors({
     origin: "*",
-    allowHeaders: ["content-type", "x-api-key", "authorization"],
+    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     maxAge: 86400
   })
@@ -152,7 +178,8 @@ function permissionForRequest(method: string, path: string): OrgPermission {
     path.startsWith("/v1/retrieval-index") ||
     path.startsWith("/v1/retrieval-ranking-profiles") ||
     path.startsWith("/v1/retrieval-generations") ||
-    path.startsWith("/v1/retrieval-generation-assignments")
+    path.startsWith("/v1/retrieval-generation-assignments") ||
+    path === "/v1/resources/backfill"
   ) return "admin";
   if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
   if (path.startsWith("/v1/audit-events")) return "export";
@@ -891,6 +918,155 @@ app.get("/v1/memories/:memoryId/details", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const result = await getMemoryDetails(c.env, tenantId, c.req.param("memoryId"));
   return jsonOk(c, result);
+});
+
+app.post("/v1/resources", async (c) => {
+  assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");
+  requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await upsertKnowledgeResource(c.env, body, getApiPrincipal(c));
+  return jsonOk(c, result, result.created ? 201 : 200);
+});
+
+app.post("/v1/resources/search", async (c) => {
+  assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  return jsonOk(c, await searchKnowledgeResources(c.env, body, {
+    principal: getApiPrincipal(c),
+    projectId: typeof record.project_id === "string" ? record.project_id : null
+  }));
+});
+
+app.get("/v1/resources/resolve", async (c) => {
+  assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const uri = c.req.query("uri");
+  if (!uri) throw new HttpError(400, "invalid_payload", "uri is required");
+  return jsonOk(c, await resolveKnowledgeResource(c.env, tenantId, uri, {
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null
+  }));
+});
+
+app.post("/v1/resources/backfill", async (c) => {
+  assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");
+  requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await backfillKnowledgeResources(c.env, body, getApiPrincipal(c)));
+});
+
+app.post("/v1/resources/:id/locations", async (c) => {
+  assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");
+  requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const result = await addKnowledgeResourceLocation(c.env, { ...record, resource_id: c.req.param("id") }, getApiPrincipal(c));
+  return jsonOk(c, result, result.created ? 201 : 200);
+});
+
+app.post("/v1/resources/:id/refresh", async (c) => {
+  assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");
+  requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const result = await captureKnowledgeResourceVersion(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    body,
+    getApiPrincipal(c),
+    typeof record.project_id === "string" ? record.project_id : null
+  );
+  return jsonOk(c, result, result.created ? 201 : 200);
+});
+
+app.get("/v1/resources/:id/decisions", async (c) => {
+  assertFeatureEnabled(c.env, "DECISION_RESOURCE_LINKS_ENABLED");
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getResourceDecisions(c.env, tenantId, c.req.param("id"), {
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    resourceVersionId: c.req.query("resource_version_id") ?? null
+  }));
+});
+
+app.get("/v1/decisions/:decisionRef{.+}/resources", async (c) => {
+  assertFeatureEnabled(c.env, "DECISION_RESOURCE_LINKS_ENABLED");
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const rawRef = decodeURIComponent(c.req.param("decisionRef"));
+  const separator = rawRef.indexOf(":");
+  if (separator < 1) throw new HttpError(400, "invalid_payload", "decisionRef must be source_type:source_id");
+  return jsonOk(c, await getDecisionResources(c.env, tenantId, {
+    source_type: rawRef.slice(0, separator),
+    source_id: rawRef.slice(separator + 1)
+  }, {
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    includeRelated: c.req.query("include_related") === "true"
+  }));
+});
+
+app.post("/v1/decision-resource-links", async (c) => {
+  assertFeatureEnabled(c.env, "DECISION_RESOURCE_LINKS_ENABLED");
+  const idempotencyKey = requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const result = await createDecisionResourceLink(
+    c.env,
+    { ...record, idempotency_key: idempotencyKey },
+    getApiPrincipal(c)
+  );
+  return jsonOk(c, result, result.created ? 201 : 200);
+});
+
+app.get("/v1/decision-resource-links/review-queue", async (c) => {
+  assertFeatureEnabled(c.env, "DECISION_RESOURCE_LINKS_ENABLED");
+  assertFeatureEnabled(c.env, "RESOURCE_RELATION_EXTRACTION_ENABLED");
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listDecisionResourceLinkProposals(c.env, tenantId, {
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null
+  }));
+});
+
+app.post("/v1/decision-resource-links/:id/confirm", async (c) => {
+  assertFeatureEnabled(c.env, "DECISION_RESOURCE_LINKS_ENABLED");
+  assertFeatureEnabled(c.env, "RESOURCE_RELATION_EXTRACTION_ENABLED");
+  const idempotencyKey = requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  return jsonOk(c, await confirmDecisionResourceLinkProposal(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    body,
+    getApiPrincipal(c),
+    idempotencyKey,
+    typeof record.project_id === "string" ? record.project_id : null
+  ));
+});
+
+app.post("/v1/decision-resource-links/:id/retire", async (c) => {
+  assertFeatureEnabled(c.env, "DECISION_RESOURCE_LINKS_ENABLED");
+  requireIdempotencyKey(c);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  return jsonOk(c, await retireDecisionResourceLink(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    getApiPrincipal(c),
+    typeof record.project_id === "string" ? record.project_id : null
+  ));
 });
 
 app.post("/v1/decision-memories", async (c) => {

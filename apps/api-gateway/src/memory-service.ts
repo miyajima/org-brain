@@ -610,7 +610,7 @@ async function validateWriteClassifications<
   return { items: validated, classification_warning: [...warnings] };
 }
 
-function stableResultReadable(permissionsJson: string | null | undefined, principalId: string | null) {
+export function stableResultReadable(permissionsJson: string | null | undefined, principalId: string | null) {
   if (!permissionsJson) return true;
   try {
     const grants = JSON.parse(permissionsJson) as Array<{

@@ -4,7 +4,8 @@ import {
   parseAclEntries,
   parseResourceType,
   replaceResourceAcl,
-  type ResourceAclEntry
+  type ResourceAclEntry,
+  type ResourceType
 } from "./authz-service";
 import type { Env } from "./types";
 
@@ -14,6 +15,10 @@ type KnowledgeOwnerRow = {
 
 type DecisionOwnerRow = {
   owner_refs_json: string | null;
+};
+
+type ResourceOwnerRow = {
+  created_by_principal: string;
 };
 
 function parseString(value: unknown, field: string, maxLength = 256): string {
@@ -41,10 +46,24 @@ function ownerRefsContainPrincipal(raw: string | null, principal: string): boole
 
 async function assertActorCanShareResource(env: Env, args: {
   tenantId: string;
-  resourceType: "decision_memory" | "knowledge_doc";
+  resourceType: ResourceType;
   resourceId: string;
   actorPrincipal: string;
 }) {
+  if (args.resourceType === "knowledge_resource") {
+    const row = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT created_by_principal
+       FROM knowledge_resources
+       WHERE tenant_id = ? AND id = ? AND lifecycle_state <> 'retired'`
+    )
+      .bind(args.tenantId, args.resourceId)
+      .first<ResourceOwnerRow>();
+    if (!row) throw new HttpError(404, "resource_not_found", "Knowledge resource not found");
+    if (row.created_by_principal !== args.actorPrincipal) {
+      throw new HttpError(403, "forbidden", "Only the resource owner can update sharing");
+    }
+    return;
+  }
   if (args.resourceType === "knowledge_doc") {
     const row = await env.OPEN_BRAIN_DB.prepare(
       `SELECT owner_principal

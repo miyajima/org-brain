@@ -43,4 +43,8 @@ export type Env = {
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;
   API_RATE_LIMIT_FAIL_OPEN?: "true" | "false";
+  KNOWLEDGE_RESOURCE_INGESTION_ENABLED?: "true" | "false";
+  DECISION_RESOURCE_LINKS_ENABLED?: "true" | "false";
+  RESOURCE_RELATION_EXTRACTION_ENABLED?: "true" | "false";
+  KNOWLEDGE_RESOURCE_CONNECTORS_JSON?: string;
 };

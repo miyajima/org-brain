@@ -13,6 +13,7 @@ test-results
 dbx-db/
 *.tsbuildinfo
 .omx/
+.codegraph/
 .benchmark/
 tmp/
 /plan.json

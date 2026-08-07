@@ -1,7 +1,7 @@
 import { HttpError, ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
-export const RESOURCE_TYPES = ["decision_memory", "knowledge_doc"] as const;
+export const RESOURCE_TYPES = ["decision_memory", "knowledge_doc", "knowledge_resource"] as const;
 export const SUBJECT_TYPES = ["principal", "group", "tenant"] as const;
 export const ACL_PERMISSIONS = ["read", "write"] as const;
 
