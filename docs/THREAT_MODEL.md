@@ -1,5 +1,21 @@
 # Threat model
 
+## Resource connector and provenance threats
+
+- Resource URIs are identifiers, not network authorization. Arbitrary live URL
+  fetching is prohibited; connector bindings are fail closed.
+- `KNOWLEDGE_RESOURCE_CONNECTORS_JSON` binds connector ids to explicit service
+  principals, optional media types, and maximum extracted-text byte sizes.
+- Connector adapters must reject embedded credentials, loopback/private/link-
+  local destinations, unsafe redirects, oversized responses, unexpected media
+  types, and timeouts before snapshot submission.
+- Confirmed source links pin immutable version digests and locators. Content
+  drift creates stale review work rather than silently moving evidence.
+- Cross-tenant Resource, Version, Assertion, and Evidence references are denied
+  by tenant-scoped service queries and Enterprise composite foreign keys/RLS.
+- Authorization filtering precedes result grouping, counts, and coverage to
+  avoid Resource or Decision existence side channels.
+
 ## Security objectives
 
 OrgBrain must preserve tenant isolation, memory confidentiality, provenance,
@@ -42,6 +58,7 @@ an actor or principal supplied in the request body.
 | Cross-tenant polymorphic reference | Validate source existence and tenant ownership in the service before writing retrieval or usage items |
 | Inflated effectiveness claims | Keep evidence levels separate, require attribution weights to total 1.0, retain negative net savings, and sample verification deterministically |
 | Availability loss | Verified backups, restore drills, bounded queues, DLQ replay, and documented RPO/RTO |
+| Resource SSRF | Fetch-enabled HTTP/Git HTTP registration rejects credentials and loopback/private/link-local IP literals; connectors must repeat resolved-address and redirect-hop checks and enforce size, media type, and timeout limits |
 
 ## Local-mode controls in 0.1
 

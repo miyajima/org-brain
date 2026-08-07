@@ -179,6 +179,24 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `knowledge_links` は resolved relation graph (`references`, `related`, `parent`, `child`) を保持する
 - `POST /v1/docs` 保存時に tenant 単位で graph を再構築し、後から追加された doc に対しても未解決 wiki link を解消する
 
+## Knowledge Resources and Decision Artifacts
+- `knowledge_resources` はURIから独立したResource identity、`knowledge_resource_locations` はcanonical/mirror/source URI、`knowledge_resource_versions` はconnector取得版のimmutable provenanceを保持する
+- 任意URLをAPIが直接fetchしない。`fetch_enabled` locationへ明示的に束縛されたconnectorだけが `/v1/resources/:id/refresh` へsnapshotを投入できる
+- DecisionとResourceのN:N関係は `knowledge_assertions(assertion_type=relation)` を正本とし、APIの`DecisionResourceLink`とGraph Edgeはprojectionとする
+- link roleは `conclusion_source`, `rationale_source`, `contradiction`, `input`, `implementation_artifact`, `output_artifact`, `verification_artifact` に固定する
+- confirmed source linkは`knowledge_assertion_evidence`でResource Versionとlocatorへ固定し、Resourceの新版が旧根拠を暗黙に差し替えない
+- proposed/retired relationはResource起点の理由検索、Decision起点の成果物探索、通常Graphへ混入させない
+- `orgbrain_resource_search`, `orgbrain_resource_decisions`, `orgbrain_decision_resources` はread-only MCP surfaceとし、登録・版取込・link確認・retireは監査対象HTTP管理面に限定する
+- `GET /v1/decision-resource-links/review-queue` と `POST /v1/decision-resource-links/:id/confirm` はACL交差済みProposal review面であり、確認時は旧Confirmed linkをretireして新しい版・locator・digestへ固定する
+- Consoleの「資料・成果物」はResource取込、明示link、Proposal confirm/reject、retireを同じ監査対象APIへ接続し、`conclusion_source` と `input` を別表示する
+- `retrieval_units.source_type=knowledge_resource_version` のsource span付きchunk、Resource FTS、`confirmed_decision_resource_edges` viewを検索/Graph projectionとして扱い、Resource/Version/Assertionから再構築できる
+- DecisionとResourceの両ACLを満たす結果だけを返し、権限外Resource/Decisionの存在や件数をcoverageへ漏らさない
+- `POST /v1/resources/backfill` はadmin限定の再開可能な3段階処理とし、`knowledge_docs`のinline/R2本文、`decision_evidence`、`decision_memories.source_refs_json`を順に正規化する。各batchはcursor、件数、完了状態、source ID digestを返す
+- `decision_evidence`は旧relationと親Decisionのconfirmationを維持し、曖昧な`source_refs_json`は`input`へ移す。同じ旧参照は同じnormalized URIへ解決し、N:Nを維持する
+- 新しいcontent hashの取得は旧evidenceを差し替えず、Confirmed sourceが旧版へ固定されたResourceを`stale`にし、影響Assertionごとの再確認Proposalを冪等に作る
+- canonical Confirmed AssertionをResource graph edgeとして投影し、別の正本edge tableは作らない
+- `KNOWLEDGE_RESOURCE_INGESTION_ENABLED`, `DECISION_RESOURCE_LINKS_ENABLED`, `RESOURCE_RELATION_EXTRACTION_ENABLED` は既定offとし、metadata、shadow index、明示link、Proposal reviewの順で有効化する
+
 ## Progressive Disclosure
 - 初回コンテキスト取得は MOC から始める
 - doc 本文の前に summary を優先して取得する

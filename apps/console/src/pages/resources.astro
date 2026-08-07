@@ -1,0 +1,248 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+type Resource = {
+  id: string;
+  project_id: string | null;
+  resource_kind: string;
+  canonical_uri: string;
+  title: string;
+  source_system: string;
+  media_type: string;
+  current_version_id: string | null;
+  lifecycle_state: string;
+  updated_at: number;
+};
+
+type Link = {
+  assertion_id: string;
+  role: string;
+  resource_version_id: string | null;
+  locator: Record<string, unknown> | null;
+  note: string | null;
+};
+
+type ResourceSearch = { items: Resource[]; coverage: { truncated: boolean } };
+type ResourceDecisions = {
+  resource: Resource;
+  decisions: Array<{
+    decision_ref: { source_type: string; source_id: string };
+    conclusion: string;
+    reason_summary: string;
+    reason_items: Link[];
+  }>;
+};
+type DecisionResources = {
+  decision: { decision_ref: { source_type: string; source_id: string }; conclusion: string; reason_summary: string };
+  artifacts: Array<{ link: Link; resource: Resource }>;
+};
+type ProposalQueue = { items: Array<{ link: Link; resource: Resource; decision: { decision_ref: { source_type: string; source_id: string }; conclusion: string }; context: Record<string, unknown> }> };
+type ApiResponse<T> = { ok: true; data: T } | { ok: false; error?: { message?: string } };
+
+const url = Astro.url;
+const params = url.searchParams;
+const tenantId = params.get("tenant_id")?.trim() || "default";
+const projectId = params.get("project_id")?.trim() || "";
+const q = params.get("q")?.trim() || "";
+const selected = params.get("selected")?.trim() || "";
+const decisionRef = params.get("decision_ref")?.trim() || "";
+const reviewEnabled = params.get("review") === "1";
+const requestedLocale = params.get("lang");
+const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale === "zh" ? requestedLocale : "en";
+const copy = {
+  en: { title: "Sources & artifacts", subtitle: "Start from a material to collect decisions and reasons, or start from a decision to inspect its outputs.", search: "Search material", empty: "Enter words from a material, URI, conclusion, or rationale.", decisions: "Related decisions and reasons", artifacts: "Decision artifacts", noResults: "No readable confirmed results.", open: "Open material", role: "Role", version: "Pinned version" },
+  ja: { title: "資料・成果物", subtitle: "資料から判断と理由を収集し、判断から実装物・出力物・検証結果を探索します。", search: "資料を検索", empty: "資料、URI、結論、理由に含まれる語を入力してください。", decisions: "関連する判断と理由", artifacts: "判断の成果物", noResults: "閲覧可能なConfirmed結果はありません。", open: "資料を開く", role: "役割", version: "固定版" },
+  zh: { title: "资料与成果", subtitle: "从资料收集决策与理由，或从决策探索实现、输出和验证成果。", search: "搜索资料", empty: "请输入资料、URI、结论或理由中的关键词。", decisions: "相关决策与理由", artifacts: "决策成果", noResults: "没有可读取的已确认结果。", open: "打开资料", role: "角色", version: "固定版本" }
+}[locale];
+
+async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
+  const response = await fetch(new URL(path, url), init);
+  const payload = await response.json().catch(() => null) as ApiResponse<T> | null;
+  if (!response.ok) return { ok: false, error: payload && "error" in payload ? payload.error : { message: `HTTP ${response.status}` } };
+  return payload;
+}
+
+const searchPayload = q ? await fetchApi<ResourceSearch>("/api/v1/resources/search", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ tenant_id: tenantId, project_id: projectId || null, q, limit: 40 })
+}) : null;
+const resources = searchPayload?.ok ? searchPayload.data.items : [];
+const selectedId = selected || resources[0]?.id || "";
+const decisionsPayload = selectedId
+  ? await fetchApi<ResourceDecisions>(`/api/v1/resources/${encodeURIComponent(selectedId)}/decisions?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
+  : null;
+const artifactsPayload = decisionRef
+  ? await fetchApi<DecisionResources>(`/api/v1/decisions/${encodeURIComponent(decisionRef)}/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
+  : null;
+const proposalsPayload = reviewEnabled
+  ? await fetchApi<ProposalQueue>(`/api/v1/decision-resource-links/review-queue?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
+  : null;
+const errors = [searchPayload, decisionsPayload, artifactsPayload, proposalsPayload]
+  .filter((item): item is { ok: false; error?: { message?: string } } => Boolean(item && !item.ok))
+  .map((item) => item.error?.message ?? "Request failed");
+
+function href(resourceId: string) {
+  const next = new URLSearchParams(params);
+  next.set("selected", resourceId);
+  return `/resources?${next.toString()}`;
+}
+
+function locator(value: Record<string, unknown> | null): string {
+  if (!value) return "-";
+  return Object.entries(value).map(([key, item]) => `${key}: ${String(item)}`).join(" / ");
+}
+---
+<BaseLayout title={copy.title} lang={locale}>
+  <section class="space-y-5">
+    <header class="card">
+      <p class="surface-label">Decision Resource Intelligence</p>
+      <h1 class="mt-2 text-3xl font-semibold text-white sm:text-5xl">{copy.title}</h1>
+      <p class="mt-3 max-w-4xl text-sm leading-7 text-zinc-300">{copy.subtitle}</p>
+      <form class="mt-5 grid gap-3 md:grid-cols-[1fr_12rem_12rem_auto]" method="get" action="/resources">
+        <input name="q" value={q} placeholder={copy.search} />
+        <input name="tenant_id" value={tenantId} aria-label="Tenant" />
+        <input name="project_id" value={projectId} aria-label="Project" />
+        <input type="hidden" name="lang" value={locale} />
+        <button type="submit">{copy.search}</button>
+      </form>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <a class="button-link" href={`/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&review=1&lang=${locale}`}>Governance review</a>
+      </div>
+    </header>
+
+    {errors.map((error) => <div class="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</div>)}
+
+    <div class="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
+      <section class="card">
+        <p class="surface-label">Resources</p>
+        <div class="mt-4 space-y-3">
+          {!q ? <p class="text-sm text-zinc-400">{copy.empty}</p> : resources.length === 0 ? <p class="text-sm text-zinc-400">{copy.noResults}</p> : resources.map((resource) => (
+            <a class="block rounded-[18px] border border-white/10 bg-white/[0.03] p-3 hover:border-amber-200/40" href={href(resource.id)} aria-current={selectedId === resource.id ? "page" : undefined}>
+              <div class="flex flex-wrap gap-2"><span class="mini-chip">{resource.resource_kind}</span><span class="mini-chip">{resource.lifecycle_state}</span></div>
+              <p class="mt-2 font-semibold text-white">{resource.title}</p>
+              <p class="mt-1 break-all text-xs leading-6 text-zinc-500">{resource.canonical_uri}</p>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <div class="space-y-5">
+        <section class="card">
+          <p class="surface-label">Governance mutations</p>
+          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <form class="surface-soft-card space-y-2" data-resource-action="/api/v1/resources">
+              <h2 class="font-semibold text-white">Resource intake</h2>
+              <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="project_id" value={projectId} />
+              <input name="canonical_uri" required placeholder="https://…" /><input name="title" required placeholder="Title" />
+              <input name="resource_kind" value="document" required /><input name="source_system" value="manual" required />
+              <input name="media_type" value="text/plain" required /><input name="connector_id" placeholder="Allowlisted connector (optional)" />
+              <button type="submit">Register Resource</button><p class="text-xs text-zinc-500" data-result></p>
+            </form>
+            <form class="surface-soft-card space-y-2" data-resource-action="/api/v1/decision-resource-links">
+              <h2 class="font-semibold text-white">Explicit Decision link</h2>
+              <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="project_id" value={projectId} />
+              <input name="decision_ref_text" required placeholder="decision_memory:id" /><input name="resource_id" required placeholder="Resource ID" />
+              <select name="role"><option>conclusion_source</option><option>rationale_source</option><option>input</option><option>contradiction</option><option>implementation_artifact</option><option>output_artifact</option><option>verification_artifact</option></select>
+              <input name="resource_version_id" placeholder="Pinned version (source roles)" /><input name="locator_json" placeholder='{"heading":"Conclusion"}' />
+              <input name="excerpt_digest" placeholder="SHA-256 excerpt digest" />
+              <button type="submit">Add Confirmed link</button><p class="text-xs text-zinc-500" data-result></p>
+            </form>
+          </div>
+        </section>
+
+        {proposalsPayload?.ok && (
+          <section class="card">
+            <p class="surface-label">Extraction / stale review queue</p>
+            <div class="mt-4 space-y-3">
+              {proposalsPayload.data.items.length === 0 ? <p class="text-sm text-zinc-400">No readable proposals.</p> : proposalsPayload.data.items.map((item) => (
+                <article class="surface-soft-card">
+                  <div class="flex flex-wrap gap-2"><span class="mini-chip">Proposal</span><span class="mini-chip">{item.link.role}</span></div>
+                  <h3 class="mt-2 font-semibold text-white">{item.decision.conclusion}</h3>
+                  <p class="mt-1 text-xs text-zinc-500">{String(item.context.review_reason ?? "extracted_relation")} · {item.resource.title}</p>
+                  <div class="mt-3 grid gap-2 lg:grid-cols-2">
+                    <form class="space-y-2" data-resource-action={`/api/v1/decision-resource-links/${item.link.assertion_id}/confirm`}>
+                      <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="project_id" value={projectId} />
+                      <input name="resource_version_id" required placeholder="Reviewed version" /><input name="locator_json" required placeholder='{"heading":"…"}' />
+                      <input name="excerpt_digest" required placeholder="SHA-256 excerpt digest" /><button type="submit">Confirm replacement</button>
+                    </form>
+                    <form data-resource-action={`/api/v1/decision-resource-links/${item.link.assertion_id}/retire`}>
+                      <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="project_id" value={projectId} />
+                      <button type="submit">Reject / retire</button>
+                    </form>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+        {decisionsPayload?.ok && (
+          <section class="card">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div><p class="surface-label">{copy.decisions}</p><h2 class="mt-2 text-2xl font-semibold text-white">{decisionsPayload.data.resource.title}</h2></div>
+              <a class="button-link" href={decisionsPayload.data.resource.canonical_uri} target="_blank" rel="noreferrer">{copy.open}</a>
+            </div>
+            <div class="mt-5 space-y-4">
+              {decisionsPayload.data.decisions.length === 0 ? <p class="text-sm text-zinc-400">{copy.noResults}</p> : decisionsPayload.data.decisions.map((decision) => (
+                <article class="surface-soft-card">
+                  <p class="text-xs text-zinc-500">{decision.decision_ref.source_type}:{decision.decision_ref.source_id}</p>
+                  <h3 class="mt-2 font-semibold text-white">{decision.conclusion}</h3>
+                  <p class="mt-2 text-sm leading-7 text-zinc-300">{decision.reason_summary}</p>
+                  <ul class="mt-3 space-y-2 text-xs leading-6 text-zinc-400">
+                    {decision.reason_items.map((item) => <li><span class={item.role === "conclusion_source" ? "mini-chip border-amber-300/50 text-amber-100" : item.role === "input" ? "mini-chip text-zinc-400" : "mini-chip"}>{item.role}</span> / <strong>{copy.version}:</strong> {item.resource_version_id ?? "-"} / {locator(item.locator)}</li>)}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {artifactsPayload?.ok && (
+          <section class="card">
+            <p class="surface-label">{copy.artifacts}</p>
+            <h2 class="mt-2 text-2xl font-semibold text-white">{artifactsPayload.data.decision.conclusion}</h2>
+            <div class="mt-5 space-y-3">
+              {artifactsPayload.data.artifacts.length === 0 ? <p class="text-sm text-zinc-400">{copy.noResults}</p> : artifactsPayload.data.artifacts.map(({ link, resource }) => (
+                <a class="block surface-soft-card hover:border-amber-200/40" href={resource.canonical_uri} target="_blank" rel="noreferrer">
+                  <div class="flex flex-wrap gap-2"><span class="mini-chip">{link.role}</span><span class="mini-chip">{resource.resource_kind}</span></div>
+                  <p class="mt-2 font-semibold text-white">{resource.title}</p>
+                  <p class="mt-1 break-all text-xs leading-6 text-zinc-500">{resource.canonical_uri}</p>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  for (const form of document.querySelectorAll<HTMLFormElement>("form[data-resource-action]")) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(form).entries());
+      const decisionRef = String(values.decision_ref_text ?? "");
+      if (decisionRef) {
+        const separator = decisionRef.indexOf(":");
+        values.decision_ref = { source_type: decisionRef.slice(0, separator), source_id: decisionRef.slice(separator + 1) } as never;
+        delete values.decision_ref_text;
+      }
+      if (values.locator_json) {
+        try { values.locator = JSON.parse(String(values.locator_json)) as never; } catch { alert("locator_json must be valid JSON"); return; }
+        delete values.locator_json;
+      }
+      for (const key of Object.keys(values)) if (values[key] === "") delete values[key];
+      if (form.dataset.resourceAction?.endsWith("/decision-resource-links")) values.confirmation_state = "confirmed";
+      const response = await fetch(form.dataset.resourceAction!, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-idempotency-key": crypto.randomUUID() },
+        body: JSON.stringify(values)
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      const result = form.querySelector<HTMLElement>("[data-result]");
+      if (result) result.textContent = response.ok ? JSON.stringify(payload) : (payload?.error?.message ?? `HTTP ${response.status}`);
+      if (response.ok && !result) location.reload();
+    });
+  }
+</script>

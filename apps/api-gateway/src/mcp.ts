@@ -49,6 +49,11 @@ import {
   updateMemoryUsageStates
 } from "./memory-effect-service";
 import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
+import {
+  getDecisionResources,
+  getResourceDecisions,
+  searchKnowledgeResources
+} from "./resource-decision-service";
 
 type AgentProps = {
   tenantId: string;
@@ -1206,6 +1211,65 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         await this.requirePermission(tenantId, "read");
         const events = await getTaskEvents(this.env, tenantId, task_id, limit ?? 50, cursor);
         return toContent(events);
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_resource_search",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(256).nullable().optional(),
+        q: z.string().min(1).max(512),
+        limit: z.number().int().min(1).max(100).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        if (this.env.KNOWLEDGE_RESOURCE_INGESTION_ENABLED !== "true") throw new HttpError(404, "feature_disabled", "Feature is not enabled");
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", payload.project_id);
+        const principal = this.props?.principal ?? "mcp";
+        return toContent(await searchKnowledgeResources(this.env, {
+          tenant_id: tenantId,
+          ...payload
+        }, { principal, projectId: payload.project_id ?? null }));
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_resource_decisions",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(256).nullable().optional(),
+        resource_id: z.string().min(1).max(256)
+      },
+      async ({ tenant_id, project_id, resource_id }) => {
+        if (this.env.DECISION_RESOURCE_LINKS_ENABLED !== "true") throw new HttpError(404, "feature_disabled", "Feature is not enabled");
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", project_id);
+        const principal = this.props?.principal ?? "mcp";
+        return toContent(await getResourceDecisions(this.env, tenantId, resource_id, {
+          principal,
+          projectId: project_id ?? null
+        }));
+      }
+    );
+
+    this.server.tool(
+      "orgbrain_decision_resources",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(256).nullable().optional(),
+        source_type: z.enum(["decision_memory", "decision_rationale"]),
+        source_id: z.string().min(1).max(256)
+      },
+      async ({ tenant_id, project_id, source_type, source_id }) => {
+        if (this.env.DECISION_RESOURCE_LINKS_ENABLED !== "true") throw new HttpError(404, "feature_disabled", "Feature is not enabled");
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", project_id);
+        const principal = this.props?.principal ?? "mcp";
+        return toContent(await getDecisionResources(this.env, tenantId, {
+          source_type,
+          source_id
+        }, { principal, projectId: project_id ?? null }));
       }
     );
 

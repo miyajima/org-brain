@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.26.0",
+    "@org-brain/contracts": "workspace:*",
+    "@org-brain/core": "workspace:*",
     "@org-brain/shared": "workspace:*",
     "agents": "^0.7.4",
     "hono": "^4.7.2",

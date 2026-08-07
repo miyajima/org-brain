@@ -1,5 +1,19 @@
 # Org Brain System Design
 
+## Decision Resource Intelligence
+
+Resource identity, locations, immutable versions, relation assertions, and
+version evidence form the canonical chain. URI resolution deduplicates within a
+tenant, connector capture projects extracted text to stable retrieval units,
+and confirmed assertions project to graph edges. Decision hydration remains an
+adapter over the separate `decision_memories` and `decision_rationales`
+originals.
+
+Read traversal is authorization-intersection based: Resource-to-Decision must
+authorize the Resource and every returned Decision; Decision-to-Artifact must
+authorize the Decision and every returned Resource. Filtering happens before
+grouping and coverage calculation so hidden counts are not observable.
+
 ## Topology
 - `open-brain-api-gateway`: Hono HTTP API, task creation, and Remote MCP on `/mcp`.
 - `open-brain-org-router`: org-bus consumer, capability queue routing, and task result materialization.
@@ -81,6 +95,10 @@
 - Hook ingestion resolves tenant and project together from the versioned local `workspaces.json`. A mapped workspace wins over the single-tenant environment fallback, while an explicit payload project applies only to that event. First reusable use can confirm `basename(cwd)` and writes the private mapping atomically; low-signal skips do not create it.
 - Organization sharing fails closed when neither a workspace mapping nor `ORGBRAIN_TENANT_ID` resolves a tenant. Legacy `project-names.json` entries migrate without source deletion, and operator backfill/snapshot/usage-status jobs consume the same workspace-to-project roots.
 - Retrieval refresh is best-effort: cap-runner and API memory search/profile update `last_accessed_at` and append a `memory_versions` refresh snapshot for top memory hits without blocking task execution.
+- Resource compatibility migration advances independently through `knowledge_docs`, `decision_evidence`, and `decision_memory_sources`; cursor plus batch digest make retry progress observable and assertion idempotency keys prevent duplicate links.
+- Resource snapshot capture advances `current_version_id` only for a new digest. Confirmed source evidence remains pinned to its original version, while the Resource lifecycle becomes `stale` and an idempotent `resource_version_changed` Proposal is queued for governance review.
+- Resource snapshot text is deterministically chunked with source spans before insertion into generation-scoped retrieval projections.
+- Resource graph consumers read the rebuildable `confirmed_decision_resource_edges` view over active Confirmed relation assertions; Proposal and retired assertions never enter normal graph or impact retrieval.
 - Measurement mode is isolated from normal execution. API task creation expands one logical request into raw-context control and compact-memory treatment task variants, cap-runner records estimated token/cost/duration usage per variant, and both variants run with memory writes disabled so measurement does not pollute future recall. Shared `measurement_session_id` values group multiple measured turns into one session report.
 
 ## Orchestration and Reliability

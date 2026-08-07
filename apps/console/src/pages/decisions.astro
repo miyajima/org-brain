@@ -540,6 +540,9 @@ const errors = [
 ].filter(Boolean) as string[];
 const reviewedCount = results.filter((item) => isHumanConfirmed(item.confirmationState)).length;
 const selectedSummary = active ?? results[0] ?? null;
+const resourceHref = active
+  ? `/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&decision_ref=${encodeURIComponent(`decision_memory:${active.id}`)}&lang=${locale}`
+  : `/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&lang=${locale}`;
 ---
 <BaseLayout title={copy.pageTitle} lang={locale}>
   <section class="decision-page space-y-5">
@@ -1096,6 +1099,9 @@ const selectedSummary = active ?? results[0] ?? null;
 
             <section class="card">
               <p class="surface-label">{copy.evidence}</p>
+              <a class="button-link mt-3 inline-flex" href={resourceHref}>
+                {locale === "ja" ? "資料・成果物" : locale === "zh" ? "资料与成果" : "Sources & artifacts"}
+              </a>
               <div class="mt-4 space-y-3">
                 {context.whyTrustThis.provenance.sourceRefs.length === 0 ? (
                   <p class="text-sm text-zinc-400">{copy.noEvidence}</p>
