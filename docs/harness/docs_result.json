@@ -1,0 +1,30 @@
+{
+  "summary": "Updated governed specifications, system design, backend contract, threat model, local migration guide, and retrieval migration documentation for classification, stable generations, telemetry, reporting, and local outbox delivery.",
+  "artifact_refs": [
+    "docs/SPEC.md",
+    "docs/SYSTEM_DESIGN.md",
+    "DESIGN.md",
+    "docs/STORAGE_BACKENDS.md",
+    "docs/THREAT_MODEL.md",
+    "docs/LOCAL_MIGRATION.md",
+    "docs/HYBRID_V4_IMPLEMENTATION.md",
+    "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+  ],
+  "decision_refs": [
+    "docs/harness/plan.json",
+    "docs/harness/implementation_plan.json"
+  ],
+  "evidence": [
+    {
+      "type": "document",
+      "ref": "docs/RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md"
+    },
+    {
+      "type": "document",
+      "ref": "docs/SPEC.md"
+    }
+  ],
+  "residual_risks": [
+    "The documented 47-table D1 and 31-table Local counts are post-compatibility cleanup targets; schema v18 intentionally keeps legacy projection tables."
+  ]
+}

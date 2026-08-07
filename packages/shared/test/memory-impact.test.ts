@@ -1,0 +1,33 @@
+import { describe, expect, it } from "vitest";
+import {
+  shouldSampleMemoryEffectVerification,
+  validateAvoidedLookupCategories
+} from "../src/memory-impact";
+
+describe("memory impact contracts", () => {
+  it("accepts supported lookup combinations and keeps none exclusive", () => {
+    expect(validateAvoidedLookupCategories(["web_search", "source_search", "web_search"]))
+      .toEqual(["web_search", "source_search"]);
+    expect(() => validateAvoidedLookupCategories(["none", "past_context"]))
+      .toThrow(/exclusive/);
+    expect(() => validateAvoidedLookupCategories(["unsupported"]))
+      .toThrow(/unsupported/);
+  });
+
+  it("selects the same deterministic ten percent cohort for the same tenant and usage", () => {
+    expect(shouldSampleMemoryEffectVerification("tenant-a", "usage-0")).toBe(false);
+    expect(shouldSampleMemoryEffectVerification("tenant-a", "usage-1")).toBe(true);
+    expect(shouldSampleMemoryEffectVerification("tenant-a", "usage-4")).toBe(true);
+    expect(shouldSampleMemoryEffectVerification("tenant-a", "usage-42")).toBe(false);
+    const first = Array.from({ length: 10_000 }, (_, index) =>
+      shouldSampleMemoryEffectVerification("tenant-a", `usage-${index}`)
+    );
+    const second = Array.from({ length: 10_000 }, (_, index) =>
+      shouldSampleMemoryEffectVerification("tenant-a", `usage-${index}`)
+    );
+    expect(second).toEqual(first);
+    const sampled = first.filter(Boolean).length;
+    expect(sampled).toBeGreaterThanOrEqual(900);
+    expect(sampled).toBeLessThanOrEqual(1_100);
+  });
+});

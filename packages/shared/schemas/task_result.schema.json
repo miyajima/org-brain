@@ -22,7 +22,67 @@
       },
       "additionalProperties": false
     },
-    "wait_event_type": { "type": "string" }
+    "wait_event_type": { "type": "string" },
+    "memory_effect": {
+      "type": "object",
+      "required": ["usage_event_id", "idempotency_key", "effect_outcome"],
+      "properties": {
+        "usage_event_id": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "evidence_level": { "enum": ["reported", "estimated", "verified", "unverifiable"] },
+        "supersedes_effect_id": { "type": ["string", "null"] },
+        "effect_outcome": { "enum": ["positive", "neutral", "negative", "unknown"] },
+        "avoided_lookup_categories": {
+          "type": "array",
+          "items": { "enum": ["source_search", "web_search", "past_context", "none"] },
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "gross_saved_tokens_estimate": { "type": "number" },
+        "token_estimation_candidates": {
+          "type": "object",
+          "properties": {
+            "paired_control_tokens": { "type": "number" },
+            "safe_replay_tokens": { "type": "number" },
+            "avoided_source_tokens": { "type": "number" },
+            "failure_pattern_median_tokens": { "type": "number" },
+            "category_median_tokens": { "type": "number" },
+            "text_size_heuristic_tokens": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "injected_tokens": { "type": "number", "minimum": 0 },
+        "net_saved_tokens_estimate": { "type": "number" },
+        "estimate_lower_bound": { "type": ["number", "null"] },
+        "estimate_upper_bound": { "type": ["number", "null"] },
+        "estimation_method": { "type": ["string", "null"] },
+        "estimator_version": { "type": ["string", "null"] },
+        "estimate_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "failure_pattern_id": { "type": ["string", "null"] },
+        "failure_opportunity_state": { "enum": ["applicable", "not_applicable", "unknown"] },
+        "action_changed": { "type": "boolean" },
+        "alternative_executed": { "type": "boolean" },
+        "failure_avoided": { "type": "boolean" },
+        "failure_saved_tokens_estimate": { "type": "number" },
+        "verification_ref_type": { "type": ["string", "null"] },
+        "verification_ref_id": { "type": ["string", "null"] },
+        "estimated_tool_calls_saved": { "type": ["number", "null"] },
+        "estimated_seconds_saved": { "type": ["number", "null"] },
+        "attributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["usage_item_id", "attribution_weight"],
+            "properties": {
+              "usage_item_id": { "type": "string" },
+              "attribution_weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false,
   "allOf": [

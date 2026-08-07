@@ -19,8 +19,97 @@ import {
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 17;
+export const MEMORY_SCHEMA_VERSION = 18;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
+
+const WORK_TYPES = new Set([
+  "implementation", "review", "debug", "proposal",
+  "support", "research", "operations", "other"
+]);
+const AVOIDED_LOOKUP_CATEGORIES = new Set(["source_search", "web_search", "past_context", "none"]);
+
+function classificationRequired() {
+  return process.env.ORGBRAIN_CLASSIFICATION_MODE === "require";
+}
+
+function cloudTelemetryEnabled() {
+  return ["1", "true", "yes", "on"].includes(
+    String(process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY ?? "").trim().toLowerCase()
+  );
+}
+
+const TOKEN_ESTIMATION_PRIORITY = [
+  ["paired_control", "paired_control_tokens"],
+  ["safe_replay", "safe_replay_tokens"],
+  ["avoided_source_or_context_size", "avoided_source_tokens"],
+  ["failure_pattern_historical_median", "failure_pattern_median_tokens"],
+  ["business_category_calibrated_median", "category_median_tokens"],
+  ["text_size_heuristic", "text_size_heuristic_tokens"]
+];
+
+function resolveLocalTokenEstimate(input) {
+  if (input.gross_saved_tokens_estimate !== undefined) {
+    const value = Number(input.gross_saved_tokens_estimate);
+    if (!Number.isFinite(value)) throw new Error("invalid_token_estimate");
+    return {
+      gross: Math.round(value),
+      method: nullableString(input.estimation_method, 128) || "reported"
+    };
+  }
+  const candidates = input.token_estimation_candidates;
+  if (candidates && typeof candidates === "object" && !Array.isArray(candidates)) {
+    for (const [method, field] of TOKEN_ESTIMATION_PRIORITY) {
+      const value = Number(candidates[field]);
+      if (Number.isFinite(value)) return { gross: Math.round(value), method };
+    }
+  }
+  throw new Error("gross_saved_tokens_estimate_required");
+}
+
+function median(values) {
+  if (!values.length) return undefined;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+export function verificationSampled(tenantId, usageId) {
+  let hash = 2166136261;
+  const input = `${tenantId}\0${usageId}`;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 100 < 10;
+}
+
+function validateBusinessClassification(db, tenantId, businessCategoryId, workType) {
+  if (classificationRequired() && !businessCategoryId) throw new Error("business_category_required");
+  if (classificationRequired() && !workType) throw new Error("work_type_required");
+  if (workType && !WORK_TYPES.has(workType)) throw new Error("invalid_work_type");
+  if (!businessCategoryId) return;
+  const category = db.prepare(
+    "SELECT id FROM business_categories WHERE tenant_id = ? AND id = ? AND is_active = 1"
+  ).get(tenantId, businessCategoryId);
+  if (!category) throw new Error("business_category_not_found_or_inactive");
+}
+
+function normalizedIdentifier(value, field, required = false) {
+  if (value === undefined || value === null) {
+    if (required) throw new Error(`${field}_required`);
+    return null;
+  }
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(normalized)) throw new Error(`invalid_${field}`);
+  return normalized;
+}
+
+function normalizedQueryHash(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!/^[a-f0-9]{64}$/i.test(normalized)) throw new Error("invalid_query_hash");
+  return normalized.toLowerCase();
+}
 
 const JSON_COLUMNS = [
   "tags_json",
@@ -34,6 +123,8 @@ const JSON_COLUMNS = [
 const MEMORY_COLUMNS = {
   tenant_id: "TEXT NOT NULL DEFAULT 'default'",
   project_id: "TEXT",
+  business_category_id: "TEXT",
+  work_type: "TEXT",
   kind: "TEXT NOT NULL DEFAULT 'episodic'",
   lifecycle_state: "TEXT NOT NULL DEFAULT 'active'",
   scope_type: "TEXT NOT NULL DEFAULT 'project'",
@@ -121,6 +212,8 @@ function memoryFromRow(row) {
     id: row.id,
     tenant_id: row.tenant_id,
     project_id: row.project_id,
+    business_category_id: row.business_category_id ?? null,
+    work_type: row.work_type ?? null,
     kind: row.kind,
     lifecycle_state: row.lifecycle_state,
     scope_type: row.scope_type,
@@ -228,6 +321,8 @@ function createCanonicalTables(db) {
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL DEFAULT 'default',
       project_id TEXT,
+      business_category_id TEXT,
+      work_type TEXT,
       kind TEXT NOT NULL DEFAULT 'episodic',
       lifecycle_state TEXT NOT NULL DEFAULT 'active',
       scope_type TEXT NOT NULL DEFAULT 'project',
@@ -280,6 +375,8 @@ function createCanonicalTables(db) {
       confidence_score REAL,
       utility_score REAL,
       canonical_key TEXT,
+      business_category_id TEXT,
+      work_type TEXT,
       snapshot_json TEXT NOT NULL,
       content_hash TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -466,6 +563,317 @@ function createCanonicalTables(db) {
   `);
 }
 
+function createV18Tables(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS business_categories (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, slug)
+    );
+    CREATE TABLE IF NOT EXISTS memory_failure_patterns (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      business_category_id TEXT,
+      work_type TEXT,
+      pattern_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      action_fingerprint TEXT,
+      failure_fingerprint TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, pattern_key)
+    );
+    CREATE TABLE IF NOT EXISTS memory_usage_events (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      task_id TEXT,
+      trace_id TEXT,
+      capability TEXT,
+      access_path TEXT NOT NULL,
+      request_source TEXT NOT NULL,
+      query_hash TEXT,
+      requested_business_category_id TEXT,
+      requested_work_type TEXT,
+      retrieval_generation_id TEXT,
+      ranking_profile_id TEXT,
+      verification_sampled INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memory_usage_items (
+      id TEXT PRIMARY KEY,
+      usage_event_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_version INTEGER,
+      rank INTEGER,
+      score REAL,
+      reference_type TEXT NOT NULL,
+      used_state TEXT NOT NULL DEFAULT 'unknown',
+      used_state_source TEXT NOT NULL DEFAULT 'reported',
+      injected_token_estimate INTEGER NOT NULL DEFAULT 0,
+      business_category_id_snapshot TEXT,
+      work_type_snapshot TEXT,
+      quality_category_snapshot TEXT,
+      created_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, usage_event_id, source_type, source_id)
+    );
+    CREATE TABLE IF NOT EXISTS memory_effect_events (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      usage_event_id TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      evidence_level TEXT NOT NULL,
+      supersedes_effect_id TEXT,
+      effect_outcome TEXT NOT NULL,
+      avoided_lookup_categories_json TEXT NOT NULL DEFAULT '[]',
+      gross_saved_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+      injected_tokens INTEGER NOT NULL DEFAULT 0,
+      net_saved_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+      estimate_lower_bound INTEGER,
+      estimate_upper_bound INTEGER,
+      estimation_method TEXT,
+      estimator_version TEXT,
+      estimate_confidence REAL,
+      failure_pattern_id TEXT,
+      failure_opportunity_state TEXT NOT NULL DEFAULT 'unknown',
+      action_changed INTEGER NOT NULL DEFAULT 0,
+      alternative_executed INTEGER NOT NULL DEFAULT 0,
+      failure_avoided INTEGER NOT NULL DEFAULT 0,
+      failure_saved_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+      verification_ref_type TEXT,
+      verification_ref_id TEXT,
+      estimated_tool_calls_saved REAL,
+      estimated_seconds_saved REAL,
+      created_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, idempotency_key)
+    );
+    CREATE TABLE IF NOT EXISTS memory_effect_attributions (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      effect_event_id TEXT NOT NULL,
+      usage_item_id TEXT NOT NULL,
+      attribution_weight REAL NOT NULL,
+      gross_saved_tokens INTEGER NOT NULL DEFAULT 0,
+      net_saved_tokens INTEGER NOT NULL DEFAULT 0,
+      failure_saved_tokens INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, effect_event_id, usage_item_id)
+    );
+    CREATE TABLE IF NOT EXISTS memory_effect_daily_metrics (
+      id TEXT PRIMARY KEY,
+      day TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      project_id_snapshot TEXT,
+      business_category_id_snapshot TEXT,
+      work_type_snapshot TEXT,
+      quality_category_snapshot TEXT,
+      reference_count INTEGER NOT NULL DEFAULT 0,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      effect_reported_count INTEGER NOT NULL DEFAULT 0,
+      positive_count INTEGER NOT NULL DEFAULT 0,
+      neutral_count INTEGER NOT NULL DEFAULT 0,
+      negative_count INTEGER NOT NULL DEFAULT 0,
+      unknown_count INTEGER NOT NULL DEFAULT 0,
+      avoided_source_search_count INTEGER NOT NULL DEFAULT 0,
+      avoided_web_search_count INTEGER NOT NULL DEFAULT 0,
+      avoided_past_context_count INTEGER NOT NULL DEFAULT 0,
+      avoided_none_count INTEGER NOT NULL DEFAULT 0,
+      gross_saved_tokens INTEGER NOT NULL DEFAULT 0,
+      injected_tokens INTEGER NOT NULL DEFAULT 0,
+      net_saved_tokens INTEGER NOT NULL DEFAULT 0,
+      failure_opportunity_count INTEGER NOT NULL DEFAULT 0,
+      failure_avoided_count INTEGER NOT NULL DEFAULT 0,
+      failure_saved_tokens INTEGER NOT NULL DEFAULT 0,
+      verification_sampled_count INTEGER NOT NULL DEFAULT 0,
+      verified_count INTEGER NOT NULL DEFAULT 0,
+      estimator_absolute_error_sum REAL NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memory_telemetry_outbox (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      aggregate_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at INTEGER,
+      last_error_code TEXT,
+      created_at INTEGER NOT NULL,
+      sent_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_ranking_profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      algorithm TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      config_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      retired_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_generations (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      unit_schema_version INTEGER NOT NULL,
+      extractor_name TEXT NOT NULL,
+      extractor_version TEXT NOT NULL,
+      embedding_profile_id TEXT,
+      ranking_profile_id TEXT NOT NULL,
+      config_hash TEXT NOT NULL,
+      baseline_generation_id TEXT,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      activated_at INTEGER,
+      retired_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_generation_assignments (
+      tenant_id TEXT NOT NULL,
+      project_scope_key TEXT NOT NULL DEFAULT '*',
+      active_generation_id TEXT NOT NULL,
+      shadow_generation_id TEXT,
+      shadow_sample_rate REAL NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, project_scope_key)
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_projection_jobs (
+      id TEXT PRIMARY KEY,
+      generation_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      cursor TEXT NOT NULL DEFAULT '',
+      processed_sources INTEGER NOT NULL DEFAULT 0,
+      projected_units INTEGER NOT NULL DEFAULT 0,
+      record_digest TEXT,
+      unit_digest TEXT,
+      state TEXT NOT NULL,
+      started_at INTEGER,
+      updated_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      error_code TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_retrieval_projection_jobs_scope
+    ON retrieval_projection_jobs(generation_id, tenant_id, IFNULL(project_id, ''));
+    CREATE TABLE IF NOT EXISTS retrieval_evaluation_events (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      query_hash TEXT NOT NULL,
+      baseline_generation_id TEXT NOT NULL,
+      candidate_generation_id TEXT NOT NULL,
+      baseline_result_count INTEGER NOT NULL,
+      candidate_result_count INTEGER NOT NULL,
+      overlap_count INTEGER NOT NULL,
+      baseline_empty INTEGER NOT NULL,
+      candidate_empty INTEGER NOT NULL,
+      candidate_degraded INTEGER NOT NULL,
+      baseline_latency_ms REAL NOT NULL,
+      candidate_latency_ms REAL NOT NULL,
+      evidence_tokens INTEGER,
+      projection_lag_ms INTEGER,
+      error_code TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_units (
+      id TEXT PRIMARY KEY,
+      generation_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      project_id TEXT,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      business_category_id TEXT,
+      work_type TEXT,
+      unit_type TEXT NOT NULL,
+      text TEXT NOT NULL,
+      speaker TEXT,
+      event_at INTEGER,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      source_ref_json TEXT,
+      source_span_start INTEGER,
+      source_span_end INTEGER,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      segment_id TEXT,
+      content_hash TEXT NOT NULL,
+      extractor_name TEXT NOT NULL,
+      extractor_version TEXT NOT NULL,
+      extraction_state TEXT NOT NULL DEFAULT 'degraded',
+      degraded_reason TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_unit_embeddings (
+      unit_id TEXT NOT NULL,
+      generation_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      feature_count INTEGER NOT NULL,
+      vector_format TEXT NOT NULL DEFAULT 'sparse-fallback',
+      vector_blob BLOB,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, generation_id, unit_id)
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_unit_features (
+      unit_id TEXT NOT NULL,
+      generation_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      feature_hash INTEGER NOT NULL,
+      weight REAL NOT NULL,
+      PRIMARY KEY(tenant_id, generation_id, unit_id, feature_hash)
+    );
+    CREATE TABLE IF NOT EXISTS retrieval_unit_feature_stats (
+      generation_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      feature_hash INTEGER NOT NULL,
+      document_count INTEGER NOT NULL,
+      PRIMARY KEY(tenant_id, generation_id, feature_hash)
+    );
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO retrieval_ranking_profiles(
+       id, name, algorithm, config_json, config_hash, created_at
+     ) VALUES(?,?,?,?,?,?)`
+  ).run(
+    "rank_default",
+    "default",
+    "reciprocal_rank_fusion",
+    JSON.stringify({ rrf_constant: 60, semantic_weight: 0.9, atomic_weight: 1.2, profile_weight: 1.35, timeline_weight: 1.35 }),
+    "builtin:rank_default:1",
+    Date.now()
+  );
+  db.prepare(
+    `INSERT OR IGNORE INTO retrieval_generations(
+       id, label, unit_schema_version, extractor_name, extractor_version,
+       embedding_profile_id, ranking_profile_id, config_hash,
+       baseline_generation_id, status, created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(
+    "gen_baseline_units", "baseline_units", 1, "retrieval-units", "1",
+    null, "rank_default", "builtin:baseline_units:1", null, "fallback", Date.now()
+  );
+  db.prepare(
+    `INSERT OR IGNORE INTO retrieval_generations(
+       id, label, unit_schema_version, extractor_name, extractor_version,
+       embedding_profile_id, ranking_profile_id, config_hash,
+       baseline_generation_id, status, created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(
+    "gen_structured_context", "structured_context", 2, "retrieval-units", "4",
+    null, "rank_default", "builtin:structured_context:1", "gen_baseline_units", "shadow", Date.now()
+  );
+}
+
 function upgradeLegacyMemoryVersions(db) {
   const columns = tableColumns(db, "memory_versions");
   const definitions = {
@@ -481,6 +889,8 @@ function upgradeLegacyMemoryVersions(db) {
     confidence_score: "REAL",
     utility_score: "REAL",
     canonical_key: "TEXT",
+    business_category_id: "TEXT",
+    work_type: "TEXT",
     snapshot_json: "TEXT",
     content_hash: "TEXT NOT NULL DEFAULT ''"
   };
@@ -518,6 +928,13 @@ function upgradeLegacyMemories(db) {
   const missingHashes = db.prepare("SELECT id, content FROM memories WHERE content_hash = ''").all();
   const updateHash = db.prepare("UPDATE memories SET content_hash = ? WHERE id = ?");
   for (const row of missingHashes) updateHash.run(hashContent(row.content), row.id);
+}
+
+function upgradeMemoryUsageItems(db) {
+  const columns = tableColumns(db, "memory_usage_items");
+  if (!columns.has("used_state_source")) {
+    db.exec("ALTER TABLE memory_usage_items ADD COLUMN used_state_source TEXT NOT NULL DEFAULT 'reported'");
+  }
 }
 
 function rebuildFts(db) {
@@ -575,6 +992,146 @@ function rebuildRetrievalUnitsV4Fts(db) {
     SELECT id, memory_id, tenant_id, text
     FROM memory_retrieval_units_v4
   `);
+}
+
+function rebuildStableRetrievalUnitsFts(db) {
+  db.exec("DROP TABLE IF EXISTS retrieval_units_fts");
+  db.exec(`
+    CREATE VIRTUAL TABLE retrieval_units_fts USING fts5(
+      unit_id UNINDEXED,
+      generation_id UNINDEXED,
+      tenant_id UNINDEXED,
+      text,
+      tokenize = 'unicode61'
+    )
+  `);
+  db.exec(`
+    INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text)
+    SELECT id, generation_id, tenant_id, text
+    FROM retrieval_units
+  `);
+}
+
+function rebuildStableRetrievalFeatureStats(db) {
+  db.prepare("DELETE FROM retrieval_unit_feature_stats").run();
+  db.exec(`
+    INSERT INTO retrieval_unit_feature_stats(generation_id, tenant_id, feature_hash, document_count)
+    SELECT generation_id, tenant_id, feature_hash, COUNT(DISTINCT unit_id)
+    FROM retrieval_unit_features
+    GROUP BY generation_id, tenant_id, feature_hash
+  `);
+}
+
+function deleteStableRetrievalUnits(db, tenantId, sourceId) {
+  const units = db.prepare(
+    "SELECT id, generation_id FROM retrieval_units WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+  ).all(tenantId, sourceId);
+  for (const unit of units) {
+    db.prepare("DELETE FROM retrieval_unit_features WHERE tenant_id = ? AND generation_id = ? AND unit_id = ?")
+      .run(tenantId, unit.generation_id, unit.id);
+    db.prepare("DELETE FROM retrieval_unit_embeddings WHERE tenant_id = ? AND generation_id = ? AND unit_id = ?")
+      .run(tenantId, unit.generation_id, unit.id);
+  }
+  db.prepare("DELETE FROM retrieval_units_fts WHERE tenant_id = ? AND unit_id IN (SELECT id FROM retrieval_units WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?)")
+    .run(tenantId, tenantId, sourceId);
+  db.prepare("DELETE FROM retrieval_units WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?")
+    .run(tenantId, sourceId);
+}
+
+function writeStableRetrievalUnits(db, record, writeFts = true, deleteExisting = true, updateFeatureStats = true) {
+  if (deleteExisting) deleteStableRetrievalUnits(db, record.tenant_id, record.id);
+  if (record.lifecycle_state === "suppressed") return;
+  const insertUnit = db.prepare(
+    `INSERT INTO retrieval_units(
+       id, generation_id, tenant_id, project_id, source_type, source_id,
+       business_category_id, work_type, unit_type, text, speaker, event_at,
+       valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+       metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+       extraction_state, degraded_reason, created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  const insertFts = writeFts
+    ? db.prepare("INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)")
+    : null;
+  const insertFeature = db.prepare(
+    "INSERT INTO retrieval_unit_features(unit_id, generation_id, tenant_id, feature_hash, weight) VALUES(?,?,?,?,?)"
+  );
+  const insertEmbedding = db.prepare(
+    `INSERT INTO retrieval_unit_embeddings(
+       unit_id, generation_id, tenant_id, provider, feature_count, vector_format, vector_blob, updated_at
+     ) VALUES(?,?,?,?,?,?,?,?)`
+  );
+  const generations = [
+    { id: "gen_baseline_units", units: buildRetrievalUnits(record) },
+    { id: "gen_structured_context", units: buildRetrievalUnitsV4(record) }
+  ];
+  for (const generation of generations) {
+    for (const unit of generation.units) {
+      const stableId = `${generation.id}:${unit.id}`;
+      insertUnit.run(
+        stableId,
+        generation.id,
+        unit.tenant_id,
+        unit.project_id,
+        "memory",
+        unit.memory_id,
+        record.business_category_id ?? null,
+        record.work_type ?? null,
+        unit.unit_type,
+        unit.text,
+        unit.speaker,
+        unit.event_at,
+        unit.valid_from,
+        unit.valid_until,
+        unit.source_ref_json,
+        unit.source_span_start,
+        unit.source_span_end,
+        unit.metadata_json ?? "{}",
+        unit.segment_id ?? null,
+        unit.content_hash,
+        unit.extractor,
+        unit.extractor_version,
+        unit.extraction_state,
+        unit.degraded_reason,
+        unit.created_at
+      );
+      if (insertFts) insertFts.run(stableId, generation.id, unit.tenant_id, unit.text);
+      const features = embedLocalText(unit.text);
+      for (const feature of features) {
+        insertFeature.run(stableId, generation.id, unit.tenant_id, feature.feature_hash, feature.weight);
+      }
+      insertEmbedding.run(
+        stableId,
+        generation.id,
+        unit.tenant_id,
+        LOCAL_EMBEDDING_PROVIDER,
+        features.length,
+        "sparse-fallback",
+        null,
+        unit.created_at
+      );
+    }
+  }
+  if (updateFeatureStats) rebuildStableRetrievalFeatureStats(db);
+}
+
+function rebuildStableRetrievalUnits(db) {
+  db.prepare(
+    `DELETE FROM retrieval_unit_features WHERE unit_id IN (
+       SELECT id FROM retrieval_units WHERE source_type = 'memory'
+     )`
+  ).run();
+  db.prepare(
+    `DELETE FROM retrieval_unit_embeddings WHERE unit_id IN (
+       SELECT id FROM retrieval_units WHERE source_type = 'memory'
+     )`
+  ).run();
+  db.prepare("DELETE FROM retrieval_unit_feature_stats").run();
+  db.prepare("DELETE FROM retrieval_units WHERE source_type = 'memory'").run();
+  const rows = db.prepare("SELECT * FROM memories WHERE lifecycle_state != 'suppressed'").all();
+  for (const row of rows) writeStableRetrievalUnits(db, memoryFromRow(row), false, false, false);
+  rebuildStableRetrievalUnitsFts(db);
+  rebuildStableRetrievalFeatureStats(db);
 }
 
 function deleteLocalEmbedding(db, tenantId, memoryId, updateFeatureStats = true) {
@@ -792,6 +1349,8 @@ function wipeMemoryProjections(db, tenantId, memoryId) {
   deleteLocalEmbedding(db, tenantId, memoryId);
   deleteRetrievalUnits(db, tenantId, memoryId);
   deleteRetrievalUnitsV4(db, tenantId, memoryId);
+  deleteStableRetrievalUnits(db, tenantId, memoryId);
+  rebuildStableRetrievalFeatureStats(db);
 }
 
 function writeRetrievalUnitsV4(db, record, writeFts = true, deleteExisting = true) {
@@ -868,6 +1427,8 @@ function addIndexes(db) {
       WHERE external_key IS NOT NULL AND external_key != '';
     CREATE INDEX IF NOT EXISTS idx_memories_tenant_project_updated
       ON memories(tenant_id, project_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memories_business_work
+      ON memories(tenant_id, business_category_id, work_type, lifecycle_state, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memories_lifecycle_updated
       ON memories(tenant_id, lifecycle_state, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_versions_created_v2
@@ -906,6 +1467,26 @@ function addIndexes(db) {
       ON memory_retrieval_units_v4(tenant_id, unit_type, event_at);
     CREATE INDEX IF NOT EXISTS idx_retrieval_unit_feature_v4_lookup
       ON memory_retrieval_unit_features_v4(tenant_id, feature_hash, unit_id);
+    CREATE INDEX IF NOT EXISTS idx_business_categories_tenant_active
+      ON business_categories(tenant_id, is_active, label);
+    CREATE INDEX IF NOT EXISTS idx_memory_usage_events_tenant_created
+      ON memory_usage_events(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_usage_items_source
+      ON memory_usage_items(tenant_id, source_type, source_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_effect_events_usage
+    ON memory_effect_events(tenant_id, usage_event_id, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_effect_events_root
+    ON memory_effect_events(tenant_id, usage_event_id)
+    WHERE supersedes_effect_id IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_effect_events_supersedes
+    ON memory_effect_events(tenant_id, supersedes_effect_id)
+    WHERE supersedes_effect_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_retrieval_units_source
+      ON retrieval_units(generation_id, tenant_id, source_type, source_id, unit_type);
+    CREATE INDEX IF NOT EXISTS idx_retrieval_units_business_work
+      ON retrieval_units(generation_id, tenant_id, business_category_id, work_type, unit_type);
+    CREATE INDEX IF NOT EXISTS idx_retrieval_unit_feature_lookup_stable
+      ON retrieval_unit_features(tenant_id, generation_id, feature_hash, unit_id);
   `);
 }
 
@@ -936,7 +1517,8 @@ function initializeVersionHistory(db) {
       id, memory_id, tenant_id, version, operation, content, summary, tags_json,
       kind, lifecycle_state, scope_type, scope_key, actor_type, actor_id,
       confidence_score, utility_score, canonical_key, snapshot_json, content_hash, created_at
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      , business_category_id, work_type
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   );
   for (const row of rows) {
     const memory = memoryFromRow(row);
@@ -945,7 +1527,8 @@ function initializeVersionHistory(db) {
       row.content, row.summary, row.tags_json, row.kind, row.lifecycle_state,
       row.scope_type, row.scope_key, row.actor_type, row.actor_id,
       row.confidence_score, row.utility_score, row.canonical_key,
-      JSON.stringify(memory), row.content_hash, row.updated_at
+      JSON.stringify(memory), row.content_hash, row.updated_at,
+      row.business_category_id ?? null, row.work_type ?? null
     );
   }
 }
@@ -962,11 +1545,14 @@ function migrateSchema(db) {
     createCanonicalTables(db);
     upgradeLegacyMemories(db);
     upgradeLegacyMemoryVersions(db);
+    createV18Tables(db);
+    upgradeMemoryUsageItems(db);
     addIndexes(db);
     rebuildFts(db);
     rebuildLocalEmbeddings(db);
     rebuildRetrievalUnits(db);
     rebuildRetrievalUnitsV4(db);
+    rebuildStableRetrievalUnits(db);
     initializeVersionHistory(db);
     db.prepare("INSERT OR REPLACE INTO schema_migrations(version, applied_at) VALUES(?,?)").run(
       MEMORY_SCHEMA_VERSION,
@@ -1643,6 +2229,161 @@ function readMode(path) {
   return stat(path).then((info) => info.mode & 0o777);
 }
 
+function utcDay(timestamp) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function dayBounds(day) {
+  const start = Date.parse(`${day}T00:00:00.000Z`);
+  if (!Number.isFinite(start)) throw new Error("day must be YYYY-MM-DD");
+  return { start, end: start + 86_400_000 };
+}
+
+function rebuildMemoryImpactDay(db, tenantId, day) {
+  const { start, end } = dayBounds(day);
+  const rows = db.prepare(
+    `SELECT
+       ui.*, ue.project_id AS usage_project_id, ue.verification_sampled,
+       ee.id AS effect_id, ee.evidence_level, ee.effect_outcome,
+       ee.avoided_lookup_categories_json, ee.failure_opportunity_state,
+       ee.failure_avoided,
+       previous_attribution.gross_saved_tokens AS previous_gross_saved_tokens,
+       ea.gross_saved_tokens AS attributed_gross_saved_tokens,
+       ea.net_saved_tokens AS attributed_net_saved_tokens,
+       ea.failure_saved_tokens AS attributed_failure_saved_tokens
+     FROM memory_usage_items ui
+     JOIN memory_usage_events ue
+       ON ue.tenant_id = ui.tenant_id AND ue.id = ui.usage_event_id
+     LEFT JOIN memory_effect_events ee
+       ON ee.tenant_id = ui.tenant_id
+      AND ee.id = (
+        SELECT candidate.id
+        FROM memory_effect_events candidate
+        WHERE candidate.tenant_id = ui.tenant_id
+          AND candidate.usage_event_id = ui.usage_event_id
+          AND NOT EXISTS (
+            SELECT 1 FROM memory_effect_events child
+            WHERE child.tenant_id = candidate.tenant_id
+              AND child.supersedes_effect_id = candidate.id
+          )
+        ORDER BY candidate.created_at DESC, candidate.id DESC
+        LIMIT 1
+      )
+     LEFT JOIN memory_effect_attributions ea
+       ON ea.tenant_id = ui.tenant_id
+      AND ea.effect_event_id = ee.id
+      AND ea.usage_item_id = ui.id
+     LEFT JOIN memory_effect_events previous
+       ON previous.tenant_id = ee.tenant_id
+      AND previous.id = ee.supersedes_effect_id
+     LEFT JOIN memory_effect_attributions previous_attribution
+       ON previous_attribution.tenant_id = previous.tenant_id
+      AND previous_attribution.effect_event_id = previous.id
+      AND previous_attribution.usage_item_id = ui.id
+     WHERE ui.tenant_id = ? AND ui.created_at >= ? AND ui.created_at < ?`
+  ).all(tenantId, start, end);
+  const groups = new Map();
+  for (const row of rows) {
+    const dimensions = [
+      row.source_type,
+      row.source_id,
+      row.usage_project_id ?? "",
+      row.business_category_id_snapshot ?? "",
+      row.work_type_snapshot ?? "",
+      row.quality_category_snapshot ?? ""
+    ];
+    const key = dimensions.join("\0");
+    const metric = groups.get(key) ?? {
+      source_type: row.source_type,
+      source_id: row.source_id,
+      project_id_snapshot: row.usage_project_id ?? null,
+      business_category_id_snapshot: row.business_category_id_snapshot ?? null,
+      work_type_snapshot: row.work_type_snapshot ?? null,
+      quality_category_snapshot: row.quality_category_snapshot ?? null,
+      reference_count: 0,
+      used_count: 0,
+      effect_reported_count: 0,
+      positive_count: 0,
+      neutral_count: 0,
+      negative_count: 0,
+      unknown_count: 0,
+      avoided_source_search_count: 0,
+      avoided_web_search_count: 0,
+      avoided_past_context_count: 0,
+      avoided_none_count: 0,
+      gross_saved_tokens: 0,
+      injected_tokens: 0,
+      net_saved_tokens: 0,
+      failure_opportunity_count: 0,
+      failure_avoided_count: 0,
+      failure_saved_tokens: 0,
+      verification_sampled_count: 0,
+      verified_count: 0,
+      estimator_absolute_error_sum: 0
+    };
+    metric.reference_count += 1;
+    metric.used_count += row.used_state === "used" ? 1 : 0;
+    metric.verification_sampled_count += Number(row.verification_sampled ?? 0);
+    if (row.effect_id && row.attributed_gross_saved_tokens !== null) {
+      metric.effect_reported_count += 1;
+      metric[`${row.effect_outcome}_count`] += 1;
+      metric.verified_count += row.evidence_level === "verified" && Number(row.verification_sampled ?? 0) === 1 ? 1 : 0;
+      const avoided = parseJson(row.avoided_lookup_categories_json);
+      for (const category of avoided) {
+        const field = `avoided_${category}_count`;
+        if (Object.hasOwn(metric, field)) metric[field] += 1;
+      }
+      metric.gross_saved_tokens += Number(row.attributed_gross_saved_tokens ?? 0);
+      metric.net_saved_tokens += Number(row.attributed_net_saved_tokens ?? 0);
+      metric.injected_tokens += Number(row.attributed_gross_saved_tokens ?? 0) -
+        Number(row.attributed_net_saved_tokens ?? 0);
+      metric.failure_opportunity_count += row.failure_opportunity_state === "applicable" ? 1 : 0;
+      metric.failure_avoided_count += Number(row.failure_avoided ?? 0);
+      metric.failure_saved_tokens += Number(row.attributed_failure_saved_tokens ?? 0);
+      if (row.evidence_level === "verified" && row.previous_gross_saved_tokens !== null) {
+        metric.estimator_absolute_error_sum += Math.abs(
+          Number(row.attributed_gross_saved_tokens ?? 0) -
+          Number(row.previous_gross_saved_tokens ?? 0)
+        );
+      }
+    }
+    groups.set(key, metric);
+  }
+  db.prepare("DELETE FROM memory_effect_daily_metrics WHERE tenant_id = ? AND day = ?").run(tenantId, day);
+  const insert = db.prepare(
+    `INSERT INTO memory_effect_daily_metrics(
+       id, day, tenant_id, source_type, source_id, project_id_snapshot,
+       business_category_id_snapshot, work_type_snapshot, quality_category_snapshot,
+       reference_count, used_count, effect_reported_count,
+       positive_count, neutral_count, negative_count, unknown_count,
+       avoided_source_search_count, avoided_web_search_count,
+       avoided_past_context_count, avoided_none_count,
+       gross_saved_tokens, injected_tokens, net_saved_tokens,
+       failure_opportunity_count, failure_avoided_count, failure_saved_tokens,
+       verification_sampled_count, verified_count, estimator_absolute_error_sum,
+       created_at, updated_at
+     ) VALUES(${Array.from({ length: 31 }, () => "?").join(",")})`
+  );
+  const now = Date.now();
+  for (const [key, metric] of groups) {
+    const id = createHash("sha256").update(`${day}\0${tenantId}\0${key}`).digest("hex");
+    insert.run(
+      id, day, tenantId, metric.source_type, metric.source_id,
+      metric.project_id_snapshot, metric.business_category_id_snapshot,
+      metric.work_type_snapshot, metric.quality_category_snapshot,
+      metric.reference_count, metric.used_count, metric.effect_reported_count,
+      metric.positive_count, metric.neutral_count, metric.negative_count, metric.unknown_count,
+      metric.avoided_source_search_count, metric.avoided_web_search_count,
+      metric.avoided_past_context_count, metric.avoided_none_count,
+      metric.gross_saved_tokens, metric.injected_tokens, metric.net_saved_tokens,
+      metric.failure_opportunity_count, metric.failure_avoided_count, metric.failure_saved_tokens,
+      metric.verification_sampled_count, metric.verified_count,
+      metric.estimator_absolute_error_sum, now, now
+    );
+  }
+  return { day, row_count: groups.size };
+}
+
 export class LocalMemoryStore {
   constructor(dbPath = DEFAULT_LOCAL_DB) {
     this.dbPath = resolve(dbPath);
@@ -1706,7 +2447,13 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_retrieval_units_v4_fts") ||
         !hasTable(db, "memory_retrieval_unit_embeddings_v4") ||
         !hasTable(db, "memory_retrieval_unit_features_v4") ||
-        !hasTable(db, "memory_retrieval_unit_feature_stats_v4")
+        !hasTable(db, "memory_retrieval_unit_feature_stats_v4") ||
+        !hasTable(db, "business_categories") ||
+        !hasTable(db, "memory_usage_events") ||
+        !hasTable(db, "memory_effect_events") ||
+        !hasTable(db, "retrieval_generations") ||
+        !hasTable(db, "retrieval_units") ||
+        !hasTable(db, "retrieval_units_fts")
       ) {
         migrateSchema(db);
       } else {
@@ -1720,6 +2467,845 @@ export class LocalMemoryStore {
 
   open({ readOnly = false } = {}) {
     return new DatabaseSync(this.dbPath, { readOnly });
+  }
+
+  async listBusinessCategories(tenantId, { includeInactive = false } = {}) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return db.prepare(
+        `SELECT id, tenant_id, slug, label, description, is_active, created_at, updated_at
+         FROM business_categories
+         WHERE tenant_id = ? AND (? = 1 OR is_active = 1)
+         ORDER BY label, slug`
+      ).all(tenantId, includeInactive ? 1 : 0);
+    } finally {
+      db.close();
+    }
+  }
+
+  async createBusinessCategory(tenantId, input) {
+    await this.init();
+    const slug = nullableString(input.slug, 64)?.toLowerCase();
+    const label = nullableString(input.label, 160);
+    if (!slug || !/^[a-z0-9][a-z0-9_-]*$/.test(slug)) throw new Error("invalid_business_category_slug");
+    if (!label) throw new Error("business_category_label_required");
+    const now = Date.now();
+    const category = {
+      id: nullableString(input.id, 128) || randomUUID(),
+      tenant_id: tenantId,
+      slug,
+      label,
+      description: nullableString(input.description, 1000),
+      is_active: input.is_active === false ? 0 : 1,
+      created_at: now,
+      updated_at: now
+    };
+    const db = this.open();
+    try {
+      db.prepare(
+        `INSERT INTO business_categories(
+           id, tenant_id, slug, label, description, is_active, created_at, updated_at
+         ) VALUES(?,?,?,?,?,?,?,?)`
+      ).run(...Object.values(category));
+      return category;
+    } finally {
+      db.close();
+    }
+  }
+
+  async updateBusinessCategory(tenantId, categoryId, input) {
+    await this.init();
+    const db = this.open();
+    try {
+      const current = db.prepare(
+        "SELECT * FROM business_categories WHERE tenant_id = ? AND id = ?"
+      ).get(tenantId, categoryId);
+      if (!current) throw new Error("business_category_not_found");
+      const slug = input.slug === undefined ? current.slug : nullableString(input.slug, 64)?.toLowerCase();
+      const label = input.label === undefined ? current.label : nullableString(input.label, 160);
+      if (!slug || !/^[a-z0-9][a-z0-9_-]*$/.test(slug)) throw new Error("invalid_business_category_slug");
+      if (!label) throw new Error("business_category_label_required");
+      const updated = {
+        ...current,
+        slug,
+        label,
+        description: input.description === undefined ? current.description : nullableString(input.description, 1000),
+        is_active: input.is_active === undefined ? current.is_active : input.is_active ? 1 : 0,
+        updated_at: Date.now()
+      };
+      db.prepare(
+        `UPDATE business_categories
+         SET slug = ?, label = ?, description = ?, is_active = ?, updated_at = ?
+         WHERE tenant_id = ? AND id = ?`
+      ).run(updated.slug, updated.label, updated.description, updated.is_active, updated.updated_at, tenantId, categoryId);
+      return updated;
+    } finally {
+      db.close();
+    }
+  }
+
+  async listFailurePatterns(tenantId, { projectId = null } = {}) {
+    await this.init();
+    const db = this.open();
+    try {
+      return db.prepare(
+        `SELECT id, tenant_id, project_id, business_category_id, work_type,
+                pattern_key, label, action_fingerprint, failure_fingerprint,
+                is_active, created_at, updated_at
+         FROM memory_failure_patterns
+         WHERE tenant_id = ? AND (? IS NULL OR project_id = ? OR project_id IS NULL)
+         ORDER BY is_active DESC, updated_at DESC`
+      ).all(tenantId, projectId, projectId);
+    } finally {
+      db.close();
+    }
+  }
+
+  async createFailurePattern(tenantId, input) {
+    await this.init();
+    const db = this.open();
+    try {
+      const patternKey = normalizedIdentifier(input.pattern_key, "pattern_key", true);
+      const label = nullableString(input.label, 240);
+      if (!label) throw new Error("label_required");
+      const businessCategoryId = nullableString(input.business_category_id, 128);
+      const workType = input.work_type ?? null;
+      validateBusinessClassification(db, tenantId, businessCategoryId, workType);
+      const now = Date.now();
+      const pattern = {
+        id: nullableString(input.id, 128) || randomUUID(),
+        tenant_id: tenantId,
+        project_id: nullableString(input.project_id, 128),
+        business_category_id: businessCategoryId,
+        work_type: workType,
+        pattern_key: patternKey,
+        label,
+        action_fingerprint: normalizedIdentifier(input.action_fingerprint, "action_fingerprint"),
+        failure_fingerprint: normalizedIdentifier(input.failure_fingerprint, "failure_fingerprint"),
+        is_active: input.is_active === false ? 0 : 1,
+        created_at: now,
+        updated_at: now
+      };
+      db.prepare(
+        `INSERT INTO memory_failure_patterns(
+           id, tenant_id, project_id, business_category_id, work_type,
+           pattern_key, label, action_fingerprint, failure_fingerprint,
+           is_active, created_at, updated_at
+         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).run(...Object.values(pattern));
+      return pattern;
+    } finally {
+      db.close();
+    }
+  }
+
+  async updateFailurePattern(tenantId, patternId, input) {
+    await this.init();
+    const db = this.open();
+    try {
+      const current = db.prepare(
+        "SELECT * FROM memory_failure_patterns WHERE tenant_id = ? AND id = ?"
+      ).get(tenantId, patternId);
+      if (!current) throw new Error("memory_failure_pattern_not_found");
+      const businessCategoryId = input.business_category_id === undefined
+        ? current.business_category_id
+        : nullableString(input.business_category_id, 128);
+      const workType = input.work_type === undefined ? current.work_type : input.work_type;
+      validateBusinessClassification(db, tenantId, businessCategoryId, workType);
+      const label = input.label === undefined ? current.label : nullableString(input.label, 240);
+      if (!label) throw new Error("invalid_label");
+      const updated = {
+        project_id: input.project_id === undefined ? current.project_id : nullableString(input.project_id, 128),
+        business_category_id: businessCategoryId,
+        work_type: workType,
+        pattern_key: input.pattern_key === undefined ? current.pattern_key : normalizedIdentifier(input.pattern_key, "pattern_key", true),
+        label,
+        action_fingerprint: input.action_fingerprint === undefined ? current.action_fingerprint : normalizedIdentifier(input.action_fingerprint, "action_fingerprint"),
+        failure_fingerprint: input.failure_fingerprint === undefined ? current.failure_fingerprint : normalizedIdentifier(input.failure_fingerprint, "failure_fingerprint"),
+        is_active: input.is_active === undefined ? current.is_active : input.is_active ? 1 : 0,
+        updated_at: Date.now()
+      };
+      db.prepare(
+        `UPDATE memory_failure_patterns SET
+           project_id = ?, business_category_id = ?, work_type = ?, pattern_key = ?,
+           label = ?, action_fingerprint = ?, failure_fingerprint = ?, is_active = ?, updated_at = ?
+         WHERE tenant_id = ? AND id = ?`
+      ).run(...Object.values(updated), tenantId, patternId);
+      return { ...current, ...updated };
+    } finally {
+      db.close();
+    }
+  }
+
+  async updateUsageStates(tenantId, input) {
+    await this.init();
+    const usageEventId = nullableString(input.usage_event_id, 128);
+    if (!usageEventId) throw new Error("usage_event_id_required");
+    if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 128) {
+      throw new Error("usage_state_items_required");
+    }
+    const updates = input.items.map((item) => {
+      const usageItemId = nullableString(item.usage_item_id, 128);
+      if (!usageItemId) throw new Error("usage_item_id_required");
+      if (!["used", "not_used", "unknown"].includes(item.used_state)) throw new Error("invalid_used_state");
+      return { usageItemId, usedState: item.used_state };
+    });
+    if (new Set(updates.map((item) => item.usageItemId)).size !== updates.length) throw new Error("duplicate_usage_item");
+    const db = this.open();
+    try {
+      const event = db.prepare("SELECT created_at FROM memory_usage_events WHERE tenant_id = ? AND id = ?").get(tenantId, usageEventId);
+      if (!event) throw new Error("memory_usage_event_not_found");
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const update = db.prepare(
+          "UPDATE memory_usage_items SET used_state = ?, used_state_source = 'reported' WHERE tenant_id = ? AND usage_event_id = ? AND id = ?"
+        );
+        for (const item of updates) {
+          const result = update.run(item.usedState, tenantId, usageEventId, item.usageItemId);
+          if (result.changes !== 1) throw new Error("memory_usage_item_not_found");
+        }
+        rebuildMemoryImpactDay(db, tenantId, utcDay(event.created_at));
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+      return { usage_event_id: usageEventId, updated_count: updates.length };
+    } finally {
+      db.close();
+    }
+  }
+
+  async recordUsage(input) {
+    await this.init();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const usageId = nullableString(input.id, 128) || randomUUID();
+    const accessPath = ["search", "profile", "context", "direct"].includes(input.access_path)
+      ? input.access_path
+      : "search";
+    const requestSource = ["api", "mcp", "cap_runner", "local"].includes(input.request_source)
+      ? input.request_source
+      : "local";
+    const uniqueItems = new Map();
+    for (const item of Array.isArray(input.items) ? input.items : []) {
+      const key = `${item.source_type}:${item.source_id}`;
+      if (!uniqueItems.has(key)) uniqueItems.set(key, item);
+    }
+    const items = [...uniqueItems.values()];
+    const createdAt = finiteNumber(input.created_at) || Date.now();
+    const db = this.open();
+    try {
+      const existing = db.prepare(
+        "SELECT id, verification_sampled FROM memory_usage_events WHERE tenant_id = ? AND id = ?"
+      ).get(tenantId, usageId);
+      if (existing) {
+        const existingItems = db.prepare(
+          "SELECT id FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
+        ).all(tenantId, usageId);
+        return {
+          usage_id: usageId,
+          usage_item_ids: existingItems.map((item) => item.id),
+          verification_sampled: Boolean(existing.verification_sampled),
+          created: false
+        };
+      }
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.prepare(
+          `INSERT INTO memory_usage_events(
+             id, tenant_id, project_id, task_id, trace_id, capability,
+             access_path, request_source, query_hash,
+             requested_business_category_id, requested_work_type,
+             retrieval_generation_id, ranking_profile_id,
+             verification_sampled, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).run(
+          usageId, tenantId, nullableString(input.project_id, 128),
+          nullableString(input.task_id, 128), nullableString(input.trace_id, 128),
+          nullableString(input.capability, 128), accessPath, requestSource,
+          normalizedQueryHash(input.query_hash), nullableString(input.requested_business_category_id, 128),
+          WORK_TYPES.has(input.requested_work_type) ? input.requested_work_type : null,
+          nullableString(input.retrieval_generation_id, 128),
+          nullableString(input.ranking_profile_id, 128),
+          verificationSampled(tenantId, usageId) ? 1 : 0, createdAt
+        );
+        const insert = db.prepare(
+          `INSERT INTO memory_usage_items(
+             id, usage_event_id, tenant_id, source_type, source_id, source_version,
+             rank, score, reference_type, used_state, used_state_source, injected_token_estimate,
+             business_category_id_snapshot, work_type_snapshot, quality_category_snapshot,
+             created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        );
+        const itemIds = [];
+        for (let index = 0; index < items.length; index += 1) {
+          const item = items[index];
+          if (!["memory", "decision_memory"].includes(item.source_type)) {
+            throw new Error("local_unknown_memory_source_type");
+          }
+          if (item.injected_token_estimate !== undefined && (!Number.isFinite(Number(item.injected_token_estimate)) || Number(item.injected_token_estimate) < 0)) {
+            throw new Error("invalid_injected_token_estimate");
+          }
+          const memory = item.source_type === "memory"
+            ? db.prepare(
+              "SELECT id, current_version, business_category_id, work_type FROM memories WHERE tenant_id = ? AND id = ?"
+            ).get(tenantId, item.source_id)
+            : db.prepare(
+              `SELECT source_id AS id, NULL AS current_version,
+                      business_category_id, work_type
+               FROM retrieval_units
+               WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ?
+               ORDER BY created_at DESC LIMIT 1`
+            ).get(tenantId, item.source_id);
+          if (!memory) throw new Error("memory_source_not_found");
+          const itemId = nullableString(item.id, 128) || randomUUID();
+          itemIds.push(itemId);
+          insert.run(
+            itemId, usageId, tenantId, item.source_type, memory.id,
+            item.source_version ?? memory.current_version ?? null,
+            Number.isInteger(item.rank) ? item.rank : index + 1,
+            finiteNumber(item.score),
+            ["returned", "injected", "direct"].includes(item.reference_type) ? item.reference_type : "returned",
+            ["used", "not_used", "unknown"].includes(item.used_state) ? item.used_state : "unknown",
+            "reported",
+            Math.max(0, Number(item.injected_token_estimate ?? 0)),
+            memory.business_category_id ?? null, memory.work_type ?? null,
+            nullableString(item.quality_category_snapshot, 128), createdAt
+          );
+        }
+        if (input.enqueue_sync === true || cloudTelemetryEnabled()) {
+          const payload = {
+            id: usageId,
+            tenant_id: tenantId,
+            project_id: nullableString(input.project_id, 128),
+            task_id: nullableString(input.task_id, 128),
+            trace_id: nullableString(input.trace_id, 128),
+            capability: nullableString(input.capability, 128),
+            access_path: input.access_path,
+            request_source: input.request_source,
+            query_hash: normalizedQueryHash(input.query_hash),
+            requested_business_category_id: nullableString(input.requested_business_category_id, 128),
+            requested_work_type: input.requested_work_type ?? null,
+            retrieval_generation_id: nullableString(input.retrieval_generation_id, 128),
+            ranking_profile_id: nullableString(input.ranking_profile_id, 128),
+            items: items.map((item, index) => ({
+              id: itemIds[index],
+              source_type: item.source_type,
+              source_id: item.source_id,
+              source_version: finiteNumber(item.source_version),
+              rank: finiteNumber(item.rank),
+              score: finiteNumber(item.score),
+              reference_type: item.reference_type,
+              used_state: item.used_state,
+              injected_token_estimate: Math.max(0, Number(item.injected_token_estimate ?? 0)),
+              quality_category_snapshot: nullableString(item.quality_category_snapshot, 128)
+            })),
+            created_at: createdAt
+          };
+          db.prepare(
+            `INSERT INTO memory_telemetry_outbox(
+               id, tenant_id, event_type, aggregate_id, payload_json,
+               idempotency_key, created_at
+             ) VALUES(?,?,?,?,?,?,?)`
+          ).run(randomUUID(), tenantId, "memory_usage", usageId, JSON.stringify(payload), `usage:${tenantId}:${usageId}`, createdAt);
+        }
+        rebuildMemoryImpactDay(db, tenantId, utcDay(createdAt));
+        db.exec("COMMIT");
+        return {
+          usage_id: usageId,
+          usage_item_ids: itemIds,
+          verification_sampled: verificationSampled(tenantId, usageId),
+          created: true
+        };
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.close();
+    }
+  }
+
+  async recordEffect(input) {
+    await this.init();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const usageId = nullableString(input.usage_event_id, 128);
+    const idempotencyKey = nullableString(input.idempotency_key, 256);
+    if (!usageId) throw new Error("usage_event_id_required");
+    if (!idempotencyKey) throw new Error("idempotency_key_required");
+    const avoided = [...new Set(Array.isArray(input.avoided_lookup_categories) ? input.avoided_lookup_categories : [])];
+    if (input.avoided_lookup_categories !== undefined && !Array.isArray(input.avoided_lookup_categories)) throw new Error("invalid_avoided_lookup_categories");
+    if (avoided.some((value) => !AVOIDED_LOOKUP_CATEGORIES.has(value))) throw new Error("invalid_avoided_lookup_category");
+    if (avoided.includes("none") && avoided.length > 1) throw new Error("avoided_lookup_none_is_exclusive");
+    if (input.evidence_level !== undefined && !["reported", "estimated", "verified", "unverifiable"].includes(input.evidence_level)) throw new Error("invalid_evidence_level");
+    const evidenceLevel = input.evidence_level ?? "reported";
+    if (input.effect_outcome === undefined) throw new Error("effect_outcome_required");
+    if (!["positive", "neutral", "negative", "unknown"].includes(input.effect_outcome)) throw new Error("invalid_effect_outcome");
+    const outcome = input.effect_outcome;
+    if (input.failure_opportunity_state !== undefined && !["applicable", "not_applicable", "unknown"].includes(input.failure_opportunity_state)) throw new Error("invalid_failure_opportunity_state");
+    const opportunity = input.failure_opportunity_state ?? "unknown";
+    const actionChanged = Boolean(input.action_changed);
+    const alternativeExecuted = Boolean(input.alternative_executed);
+    const failureAvoided = Boolean(input.failure_avoided);
+    if (failureAvoided && !(opportunity === "applicable" && actionChanged && alternativeExecuted)) {
+      throw new Error("invalid_failure_avoidance_evidence");
+    }
+    const supersedesEffectId = nullableString(input.supersedes_effect_id, 128);
+    const failurePatternId = nullableString(input.failure_pattern_id, 128);
+    if (evidenceLevel === "verified" && !(input.verification_ref_type && input.verification_ref_id)) {
+      throw new Error("verification_reference_required");
+    }
+    const createdAt = finiteNumber(input.created_at) || Date.now();
+    const effectId = nullableString(input.id, 128) || randomUUID();
+    const db = this.open();
+    try {
+      const existing = db.prepare(
+        "SELECT id FROM memory_effect_events WHERE tenant_id = ? AND idempotency_key = ?"
+      ).get(tenantId, idempotencyKey);
+      if (existing) return { effect_id: existing.id, created: false };
+      const usage = db.prepare(
+        "SELECT id, created_at FROM memory_usage_events WHERE tenant_id = ? AND id = ?"
+      ).get(tenantId, usageId);
+      if (!usage) throw new Error("memory_usage_event_not_found");
+      if (supersedesEffectId) {
+        const superseded = db.prepare(
+          `SELECT id FROM memory_effect_events
+           WHERE tenant_id = ? AND usage_event_id = ? AND id = ?`
+        ).get(tenantId, usageId, supersedesEffectId);
+        if (!superseded) throw new Error("invalid_supersedes_effect_id");
+      }
+      const currentEffect = db.prepare(
+        `SELECT e.id FROM memory_effect_events e
+         WHERE e.tenant_id = ? AND e.usage_event_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM memory_effect_events child
+             WHERE child.tenant_id = e.tenant_id AND child.supersedes_effect_id = e.id
+           )
+         ORDER BY e.created_at DESC, e.id DESC LIMIT 1`
+      ).get(tenantId, usageId);
+      if (currentEffect && supersedesEffectId !== currentEffect.id) throw new Error("effect_supersedes_latest_required");
+      if (!currentEffect && supersedesEffectId) throw new Error("effect_supersedes_latest_required");
+      if (failurePatternId) {
+        const pattern = db.prepare(
+          "SELECT id FROM memory_failure_patterns WHERE tenant_id = ? AND id = ? AND is_active = 1"
+        ).get(tenantId, failurePatternId);
+        if (!pattern) throw new Error("invalid_failure_pattern_id");
+      }
+      if (opportunity === "applicable" && !failurePatternId) throw new Error("failure_pattern_id_required");
+      if (Number(input.failure_saved_tokens_estimate ?? 0) !== 0 && !failureAvoided) {
+        throw new Error("failure_saved_tokens_without_avoidance");
+      }
+      const usageItems = db.prepare(
+        `SELECT id, source_type, source_id, business_category_id_snapshot, injected_token_estimate FROM memory_usage_items
+         WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id`
+      ).all(tenantId, usageId);
+      if (usageItems.length === 0) throw new Error("memory_usage_items_required");
+      const requestedAttributions = Array.isArray(input.attributions) ? input.attributions : [];
+      const usageItemIds = new Set(usageItems.map((item) => item.id));
+      const attributionById = new Map();
+      for (const item of requestedAttributions) {
+        if (!usageItemIds.has(item.usage_item_id)) throw new Error("invalid_usage_item_attribution");
+        const weight = Number(item.attribution_weight);
+        if (!Number.isFinite(weight) || weight <= 0 || weight > 1) throw new Error("invalid_attribution_weight");
+        if (attributionById.has(item.usage_item_id)) throw new Error("duplicate_usage_item_attribution");
+        attributionById.set(item.usage_item_id, weight);
+      }
+      const attributions = usageItems.map((item) => ({
+        usage_item_id: item.id,
+        attribution_weight: attributionById.size > 0
+          ? attributionById.get(item.id) ?? 0
+          : 1 / usageItems.length
+      })).filter((item) => item.attribution_weight > 0);
+      const weightTotal = attributions.reduce((sum, item) => sum + item.attribution_weight, 0);
+      if (Math.abs(weightTotal - 1) > 0.000001) throw new Error("attribution_weights_must_sum_to_one");
+      const estimationCandidates = input.token_estimation_candidates && typeof input.token_estimation_candidates === "object" && !Array.isArray(input.token_estimation_candidates)
+        ? { ...input.token_estimation_candidates }
+        : {};
+      if (input.gross_saved_tokens_estimate === undefined) {
+        let sourceCharacters = 0;
+        for (const item of usageItems) {
+          const row = item.source_type === "memory"
+            ? db.prepare("SELECT length(content) AS chars FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, item.source_id)
+            : db.prepare("SELECT length(text) AS chars FROM retrieval_units WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ? ORDER BY created_at DESC LIMIT 1").get(tenantId, item.source_id);
+          sourceCharacters += Math.max(0, Number(row?.chars ?? 0));
+        }
+        const sourceTokens = Math.max(1, Math.ceil(sourceCharacters / 4));
+        estimationCandidates.text_size_heuristic_tokens ??= sourceTokens;
+        if (avoided.some((category) => category === "source_search" || category === "past_context")) {
+          estimationCandidates.avoided_source_tokens ??= sourceTokens;
+        }
+        if (failurePatternId && estimationCandidates.failure_pattern_median_tokens === undefined) {
+          const rows = db.prepare(
+            `SELECT e.gross_saved_tokens_estimate AS value FROM memory_effect_events e
+             WHERE e.tenant_id = ? AND e.failure_pattern_id = ? AND e.evidence_level IN ('estimated', 'verified')
+               AND NOT EXISTS (
+                 SELECT 1 FROM memory_effect_events child
+                 WHERE child.tenant_id = e.tenant_id AND child.supersedes_effect_id = e.id
+               )
+             ORDER BY e.created_at DESC LIMIT 101`
+          ).all(tenantId, failurePatternId);
+          const value = median(rows.map((row) => Number(row.value)).filter(Number.isFinite));
+          if (value !== undefined) estimationCandidates.failure_pattern_median_tokens = value;
+        }
+        const categoryIds = [...new Set(usageItems.map((item) => item.business_category_id_snapshot).filter(Boolean))];
+        if (categoryIds.length && estimationCandidates.category_median_tokens === undefined) {
+          const rows = db.prepare(
+            `SELECT ea.gross_saved_tokens AS value
+             FROM memory_effect_attributions ea
+             JOIN memory_effect_events e ON e.tenant_id = ea.tenant_id AND e.id = ea.effect_event_id
+             JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
+             WHERE ea.tenant_id = ? AND e.evidence_level IN ('estimated', 'verified')
+               AND ui.business_category_id_snapshot IN (${categoryIds.map(() => "?").join(",")})
+               AND NOT EXISTS (
+                 SELECT 1 FROM memory_effect_events child
+                 WHERE child.tenant_id = e.tenant_id AND child.supersedes_effect_id = e.id
+               )
+             ORDER BY ea.created_at DESC LIMIT 101`
+          ).all(tenantId, ...categoryIds);
+          const value = median(rows.map((row) => Number(row.value)).filter(Number.isFinite));
+          if (value !== undefined) estimationCandidates.category_median_tokens = value;
+        }
+      }
+      const tokenEstimate = resolveLocalTokenEstimate({ ...input, token_estimation_candidates: estimationCandidates });
+      const gross = tokenEstimate.gross;
+      const attributedIds = new Set(attributions.map((item) => item.usage_item_id));
+      if (input.injected_tokens !== undefined && (!Number.isFinite(Number(input.injected_tokens)) || Number(input.injected_tokens) < 0)) {
+        throw new Error("invalid_injected_tokens");
+      }
+      const injected = input.injected_tokens === undefined
+        ? usageItems
+          .filter((item) => attributedIds.has(item.id))
+          .reduce((sum, item) => sum + Math.max(0, Math.round(Number(item.injected_token_estimate ?? 0))), 0)
+        : Math.max(0, Math.round(Number(input.injected_tokens)));
+      const net = gross - injected;
+      if (input.net_saved_tokens_estimate !== undefined && Math.round(Number(input.net_saved_tokens_estimate)) !== net) {
+        throw new Error("net_saved_tokens_mismatch");
+      }
+      if (![gross, injected, net].every(Number.isFinite)) throw new Error("invalid_token_estimate");
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.prepare(
+          `INSERT INTO memory_effect_events(
+             id, tenant_id, usage_event_id, idempotency_key, evidence_level,
+             supersedes_effect_id, effect_outcome, avoided_lookup_categories_json,
+             gross_saved_tokens_estimate, injected_tokens, net_saved_tokens_estimate,
+             estimate_lower_bound, estimate_upper_bound, estimation_method,
+             estimator_version, estimate_confidence, failure_pattern_id,
+             failure_opportunity_state, action_changed, alternative_executed,
+             failure_avoided, failure_saved_tokens_estimate,
+             verification_ref_type, verification_ref_id,
+             estimated_tool_calls_saved, estimated_seconds_saved, created_at
+           ) VALUES(${Array.from({ length: 27 }, () => "?").join(",")})`
+        ).run(
+          effectId, tenantId, usageId, idempotencyKey, evidenceLevel,
+          supersedesEffectId, outcome, JSON.stringify(avoided),
+          gross, injected, net, finiteNumber(input.estimate_lower_bound),
+          finiteNumber(input.estimate_upper_bound), tokenEstimate.method,
+          nullableString(input.estimator_version, 64), finiteNumber(input.estimate_confidence),
+          failurePatternId, opportunity,
+          actionChanged ? 1 : 0, alternativeExecuted ? 1 : 0,
+          failureAvoided ? 1 : 0, Number(input.failure_saved_tokens_estimate ?? 0),
+          nullableString(input.verification_ref_type, 64), nullableString(input.verification_ref_id, 256),
+          finiteNumber(input.estimated_tool_calls_saved), finiteNumber(input.estimated_seconds_saved), createdAt
+        );
+        const insertAttribution = db.prepare(
+          `INSERT INTO memory_effect_attributions(
+             id, tenant_id, effect_event_id, usage_item_id, attribution_weight,
+             gross_saved_tokens, net_saved_tokens, failure_saved_tokens, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?)`
+        );
+        let allocatedGross = 0;
+        let allocatedNet = 0;
+        let allocatedFailure = 0;
+        for (let index = 0; index < attributions.length; index += 1) {
+          const attribution = attributions[index];
+          const last = index === attributions.length - 1;
+          const attributedGross = last ? gross - allocatedGross : Math.round(gross * attribution.attribution_weight);
+          const attributedNet = last ? net - allocatedNet : Math.round(net * attribution.attribution_weight);
+          const failureSaved = Number(input.failure_saved_tokens_estimate ?? 0);
+          const attributedFailure = last ? failureSaved - allocatedFailure : Math.round(failureSaved * attribution.attribution_weight);
+          allocatedGross += attributedGross;
+          allocatedNet += attributedNet;
+          allocatedFailure += attributedFailure;
+          insertAttribution.run(
+            randomUUID(), tenantId, effectId, attribution.usage_item_id,
+            attribution.attribution_weight, attributedGross, attributedNet,
+            attributedFailure, createdAt
+          );
+        }
+        if (supersedesEffectId) {
+          db.prepare(
+            `UPDATE memory_usage_items SET used_state = 'unknown', used_state_source = 'reported'
+             WHERE tenant_id = ? AND usage_event_id = ? AND used_state_source = 'effect'
+               AND id IN (
+                 SELECT usage_item_id FROM memory_effect_attributions
+                 WHERE tenant_id = ? AND effect_event_id = ?
+               )`
+          ).run(tenantId, usageId, tenantId, supersedesEffectId);
+        }
+        if (input.used_state === "used" || outcome !== "unknown") {
+          db.prepare(
+            `UPDATE memory_usage_items SET used_state = 'used', used_state_source = 'effect'
+             WHERE tenant_id = ? AND usage_event_id = ?
+               AND (used_state_source = 'effect' OR used_state = 'unknown')
+               AND id IN (${attributions.map(() => "?").join(",")})`
+          ).run(tenantId, usageId, ...attributions.map((item) => item.usage_item_id));
+        }
+        if (input.enqueue_sync === true || cloudTelemetryEnabled()) {
+          const payload = {
+            id: effectId,
+            tenant_id: tenantId,
+            usage_event_id: usageId,
+            idempotency_key: idempotencyKey,
+            evidence_level: evidenceLevel,
+            supersedes_effect_id: supersedesEffectId,
+            effect_outcome: outcome,
+            avoided_lookup_categories: avoided,
+            gross_saved_tokens_estimate: gross,
+            injected_tokens: injected,
+            net_saved_tokens_estimate: net,
+            estimate_lower_bound: finiteNumber(input.estimate_lower_bound),
+            estimate_upper_bound: finiteNumber(input.estimate_upper_bound),
+            estimation_method: nullableString(input.estimation_method, 128),
+            estimator_version: nullableString(input.estimator_version, 64),
+            estimate_confidence: finiteNumber(input.estimate_confidence),
+            failure_pattern_id: failurePatternId,
+            failure_opportunity_state: opportunity,
+            action_changed: actionChanged,
+            alternative_executed: alternativeExecuted,
+            failure_avoided: failureAvoided,
+            failure_saved_tokens_estimate: Number(input.failure_saved_tokens_estimate ?? 0),
+            verification_ref_type: nullableString(input.verification_ref_type, 64),
+            verification_ref_id: nullableString(input.verification_ref_id, 256),
+            estimated_tool_calls_saved: finiteNumber(input.estimated_tool_calls_saved),
+            estimated_seconds_saved: finiteNumber(input.estimated_seconds_saved),
+            attributions,
+            created_at: createdAt
+          };
+          db.prepare(
+            `INSERT INTO memory_telemetry_outbox(
+               id, tenant_id, event_type, aggregate_id, payload_json,
+               idempotency_key, created_at
+             ) VALUES(?,?,?,?,?,?,?)`
+          ).run(randomUUID(), tenantId, "memory_effect", effectId, JSON.stringify(payload), `effect:${tenantId}:${idempotencyKey}`, createdAt);
+        }
+        rebuildMemoryImpactDay(db, tenantId, utcDay(usage.created_at));
+        db.exec("COMMIT");
+        return { effect_id: effectId, created: true, net_saved_tokens_estimate: net };
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.close();
+    }
+  }
+
+  async rebuildMemoryImpact(tenantId, day = utcDay(Date.now())) {
+    await this.init();
+    const db = this.open();
+    try {
+      return rebuildMemoryImpactDay(db, tenantId, day);
+    } finally {
+      db.close();
+    }
+  }
+
+  async syncTelemetryOutbox({ apiBase, apiKey, limit = 100, fetchImpl = fetch } = {}) {
+    await this.init();
+    if (!cloudTelemetryEnabled()) throw new Error("cloud_memory_sync_not_enabled");
+    const base = nullableString(apiBase, 2048)?.replace(/\/+$/u, "");
+    const key = nullableString(apiKey, 2048);
+    if (!base) throw new Error("ORGBRAIN_API_URL_required");
+    if (!key) throw new Error("ORGBRAIN_API_KEY_required");
+    const db = this.open();
+    const now = Date.now();
+    const rows = db.prepare(
+      `SELECT id, event_type, payload_json, attempt_count
+       FROM memory_telemetry_outbox
+       WHERE sent_at IS NULL AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+       ORDER BY CASE event_type WHEN 'memory_usage' THEN 0 ELSE 1 END, created_at, id
+       LIMIT ?`
+    ).all(now, Math.max(1, Math.min(1000, Number(limit) || 100)));
+    let sent = 0;
+    let failed = 0;
+    try {
+      for (const row of rows) {
+        const endpoint = row.event_type === "memory_usage"
+          ? "/v1/memory-usages"
+          : row.event_type === "memory_effect"
+            ? "/v1/memory-effects"
+            : null;
+        if (!endpoint) {
+          failed += 1;
+          db.prepare(
+            `UPDATE memory_telemetry_outbox
+             SET attempt_count = attempt_count + 1, next_attempt_at = ?, last_error_code = ?
+             WHERE id = ?`
+          ).run(now + 86_400_000, "unsupported_event_type", row.id);
+          continue;
+        }
+        let errorCode = "network_error";
+        try {
+          const response = await fetchImpl(`${base}${endpoint}`, {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-api-key": key },
+            body: row.payload_json
+          });
+          if (!response.ok) {
+            errorCode = `http_${response.status}`;
+            throw new Error(errorCode);
+          }
+          db.prepare(
+            `UPDATE memory_telemetry_outbox
+             SET sent_at = ?, next_attempt_at = NULL, last_error_code = NULL
+             WHERE id = ?`
+          ).run(Date.now(), row.id);
+          sent += 1;
+        } catch (error) {
+          failed += 1;
+          const attempts = Number(row.attempt_count ?? 0) + 1;
+          const delay = Math.min(86_400_000, 1000 * (2 ** Math.min(attempts, 16)));
+          db.prepare(
+            `UPDATE memory_telemetry_outbox
+             SET attempt_count = ?, next_attempt_at = ?, last_error_code = ?
+             WHERE id = ?`
+          ).run(
+            attempts,
+            Date.now() + delay,
+            errorCode === "network_error" && error instanceof Error && error.message.startsWith("http_")
+              ? error.message.slice(0, 64)
+              : errorCode,
+            row.id
+          );
+        }
+      }
+      const pending = db.prepare(
+        "SELECT COUNT(*) AS count FROM memory_telemetry_outbox WHERE sent_at IS NULL"
+      ).get().count;
+      return { attempted: rows.length, sent, failed, pending: Number(pending) };
+    } finally {
+      db.close();
+    }
+  }
+
+  async memoryImpactReport(tenantId, filters = {}) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const groupColumns = {
+        memory: "ui.source_type || ':' || ui.source_id",
+        business_category: "COALESCE(ui.business_category_id_snapshot, 'unclassified')",
+        work_type: "COALESCE(ui.work_type_snapshot, 'unclassified')",
+        project: "COALESCE(ue.project_id, 'unclassified')",
+        day: "date(ui.created_at / 1000, 'unixepoch')"
+      };
+      const groupBy = Object.hasOwn(groupColumns, filters.group_by) ? filters.group_by : "memory";
+      const clauses = ["ui.tenant_id = ?"];
+      const bindings = [tenantId];
+      if (groupBy === "business_category") clauses.push("ui.business_category_id_snapshot IS NOT NULL");
+      for (const [field, value] of [
+        ["ui.source_type", filters.source_type],
+        ["ui.source_id", filters.source_id],
+        ["ui.business_category_id_snapshot", filters.business_category_id],
+        ["ui.work_type_snapshot", filters.work_type],
+        ["date(ui.created_at / 1000, 'unixepoch')", filters.day]
+      ]) {
+        if (value) {
+          clauses.push(`${field} = ?`);
+          bindings.push(value);
+        }
+      }
+      const rows = db.prepare(
+        `WITH latest_effect AS (
+           SELECT e.* FROM memory_effect_events e
+           WHERE e.tenant_id = ? AND NOT EXISTS (
+             SELECT 1 FROM memory_effect_events child
+             WHERE child.tenant_id = e.tenant_id
+               AND child.supersedes_effect_id = e.id
+           )
+         )
+         SELECT ${groupColumns[groupBy]} AS group_key,
+           CASE WHEN ea.usage_item_id IS NOT NULL THEN le.evidence_level ELSE 'unreported' END AS evidence_level,
+           COUNT(DISTINCT ui.usage_event_id) AS reference_count,
+           COUNT(DISTINCT CASE WHEN ui.used_state = 'used' THEN ui.usage_event_id END) AS used_count,
+           COUNT(DISTINCT CASE WHEN ui.used_state = 'not_used' THEN ui.usage_event_id END) AS not_used_count,
+           COUNT(DISTINCT CASE WHEN ui.used_state = 'unknown' THEN ui.usage_event_id END) AS usage_unknown_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL THEN ui.usage_event_id END) AS effect_reported_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.effect_outcome = 'positive' THEN ui.usage_event_id END) AS positive_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.effect_outcome = 'neutral' THEN ui.usage_event_id END) AS neutral_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.effect_outcome = 'negative' THEN ui.usage_event_id END) AS negative_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.effect_outcome = 'unknown' THEN ui.usage_event_id END) AS unknown_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.avoided_lookup_categories_json LIKE '%source_search%' THEN ui.usage_event_id END) AS avoided_source_search_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.avoided_lookup_categories_json LIKE '%web_search%' THEN ui.usage_event_id END) AS avoided_web_search_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.avoided_lookup_categories_json LIKE '%past_context%' THEN ui.usage_event_id END) AS avoided_past_context_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.avoided_lookup_categories_json = '["none"]' THEN ui.usage_event_id END) AS avoided_none_count,
+           COALESCE(SUM(ea.gross_saved_tokens), 0) AS gross_saved_tokens,
+           COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) AS injected_tokens,
+           COALESCE(SUM(ea.net_saved_tokens), 0) AS net_saved_tokens,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.failure_opportunity_state = 'applicable' THEN ui.usage_event_id END) AS failure_opportunity_count,
+           COUNT(DISTINCT CASE WHEN ea.usage_item_id IS NOT NULL AND le.failure_avoided = 1 THEN ui.usage_event_id END) AS failure_avoided_count,
+           COALESCE(SUM(ea.failure_saved_tokens), 0) AS failure_saved_tokens,
+           COUNT(DISTINCT CASE WHEN ue.verification_sampled = 1 THEN ui.usage_event_id END) AS verification_sampled_count,
+           COUNT(DISTINCT CASE WHEN ue.verification_sampled = 1 AND ea.usage_item_id IS NOT NULL AND le.evidence_level = 'verified' THEN ui.usage_event_id END) AS verified_count,
+           SUM(le.estimated_tool_calls_saved * ea.attribution_weight) AS estimated_tool_calls_saved,
+           SUM(le.estimated_seconds_saved * ea.attribution_weight) AS estimated_seconds_saved,
+           COALESCE(SUM(CASE
+             WHEN le.evidence_level = 'verified' AND previous.id IS NOT NULL
+             THEN ABS(COALESCE(ea.gross_saved_tokens, 0) - COALESCE(previous_attribution.gross_saved_tokens, 0))
+             ELSE 0 END), 0) AS estimator_absolute_error_sum
+         FROM memory_usage_items ui
+         JOIN memory_usage_events ue ON ue.tenant_id = ui.tenant_id AND ue.id = ui.usage_event_id
+         LEFT JOIN latest_effect le ON le.tenant_id = ui.tenant_id AND le.usage_event_id = ui.usage_event_id
+         LEFT JOIN memory_effect_attributions ea
+           ON ea.tenant_id = ui.tenant_id AND ea.effect_event_id = le.id AND ea.usage_item_id = ui.id
+         LEFT JOIN memory_effect_events previous
+           ON previous.tenant_id = le.tenant_id AND previous.id = le.supersedes_effect_id
+         LEFT JOIN memory_effect_attributions previous_attribution
+           ON previous_attribution.tenant_id = previous.tenant_id
+          AND previous_attribution.effect_event_id = previous.id
+          AND previous_attribution.usage_item_id = ui.id
+         WHERE ${clauses.join(" AND ")}
+         GROUP BY group_key, CASE WHEN ea.usage_item_id IS NOT NULL THEN le.evidence_level ELSE 'unreported' END
+         ORDER BY group_key, evidence_level`
+      ).all(tenantId, ...bindings);
+      const rankRows = db.prepare(
+        `SELECT rank, COUNT(DISTINCT usage_event_id) AS reference_count,
+                COUNT(DISTINCT CASE WHEN used_state = 'used' THEN usage_event_id END) AS used_count,
+                COUNT(DISTINCT CASE WHEN used_state = 'not_used' THEN usage_event_id END) AS not_used_count,
+                COUNT(DISTINCT CASE WHEN used_state = 'unknown' THEN usage_event_id END) AS usage_unknown_count
+         FROM memory_usage_items
+         WHERE tenant_id = ? AND rank IS NOT NULL
+         GROUP BY rank ORDER BY rank`
+      ).all(tenantId);
+      return {
+        tenant_id: tenantId,
+        group_by: groupBy,
+        unclassified_excluded: groupBy === "business_category",
+        groups: rows.map((row) => ({
+          ...row,
+          utilization_rate: row.reference_count ? row.used_count / row.reference_count : null,
+          positive_effect_rate: row.used_count ? row.positive_count / row.used_count : null,
+          negative_effect_rate: row.used_count ? row.negative_count / row.used_count : null,
+          failure_avoidance_rate: row.failure_opportunity_count
+            ? row.failure_avoided_count / row.failure_opportunity_count
+            : null,
+          verification_coverage: row.verification_sampled_count
+            ? row.verified_count / row.verification_sampled_count
+            : null,
+          net_saved_tokens_per_1000_injected: row.injected_tokens
+            ? row.net_saved_tokens * 1000 / row.injected_tokens
+            : null
+        })),
+        rank_utilization: rankRows.map((row) => ({
+          ...row,
+          utilization_rate: row.reference_count ? row.used_count / row.reference_count : null
+        }))
+      };
+    } finally {
+      db.close();
+    }
   }
 
   async capture(input) {
@@ -1759,6 +3345,7 @@ export class LocalMemoryStore {
         rebuildLocalEmbeddings(db);
         rebuildRetrievalUnits(db);
         rebuildRetrievalUnitsV4(db);
+        rebuildStableRetrievalUnits(db);
         db.exec("COMMIT");
         return results;
       } catch (error) {
@@ -1802,6 +3389,7 @@ export class LocalMemoryStore {
       },
       existing ? memoryFromRow(existing) : null
     );
+    validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
     this.writeRecord(db, record, Boolean(existing), updateFeatureStats, writeProjections);
     this.writeVersion(db, record, "capture");
     return {
@@ -1843,12 +3431,44 @@ export class LocalMemoryStore {
       const current = db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, memoryId);
       if (!current) throw new Error(`memory not found: ${memoryId}`);
       const version = Number(current.current_version || 1) + 1;
+      const affectedUsageIds = db.prepare(
+        "SELECT DISTINCT usage_event_id FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+      ).all(tenantId, memoryId).map((row) => row.usage_event_id);
       db.exec("BEGIN IMMEDIATE");
       try {
         db.prepare(
           "INSERT INTO memory_deletions(id, tenant_id, memory_id, actor_type, actor_id, deleted_at) VALUES(?,?,?,?,?,?)"
         ).run(randomUUID(), tenantId, memoryId, actor.actor_type ?? null, actor.actor_id ?? null, Date.now());
         wipeMemoryProjections(db, tenantId, memoryId);
+        db.prepare(
+          `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND usage_item_id IN (
+             SELECT id FROM memory_usage_items
+             WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
+           )`
+        ).run(tenantId, tenantId, memoryId);
+        db.prepare(
+          "DELETE FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+        ).run(tenantId, memoryId);
+        for (const usageId of affectedUsageIds) {
+          db.prepare(
+            "DELETE FROM memory_telemetry_outbox WHERE tenant_id = ? AND (aggregate_id = ? OR json_extract(payload_json, '$.usage_event_id') = ?)"
+          ).run(tenantId, usageId, usageId);
+          const remaining = db.prepare(
+            "SELECT 1 FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? LIMIT 1"
+          ).get(tenantId, usageId);
+          if (!remaining) {
+            db.prepare(
+              `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND effect_event_id IN (
+                 SELECT id FROM memory_effect_events WHERE tenant_id = ? AND usage_event_id = ?
+               )`
+            ).run(tenantId, tenantId, usageId);
+            db.prepare("DELETE FROM memory_effect_events WHERE tenant_id = ? AND usage_event_id = ?").run(tenantId, usageId);
+            db.prepare("DELETE FROM memory_usage_events WHERE tenant_id = ? AND id = ?").run(tenantId, usageId);
+          }
+        }
+        db.prepare(
+          "DELETE FROM memory_effect_daily_metrics WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+        ).run(tenantId, memoryId);
         db.prepare(
           "DELETE FROM memory_edges WHERE tenant_id = ? AND (from_memory_id = ? OR to_memory_id = ?)"
         ).run(tenantId, memoryId, memoryId);
@@ -1881,6 +3501,7 @@ export class LocalMemoryStore {
         },
         current
       );
+      validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
       db.exec("BEGIN IMMEDIATE");
       try {
         this.writeRecord(db, record, true);
@@ -1902,6 +3523,10 @@ export class LocalMemoryStore {
     if (!content) throw new Error("content must not be empty");
     const tenantId = nullableString(input.tenant_id, 128) || "default";
     const projectId = nullableString(input.project_id, 128);
+    const businessCategoryId = nullableString(input.business_category_id, 128) ?? fallback?.business_category_id ?? null;
+    const workType = WORK_TYPES.has(input.work_type)
+      ? input.work_type
+      : fallback?.work_type ?? null;
     const kind = [
       "episodic",
       "semantic",
@@ -1927,6 +3552,8 @@ export class LocalMemoryStore {
       id: nullableString(input.id, 128) || fallback?.id || randomUUID(),
       tenant_id: tenantId,
       project_id: projectId,
+      business_category_id: businessCategoryId,
+      work_type: workType,
       kind,
       lifecycle_state: lifecycleState,
       scope_type: scopeType,
@@ -1965,7 +3592,7 @@ export class LocalMemoryStore {
 
   writeRecord(db, record, exists, updateFeatureStats = true, writeProjections = true) {
     const columns = [
-      "id", "tenant_id", "project_id", "kind", "lifecycle_state", "scope_type", "scope_key", "content",
+      "id", "tenant_id", "project_id", "business_category_id", "work_type", "kind", "lifecycle_state", "scope_type", "scope_key", "content",
       "summary", "tags_json", "entities_json", "source", "source_refs_json", "external_key", "actor_type",
       "actor_id", "created_at", "updated_at", "valid_from", "valid_until", "confidence_score", "utility_score",
       "content_hash", "current_version", "rationale", "evidence_json", "conflicts_json", "permissions_json",
@@ -2003,6 +3630,7 @@ export class LocalMemoryStore {
       writeLocalEmbedding(db, record, updateFeatureStats);
       writeRetrievalUnits(db, record, updateFeatureStats);
       writeRetrievalUnitsV4(db, record);
+      writeStableRetrievalUnits(db, record);
     }
   }
 
@@ -2012,7 +3640,8 @@ export class LocalMemoryStore {
         id, memory_id, tenant_id, version, operation, content, summary, tags_json,
         kind, lifecycle_state, scope_type, scope_key, actor_type, actor_id,
         confidence_score, utility_score, canonical_key, snapshot_json, content_hash, created_at
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        , business_category_id, work_type
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       randomUUID(),
       record.id,
@@ -2041,7 +3670,9 @@ export class LocalMemoryStore {
         permissions_json: json(record.permissions)
       })),
       record.content_hash,
-      record.updated_at
+      record.updated_at,
+      record.business_category_id,
+      record.work_type
     );
   }
 
@@ -2058,6 +3689,8 @@ export class LocalMemoryStore {
   async search({
     tenant_id: tenantId,
     project_id: projectId = null,
+    business_category_id: businessCategoryId = null,
+    work_type: workType = null,
     query,
     limit = 10,
     minimum_total_score: minimumTotalScoreInput = null,
@@ -2081,7 +3714,7 @@ export class LocalMemoryStore {
         ) {
           throw new Error("minimum_total_score must be a non-negative finite number");
         }
-        return (searchMode === "hybrid_v4" ? searchRetrievalUnitsV4 : searchRetrievalUnitsV3)(db, {
+        const results = (searchMode === "hybrid_v4" ? searchRetrievalUnitsV4 : searchRetrievalUnitsV3)(db, {
           tenantId,
           projectId,
           query,
@@ -2091,6 +3724,10 @@ export class LocalMemoryStore {
           principalId,
           at
         });
+        return results.filter(({ memory }) =>
+          (businessCategoryId === null || memory.business_category_id === businessCategoryId) &&
+          (workType === null || memory.work_type === workType)
+        );
       } finally {
         db.close();
       }
@@ -2242,6 +3879,8 @@ export class LocalMemoryStore {
       return [...rowsById.values()]
         .filter((row) =>
           (projectId === null || row.project_id === projectId) &&
+          (businessCategoryId === null || row.business_category_id === businessCategoryId) &&
+          (workType === null || row.work_type === workType) &&
           (include_suppressed || row.lifecycle_state !== "suppressed") &&
           (row.valid_from === null || row.valid_from <= at) &&
           (row.valid_until === null || row.valid_until > at)
@@ -2304,6 +3943,8 @@ export class LocalMemoryStore {
   async retrieveContext({
     tenant_id: tenantId,
     project_id: projectId = null,
+    business_category_id: businessCategoryId = null,
+    work_type: workType = null,
     query,
     limit = 50,
     top_k = 5,
@@ -2317,6 +3958,8 @@ export class LocalMemoryStore {
     const results = await this.search({
       tenant_id: tenantId,
       project_id: projectId,
+      business_category_id: businessCategoryId,
+      work_type: workType,
       query,
       limit: Math.max(safeTopK, Math.min(50, Number(limit) || 50)),
       principal_id: principalId,
@@ -2339,8 +3982,9 @@ export class LocalMemoryStore {
         const units = db.prepare(
           `SELECT unit_type, speaker, text, event_at, source_ref_json,
                   source_span_start, source_span_end, metadata_json, extraction_state
-           FROM memory_retrieval_units_v4
-           WHERE tenant_id = ? AND memory_id = ?
+           FROM retrieval_units
+           WHERE generation_id = 'gen_structured_context'
+             AND tenant_id = ? AND source_type = 'memory' AND source_id = ?
            ORDER BY
              CASE unit_type
                WHEN 'atomic' THEN 0 WHEN 'profile' THEN 1 WHEN 'timeline' THEN 2
@@ -2437,8 +4081,38 @@ export class LocalMemoryStore {
               : multiEvidence
                 ? "multi_session"
                 : "evidence";
+      const usage = await this.recordUsage({
+        tenant_id: tenantId,
+        project_id: projectId,
+        capability: "memory_retrieve_context",
+        access_path: "context",
+        request_source: "local",
+        requested_business_category_id: businessCategoryId,
+        requested_work_type: workType,
+        items: evidence.map((item, index) => ({
+          source_type: "memory",
+          source_id: item.memory_id,
+          rank: index + 1,
+          score: item.score,
+          reference_type: "injected",
+          used_state: "unknown",
+          injected_token_estimate: Math.ceil(item.text.length / 4)
+        }))
+      });
       return {
         results,
+        meta: {
+          usage_id: usage.usage_id,
+          verification_sampled: usage.verification_sampled,
+          retrieval: {
+            generation_id: "gen_structured_context",
+            unit_schema_version: "2",
+            extractor_name: "local-structured-projector",
+            extractor_version: "4",
+            ranking_profile_id: "rank_default",
+            embedding_profile_id: "local-sparse-v1"
+          }
+        },
         evidence_bundle: {
           query_at: at,
           token_budget: safeTokenBudget,

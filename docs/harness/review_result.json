@@ -1,0 +1,23 @@
+{
+  "summary": "Independent reviewer and verifier passed the final diff with no remaining blocking findings.",
+  "artifact_refs": [
+    "docs/harness/review.json",
+    "docs/harness/test_result.json"
+  ],
+  "decision_refs": [
+    "docs/harness/implementation_plan.json"
+  ],
+  "evidence": [
+    {
+      "type": "review",
+      "ref": "docs/harness/review.json"
+    },
+    {
+      "type": "test",
+      "ref": "docs/harness/test_result.json"
+    }
+  ],
+  "residual_risks": [
+    "Production D1 migration, real-data backfill, shadow observation, assignment switch, and deployment were not run."
+  ]
+}

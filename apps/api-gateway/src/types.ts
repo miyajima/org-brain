@@ -36,6 +36,9 @@ export type Env = {
   HYBRID_V4_SHADOW_SAMPLE_RATE?: string;
   HYBRID_V3_CANARY_SAMPLE_RATE?: string;
   HYBRID_V4_CANARY_SAMPLE_RATE?: string;
+  MEMORY_CLASSIFICATION_MODE?: "observe" | "require";
+  RETRIEVAL_GENERATION_ROUTING?: "legacy" | "observe" | "enforce";
+  RETRIEVAL_OPERATOR_PRINCIPALS_JSON?: string;
   GEMINI_API_KEY?: string;
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;

@@ -51,7 +51,9 @@ async function workspaceScope(cwdInput, env) {
   });
   return {
     tenantId,
-    projectId: mapped?.project_id ?? (path.basename(cwd) || null)
+    projectId: mapped?.project_id ?? (path.basename(cwd) || null),
+    businessCategoryId: mapped?.business_category_id ?? null,
+    workType: mapped?.default_work_type ?? null
   };
 }
 
@@ -68,6 +70,8 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   const results = await store.search({
     tenant_id: scope.tenantId,
     project_id: scope.projectId,
+    business_category_id: scope.businessCategoryId,
+    work_type: scope.workType,
     query: prompt,
     limit: MAX_RESULTS,
     minimum_total_score: MIN_TOTAL_SCORE,

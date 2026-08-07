@@ -1,23 +1,23 @@
 {
-  "summary": "Existing tests cover both divergent classifiers and their Cloud and Node consumers; add parity tests and run focused suites before the manifest full gate.",
+  "summary": "The repository has Vitest API suites, Node Local SQLite suites, schema parity tests, retrieval benchmark suites, and manifest-backed typecheck, test, lint, and build commands.",
   "artifact_refs": [
-    "scripts/memory-quality.test.mjs",
-    "packages/shared/test/memory-quality.test.ts",
-    "apps/cap-runner/test/memory-maintenance.test.ts",
-    "apps/api-gateway/test/memory-service.test.ts"
+    "apps/api-gateway/test/memory-service.test.ts",
+    "apps/api-gateway/test/context-engine-service.test.ts",
+    "apps/api-gateway/test/mcp-tools.test.ts",
+    "scripts/local-memory.test.mjs",
+    "scripts/schema-parity.test.mjs"
   ],
   "decision_refs": [
-    "add cross-runtime parity coverage for the canonical classifier",
-    "run recursive typecheck, tests, lint, and build"
+    "docs/harness/plan.json"
   ],
   "evidence": [
     {
       "type": "artifact",
-      "ref": "docs/harness/context_tests.md"
+      "ref": "/Users/0300815938/projects/sie/pr-team-harness/repos/org-brain.toml"
     }
   ],
   "residual_risks": [
-    "Production D1 data will not be mutated during validation",
-    "A remote dry-run is needed to prove Cloud and operator assessment convergence on current data"
+    "Production shadow duration and traffic thresholds cannot be proven by local tests.",
+    "No production D1 mutation or Cloudflare deployment is authorized."
   ]
 }

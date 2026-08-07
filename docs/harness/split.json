@@ -1,12 +1,12 @@
 {
-  "summary": "Keep implementation as one serial task because the shared runtime move, typed facade, compatibility wrapper, and parity tests touch one dependency seam and require one integration owner.",
+  "summary": "Keep one implementation owner because migrations, shared contracts, Cloud services, Local storage, MCP, and documentation overlap. Execute in four ordered slices: schema/types, Cloud APIs, Local parity/tooling, then tests/docs/rollout review.",
   "artifact_refs": [
     "docs/harness/tasks.json",
-    "docs/harness/plan.json"
+    "docs/harness/implementation_plan.json"
   ],
   "decision_refs": [
-    "do not split the simple implementation task",
-    "preserve a single writer across the shared classifier seam"
+    "single writer for all repository changes",
+    "legacy retrieval projections remain read-compatible during migration"
   ],
   "evidence": [
     {
@@ -15,6 +15,6 @@
     }
   ],
   "residual_risks": [
-    "Focused tests must cover both Node ESM and Cloud TypeScript consumers before integration is considered complete"
+    "The single implementation task is large but avoids conflicting schema and API edits."
   ]
 }

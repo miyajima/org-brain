@@ -215,11 +215,13 @@ describe("hook-memory-bridge promotion", () => {
     expect(selected).toBe("client-workspace");
     const saved = JSON.parse(await readFile(file, "utf8"));
     expect(saved).toEqual({
-      version: 1,
+      version: 2,
       workspaces: {
         "/tmp/workspaces/org-brain": {
           tenant_id: "tenant-a",
-          project_id: "client-workspace"
+          project_id: "client-workspace",
+          business_category_id: null,
+          default_work_type: null
         }
       }
     });
@@ -256,7 +258,9 @@ describe("hook-memory-bridge promotion", () => {
     const saved = JSON.parse(await readFile(file, "utf8"));
     expect(saved.workspaces["/tmp/workspaces/demo-app"]).toEqual({
       tenant_id: "tenant-a",
-      project_id: "demo-app"
+      project_id: "demo-app",
+      business_category_id: null,
+      default_work_type: null
     });
   });
 

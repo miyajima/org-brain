@@ -1,0 +1,38 @@
+{
+  "summary": "All manifest verification commands passed after the final fixes. Independent-review follow-ups added scope-specific active-assignment gates, failed-backfill reset enforcement, direct stable-backfill and FTS coverage, ranking-profile RRF application, idempotent late-rollup repair, NULL-project job uniqueness, superseding-attribution, hash-boundary, and stable-local-context coverage.",
+  "artifact_refs": [
+    "apps/api-gateway/test/memory-impact-service.test.ts",
+    "scripts/local-memory.test.mjs",
+    "scripts/schema-parity.test.mjs",
+    "packages/shared/test/memory-impact.test.ts",
+    "apps/api-gateway/test/retrieval-generation-service.test.ts"
+  ],
+  "decision_refs": [
+    "docs/harness/implementation_plan.json"
+  ],
+  "evidence": [
+    {
+      "type": "test",
+      "ref": "pnpm test: passed (Node 84 assertions, script 96, API 87, shared 28, cap-runner 23, org-router 2, all workspace suites); a subsequent API rerun also passed after one transient CORS timeout"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm lint: passed"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm typecheck: passed"
+    },
+    {
+      "type": "test",
+      "ref": "pnpm build: passed; all Astro and Wrangler dry-run builds completed after sandbox escalation"
+    },
+    {
+      "type": "test",
+      "ref": "git diff --check: passed"
+    }
+  ],
+  "residual_risks": [
+    "No production D1 migration or credentialed live smoke was run because deployment was not requested."
+  ]
+}

@@ -14,6 +14,7 @@ checked.
 - tenant, project, group, and principal authorization data
 - API, MCP, OIDC, and service credentials
 - backups, exports, indexes, caches, and audit events
+- usage/effect attribution, failure-pattern fingerprints, and verification references
 
 ## Trust boundaries
 
@@ -37,6 +38,9 @@ an actor or principal supplied in the request body.
 | Index resurrection after deletion | Delete from FTS, vectors, caches, exports, and edges before acknowledging; retain only a content-free tombstone |
 | Backup disclosure | Private file modes, encrypted storage guidance, scoped restore access, and restore verification |
 | Audit tampering | Append-only, hash-chained audit records with protected retention |
+| Telemetry leakage | Store query hashes and normalized identifiers only; never store raw prompts, queries, or commands in impact telemetry |
+| Cross-tenant polymorphic reference | Validate source existence and tenant ownership in the service before writing retrieval or usage items |
+| Inflated effectiveness claims | Keep evidence levels separate, require attribution weights to total 1.0, retain negative net savings, and sample verification deterministically |
 | Availability loss | Verified backups, restore drills, bounded queues, DLQ replay, and documented RPO/RTO |
 
 ## Local-mode controls in 0.1
@@ -49,6 +53,8 @@ an actor or principal supplied in the request body.
 - loopback-only HTTP serving and no external network requests
 - hard delete removes authoritative records, versions, edges, and FTS rows while
   retaining only a content-free tombstone
+- privacy purge removes source-linked usage items, effect attributions, and
+  rebuildable daily metrics without storing raw prompt/query/command bodies
 
 ## Implemented organization controls
 

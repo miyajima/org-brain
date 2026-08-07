@@ -1,7 +1,10 @@
-import { HttpError, collapseWhitespace, ulid } from "@org-brain/shared";
+import { HttpError, collapseWhitespace, sha256, ulid, type MemoryWorkType } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
+import { validateBusinessClassification } from "./business-category-service";
+import { recordMemoryUsage } from "./memory-impact-service";
+import { resolveRetrievalGenerationAssignment } from "./retrieval-generation-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_TOKENS = 6000;
@@ -77,6 +80,8 @@ type DecisionMemoryRow = {
   confirmed_at: number | null;
   created_at: number;
   updated_at: number;
+  business_category_id: string | null;
+  work_type: MemoryWorkType | null;
 };
 
 type DecisionMemory = {
@@ -105,6 +110,8 @@ type DecisionMemory = {
   confirmedAt: number | null;
   createdAt: number;
   updatedAt: number;
+  businessCategoryId: string | null;
+  workType: MemoryWorkType | null;
 };
 
 type DecisionMemoryVersionRow = {
@@ -181,6 +188,8 @@ type ContextEnrichRequest = {
   authority_scoring?: boolean;
   verificationView?: boolean;
   verification_view?: boolean;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
 };
 
 type DecisionMemoryCreateRequest = {
@@ -218,6 +227,8 @@ type DecisionMemoryCreateRequest = {
   confirmation_state?: ConfirmationState;
   confirmationNote?: string | null;
   confirmation_note?: string | null;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
 };
 
 type DecisionMemorySearchRequest = {
@@ -249,6 +260,10 @@ type DecisionMemorySearchRequest = {
   authority_scoring?: boolean;
   verificationView?: boolean;
   verification_view?: boolean;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
+  generation_id?: string | null;
+  ranking_profile_id?: string | null;
 };
 
 type DecisionMemoryReviseRequest = Partial<DecisionMemoryCreateRequest> & {
@@ -277,6 +292,7 @@ type DecisionMemoryConfirmRequest = {
 
 type PrincipalIdentityOptions = {
   principal?: string | null;
+  recordUsage?: boolean;
 };
 
 function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
@@ -446,6 +462,8 @@ function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
     confirmedAt: row.confirmed_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+    , businessCategoryId: row.business_category_id ?? null
+    , workType: row.work_type ?? null
   };
 }
 
@@ -730,8 +748,138 @@ function parseEnrichRequest(rawBody: unknown, principal?: string | null) {
     debugScores: parseOptionalBoolean(body.debugScores ?? body.debug_scores, "debugScores", false),
     includeProvenance: parseOptionalBoolean(body.includeProvenance ?? body.include_provenance, "includeProvenance", false),
     authorityScoring: parseOptionalBoolean(body.authorityScoring ?? body.authority_scoring, "authorityScoring", false),
-    verificationView: parseOptionalBoolean(body.verificationView ?? body.verification_view, "verificationView", false)
+    verificationView: parseOptionalBoolean(body.verificationView ?? body.verification_view, "verificationView", false),
+    businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
+    workType: body.work_type ?? null
   };
+}
+
+type DecisionRetrievalGeneration = {
+  id: string;
+  unit_schema_version: number;
+  extractor_name: string;
+  extractor_version: string;
+  embedding_profile_id: string | null;
+  ranking_profile_id: string;
+  ranking_algorithm: string;
+  ranking_config: Record<string, number>;
+  shadow_generation_id: string | null;
+  shadow_sample_rate: number;
+};
+
+function parseRankingConfig(raw: string): Record<string, number> {
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(value).filter((entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isFinite(entry[1])
+      )
+    );
+  } catch {
+    throw new HttpError(500, "invalid_ranking_profile_config", "ranking profile config is invalid");
+  }
+}
+
+function shouldRunDecisionShadow(rate: number, sampleKey: string) {
+  if (rate <= 0) return false;
+  if (rate >= 1) return true;
+  let hash = 2166136261;
+  for (let index = 0; index < sampleKey.length; index += 1) {
+    hash ^= sampleKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0x1_0000_0000 < rate;
+}
+
+async function resolveDecisionRetrievalGeneration(
+  env: Env,
+  request: ReturnType<typeof parseSearchDecisionRequest>
+): Promise<DecisionRetrievalGeneration | null> {
+  if (
+    !request.generationId &&
+    !request.rankingProfileId &&
+    (!env.RETRIEVAL_GENERATION_ROUTING || env.RETRIEVAL_GENERATION_ROUTING === "legacy")
+  ) {
+    return null;
+  }
+  try {
+    const assignment = await resolveRetrievalGenerationAssignment(env, request.tenantId, request.projectId);
+    const generationId = request.generationId ?? assignment.active_generation_id;
+    if (generationId !== assignment.active_generation_id && generationId !== assignment.shadow_generation_id) {
+      throw new HttpError(403, "generation_not_assigned", "requested generation is not assigned to tenant/project");
+    }
+    const generationRow = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT g.id, g.unit_schema_version, g.extractor_name, g.extractor_version,
+              g.embedding_profile_id, g.ranking_profile_id,
+              p.algorithm AS ranking_algorithm, p.config_json AS ranking_config_json
+       FROM retrieval_generations g
+       JOIN retrieval_ranking_profiles p ON p.id = g.ranking_profile_id AND p.retired_at IS NULL
+       WHERE g.id = ?`
+    ).bind(generationId).first<Omit<DecisionRetrievalGeneration, "ranking_config" | "shadow_generation_id" | "shadow_sample_rate"> & {
+      ranking_config_json: string;
+    }>();
+    if (!generationRow) throw new HttpError(404, "retrieval_generation_not_found", "generation or ranking profile not found");
+    const generation: DecisionRetrievalGeneration = {
+      ...generationRow,
+      ranking_config: parseRankingConfig(generationRow.ranking_config_json),
+      shadow_generation_id: null,
+      shadow_sample_rate: 0
+    };
+    if (request.rankingProfileId) {
+      const ranking = await env.OPEN_BRAIN_DB.prepare(
+        "SELECT id, algorithm, config_json FROM retrieval_ranking_profiles WHERE id = ? AND retired_at IS NULL"
+      ).bind(request.rankingProfileId).first<{ id: string; algorithm: string; config_json: string }>();
+      if (!ranking) throw new HttpError(404, "retrieval_ranking_profile_not_found", "ranking profile not found or retired");
+      generation.ranking_profile_id = ranking.id;
+      generation.ranking_algorithm = ranking.algorithm;
+      generation.ranking_config = parseRankingConfig(ranking.config_json);
+    }
+    return {
+      ...generation,
+      shadow_generation_id: request.generationId ? null : assignment.shadow_generation_id,
+      shadow_sample_rate: request.generationId ? 0 : assignment.shadow_sample_rate
+    };
+  } catch (error) {
+    if (!request.generationId && env.RETRIEVAL_GENERATION_ROUTING === "observe") return null;
+    throw error;
+  }
+}
+
+async function stableDecisionCandidateIds(
+  env: Env,
+  request: ReturnType<typeof parseSearchDecisionRequest>,
+  generationId: string,
+  query: string
+) {
+  const tokens = [...new Set(tokenize(query))].slice(0, 16);
+  const bindings: unknown[] = [generationId, request.tenantId];
+  const projectSql = request.projectId ? " AND (u.project_id = ? OR u.project_id IS NULL)" : "";
+  const categorySql = request.businessCategoryId ? " AND u.business_category_id = ?" : "";
+  const workSql = request.workType ? " AND u.work_type = ?" : "";
+  if (tokens.length) bindings.push(tokens.map((token) => `"${token.replaceAll('"', '')}"*`).join(" AND "));
+  if (request.projectId) bindings.push(request.projectId);
+  if (request.businessCategoryId) bindings.push(request.businessCategoryId);
+  if (request.workType) bindings.push(request.workType);
+  const result = tokens.length
+    ? await env.OPEN_BRAIN_DB.prepare(
+      `SELECT u.source_id
+       FROM retrieval_units_fts
+       JOIN retrieval_units u
+         ON u.id = retrieval_units_fts.unit_id
+        AND u.generation_id = retrieval_units_fts.generation_id
+        AND u.tenant_id = retrieval_units_fts.tenant_id
+       WHERE u.generation_id = ? AND u.tenant_id = ?
+         AND u.source_type = 'decision_memory' AND retrieval_units_fts MATCH ?
+         ${projectSql}${categorySql}${workSql}
+       ORDER BY bm25(retrieval_units_fts), u.created_at DESC LIMIT 200`
+    ).bind(...bindings).all<{ source_id: string }>()
+    : await env.OPEN_BRAIN_DB.prepare(
+      `SELECT u.source_id FROM retrieval_units u
+       WHERE u.generation_id = ? AND u.tenant_id = ? AND u.source_type = 'decision_memory'
+         ${projectSql}${categorySql}${workSql}
+       ORDER BY u.created_at DESC LIMIT 200`
+    ).bind(...bindings).all<{ source_id: string }>();
+  return [...new Set(result.results.map((row) => row.source_id))];
 }
 
 function parseCreateDecisionRequest(rawBody: unknown, principal?: string | null): DecisionMemory {
@@ -772,6 +920,8 @@ function parseCreateDecisionRequest(rawBody: unknown, principal?: string | null)
     confirmedAt: null,
     createdAt: now,
     updatedAt: now
+    , businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128)
+    , workType: body.work_type ?? null
   };
 }
 
@@ -794,24 +944,42 @@ function parseSearchDecisionRequest(rawBody: unknown, principal?: string | null)
     taskContext: parseOptionalString(body.taskContext ?? body.task_context, "taskContext", 1000) ?? "",
     includeProvenance: parseOptionalBoolean(body.includeProvenance ?? body.include_provenance, "includeProvenance", false),
     authorityScoring: parseOptionalBoolean(body.authorityScoring ?? body.authority_scoring, "authorityScoring", false),
-    verificationView: parseOptionalBoolean(body.verificationView ?? body.verification_view, "verificationView", false)
+    verificationView: parseOptionalBoolean(body.verificationView ?? body.verification_view, "verificationView", false),
+    businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
+    workType: body.work_type ?? null,
+    generationId: parseOptionalString(body.generation_id, "generation_id", 128),
+    rankingProfileId: parseOptionalString(body.ranking_profile_id, "ranking_profile_id", 128)
   };
 }
 
-async function loadDecisionMemories(env: Env, args: { tenantId: string; projectId: string | null; q: string; limit: number }): Promise<DecisionMemory[]> {
+async function loadDecisionMemories(env: Env, args: {
+  tenantId: string;
+  projectId: string | null;
+  q: string;
+  limit: number;
+  businessCategoryId?: string | null;
+  workType?: MemoryWorkType | null;
+}): Promise<DecisionMemory[]> {
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, domain, title, decision, rationale,
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
             valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
             confirmation_state, confirmation_note, confirmed_at,
-            created_at, updated_at
+            created_at, updated_at, business_category_id, work_type
      FROM decision_memories
      WHERE tenant_id = ?
        AND (? IS NULL OR project_id = ? OR project_id IS NULL)
+       AND (? IS NULL OR business_category_id = ?)
+       AND (? IS NULL OR work_type = ?)
      ORDER BY updated_at DESC
      LIMIT ?`
   )
-    .bind(args.tenantId, args.projectId, args.projectId, Math.max(args.limit, 64))
+    .bind(
+      args.tenantId, args.projectId, args.projectId,
+      args.businessCategoryId ?? null, args.businessCategoryId ?? null,
+      args.workType ?? null, args.workType ?? null,
+      Math.max(args.limit, 64)
+    )
     .all<DecisionMemoryRow>();
   const memories = result.results.map(toDecisionMemory);
   const queryTokens = tokenize(args.q);
@@ -826,7 +994,7 @@ async function loadDecisionMemoryById(env: Env, tenantId: string, id: string): P
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
             valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
             confirmation_state, confirmation_note, confirmed_at,
-            created_at, updated_at
+            created_at, updated_at, business_category_id, work_type
      FROM decision_memories
      WHERE tenant_id = ? AND id = ?
      LIMIT 1`
@@ -878,6 +1046,8 @@ function snapshotDecisionMemory(memory: DecisionMemory): Record<string, unknown>
     confirmedAt: memory.confirmedAt,
     createdAt: memory.createdAt,
     updatedAt: memory.updatedAt
+    , businessCategoryId: memory.businessCategoryId
+    , workType: memory.workType
   };
 }
 
@@ -892,8 +1062,9 @@ async function insertDecisionMemoryVersion(env: Env, args: {
   const now = args.now ?? Date.now();
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO decision_memory_versions(
-       id, decision_memory_id, tenant_id, operation, snapshot_json, actor_refs_json, reviewer_refs_json, note, created_at
-     ) VALUES(?,?,?,?,?,?,?,?,?)`
+       id, decision_memory_id, tenant_id, operation, snapshot_json, actor_refs_json,
+       reviewer_refs_json, note, created_at, business_category_id, work_type
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
   )
     .bind(
       ulid(now),
@@ -904,7 +1075,9 @@ async function insertDecisionMemoryVersion(env: Env, args: {
       JSON.stringify(args.actorRefs ?? []),
       JSON.stringify(args.reviewerRefs ?? []),
       args.note ?? null,
-      now
+      now,
+      args.memory.businessCategoryId,
+      args.memory.workType
     )
     .run();
 }
@@ -1054,10 +1227,98 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
   return trimmed;
 }
 
+async function projectDecisionMemory(env: Env, memory: DecisionMemory) {
+  const text = [
+    memory.title,
+    memory.decision,
+    memory.rationale,
+    ...memory.constraints,
+    ...memory.knownPitfalls
+  ].join("\n");
+  const contentHash = await sha256(text);
+  const assignedGenerations = (await env.OPEN_BRAIN_DB.prepare(
+    `SELECT DISTINCT g.id, g.extractor_name, g.extractor_version
+     FROM retrieval_generation_assignments a
+     JOIN retrieval_generations g
+       ON g.id = a.active_generation_id OR g.id = a.shadow_generation_id
+     WHERE a.tenant_id = ? AND a.project_scope_key IN ('*', ?)
+       AND g.id NOT IN ('gen_baseline_units', 'gen_structured_context')
+       AND g.status IN ('building', 'shadow', 'active', 'fallback')`
+  ).bind(memory.tenantId, memory.projectId ?? "").all<{
+    id: string;
+    extractor_name: string;
+    extractor_version: string;
+  }>()).results;
+  const generations = [
+    {
+      id: "gen_baseline_units",
+      unitId: `stable_decision_v3_${memory.id}`,
+      extractorName: "decision-memory-projector",
+      extractorVersion: "1"
+    },
+    {
+      id: "gen_structured_context",
+      unitId: `stable_decision_${memory.id}`,
+      extractorName: "decision-memory-projector",
+      extractorVersion: "1"
+    },
+    ...assignedGenerations.map((generation) => ({
+      id: generation.id,
+      unitId: `stable_${generation.id}_decision_${memory.id}`,
+      extractorName: generation.extractor_name,
+      extractorVersion: generation.extractor_version
+    }))
+  ];
+  const statements = generations.flatMap((generation) => [
+      env.OPEN_BRAIN_DB.prepare(
+        "DELETE FROM retrieval_units_fts WHERE tenant_id = ? AND unit_id = ?"
+      ).bind(memory.tenantId, generation.unitId),
+      env.OPEN_BRAIN_DB.prepare(
+        "DELETE FROM retrieval_units WHERE tenant_id = ? AND id = ?"
+      ).bind(memory.tenantId, generation.unitId),
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO retrieval_units(
+           id, generation_id, tenant_id, project_id, source_type, source_id,
+           business_category_id, work_type, unit_type, text, speaker, event_at,
+           valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+           metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+           extraction_state, degraded_reason, created_at
+         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        generation.unitId, generation.id, memory.tenantId, memory.projectId,
+        "decision_memory", memory.id, memory.businessCategoryId, memory.workType,
+        "decision", text, null, memory.updatedAt, memory.validFrom, memory.validUntil,
+        JSON.stringify(memory.sourceRefs), null, null,
+        JSON.stringify({
+          domain: memory.domain,
+          status: memory.status,
+          confirmation_state: memory.confirmationState,
+          confidence: memory.confidence
+        }),
+        null, contentHash, generation.extractorName, generation.extractorVersion, "ready", null,
+        memory.updatedAt
+      ),
+      env.OPEN_BRAIN_DB.prepare(
+        "INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)"
+      ).bind(generation.unitId, generation.id, memory.tenantId, text)
+    ]);
+  if (typeof env.OPEN_BRAIN_DB.batch === "function") await env.OPEN_BRAIN_DB.batch(statements);
+  else for (const statement of statements) await statement.run();
+}
+
 export async function createDecisionMemory(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const parsedMemory = parseCreateDecisionRequest(rawBody, options.principal);
+  const classification = await validateBusinessClassification(
+    env,
+    parsedMemory.tenantId,
+    parsedMemory.businessCategoryId,
+    parsedMemory.workType,
+    { required: env.MEMORY_CLASSIFICATION_MODE === "require" }
+  );
   const memory: DecisionMemory = {
     ...parsedMemory,
+    businessCategoryId: classification.business_category_id,
+    workType: classification.work_type,
     title: screenMemoryWriteText(parsedMemory.title, "title"),
     decision: screenMemoryWriteText(parsedMemory.decision, "decision"),
     rationale: screenMemoryWriteText(parsedMemory.rationale, "rationale"),
@@ -1079,8 +1340,8 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
        rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
        valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
        confirmation_state, confirmation_note, confirmed_at,
-       created_at, updated_at
-     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       created_at, updated_at, business_category_id, work_type
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   )
     .bind(
       memory.id,
@@ -1107,17 +1368,47 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
       memory.confirmationNote,
       memory.confirmedAt,
       memory.createdAt,
-      memory.updatedAt
+      memory.updatedAt,
+      memory.businessCategoryId,
+      memory.workType
     )
     .run();
   await insertDecisionMemoryVersion(env, { memory, operation: "create", actorRefs: memory.ownerRefs, reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
-  return { decisionMemory: memory };
+  await projectDecisionMemory(env, memory);
+  return {
+    decisionMemory: memory,
+    ...(classification.classification_warning
+      ? { classification_warning: classification.classification_warning }
+      : {})
+  };
 }
 
 export async function searchDecisionMemories(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const request = parseSearchDecisionRequest(rawBody, options.principal);
+  await validateBusinessClassification(
+    env,
+    request.tenantId,
+    request.businessCategoryId,
+    request.workType,
+    { required: false }
+  );
   const q = request.q || request.taskContext;
-  const memories = await loadDecisionMemories(env, { ...request, q });
+  const primaryStartedAt = performance.now();
+  const generation = await resolveDecisionRetrievalGeneration(env, request);
+  const candidateIds = generation
+    ? await stableDecisionCandidateIds(env, request, generation.id, q)
+    : null;
+  const loaded = await loadDecisionMemories(env, {
+    ...request,
+    q: candidateIds ? "" : q,
+    limit: candidateIds ? Math.max(candidateIds.length, request.limit) : request.limit
+  });
+  const candidateOrder = new Map((candidateIds ?? []).map((id, index) => [id, index]));
+  const memories = candidateIds
+    ? loaded
+      .filter((memory) => candidateOrder.has(memory.id))
+      .sort((left, right) => candidateOrder.get(left.id)! - candidateOrder.get(right.id)!)
+    : loaded;
   const visibleMemories = await filterReadableDecisionMemories(
     env,
     request.tenantId,
@@ -1143,13 +1434,52 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
         userId: request.userId,
         agentId: request.agentId
       })
-    }))
-    .sort(compareScored);
+    }));
+  if (generation) {
+    if (generation.ranking_algorithm !== "reciprocal_rank_fusion") {
+      throw new HttpError(500, "unsupported_ranking_algorithm", "assigned ranking algorithm is unsupported");
+    }
+    const structuredOrder = new Map(
+      [...scored].sort(compareScored).map((item, index) => [item.memory.id, index])
+    );
+    const rrfConstant = generation.ranking_config.rrf_constant ?? 60;
+    const decisionWeight = generation.ranking_config.decision_weight ?? 1;
+    scored.sort((left, right) => {
+      const leftLexical = candidateOrder.get(left.memory.id) ?? Number.MAX_SAFE_INTEGER;
+      const rightLexical = candidateOrder.get(right.memory.id) ?? Number.MAX_SAFE_INTEGER;
+      const leftStructured = structuredOrder.get(left.memory.id) ?? Number.MAX_SAFE_INTEGER;
+      const rightStructured = structuredOrder.get(right.memory.id) ?? Number.MAX_SAFE_INTEGER;
+      const leftRrf = 1 / (rrfConstant + leftLexical + 1) + decisionWeight / (rrfConstant + leftStructured + 1);
+      const rightRrf = 1 / (rrfConstant + rightLexical + 1) + decisionWeight / (rrfConstant + rightStructured + 1);
+      return rightRrf - leftRrf || compareScored(left, right);
+    });
+  } else {
+    scored.sort(compareScored);
+  }
   const conflicts = detectConflicts(scored, Date.now());
   const conflictMemoryIds = new Set(conflicts.flatMap((conflict) => [conflict.preferredMemoryId, ...conflict.conflictingMemoryIds]));
   const filtered = request.hasConflicts ? scored.filter((item) => conflictMemoryIds.has(item.memory.id)) : scored;
   const selected = filtered.slice(0, request.limit);
-  return {
+  const usage = options.recordUsage === false ? null : await recordMemoryUsage(env, {
+    tenant_id: request.tenantId,
+    project_id: request.projectId,
+    capability: "decision_memory_search",
+    access_path: "search",
+    request_source: "api",
+    requested_business_category_id: request.businessCategoryId,
+    requested_work_type: request.workType,
+    retrieval_generation_id: generation?.id ?? null,
+    ranking_profile_id: generation?.ranking_profile_id ?? null,
+    items: selected.map((item, index) => ({
+      source_type: "decision_memory" as const,
+      source_id: item.memory.id,
+      rank: index + 1,
+      score: item.score.finalScore,
+      reference_type: "returned" as const,
+      used_state: "unknown" as const
+    }))
+  });
+  const response = {
     tenant_id: request.tenantId,
     project_id: request.projectId,
     q,
@@ -1159,6 +1489,18 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
       verification_view: request.verificationView
     },
     conflicts: request.verificationView ? conflicts : undefined,
+    meta: {
+      usage_id: usage?.usage_id,
+      verification_sampled: usage?.verification_sampled,
+      retrieval: {
+        generation_id: generation?.id ?? null,
+        unit_schema_version: generation ? String(generation.unit_schema_version) : null,
+        extractor_name: generation?.extractor_name ?? null,
+        extractor_version: generation?.extractor_version ?? null,
+        ranking_profile_id: generation?.ranking_profile_id ?? null,
+        embedding_profile_id: generation?.embedding_profile_id ?? null
+      }
+    },
     results: selected.map((item) =>
       toPublicDecisionSearchResult({
         item,
@@ -1171,6 +1513,53 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
       })
     )
   };
+  if (
+    generation?.shadow_generation_id &&
+    generation.shadow_generation_id !== generation.id &&
+    shouldRunDecisionShadow(
+      generation.shadow_sample_rate,
+      `${request.tenantId}\0${request.projectId ?? ""}\0governance\0${q}`
+    )
+  ) {
+    const shadowStartedAt = performance.now();
+    let shadow: Awaited<ReturnType<typeof searchDecisionMemories>> | null = null;
+    let shadowError: string | null = null;
+    try {
+      shadow = await searchDecisionMemories(env, {
+        ...(rawBody as Record<string, unknown>),
+        generation_id: generation.shadow_generation_id,
+        ranking_profile_id: undefined
+      }, { ...options, recordUsage: false });
+    } catch (error) {
+      shadowError = error instanceof Error ? error.message.slice(0, 200) : "shadow governance retrieval failed";
+    }
+    const queryHash = await sha256(`governance:${q}`);
+    const primaryIds = new Set(response.results.map((item) => item.id));
+    const shadowIds = shadow?.results.map((item) => item.id) ?? [];
+    await env.OPEN_BRAIN_DB.prepare(
+      `INSERT INTO retrieval_evaluation_events(
+         id, tenant_id, project_id, query_hash, baseline_generation_id,
+         candidate_generation_id, baseline_result_count, candidate_result_count,
+         overlap_count, baseline_empty, candidate_empty, candidate_degraded,
+         baseline_latency_ms, candidate_latency_ms, evidence_tokens,
+         projection_lag_ms, error_code, created_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      crypto.randomUUID(), request.tenantId, request.projectId, queryHash,
+      generation.id, generation.shadow_generation_id,
+      response.results.length, shadowIds.length,
+      shadowIds.filter((id) => primaryIds.has(id)).length,
+      response.results.length === 0 ? 1 : 0,
+      shadowIds.length === 0 ? 1 : 0,
+      shadowError ? 1 : 0,
+      Number((shadowStartedAt - primaryStartedAt).toFixed(3)),
+      Number((performance.now() - shadowStartedAt).toFixed(3)),
+      null, null, shadowError, Date.now()
+    ).run().catch(() => {
+      // Shadow evaluation is best-effort and must not affect governance results.
+    });
+  }
+  return response;
 }
 
 function mergeDecisionMemory(current: DecisionMemory, rawBody: unknown): { memory: DecisionMemory; actorRefs: OwnerRef[]; note: string | null } {
@@ -1226,7 +1615,8 @@ async function persistDecisionMemory(env: Env, memory: DecisionMemory) {
          source_refs_json = ?, owner_refs_json = ?, reviewer_refs_json = ?,
          valid_from = ?, valid_until = ?, status = ?, superseded_by = ?, confidence = ?,
          visibility = ?, allowed_principals_json = ?,
-         confirmation_state = ?, confirmation_note = ?, confirmed_at = ?, updated_at = ?
+         confirmation_state = ?, confirmation_note = ?, confirmed_at = ?, updated_at = ?,
+         business_category_id = ?, work_type = ?
      WHERE tenant_id = ? AND id = ?`
   )
     .bind(
@@ -1252,10 +1642,13 @@ async function persistDecisionMemory(env: Env, memory: DecisionMemory) {
       memory.confirmationNote,
       memory.confirmedAt,
       memory.updatedAt,
+      memory.businessCategoryId,
+      memory.workType,
       memory.tenantId,
       memory.id
     )
     .run();
+  await projectDecisionMemory(env, memory);
 }
 
 export async function getDecisionMemoryContext(env: Env, args: { tenantId: string; id: string; userId?: string | null; agentId?: string | null }) {
@@ -1289,6 +1682,23 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
     conflict.preferredMemoryId === memory.id || conflict.conflictingMemoryIds.includes(memory.id)
   );
   const versions = await loadDecisionMemoryVersions(env, memory.tenantId, memory.id);
+  const usage = await recordMemoryUsage(env, {
+    tenant_id: memory.tenantId,
+    project_id: memory.projectId,
+    capability: "decision_memory_context",
+    access_path: "direct",
+    request_source: "api",
+    retrieval_generation_id: "gen_structured_context",
+    ranking_profile_id: "rank_default",
+    items: [{
+      source_type: "decision_memory",
+      source_id: memory.id,
+      source_version: versions.length,
+      rank: 1,
+      reference_type: "direct",
+      used_state: "unknown"
+    }]
+  });
   return {
     decisionMemory: {
       ...memory,
@@ -1299,6 +1709,10 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
       provenance: buildProvenance(memory, userId, agentId),
       conflicts,
       versions
+    },
+    meta: {
+      usage_id: usage.usage_id,
+      verification_sampled: usage.verification_sampled
     },
     related: scored
       .filter((item) => item.memory.id !== memory.id)
@@ -1322,12 +1736,30 @@ export async function reviseDecisionMemory(
   options: PrincipalIdentityOptions = {}
 ) {
   const current = await loadDecisionMemoryById(env, tenantId, id);
-  const { memory, actorRefs, note } = mergeDecisionMemory(current, rawBody);
+  const { memory: mergedMemory, actorRefs, note } = mergeDecisionMemory(current, rawBody);
+  const body = rawBody as DecisionMemoryReviseRequest;
+  const classification = await validateBusinessClassification(
+    env,
+    tenantId,
+    body.business_category_id === undefined ? current.businessCategoryId : body.business_category_id,
+    body.work_type === undefined ? current.workType : body.work_type,
+    { required: env.MEMORY_CLASSIFICATION_MODE === "require" }
+  );
+  const memory = {
+    ...mergedMemory,
+    businessCategoryId: classification.business_category_id,
+    workType: classification.work_type
+  };
   const principal = normalizePrincipal(options.principal);
   const versionActorRefs = actorRefs.length > 0 ? actorRefs : principal ? [principalOwnerRef(principal)] : actorRefs;
   await persistDecisionMemory(env, memory);
   await insertDecisionMemoryVersion(env, { memory, operation: "revise", actorRefs: versionActorRefs, reviewerRefs: memory.reviewerRefs, note });
-  return { decisionMemory: memory };
+  return {
+    decisionMemory: memory,
+    ...(classification.classification_warning
+      ? { classification_warning: classification.classification_warning }
+      : {})
+  };
 }
 
 export async function confirmDecisionMemory(
@@ -1365,11 +1797,20 @@ export async function confirmDecisionMemory(
 
 export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const request = parseEnrichRequest(rawBody, options.principal);
+  await validateBusinessClassification(
+    env,
+    request.tenantId,
+    request.businessCategoryId,
+    request.workType,
+    { required: false }
+  );
   const memories = await loadDecisionMemories(env, {
     tenantId: request.tenantId,
     projectId: request.projectId,
     q: request.taskText,
-    limit: 24
+    limit: 24,
+    businessCategoryId: request.businessCategoryId,
+    workType: request.workType
   });
   const visibleMemories = await filterReadableDecisionMemories(
     env,
@@ -1452,6 +1893,40 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
   );
   const meta = response.meta as { estimatedTokens?: number } | undefined;
   if (meta) meta.estimatedTokens = estimateTokens(response);
+  const usage = await recordMemoryUsage(env, {
+    tenant_id: request.tenantId,
+    project_id: request.projectId,
+    capability: "context_enrich",
+    access_path: "context",
+    request_source: "api",
+    requested_business_category_id: request.businessCategoryId,
+    requested_work_type: request.workType,
+    retrieval_generation_id: "gen_structured_context",
+    ranking_profile_id: "rank_default",
+    items: selected.map((item, index) => ({
+      source_type: "decision_memory" as const,
+      source_id: item.memory.id,
+      rank: index + 1,
+      score: item.score.finalScore,
+      reference_type: "injected" as const,
+      used_state: "unknown" as const,
+      injected_token_estimate: estimateTokens(toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, false))
+    }))
+  });
+  if (meta) {
+    Object.assign(meta, {
+      usage_id: usage.usage_id,
+      verification_sampled: usage.verification_sampled,
+      retrieval: {
+        generation_id: "gen_structured_context",
+        unit_schema_version: "2",
+        extractor_name: "decision-memory-projector",
+        extractor_version: "1",
+        ranking_profile_id: "rank_default",
+        embedding_profile_id: null
+      }
+    });
+  }
   return response;
 }
 

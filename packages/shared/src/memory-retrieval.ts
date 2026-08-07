@@ -117,6 +117,10 @@ export type MemorySearchResult = {
 };
 
 export type MemorySearchMeta = {
+  usage_id?: string;
+  verification_sampled?: boolean;
+  classification_warning?: string[];
+  deprecation_warnings?: string[];
   search_strategy: MemorySearchStrategy;
   matched_count: number;
   returned_count: number;
@@ -139,6 +143,11 @@ export type MemorySearchMeta = {
     parent_candidate_count?: number;
     projection_lag_ms?: number | null;
     degraded_reasons?: string[];
+    generation_id?: string | null;
+    unit_schema_version?: string | null;
+    extractor_name?: string | null;
+    ranking_profile_id?: string | null;
+    embedding_profile_id?: string | null;
   };
 };
 
@@ -176,6 +185,8 @@ export type MemoryProfileResponse = {
   recent: MemoryProfileItem[];
   search_results: MemorySearchResult[];
   meta: {
+    usage_id?: string;
+    verification_sampled?: boolean;
     durable_count: number;
     recent_count: number;
     search: MemorySearchMeta | null;

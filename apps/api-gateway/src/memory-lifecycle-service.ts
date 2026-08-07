@@ -5,6 +5,7 @@ import {
   MEMORY_LIFECYCLE_STATES,
   MEMORY_OPERATIONS,
   MEMORY_SCOPE_TYPES,
+  MEMORY_WORK_TYPES,
   assessMemoryUsefulness,
   buildRetrievalUnits,
   normalizeLifecycleState,
@@ -16,7 +17,8 @@ import {
   type MemoryLifecycleState,
   type MemoryOperation,
   type MemoryScopeType,
-  type MemorySourceReference
+  type MemorySourceReference,
+  type MemoryWorkType
 } from "@org-brain/shared";
 import type { Env } from "./types";
 import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
@@ -46,6 +48,8 @@ type LifecycleWriteItem = {
   evidence?: Array<Record<string, unknown>>;
   conflicts?: string[];
   permissions?: Array<Record<string, unknown>>;
+  business_category_id?: string | null;
+  work_type?: MemoryWorkType | null;
 };
 
 type StoredMemoryRow = {
@@ -85,6 +89,8 @@ type StoredMemoryRow = {
   evidence_json?: string | null;
   conflicts_json?: string | null;
   permissions_json?: string | null;
+  business_category_id?: string | null;
+  work_type?: string | null;
 };
 
 export type LifecycleMutationResult = {
@@ -178,6 +184,8 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
   evidence: Array<Record<string, unknown>>;
   conflicts: string[];
   permissions: Array<Record<string, unknown>>;
+  business_category_id: string | null;
+  work_type: MemoryWorkType | null;
 } {
   const projectId = typeof item.project_id === "string" && item.project_id.trim() ? item.project_id.trim().slice(0, 128) : null;
   const { scopeType, scopeKey } = deriveScope(tenantId, projectId, item);
@@ -230,6 +238,10 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     evidence: sanitizeObjects(item.evidence),
     conflicts: sanitizeTags(item.conflicts).slice(0, 64),
     permissions: sanitizeObjects(item.permissions)
+    , business_category_id: item.business_category_id?.trim().slice(0, 128) || null
+    , work_type: item.work_type
+      ? ensureMemoryEnum(item.work_type, "other", MEMORY_WORK_TYPES, "work_type")
+      : null
   };
 }
 
@@ -240,7 +252,8 @@ async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Pro
             utility_score, canonical_key, root_memory_id, current_version, last_accessed_at,
             suppressed_at, consolidated_at, promoted_at, expires_at, revised_at,
             entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash,
-            rationale, evidence_json, conflicts_json, permissions_json
+            rationale, evidence_json, conflicts_json, permissions_json,
+            business_category_id, work_type
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
@@ -327,8 +340,8 @@ function buildVersionInsert(
     `INSERT INTO memory_versions(
       id, memory_id, tenant_id, version, operation, content, summary, tags_json, kind, lifecycle_state,
       scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score, canonical_key, created_at,
-      snapshot_json, content_hash
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      snapshot_json, content_hash, business_category_id, work_type
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     ulid(),
     args.memoryId,
@@ -355,7 +368,9 @@ function buildVersionInsert(
       ...snapshot,
       content_hash: args.contentHash
     }),
-    args.contentHash
+    args.contentHash,
+    snapshot.business_category_id,
+    snapshot.work_type
   );
 }
 
@@ -423,6 +438,23 @@ async function saveCurrentSnapshot(
           valid_until: snapshot.valid_until,
           source_references: snapshot.source_references as MemorySourceReference[]
         });
+  const dynamicGenerations = (await env.OPEN_BRAIN_DB.prepare(
+    `SELECT DISTINCT g.id, g.unit_schema_version, g.extractor_name, g.extractor_version
+     FROM retrieval_generation_assignments a
+     JOIN retrieval_generations g
+       ON g.id = a.active_generation_id OR g.id = a.shadow_generation_id
+     WHERE a.tenant_id = ? AND a.project_scope_key IN ('*', ?)
+       AND g.id NOT IN ('gen_baseline_units', 'gen_structured_context')
+       AND g.status IN ('building', 'shadow', 'active', 'fallback')`
+  ).bind(args.tenantId, snapshot.project_id ?? "").all<{
+    id: string;
+    unit_schema_version: number;
+    extractor_name: string;
+    extractor_version: string;
+  }>()).results;
+  if (dynamicGenerations.some((generation) => ![1, 2].includes(generation.unit_schema_version))) {
+    throw new Error("unsupported_assigned_retrieval_unit_schema");
+  }
   const statements: D1PreparedStatement[] = [];
 
   if (args.rowExists) {
@@ -434,7 +466,8 @@ async function saveCurrentSnapshot(
              confidence_score = ?, utility_score = ?, canonical_key = ?, root_memory_id = ?, current_version = ?,
              suppressed_at = ?, expires_at = ?, revised_at = ?, entities_json = ?, source_refs_json = ?,
              updated_at = ?, valid_from = ?, valid_until = ?, content_hash = ?, rationale = ?,
-             evidence_json = ?, conflicts_json = ?, permissions_json = ?
+             evidence_json = ?, conflicts_json = ?, permissions_json = ?,
+             business_category_id = ?, work_type = ?
          WHERE tenant_id = ? AND id = ?`
       ).bind(
         snapshot.project_id,
@@ -467,6 +500,8 @@ async function saveCurrentSnapshot(
         JSON.stringify(snapshot.evidence),
         JSON.stringify(snapshot.conflicts),
         JSON.stringify(snapshot.permissions),
+        snapshot.business_category_id,
+        snapshot.work_type,
         args.tenantId,
         args.memoryId
       )
@@ -479,8 +514,8 @@ async function saveCurrentSnapshot(
           lifecycle_state, scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score,
           canonical_key, root_memory_id, current_version, suppressed_at, expires_at, revised_at,
           entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash, rationale,
-          evidence_json, conflicts_json, permissions_json
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          evidence_json, conflicts_json, permissions_json, business_category_id, work_type
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         args.memoryId,
         args.tenantId,
@@ -514,7 +549,9 @@ async function saveCurrentSnapshot(
         snapshot.rationale,
         JSON.stringify(snapshot.evidence),
         JSON.stringify(snapshot.conflicts),
-        JSON.stringify(snapshot.permissions)
+        JSON.stringify(snapshot.permissions),
+        snapshot.business_category_id,
+        snapshot.work_type
       )
     );
   }
@@ -535,7 +572,34 @@ async function saveCurrentSnapshot(
       contentHash
     })
   );
+  for (const generation of dynamicGenerations) {
+    statements.push(
+      env.OPEN_BRAIN_DB.prepare(
+        `DELETE FROM retrieval_units_fts WHERE tenant_id = ? AND unit_id IN (
+           SELECT id FROM retrieval_units
+           WHERE tenant_id = ? AND generation_id = ? AND source_type = 'memory' AND source_id = ?
+         )`
+      ).bind(args.tenantId, args.tenantId, generation.id, args.memoryId),
+      env.OPEN_BRAIN_DB.prepare(
+        `DELETE FROM retrieval_units
+         WHERE tenant_id = ? AND generation_id = ? AND source_type = 'memory' AND source_id = ?`
+      ).bind(args.tenantId, generation.id, args.memoryId)
+    );
+  }
   statements.push(
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM retrieval_units_fts
+       WHERE tenant_id = ? AND unit_id IN (
+         SELECT id FROM retrieval_units
+         WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
+           AND generation_id IN ('gen_baseline_units', 'gen_structured_context')
+       )`
+    ).bind(args.tenantId, args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM retrieval_units
+       WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
+         AND generation_id IN ('gen_baseline_units', 'gen_structured_context')`
+    ).bind(args.tenantId, args.memoryId),
     env.OPEN_BRAIN_DB.prepare(
       "DELETE FROM memory_retrieval_units_v4_fts WHERE memory_id = ? AND tenant_id = ?"
     ).bind(args.memoryId, args.tenantId),
@@ -583,7 +647,26 @@ async function saveCurrentSnapshot(
       ),
       env.OPEN_BRAIN_DB.prepare(
         "INSERT INTO memory_retrieval_units_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
-      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
+      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text),
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO retrieval_units(
+          id, generation_id, tenant_id, project_id, source_type, source_id,
+          business_category_id, work_type, unit_type, text, speaker, event_at,
+          valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+          metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+          extraction_state, degraded_reason, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        `stable_v3_${unit.id}`, "gen_baseline_units", unit.tenant_id, unit.project_id,
+        "memory", unit.memory_id, snapshot.business_category_id, snapshot.work_type,
+        unit.unit_type, unit.text, unit.speaker, unit.event_at, unit.valid_from,
+        unit.valid_until, unit.source_ref_json, unit.source_span_start,
+        unit.source_span_end, "{}", null, unit.content_hash, unit.extractor,
+        unit.extractor_version, unit.extraction_state, unit.degraded_reason, unit.created_at
+      ),
+      env.OPEN_BRAIN_DB.prepare(
+        "INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)"
+      ).bind(`stable_v3_${unit.id}`, "gen_baseline_units", unit.tenant_id, unit.text)
     );
   }
   for (const unit of retrievalUnitsV4) {
@@ -620,8 +703,58 @@ async function saveCurrentSnapshot(
       ),
       env.OPEN_BRAIN_DB.prepare(
         "INSERT INTO memory_retrieval_units_v4_fts(unit_id, memory_id, tenant_id, text) VALUES(?,?,?,?)"
-      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text)
+      ).bind(unit.id, unit.memory_id, unit.tenant_id, unit.text),
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO retrieval_units(
+          id, generation_id, tenant_id, project_id, source_type, source_id,
+          business_category_id, work_type, unit_type, text, speaker, event_at,
+          valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+          metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+          extraction_state, degraded_reason, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        `stable_v4_${unit.id}`, "gen_structured_context", unit.tenant_id, unit.project_id,
+        "memory", unit.memory_id, snapshot.business_category_id, snapshot.work_type,
+        unit.unit_type, unit.text, unit.speaker, unit.event_at, unit.valid_from,
+        unit.valid_until, unit.source_ref_json, unit.source_span_start,
+        unit.source_span_end, unit.metadata_json, unit.segment_id, unit.content_hash,
+        unit.extractor, unit.extractor_version, unit.extraction_state,
+        unit.degraded_reason, unit.created_at
+      ),
+      env.OPEN_BRAIN_DB.prepare(
+        "INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)"
+      ).bind(`stable_v4_${unit.id}`, "gen_structured_context", unit.tenant_id, unit.text)
     );
+  }
+  for (const generation of dynamicGenerations) {
+    const units = generation.unit_schema_version === 1 ? retrievalUnits : retrievalUnitsV4;
+    for (const unit of units) {
+      const stableId = `stable_${generation.id}_${unit.id}`;
+      const metadataJson = "metadata_json" in unit ? unit.metadata_json : "{}";
+      const segmentId = "segment_id" in unit ? unit.segment_id : null;
+      statements.push(
+        env.OPEN_BRAIN_DB.prepare(
+          `INSERT INTO retrieval_units(
+             id, generation_id, tenant_id, project_id, source_type, source_id,
+             business_category_id, work_type, unit_type, text, speaker, event_at,
+             valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+             metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+             extraction_state, degraded_reason, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          stableId, generation.id, unit.tenant_id, unit.project_id,
+          "memory", unit.memory_id, snapshot.business_category_id, snapshot.work_type,
+          unit.unit_type, unit.text, unit.speaker, unit.event_at, unit.valid_from,
+          unit.valid_until, unit.source_ref_json, unit.source_span_start,
+          unit.source_span_end, metadataJson, segmentId, unit.content_hash,
+          generation.extractor_name, generation.extractor_version,
+          unit.extraction_state, unit.degraded_reason, unit.created_at
+        ),
+        env.OPEN_BRAIN_DB.prepare(
+          "INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)"
+        ).bind(stableId, generation.id, unit.tenant_id, unit.text)
+      );
+    }
   }
 
   await runBatchChunks(env.OPEN_BRAIN_DB, statements);
@@ -752,6 +885,8 @@ export async function reviseMemory(
     evidence?: Array<Record<string, unknown>>;
     conflicts?: string[];
     permissions?: Array<Record<string, unknown>>;
+    businessCategoryId?: string | null;
+    workType?: MemoryWorkType | null;
   }
 ): Promise<LifecycleMutationResult> {
   const existing = await loadMemoryById(env, args.tenantId, args.memoryId);
@@ -765,6 +900,14 @@ export async function reviseMemory(
     evidence: args.evidence ?? parseStoredObjects(existing.evidence_json),
     conflicts: args.conflicts ?? parseStoredTags(existing.conflicts_json),
     permissions: args.permissions ?? parseStoredObjects(existing.permissions_json),
+    business_category_id: args.businessCategoryId === undefined
+      ? existing.business_category_id ?? null
+      : args.businessCategoryId,
+    work_type: args.workType === undefined
+      ? MEMORY_WORK_TYPES.includes(existing.work_type as MemoryWorkType)
+        ? existing.work_type as MemoryWorkType
+        : null
+      : args.workType,
     external_key: existing.external_key,
     content: args.content ?? existing.content,
     summary: args.summary ?? existing.summary,
@@ -996,6 +1139,59 @@ export async function deleteMemory(
     ).bind(args.tenantId, args.memoryId),
     env.OPEN_BRAIN_DB.prepare(
       "DELETE FROM memory_retrieval_units WHERE tenant_id = ? AND memory_id = ?"
+    ).bind(args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_v4_fts WHERE tenant_id = ? AND memory_id = ?"
+    ).bind(args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_retrieval_units_v4 WHERE tenant_id = ? AND memory_id = ?"
+    ).bind(args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM retrieval_units_fts WHERE tenant_id = ? AND unit_id IN (
+         SELECT id FROM retrieval_units
+         WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
+       )`
+    ).bind(args.tenantId, args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM retrieval_units WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+    ).bind(args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND usage_item_id IN (
+         SELECT id FROM memory_usage_items
+         WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
+       )`
+    ).bind(args.tenantId, args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+    ).bind(args.tenantId, args.memoryId),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM memory_effect_attributions
+       WHERE tenant_id = ? AND effect_event_id IN (
+         SELECT e.id FROM memory_effect_events e
+         WHERE e.tenant_id = ? AND NOT EXISTS (
+           SELECT 1 FROM memory_usage_items ui
+           WHERE ui.tenant_id = e.tenant_id AND ui.usage_event_id = e.usage_event_id
+         )
+       )`
+    ).bind(args.tenantId, args.tenantId),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM memory_effect_events
+       WHERE tenant_id = ? AND NOT EXISTS (
+         SELECT 1 FROM memory_usage_items ui
+         WHERE ui.tenant_id = memory_effect_events.tenant_id
+           AND ui.usage_event_id = memory_effect_events.usage_event_id
+       )`
+    ).bind(args.tenantId),
+    env.OPEN_BRAIN_DB.prepare(
+      `DELETE FROM memory_usage_events
+       WHERE tenant_id = ? AND NOT EXISTS (
+         SELECT 1 FROM memory_usage_items ui
+         WHERE ui.tenant_id = memory_usage_events.tenant_id
+           AND ui.usage_event_id = memory_usage_events.id
+       )`
+    ).bind(args.tenantId),
+    env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM memory_effect_daily_metrics WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
     ).bind(args.tenantId, args.memoryId),
     env.OPEN_BRAIN_DB.prepare("DELETE FROM memory_versions WHERE tenant_id = ? AND memory_id = ?").bind(
       args.tenantId,

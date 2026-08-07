@@ -1,5 +1,5 @@
 {
-  "summary": "Adopt the richer Node ingestion/operator classifier as one runtime-neutral implementation under packages/shared, consumed by typed Cloud and compatibility Node facades.",
+  "summary": "The requested implementation is bounded to additive classification and impact telemetry plus a staged replacement of version-named retrieval projections; production activation and deletion of legacy projections remain rollout steps, not local implementation side effects.",
   "artifact_refs": [
     "docs/harness/plan.json",
     "docs/harness/context_code.json",
@@ -8,9 +8,9 @@
     "docs/harness/context_risks.json"
   ],
   "decision_refs": [
-    "single canonical classifier under packages/shared",
-    "no production mutation or deployment",
-    "separate export-gated reconciliation for existing D1 rows"
+    "separate canonical memories and decision memories",
+    "shared retrieval projection with separate evidence and governance channels",
+    "stable role-based table names with generation metadata"
   ],
   "evidence": [
     {
@@ -19,7 +19,7 @@
     }
   ],
   "residual_risks": [
-    "Cloudflare bundle and Node ESM resolution must both be verified",
-    "Existing production rows remain scored by historical implementations until a later backfill"
+    "Legacy projections must remain during dual-write and shadow validation.",
+    "Production activation criteria require later live evidence."
   ]
 }

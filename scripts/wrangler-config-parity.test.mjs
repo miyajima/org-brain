@@ -11,7 +11,13 @@ function quotedValues(source, key) {
 test("API Gateway local and production Wrangler configs keep local-safe runtime parity", async () => {
   const production = await readFile(new URL("../apps/api-gateway/wrangler.toml", import.meta.url), "utf8");
   const local = await readFile(new URL("../apps/api-gateway/wrangler.local.toml", import.meta.url), "utf8");
-  for (const variable of ["HYBRID_V3_MODE", "HYBRID_V4_MODE", "HYBRID_V4_SHADOW_SAMPLE_RATE"]) {
+  for (const variable of [
+    "HYBRID_V3_MODE",
+    "HYBRID_V4_MODE",
+    "HYBRID_V4_SHADOW_SAMPLE_RATE",
+    "MEMORY_CLASSIFICATION_MODE",
+    "RETRIEVAL_GENERATION_ROUTING"
+  ]) {
     assert.deepEqual(quotedValues(local, variable), quotedValues(production, variable), `${variable} differs`);
   }
   const productionOnlyBindings = ["AI", "MEMORY_VECTOR_INDEX_V3"];

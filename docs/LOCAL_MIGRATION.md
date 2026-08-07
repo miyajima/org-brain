@@ -1,7 +1,7 @@
 # Local memory migration and recovery
 
 OrgBrain local memory uses the same MemoryRecord v2 logical contract as the
-Cloud D1 service. The authoritative SQLite schema version is `17`. Full-text and
+Cloud D1 service. The authoritative SQLite schema version is `18`. Full-text and
 future vector indexes are derived data and can be rebuilt from authoritative
 records.
 
@@ -78,3 +78,24 @@ orgbrain doctor
 `doctor` runs SQLite `quick_check`, validates every content hash, compares FTS
 and searchable-record counts, checks schema version, and verifies POSIX private
 permissions.
+
+## Schema v18 classification and impact telemetry
+
+Schema v18 adds explicit business categories, category/work snapshots on
+memory history, stable retrieval generations and units, usage/effect/failure
+telemetry, a rebuildable daily impact projection, and a local telemetry outbox.
+The outbox is populated only when explicit Cloud synchronization is enabled
+with `ORGBRAIN_ENABLE_CLOUD_MEMORY=true`. Deliver pending usage records before
+their dependent effect records with `orgbrain telemetry sync`; the command
+also requires `ORGBRAIN_API_URL` (or its compatibility alias) and
+`ORGBRAIN_API_KEY`, and retries failures with bounded exponential backoff.
+
+Existing rows remain unclassified; initialization does not infer a category or
+work type from their content. Workspace config v2 can provide explicit defaults
+for future capture. Use `pnpm memories:backfill-classification` for a validated
+JSON/CSV dry run before any operator-approved backfill.
+
+Legacy v3/v4 local projection tables coexist with stable tables during rollout.
+Do not remove them until stable assignment has passed the promotion gates and a
+backup/restore drill has succeeded. See
+[`RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md`](RETRIEVAL_GENERATIONS_AND_MEMORY_IMPACT.md).

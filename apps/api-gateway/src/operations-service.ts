@@ -143,6 +143,8 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
       semantic_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX),
       hybrid_v3_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX_V3),
       hybrid_v4_mode: env.HYBRID_V4_MODE ?? "off",
+      generation_routing: env.RETRIEVAL_GENERATION_ROUTING ?? "legacy",
+      classification_mode: env.MEMORY_CLASSIFICATION_MODE ?? "observe",
       lexical: "d1-fts5",
       graph: "d1-memory-graph",
       retrieval_units: numeric(retrievalUnits, "total"),
