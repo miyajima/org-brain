@@ -40,17 +40,43 @@ async function getRuntimeEnv(): Promise<ConsoleWorkerEnv> {
 }
 
 function jsonError(status: number, code: string, message: string): Response {
+  console.warn(JSON.stringify({
+    console_view: "api_proxy",
+    phase: code,
+    status
+  }));
   return new Response(JSON.stringify({ ok: false, error: { code, message } }), {
     status,
     headers: { "content-type": "application/json" }
   });
 }
 
-function stripHeaders(headers: Headers): Headers {
+async function logUpstreamFailure(response: Response): Promise<void> {
+  if (response.status < 400) return;
+  let code = "upstream_error";
+  try {
+    const payload = await response.clone().json() as { error?: { code?: string } };
+    if (typeof payload.error?.code === "string") code = payload.error.code;
+  } catch {
+    // Keep logs metadata-only when the upstream body is not JSON.
+  }
+  console.warn(JSON.stringify({
+    console_view: "api_proxy",
+    phase: code,
+    status: response.status
+  }));
+}
+
+export function stripProxyHeaders(headers: Headers): Headers {
   const next = new Headers();
   for (const [key, value] of headers.entries()) {
     const lower = key.toLowerCase();
-    if (lower === "host" || lower === "x-api-key") continue;
+    if (
+      lower === "host" ||
+      lower === "x-api-key" ||
+      lower === "cf-access-jwt-assertion" ||
+      lower === "cf-access-authenticated-user-email"
+    ) continue;
     next.set(key, value);
   }
   return next;
@@ -86,7 +112,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
   const targetUrl = new URL(`https://internal/${path}`);
   targetUrl.search = new URL(request.url).search;
 
-  const headers = stripHeaders(request.headers);
+  const headers = stripProxyHeaders(request.headers);
   if (runtimeEnv.INTERNAL_API_KEY) headers.set("x-api-key", runtimeEnv.INTERNAL_API_KEY);
 
   const init = {
@@ -98,6 +124,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
   if (runtimeEnv?.API) {
     try {
       const serviceResponse = await runtimeEnv.API.fetch(targetUrl.toString(), init);
+      await logUpstreamFailure(serviceResponse);
       if (!apiBaseUrl || serviceResponse.status !== 503) {
         return serviceResponse;
       }
