@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const consolePort = Number(process.env.CONSOLE_E2E_PORT ?? 4321);
 const mockApiPort = Number(process.env.CONSOLE_E2E_API_PORT ?? 19087);
+const browserExecutablePath = process.env.CONSOLE_E2E_BROWSER_EXECUTABLE;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -28,7 +29,7 @@ export default defineConfig({
       timeout: 15_000
     },
     {
-      command: `pnpm exec astro dev --host 127.0.0.1 --port ${consolePort}`,
+      command: `./node_modules/.bin/astro dev --host 127.0.0.1 --port ${consolePort}`,
       url: `http://127.0.0.1:${consolePort}/profile`,
       reuseExistingServer: false,
       timeout: 30_000,
@@ -36,14 +37,18 @@ export default defineConfig({
         API_BASE_URL: `http://127.0.0.1:${mockApiPort}`,
         INTERNAL_API_KEY: "dev-org-brain-api-key",
         ACCESS_JWT_REQUIRED: "false",
-        CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+        CLOUDFLARE_INCLUDE_PROCESS_ENV: "true",
+        INSIGHTS_UI_MODE: "on"
       }
     }
   ],
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] }
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(browserExecutablePath ? { launchOptions: { executablePath: browserExecutablePath } } : {})
+      }
     }
   ]
 });

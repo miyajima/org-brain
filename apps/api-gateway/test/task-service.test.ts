@@ -58,7 +58,8 @@ class FakeStatement {
         id: this.args[0] as string,
         tenant_id: this.args[1] as string,
         status: this.args[4] as string,
-        idempotency_key: this.args[7] as string
+        idempotency_key: this.args[7] as string,
+        created_by_principal: this.args[10] as string | null
       });
     }
 
@@ -99,7 +100,13 @@ class FakeStatement {
 }
 
 class FakeD1 {
-  tasks: Array<{ id: string; tenant_id: string; status: string; idempotency_key: string }> = [];
+  tasks: Array<{
+    id: string;
+    tenant_id: string;
+    status: string;
+    idempotency_key: string;
+    created_by_principal: string | null;
+  }> = [];
   events: Array<{ id: string; tenant_id: string; task_id: string; kind: string; payload: string }> = [];
   measurementRuns: Array<{ id: string; tenant_id: string; pair_key: string }> = [];
   measurementVariants: Array<{
@@ -144,13 +151,14 @@ describe("createTask", () => {
       input_ref: "spec://abc"
     };
 
-    const first = await createTask(env, body);
+    const first = await createTask(env, body, { actorPrincipal: "authenticated-principal" });
     const second = await createTask(env, body);
 
     expect(first.deduped).toBe(false);
     expect(second.deduped).toBe(true);
     expect(second.task_id).toBe(first.task_id);
     expect(db.tasks).toHaveLength(1);
+    expect(db.tasks[0]?.created_by_principal).toBe("authenticated-principal");
     expect(sent).toHaveLength(1);
   });
 

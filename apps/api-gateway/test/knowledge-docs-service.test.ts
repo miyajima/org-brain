@@ -105,16 +105,23 @@ class FakeStatement {
     }
 
     if (this.sql.includes("FROM resource_acl")) {
-      const tenantId = String(this.args[0]);
-      const resourceType = String(this.args[1]);
+      const jsonTableLookup = this.sql.includes("WITH requested_ids(resource_id)");
+      const tenantId = String(this.args[jsonTableLookup ? 2 : 0]);
+      const resourceType = String(this.args[jsonTableLookup ? 3 : 1]);
+      const resourceIds = jsonTableLookup
+        ? new Set(JSON.parse(String(this.args[0])) as string[])
+        : new Set(this.args.slice(2).map(String));
+      const subjects = jsonTableLookup
+        ? JSON.parse(String(this.args[1])) as Array<[string, string]>
+        : this.args.slice(2, -1).map((value, index, values) =>
+          index % 2 === 0 ? [String(value), String(values[index + 1])] as [string, string] : null
+        ).filter((value): value is [string, string] => Boolean(value));
       const rows = this.db.resourceAcl.filter((row) => {
         if (row.tenant_id !== tenantId || row.resource_type !== resourceType || row.permission !== "read") return false;
-        const resourceIds = new Set(this.args.slice(2).map(String));
         if (!resourceIds.has(row.resource_id)) return false;
-        for (let index = 2; index < this.args.length - 1; index += 1) {
-          if (String(this.args[index]) === row.subject_type && String(this.args[index + 1]) === row.subject_id) return true;
-        }
-        return false;
+        return subjects.some(([subjectType, subjectId]) =>
+          subjectType === row.subject_type && subjectId === row.subject_id
+        );
       });
       return { results: rows.map((row) => ({ resource_id: row.resource_id })) as T[] };
     }

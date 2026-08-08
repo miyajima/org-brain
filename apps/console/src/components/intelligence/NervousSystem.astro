@@ -1,0 +1,304 @@
+---
+import brandMark from "../../../../../assets/brand/org-brain-avatar.png";
+import IntelligencePoller from "./IntelligencePoller.astro";
+import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import {
+  activityTimelineWidth,
+  buildProjectPulses,
+  eventDeepLink,
+  hasDashboardActivityContent,
+  layoutActivityTimeline,
+  relativeTime,
+  type ActivityEvent,
+  type DashboardActivity
+} from "../../lib/nervous-system-ui";
+
+const {
+  data,
+  refreshUrl,
+  params,
+  locale = "en"
+} = Astro.props as { data: DashboardActivity; refreshUrl: string; params: URLSearchParams; locale?: IntelligenceLocale };
+const copy = intelligencePageCopy(locale);
+const hasActivityContent = hasDashboardActivityContent(data);
+const actors = data.observed_agents.slice(0, 6);
+const allProjects = buildProjectPulses(data.events);
+const projects = allProjects.slice(0, 5);
+const selectedEventId = params.get("event");
+const selectedEvent = data.events.find((event) => event.id === selectedEventId) ?? data.events[0] ?? null;
+const attention = data.attention.slice(0, 3);
+const omittedActors = data.observed_agents.slice(actors.length);
+const omittedProjects = allProjects.slice(projects.length);
+const omittedAttention = data.attention.slice(attention.length);
+const hasOmissions = data.has_more || omittedActors.length > 0 || omittedProjects.length > 0 || omittedAttention.length > 0;
+const now = data.generated_at || Date.now();
+const start = now - 86_400_000;
+const formatTime = (timestamp: number) => timestamp
+  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp))
+  : copy.nervous.timeUnknown;
+const dateTime = (timestamp: number) => new Date(timestamp).toISOString();
+const pointY = (index: number, count: number) => count <= 1 ? 220 : 72 + index * (296 / (count - 1));
+const timelineWidth = activityTimelineWidth(data.events.length);
+const timelinePoints = layoutActivityTimeline(data.events, start, now, timelineWidth);
+const timelineRowCount = Math.max(1, ...timelinePoints.map((point) => point.row + 1));
+const timelineHeight = timelineRowCount * 44;
+const scope = new URLSearchParams();
+for (const key of ["tenant_id", "project_id", "lang"]) {
+  const value = params.get(key);
+  if (value) scope.set(key, value);
+}
+const selectEventHref = (event: ActivityEvent) => {
+  const next = new URLSearchParams(params);
+  next.set("event", event.id);
+  const pathname = Astro.url.pathname === "/" ? "/" : "/overview";
+  return `${pathname}?${next.toString()}`;
+};
+const selectedDeepLink = selectedEvent ? eventDeepLink(selectedEvent, scope) : null;
+const severityLabel = (severity: ActivityEvent["severity"]) => copy.common.severity[severity];
+const countCopy = (template: string, count: number) => template.replace("{count}", String(count));
+---
+<section class="intelligence-surface nervous-system" aria-labelledby="nervous-system-title">
+  <header class="intelligence-header">
+    <div>
+      <p class="intelligence-eyebrow">{copy.nervous.eyebrow}</p>
+      <h1 id="nervous-system-title">{copy.nervous.title}</h1>
+      <p>{copy.nervous.description}</p>
+    </div>
+    <div class="header-actions">
+      {attention.length > 0 && <a class="primary-action" href="#attention-signals">{copy.nervous.reviewSignals} ({data.attention.length})</a>}
+      <a class="secondary-action" href="#activity-timeline">{copy.nervous.replay24}</a>
+      <IntelligencePoller refreshUrl={refreshUrl} initialData={data} generatedAt={data.generated_at} locale={locale} incrementalField={data.newest_cursor != null ? "events" : undefined} />
+    </div>
+  </header>
+
+  {hasOmissions && (
+    <details class="activity-omissions">
+      <summary>{copy.nervous.omittedSummary}</summary>
+      <ul>
+        {data.has_more && <li>{copy.nervous.moreEventsAvailable}</li>}
+        {omittedActors.length > 0 && <li><strong>{countCopy(copy.nervous.omittedAgents, omittedActors.length)}</strong><span>{omittedActors.map((actor) => actor.label).join(" · ")}</span></li>}
+        {omittedProjects.length > 0 && <li><strong>{countCopy(copy.nervous.omittedProjects, omittedProjects.length)}</strong><span>{omittedProjects.map((project) => project.label).join(" · ")}</span></li>}
+        {omittedAttention.length > 0 && <li><strong>{countCopy(copy.nervous.omittedSignals, omittedAttention.length)}</strong><span>{omittedAttention.map((signal) => signal.reason).join(" · ")}</span></li>}
+      </ul>
+    </details>
+  )}
+
+  {!hasActivityContent ? (
+    <div class="intelligence-empty" role="status">
+      <strong>{copy.nervous.noActivityTitle}</strong>
+      <span>{copy.nervous.noActivityBody}</span>
+    </div>
+  ) : (
+    <div class="system-stage">
+      <div class="topology-heading topology-heading-actors">{copy.nervous.agentsHeading}</div>
+      <div class="topology-heading topology-heading-brain">{copy.nervous.brainHeading}</div>
+      <div class="topology-heading topology-heading-projects">{copy.nervous.projectsHeading}</div>
+
+      <svg class="topology-map" viewBox="0 0 1200 440" role="img" aria-labelledby="topology-title topology-description">
+        <title id="topology-title">{copy.nervous.topologyTitle}</title>
+        <desc id="topology-description">{copy.nervous.topologyDescription}</desc>
+        <defs>
+          <filter id="blue-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="6" result="blur"></feGaussianBlur>
+            <feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+          </filter>
+          <linearGradient id="flow-blue" x1="0" x2="1"><stop offset="0" stop-color="#55b8ff" stop-opacity="0.35"></stop><stop offset="0.48" stop-color="#1687ff"></stop><stop offset="1" stop-color="#75c9ff"></stop></linearGradient>
+          <linearGradient id="flow-critical" x1="0" x2="1"><stop offset="0" stop-color="#1687ff"></stop><stop offset="1" stop-color="#ff5c67"></stop></linearGradient>
+        </defs>
+
+        {actors.map((_, index) => {
+          const y = pointY(index, actors.length);
+          return (
+            <g>
+              <path class="flow flow-in" d={`M 142 ${y} C 300 ${y}, 360 220, 548 220`}></path>
+              {[0.25, 0.52, 0.76].map((progress) => <circle class="flow-pulse" cx={142 + progress * 406} cy={y + (220 - y) * progress} r="3.4"></circle>)}
+            </g>
+          );
+        })}
+        {projects.map((project, index) => {
+          const y = pointY(index, projects.length);
+          return (
+            <path class={project.criticalCount > 0 ? "flow flow-out flow-critical" : "flow flow-out"} d={`M 652 220 C 835 220, 900 ${y}, 1048 ${y}`}></path>
+          );
+        })}
+
+        <circle class="brain-aura" cx="600" cy="220" r="74"></circle>
+        <circle class="brain-ring" cx="600" cy="220" r="56"></circle>
+        <image href={brandMark.src} x="562" y="182" width="76" height="76" preserveAspectRatio="xMidYMid slice"></image>
+
+        {actors.map((actor, index) => {
+          const y = pointY(index, actors.length);
+          const initial = actor.label.replace(/[^A-Za-z0-9一-龠ぁ-んァ-ヶ]/gu, "").slice(0, 2).toUpperCase() || "AI";
+          return (
+            <g>
+              <circle class="actor-ring" cx="80" cy={y} r="31"></circle>
+              <text class="actor-initial" x="80" y={y + 5} text-anchor="middle">{initial}</text>
+              <circle class={actor.state === "active" ? "agent-state agent-state-active" : "agent-state"} cx="105" cy={y - 23} r="4"><title>{actor.state === "active" ? copy.nervous.active : copy.nervous.idle}</title></circle>
+              <text class="actor-label" x="122" y={y - 5}>{actor.label}</text>
+              <text class="actor-detail" x="122" y={y + 15}>{actor.model || `${actor.active_task_count} ${copy.common.activeTasks}`}</text>
+              <text class="actor-counter" x="122" y={y + 34}>{copy.common.read} {actor.read_count} · {copy.common.write} {actor.write_count}</text>
+            </g>
+          );
+        })}
+
+        {projects.map((project, index) => {
+          const y = pointY(index, projects.length);
+          return (
+            <g>
+              <rect class={project.criticalCount > 0 ? "project-card project-card-critical" : "project-card"} x="1048" y={y - 34} width="144" height="68" rx="12"></rect>
+              <text class="project-label" x="1064" y={y - 6}>{project.label.slice(0, 20)}</text>
+              <text class="project-detail" x="1064" y={y + 15}>{project.eventCount} {copy.common.events} · {project.criticalCount} {copy.common.critical}</text>
+            </g>
+          );
+        })}
+
+        <g class="brain-capability">
+          <rect x="472" y="105" width="92" height="64" rx="12"></rect>
+          <text x="518" y="133" text-anchor="middle">{copy.nervous.remember}</text><text class="capability-note" x="518" y="151" text-anchor="middle">{copy.nervous.storeStructure}</text>
+        </g>
+        <g class="brain-capability">
+          <rect x="636" y="105" width="92" height="64" rx="12"></rect>
+          <text x="682" y="133" text-anchor="middle">{copy.nervous.understand}</text><text class="capability-note" x="682" y="151" text-anchor="middle">{copy.nervous.searchRelate}</text>
+        </g>
+        <g class="brain-capability">
+          <rect x="472" y="274" width="92" height="64" rx="12"></rect>
+          <text x="518" y="302" text-anchor="middle">{copy.nervous.evaluate}</text><text class="capability-note" x="518" y="320" text-anchor="middle">{copy.nervous.trustFreshness}</text>
+        </g>
+        <g class="brain-capability">
+          <rect x="636" y="274" width="92" height="64" rx="12"></rect>
+          <text x="682" y="302" text-anchor="middle">{copy.nervous.use}</text><text class="capability-note" x="682" y="320" text-anchor="middle">{copy.nervous.shareGenerate}</text>
+        </g>
+      </svg>
+
+      <div class="topology-fallback">
+        <section aria-labelledby="actors-list-title">
+          <h2 id="actors-list-title">{copy.nervous.observedAgents}</h2>
+          <ul>
+            {actors.map((actor) => <li><strong>{actor.label}</strong><span>{actor.state === "active" ? copy.nervous.active : copy.nervous.idle} · {copy.common.read} {actor.read_count} · {copy.common.write} {actor.write_count}</span></li>)}
+          </ul>
+        </section>
+        <section aria-labelledby="projects-list-title">
+          <h2 id="projects-list-title">{copy.nervous.relatedProjects}</h2>
+          <ul>
+            {projects.map((project) => <li><strong>{project.label}</strong><span>{project.eventCount} {copy.common.events} · {relativeTime(project.lastSeenAt, now, locale)}</span></li>)}
+          </ul>
+        </section>
+      </div>
+
+      {attention.length > 0 && (
+        <section class="attention-rail" id="attention-signals" aria-labelledby="attention-title">
+          <div><p class="intelligence-eyebrow">{copy.nervous.attentionEyebrow}</p><h2 id="attention-title">{copy.nervous.attentionTitle}</h2></div>
+          <div class="attention-list">
+            {attention.map((signal) => (
+              <article class:list={["attention-card", signal.severity === "critical" && "attention-critical"]}>
+                <span class="attention-severity">{severityLabel(signal.severity)}</span>
+                <strong>{signal.reason}</strong>
+                <span>{signal.kind} · {relativeTime(signal.detected_at, now, locale)}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )}
+
+  {selectedEvent && (
+    <section class="selected-event" aria-labelledby="selected-event-title">
+      <div class="selected-event-summary">
+        <span class:list={["event-dot", `event-dot-${selectedEvent.severity}`]}></span>
+        <div><p class="intelligence-eyebrow">{copy.nervous.selectedEvent} · {severityLabel(selectedEvent.severity)}</p><h2 id="selected-event-title">{selectedEvent.summary}</h2><p>{selectedEvent.actor.label} → {selectedEvent.target?.label || selectedEvent.subject.label}</p></div>
+      </div>
+      <dl>
+        <div><dt>{copy.nervous.target}</dt><dd>{selectedEvent.subject.label}</dd></div>
+        <div><dt>{copy.nervous.status}</dt><dd>{selectedEvent.status || selectedEvent.type}</dd></div>
+        <div><dt>{copy.nervous.occurredAt}</dt><dd><time datetime={dateTime(selectedEvent.occurred_at)}>{formatTime(selectedEvent.occurred_at)}</time></dd></div>
+      </dl>
+      {selectedDeepLink && <a class="secondary-action" href={selectedDeepLink}>{copy.nervous.openTrace}</a>}
+    </section>
+  )}
+
+  <section class="activity-timeline" id="activity-timeline" aria-labelledby="activity-timeline-title">
+    <header><div><p class="intelligence-eyebrow">{copy.nervous.replayEyebrow}</p><h2 id="activity-timeline-title">{copy.nervous.replayTitle}</h2></div><span>{data.events.length} {copy.common.events}</span></header>
+    {data.events.length > 0 ? (
+      <div class="timeline-scroll">
+        <div class="timeline-canvas" style={`width:${timelineWidth}px`}>
+          <div class="timeline-hours" aria-hidden="true">{[24, 20, 16, 12, 8, 4, 0].map((hours) => <span>{hours === 0 ? copy.nervous.now : copy.nervous.hoursAgo.replace("{hours}", String(hours))}</span>)}</div>
+          <div class="timeline-track" style={`height:${timelineHeight}px`}>
+            {Array.from({ length: timelineRowCount }, (_, row) => <span class="timeline-line" style={`top:${row * 44 + 22}px`}></span>)}
+            {timelinePoints.map(({ event, x, row }) => (
+              <a
+                class:list={["timeline-event", `timeline-event-${event.severity}`, selectedEvent.id === event.id && "timeline-event-selected"]}
+                style={`left:${x}px;top:${row * 44 + 22}px`}
+                href={selectEventHref(event)}
+                aria-label={`${event.summary}, ${formatTime(event.occurred_at)}, ${severityLabel(event.severity)}`}
+                aria-current={selectedEvent.id === event.id ? "true" : undefined}
+                title={event.summary}
+              ><span class="timeline-event-mark" aria-hidden="true"></span></a>
+            ))}
+          </div>
+        </div>
+      </div>
+    ) : <div class="intelligence-empty compact">{copy.nervous.noPeriodEvents}</div>}
+    {data.events.length > 0 && (
+      <>
+        <div class="timeline-legend" aria-label={copy.nervous.eventTypes}>
+          {[...new Set(data.events.map((event) => event.type))].slice(0, 8).map((type) => <span>{type}</span>)}
+        </div>
+        <details class="timeline-event-list">
+          <summary>{copy.nervous.eventList} <span>{data.events.length}</span></summary>
+          <ol>
+            {data.events.map((event) => <li><a href={selectEventHref(event)} aria-current={selectedEvent?.id === event.id ? "true" : undefined}><strong>{event.summary}</strong><span>{event.actor.label} · <time datetime={dateTime(event.occurred_at)}>{formatTime(event.occurred_at)}</time> · {severityLabel(event.severity)}</span></a></li>)}
+          </ol>
+        </details>
+      </>
+    )}
+  </section>
+</section>
+
+<style>
+  .nervous-system { padding-bottom: 2rem; }
+  .intelligence-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem; align-items: end; padding: 1.8rem 0 1.5rem; }
+  .intelligence-header h1 { margin-top: .55rem; max-width: 26ch; color: var(--intelligence-text); font-size: clamp(2rem, 3.3vw, 3.25rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.12; }
+  .intelligence-header > div > p:last-child { margin-top: .75rem; max-width: 55rem; color: var(--intelligence-muted); line-height: 1.75; }
+  .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: "Fira Code", monospace; font-size: .69rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+  .header-actions { display: flex; max-width: 31rem; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; }
+  .primary-action, .secondary-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 11px; padding: .65rem 1rem; font-size: .82rem; font-weight: 600; }
+  .primary-action { border: 1px solid #2b9bff; background: linear-gradient(180deg, #178bff, #0568ed); color: white; box-shadow: 0 0 28px rgba(13, 123, 255, .2); }
+  .secondary-action { border: 1px solid var(--intelligence-border); background: rgba(255,255,255,.025); color: var(--intelligence-text); }
+  .system-stage { position: relative; min-height: 31rem; overflow: hidden; border-top: 1px solid rgba(111,136,172,.12); border-bottom: 1px solid rgba(111,136,172,.14); background: radial-gradient(circle at 50% 48%, rgba(0,112,255,.12), transparent 24%); }
+  .topology-map { width: 100%; min-height: 31rem; }
+  .topology-heading { position: absolute; z-index: 2; top: 1rem; color: #b4bdcb; font-size: .72rem; font-weight: 600; }
+  .topology-heading-actors { left: 3%; }.topology-heading-brain { left: 46%; }.topology-heading-projects { right: 3%; }
+  .flow { fill: none; stroke: url(#flow-blue); stroke-width: 3; filter: url(#blue-glow); vector-effect: non-scaling-stroke; }
+  .flow-critical { stroke: url(#flow-critical); }
+  .flow-pulse { fill: #d8f1ff; filter: url(#blue-glow); }
+  .brain-aura { fill: rgba(0,110,255,.1); stroke: rgba(45,155,255,.35); stroke-width: 2; filter: url(#blue-glow); }
+  .brain-ring { fill: #050b14; stroke: #39a2ff; stroke-width: 2; filter: url(#blue-glow); }
+  .actor-ring { fill: #080d15; stroke: #607691; stroke-width: 1.5; filter: url(#blue-glow); }
+  .actor-initial { fill: #f7fbff; font-family: "Fira Code", monospace; font-size: 14px; font-weight: 600; }
+  .agent-state { fill: none; stroke: #a5afbe; stroke-width: 1.5; }.agent-state-active { fill: #45dc8a; stroke: none; filter: url(#blue-glow); }
+  .actor-label, .project-label { fill: #f4f8ff; font-size: 13px; font-weight: 600; }
+  .actor-detail, .project-detail, .actor-counter { fill: #8f99aa; font-size: 9px; }.actor-counter { fill: #46aaff; }
+  .project-card { fill: rgba(10,15,23,.9); stroke: rgba(139,163,196,.28); }.project-card-critical { stroke: rgba(255,92,103,.65); }
+  .brain-capability rect { fill: rgba(9,17,29,.86); stroke: rgba(100,146,198,.28); }
+  .brain-capability text { fill: #e5f3ff; font-size: 11px; font-weight: 600; }.brain-capability .capability-note { fill: #8190a4; font-size: 8px; font-weight: 400; }
+  .topology-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .attention-rail { position: absolute; z-index: 3; right: 1.5rem; bottom: 1.2rem; left: 1.5rem; display: grid; grid-template-columns: 12rem minmax(0,1fr); gap: 1rem; align-items: center; border: 1px solid rgba(246,173,50,.2); border-radius: 13px; background: rgba(6,10,17,.86); padding: .8rem 1rem; backdrop-filter: blur(16px); }
+  .attention-rail h2 { margin-top: .2rem; font-size: .92rem; }.attention-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .6rem; }
+  .attention-card { display: grid; gap: .22rem; border-left: 2px solid var(--intelligence-warning); padding-left: .7rem; }.attention-critical { border-color: var(--intelligence-danger); }
+  .attention-card strong { overflow: hidden; color: #fff4d9; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }.attention-card span:last-child { color: var(--intelligence-muted); font-size: .65rem; }
+  .attention-severity { color: var(--intelligence-warning); font-family: "Fira Code", monospace; font-size: .58rem; text-transform: uppercase; }
+  .activity-omissions { margin-bottom: 1rem; border: 1px solid rgba(246,173,50,.25); border-radius: 12px; background: rgba(246,173,50,.055); color: #f7d598; font-size: .72rem; }.activity-omissions summary { min-height: 44px; padding: .75rem 1rem; cursor: pointer; font-weight: 600; }.activity-omissions ul { display: grid; gap: .45rem; border-top: 1px solid rgba(246,173,50,.18); padding: .75rem 1rem; }.activity-omissions li { display: grid; gap: .2rem; }.activity-omissions li span { overflow: hidden; color: var(--intelligence-muted); text-overflow: ellipsis; white-space: nowrap; }
+  .selected-event { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) auto; gap: 1rem; align-items: center; margin-top: 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(7,11,18,.72); padding: 1rem 1.2rem; }
+  .selected-event-summary { display: flex; align-items: flex-start; gap: .75rem; }.selected-event h2 { margin-top: .35rem; color: var(--intelligence-text); font-size: 1.05rem; }.selected-event-summary p:last-child { margin-top: .32rem; color: var(--intelligence-muted); font-size: .75rem; }
+  .event-dot { width: .55rem; height: .55rem; flex: 0 0 auto; margin-top: .25rem; border-radius: 999px; background: var(--intelligence-blue); box-shadow: 0 0 14px rgba(22,135,255,.7); }.event-dot-warning { background: var(--intelligence-warning); }.event-dot-critical { background: var(--intelligence-danger); }
+  .selected-event dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .8rem; }.selected-event dt { color: var(--intelligence-muted); font-size: .62rem; text-transform: uppercase; }.selected-event dd { margin-top: .3rem; overflow: hidden; color: var(--intelligence-text); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .activity-timeline { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(4,8,14,.72); }.activity-timeline > header { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1rem; border-bottom: 1px solid var(--intelligence-border); }.activity-timeline h2 { margin-top: .2rem; font-size: .92rem; }.activity-timeline > header > span { color: var(--intelligence-muted); font-family: "Fira Code", monospace; font-size: .68rem; }
+  .timeline-scroll { overflow-x: auto; padding: .75rem 1rem .4rem; scrollbar-gutter: stable; }.timeline-canvas { min-width: 100%; }.timeline-hours { display: flex; justify-content: space-between; color: var(--intelligence-muted); font-size: .64rem; }.timeline-track { position: relative; min-height: 2.75rem; }.timeline-line { position: absolute; right: 0; left: 0; height: 1px; background: linear-gradient(90deg,rgba(22,135,255,.15),rgba(83,187,255,.8),rgba(22,135,255,.25)); box-shadow: 0 0 12px rgba(22,135,255,.35); }
+  .timeline-event { position: absolute; z-index: 2; display: grid; width: 44px; height: 44px; transform: translate(-50%,-50%); place-items: center; border: 0; border-radius: 999px; }.timeline-event-mark { display: block; width: .36rem; height: 1.05rem; border-radius: 3px; background: #e8f7ff; box-shadow: 0 0 10px rgba(61,173,255,.8); }.timeline-event-warning .timeline-event-mark { width: .72rem; height: .72rem; transform: rotate(45deg); border-radius: 2px; background: var(--intelligence-warning); }.timeline-event-critical .timeline-event-mark { width: .78rem; height: .78rem; border: 2px solid #ffd9dc; border-radius: 999px; background: var(--intelligence-danger); }.timeline-event-selected { outline: 2px solid #86d2ff; outline-offset: -4px; }.timeline-event-selected .timeline-event-mark { scale: 1.18; }
+  .timeline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .55rem 1rem .8rem; color: var(--intelligence-muted); font-size: .65rem; }.timeline-legend span::before { display: inline-block; width: .4rem; height: .4rem; margin-right: .38rem; border-radius: 999px; background: var(--intelligence-blue); content: ""; }.timeline-event-list { border-top: 1px solid var(--intelligence-border); }.timeline-event-list summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: .65rem 1rem; color: #c7d8e8; cursor: pointer; font-size: .7rem; }.timeline-event-list ol { display: grid; max-height: 22rem; overflow-y: auto; border-top: 1px solid var(--intelligence-border); }.timeline-event-list li + li { border-top: 1px solid rgba(139,159,185,.1); }.timeline-event-list a { display: grid; min-height: 50px; gap: .2rem; padding: .55rem 1rem; }.timeline-event-list strong { color: var(--intelligence-text); font-size: .72rem; }.timeline-event-list a span { color: var(--intelligence-muted); font-size: .62rem; }
+  .intelligence-empty { display: grid; gap: .55rem; min-height: 16rem; place-content: center; border: 1px dashed var(--intelligence-border); border-radius: 16px; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 6rem; }
+  @media (max-width: 1020px) { .intelligence-header { grid-template-columns: 1fr; }.header-actions { max-width: none; justify-content: flex-start; }.system-stage { padding-top: 2.5rem; }.topology-map { min-width: 880px; transform: translateX(calc((100% - 880px)/2)); }.attention-rail { position: relative; right: auto; bottom: auto; left: auto; margin: 0 1rem 1rem; grid-template-columns: 1fr; }.selected-event { grid-template-columns: 1fr; }.attention-list { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 720px) { .topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: flex; justify-content: space-between; gap: .8rem; color: var(--intelligence-muted); font-size: .7rem; }.topology-fallback strong { color: var(--intelligence-text); }.attention-list, .selected-event dl { grid-template-columns: 1fr; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-omissions li span { white-space: normal; } }
+  @media (prefers-reduced-motion: no-preference) { .flow { stroke-dasharray: 10 12; animation: flow-dash 7s linear infinite; }.brain-aura { animation: brain-pulse 3.4s ease-in-out infinite; } @keyframes flow-dash { to { stroke-dashoffset: -88; } } @keyframes brain-pulse { 50% { opacity: .58; transform: scale(1.04); transform-origin: 600px 220px; } } }
+</style>

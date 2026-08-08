@@ -82,7 +82,8 @@ class ImpactStatement {
         task_id: this.args[3],
         trace_id: this.args[4],
         external_run_id: this.args[5],
-        created_at: this.args[15]
+        actor_principal: this.args[14],
+        created_at: this.args[16]
       });
     } else if (this.sql.includes("INSERT INTO memory_usage_items")) {
       this.db.usageItems.push({
@@ -165,6 +166,14 @@ describe("memory impact service", () => {
       access_path: "search", request_source: "api", query_hash: "raw query text",
       items: [{ source_type: "memory", source_id: "memory-1" }]
     })).rejects.toMatchObject({ code: "invalid_query_hash" });
+    await recordMemoryUsageFromRequest(env, "tenant-a", {
+      id: "usage-authenticated",
+      access_path: "direct",
+      request_source: "api",
+      actor_principal: "spoofed-principal",
+      items: [{ source_type: "memory", source_id: "memory-1" }]
+    }, "authenticated-principal");
+    expect(db.usageEvents[0]?.actor_principal).toBe("authenticated-principal");
     const usage = await recordMemoryUsage(env, {
       id: "usage-local-1",
       tenant_id: "tenant-a",
@@ -179,8 +188,9 @@ describe("memory impact service", () => {
     });
     expect(usage.usage_item_ids).toHaveLength(1);
     expect(usage).toMatchObject({ created: true, usage_item_ids: ["usage-item-local-1"] });
-    expect(db.usageEvents[0]?.external_run_id).toBe("run-1");
-    expect(db.usageEvents[0]).toMatchObject({
+    const linkedUsage = db.usageEvents.find((row) => row.id === "usage-local-1");
+    expect(linkedUsage?.external_run_id).toBe("run-1");
+    expect(linkedUsage).toMatchObject({
       project_id: "org-brain",
       task_id: "task-1",
       trace_id: "trace-1"
@@ -218,7 +228,7 @@ describe("memory impact service", () => {
       usage_event_id: usage.usage_id,
       items: [{ usage_item_id: "usage-item-local-1", used_state: "not_used" }]
     })).resolves.toMatchObject({ updated_count: 1 });
-    expect(db.usageItems[0]?.used_state).toBe("not_used");
+    expect(db.usageItems.find((row) => row.id === "usage-item-local-1")?.used_state).toBe("not_used");
     await expect(recordMemoryEffect(env, "tenant-a", {
       usage_event_id: usage.usage_id,
       idempotency_key: "negative-gross",

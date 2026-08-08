@@ -1,0 +1,62 @@
+---
+import MemoryStrata from "../../components/intelligence/MemoryStrata.astro";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
+import { intelligencePageCopy } from "../../lib/intelligence-locale";
+import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../../lib/insights-ui-mode";
+import {
+  normalizeStrataDetail,
+  normalizeStrataPayload,
+  type StrataSourceType
+} from "../../lib/memory-strata-ui";
+
+const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
+if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
+  return Astro.redirect(`/decisions${Astro.url.search}`);
+}
+const { params, apiParams, lang } = dashboardPageParams(Astro.url);
+const copy = intelligencePageCopy(lang);
+const chainTypes = new Set(["canonical", "decision", "learning", "assumption", "source"]);
+const requestedType = params.get("type")?.trim();
+if (requestedType && chainTypes.has(requestedType)) apiParams.set("types", requestedType);
+
+const refreshUrl = `/api/v1/dashboard/strata?${apiParams.toString()}`;
+const result = await fetchDashboardData(
+  new URL(refreshUrl, Astro.url),
+  normalizeStrataPayload,
+  normalizeStrataPayload({})
+);
+
+const sourceTypes = new Set<StrataSourceType>(["memory", "decision_memory", "knowledge_assertion", "knowledge_resource"]);
+const requestedSourceType = params.get("source_type")?.trim();
+const requestedSourceId = params.get("source_id")?.trim();
+const fallbackChain = result.data.chains[0] ?? null;
+const sourceType = requestedSourceType && sourceTypes.has(requestedSourceType as StrataSourceType)
+  ? requestedSourceType as StrataSourceType
+  : fallbackChain?.source_type ?? null;
+const sourceId = sourceType && requestedSourceId ? requestedSourceId : fallbackChain?.source_id ?? null;
+let detail = null;
+let detailError: string | null = null;
+if (sourceType && sourceId) {
+  const detailParams = new URLSearchParams({ tenant_id: params.get("tenant_id") || "default" });
+  const projectId = params.get("project_id");
+  if (projectId) detailParams.set("project_id", projectId);
+  const detailUrl = `/api/v1/dashboard/strata/${encodeURIComponent(sourceType)}/${encodeURIComponent(sourceId)}?${detailParams.toString()}`;
+  const detailResult = await fetchDashboardData(
+    new URL(detailUrl, Astro.url),
+    normalizeStrataDetail,
+    normalizeStrataDetail({})
+  );
+  detail = detailResult.data.chain ? detailResult.data : null;
+  detailError = detailResult.error;
+}
+---
+<BaseLayout title={copy.routes.strataTitle} lang={lang} wide>
+  {(result.error || detailError) && (
+    <div class="intelligence-route-alert" role="alert">
+      <strong>{copy.routes.strataError}</strong>
+      <span>{result.error || detailError}</span>
+    </div>
+  )}
+  <MemoryStrata data={result.data} detail={detail} refreshUrl={refreshUrl} params={params} locale={lang} />
+</BaseLayout>

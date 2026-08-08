@@ -19,7 +19,7 @@ import {
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 20;
+export const MEMORY_SCHEMA_VERSION = 21;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -721,6 +721,7 @@ function createCurrentTables(db) {
       requested_work_type TEXT,
       retrieval_generation_id TEXT,
       ranking_profile_id TEXT,
+      actor_principal TEXT,
       verification_sampled INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
@@ -1057,6 +1058,9 @@ function upgradeMemoryUsageEvents(db) {
   const columns = tableColumns(db, "memory_usage_events");
   if (!columns.has("external_run_id")) {
     db.exec("ALTER TABLE memory_usage_events ADD COLUMN external_run_id TEXT");
+  }
+  if (!columns.has("actor_principal")) {
+    db.exec("ALTER TABLE memory_usage_events ADD COLUMN actor_principal TEXT");
   }
 }
 
@@ -1630,6 +1634,8 @@ function addIndexes(db) {
       ON memory_usage_events(tenant_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_usage_events_external_run
       ON memory_usage_events(tenant_id, external_run_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memory_usage_events_actor
+      ON memory_usage_events(tenant_id, actor_principal, created_at DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_usage_items_source
       ON memory_usage_items(tenant_id, source_type, source_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_effect_events_usage
@@ -3446,8 +3452,8 @@ export class LocalMemoryStore {
              access_path, request_source, query_hash,
              requested_business_category_id, requested_work_type,
              retrieval_generation_id, ranking_profile_id,
-             verification_sampled, created_at
-           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+             actor_principal, verification_sampled, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).run(
           usageId, tenantId, linkedProjectId,
           linkedTaskId, linkedTraceId,
@@ -3456,6 +3462,7 @@ export class LocalMemoryStore {
           WORK_TYPES.has(input.requested_work_type) ? input.requested_work_type : null,
           nullableString(input.retrieval_generation_id, 128),
           nullableString(input.ranking_profile_id, 128),
+          "local",
           verificationSampled(tenantId, usageId) ? 1 : 0, createdAt
         );
         const insert = db.prepare(

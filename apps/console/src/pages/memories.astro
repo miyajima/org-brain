@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 
 type MemoryRow = {
   id: string;
@@ -154,6 +155,8 @@ type DetailRecord = {
 
 const url = Astro.url;
 const params = url.searchParams;
+const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
+const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 
 const tenantId = params.get("tenant_id")?.trim() || "default";
 const projectId = params.get("project_id")?.trim() || "";
@@ -466,6 +469,13 @@ const searchTabHref = makeHref({ view: "search", page: String(page) });
 const profileTabHref = makeHref({ view: "profile", selected: "" });
 const maintenanceTabHref = makeHref({ view: "maintenance", page: String(page), selected: "" });
 const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
+const constellationParams = new URLSearchParams({ tenant_id: tenantId });
+if (projectId) constellationParams.set("project_id", projectId);
+const requestedLang = params.get("lang");
+if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") {
+  constellationParams.set("lang", requestedLang);
+}
+const constellationHref = `/memories/constellation?${constellationParams.toString()}`;
 ---
 <BaseLayout title="Memory Explorer">
   <section class="space-y-5">
@@ -481,6 +491,7 @@ const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
           </div>
         </div>
         <div class="flex flex-wrap gap-2 xl:justify-end">
+          {insightsRoutesEnabled && <a class="surface-chip" href={constellationHref}>Knowledge Constellation</a>}
           <span class="surface-chip">{listPage?.meta.total ?? 0} visible</span>
           <span class="surface-chip">{listPage?.meta.canonical_count ?? 0} canonical</span>
           <span class="surface-chip">{listPage?.meta.digest_count ?? 0} digest</span>

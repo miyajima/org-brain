@@ -71,19 +71,30 @@ export async function loadReadableResourceIds(
 ): Promise<Set<string>> {
   const ids = [...new Set(args.resourceIds.filter(Boolean))];
   if (ids.length === 0 || args.authz.subjects.length === 0) return new Set();
-  const idPlaceholders = ids.map(() => "?").join(", ");
-  const subjectClauses = args.authz.subjects.map(() => "(subject_type = ? AND subject_id = ?)").join(" OR ");
-  const subjectBindings = args.authz.subjects.flatMap((subject) => [subject.subjectType, subject.subjectId]);
+  // D1 accepts at most 100 bound parameters per statement. Encode both
+  // unbounded sets as JSON tables so dense dashboard pages and principals
+  // with many groups retain exact ACL semantics without crossing that limit.
+  const subjectRows = args.authz.subjects.map((subject) => [subject.subjectType, subject.subjectId]);
   const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT DISTINCT resource_id
-     FROM resource_acl
-     WHERE tenant_id = ?
-       AND resource_type = ?
-       AND resource_id IN (${idPlaceholders})
-       AND permission = 'read'
-       AND (${subjectClauses})`
+    `WITH requested_ids(resource_id) AS (
+       SELECT CAST(value AS TEXT) FROM json_each(?)
+     ),
+     authorized_subjects(subject_type, subject_id) AS (
+       SELECT CAST(json_extract(value, '$[0]') AS TEXT),
+              CAST(json_extract(value, '$[1]') AS TEXT)
+       FROM json_each(?)
+     )
+     SELECT DISTINCT acl.resource_id
+     FROM resource_acl acl
+     JOIN requested_ids requested ON requested.resource_id = acl.resource_id
+     JOIN authorized_subjects subject
+       ON subject.subject_type = acl.subject_type
+      AND subject.subject_id = acl.subject_id
+     WHERE acl.tenant_id = ?
+       AND acl.resource_type = ?
+       AND acl.permission = 'read'`
   )
-    .bind(args.tenantId, args.resourceType, ...ids, ...subjectBindings)
+    .bind(JSON.stringify(ids), JSON.stringify(subjectRows), args.tenantId, args.resourceType)
     .all<{ resource_id: string }>();
   return new Set(rows.results.map((row) => row.resource_id));
 }

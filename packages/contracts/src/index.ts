@@ -355,3 +355,291 @@ export type DecisionResourceLink = {
   reviewed_by: string | null;
   created_at: number;
 };
+
+export const DASHBOARD_CONTRACT_VERSION = "dashboard/v1" as const;
+
+export const DASHBOARD_NODE_TYPES = ["project", "memory", "decision", "resource", "entity", "task"] as const;
+export const DASHBOARD_STRATA_TYPES = ["canonical", "decision", "learning", "assumption", "source"] as const;
+export const DASHBOARD_SOURCE_TYPES = ["memory", "decision_memory", "knowledge_assertion", "knowledge_resource"] as const;
+export const DASHBOARD_SEVERITIES = ["info", "warning", "critical"] as const;
+export const DASHBOARD_ATTENTION_KINDS = [
+  "task_stalled",
+  "task_failed",
+  "handoff_unacked",
+  "impact_unreported",
+  "retrieval_miss",
+  "negative_memory_effect",
+  "decision_conflict",
+  "memory_dormant",
+  "memory_expired"
+] as const;
+
+const dashboardTenantSchema = z.string().trim().min(1).max(128);
+const dashboardOptionalIdentifierSchema = z.string().trim().min(1).max(256).optional();
+const dashboardCursorSchema = z.string().trim().min(1).max(1024).optional();
+const dashboardOptionalTimestampSchema = z.preprocess(
+  (value) => value === "" || value === null ? undefined : value,
+  z.coerce.number().int().nonnegative().optional()
+);
+
+export const dashboardActivityQuerySchema = z.object({
+  tenant_id: dashboardTenantSchema.optional(),
+  project_id: dashboardOptionalIdentifierSchema,
+  from: dashboardOptionalTimestampSchema,
+  to: dashboardOptionalTimestampSchema,
+  before: dashboardCursorSchema,
+  after: dashboardCursorSchema,
+  limit: z.coerce.number().int().min(1).max(250).default(100)
+}).superRefine((value, context) => {
+  if (value.before && value.after) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["after"], message: "before and after are mutually exclusive" });
+  }
+  if (value.from !== undefined && value.to !== undefined) {
+    if (value.from > value.to) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["from"], message: "from must be before or equal to to" });
+    } else if (value.to - value.from > 7 * 24 * 60 * 60 * 1000) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["from"], message: "activity range cannot exceed 7 days" });
+    }
+  }
+});
+
+export const dashboardKnowledgeGraphQuerySchema = z.object({
+  tenant_id: dashboardTenantSchema.optional(),
+  project_id: dashboardOptionalIdentifierSchema,
+  q: z.string().trim().max(512).optional(),
+  focus_type: z.enum(DASHBOARD_NODE_TYPES).optional(),
+  focus_id: dashboardOptionalIdentifierSchema,
+  depth: z.coerce.number().int().min(1).max(2).default(1),
+  node_limit: z.coerce.number().int().min(1).max(150).default(80),
+  edge_limit: z.coerce.number().int().min(1).max(300).default(160)
+}).superRefine((value, context) => {
+  if ((value.focus_type && !value.focus_id) || (!value.focus_type && value.focus_id)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: value.focus_type ? ["focus_id"] : ["focus_type"],
+      message: "focus_type and focus_id must be supplied together"
+    });
+  }
+});
+
+const dashboardStrataTypesQuerySchema = z.preprocess((value) => {
+  if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return value;
+}, z.array(z.enum(DASHBOARD_STRATA_TYPES)).max(DASHBOARD_STRATA_TYPES.length).optional());
+
+export const dashboardStrataQuerySchema = z.object({
+  tenant_id: dashboardTenantSchema.optional(),
+  project_id: dashboardOptionalIdentifierSchema,
+  types: dashboardStrataTypesQuerySchema,
+  from: dashboardOptionalTimestampSchema,
+  to: dashboardOptionalTimestampSchema,
+  before: dashboardCursorSchema,
+  limit: z.coerce.number().int().min(1).max(100).default(30)
+}).superRefine((value, context) => {
+  if (value.from !== undefined && value.to !== undefined && value.from > value.to) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["from"], message: "from must be before or equal to to" });
+  }
+});
+
+export type DashboardActivityQuery = z.infer<typeof dashboardActivityQuerySchema>;
+export type DashboardKnowledgeGraphQuery = z.infer<typeof dashboardKnowledgeGraphQuerySchema>;
+export type DashboardStrataQuery = z.infer<typeof dashboardStrataQuerySchema>;
+export type DashboardNodeType = (typeof DASHBOARD_NODE_TYPES)[number];
+export type DashboardStrataType = (typeof DASHBOARD_STRATA_TYPES)[number];
+export type DashboardSourceType = (typeof DASHBOARD_SOURCE_TYPES)[number];
+export type DashboardSeverity = (typeof DASHBOARD_SEVERITIES)[number];
+export type DashboardAttentionKind = (typeof DASHBOARD_ATTENTION_KINDS)[number];
+
+const dashboardActorSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  kind: z.enum(["principal", "agent", "system"])
+});
+
+const dashboardSubjectSchema = z.object({
+  type: z.string(),
+  id: z.string(),
+  label: z.string()
+});
+
+const dashboardMetadataValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+export const dashboardActivityEventSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  occurred_at: z.number().int().nonnegative(),
+  project_id: z.string().nullable(),
+  task_id: z.string().nullable(),
+  trace_id: z.string().nullable(),
+  actor: dashboardActorSchema,
+  subject: dashboardSubjectSchema,
+  target: dashboardSubjectSchema.nullable(),
+  severity: z.enum(DASHBOARD_SEVERITIES),
+  status: z.string().nullable(),
+  summary: z.string(),
+  metadata: z.record(dashboardMetadataValueSchema)
+});
+
+export const dashboardObservedAgentSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  model: z.string().nullable(),
+  state: z.enum(["active", "idle"]),
+  last_seen_at: z.number().int().nonnegative(),
+  active_task_count: z.number().int().nonnegative(),
+  read_count: z.number().int().nonnegative(),
+  write_count: z.number().int().nonnegative(),
+  failure_count: z.number().int().nonnegative()
+});
+
+export const dashboardAttentionSchema = z.object({
+  id: z.string(),
+  kind: z.enum(DASHBOARD_ATTENTION_KINDS),
+  severity: z.enum(["warning", "critical"]),
+  detected_at: z.number().int().nonnegative(),
+  subject_type: z.string(),
+  subject_id: z.string(),
+  reason: z.string()
+});
+
+export const dashboardActivityResponseSchema = z.object({
+  contract_version: z.literal(DASHBOARD_CONTRACT_VERSION).default(DASHBOARD_CONTRACT_VERSION),
+  events: z.array(dashboardActivityEventSchema),
+  observed_agents: z.array(dashboardObservedAgentSchema),
+  attention: z.array(dashboardAttentionSchema),
+  oldest_cursor: z.string().nullable(),
+  newest_cursor: z.string().nullable(),
+  has_more: z.boolean(),
+  generated_at: z.number().int().nonnegative()
+});
+
+export const dashboardKnowledgeNodeSchema = z.object({
+  id: z.string(),
+  source_id: z.string(),
+  type: z.enum(DASHBOARD_NODE_TYPES),
+  kind: z.string().nullable(),
+  label: z.string(),
+  summary: z.string().nullable(),
+  project_id: z.string().nullable(),
+  status: z.string().nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+  updated_at: z.number().int().nonnegative().nullable(),
+  last_used_at: z.number().int().nonnegative().nullable(),
+  usage_count_30d: z.number().int().nonnegative(),
+  degree: z.number().int().nonnegative(),
+  cluster_ids: z.array(z.string()),
+  deep_link: z.string().optional()
+});
+
+export const dashboardKnowledgeEdgeSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  target: z.string(),
+  relation: z.string(),
+  directed: z.boolean(),
+  inferred: z.literal(false),
+  weight: z.number().nonnegative(),
+  confidence: z.number().min(0).max(1).nullable()
+});
+
+export const dashboardKnowledgeClusterSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["project", "domain", "memory_kind"]),
+  label: z.string(),
+  node_ids: z.array(z.string())
+});
+
+export const dashboardKnowledgeGraphResponseSchema = z.object({
+  contract_version: z.literal(DASHBOARD_CONTRACT_VERSION).default(DASHBOARD_CONTRACT_VERSION),
+  nodes: z.array(dashboardKnowledgeNodeSchema),
+  edges: z.array(dashboardKnowledgeEdgeSchema),
+  clusters: z.array(dashboardKnowledgeClusterSchema),
+  truncated: z.boolean(),
+  omitted_node_count: z.number().int().nonnegative()
+});
+
+export const dashboardStrataRevisionSchema = z.object({
+  id: z.string(),
+  operation: z.string(),
+  recorded_at: z.number().int().nonnegative(),
+  valid_from: z.number().int().nonnegative().nullable(),
+  valid_until: z.number().int().nonnegative().nullable(),
+  actor_id: z.string().nullable(),
+  state: z.string(),
+  summary: z.string().nullable(),
+  partial: z.boolean(),
+  snapshot: z.record(z.unknown()).optional()
+});
+
+export const dashboardStrataRelationSchema = z.object({
+  relation: z.string(),
+  target_type: z.string(),
+  target_id: z.string(),
+  valid_from: z.number().int().nonnegative().nullable(),
+  valid_until: z.number().int().nonnegative().nullable()
+});
+
+export const dashboardStrataSourceSchema = z.object({
+  resource_id: z.string(),
+  resource_version_id: z.string().nullable(),
+  title: z.string(),
+  relation: z.string(),
+  captured_at: z.number().int().nonnegative().nullable(),
+  locator: z.record(z.unknown()).nullable(),
+  unresolved: z.boolean()
+});
+
+export const dashboardStrataChainSummarySchema = z.object({
+  id: z.string(),
+  type: z.enum(DASHBOARD_STRATA_TYPES),
+  source_type: z.enum(DASHBOARD_SOURCE_TYPES),
+  source_id: z.string(),
+  title: z.string(),
+  project_id: z.string().nullable(),
+  current_state: z.string(),
+  confidence: z.number().min(0).max(1).nullable(),
+  valid_from: z.number().int().nonnegative().nullable(),
+  valid_until: z.number().int().nonnegative().nullable(),
+  changed_at: z.number().int().nonnegative(),
+  partial: z.boolean(),
+  revision_count: z.number().int().nonnegative(),
+  source_count: z.number().int().nonnegative(),
+  attention: z.array(z.string())
+});
+
+export const dashboardStrataChainSchema = dashboardStrataChainSummarySchema.extend({
+  revisions: z.array(dashboardStrataRevisionSchema),
+  relations: z.array(dashboardStrataRelationSchema),
+  sources: z.array(dashboardStrataSourceSchema)
+});
+
+export const dashboardStrataResponseSchema = z.object({
+  contract_version: z.literal(DASHBOARD_CONTRACT_VERSION).default(DASHBOARD_CONTRACT_VERSION),
+  chains: z.array(dashboardStrataChainSummarySchema),
+  oldest_cursor: z.string().nullable(),
+  has_more: z.boolean(),
+  generated_at: z.number().int().nonnegative(),
+  truncated: z.boolean()
+});
+
+export const dashboardStrataDetailResponseSchema = z.object({
+  contract_version: z.literal(DASHBOARD_CONTRACT_VERSION).default(DASHBOARD_CONTRACT_VERSION),
+  chain: dashboardStrataChainSchema,
+  truncated: z.object({ revisions: z.boolean(), sources: z.boolean() })
+});
+
+export type DashboardActivityEvent = z.infer<typeof dashboardActivityEventSchema>;
+export type DashboardObservedAgent = z.infer<typeof dashboardObservedAgentSchema>;
+export type DashboardAttention = z.infer<typeof dashboardAttentionSchema>;
+export type DashboardActivityResponse = z.infer<typeof dashboardActivityResponseSchema>;
+export type DashboardKnowledgeNode = z.infer<typeof dashboardKnowledgeNodeSchema>;
+export type DashboardKnowledgeEdge = z.infer<typeof dashboardKnowledgeEdgeSchema>;
+export type DashboardKnowledgeCluster = z.infer<typeof dashboardKnowledgeClusterSchema>;
+export type DashboardKnowledgeGraphResponse = z.infer<typeof dashboardKnowledgeGraphResponseSchema>;
+export type DashboardStrataRevision = z.infer<typeof dashboardStrataRevisionSchema>;
+export type DashboardStrataRelation = z.infer<typeof dashboardStrataRelationSchema>;
+export type DashboardStrataSource = z.infer<typeof dashboardStrataSourceSchema>;
+export type DashboardStrataChainSummary = z.infer<typeof dashboardStrataChainSummarySchema>;
+export type DashboardStrataChain = z.infer<typeof dashboardStrataChainSchema>;
+export type DashboardStrataResponse = z.infer<typeof dashboardStrataResponseSchema>;
+export type DashboardStrataDetailResponse = z.infer<typeof dashboardStrataDetailResponseSchema>;

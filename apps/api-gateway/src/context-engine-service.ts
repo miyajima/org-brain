@@ -681,11 +681,15 @@ export function scoreDecisionMemory(args: {
   };
 }
 
-function topicKey(memory: DecisionMemory): string {
-  return collapseWhitespace(memory.title)
+export function normalizeDecisionTopic(title: string): string {
+  return collapseWhitespace(title)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s_-]/gu, "")
     .trim();
+}
+
+function topicKey(memory: DecisionMemory): string {
+  return normalizeDecisionTopic(memory.title);
 }
 
 function compareScored(left: ScoredDecisionMemory, right: ScoredDecisionMemory): number {
@@ -1479,6 +1483,7 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
     requested_work_type: request.workType,
     retrieval_generation_id: generation?.id ?? null,
     ranking_profile_id: generation?.ranking_profile_id ?? null,
+    actor_principal: options.principal ?? null,
     items: selected.map((item, index) => ({
       source_type: "decision_memory" as const,
       source_id: item.memory.id,
@@ -1699,6 +1704,7 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
     request_source: "api",
     retrieval_generation_id: "gen_structured_context",
     ranking_profile_id: "rank_default",
+    actor_principal: userId ?? agentId,
     items: [{
       source_type: "decision_memory",
       source_id: memory.id,
@@ -1912,6 +1918,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
     requested_work_type: request.workType,
     retrieval_generation_id: "gen_structured_context",
     ranking_profile_id: "rank_default",
+    actor_principal: options.principal ?? null,
     items: selected.map((item, index) => ({
       source_type: "decision_memory" as const,
       source_id: item.memory.id,

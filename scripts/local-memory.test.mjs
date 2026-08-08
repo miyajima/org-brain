@@ -1237,6 +1237,9 @@ test("v19 links run-level impact measurement to per-memory usage", async () => {
         "SELECT project_id FROM memory_usage_events WHERE id = ?"
       ).get(usage.usage_id).project_id, "orgbrain");
       assert.equal(db.prepare(
+        "SELECT actor_principal FROM memory_usage_events WHERE id = ?"
+      ).get(usage.usage_id).actor_principal, "local");
+      assert.equal(db.prepare(
         "SELECT reporting_rate FROM memory_impact_daily_metrics WHERE tenant_id = ? AND project_id = ?"
       ).get("personal", "orgbrain").reporting_rate, 1);
     } finally {

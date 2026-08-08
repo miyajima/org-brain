@@ -1,6 +1,14 @@
+import {
+  DASHBOARD_SOURCE_TYPES,
+  dashboardActivityQuerySchema,
+  dashboardKnowledgeGraphQuerySchema,
+  dashboardStrataQuerySchema,
+  type DashboardSourceType
+} from "@org-brain/contracts";
 import { HttpError, runRecordedScheduledJob, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
-import { Hono, type MiddlewareHandler } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
+import { z } from "zod";
 import {
   ackAgentMessage,
   getAgentMessage,
@@ -8,6 +16,7 @@ import {
   markAgentMessageRead,
   sendAgentMessage
 } from "./agent-message-service";
+import { getActivityDashboard } from "./activity-dashboard-service";
 import { appendAuditEvent, listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
 import {
   createBusinessCategory,
@@ -83,6 +92,7 @@ import {
   updateUser
 } from "./organization-user-service";
 import { getKnowledgeDoc, getKnowledgeDocContext, searchKnowledgeDocs, upsertKnowledgeDoc } from "./knowledge-docs-service";
+import { getKnowledgeGraph } from "./knowledge-graph-service";
 import {
   captureMemories,
   deleteMemoryById,
@@ -97,6 +107,7 @@ import {
   suppressMemoryByRequest,
   upsertMemories
 } from "./memory-service";
+import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
 import { mountMcp, OrgBrainMCP } from "./mcp";
 import {
   getMemoryImpactExecution,
@@ -131,6 +142,61 @@ import { issueScopedToken, listScopedTokens, revokeScopedToken } from "./token-s
 import type { Env } from "./types";
 
 const app = new Hono<ApiContextEnv>();
+
+const dashboardStrataDetailQuerySchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: z.string().trim().min(1).max(256).optional()
+});
+
+type DashboardLogSummary = { count: number; truncated: boolean };
+
+function shouldSampleDashboardView(c: Context<ApiContextEnv>): boolean {
+  const requestId = c.req.header("cf-ray") || c.req.header("x-request-id");
+  if (!requestId) return false;
+  let hash = 2166136261;
+  for (let index = 0; index < requestId.length; index += 1) {
+    hash ^= requestId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 20 === 0;
+}
+
+async function runDashboardView<T>(
+  c: Context<ApiContextEnv>,
+  view: "activity" | "knowledge_graph" | "strata" | "strata_detail",
+  operation: () => Promise<T>,
+  summarize: (data: T) => DashboardLogSummary
+): Promise<T> {
+  const startedAt = performance.now();
+  const sampled = shouldSampleDashboardView(c);
+  try {
+    const data = await operation();
+    if (sampled) {
+      const summary = summarize(data);
+      console.info(JSON.stringify({
+        event: "dashboard.view",
+        view,
+        duration_ms: Math.round((performance.now() - startedAt) * 10) / 10,
+        count: summary.count,
+        status: 200,
+        truncated: summary.truncated
+      }));
+    }
+    return data;
+  } catch (error) {
+    if (sampled) {
+      console.info(JSON.stringify({
+        event: "dashboard.view",
+        view,
+        duration_ms: Math.round((performance.now() - startedAt) * 10) / 10,
+        count: 0,
+        status: error instanceof HttpError ? error.status : 500,
+        truncated: false
+      }));
+    }
+    throw error;
+  }
+}
 
 function assertFeatureEnabled(env: Env, key: "KNOWLEDGE_RESOURCE_INGESTION_ENABLED" | "DECISION_RESOURCE_LINKS_ENABLED" | "RESOURCE_RELATION_EXTRACTION_ENABLED") {
   if (env[key] !== "true") throw new HttpError(404, "feature_disabled", "Feature is not enabled for this deployment");
@@ -317,6 +383,143 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
 
 app.use("/v1/*", rbacAuditMiddleware);
 app.use("/api/*", rbacAuditMiddleware);
+
+app.get("/v1/dashboard/activity", async (c) => {
+  const parsed = dashboardActivityQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+    before: c.req.query("before"),
+    after: c.req.query("after"),
+    limit: c.req.query("limit")
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "query";
+    throw new HttpError(400, "invalid_query", `Invalid ${field}: ${issue?.message || "invalid value"}`);
+  }
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  const data = await runDashboardView(
+    c,
+    "activity",
+    () => getActivityDashboard(c.env, tenantId, {
+      projectId: parsed.data.project_id,
+      from: parsed.data.from,
+      to: parsed.data.to,
+      before: parsed.data.before,
+      after: parsed.data.after,
+      limit: parsed.data.limit,
+      principal: getApiPrincipal(c)
+    }),
+    (result) => ({ count: result.events.length, truncated: result.has_more })
+  );
+  return jsonOk(c, data);
+});
+
+app.get("/v1/dashboard/knowledge-graph", async (c) => {
+  const parsed = dashboardKnowledgeGraphQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id"),
+    q: c.req.query("q"),
+    focus_type: c.req.query("focus_type"),
+    focus_id: c.req.query("focus_id"),
+    depth: c.req.query("depth"),
+    node_limit: c.req.query("node_limit"),
+    edge_limit: c.req.query("edge_limit")
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "query";
+    throw new HttpError(400, "invalid_query", `Invalid ${field}: ${issue?.message || "invalid value"}`);
+  }
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  const data = await runDashboardView(
+    c,
+    "knowledge_graph",
+    () => getKnowledgeGraph(c.env, tenantId, {
+      project_id: parsed.data.project_id,
+      q: parsed.data.q,
+      focus_type: parsed.data.focus_type,
+      focus_id: parsed.data.focus_id,
+      depth: parsed.data.depth,
+      node_limit: parsed.data.node_limit,
+      edge_limit: parsed.data.edge_limit,
+      principal: getApiPrincipal(c)
+    }),
+    (result) => ({ count: result.nodes.length, truncated: result.truncated })
+  );
+  return jsonOk(c, data);
+});
+
+app.get("/v1/dashboard/strata", async (c) => {
+  const parsed = dashboardStrataQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id"),
+    types: c.req.query("types"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+    before: c.req.query("before"),
+    limit: c.req.query("limit")
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "query";
+    throw new HttpError(400, "invalid_query", `Invalid ${field}: ${issue?.message || "invalid value"}`);
+  }
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  const data = await runDashboardView(
+    c,
+    "strata",
+    () => getMemoryStrata(c.env, tenantId, {
+      project_id: parsed.data.project_id,
+      types: parsed.data.types,
+      from: parsed.data.from,
+      to: parsed.data.to,
+      before: parsed.data.before,
+      limit: parsed.data.limit,
+      principal: getApiPrincipal(c)
+    }),
+    (result) => ({ count: result.chains.length, truncated: result.truncated })
+  );
+  return jsonOk(c, data);
+});
+
+app.get("/v1/dashboard/strata/:sourceType/:sourceId", async (c) => {
+  const sourceType = c.req.param("sourceType");
+  if (!DASHBOARD_SOURCE_TYPES.includes(sourceType as DashboardSourceType)) {
+    throw new HttpError(400, "invalid_source_type", `Unsupported strata source type: ${sourceType}`);
+  }
+  const parsed = dashboardStrataDetailQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id")
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "query";
+    throw new HttpError(400, "invalid_query", `Invalid ${field}: ${issue?.message || "invalid value"}`);
+  }
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  const data = await runDashboardView(
+    c,
+    "strata_detail",
+    () => getMemoryStrataDetail(
+      c.env,
+      tenantId,
+      sourceType as DashboardSourceType,
+      c.req.param("sourceId"),
+      {
+        project_id: parsed.data.project_id,
+        principal: getApiPrincipal(c)
+      }
+    ),
+    (result) => ({
+      count: result.chain.revisions.length + result.chain.sources.length,
+      truncated: result.truncated.revisions || result.truncated.sources
+    })
+  );
+  return jsonOk(c, data);
+});
 
 app.post("/v1/auth/email/request-code", async (c) => {
   const body = await c.req.json<unknown>();
@@ -528,7 +731,12 @@ app.get("/v1/ops/status", async (c) => {
 app.post("/v1/ops/tasks/:id/replay", async (c) => {
   const body: { tenant_id?: string } = await c.req.json<{ tenant_id?: string }>().catch(() => ({}));
   const tenantId = assertApiTenantAccess(c, body.tenant_id);
-  return jsonOk(c, await replayFailedTask(c.env, tenantId, c.req.param("id")), 201);
+  return jsonOk(c, await replayFailedTask(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    getApiPrincipal(c)
+  ), 201);
 });
 
 app.get("/v1/auth/me", async (c) => {
@@ -673,7 +881,7 @@ app.post("/v1/agent-messages/:messageId/ack", async (c) => {
 
 app.post("/v1/tasks", async (c) => {
   const body = await c.req.json<unknown>();
-  const created = await createTask(c.env, body);
+  const created = await createTask(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, created, 201);
 });
 
@@ -798,7 +1006,7 @@ app.post("/v1/memory-effects", async (c) => {
 app.post("/v1/memory-usages", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
-  return jsonOk(c, await recordMemoryUsageFromRequest(c.env, tenantId, body), 201);
+  return jsonOk(c, await recordMemoryUsageFromRequest(c.env, tenantId, body, getApiPrincipal(c)), 201);
 });
 
 app.post("/v1/memory-usages/state", async (c) => {
@@ -1015,6 +1223,7 @@ app.post("/v1/memories/search", async (c) => {
     ranking_profile_id: evidence.meta.retrieval?.ranking_profile_id === governance.meta.retrieval.ranking_profile_id
       ? evidence.meta.retrieval?.ranking_profile_id
       : null,
+    actor_principal: getApiPrincipal(c),
     items: [
       ...evidence.results.filter((item) => item.kind === "memory").map((item, index) => ({
         source_type: "memory" as const,
@@ -1067,13 +1276,15 @@ app.post("/v1/memories/retrieve-context", async (c) => {
 app.post("/v1/memories/profile", async (c) => {
   const body = await c.req.json<unknown>();
   assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await getMemoryProfile(c.env, body);
+  const result = await getMemoryProfile(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, result);
 });
 
 app.get("/v1/memories/:memoryId/details", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await getMemoryDetails(c.env, tenantId, c.req.param("memoryId"));
+  const result = await getMemoryDetails(c.env, tenantId, c.req.param("memoryId"), {
+    actorPrincipal: getApiPrincipal(c)
+  });
   return jsonOk(c, result);
 });
 

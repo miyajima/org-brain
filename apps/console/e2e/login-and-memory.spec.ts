@@ -49,4 +49,24 @@ test.describe("authenticated console flows", () => {
 
     await expect(page.getByRole("heading", { name: "Memory Explorer" })).toBeVisible();
   });
+
+  test("opens and revises an existing decision without dashboard regressions", async ({ page }) => {
+    await page.goto("/decisions?tenant_id=default&project_id=org-brain&lang=ja");
+
+    await expect(page.getByRole("heading", { name: "判断知識エディタ" })).toBeVisible();
+    await expect(page.locator("#editor h2")).toHaveText("Use authenticated principals for shared memory");
+    await expect(page.getByText("前版からの変更項目").first()).toBeVisible();
+    await expect(page.getByText("未確認の推定 → 人が確認済み")).toBeVisible();
+    await expect(page.getByText("要確認 → 有効")).toBeVisible();
+    await page.getByLabel("改訂メモ").fill("Dashboard regression check");
+
+    const reviseResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/v1/decision-memories/decision-e2e/revise") && response.status() === 200
+    );
+    await page.getByRole("button", { name: "改訂を保存" }).click();
+    await reviseResponse;
+
+    await expect(page.getByRole("heading", { name: "判断知識エディタ" })).toBeVisible();
+    await expect(page.locator("#editor h2")).toHaveText("Use authenticated principals for shared memory");
+  });
 });

@@ -58,6 +58,7 @@ export type MemoryUsageInput = {
   requested_work_type?: MemoryWorkType | null;
   retrieval_generation_id?: string | null;
   ranking_profile_id?: string | null;
+  actor_principal?: string | null;
   items: UsageItemInput[];
   created_at?: number;
 };
@@ -316,14 +317,15 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
          id, tenant_id, project_id, task_id, trace_id, external_run_id, capability, access_path,
          request_source, query_hash, requested_business_category_id,
          requested_work_type, retrieval_generation_id, ranking_profile_id,
-         verification_sampled, created_at
-       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         actor_principal, verification_sampled, created_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       usageId, input.tenant_id, linkedProjectId ?? null, linkedTaskId ?? null,
       linkedTraceId ?? null, input.external_run_id ?? null, input.capability ?? null, input.access_path,
       input.request_source, input.query_hash ?? null,
       input.requested_business_category_id ?? null, input.requested_work_type ?? null,
       input.retrieval_generation_id ?? null, input.ranking_profile_id ?? null,
+      input.actor_principal?.trim().slice(0, 128) || null,
       shouldSampleMemoryEffectVerification(input.tenant_id, usageId) ? 1 : 0, createdAt
     )
   ];
@@ -358,7 +360,12 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
   };
 }
 
-export async function recordMemoryUsageFromRequest(env: Env, tenantId: string, raw: unknown) {
+export async function recordMemoryUsageFromRequest(
+  env: Env,
+  tenantId: string,
+  raw: unknown,
+  actorPrincipal?: string | null
+) {
   const body = asObject(raw);
   if (!["search", "profile", "context", "direct"].includes(String(body.access_path))) {
     throw new HttpError(400, "invalid_access_path", "access_path is invalid");
@@ -436,6 +443,7 @@ export async function recordMemoryUsageFromRequest(env: Env, tenantId: string, r
       : null,
     retrieval_generation_id: typeof body.retrieval_generation_id === "string" ? body.retrieval_generation_id : null,
     ranking_profile_id: typeof body.ranking_profile_id === "string" ? body.ranking_profile_id : null,
+    actor_principal: actorPrincipal?.trim().slice(0, 128) || null,
     items,
     created_at: typeof body.created_at === "number" ? body.created_at : undefined
   });

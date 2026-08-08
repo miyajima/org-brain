@@ -21,7 +21,8 @@ export type CreatedTaskResult = {
 export async function replayFailedTask(
   env: Env,
   tenantId: string,
-  taskId: string
+  taskId: string,
+  actorPrincipal?: string | null
 ): Promise<CreatedTaskResult & { replayed_from_task_id: string }> {
   const task = await env.OPEN_BRAIN_DB.prepare(
     "SELECT status FROM tasks WHERE tenant_id = ? AND id = ?"
@@ -53,7 +54,7 @@ export async function replayFailedTask(
     ...(original as Record<string, unknown>),
     tenant_id: tenantId,
     idempotency_key: `replay:${taskId}:${replayId}`
-  });
+  }, { actorPrincipal });
   await env.OPEN_BRAIN_DB.prepare(
     "INSERT INTO task_events(id, tenant_id, task_id, kind, payload, created_at) VALUES(?,?,?,?,?,?)"
   ).bind(
@@ -67,14 +68,18 @@ export async function replayFailedTask(
   return { ...created, replayed_from_task_id: taskId };
 }
 
-export async function createTask(env: Env, rawBody: unknown): Promise<CreatedTaskResult> {
+export async function createTask(
+  env: Env,
+  rawBody: unknown,
+  options: { actorPrincipal?: string | null } = {}
+): Promise<CreatedTaskResult> {
   if (!validateTaskCreateBody(rawBody)) {
     throw new HttpError(400, "invalid_payload", "Request body does not match task_create.schema.json");
   }
 
   const body = createTaskSchema.parse(rawBody) as CreateTaskInput;
   if (body.measurement_mode) {
-    return createMeasurementTask(env, body);
+    return createMeasurementTask(env, body, options.actorPrincipal);
   }
 
   const now = Date.now();
@@ -93,8 +98,9 @@ export async function createTask(env: Env, rawBody: unknown): Promise<CreatedTas
   }
 
   const taskId = ulid();
+  const actorPrincipal = options.actorPrincipal?.trim().slice(0, 128) || null;
   const insertTask = env.OPEN_BRAIN_DB.prepare(
-    "INSERT INTO tasks(id, tenant_id, project_id, capability, status, priority, input_ref, idempotency_key, trace_id, wait_event_type, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+    "INSERT INTO tasks(id, tenant_id, project_id, capability, status, priority, input_ref, idempotency_key, trace_id, wait_event_type, created_by_principal, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
   ).bind(
     taskId,
     tenantId,
@@ -106,6 +112,7 @@ export async function createTask(env: Env, rawBody: unknown): Promise<CreatedTas
     idem,
     body.trace_id ?? null,
     body.wait_event_type ?? null,
+    actorPrincipal,
     now,
     now
   );
@@ -139,13 +146,18 @@ export async function createTask(env: Env, rawBody: unknown): Promise<CreatedTas
   return { task_id: taskId, status: "created", deduped: false };
 }
 
-async function createMeasurementTask(env: Env, body: CreateTaskInput): Promise<CreatedTaskResult> {
+async function createMeasurementTask(
+  env: Env,
+  body: CreateTaskInput,
+  actorPrincipalInput?: string | null
+): Promise<CreatedTaskResult> {
   const now = Date.now();
   const tenantId = body.tenant_id ?? "default";
   const projectId = body.project_id ?? null;
   const referenceModel = body.measurement_reference_model ?? "estimated_tokens_v1";
   const measurementUnit = body.measurement_unit ?? "task";
   const sessionId = body.measurement_session_id ?? null;
+  const actorPrincipal = actorPrincipalInput?.trim().slice(0, 128) || null;
   const pairKey = body.idempotency_key ?? `${tenantId}:${body.capability}:measurement:${await sha256(body.input_ref)}`;
 
   const existingRun = await env.OPEN_BRAIN_DB.prepare(
@@ -194,7 +206,7 @@ async function createMeasurementTask(env: Env, body: CreateTaskInput): Promise<C
   for (const row of taskRows) {
     statements.push(
       env.OPEN_BRAIN_DB.prepare(
-        "INSERT INTO tasks(id, tenant_id, project_id, capability, status, priority, input_ref, idempotency_key, trace_id, wait_event_type, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO tasks(id, tenant_id, project_id, capability, status, priority, input_ref, idempotency_key, trace_id, wait_event_type, created_by_principal, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
       ).bind(
         row.taskId,
         tenantId,
@@ -206,6 +218,7 @@ async function createMeasurementTask(env: Env, body: CreateTaskInput): Promise<C
         row.idempotencyKey,
         body.trace_id ?? null,
         body.wait_event_type ?? null,
+        actorPrincipal,
         now,
         now
       ),

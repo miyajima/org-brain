@@ -16,6 +16,7 @@
   "dependencies": {
     "@astrojs/cloudflare": "^13.1.7",
     "@astrojs/node": "^10.1.4",
+    "@org-brain/contracts": "workspace:*",
     "astro": "^6.4.8"
   },
   "devDependencies": {

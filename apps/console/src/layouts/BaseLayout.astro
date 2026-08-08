@@ -1,15 +1,23 @@
 ---
 import "../styles/global.css";
+import brandMark from "../../../../assets/brand/org-brain-avatar.png";
+import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 
-const { title = "Org Brain Console", lang = "en" } = Astro.props;
+const { title = "Org Brain Console", lang = "en", wide = false } = Astro.props;
 const currentPath = Astro.url.pathname;
 type LayoutLocale = "en" | "ja" | "zh";
 const locale: LayoutLocale = lang === "ja" || lang === "zh" ? lang : "en";
 const navCopy = {
   en: {
-    dashboard: "Dashboard",
+    overview: "Overview",
     memories: "Memories",
     decisions: "Decisions",
+    management: "Manage",
+    dashboard: "Dashboard",
+    legacyDashboard: "Legacy Dashboard",
+    labs: "Labs · Overview",
+    memoryExplorer: "Memory Explorer",
+    decisionEditor: "Decision Editor",
     resources: "Resources",
     groups: "Groups",
     users: "Users",
@@ -21,9 +29,15 @@ const navCopy = {
     tasks: "Tasks"
   },
   ja: {
-    dashboard: "ダッシュボード",
+    overview: "概要",
     memories: "メモリ",
     decisions: "判断",
+    management: "管理",
+    dashboard: "ダッシュボード",
+    legacyDashboard: "従来のダッシュボード",
+    labs: "Labs · 新しい概要",
+    memoryExplorer: "メモリエクスプローラー",
+    decisionEditor: "判断エディター",
     resources: "資料・成果物",
     groups: "グループ",
     users: "ユーザー",
@@ -35,9 +49,15 @@ const navCopy = {
     tasks: "Task一覧"
   },
   zh: {
-    dashboard: "仪表盘",
+    overview: "概览",
     memories: "记忆",
     decisions: "决策",
+    management: "管理",
+    dashboard: "仪表盘",
+    legacyDashboard: "旧版仪表盘",
+    labs: "Labs · 新概览",
+    memoryExplorer: "记忆浏览器",
+    decisionEditor: "决策编辑器",
     resources: "资料与成果",
     groups: "群组",
     users: "用户",
@@ -49,17 +69,31 @@ const navCopy = {
     tasks: "任务"
   }
 }[locale];
-const decisionsHref = locale === "en" ? "/decisions" : `/decisions?lang=${locale}`;
+const insightsUiMode = await resolveRequestInsightsUiMode(
+  Astro.locals,
+  processInsightsUiModeFallback()
+);
+const insightsBehavior = insightsUiBehavior(insightsUiMode);
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim();
-const withTenant = (href: string) => {
-  if (!tenantId) return href;
+const projectId = Astro.url.searchParams.get("project_id")?.trim();
+const requestedLang = Astro.url.searchParams.get("lang")?.trim();
+const withScope = (href: string) => {
   const target = new URL(href, Astro.url);
-  target.searchParams.set("tenant_id", tenantId);
+  if (tenantId) target.searchParams.set("tenant_id", tenantId);
+  if (projectId) target.searchParams.set("project_id", projectId);
+  if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") {
+    target.searchParams.set("lang", requestedLang);
+  } else if (locale !== "en") {
+    target.searchParams.set("lang", locale);
+  }
   return `${target.pathname}${target.search}`;
 };
 
 const isActive = (href: string) => {
   if (href === "/") return currentPath === "/";
+  if (href === "/overview") return currentPath === "/overview";
+  if (href === "/memories/constellation") return currentPath === "/memories" || currentPath.startsWith("/memories/");
+  if (href === "/decisions/history") return currentPath === "/decisions" || currentPath.startsWith("/decisions/");
   if (href === "/tasks") return currentPath === "/tasks" || (currentPath.startsWith("/tasks/") && currentPath !== "/tasks/new");
   if (href === "/tasks/new") return currentPath === "/tasks/new";
   if (href === "/decisions") return currentPath === "/decisions";
@@ -78,29 +112,62 @@ const isActive = (href: string) => {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="theme-color" content="#050910" />
     <link rel="icon" href="data:," />
     <title>{title}</title>
   </head>
   <body>
     <div class="console-shell">
-      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_22%)]"></div>
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(22,135,255,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_22%)]"></div>
       <nav class="console-nav">
-        <span class="console-brand">Org Brain</span>
-        <a class="console-nav-link" href="/" aria-current={isActive("/") ? "page" : undefined}>{navCopy.dashboard}</a>
-        <a class="console-nav-link" href="/memories" aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
-        <a class="console-nav-link" href={decisionsHref} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
-        <a class="console-nav-link" href="/resources" aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
-        <a class="console-nav-link" href={withTenant("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
-        <a class="console-nav-link" href={withTenant("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
-        <a class="console-nav-link" href={withTenant("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
-        <a class="console-nav-link" href={withTenant("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
-        <a class="console-nav-link" href={withTenant("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
-        <a class="console-nav-link" href="/operations" aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
-        <a class="console-nav-link" href="/tasks/new" aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
-        <a class="console-nav-link" href="/tasks" aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
+        <a class="console-brand" href={withScope("/")} aria-label="Org Brain">
+          <img src={brandMark.src} width="28" height="28" alt="" />
+          <span>Org Brain</span>
+        </a>
+        {insightsBehavior.useInsightsNavigation ? (
+          <>
+            <div class="console-primary-links">
+              <a class="console-nav-link" href={withScope("/")} aria-current={isActive("/overview") || currentPath === "/" ? "page" : undefined}>{navCopy.overview}</a>
+              <a class="console-nav-link" href={withScope("/memories/constellation")} aria-current={isActive("/memories/constellation") ? "page" : undefined}>{navCopy.memories}</a>
+              <a class="console-nav-link" href={withScope("/decisions/history")} aria-current={isActive("/decisions/history") ? "page" : undefined}>{navCopy.decisions}</a>
+              <a class="console-nav-link" href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
+            </div>
+            <details class="console-nav-menu">
+              <summary>{navCopy.management}</summary>
+              <div class="console-nav-menu-panel">
+                {insightsBehavior.showLegacyDashboard && <a href={withScope("/dashboard")} aria-current={currentPath === "/dashboard" ? "page" : undefined}>{navCopy.legacyDashboard}</a>}
+                <a href={withScope("/memories")} aria-current={currentPath === "/memories" ? "page" : undefined}>{navCopy.memoryExplorer}</a>
+                <a href={withScope("/decisions")} aria-current={currentPath === "/decisions" ? "page" : undefined}>{navCopy.decisionEditor}</a>
+                <a href={withScope("/resources")} aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
+                <a href={withScope("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
+                <a href={withScope("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
+                <a href={withScope("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
+                <a href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
+                <a href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
+                <a href={withScope("/operations")} aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
+                <a href={withScope("/tasks/new")} aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
+              </div>
+            </details>
+          </>
+        ) : (
+          <div class="console-primary-links console-legacy-links">
+            <a class="console-nav-link" href={withScope("/")} aria-current={isActive("/") ? "page" : undefined}>{navCopy.dashboard}</a>
+            {insightsBehavior.showOverviewLab && <a class="console-nav-link console-labs-link" href={withScope("/overview")} aria-current={isActive("/overview") ? "page" : undefined}>{navCopy.labs}</a>}
+            <a class="console-nav-link" href={withScope("/memories")} aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
+            <a class="console-nav-link" href={withScope("/decisions")} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
+            <a class="console-nav-link" href={withScope("/resources")} aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
+            <a class="console-nav-link" href={withScope("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
+            <a class="console-nav-link" href={withScope("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
+            <a class="console-nav-link" href={withScope("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
+            <a class="console-nav-link" href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
+            <a class="console-nav-link" href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
+            <a class="console-nav-link" href={withScope("/operations")} aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
+            <a class="console-nav-link" href={withScope("/tasks/new")} aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
+            <a class="console-nav-link" href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
+          </div>
+        )}
       </nav>
-      <main class="console-main">
+      <main class:list={["console-main", wide && "console-main-wide"]}>
         <slot />
       </main>
     </div>
