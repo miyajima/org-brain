@@ -218,6 +218,10 @@ type CountRow = {
   count: number;
 };
 
+type ProjectIdRow = {
+  project_id: string | null;
+};
+
 function parseOptions(raw: KnowledgeGraphOptions): ParsedOptions {
   const parsed = dashboardKnowledgeGraphQuerySchema.safeParse(raw);
   if (!parsed.success) {
@@ -1146,20 +1150,127 @@ function readableNodeCtes(
   };
 }
 
+async function exactUnfocusedNodeCount(
+  env: Pick<Env, "OPEN_BRAIN_DB">,
+  tenantId: string,
+  options: ParsedOptions
+): Promise<number> {
+  const scoped = projectClause(options.project_id);
+  const memoryReadable = memoryReadabilityClause(options.principal, "m.permissions_json");
+  const decisionReadable = decisionReadabilityClause(tenantId, options.principal, "d");
+  const resourceReadable = resourceReadabilityClause(tenantId, options.project_id, options.principal, "r");
+  const memoryMatch = substringMatchExpression(options.q, [
+    "m.content", "m.summary", "m.kind", "m.lifecycle_state", "m.project_id"
+  ]);
+  const linkedEntityMatch = substringMatchExpression(options.q, [
+    "linked_entity.canonical_name", "linked_entity.entity_type"
+  ]);
+  const memoryPopulationMatch: SqlClause = !options.q
+    ? memoryMatch
+    : {
+        sql: `(${memoryMatch.sql} OR EXISTS (
+          SELECT 1
+          FROM memory_entities linked_entity_relation
+          JOIN entities linked_entity
+            ON linked_entity.tenant_id = linked_entity_relation.tenant_id
+           AND linked_entity.id = linked_entity_relation.entity_id
+          WHERE linked_entity_relation.tenant_id = m.tenant_id
+            AND linked_entity_relation.memory_id = m.id
+            AND ${linkedEntityMatch.sql}
+        ))`,
+        bindings: [...memoryMatch.bindings, ...linkedEntityMatch.bindings]
+      };
+  const decisionMatch = substringMatchExpression(options.q, [
+    "d.title", "d.decision", "d.domain", "d.status", "d.project_id"
+  ]);
+  const resourceMatch = substringMatchExpression(options.q, [
+    "r.title", "r.source_system", "r.resource_kind", "r.lifecycle_state", "r.project_id"
+  ]);
+  const taskMatch = substringMatchExpression(options.q, ["t.capability", "t.status", "t.project_id"]);
+  const entityMatch = substringMatchExpression(options.q, ["e.canonical_name", "e.entity_type"]);
+
+  const sources = [
+    {
+      from: "memories m",
+      where: `m.tenant_id = ? AND m.lifecycle_state != 'suppressed'
+        ${scoped.sql.replaceAll("project_id", "m.project_id")}
+        ${memoryReadable.sql} AND ${memoryPopulationMatch.sql}`,
+      bindings: [tenantId, ...scoped.bindings, ...memoryReadable.bindings, ...memoryPopulationMatch.bindings]
+    },
+    {
+      from: "decision_memories d",
+      where: `d.tenant_id = ? ${scoped.sql.replaceAll("project_id", "d.project_id")}
+        ${decisionReadable.sql} AND ${decisionMatch.sql}`,
+      bindings: [tenantId, ...scoped.bindings, ...decisionReadable.bindings, ...decisionMatch.bindings]
+    },
+    {
+      from: "knowledge_resources r",
+      where: `r.tenant_id = ? ${scoped.sql.replaceAll("project_id", "r.project_id")}
+        ${resourceReadable.sql} AND ${resourceMatch.sql}`,
+      bindings: [tenantId, ...scoped.bindings, ...resourceReadable.bindings, ...resourceMatch.bindings]
+    },
+    {
+      from: "tasks t",
+      where: `t.tenant_id = ? ${scoped.sql.replaceAll("project_id", "t.project_id")}
+        AND ${taskMatch.sql}`,
+      bindings: [tenantId, ...scoped.bindings, ...taskMatch.bindings]
+    }
+  ] as const;
+  const entitySql = `FROM memory_entities me
+    JOIN entities e ON e.tenant_id = me.tenant_id AND e.id = me.entity_id
+    JOIN memories m ON m.tenant_id = me.tenant_id AND m.id = me.memory_id
+    WHERE me.tenant_id = ? AND m.lifecycle_state != 'suppressed'
+      ${scoped.sql.replaceAll("project_id", "m.project_id")}
+      ${memoryReadable.sql} AND ${entityMatch.sql}`;
+  const entityBindings = [
+    tenantId,
+    ...scoped.bindings,
+    ...memoryReadable.bindings,
+    ...entityMatch.bindings
+  ];
+
+  const [sourceCounts, entityCount, sourceProjects] = await Promise.all([
+    Promise.all(sources.map(async (source) => {
+      const row = await env.OPEN_BRAIN_DB.prepare(
+        `SELECT COUNT(*) AS count FROM ${source.from} WHERE ${source.where}`
+      ).bind(...source.bindings).first<CountRow>();
+      return Math.max(0, Number(row?.count ?? 0));
+    })),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT COUNT(DISTINCT e.id) AS count ${entitySql}`
+    ).bind(...entityBindings).first<CountRow>(),
+    Promise.all(sources.map(async (source) => {
+      const result = await env.OPEN_BRAIN_DB.prepare(
+        `SELECT DISTINCT project_id FROM ${source.from}
+         WHERE ${source.where} AND project_id IS NOT NULL`
+      ).bind(...source.bindings).all<ProjectIdRow>();
+      return result.results;
+    }))
+  ]);
+
+  const projectIds = new Set(sourceProjects.flatMap((rows) => rows)
+    .map((row) => row.project_id)
+    .filter((projectId): projectId is string => Boolean(projectId)));
+  if (options.project_id) projectIds.add(options.project_id);
+  const matchingProjectCount = [...projectIds].filter((projectId) => (
+    !options.q || projectId.toLocaleLowerCase().includes(options.q.toLocaleLowerCase())
+  )).length;
+  return sourceCounts.reduce((sum, count) => sum + count, 0)
+    + Math.max(0, Number(entityCount?.count ?? 0))
+    + matchingProjectCount;
+}
+
 async function exactRelevantNodeCount(
   env: Pick<Env, "OPEN_BRAIN_DB">,
   tenantId: string,
   options: ParsedOptions
 ): Promise<number> {
   const focused = Boolean(options.focus_type && options.focus_id);
-  const nodes = readableNodeCtes(tenantId, options, focused);
   if (!focused) {
-    const row = await env.OPEN_BRAIN_DB.prepare(
-      `WITH ${nodes.sql}
-       SELECT COUNT(*) AS count FROM all_nodes`
-    ).bind(...nodes.bindings).first<CountRow>();
-    return Math.max(0, Number(row?.count ?? 0));
+    return exactUnfocusedNodeCount(env, tenantId, options);
   }
+
+  const nodes = readableNodeCtes(tenantId, options, focused);
 
   const assertionSource = storedNodeKeySql("a.subject_type", "a.subject_ref");
   const assertionTarget = assertionTargetNodeKeySql("a");
