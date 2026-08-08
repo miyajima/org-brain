@@ -109,18 +109,21 @@ function resolveServiceToken(headers: Headers, rawConfig: string | undefined): P
   throw new HttpError(403, "forbidden", "Invalid service token");
 }
 
-function mergeServiceTokenConfigs(
-  primaryRawConfig: string | undefined,
-  additionalRawConfig: string | undefined
-): string | undefined {
-  if (!additionalRawConfig?.trim()) return primaryRawConfig;
-  const primary = parseServiceTokenConfig(primaryRawConfig);
-  const additional = parseServiceTokenConfig(additionalRawConfig);
+function mergeServiceTokenConfigs(env: object): string | undefined {
+  const rawConfigs = Object.entries(env as Record<string, unknown>)
+    .filter(([key, value]) =>
+      typeof value === "string"
+      && (key === "MCP_SERVICE_TOKENS_JSON" || /^MCP_SERVICE_TOKENS_[A-Z0-9_]+_JSON$/.test(key))
+    )
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, value]) => value as string)
+    .filter((value) => value.trim().length > 0);
+  if (rawConfigs.length === 0) return undefined;
   return JSON.stringify({
-    tokens: [
-      ...(Array.isArray(primary.tokens) ? primary.tokens : []),
-      ...(Array.isArray(additional.tokens) ? additional.tokens : [])
-    ]
+    tokens: rawConfigs.flatMap((rawConfig) => {
+      const parsed = parseServiceTokenConfig(rawConfig);
+      return Array.isArray(parsed.tokens) ? parsed.tokens : [];
+    })
   });
 }
 
@@ -155,6 +158,7 @@ function pickTenant(requestedTenant: string | null, allowedTenants: string[]): s
 export function authorizeMcpRequest(
   request: Request,
   env: {
+    [key: string]: unknown;
     MCP_TENANT_POLICY_JSON?: string;
     MCP_ACCESS_AUD?: string;
     MCP_SERVICE_TOKENS_JSON?: string;
@@ -163,7 +167,7 @@ export function authorizeMcpRequest(
 ): McpAuthResult {
   const serviceToken = resolveServiceToken(
     request.headers,
-    mergeServiceTokenConfigs(env.MCP_SERVICE_TOKENS_JSON, env.MCP_SERVICE_TOKENS_ADDITIONAL_JSON)
+    mergeServiceTokenConfigs(env)
   );
   if (serviceToken) {
     const policy = parseTenantPolicy(env.MCP_TENANT_POLICY_JSON);

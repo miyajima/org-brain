@@ -38,6 +38,9 @@ Set on `apps/api-gateway`:
 - `MCP_SERVICE_TOKENS_JSON` (JSON)
 - optional `MCP_SERVICE_TOKENS_ADDITIONAL_JSON` (JSON) for adding credentials
   without replacing an existing write-only Cloudflare secret
+- optional independently managed `MCP_SERVICE_TOKENS_<SLOT>_JSON` secrets. Use
+  one slot per machine or integration so rotating one credential does not
+  invalidate another write-only secret.
 - optional `MCP_TENANT_POLICY_JSON` (JSON)
 
 Example service token config:

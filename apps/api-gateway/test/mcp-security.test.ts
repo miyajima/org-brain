@@ -75,6 +75,32 @@ describe("authorizeMcpRequest", () => {
     });
   });
 
+  it("accepts independently managed named service-token slots", () => {
+    const request = new Request("https://example.com/mcp", {
+      headers: {
+        "cf-access-client-id": "codex-mac",
+        "cf-access-client-secret": "machine-secret"
+      }
+    });
+
+    expect(authorizeMcpRequest(request, {
+      MCP_SERVICE_TOKENS_JSON: JSON.stringify({
+        tokens: [{ client_id: "primary", client_secret: "primary-secret", tenants: ["default"] }]
+      }),
+      MCP_SERVICE_TOKENS_CODEX_MAC_JSON: JSON.stringify({
+        tokens: [{
+          client_id: "codex-mac",
+          client_secret: "machine-secret",
+          principal: "service:codex-mac",
+          tenants: ["default"]
+        }]
+      })
+    })).toMatchObject({
+      principal: "service:codex-mac",
+      tenantId: "default"
+    });
+  });
+
   it("rejects when service token tenant is not in the allowed list", () => {
     const req = new Request("https://example.com/mcp", {
       headers: {
