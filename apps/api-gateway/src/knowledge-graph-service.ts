@@ -1077,7 +1077,7 @@ function readableNodeCtes(
   const projectSourceBindings = options.project_id ? [options.project_id] : [];
   const projectBindings = [...projectSourceBindings, ...projectMatch.bindings];
   return {
-    sql: `memory_nodes(node_id, project_id, matches_query) AS (
+    sql: `memory_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT 'memory:' || m.id, m.project_id, ${matchSelect(memoryMatch)}
       FROM memories m
       WHERE m.tenant_id = ? AND m.lifecycle_state != 'suppressed'
@@ -1085,7 +1085,7 @@ function readableNodeCtes(
         ${memoryReadable.sql}
         ${matchWhere(memoryPopulationMatch)}
     ),
-    decision_nodes(node_id, project_id, matches_query) AS (
+    decision_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT 'decision:' || d.id, d.project_id, ${matchSelect(decisionMatch)}
       FROM decision_memories d
       WHERE d.tenant_id = ?
@@ -1093,7 +1093,7 @@ function readableNodeCtes(
         ${decisionReadable.sql}
         ${matchWhere(decisionMatch)}
     ),
-    resource_nodes(node_id, project_id, matches_query) AS (
+    resource_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT 'resource:' || r.id, r.project_id, ${matchSelect(resourceMatch)}
       FROM knowledge_resources r
       WHERE r.tenant_id = ?
@@ -1101,33 +1101,33 @@ function readableNodeCtes(
         ${resourceReadable.sql}
         ${matchWhere(resourceMatch)}
     ),
-    task_nodes(node_id, project_id, matches_query) AS (
+    task_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT 'task:' || t.id, t.project_id, ${matchSelect(taskMatch)}
       FROM tasks t
       WHERE t.tenant_id = ?
         ${scoped.sql.replaceAll("project_id", "t.project_id")}
         ${matchWhere(taskMatch)}
     ),
-    entity_nodes(node_id, project_id, matches_query) AS (
+    entity_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT DISTINCT 'entity:' || e.id, NULL, ${matchSelect(entityMatch)}
       FROM memory_entities me
       JOIN entities e ON e.tenant_id = me.tenant_id AND e.id = me.entity_id
       JOIN memory_nodes mn ON mn.node_id = ('memory:' || me.memory_id)
       WHERE me.tenant_id = ? ${matchWhere(entityMatch)}
     ),
-    project_sources(project_id) AS (
+    project_sources(project_id) AS MATERIALIZED (
       SELECT project_id FROM memory_nodes WHERE project_id IS NOT NULL
       UNION SELECT project_id FROM decision_nodes WHERE project_id IS NOT NULL
       UNION SELECT project_id FROM resource_nodes WHERE project_id IS NOT NULL
       UNION SELECT project_id FROM task_nodes WHERE project_id IS NOT NULL
       ${projectSource}
     ),
-    project_nodes(node_id, project_id, matches_query) AS (
+    project_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT 'project:' || project_id, project_id, ${matchSelect(projectMatch)}
       FROM project_sources
       WHERE project_id IS NOT NULL ${matchWhere(projectMatch)}
     ),
-    all_nodes(node_id, project_id, matches_query) AS (
+    all_nodes(node_id, project_id, matches_query) AS MATERIALIZED (
       SELECT node_id, project_id, matches_query FROM memory_nodes
       UNION ALL SELECT node_id, project_id, matches_query FROM decision_nodes
       UNION ALL SELECT node_id, project_id, matches_query FROM resource_nodes
