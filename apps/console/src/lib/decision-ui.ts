@@ -15,6 +15,87 @@ export type SourceRef = {
 export type StructuredRow = Record<string, FormDataEntryValue | string | null | undefined>;
 export type Locale = "en" | "ja" | "zh";
 
+export type DecisionVersionSnapshot = Record<string, unknown>;
+
+export type DecisionVersionForDiff = {
+  id: string;
+  createdAt: number;
+  snapshot?: DecisionVersionSnapshot;
+};
+
+export type DecisionVersionChange = {
+  field: string;
+  before?: unknown;
+  after?: unknown;
+};
+
+export type DecisionVersionDiff<T extends DecisionVersionForDiff = DecisionVersionForDiff> = {
+  version: T;
+  previousVersion: T | null;
+  comparable: boolean;
+  changes: DecisionVersionChange[];
+};
+
+const DECISION_HISTORY_FIELDS = [
+  "title",
+  "decision",
+  "rationale",
+  "domain",
+  "rejectedAlternatives",
+  "constraints",
+  "knownPitfalls",
+  "sourceRefs",
+  "ownerRefs",
+  "reviewerRefs",
+  "confidence",
+  "visibility",
+  "confirmationState",
+  "confirmationNote",
+  "confirmedAt",
+  "status",
+  "validFrom",
+  "validUntil",
+  "supersededBy"
+] as const;
+
+function canonicalSnapshotValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalSnapshotValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => [key, canonicalSnapshotValue(child)])
+  );
+}
+
+function snapshotValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  return JSON.stringify(canonicalSnapshotValue(left)) === JSON.stringify(canonicalSnapshotValue(right));
+}
+
+export function buildDecisionVersionDiffs<T extends DecisionVersionForDiff>(versions: T[]): DecisionVersionDiff<T>[] {
+  const chronological = [...versions].sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
+  const diffs = chronological.map((version, index): DecisionVersionDiff<T> => {
+    const previousVersion = chronological[index - 1] ?? null;
+    const snapshot = version.snapshot;
+    const previousSnapshot = previousVersion?.snapshot;
+    if (!previousVersion || !snapshot || !previousSnapshot) {
+      return { version, previousVersion, comparable: false, changes: [] };
+    }
+    const changes = DECISION_HISTORY_FIELDS.flatMap((field): DecisionVersionChange[] => {
+      const before = previousSnapshot[field];
+      const after = snapshot[field];
+      const beforeRecorded = Object.prototype.hasOwnProperty.call(previousSnapshot, field);
+      const afterRecorded = Object.prototype.hasOwnProperty.call(snapshot, field);
+      if (!beforeRecorded && !afterRecorded) return [];
+      if (beforeRecorded === afterRecorded && snapshotValuesEqual(before, after)) return [];
+      return [{ field, ...(beforeRecorded ? { before } : {}), ...(afterRecorded ? { after } : {}) }];
+    });
+    return { version, previousVersion, comparable: true, changes };
+  });
+  return diffs.sort((left, right) => right.version.createdAt - left.version.createdAt || right.version.id.localeCompare(left.version.id));
+}
+
 export const LOCALES: Array<{ code: Locale; label: string }> = [
   { code: "en", label: "English" },
   { code: "ja", label: "日本語" },

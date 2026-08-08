@@ -471,6 +471,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           ranking_profile_id: evidence.meta.retrieval?.ranking_profile_id === governance.meta.retrieval.ranking_profile_id
             ? evidence.meta.retrieval?.ranking_profile_id
             : null,
+          actor_principal: this.props?.principal ?? null,
           items: [
             ...evidence.results.filter((item) => item.kind === "memory").map((item, index) => ({
               source_type: "memory" as const,
@@ -563,7 +564,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           limit_recent,
           rewrite_query,
           search_mode
-        });
+        }, { actorPrincipal: this.props?.principal });
         return toContent(result);
       }
     );
@@ -1178,7 +1179,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
           () => createTask(this.env, {
             ...payload,
             tenant_id: tenantId
-          })
+          }, { actorPrincipal: this.props?.principal })
         );
         return toContent(result);
       }

@@ -76,6 +76,9 @@ importers:
       '@astrojs/node':
         specifier: ^10.1.4
         version: 10.1.4(astro@6.4.8(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.60.1)(yaml@2.8.3))
+      '@org-brain/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       astro:
         specifier: ^6.4.8
         version: 6.4.8(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.60.1)(yaml@2.8.3)

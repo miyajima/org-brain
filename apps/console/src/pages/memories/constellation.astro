@@ -1,0 +1,44 @@
+---
+import KnowledgeConstellation from "../../components/intelligence/KnowledgeConstellation.astro";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
+import { intelligencePageCopy } from "../../lib/intelligence-locale";
+import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../../lib/insights-ui-mode";
+import { normalizeKnowledgeGraph, type KnowledgeNodeType } from "../../lib/knowledge-graph-ui";
+
+const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
+if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
+  return Astro.redirect(`/memories${Astro.url.search}`);
+}
+const { params, apiParams, lang } = dashboardPageParams(Astro.url);
+const copy = intelligencePageCopy(lang);
+const query = params.get("q")?.trim();
+if (query) apiParams.set("q", query);
+apiParams.set("depth", "2");
+const selected = params.get("selected")?.trim();
+const nodeTypes = new Set<KnowledgeNodeType>(["project", "memory", "decision", "resource", "entity", "task"]);
+if (selected) {
+  const separator = selected.indexOf(":");
+  const focusType = separator > 0 ? selected.slice(0, separator) : "";
+  const focusId = separator > 0 ? selected.slice(separator + 1) : "";
+  if (focusId && nodeTypes.has(focusType as KnowledgeNodeType)) {
+    apiParams.set("focus_type", focusType);
+    apiParams.set("focus_id", focusId);
+  }
+}
+const refreshUrl = `/api/v1/dashboard/knowledge-graph?${apiParams.toString()}`;
+const result = await fetchDashboardData(
+  new URL(refreshUrl, Astro.url),
+  normalizeKnowledgeGraph,
+  normalizeKnowledgeGraph({})
+);
+---
+<BaseLayout title={copy.routes.constellationTitle} lang={lang} wide>
+  {result.error && (
+    <div class="intelligence-route-alert" role="alert">
+      <strong>{copy.routes.graphError}</strong>
+      <span>{result.error}</span>
+    </div>
+  )}
+  <KnowledgeConstellation data={result.data} refreshUrl={refreshUrl} params={params} locale={lang} />
+</BaseLayout>

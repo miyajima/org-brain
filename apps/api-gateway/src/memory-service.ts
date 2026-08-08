@@ -1152,6 +1152,7 @@ export async function searchMemories(
           ? "gen_structured_context"
           : null),
       ranking_profile_id: request.rankingProfileId ?? "rank_default",
+      actor_principal: options.actorPrincipal ?? null,
       items: response.results
         .filter((item) => item.kind === "memory")
         .map((item, index) => ({
@@ -1781,6 +1782,7 @@ export async function retrieveMemoryContext(
       : null,
     retrieval_generation_id: selectedGenerationId,
     ranking_profile_id: search.meta.retrieval?.ranking_profile_id ?? null,
+    actor_principal: options.actorPrincipal ?? null,
     items: evidence.map((item, index) => ({
       source_type: "memory" as const,
       source_id: String(item.memory_id),
@@ -1819,7 +1821,11 @@ export async function retrieveMemoryContext(
   };
 }
 
-export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<MemoryProfileResponse> {
+export async function getMemoryProfile(
+  env: Env,
+  rawBody: unknown,
+  options: PrincipalActorOptions = {}
+): Promise<MemoryProfileResponse> {
   const request = parseProfileRequest(rawBody);
   await validateBusinessClassification(env, request.tenantId, request.businessCategoryId, request.workType, { required: false });
   let profile = await buildTenantMemoryProfile(env.OPEN_BRAIN_DB, request);
@@ -1876,6 +1882,7 @@ export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<Memo
     request_source: "api",
     requested_business_category_id: request.businessCategoryId,
     requested_work_type: request.workType,
+    actor_principal: options.actorPrincipal ?? null,
     items: ids.map((id, index) => ({
       source_type: "memory" as const,
       source_id: id,
@@ -1894,7 +1901,12 @@ export async function getMemoryProfile(env: Env, rawBody: unknown): Promise<Memo
   };
 }
 
-export async function getMemoryDetails(env: Env, tenantId: string, memoryId: string): Promise<MemoryDetail> {
+export async function getMemoryDetails(
+  env: Env,
+  tenantId: string,
+  memoryId: string,
+  options: PrincipalActorOptions = {}
+): Promise<MemoryDetail> {
   const memory = await env.OPEN_BRAIN_DB.prepare(
     `SELECT actor_type, actor_id, current_version
      FROM memories
@@ -1982,6 +1994,7 @@ export async function getMemoryDetails(env: Env, tenantId: string, memoryId: str
     capability: "memory_details",
     access_path: "direct",
     request_source: "api",
+    actor_principal: options.actorPrincipal ?? null,
     items: [{
       source_type: "memory",
       source_id: memoryId,

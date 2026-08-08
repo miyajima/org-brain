@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDecisionVersionDiffs,
   compactOwnerRefs,
   compactSourceRefs,
   confirmationLabel,
@@ -48,5 +49,31 @@ describe("decision UI helpers", () => {
         { type: "", id: "", title: "", url: "", updatedAt: "2026-06-09" }
       ])
     ).toEqual([{ type: "adr", id: "ADR-014", title: "API boundary", url: "https://example.test/adr", updatedAt: "2026-06-09" }]);
+  });
+
+  it("compares adjacent decision snapshots in chronological order", () => {
+    const diffs = buildDecisionVersionDiffs([
+      { id: "v2", createdAt: 200, snapshot: { status: "active", confirmationState: "user_confirmed", validUntil: 500 } },
+      { id: "v1", createdAt: 100, snapshot: { status: "uncertain", confirmationState: "inferred_unconfirmed", validUntil: null } }
+    ]);
+    expect(diffs.map((item) => item.version.id)).toEqual(["v2", "v1"]);
+    expect(diffs[0]).toMatchObject({
+      comparable: true,
+      previousVersion: { id: "v1" },
+      changes: [
+        { field: "confirmationState", before: "inferred_unconfirmed", after: "user_confirmed" },
+        { field: "status", before: "uncertain", after: "active" },
+        { field: "validUntil", before: null, after: 500 }
+      ]
+    });
+    expect(diffs[1]).toMatchObject({ comparable: false, previousVersion: null, changes: [] });
+  });
+
+  it("does not infer a diff when either adjacent snapshot is absent", () => {
+    const diffs = buildDecisionVersionDiffs([
+      { id: "v1", createdAt: 100 },
+      { id: "v2", createdAt: 200, snapshot: { status: "active" } }
+    ]);
+    expect(diffs[0]).toMatchObject({ comparable: false, changes: [] });
   });
 });

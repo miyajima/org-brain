@@ -1,0 +1,44 @@
+{
+  "page": "Org Brain integrated insight dashboard",
+  "goal": "Expose current activity, knowledge relationships, and decision lineage without replacing source-of-truth workflows.",
+  "sections": [
+    {
+      "id": "nervous-system",
+      "type": "activity-flow-dashboard",
+      "intent": "Show observed agents and tasks flowing through Org Brain toward projects, with attention signals in context.",
+      "layout": "Three-zone desktop flow: observed agents, central Org Brain processing, project outcomes; event inspector and 24h timeline below.",
+      "priority": 1,
+      "primary_cta": "Open selected event source",
+      "visual": "Electric-blue data paths on near-black field; amber/red only for warning/critical branches.",
+      "content_notes": ["30 second polling", "last-good snapshot remains visible", "System / Unknown is explicit"],
+      "must_avoid": ["claiming authoritative online presence", "raw payload content", "decorative particle animation"]
+    },
+    {
+      "id": "knowledge-constellation",
+      "type": "bounded-relationship-map",
+      "intent": "Let users focus a knowledge object and understand its recorded neighborhood.",
+      "layout": "SVG relationship field with focus at center, one-hop inner ring, two-hop outer ring, project clusters, and sticky inspector.",
+      "priority": 2,
+      "primary_cta": "Open selected source record",
+      "visual": "Selected blue focus, white lessons, amber warnings, outlined project clusters; shape and labels duplicate color meaning.",
+      "content_notes": ["maximum 150 nodes / 300 edges", "deterministic coordinates", "equivalent list fallback"],
+      "must_avoid": ["semantic similarity edges", "unbounded force simulation", "canvas-only interaction"]
+    },
+    {
+      "id": "memory-strata",
+      "type": "temporal-lineage-map",
+      "intent": "Explain how current canonical knowledge emerged from decisions, learnings, assumptions, and sources.",
+      "layout": "Five horizontal lanes on desktop with time across x; vertical chronological feed on mobile; attention cards below.",
+      "priority": 3,
+      "primary_cta": "Open selected lineage detail",
+      "visual": "Canonical blue lane, neutral supporting lanes, amber assumption/conflict lane, visible present-time marker.",
+      "content_notes": ["partial revisions labeled", "supersession and validity shown", "version diffs use whitelisted fields"],
+      "must_avoid": ["classifying low confidence alone as assumption", "shrinking desktop timeline on mobile", "hiding truncation"]
+    }
+  ],
+  "responsive_strategy": {
+    "desktop": "Use wide visualization canvases with sticky inspectors and dense secondary metadata.",
+    "tablet": "Stack visualization above inspector; collapse management navigation into a disclosure menu.",
+    "mobile": "Use one-column cards, a vertical Strata timeline, horizontally scrollable bounded graph viewport plus list fallback, and 44px touch targets."
+  }
+}

@@ -1,0 +1,33 @@
+---
+import NervousSystem from "../components/intelligence/NervousSystem.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { intelligencePageCopy } from "../lib/intelligence-locale";
+import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
+import { normalizeDashboardActivity } from "../lib/nervous-system-ui";
+
+const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
+if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
+  return Astro.redirect(`/${Astro.url.search}`);
+}
+const { params, apiParams, lang } = dashboardPageParams(Astro.url);
+const copy = intelligencePageCopy(lang);
+const initialUrl = `/api/v1/dashboard/activity?${apiParams.toString()}`;
+const result = await fetchDashboardData(
+  new URL(initialUrl, Astro.url),
+  normalizeDashboardActivity,
+  normalizeDashboardActivity({})
+);
+const refreshParams = new URLSearchParams(apiParams);
+if (result.data.newest_cursor != null) refreshParams.set("after", String(result.data.newest_cursor));
+const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
+---
+<BaseLayout title={copy.routes.nervousTitle} lang={lang} wide>
+  {result.error && (
+    <div class="intelligence-route-alert" role="alert">
+      <strong>{copy.routes.activityError}</strong>
+      <span>{result.error}</span>
+    </div>
+  )}
+  <NervousSystem data={result.data} refreshUrl={refreshUrl} params={params} locale={lang} />
+</BaseLayout>

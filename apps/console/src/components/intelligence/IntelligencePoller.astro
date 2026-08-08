@@ -1,0 +1,166 @@
+---
+import { incrementalPollingSignature, isPollingSnapshotStale, stablePollingSignature } from "../../lib/intelligence-polling";
+import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+
+const {
+  refreshUrl,
+  initialData,
+  generatedAt = 0,
+  label: requestedLabel,
+  locale = "en",
+  incrementalField
+} = Astro.props as {
+  refreshUrl: string;
+  initialData: unknown;
+  generatedAt?: number;
+  label?: string;
+  locale?: IntelligenceLocale;
+  incrementalField?: string;
+};
+const copy = intelligencePageCopy(locale);
+const label = requestedLabel ?? copy.poller.live;
+const signature = stablePollingSignature(initialData);
+const incrementalBaseline = incrementalField
+  ? incrementalPollingSignature(initialData, incrementalField)
+  : "";
+const formatted = generatedAt
+  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", dateStyle: "medium", timeStyle: "short" }).format(new Date(generatedAt))
+  : copy.common.unavailable;
+const initiallyStale = isPollingSnapshotStale(generatedAt);
+---
+<intelligence-poller
+  data-refresh-url={refreshUrl}
+  data-signature={signature}
+  data-incremental-field={incrementalField}
+  data-incremental-baseline={incrementalBaseline}
+  data-poll-state={initiallyStale ? "stale" : "idle"}
+  data-poll-stale={initiallyStale ? "true" : "false"}
+  data-copy-live={label}
+  data-copy-new-data={copy.poller.newData}
+  data-copy-retry={copy.poller.retry}
+  data-copy-refreshing={copy.poller.refreshing}
+  data-copy-reconnecting={copy.poller.reconnecting}
+  data-copy-paused={copy.poller.paused}
+  data-copy-stopped={copy.poller.stopped}
+>
+  <span class="poll-live-dot" aria-hidden="true"></span>
+  <span data-poll-label>{initiallyStale ? copy.poller.stale : label}</span>
+  <span class="poll-updated">{copy.poller.lastUpdated}: {generatedAt ? <time datetime={new Date(generatedAt).toISOString()}>{formatted}</time> : formatted}</span>
+  <button type="button" class="poll-refresh" data-poll-refresh>{copy.poller.refresh}</button>
+  <span class="sr-only" aria-live="polite" data-poll-status></span>
+</intelligence-poller>
+
+<script>
+  import { incrementalPollingSignature, PollingHttpError, stablePollingSignature, startVisiblePolling } from "../../lib/intelligence-polling";
+
+  class IntelligencePoller extends HTMLElement {
+    stopPolling?: () => void;
+
+    connectedCallback() {
+      const url = this.dataset.refreshUrl;
+      const initialSignature = this.dataset.signature;
+      const incrementalField = this.dataset.incrementalField;
+      const incrementalBaseline = this.dataset.incrementalBaseline;
+      const copyLive = this.dataset.copyLive || "Live";
+      const copyNewData = this.dataset.copyNewData || "New data is available. Refreshing now.";
+      const copyRetry = this.dataset.copyRetry || "Refresh failed. Retrying in {seconds} seconds.";
+      const copyRefreshing = this.dataset.copyRefreshing || "Refreshing";
+      const copyReconnecting = this.dataset.copyReconnecting || "Data is stale · Reconnecting";
+      const copyPaused = this.dataset.copyPaused || "Paused";
+      const copyStopped = this.dataset.copyStopped || "Stopped";
+      const label = this.querySelector<HTMLElement>("[data-poll-label]");
+      const status = this.querySelector<HTMLElement>("[data-poll-status]");
+      this.querySelector<HTMLButtonElement>("[data-poll-refresh]")?.addEventListener("click", () => window.location.reload());
+      if (!url) return;
+
+      this.stopPolling = startVisiblePolling<unknown>({
+        url,
+        intervalMs: 30_000,
+        maximumDelayMs: 300_000,
+        onData: (data) => {
+          const record = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null;
+          const incrementalItems = record && incrementalField && Array.isArray(record[incrementalField]) ? record[incrementalField] as unknown[] : [];
+          const changed = incrementalField
+            ? incrementalItems.length > 0 || incrementalPollingSignature(data, incrementalField) !== incrementalBaseline
+            : stablePollingSignature(data) !== initialSignature;
+          if (changed) {
+            if (status) status.textContent = copyNewData;
+            window.location.reload();
+          }
+        },
+        onError: (error, retryInMs) => {
+          if (error instanceof PollingHttpError && error.status === 400) {
+            window.location.reload();
+            return;
+          }
+          this.dataset.pollStale = "true";
+          if (status) status.textContent = copyRetry.replace("{seconds}", String(Math.round(retryInMs / 1000)));
+        },
+        onStateChange: (state) => {
+          if (!label) return;
+          if (state === "live") this.dataset.pollStale = "false";
+          label.textContent = state === "refreshing"
+            ? copyRefreshing
+            : state === "backoff"
+              ? copyReconnecting
+              : state === "idle"
+                ? copyPaused
+                : state === "stopped"
+                  ? copyStopped
+                  : copyLive;
+          this.dataset.pollState = state;
+        }
+      });
+    }
+
+    disconnectedCallback() {
+      this.stopPolling?.();
+    }
+  }
+
+  if (!customElements.get("intelligence-poller")) customElements.define("intelligence-poller", IntelligencePoller);
+</script>
+
+<style>
+  intelligence-poller {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--intelligence-muted);
+    font-size: 0.76rem;
+  }
+
+  .poll-live-dot {
+    width: 0.48rem;
+    height: 0.48rem;
+    border-radius: 999px;
+    background: var(--intelligence-success);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--intelligence-success) 80%, transparent);
+  }
+
+  intelligence-poller[data-poll-stale="true"] .poll-live-dot,
+  intelligence-poller[data-poll-state="backoff"] .poll-live-dot {
+    background: var(--intelligence-warning);
+  }
+
+  .poll-updated {
+    padding-left: 0.7rem;
+    border-left: 1px solid var(--intelligence-border);
+  }
+
+  .poll-refresh {
+    min-height: 44px;
+    border-color: var(--intelligence-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: none;
+    padding: 0.25rem 0.65rem;
+    color: var(--intelligence-text);
+  }
+
+  @media (max-width: 560px) {
+    intelligence-poller { flex-wrap: wrap; }
+    .poll-updated { order: 3; width: 100%; border-left: 0; padding-left: 0; }
+  }
+</style>

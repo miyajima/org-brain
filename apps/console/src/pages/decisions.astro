@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import {
+  buildDecisionVersionDiffs,
   confirmationLabel as decisionConfirmationLabel,
   freshnessLabel as decisionFreshnessLabel,
   isExpired,
@@ -59,6 +61,7 @@ type DecisionMemory = {
 type DecisionVersion = {
   id: string;
   operation: string;
+  snapshot?: Record<string, unknown>;
   actorRefs: OwnerRef[];
   reviewerRefs: OwnerRef[];
   note: string | null;
@@ -202,6 +205,11 @@ const PAGE_COPY: Record<Locale, Record<string, string>> = {
     humanReviewOptional: "optional",
     history: "History",
     noHistory: "No history yet.",
+    changedFields: "Changes from previous version",
+    noRecordedChanges: "No changes in the recorded comparable fields.",
+    comparisonUnavailable: "The previous snapshot is not available for comparison.",
+    supersession: "Supersession",
+    notRecorded: "Not recorded",
     actors: "Actors",
     relatedDecisions: "Related decisions",
     trustEmpty: "Select a decision to see trust evidence.",
@@ -293,6 +301,11 @@ const PAGE_COPY: Record<Locale, Record<string, string>> = {
     humanReviewRequired: "必要",
     humanReviewOptional: "任意",
     history: "履歴",
+    changedFields: "前版からの変更項目",
+    noRecordedChanges: "保存済みの比較可能な項目に変更はありません。",
+    comparisonUnavailable: "比較に必要な以前のsnapshotが記録されていません。",
+    supersession: "後継・置換",
+    notRecorded: "記録なし",
     noHistory: "履歴はありません。",
     actors: "改訂者",
     relatedDecisions: "関連判断",
@@ -385,6 +398,11 @@ const PAGE_COPY: Record<Locale, Record<string, string>> = {
     humanReviewRequired: "需要",
     humanReviewOptional: "可选",
     history: "历史",
+    changedFields: "与上一版本相比的变更",
+    noRecordedChanges: "已记录的可比较字段没有变化。",
+    comparisonUnavailable: "未记录用于比较的上一版本快照。",
+    supersession: "替代关系",
+    notRecorded: "未记录",
     noHistory: "暂无历史记录。",
     actors: "修订者",
     relatedDecisions: "相关决策",
@@ -397,6 +415,8 @@ const PAGE_COPY: Record<Locale, Record<string, string>> = {
 
 const url = Astro.url;
 const params = url.searchParams;
+const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
+const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 const tenantId = params.get("tenant_id")?.trim() || "default";
 const projectId = params.get("project_id")?.trim() || "";
 const query = params.get("q")?.trim() || "";
@@ -484,6 +504,21 @@ function compactRefs(refs: OwnerRef[] | SourceRef[] | null | undefined, limit = 
   return labels.length > limit ? `${shown} + ${labels.length - limit} more` : shown;
 }
 
+function formatVersionValue(value: unknown, field: string): string {
+  if (value === undefined || value === null || value === "") return copy.notRecorded;
+  if ((field === "validFrom" || field === "validUntil" || field === "confirmedAt") && typeof value === "number") return formatDate(value);
+  if (field === "confirmationState" && typeof value === "string") return confirmationLabel(value);
+  if (field === "status" && typeof value === "string") return statusLabel(value);
+  if (typeof value === "object") {
+    try {
+      return trimText(JSON.stringify(value), 120) || copy.notRecorded;
+    } catch {
+      return copy.notRecorded;
+    }
+  }
+  return trimText(String(value), 120) || copy.notRecorded;
+}
+
 function sourceCount(memory: DecisionMemory): number {
   return memory.trustSignals?.sourceCount ?? memory.sourceRefs.length;
 }
@@ -529,10 +564,11 @@ const results = searchPayload?.ok ? searchPayload.data.results : [];
 const activeId = !createMode ? selectedId || results[0]?.id || "" : "";
 const contextPayload = activeId
   ? await fetchApi<DecisionContext>(
-      `/api/v1/decision-memories/${encodeURIComponent(activeId)}/context?tenant_id=${encodeURIComponent(tenantId)}`
+      `/api/v1/decision-memories/${encodeURIComponent(activeId)}/context?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`
     )
   : null;
 const context = contextPayload?.ok ? contextPayload.data : null;
+const versionHistory = buildDecisionVersionDiffs(context?.whyTrustThis.versions ?? []);
 const active = context?.decisionMemory ?? results.find((item) => item.id === activeId) ?? null;
 const errors = [
   searchPayload?.ok === false ? searchPayload.error?.message ?? "Decision search could not be loaded" : null,
@@ -543,6 +579,7 @@ const selectedSummary = active ?? results[0] ?? null;
 const resourceHref = active
   ? `/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&decision_ref=${encodeURIComponent(`decision_memory:${active.id}`)}&lang=${locale}`
   : `/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&lang=${locale}`;
+const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}&lang=${locale}`;
 ---
 <BaseLayout title={copy.pageTitle} lang={locale}>
   <section class="decision-page space-y-5">
@@ -556,6 +593,7 @@ const resourceHref = active
           </p>
         </div>
         <div class="flex flex-wrap gap-2 xl:justify-end" aria-label={copy.language}>
+          {insightsRoutesEnabled && <a class="trust-chip" href={historyHref}>Memory Strata</a>}
           {LOCALES.map((item) => (
             <a class={["trust-chip", locale === item.code ? "trust-chip-good" : ""].join(" ")} href={makeHref({ lang: item.code })} aria-current={locale === item.code ? "page" : undefined}>
               {item.label}
@@ -1135,9 +1173,12 @@ const resourceHref = active
             <section class="card">
               <p class="surface-label">{copy.history}</p>
               <div class="mt-4 space-y-3">
-                {context.whyTrustThis.versions.length === 0 ? (
+                {versionHistory.length === 0 ? (
                   <p class="text-sm text-zinc-400">{copy.noHistory}</p>
-                ) : context.whyTrustThis.versions.map((version) => (
+                ) : versionHistory.map((entry) => {
+                  const version = entry.version;
+                  const snapshot = version.snapshot ?? {};
+                  return (
                   <div class="surface-soft-card">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <strong class="text-sm text-white">{operationLabel(version.operation)}</strong>
@@ -1145,8 +1186,46 @@ const resourceHref = active
                     </div>
                     <p class="mt-2 text-xs leading-6 text-zinc-500">{copy.actors}: {compactRefs(version.actorRefs)} / {copy.reviewers}: {compactRefs(version.reviewerRefs)}</p>
                     {version.note && <p class="mt-2 text-sm leading-7 text-zinc-400">{version.note}</p>}
+                    <dl class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                      <div class="rounded-xl border border-white/8 bg-black/15 p-2">
+                        <dt class="text-zinc-500">{copy.confirmationState}</dt>
+                        <dd class="mt-1 text-zinc-200">{formatVersionValue(snapshot.confirmationState, "confirmationState")}</dd>
+                      </div>
+                      <div class="rounded-xl border border-white/8 bg-black/15 p-2">
+                        <dt class="text-zinc-500">{copy.status}</dt>
+                        <dd class="mt-1 text-zinc-200">{formatVersionValue(snapshot.status, "status")}</dd>
+                      </div>
+                      <div class="rounded-xl border border-white/8 bg-black/15 p-2">
+                        <dt class="text-zinc-500">{copy.validFrom} / {copy.validUntil}</dt>
+                        <dd class="mt-1 text-zinc-200">{formatVersionValue(snapshot.validFrom, "validFrom")} / {formatVersionValue(snapshot.validUntil, "validUntil")}</dd>
+                      </div>
+                      <div class="rounded-xl border border-white/8 bg-black/15 p-2">
+                        <dt class="text-zinc-500">{copy.supersession}</dt>
+                        <dd class="mt-1 break-all text-zinc-200">{formatVersionValue(snapshot.supersededBy, "supersededBy")}</dd>
+                      </div>
+                    </dl>
+                    <div class="mt-3 border-t border-white/8 pt-3">
+                      <p class="text-xs font-semibold text-zinc-300">{copy.changedFields}</p>
+                      {!entry.comparable ? (
+                        <p class="mt-2 text-xs leading-6 text-zinc-500">{copy.comparisonUnavailable}</p>
+                      ) : entry.changes.length === 0 ? (
+                        <p class="mt-2 text-xs leading-6 text-zinc-500">{copy.noRecordedChanges}</p>
+                      ) : (
+                        <ul class="mt-2 space-y-2">
+                          {entry.changes.map((change) => (
+                            <li class="grid gap-1 rounded-xl border border-white/8 bg-black/15 p-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
+                              <strong class="break-words text-xs text-sky-100">{change.field}</strong>
+                              <span class="break-words text-xs leading-5 text-zinc-400">
+                                {formatVersionValue(change.before, change.field)} → {formatVersionValue(change.after, change.field)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 

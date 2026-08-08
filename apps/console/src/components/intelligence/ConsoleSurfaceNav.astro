@@ -1,0 +1,58 @@
+---
+import { intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+
+const { section, params = new URLSearchParams(), locale = "en" } = Astro.props as {
+  section: "memories" | "decisions";
+  params?: URLSearchParams;
+  locale?: IntelligenceLocale;
+};
+const copy = intelligencePageCopy(locale);
+const scoped = (pathname: string) => {
+  const next = new URLSearchParams();
+  for (const key of ["tenant_id", "project_id", "lang"]) {
+    const value = params.get(key);
+    if (value) next.set(key, value);
+  }
+  return next.size ? `${pathname}?${next.toString()}` : pathname;
+};
+const path = Astro.url.pathname;
+const links = section === "memories"
+  ? [
+      { href: scoped("/memories/constellation"), label: copy.nav.constellation, active: path === "/memories/constellation" },
+      { href: scoped("/memories"), label: copy.nav.explorer, active: path === "/memories" }
+    ]
+  : [
+      { href: scoped("/decisions/history"), label: copy.nav.strata, active: path === "/decisions/history" },
+      { href: scoped("/decisions"), label: copy.nav.decisionEditor, active: path === "/decisions" }
+    ];
+---
+<nav class="surface-switcher" aria-label={section === "memories" ? copy.nav.memoriesAria : copy.nav.decisionsAria}>
+  {links.map((link) => <a href={link.href} aria-current={link.active ? "page" : undefined}>{link.label}</a>)}
+</nav>
+
+<style>
+  .surface-switcher {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    border: 1px solid var(--intelligence-border);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.025);
+    padding: 0.28rem;
+  }
+  .surface-switcher a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    border-radius: 9px;
+    padding: 0.45rem 0.85rem;
+    color: var(--intelligence-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .surface-switcher a[aria-current="page"] {
+    background: rgba(22, 135, 255, 0.14);
+    color: #cae8ff;
+    box-shadow: inset 0 0 0 1px rgba(75, 173, 255, 0.28);
+  }
+</style>
