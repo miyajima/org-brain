@@ -112,6 +112,27 @@ describe("api tenant auth", () => {
     expect(denied.status).toBe(403);
   });
 
+  it("limits the dedicated Console key to read-only access for the default tenant", async () => {
+    const app = buildApp();
+    const env = { CONSOLE_API_KEY: "console-secret" } as Env;
+    const principal = await app.fetch(
+      new Request("https://example.test/principal", { headers: { "x-api-key": "console-secret" } }),
+      env
+    );
+    const deniedTenant = await app.fetch(
+      new Request("https://example.test/tenant?tenant_id=team-a", { headers: { "x-api-key": "console-secret" } }),
+      env
+    );
+
+    expect(principal.status).toBe(200);
+    expect(await principal.json()).toMatchObject({
+      principal: "service:open-brain-console",
+      allowedTenants: ["default"],
+      defaultRole: "reader"
+    });
+    expect(deniedTenant.status).toBe(403);
+  });
+
   it("stores the resolved API key principal in context", async () => {
     const app = buildApp();
     const env = {

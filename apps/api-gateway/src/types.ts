@@ -14,6 +14,7 @@ export type Env = {
   ORG_BUS_OUT: Queue<TaskEnvelope>;
   RETRIEVAL_PROJECTION_QUEUE?: Queue<RetrievalProjectionJob>;
   API_KEY: string;
+  CONSOLE_API_KEY?: string;
   API_TENANT_POLICY_JSON?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
