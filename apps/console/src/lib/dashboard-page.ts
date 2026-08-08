@@ -9,6 +9,31 @@ type ApiEnvelope<T> = {
   error?: { message?: string };
 };
 
+type DashboardRuntimeEnv = {
+  API?: Fetcher;
+  INTERNAL_API_KEY?: string;
+};
+
+async function fetchDashboardResponse(url: URL): Promise<Response> {
+  try {
+    const runtimeEnv = (await import("cloudflare:workers")).env as unknown as DashboardRuntimeEnv;
+    if (runtimeEnv.API && runtimeEnv.INTERNAL_API_KEY) {
+      const path = url.pathname.replace(/^\/api(?=\/)/u, "");
+      const target = new URL(path || "/", "https://internal");
+      target.search = url.search;
+      return runtimeEnv.API.fetch(target.toString(), {
+        headers: {
+          accept: "application/json",
+          "x-api-key": runtimeEnv.INTERNAL_API_KEY
+        }
+      });
+    }
+  } catch {
+    // Non-Cloudflare runtimes and unit tests use the normal fetch path.
+  }
+  return fetch(url, { headers: { accept: "application/json" } });
+}
+
 export function dashboardPageParams(url: URL): {
   params: URLSearchParams;
   apiParams: URLSearchParams;
@@ -45,7 +70,7 @@ export async function fetchDashboardData<T>(
   fallback: T
 ): Promise<DashboardFetchResult<T>> {
   try {
-    const response = await fetch(url, { headers: { accept: "application/json" } });
+    const response = await fetchDashboardResponse(url);
     const payload = await response.json() as ApiEnvelope<unknown>;
     if (!response.ok || payload.ok !== true || !("data" in payload)) {
       return {
