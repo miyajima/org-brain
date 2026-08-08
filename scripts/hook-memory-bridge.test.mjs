@@ -1,13 +1,16 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  buildMcpCaptureRequest,
   classifyMemoryRecord,
   normalizeRecord,
+  postMemoryViaMcp,
   prepareMemoryRecordForUpsert,
   redactHookMemoryText,
   resolveApiBase,
+  resolveMcpConfig,
   resolveProjectNameForWorkspace,
   resolveWorkspaceContext
 } from "../packages/orgbrain-cli/src/hook-memory-bridge.mjs";
@@ -77,6 +80,107 @@ describe("hook-memory-bridge promotion", () => {
         ORGBRAIN_API_BASE: "https://legacy.example.test"
       })
     ).toBe("https://canonical.example.test");
+  });
+
+  it("requires a complete stateless MCP service-token configuration", () => {
+    expect(resolveMcpConfig({})).toMatchObject({ configured: false, complete: false });
+    expect(resolveMcpConfig({ ORGBRAIN_MCP_URL: "https://mcp.example.test/mcp" })).toMatchObject({
+      configured: true,
+      complete: false,
+      missing: ["ORGBRAIN_MCP_CLIENT_ID", "ORGBRAIN_MCP_CLIENT_SECRET"]
+    });
+    expect(resolveMcpConfig({
+      ORGBRAIN_MCP_URL: "https://mcp.example.test/mcp",
+      ORGBRAIN_MCP_CLIENT_ID: "client-id",
+      ORGBRAIN_MCP_CLIENT_SECRET: "client-secret"
+    })).toMatchObject({
+      configured: true,
+      complete: true,
+      missing: []
+    });
+  });
+
+  it("builds a zero-discovery MCP 2026-07-28 capture call", () => {
+    const request = buildMcpCaptureRequest("default", "codex", {
+      externalKey: "codex:turn-1",
+      content: "Reusable diagnosis and fix.",
+      summary: "Diagnosis",
+      tags: ["diagnosis"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation"
+    });
+
+    expect(request).toMatchObject({
+      jsonrpc: "2.0",
+      id: "hook:codex:turn-1",
+      method: "tools/call",
+      params: {
+        name: "orgbrain_memories_capture_rationale",
+        arguments: {
+          tenant_id: "default",
+          source: "codex",
+          item: {
+            external_key: "codex:turn-1",
+            project_id: "org-brain"
+          }
+        },
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientCapabilities": {}
+        }
+      }
+    });
+  });
+
+  it("calls the known capture tool once with modern MCP headers", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: "hook:codex:turn-1",
+      result: {
+        content: [{ type: "text", text: JSON.stringify({ inserted: 1, updated: 0 }) }]
+      }
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const result = await postMemoryViaMcp({
+        url: "https://mcp.example.test/mcp",
+        clientId: "client-id",
+        clientSecret: "client-secret"
+      }, "default", "codex", {
+        externalKey: "codex:turn-1",
+        content: "Reusable diagnosis and fix.",
+        summary: "Diagnosis",
+        tags: ["diagnosis"],
+        createdAt: 1_786_000_000_000,
+        projectId: "org-brain",
+        businessCategoryId: null,
+        workType: "implementation"
+      });
+
+      expect(result).toEqual({ inserted: 1, updated: 0 });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("https://mcp.example.test/mcp");
+      expect(init.headers).toMatchObject({
+        "CF-Access-Client-Id": "client-id",
+        "CF-Access-Client-Secret": "client-secret",
+        "MCP-Protocol-Version": "2026-07-28",
+        "Mcp-Method": "tools/call",
+        "Mcp-Name": "orgbrain_memories_capture_rationale"
+      });
+      expect(JSON.parse(init.body)).toMatchObject({
+        method: "tools/call",
+        params: { name: "orgbrain_memories_capture_rationale" }
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("skips generic agent-turn-complete messages", () => {

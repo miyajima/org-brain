@@ -9,7 +9,6 @@ import {
   type AgentMessageStatus,
   type AgentMessageTargetType
 } from "@org-brain/shared";
-import { z } from "zod";
 import type { Env } from "./types";
 
 type AgentMessageRow = {
@@ -77,16 +76,30 @@ export type ListAgentMessagesResult = {
   next_cursor: number | null;
 };
 
-function badRequestFromZod(error: z.ZodError): HttpError {
+type SchemaParser<T> = {
+  parse(raw: unknown): T;
+};
+
+type SchemaError = {
+  issues: Array<{ message: string }>;
+};
+
+function isSchemaError(error: unknown): error is SchemaError {
+  return typeof error === "object"
+    && error !== null
+    && Array.isArray((error as { issues?: unknown }).issues);
+}
+
+function badRequestFromSchema(error: SchemaError): HttpError {
   return new HttpError(400, "invalid_payload", error.issues.map((issue) => issue.message).join("; "));
 }
 
-function parseWithHttpError<T>(parser: z.ZodType<T>, raw: unknown): T {
+function parseWithHttpError<T>(parser: SchemaParser<T>, raw: unknown): T {
   try {
     return parser.parse(raw);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw badRequestFromZod(error);
+    if (isSchemaError(error)) {
+      throw badRequestFromSchema(error);
     }
     throw error;
   }

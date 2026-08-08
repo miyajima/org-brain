@@ -108,7 +108,7 @@ import {
   upsertMemories
 } from "./memory-service";
 import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
-import { mountMcp, OrgBrainMCP } from "./mcp";
+import { mountMcp } from "./mcp";
 import {
   getMemoryImpactExecution,
   getMemoryImpactSummary,
@@ -1591,4 +1591,3 @@ export default {
     }, async () => runScheduledRetentionSweep(env, scheduledFor));
   }
 };
-export { OrgBrainMCP };

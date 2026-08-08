@@ -110,7 +110,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `/v1/memories/capture` は lifecycle write API で、`/v1/memories/upsert` は後方互換入口としてこれにマップされる
 - `/v1/memories/propose` は raw text から `結論` と `理由` を heuristic に推定し、確認 token と一緒に返す
 - `/v1/memories/confirm` は確認 token を消費し、approved 時だけ `memories` + `decision_rationales` + entity/evidence rows を永続化する
-- `/v1/memories/capture-rationale` は非対話 hook 用に memory capture と推定 rationale/evidence 保存を 1 回で行う。保存される rationale は `confirmation_state=inferred_unconfirmed` とし、人間確認済みとは区別する
+- MCP tool `orgbrain_memories_capture_rationale` は非対話 hook 用に memory capture と推定 rationale/evidence 保存を 1 回で行う。保存される rationale は `confirmation_state=inferred_unconfirmed` とし、人間確認済みとは区別する。`/v1/memories/capture-rationale` は旧bridge互換として維持する
 - `/v1/memories/revise` は current snapshot を更新しつつ `memory_versions` に `operation=revise` を追加する
 - `/v1/memories/refresh` は `last_accessed_at` と optional な `confidence_delta` を更新し、想起イベントを version 履歴に残す
 - `/v1/memories/suppress` は memory を物理削除せず通常 retrieval から外し、`lifecycle_state=suppressed` と `suppressed_at` を記録する
@@ -223,7 +223,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `pnpm agmsg` sends, lists, reads, and acks agent messages through the API Gateway.
 - `pnpm hook:bridge <source>` normalizes hook payloads from coding agents and upserts them into `memories`.
 - `pnpm hook:bridge` emits JSON with `memory_scope`, `cloud_memory_enabled`, `org_sharing_enabled`, and `shared_write`; `pnpm sync:agents-memory` prints the same mode before API import/export.
-- hook/bridge 由来の自動保存は非対話 path として扱い、propose/confirm を要求しない。代わりに `/v1/memories/capture-rationale` で `decision_rationales` / `decision_evidence` を `inferred_unconfirmed` として保存する。
+- hook/bridge 由来の自動保存は非対話 path として扱い、propose/confirm を要求しない。MCP `2026-07-28` の既知tool `orgbrain_memories_capture_rationale` をdiscoveryなしで直接呼び、`decision_rationales` / `decision_evidence` を `inferred_unconfirmed` として保存する。旧REST endpointは移行互換のみとする。
 - `pnpm docs:seed` upserts the minimal stable knowledge-doc set via the Pages/API proxy.
 - `pnpm memories:maintain` compacts old raw hook memories into digest rows and collapses old duplicates.
 - 個人ローカルSQLiteでは `orgbrain maintenance run` が同じ決定的な整理方針を適用する。macOSの日次LaunchAgent登録は `connector setup codex --mode minimal-hooks --maintenance daily --execute` の明示指定時だけ行い、LLM・Cloud書き込み・manual sourceの自動抑制・物理削除は行わない。`status` とrecoverableな `uninstall --execute` を提供する。

@@ -2,19 +2,18 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import type { Env } from "../src/types";
 
-vi.mock("agents/mcp", () => {
-  class MockMcpAgent {
-    static serve(_path: string) {
-      return {
-        fetch(_request: Request, _env: unknown, _ctx: unknown) {
-          return new Response("mcp handler reached", { status: 418 });
-        }
-      };
-    }
-  }
+const handlerCalls = vi.hoisted(() => [] as Array<{
+  request: Request;
+  options: Record<string, unknown>;
+}>);
 
+vi.mock("agents/mcp/server", () => {
   return {
-    McpAgent: MockMcpAgent
+    createMcpHandler: (_factory: unknown, options: Record<string, unknown>) =>
+      async (request: Request) => {
+        handlerCalls.push({ request, options });
+        return new Response("mcp handler reached", { status: 418 });
+      }
   };
 });
 
@@ -42,10 +41,15 @@ describe("MCP routing under Hono mount path stripping", () => {
     mountMcp(app);
 
     const req = new Request("https://example.com/mcp", {
+      method: "POST",
       headers: {
         "cf-access-client-id": "token-1",
-        "cf-access-client-secret": "secret-1"
-      }
+        "cf-access-client-secret": "secret-1",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2026-07-28",
+        "mcp-method": "server/discover"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "server/discover", params: {} })
     });
 
     const env = {
@@ -63,22 +67,6 @@ describe("MCP routing under Hono mount path stripping", () => {
         async limit() {
           return { success: true };
         }
-      },
-      MCP_OBJECT: {
-        newUniqueId() {
-          return {
-            toString() {
-              return "stub-session";
-            }
-          };
-        },
-        idFromName(name: string) {
-          return {
-            toString() {
-              return name;
-            }
-          };
-        }
       }
     } as unknown as Env;
 
@@ -87,6 +75,20 @@ describe("MCP routing under Hono mount path stripping", () => {
 
     expect(res.status).toBe(418);
     expect(text).toContain("mcp handler reached");
+    expect(handlerCalls.at(-1)?.options).toMatchObject({
+      route: "/",
+      legacy: "stateless",
+      corsOptions: false,
+      authContext: {
+        props: {
+          tenantId: "default",
+          principal: "service:openclaw-orgbrain",
+          allowedTenants: ["default", "team-a"]
+        }
+      }
+    });
+    expect(handlerCalls.at(-1)?.request.headers.get("mcp-session-id")).toBeNull();
+    expect(handlerCalls.at(-1)?.request.headers.get("mcp-protocol-version")).toBe("2026-07-28");
   });
 
   it("fails closed before the MCP handler when rate limiting is unavailable", async () => {

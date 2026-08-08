@@ -1,6 +1,6 @@
 ---
 name: org-brain-mcp
-description: "Use OrgBrain Remote MCP tools for memory/task operations. Prefer MCP over direct API calls or local SQLite access."
+description: "Configure and use OrgBrain Remote MCP for initial setup, memory capture/search, task operations, agent handoffs, and lifecycle-hook verification. Prefer the stateless remote MCP over direct API calls or local SQLite access."
 metadata:
   {
     "openclaw": {
@@ -29,11 +29,14 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
    - `confidence: low|medium|high`
 9. If memory was consulted but did not replace another lookup, report `memory_used: yes` and `avoided_lookup: none` only when the detail is relevant to the user-visible outcome.
 10. Auth must go through the configured `CF-Access-*` service token headers, not static bearer tokens.
+11. Treat hook, MCP, and skill as separate layers: hook selects when to run, MCP is the only preferred cloud transport, and this skill defines usage policy.
+12. For automatic hook capture, call the known capture tool directly without `server/discover` or `tools/list`; this path must not invoke an LLM.
 
 ## Tool Map
 - List memory: `orgbrain_memories_list`
 - Propose memory save: `orgbrain_memories_propose`
 - Confirm memory save: `orgbrain_memories_confirm`
+- Non-interactive hook capture: `orgbrain_memories_capture_rationale`
 - Upsert memory: `orgbrain_memories_upsert`
 - Enrich task context: `orgbrain_context_enrich`
 - Create decision memory: `orgbrain_decision_memories_create`
@@ -44,8 +47,29 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 - Start impact measurement: `orgbrain_memory_impact_start`
 - Report impact measurement: `orgbrain_memory_impact_report`
 
+## Initial setup
+
+1. Confirm the endpoint is the deployed API Gateway `/mcp` URL, not the Console page URL.
+2. Configure the MCP client with `CF-Access-Client-Id`, `CF-Access-Client-Secret`, and optional `x-orgbrain-tenant` headers.
+3. For lifecycle hooks, store these private values in `~/.config/org-brain/hooks.env`:
+
+```dotenv
+ORGBRAIN_ENABLE_CLOUD_MEMORY=true
+ORGBRAIN_ENABLE_ORG_SHARING=true
+ORGBRAIN_MCP_URL=https://<api-gateway-domain>/mcp
+ORGBRAIN_MCP_CLIENT_ID=<service-token-client-id>
+ORGBRAIN_MCP_CLIENT_SECRET=<service-token-client-secret>
+ORGBRAIN_TENANT_ID=default
+```
+
+4. Keep workspace-to-project routing in `~/.config/org-brain/workspaces.json`; do not put repository paths in `hooks.env`.
+5. Verify `server/discover`, then `tools/list`, then a read-only `orgbrain_memories_list` call. Modern responses must not contain `Mcp-Session-Id`.
+6. Install the agent lifecycle hook only after the read-only MCP smoke succeeds. The hook calls `orgbrain_memories_capture_rationale` directly and must fail closed when any MCP credential field is missing.
+7. Never print the client secret. Report only whether each required setting is present and the MCP hostname.
+
 ## Operational Notes
 - OrgBrain master memory is Cloudflare D1.
+- The primary remote endpoint implements MCP `2026-07-28` as stateless Streamable HTTP and keeps an ordinary legacy-tool compatibility lane.
 - OpenClaw local memory remains cache/index.
 - Retrieval impact should be measured primarily with D1 `retrieval_events` and opt-in measurement mode; the final-report impact note is a lightweight self-report for cases where memory avoided another lookup.
 - For an eligible measured run, call `orgbrain_memory_impact_start` before retrieval and always call `orgbrain_memory_impact_report` at completion, including `memory_used=false`, `avoided_lookup=none`, or a failed outcome. Reuse stable `external_run_id` and idempotency keys across retries.

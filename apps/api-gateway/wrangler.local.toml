@@ -39,11 +39,10 @@ queue = "org-bus"
 binding = "RETRIEVAL_PROJECTION_QUEUE"
 queue = "orgbrain-retrieval-projection-v3"
 
-[durable_objects]
-bindings = [
-  { name = "MCP_OBJECT", class_name = "OrgBrainMCP" }
-]
-
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["OrgBrainMCP"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["OrgBrainMCP"]
