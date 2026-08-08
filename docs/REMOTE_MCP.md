@@ -6,11 +6,32 @@
 - Compatibility Worker: `apps/mcp` is retained only for legacy deployments that need an `API` service binding proxy.
 - Auth: Worker-validated service tokens via `CF-Access-Client-Id` / `CF-Access-Client-Secret`
 - Tenant control: per-token `tenants` plus optional `MCP_TENANT_POLICY_JSON`
+- Protocol: MCP `2026-07-28` stateless Streamable HTTP, with stateless compatibility for ordinary 2025 clients
 
 ## Why this shape
 - No extra `mcp -> api-gateway` hop
-- Access handles identity/session
+- No MCP protocol session, sticky routing, or session Durable Object
+- Access handles identity on every request
 - Worker enforces tenant-level authorization
+- `server/discover` and `tools/list` advertise a private five-minute cache hint
+
+## MCP 2026-07-28
+
+The primary endpoint uses Cloudflare Agents `createMcpHandler` and
+`@modelcontextprotocol/server` v2. Each request carries its protocol version,
+client identity, and capabilities. Modern requests do not send or receive
+`Mcp-Session-Id`.
+
+Required modern HTTP headers are preserved end-to-end:
+
+- `MCP-Protocol-Version: 2026-07-28`
+- `Mcp-Method`
+- `Mcp-Name` for named tool operations
+
+The handler also accepts ordinary legacy tool calls through its stateless
+compatibility lane. Legacy session replay, standalone GET streams, and pushed
+server-to-client requests are intentionally unsupported because OrgBrain tools
+keep business state in D1 rather than MCP transport sessions.
 
 ## Required Worker Settings
 Set on `apps/api-gateway`:
@@ -147,6 +168,30 @@ Raw/episodic memories are not group-published in this phase.
 
 ## Skill
 - `skills/org-brain-mcp/SKILL.md`
+
+The skill also contains the initial setup and verification workflow. Use it to
+configure the remote endpoint and the deterministic lifecycle hook without
+introducing a second local source of truth.
+
+## Lifecycle hook over MCP
+
+`hook-memory-bridge` can call the known
+`orgbrain_memories_capture_rationale` tool directly. It does not call
+`server/discover`, fetch the tool catalog, or invoke an LLM, so automatic
+capture adds no model tokens.
+
+```dotenv
+ORGBRAIN_ENABLE_CLOUD_MEMORY=true
+ORGBRAIN_ENABLE_ORG_SHARING=true
+ORGBRAIN_MCP_URL=https://<api-gateway-domain>/mcp
+ORGBRAIN_MCP_CLIENT_ID=<service-token-client-id>
+ORGBRAIN_MCP_CLIENT_SECRET=<service-token-client-secret>
+ORGBRAIN_TENANT_ID=default
+```
+
+If no `ORGBRAIN_MCP_*` variable is present, the bridge retains the legacy REST
+API-key path for compatibility. A partially configured MCP credential set
+fails closed and does not silently fall back to REST.
 
 ## Preflight Tools
 Use these tools before implementation/review/debug work when shared org context may matter:

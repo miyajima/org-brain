@@ -10,13 +10,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.26.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@org-brain/contracts": "workspace:*",
     "@org-brain/core": "workspace:*",
     "@org-brain/shared": "workspace:*",
-    "agents": "^0.7.4",
+    "agents": "0.20.1",
     "hono": "^4.7.2",
-    "zod": "^3.25.76"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "wrangler": "^4.80.0"

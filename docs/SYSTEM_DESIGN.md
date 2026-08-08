@@ -56,7 +56,7 @@ grouping and coverage calculation so hidden counts are not observable.
 - Context Engine MVP logic lives in `apps/api-gateway/src/context-engine-service.ts`.
 - Lifecycle-aware write logic lives in `apps/api-gateway/src/memory-lifecycle-service.ts`.
 - Interactive rationale confirmation lives in `apps/api-gateway/src/rationale-service.ts`.
-- Non-interactive hook rationale capture also lives in `apps/api-gateway/src/rationale-service.ts` and writes inferred rationale/evidence rows without a confirmation token.
+- Non-interactive hook rationale capture is exposed as the stateless MCP tool `orgbrain_memories_capture_rationale`; its persistence logic lives in `apps/api-gateway/src/rationale-service.ts` and writes inferred rationale/evidence rows without a confirmation token. The REST route is retained only for bridge compatibility.
 - Retrieval is tier-aware: `canonical-memory` > `curated-memory` / `promoted-memory` > `memory-digest` > recent raw history.
 - Lifecycle-aware filtering excludes `suppressed` and expired memories from normal retrieval.
 - `semantic` memories are preferred over `episodic` memories when durable/profile candidates are sorted.

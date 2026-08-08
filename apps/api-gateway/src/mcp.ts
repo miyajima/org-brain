@@ -1,7 +1,7 @@
 import { HttpError, type OrgPermission, type OrgRole } from "@org-brain/shared";
 import type { Hono } from "hono";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { McpAgent } from "agents/mcp";
+import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
+import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
 import { authorizeMcpRequest } from "./mcp-security";
 import {
@@ -29,7 +29,11 @@ import {
   suppressMemoryByRequest,
   upsertMemories
 } from "./memory-service";
-import { confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
+import {
+  captureMemoryWithInferredRationale,
+  confirmProposedMemory,
+  proposeMemoryWithRationale
+} from "./rationale-service";
 import { assertPermission } from "./rbac-service";
 import { appendAuditEvent } from "./audit-service";
 import { extractMemoryCandidates } from "./memory-extraction-service";
@@ -91,6 +95,23 @@ function toContent(data: unknown) {
   };
 }
 
+type ToolHandler<Shape extends z.ZodRawShape> = (
+  args: z.output<z.ZodObject<Shape>>
+) => CallToolResult | Promise<CallToolResult>;
+
+function registerTool<Shape extends z.ZodRawShape>(
+  server: McpServer,
+  name: string,
+  inputShape: Shape,
+  handler: ToolHandler<Shape>
+) {
+  return server.registerTool(
+    name,
+    { inputSchema: z.object(inputShape) },
+    handler
+  );
+}
+
 function normalizeTenant(tenantInput: string | undefined, props: AgentProps | undefined): string {
   if (!props) {
     throw new HttpError(500, "misconfigured", "missing MCP auth context");
@@ -103,11 +124,26 @@ function normalizeTenant(tenantInput: string | undefined, props: AgentProps | un
   return requested;
 }
 
-export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
-  server = new McpServer({
-    name: "OrgBrain MCP",
-    version: "1.1.0"
-  });
+class OrgBrainMcpTools {
+  server = new McpServer(
+    {
+      name: "OrgBrain MCP",
+      version: "2.0.0"
+    },
+    {
+      instructions:
+        "Search OrgBrain before repeating source discovery. Use propose then confirm for interactive memory writes.",
+      cacheHints: {
+        "server/discover": { ttlMs: 300_000, cacheScope: "private" },
+        "tools/list": { ttlMs: 300_000, cacheScope: "private" }
+      }
+    }
+  );
+
+  constructor(
+    readonly env: Env,
+    readonly props: AgentProps
+  ) {}
 
   async requirePermission(
     tenantId: string,
@@ -167,7 +203,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       "implementation", "review", "debug", "proposal",
       "support", "research", "operations", "other"
     ]);
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_business_categories_list",
       {
         tenant_id: z.string().optional(),
@@ -180,7 +216,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_business_categories_create",
       {
         tenant_id: z.string().optional(),
@@ -200,7 +236,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_business_categories_update",
       {
         tenant_id: z.string().optional(),
@@ -222,7 +258,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_list",
       {
         tenant_id: z.string().optional(),
@@ -237,7 +273,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_extract",
       {
         tenant_id: z.string().optional(),
@@ -265,7 +301,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_propose",
       {
         tenant_id: z.string().optional(),
@@ -310,7 +346,42 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server,
+      "orgbrain_memories_capture_rationale",
+      {
+        tenant_id: z.string().optional(),
+        source: z.string().min(1).max(64).optional(),
+        item: z.object({
+          external_key: z.string().min(1).max(256),
+          content: z.string().min(1).max(20000),
+          summary: z.string().max(1000).optional(),
+          tags: z.array(z.string().min(1).max(64)).max(16).optional(),
+          created_at: z.number().int().optional(),
+          project_id: z.string().max(128).nullable().optional(),
+          business_category_id: z.string().max(128).nullable().optional(),
+          work_type: workTypeSchema.nullable().optional()
+        })
+      },
+      async ({ tenant_id, source, item }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", item.project_id);
+        const result = await this.auditedMutation(
+          tenantId,
+          "mcp.orgbrain_memories_capture_rationale",
+          "memory",
+          () => captureMemoryWithInferredRationale(this.env, {
+            tenant_id: tenantId,
+            source: source?.trim() || "hook",
+            actor_type: "principal",
+            actor_id: this.props.principal,
+            item
+          })
+        );
+        return toContent(result);
+      }
+    );
+
+    registerTool(this.server, 
       "orgbrain_memories_confirm",
       {
         tenant_id: z.string().optional(),
@@ -348,7 +419,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_upsert",
       {
         tenant_id: z.string().optional(),
@@ -386,7 +457,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_search",
       {
         tenant_id: z.string().optional(),
@@ -510,7 +581,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_retrieve_context",
       {
         tenant_id: z.string().optional(),
@@ -538,7 +609,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_profile",
       {
         tenant_id: z.string().optional(),
@@ -569,7 +640,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_context_enrich",
       {
         tenant_id: z.string().optional(),
@@ -602,7 +673,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_context_pre_action_gate",
       {
         tenant_id: z.string().optional(),
@@ -626,7 +697,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_decision_review_queue",
       {
         tenant_id: z.string().optional(),
@@ -645,7 +716,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_decision_memories_create",
       {
         tenant_id: z.string().optional(),
@@ -689,7 +760,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_decision_memories_search",
       {
         tenant_id: z.string().optional(),
@@ -721,7 +792,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_failure_patterns_list",
       {
         tenant_id: z.string().optional(),
@@ -745,7 +816,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       failure_fingerprint: z.string().max(128).nullable().optional(),
       is_active: z.boolean().optional()
     };
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_failure_pattern_create",
       { ...failurePatternSchema, pattern_key: z.string().min(1).max(128), label: z.string().min(1).max(240) },
       async ({ tenant_id, ...payload }) => {
@@ -759,7 +830,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         ));
       }
     );
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_failure_pattern_update",
       { pattern_id: z.string().min(1).max(128), ...failurePatternSchema },
       async ({ tenant_id, pattern_id, ...payload }) => {
@@ -774,7 +845,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_usage_state_update",
       {
         tenant_id: z.string().optional(),
@@ -796,7 +867,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_effect_record",
       {
         tenant_id: z.string().optional(),
@@ -851,7 +922,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_impact_metrics",
       {
         tenant_id: z.string().optional(),
@@ -864,7 +935,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_refresh",
       {
         tenant_id: z.string().optional(),
@@ -890,7 +961,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memories_suppress",
       {
         tenant_id: z.string().optional(),
@@ -916,7 +987,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_messages_send",
       {
         tenant_id: z.string().optional(),
@@ -925,7 +996,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
         target_key: z.string().min(1).max(256),
         subject: z.string().max(500).nullable().optional(),
         body: z.string().min(1).max(20_000),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
         thread_id: z.string().min(1).max(128).optional(),
         reply_to_message_id: z.string().min(1).max(128).optional(),
         idempotency_key: z.string().min(1).max(256).optional()
@@ -947,7 +1018,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_handoff_send",
       {
         tenant_id: z.string().optional(),
@@ -1009,7 +1080,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_messages_inbox",
       {
         tenant_id: z.string().optional(),
@@ -1032,7 +1103,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_messages_get",
       {
         tenant_id: z.string().optional(),
@@ -1052,7 +1123,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_messages_read",
       {
         tenant_id: z.string().optional(),
@@ -1077,7 +1148,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_messages_ack",
       {
         tenant_id: z.string().optional(),
@@ -1102,7 +1173,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_impact_start",
       {
         tenant_id: z.string().optional(),
@@ -1129,7 +1200,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_memory_impact_report",
       {
         tenant_id: z.string().optional(),
@@ -1157,7 +1228,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_task_create",
       {
         tenant_id: z.string().optional(),
@@ -1185,7 +1256,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_task_get",
       {
         tenant_id: z.string().optional(),
@@ -1199,7 +1270,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_task_events",
       {
         tenant_id: z.string().optional(),
@@ -1215,7 +1286,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_resource_search",
       {
         tenant_id: z.string().optional(),
@@ -1235,7 +1306,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_resource_decisions",
       {
         tenant_id: z.string().optional(),
@@ -1254,7 +1325,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       }
     );
 
-    this.server.tool(
+    registerTool(this.server, 
       "orgbrain_decision_resources",
       {
         tenant_id: z.string().optional(),
@@ -1277,6 +1348,12 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
   }
 }
 
+export async function createOrgBrainMcpServer(env: Env, props: AgentProps) {
+  const tools = new OrgBrainMcpTools(env, props);
+  await tools.init();
+  return tools.server;
+}
+
 export function mountMcp(app: Hono<any>) {
   app.mount("/mcp", async (request, env, ctx) => {
     try {
@@ -1286,14 +1363,22 @@ export function mountMcp(app: Hono<any>) {
         principal: auth.principal,
         path: "/mcp"
       });
-      const runtimeCtx = ctx as ExecutionContext & { props?: AgentProps };
-      runtimeCtx.props = {
+      const props: AgentProps = {
         tenantId: auth.tenantId,
         principal: auth.principal,
         allowedTenants: auth.allowedTenants,
         defaultRole: auth.defaultRole
       };
-      return OrgBrainMCP.serve("/").fetch(request, env, runtimeCtx);
+      const handler = createMcpHandler(
+        () => createOrgBrainMcpServer(env, props),
+        {
+          route: "/",
+          legacy: "stateless",
+          corsOptions: false,
+          authContext: { props }
+        }
+      );
+      return handler(request, env, ctx);
     } catch (error) {
       if (error instanceof HttpError) {
         return new Response(error.message, { status: error.status });

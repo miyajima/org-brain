@@ -425,9 +425,12 @@ artifact, the targets are configured but not production evidence.
    pnpm -C apps/cap-runner build
    pnpm -C apps/org-router build
    pnpm -C apps/api-gateway build
-   pnpm -C apps/mcp build
    pnpm -C apps/console build
    ```
+
+   `apps/mcp` is a compatibility Worker for deployments that still require the
+   old service-binding proxy. New deployments use the API Gateway `/mcp`
+   endpoint and do not need to deploy it.
 
 ## Agent Integrations
 
@@ -447,12 +450,18 @@ Hook processes load `~/.config/org-brain/hooks.env` first. Keep only connection,
 and global fallback values there; workspace routing belongs in `workspaces.json`:
 
 ```dotenv
-ORGBRAIN_ENABLE_CLOUD_MEMORY=false
-ORGBRAIN_ENABLE_ORG_SHARING=false
-ORGBRAIN_API_URL=https://<your-worker>.<account>.workers.dev
-ORGBRAIN_API_KEY=<api-key>
-ORGBRAIN_TENANT_ID=<single-tenant-fallback>
+ORGBRAIN_ENABLE_CLOUD_MEMORY=true
+ORGBRAIN_ENABLE_ORG_SHARING=true
+ORGBRAIN_MCP_URL=https://<your-worker>.<account>.workers.dev/mcp
+ORGBRAIN_MCP_CLIENT_ID=<cloudflare-access-service-token-id>
+ORGBRAIN_MCP_CLIENT_SECRET=<cloudflare-access-service-token-secret>
+ORGBRAIN_TENANT_ID=default
 ```
+
+Cloud hooks use MCP `2026-07-28` directly through the known
+`orgbrain_memories_capture_rationale` tool. The bridge performs no discovery
+and no LLM call. `ORGBRAIN_API_URL` / `ORGBRAIN_API_KEY` remain a legacy REST
+fallback only when no `ORGBRAIN_MCP_*` setting is present.
 
 `ORGBRAIN_TENANT_ID` is optional when every workspace has an explicit tenant mapping. It remains the
 convenient fallback for a current single-tenant installation. Do not put repository names or paths in

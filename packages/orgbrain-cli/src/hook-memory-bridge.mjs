@@ -31,6 +31,8 @@ const DEFAULT_ENV_FILES = [
   path.join(ROOT, ".env.local"),
   path.join(ROOT, ".env")
 ];
+const MCP_PROTOCOL_VERSION = "2026-07-28";
+const MCP_CAPTURE_TOOL = "orgbrain_memories_capture_rationale";
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
@@ -881,6 +883,96 @@ export function resolveApiBase(env = process.env) {
   return ensureRequiredEnv("ORGBRAIN_API_URL") || ensureRequiredEnv("ORGBRAIN_API_BASE");
 }
 
+export function resolveMcpConfig(env = process.env) {
+  const url = typeof env.ORGBRAIN_MCP_URL === "string" ? env.ORGBRAIN_MCP_URL.trim() : "";
+  const clientId = typeof env.ORGBRAIN_MCP_CLIENT_ID === "string"
+    ? env.ORGBRAIN_MCP_CLIENT_ID.trim()
+    : "";
+  const clientSecret = typeof env.ORGBRAIN_MCP_CLIENT_SECRET === "string"
+    ? env.ORGBRAIN_MCP_CLIENT_SECRET.trim()
+    : "";
+  const configured = Boolean(url || clientId || clientSecret);
+  const missing = configured
+    ? [
+        !url ? "ORGBRAIN_MCP_URL" : "",
+        !clientId ? "ORGBRAIN_MCP_CLIENT_ID" : "",
+        !clientSecret ? "ORGBRAIN_MCP_CLIENT_SECRET" : ""
+      ].filter(Boolean)
+    : [];
+  return {
+    configured,
+    complete: configured && missing.length === 0,
+    url,
+    clientId,
+    clientSecret,
+    missing
+  };
+}
+
+export function buildMcpCaptureRequest(tenantId, sourceName, record) {
+  return {
+    jsonrpc: "2.0",
+    id: `hook:${record.externalKey}`,
+    method: "tools/call",
+    params: {
+      name: MCP_CAPTURE_TOOL,
+      arguments: {
+        tenant_id: tenantId,
+        source: sourceName,
+        item: {
+          external_key: record.externalKey,
+          content: clip(redactHookMemoryText(record.content), 20_000),
+          summary: clip(redactHookMemoryText(record.summary), 1_000),
+          tags: record.tags,
+          created_at: record.createdAt,
+          project_id: record.projectId,
+          business_category_id: record.businessCategoryId ?? null,
+          work_type: record.workType ?? null
+        }
+      },
+      _meta: {
+        "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {
+          name: "orgbrain-hook-memory-bridge",
+          version: "0.1.0"
+        }
+      }
+    }
+  };
+}
+
+export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
+  const response = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "CF-Access-Client-Id": config.clientId,
+      "CF-Access-Client-Secret": config.clientSecret,
+      "x-orgbrain-tenant": tenantId,
+      "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
+      "Mcp-Method": "tools/call",
+      "Mcp-Name": MCP_CAPTURE_TOOL
+    },
+    body: JSON.stringify(buildMcpCaptureRequest(tenantId, sourceName, record))
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || body.error || body.result?.isError) {
+    const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
+    throw new Error(`org-brain MCP hook capture failed (${response.status}): ${detail}`);
+  }
+  const text = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
+  if (typeof text !== "string") {
+    throw new Error("org-brain MCP hook capture returned no text result");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("org-brain MCP hook capture returned invalid JSON");
+  }
+}
+
 async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
   const res = await fetch(buildApiUrl(apiBase, "/v1/memories/capture-rationale"), {
     method: "POST",
@@ -1012,10 +1104,21 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     });
   }
 
+  const mcp = resolveMcpConfig();
+  if (mcp.configured && !mcp.complete) {
+    return finish({
+      ok: true,
+      skipped: "missing-orgbrain-mcp-env",
+      missing: mcp.missing,
+      source: sourceName,
+      ...memoryModeFields(memoryMode)
+    });
+  }
+
   const apiBase = resolveApiBase();
   const apiKey = ensureRequiredEnv("ORGBRAIN_API_KEY");
 
-  if (!apiBase || !apiKey) {
+  if (!mcp.complete && (!apiBase || !apiKey)) {
     return finish({
       ok: true,
       skipped: "missing-orgbrain-env",
@@ -1024,7 +1127,9 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     });
   }
 
-  const result = await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
+  const result = mcp.complete
+    ? await postMemoryViaMcp(mcp, tenantId, sourceName, prepared.record)
+    : await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
   return finish({
     ok: true,
     source: sourceName,
@@ -1032,6 +1137,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     external_key: prepared.record.externalKey,
     inserted: Number(result?.inserted ?? 0),
     updated: Number(result?.updated ?? 0),
+    transport: mcp.complete ? "mcp-2026-07-28" : "legacy-rest",
     ...memoryModeFields(memoryMode)
   });
 }
