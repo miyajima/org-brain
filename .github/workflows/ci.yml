@@ -26,6 +26,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Dashboard 100k performance gate
+        run: pnpm test:dashboard-performance
       - run: pnpm build
       - name: Apply all D1 migrations
         working-directory: apps/api-gateway
