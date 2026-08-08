@@ -143,6 +143,15 @@ function resolveApiKeyGrant(env: Env, provided: string): ApiKeyGrant | null {
     };
   }
 
+  if (env.CONSOLE_API_KEY && constantTimeEquals(env.CONSOLE_API_KEY, provided)) {
+    return {
+      principal: "service:open-brain-console",
+      allowedTenants: ["default"],
+      source: "api-key",
+      defaultRole: "reader"
+    };
+  }
+
   if (env.API_KEY && constantTimeEquals(env.API_KEY, provided)) {
     return {
       principal: "api-key:default",
