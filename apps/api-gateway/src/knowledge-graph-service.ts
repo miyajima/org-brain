@@ -1976,6 +1976,15 @@ function buildClusters(nodes: DashboardKnowledgeNode[]): DashboardKnowledgeClust
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
+async function runKnowledgeGraphPhase<T>(phase: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    console.error(JSON.stringify({ dashboard_view: "knowledge_graph", phase, status: "error" }));
+    throw error;
+  }
+}
+
 /**
  * Builds a bounded dashboard/v1 graph using only stored relations. ACL filtering is
  * completed before the final edge pass, so no edge can expose a hidden endpoint.
@@ -1993,10 +2002,18 @@ export async function getKnowledgeGraph(
     }
     options.project_id = options.focus_id;
   }
-  const rows = await queryCandidates(env, normalizedTenant, options);
-  await ensureFocusCandidate(env, normalizedTenant, options, rows);
-  const focusHydration = await hydrateFocusNeighborhood(env, normalizedTenant, options, rows);
-  const directEntitySearch = await queryDirectEntitySearch(env, normalizedTenant, options);
+  const rows = await runKnowledgeGraphPhase("query_candidates", () =>
+    queryCandidates(env, normalizedTenant, options)
+  );
+  await runKnowledgeGraphPhase("ensure_focus", () =>
+    ensureFocusCandidate(env, normalizedTenant, options, rows)
+  );
+  const focusHydration = await runKnowledgeGraphPhase("hydrate_focus", () =>
+    hydrateFocusNeighborhood(env, normalizedTenant, options, rows)
+  );
+  const directEntitySearch = await runKnowledgeGraphPhase("direct_entity_search", () =>
+    queryDirectEntitySearch(env, normalizedTenant, options)
+  );
   const knownMemoryIds = new Set(rows.memories.map((row) => row.id));
   for (const memory of directEntitySearch.memories) {
     if (knownMemoryIds.has(memory.id)) continue;
@@ -2012,14 +2029,16 @@ export async function getKnowledgeGraph(
   ])];
 
   const candidates = baseCandidates(rows);
-  const entityLinkResult = await queryEntityLinks(
-    env,
-    normalizedTenant,
-    rows.memories.map((row) => row.id),
-    edgeCandidateLimit(options.edge_limit),
-    options.focus_type,
-    options.focus_id,
-    preferredEdgeIds
+  const entityLinkResult = await runKnowledgeGraphPhase("query_entity_links", () =>
+    queryEntityLinks(
+      env,
+      normalizedTenant,
+      rows.memories.map((row) => row.id),
+      edgeCandidateLimit(options.edge_limit),
+      options.focus_type,
+      options.focus_id,
+      preferredEdgeIds
+    )
   );
   const entityLinksById = new Map<string, EntityLinkRow>();
   for (const row of [...directEntitySearch.links, ...entityLinkResult.rows]) {
@@ -2054,16 +2073,20 @@ export async function getKnowledgeGraph(
   for (const node of candidates.sort(candidateSort)) {
     if (!candidateById.has(node.id)) candidateById.set(node.id, node);
   }
-  await applyUsageStats(env, normalizedTenant, options, candidateById);
-  const edgeResult = await buildExplicitEdges(
-    env,
-    normalizedTenant,
-    options,
-    rows,
-    entityLinks,
-    candidateById,
-    preferredEdgeIds,
-    focusNodeId
+  await runKnowledgeGraphPhase("apply_usage_stats", () =>
+    applyUsageStats(env, normalizedTenant, options, candidateById)
+  );
+  const edgeResult = await runKnowledgeGraphPhase("build_explicit_edges", () =>
+    buildExplicitEdges(
+      env,
+      normalizedTenant,
+      options,
+      rows,
+      entityLinks,
+      candidateById,
+      preferredEdgeIds,
+      focusNodeId
+    )
   );
   const allEdges = edgeResult.edges;
 
@@ -2103,7 +2126,9 @@ export async function getKnowledgeGraph(
     ...node,
     degree: degree.get(node.id) ?? 0
   }));
-  const exactRelevantCount = await exactRelevantNodeCount(env, normalizedTenant, options);
+  const exactRelevantCount = await runKnowledgeGraphPhase("exact_relevant_count", () =>
+    exactRelevantNodeCount(env, normalizedTenant, options)
+  );
   const omittedNodeCount = Math.max(0, exactRelevantCount - nodes.length);
   return {
     contract_version: DASHBOARD_CONTRACT_VERSION,
