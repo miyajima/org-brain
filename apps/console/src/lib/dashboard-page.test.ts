@@ -41,4 +41,38 @@ describe("dashboard page helpers", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("uses the configured API base when the local service binding is unavailable", async () => {
+    const originalFetch = globalThis.fetch;
+    const processEnv = (globalThis as typeof globalThis & {
+      process?: { env: Record<string, string | undefined> };
+    }).process?.env;
+    if (!processEnv) throw new Error("Expected a process environment in the test runtime");
+    const originalApiBaseUrl = processEnv.API_BASE_URL;
+    const originalInternalApiKey = processEnv.INTERNAL_API_KEY;
+    processEnv.API_BASE_URL = "http://api.test/base";
+    processEnv.INTERNAL_API_KEY = "test-internal-key";
+    globalThis.fetch = async (input, init) => {
+      expect(String(input)).toBe("http://api.test/base/v1/dashboard/activity?tenant_id=default");
+      expect(new Headers(init?.headers).get("x-api-key")).toBe("test-internal-key");
+      return new Response(JSON.stringify({ ok: true, data: { source: "fallback" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+    try {
+      const result = await fetchDashboardData(
+        new URL("https://console.test/api/v1/dashboard/activity?tenant_id=default"),
+        (value) => value as { source: string },
+        { source: "empty" }
+      );
+      expect(result).toEqual({ data: { source: "fallback" }, error: null });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalApiBaseUrl === undefined) delete processEnv.API_BASE_URL;
+      else processEnv.API_BASE_URL = originalApiBaseUrl;
+      if (originalInternalApiKey === undefined) delete processEnv.INTERNAL_API_KEY;
+      else processEnv.INTERNAL_API_KEY = originalInternalApiKey;
+    }
+  });
 });
