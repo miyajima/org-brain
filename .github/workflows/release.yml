@@ -25,6 +25,8 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+      - name: Dashboard 100k performance gate
+        run: pnpm test:dashboard-performance
       - run: pnpm typecheck
       - run: pnpm --filter @org-brain/contracts build
       - run: pnpm --filter @org-brain/core build
