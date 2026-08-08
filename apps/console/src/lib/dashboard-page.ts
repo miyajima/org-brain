@@ -12,25 +12,65 @@ type ApiEnvelope<T> = {
 type DashboardRuntimeEnv = {
   API?: Fetcher;
   INTERNAL_API_KEY?: string;
+  API_BASE_URL?: string;
 };
 
+type ProcessLike = {
+  env?: Record<string, string | undefined>;
+};
+
+const LOCAL_BINDING_FAILURES = [
+  "Couldn't find a local dev session",
+  "Couldn't fetch from any upstream"
+];
+
+function buildDashboardApiUrl(url: URL, baseUrl: string): URL {
+  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const path = url.pathname.replace(/^\/api(?=\/)/u, "").replace(/^\/+/u, "");
+  const target = new URL(path, normalizedBaseUrl);
+  target.search = url.search;
+  return target;
+}
+
 async function fetchDashboardResponse(url: URL): Promise<Response> {
+  const processEnv = (globalThis as typeof globalThis & { process?: ProcessLike }).process?.env ?? {};
+  let runtimeEnv: DashboardRuntimeEnv = {};
   try {
-    const runtimeEnv = (await import("cloudflare:workers")).env as unknown as DashboardRuntimeEnv;
-    if (runtimeEnv.API && runtimeEnv.INTERNAL_API_KEY) {
+    runtimeEnv = (await import("cloudflare:workers")).env as unknown as DashboardRuntimeEnv;
+  } catch {
+    // Non-Cloudflare runtimes and unit tests use process env or the normal fetch path.
+  }
+
+  const internalApiKey = runtimeEnv.INTERNAL_API_KEY ?? processEnv.INTERNAL_API_KEY;
+  const apiBaseUrl = (runtimeEnv.API_BASE_URL ?? processEnv.API_BASE_URL)?.trim() ?? "";
+  if (runtimeEnv.API && internalApiKey) {
+    try {
       const path = url.pathname.replace(/^\/api(?=\/)/u, "");
       const target = new URL(path || "/", "https://internal");
       target.search = url.search;
-      return runtimeEnv.API.fetch(target.toString(), {
+      const response = await runtimeEnv.API.fetch(target.toString(), {
         headers: {
           accept: "application/json",
-          "x-api-key": runtimeEnv.INTERNAL_API_KEY
+          "x-api-key": internalApiKey
         }
       });
+      if (!apiBaseUrl || response.status !== 503) return response;
+      const body = await response.clone().text();
+      if (!LOCAL_BINDING_FAILURES.some((message) => body.includes(message))) return response;
+    } catch {
+      if (!apiBaseUrl) throw new Error("Service binding fetch failed and API_BASE_URL is not configured");
     }
-  } catch {
-    // Non-Cloudflare runtimes and unit tests use the normal fetch path.
   }
+
+  if (apiBaseUrl && internalApiKey) {
+    return fetch(buildDashboardApiUrl(url, apiBaseUrl), {
+      headers: {
+        accept: "application/json",
+        "x-api-key": internalApiKey
+      }
+    });
+  }
+
   return fetch(url, { headers: { accept: "application/json" } });
 }
 
