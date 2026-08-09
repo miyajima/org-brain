@@ -84,6 +84,26 @@ const ownerRefSchema = z.object({
 const agentMessageTargetTypeSchema = z.enum(["principal", "agent", "project", "channel"]);
 const agentMessageStatusSchema = z.enum(["unread", "read", "acked", "archived", "active"]);
 
+const contextEnrichInputShape = {
+  tenant_id: z.string().optional(),
+  project_id: z.string().nullable().optional(),
+  user_id: z.string().max(128).optional(),
+  agent_id: z.string().max(128).optional(),
+  task_type: z.enum(["implementation", "review", "debug", "proposal", "support"]).optional(),
+  task: z.object({
+    title: z.string().max(240).optional(),
+    description: z.string().max(2000).optional(),
+    target_files: z.array(z.string().max(256)).max(32).optional(),
+    related_issue_ids: z.array(z.string().max(128)).max(32).optional()
+  }),
+  max_tokens: z.number().int().min(500).max(32000).optional(),
+  include_sources: z.boolean().optional(),
+  include_conflicts: z.boolean().optional(),
+  debug_scores: z.boolean().optional()
+};
+const contextEnrichInputSchema = z.object(contextEnrichInputShape);
+type ContextEnrichInput = z.infer<typeof contextEnrichInputSchema>;
+
 function toContent(data: unknown) {
   return {
     content: [
@@ -124,6 +144,24 @@ function normalizeTenant(tenantInput: string | undefined, props: AgentProps | un
   return requested;
 }
 
+async function requireMcpPermission(
+  env: Env,
+  props: AgentProps,
+  tenantId: string,
+  permission: OrgPermission,
+  projectId?: string | null
+) {
+  const principal = props.principal;
+  if (!principal) throw new HttpError(500, "misconfigured", "missing MCP principal");
+  return assertPermission(env, {
+    tenantId,
+    projectId,
+    principal,
+    permission,
+    fallbackRole: props.defaultRole
+  });
+}
+
 class OrgBrainMcpTools {
   server = new McpServer(
     {
@@ -150,15 +188,7 @@ class OrgBrainMcpTools {
     permission: OrgPermission,
     projectId?: string | null
   ) {
-    const principal = this.props?.principal;
-    if (!principal) throw new HttpError(500, "misconfigured", "missing MCP principal");
-    return assertPermission(this.env, {
-      tenantId,
-      projectId,
-      principal,
-      permission,
-      fallbackRole: this.props?.defaultRole ?? "service_agent"
-    });
+    return requireMcpPermission(this.env, this.props, tenantId, permission, projectId);
   }
 
   async auditedMutation<T>(
@@ -642,23 +672,7 @@ class OrgBrainMcpTools {
 
     registerTool(this.server, 
       "orgbrain_context_enrich",
-      {
-        tenant_id: z.string().optional(),
-        project_id: z.string().nullable().optional(),
-        user_id: z.string().max(128).optional(),
-        agent_id: z.string().max(128).optional(),
-        task_type: z.enum(["implementation", "review", "debug", "proposal", "support"]).optional(),
-        task: z.object({
-          title: z.string().max(240).optional(),
-          description: z.string().max(2000).optional(),
-          target_files: z.array(z.string().max(256)).max(32).optional(),
-          related_issue_ids: z.array(z.string().max(128)).max(32).optional()
-        }),
-        max_tokens: z.number().int().min(500).max(32000).optional(),
-        include_sources: z.boolean().optional(),
-        include_conflicts: z.boolean().optional(),
-        debug_scores: z.boolean().optional()
-      },
+      contextEnrichInputShape,
       async ({ tenant_id, user_id, agent_id, ...payload }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", payload.project_id);
@@ -1354,6 +1368,103 @@ export async function createOrgBrainMcpServer(env: Env, props: AgentProps) {
   return tools.server;
 }
 
+type ContextEnrichJsonRpcRequest = {
+  jsonrpc?: unknown;
+  id?: unknown;
+  method?: unknown;
+  params?: {
+    name?: unknown;
+    arguments?: unknown;
+  };
+};
+
+function isContextEnrichJsonRpcRequest(value: unknown): value is ContextEnrichJsonRpcRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const body = value as ContextEnrichJsonRpcRequest;
+  return body.jsonrpc === "2.0" &&
+    Object.prototype.hasOwnProperty.call(body, "id") &&
+    body.method === "tools/call" &&
+    body.params?.name === "orgbrain_context_enrich";
+}
+
+function jsonRpcResult(id: unknown, result: unknown) {
+  return new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
+    status: 200,
+    headers: { "content-type": "application/json" }
+  });
+}
+
+function degradedContextResponse(input: ContextEnrichInput, tenantId: string) {
+  return {
+    summary: "OrgBrain context is temporarily unavailable; continue without decision memory context.",
+    decisionContext: [],
+    constraints: [],
+    knownPitfalls: [],
+    conflicts: [],
+    recommendedNextActions: ["関連する既存方針を手動で確認する"],
+    confidence: 0,
+    requiresHumanReview: true,
+    meta: {
+      tenant_id: tenantId,
+      project_id: input.project_id ?? null,
+      task_type: input.task_type ?? "implementation",
+      selectedMemoryCount: 0,
+      conflictCount: 0,
+      featureFlags: {
+        includeProvenance: false,
+        authorityScoring: false,
+        verificationView: false
+      },
+      estimatedTokens: 0,
+      degraded: true,
+      degraded_reason: "context_unavailable"
+    }
+  };
+}
+
+async function tryHandleContextEnrichFastPath(
+  request: Request,
+  env: Env,
+  props: AgentProps
+): Promise<Response | null> {
+  if (request.method !== "POST") return null;
+
+  let body: unknown;
+  try {
+    body = await request.clone().json();
+  } catch {
+    return null;
+  }
+  if (!isContextEnrichJsonRpcRequest(body)) return null;
+
+  const parsed = contextEnrichInputSchema.safeParse(body.params?.arguments);
+  if (!parsed.success) return null;
+
+  const input = parsed.data;
+  const tenantId = normalizeTenant(input.tenant_id, props);
+  await requireMcpPermission(env, props, tenantId, "read", input.project_id);
+  const principal = props.principal || "mcp";
+  const { tenant_id: _tenantId, user_id, agent_id, ...payload } = input;
+
+  try {
+    const result = await enrichContext(env, {
+      tenant_id: tenantId,
+      user_id: user_id ?? principal,
+      agent_id: agent_id ?? principal,
+      ...payload
+    }, { principal, bestEffortUsage: true });
+    return jsonRpcResult(body.id, toContent(result));
+  } catch (error) {
+    if (error instanceof HttpError && error.status < 500) throw error;
+    if (Math.random() < 0.1) {
+      console.warn("[mcp] context_enrich degraded", {
+        code: error instanceof HttpError ? error.code : "unknown"
+      });
+    }
+    return jsonRpcResult(body.id, toContent(degradedContextResponse(input, tenantId)));
+  }
+}
+
 export function mountMcp(app: Hono<any>) {
   app.mount("/mcp", async (request, env, ctx) => {
     try {
@@ -1369,6 +1480,8 @@ export function mountMcp(app: Hono<any>) {
         allowedTenants: auth.allowedTenants,
         defaultRole: auth.defaultRole
       };
+      const fastPathResponse = await tryHandleContextEnrichFastPath(request, env, props);
+      if (fastPathResponse) return fastPathResponse;
       const handler = createMcpHandler(
         () => createOrgBrainMcpServer(env, props),
         {

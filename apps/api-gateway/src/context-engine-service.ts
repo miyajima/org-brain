@@ -296,6 +296,7 @@ type DecisionMemoryConfirmRequest = {
 type PrincipalIdentityOptions = {
   principal?: string | null;
   recordUsage?: boolean;
+  bestEffortUsage?: boolean;
 };
 
 function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
@@ -1908,31 +1909,48 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
   );
   const meta = response.meta as { estimatedTokens?: number } | undefined;
   if (meta) meta.estimatedTokens = estimateTokens(response);
-  const usage = await recordMemoryUsage(env, {
-    tenant_id: request.tenantId,
-    project_id: request.projectId,
-    capability: "context_enrich",
-    access_path: "context",
-    request_source: "api",
-    requested_business_category_id: request.businessCategoryId,
-    requested_work_type: request.workType,
-    retrieval_generation_id: "gen_structured_context",
-    ranking_profile_id: "rank_default",
-    actor_principal: options.principal ?? null,
-    items: selected.map((item, index) => ({
-      source_type: "decision_memory" as const,
-      source_id: item.memory.id,
-      rank: index + 1,
-      score: item.score.finalScore,
-      reference_type: "injected" as const,
-      used_state: "unknown" as const,
-      injected_token_estimate: estimateTokens(toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, false))
-    }))
-  });
+  let usage: Awaited<ReturnType<typeof recordMemoryUsage>> | null = null;
+  if (options.recordUsage !== false) {
+    try {
+      usage = await recordMemoryUsage(env, {
+        tenant_id: request.tenantId,
+        project_id: request.projectId,
+        capability: "context_enrich",
+        access_path: "context",
+        request_source: "api",
+        requested_business_category_id: request.businessCategoryId,
+        requested_work_type: request.workType,
+        retrieval_generation_id: "gen_structured_context",
+        ranking_profile_id: "rank_default",
+        actor_principal: options.principal ?? null,
+        items: selected.map((item, index) => ({
+          source_type: "decision_memory" as const,
+          source_id: item.memory.id,
+          rank: index + 1,
+          score: item.score.finalScore,
+          reference_type: "injected" as const,
+          used_state: "unknown" as const,
+          injected_token_estimate: estimateTokens(toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, false))
+        }))
+      });
+    } catch (error) {
+      if (!options.bestEffortUsage) throw error;
+      if (Math.random() < 0.1) {
+        console.warn("[context] usage recording skipped", {
+          code: error instanceof HttpError ? error.code : "unknown"
+        });
+      }
+    }
+  }
   if (meta) {
     Object.assign(meta, {
-      usage_id: usage.usage_id,
-      verification_sampled: usage.verification_sampled,
+      usage_recorded: Boolean(usage),
+      ...(usage
+        ? {
+            usage_id: usage.usage_id,
+            verification_sampled: usage.verification_sampled
+          }
+        : {}),
       retrieval: {
         generation_id: "gen_structured_context",
         unit_schema_version: "2",
