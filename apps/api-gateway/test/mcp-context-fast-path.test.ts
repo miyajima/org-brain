@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import type { Env } from "../src/types";
 
@@ -51,8 +51,13 @@ function testEnv(): Env {
   } as unknown as Env;
 }
 
-function contextRequest(args: Record<string, unknown>, id = 1, authenticated = true) {
-  return new Request("https://example.com/mcp", {
+function contextRequest(
+  args: Record<string, unknown>,
+  id = 1,
+  authenticated = true,
+  options: { url?: string; headers?: Record<string, string> } = {}
+) {
+  return new Request(options.url ?? "https://example.com/mcp", {
     method: "POST",
     headers: {
       accept: "application/json, text/event-stream",
@@ -64,7 +69,8 @@ function contextRequest(args: Record<string, unknown>, id = 1, authenticated = t
           }
         : {}),
       "mcp-protocol-version": "2026-07-28",
-      "mcp-method": "tools/call"
+      "mcp-method": "tools/call",
+      ...options.headers
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
@@ -93,7 +99,11 @@ describe("MCP context_enrich fast path", () => {
     mocks.handlerFactoryCalls = 0;
   });
 
-  it("handles an authenticated context call without initializing the full MCP tool catalog", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("handles an authenticated no-Origin context call without initializing the full MCP tool catalog", async () => {
     mocks.enrichContext.mockResolvedValue({ decisionContext: [{ id: "dm-1" }] });
     const app = new Hono<{ Bindings: Env }>();
     mountMcp(app);
@@ -122,7 +132,32 @@ describe("MCP context_enrich fast path", () => {
     });
   });
 
+  it("accepts a matching workers.dev Origin and Host without initializing the full MCP tool catalog", async () => {
+    const workerHost = "open-brain-api-gateway.example.workers.dev";
+    mocks.enrichContext.mockResolvedValue({ decisionContext: [{ id: "dm-workers" }] });
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+
+    const response = await app.fetch(contextRequest({
+      project_id: "project-1",
+      task: { title: "Resume the existing chat" }
+    }, 1, true, {
+      url: `https://${workerHost}/mcp`,
+      headers: {
+        host: workerHost,
+        origin: `https://${workerHost}`
+      }
+    }), testEnv(), {} as ExecutionContext);
+
+    expect(response.status).toBe(200);
+    expect(mocks.handlerFactoryCalls).toBe(0);
+    await expect(readContextResult(response)).resolves.toMatchObject({
+      decisionContext: [{ id: "dm-workers" }]
+    });
+  });
+
   it("returns a degraded context result when context enrichment is temporarily unavailable", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     mocks.enrichContext.mockRejectedValue(new Error("database unavailable"));
     const app = new Hono<{ Bindings: Env }>();
     mountMcp(app);
@@ -147,6 +182,54 @@ describe("MCP context_enrich fast path", () => {
       }
     });
     expect(JSON.stringify(result)).not.toContain("database unavailable");
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith({
+      event: "orgbrain.mcp.context_enrich.degraded",
+      tenant_id: "default",
+      project_id: null,
+      error_code: "unknown"
+    });
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("database unavailable");
+  });
+
+  it.each([
+    ["hostile", "https://evil.example"],
+    ["opaque", "null"],
+    ["malformed", "not-an-origin"],
+    ["non-http", "ftp://example.com"]
+  ])("rejects a custom-domain %s Origin before the fast path", async (_label, origin) => {
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+
+    const response = await app.fetch(contextRequest({
+      task: { title: "Resume the existing chat" }
+    }, 1, true, { headers: { origin } }), testEnv(), {} as ExecutionContext);
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32000 },
+      id: null
+    });
+    expect(mocks.enrichContext).not.toHaveBeenCalled();
+    expect(mocks.handlerFactoryCalls).toBe(0);
+  });
+
+  it("rejects a workers.dev Host mismatch before the fast path", async () => {
+    const workerHost = "open-brain-api-gateway.example.workers.dev";
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+
+    const response = await app.fetch(contextRequest({
+      task: { title: "Resume the existing chat" }
+    }, 1, true, {
+      url: `https://${workerHost}/mcp`,
+      headers: { host: "other-worker.example.workers.dev" }
+    }), testEnv(), {} as ExecutionContext);
+
+    expect(response.status).toBe(403);
+    expect(mocks.enrichContext).not.toHaveBeenCalled();
+    expect(mocks.handlerFactoryCalls).toBe(0);
   });
 
   it("keeps authentication and non-target requests on their existing paths", async () => {
@@ -174,6 +257,27 @@ describe("MCP context_enrich fast path", () => {
     expect(discovery.status).toBe(418);
     expect(mocks.handlerFactoryCalls).toBe(1);
     expect(mocks.enrichContext).not.toHaveBeenCalled();
+  });
+
+  it("applies the same boundary validation to non-target MCP requests", async () => {
+    const workerHost = "open-brain-api-gateway.example.workers.dev";
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+
+    const response = await app.fetch(new Request(`https://${workerHost}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-access-client-id": "token-1",
+        "cf-access-client-secret": "secret-1",
+        host: workerHost,
+        origin: "https://evil.example"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "server/discover", params: {} })
+    }), testEnv(), {} as ExecutionContext);
+
+    expect(response.status).toBe(403);
+    expect(mocks.handlerFactoryCalls).toBe(0);
   });
 
   it("falls through for invalid context arguments so standard MCP validation is preserved", async () => {

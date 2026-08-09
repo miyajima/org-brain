@@ -1935,11 +1935,12 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
       });
     } catch (error) {
       if (!options.bestEffortUsage) throw error;
-      if (Math.random() < 0.1) {
-        console.warn("[context] usage recording skipped", {
-          code: error instanceof HttpError ? error.code : "unknown"
-        });
-      }
+      console.warn({
+        event: "orgbrain.context.usage_recording_skipped",
+        tenant_id: request.tenantId,
+        project_id: request.projectId,
+        error_code: error instanceof HttpError ? error.code : "unknown"
+      });
     }
   }
   if (meta) {

@@ -1,6 +1,13 @@
 import { HttpError, type OrgPermission, type OrgRole } from "@org-brain/shared";
 import type { Hono } from "hono";
-import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
+import {
+  hostHeaderValidationResponse,
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  McpServer,
+  originValidationResponse,
+  type CallToolResult
+} from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
 import { authorizeMcpRequest } from "./mcp-security";
@@ -1422,6 +1429,38 @@ function degradedContextResponse(input: ContextEnrichInput, tenantId: string) {
   };
 }
 
+function mcpTransportValidationResponse(request: Request): Response | undefined {
+  const requestUrl = new URL(request.url);
+  const localEndpoint = localhostAllowedHostnames().includes(requestUrl.hostname);
+  const workersDevEndpoint = requestUrl.hostname.endsWith(".workers.dev");
+  const acceptedHostnames = localEndpoint
+    ? localhostAllowedHostnames()
+    : workersDevEndpoint
+      ? [requestUrl.hostname]
+      : undefined;
+  const hostRejection = acceptedHostnames
+    ? hostHeaderValidationResponse(request, acceptedHostnames)
+    : undefined;
+  if (hostRejection) return hostRejection;
+
+  const acceptedOriginHostnames = new Set(localhostAllowedOrigins());
+  if (workersDevEndpoint) acceptedOriginHostnames.add(requestUrl.hostname);
+
+  const origin = request.headers.get("origin");
+  if (origin !== null && origin !== "") {
+    try {
+      const originUrl = new URL(origin);
+      if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") {
+        return originValidationResponse(request, []);
+      }
+    } catch {
+      // Delegate malformed Origin handling, including the SDK-compatible body,
+      // to the public helper below.
+    }
+  }
+  return originValidationResponse(request, [...acceptedOriginHostnames]);
+}
+
 async function tryHandleContextEnrichFastPath(
   request: Request,
   env: Env,
@@ -1456,11 +1495,12 @@ async function tryHandleContextEnrichFastPath(
     return jsonRpcResult(body.id, toContent(result));
   } catch (error) {
     if (error instanceof HttpError && error.status < 500) throw error;
-    if (Math.random() < 0.1) {
-      console.warn("[mcp] context_enrich degraded", {
-        code: error instanceof HttpError ? error.code : "unknown"
-      });
-    }
+    console.warn({
+      event: "orgbrain.mcp.context_enrich.degraded",
+      tenant_id: tenantId,
+      project_id: input.project_id ?? null,
+      error_code: error instanceof HttpError ? error.code : "unknown"
+    });
     return jsonRpcResult(body.id, toContent(degradedContextResponse(input, tenantId)));
   }
 }
@@ -1480,6 +1520,8 @@ export function mountMcp(app: Hono<any>) {
         allowedTenants: auth.allowedTenants,
         defaultRole: auth.defaultRole
       };
+      const transportValidationResponse = mcpTransportValidationResponse(request);
+      if (transportValidationResponse) return transportValidationResponse;
       const fastPathResponse = await tryHandleContextEnrichFastPath(request, env, props);
       if (fastPathResponse) return fastPathResponse;
       const handler = createMcpHandler(
