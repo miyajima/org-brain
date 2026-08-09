@@ -70,6 +70,7 @@ function contextRequest(
         : {}),
       "mcp-protocol-version": "2026-07-28",
       "mcp-method": "tools/call",
+      "mcp-name": "orgbrain_context_enrich",
       ...options.headers
     },
     body: JSON.stringify({
@@ -255,6 +256,23 @@ describe("MCP context_enrich fast path", () => {
     }), testEnv(), {} as ExecutionContext);
 
     expect(discovery.status).toBe(418);
+    expect(mocks.handlerFactoryCalls).toBe(1);
+    expect(mocks.enrichContext).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["mismatched", "orgbrain_memories_list"]
+  ])("falls through when the MCP name header is %s", async (_label, mcpName) => {
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+
+    const headers = mcpName === undefined ? { "mcp-name": "" } : { "mcp-name": mcpName };
+    const response = await app.fetch(contextRequest({
+      task: { title: "Resume the existing chat" }
+    }, 3, true, { headers }), testEnv(), {} as ExecutionContext);
+
+    expect(response.status).toBe(418);
     expect(mocks.handlerFactoryCalls).toBe(1);
     expect(mocks.enrichContext).not.toHaveBeenCalled();
   });
