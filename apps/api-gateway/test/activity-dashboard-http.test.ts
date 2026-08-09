@@ -118,7 +118,7 @@ describe("GET /v1/dashboard/activity", () => {
   it("returns a compact 400 error for invalid limits and windows", async () => {
     for (const query of [
       "tenant_id=tenant-a&limit=251",
-      `tenant_id=tenant-a&from=0&to=${7 * 86_400_000 + 1}`
+      `tenant_id=tenant-a&from=0&to=${30 * 86_400_000 + 1}`
     ]) {
       const response = await fetchActivity(`/v1/dashboard/activity?${query}`);
       const body = await response.json<{ ok: boolean; error: Record<string, unknown> }>();

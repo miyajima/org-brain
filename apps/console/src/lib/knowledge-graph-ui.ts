@@ -12,6 +12,8 @@ export type KnowledgeGraphNode = Omit<DashboardKnowledgeNode, "kind" | "summary"
   kind: string;
   summary: string;
   updated_at: number;
+  usage_count_30d_recorded: boolean;
+  degree_recorded: boolean;
 };
 
 export type KnowledgeGraphEdge = DashboardKnowledgeEdge;
@@ -95,6 +97,8 @@ export function normalizeKnowledgeGraph(value: unknown): KnowledgeGraph {
       last_used_at: nullableNumber(item.last_used_at),
       usage_count_30d: Math.max(0, numeric(item.usage_count_30d)),
       degree: Math.max(0, numeric(item.degree)),
+      usage_count_30d_recorded: item.usage_count_30d != null && item.usage_count_30d !== "",
+      degree_recorded: item.degree != null && item.degree !== "",
       cluster_ids: Array.isArray(item.cluster_ids) ? item.cluster_ids.map((entry) => text(entry)).filter(Boolean) : [],
       ...(text(item.deep_link) ? { deep_link: text(item.deep_link) } : {})
     };

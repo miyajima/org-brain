@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "reuse": "apps/console/src/styles/global.css intelligence tokens",
+  "colors": {"background":"#050a12","surface":"rgba(8,20,36,.82)","text":"#ecf8ff","muted_text":"rgba(191,216,235,.78)","border":"rgba(90,172,238,.24)","accent":"#1687ff","success":"#43dcad","warning":"#ffb84d","danger":"#ff5c67"},
+  "typography": {"body_min_px":12,"metadata_min_px":11,"heading_weight":600,"line_height":1.6},
+  "spacing": {"unit":4,"rail_gap":12,"section_gap":16},
+  "radius": {"control":10,"card":14,"rail":14},
+  "motion": {"duration_ms":180,"easing":"cubic-bezier(0.2,0.8,0.2,1)","reduced_motion":"retain line, label, and background state"}
+}

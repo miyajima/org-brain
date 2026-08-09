@@ -356,7 +356,9 @@ export function layoutStrataTimelineRows(
   return [...events]
     .sort((left, right) => left.timestamp - right.timestamp || left.id.localeCompare(right.id))
     .map((event) => {
-      const x = timelinePercent(event.timestamp, bounds) / 100 * trackWidth;
+      const unclampedX = timelinePercent(event.timestamp, bounds) / 100 * trackWidth;
+      const cardHalfWidth = 88;
+      const x = Math.max(cardHalfWidth, Math.min(trackWidth - cardHalfWidth, unclampedX));
       const laneRows = lastXByLaneAndRow.get(event.lane) ?? [];
       let row = laneRows.findIndex((lastX) => x - lastX >= minimumGap);
       if (row < 0) row = laneRows.length;

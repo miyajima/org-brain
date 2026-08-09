@@ -112,4 +112,15 @@ describe("knowledge graph view model", () => {
     expect(knowledgeNodeVisualKind({ type: "task", kind: "task", status: "failed" })).toBe("warning");
     expect(knowledgeNodeVisualKind({ type: "resource", kind: "document", status: null })).toBe("evidence");
   });
+
+  it("preserves the difference between a recorded zero and a missing metric", () => {
+    const [recordedZero, missing] = normalizeKnowledgeGraph({
+      nodes: [
+        { id: "zero", source_id: "zero", type: "memory", label: "Zero", degree: 0, usage_count_30d: 0 },
+        { id: "missing", source_id: "missing", type: "memory", label: "Missing" }
+      ]
+    }).nodes;
+    expect(recordedZero).toMatchObject({ degree: 0, degree_recorded: true, usage_count_30d: 0, usage_count_30d_recorded: true });
+    expect(missing).toMatchObject({ degree: 0, degree_recorded: false, usage_count_30d: 0, usage_count_30d_recorded: false });
+  });
 });

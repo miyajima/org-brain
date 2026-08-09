@@ -1,6 +1,15 @@
 ---
 import ConsoleSurfaceNav from "./ConsoleSurfaceNav.astro";
+import InsightPageGuide from "./InsightPageGuide.astro";
+import InsightScopeRail from "./InsightScopeRail.astro";
 import IntelligencePoller from "./IntelligencePoller.astro";
+import RecommendedActions from "./RecommendedActions.astro";
+import {
+  historyHealthyCopy,
+  historyRecommendedActions,
+  insightBriefingTitle,
+  pageGuide
+} from "../../lib/insight-guidance";
 import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
 import {
   STRATA_LANES,
@@ -16,14 +25,64 @@ import {
   type StrataTimelineEvent
 } from "../../lib/memory-strata-ui";
 
-const { data, detail, refreshUrl, params, locale = "en" } = Astro.props as {
+const { data, detail, loadError = null, refreshUrl, params, locale = "en" } = Astro.props as {
   data: StrataPayload;
   detail: StrataDetailPayload | null;
+  loadError?: string | null;
   refreshUrl: string;
   params: URLSearchParams;
   locale?: IntelligenceLocale;
 };
 const copy = intelligencePageCopy(locale);
+const plainHistoryCopy = {
+  en: {
+    currentSummary: "Current content",
+    latestChange: "Latest change",
+    evidence: "Evidence",
+    reviewState: "Review state",
+    noChange: "No revision recorded yet",
+    noReview: "No review candidate right now",
+    technicalDetails: "Technical details",
+    revisions: "recorded changes",
+    changeReason: "Change reason",
+    reviewer: "Reviewer",
+    noReviewer: "Not recorded",
+    statuses: { canonical: "Currently adopted", promoted: "Formally adopted", active: "Active", current: "Current", confirmed: "Confirmed", proposed: "Proposed", inferred_unconfirmed: "Not yet confirmed", user_confirmed: "Confirmed by a member" },
+    operations: { promote: "Formally adopted", promoted: "Formally adopted", capture: "Initial record", confirm: "Confirmed", create: "Initial proposal", revision: "Revision", current: "Current" }
+  },
+  ja: {
+    currentSummary: "現在の内容",
+    latestChange: "直近の変更",
+    evidence: "根拠",
+    reviewState: "レビュー状態",
+    noChange: "変更履歴はまだありません",
+    noReview: "現在の確認候補はありません",
+    technicalDetails: "技術詳細",
+    revisions: "件の変更記録",
+    changeReason: "変更理由",
+    reviewer: "確認者",
+    noReviewer: "未記録",
+    statuses: { canonical: "現在採用されている内容", promoted: "正式採用", active: "有効", current: "現在", confirmed: "確認済み", proposed: "提案中", inferred_unconfirmed: "未確認", user_confirmed: "メンバー確認済み" },
+    operations: { promote: "正式採用", promoted: "正式採用", capture: "初回記録", confirm: "確認", create: "初回提案", revision: "内容更新", current: "現在" }
+  },
+  zh: {
+    currentSummary: "当前内容",
+    latestChange: "最近变更",
+    evidence: "依据",
+    reviewState: "审核状态",
+    noChange: "尚无变更记录",
+    noReview: "当前没有待确认项",
+    technicalDetails: "技术详情",
+    revisions: "条变更记录",
+    changeReason: "变更原因",
+    reviewer: "确认者",
+    noReviewer: "未记录",
+    statuses: { canonical: "当前采用的内容", promoted: "正式采用", active: "有效", current: "当前", confirmed: "已确认", proposed: "提议中", inferred_unconfirmed: "未确认", user_confirmed: "成员已确认" },
+    operations: { promote: "正式采用", promoted: "正式采用", capture: "首次记录", confirm: "确认", create: "首次提议", revision: "内容更新", current: "当前" }
+  }
+}[locale];
+const friendlyState = (value: string) => (plainHistoryCopy.statuses as Record<string, string>)[value.toLowerCase()] ?? value;
+const friendlyOperation = (value: string) => (plainHistoryCopy.operations as Record<string, string>)[value.toLowerCase()] ?? value;
 const events = buildStrataTimeline(data, detail);
 const bounds = timelineBounds(events, data.generated_at || Date.now());
 const strataTrackWidth = strataTimelineTrackWidth(events);
@@ -79,6 +138,23 @@ const selectChainHref = (event: StrataTimelineEvent) => {
   return `/decisions/history?${next.toString()}`;
 };
 const selectedDeepLink = selectedChain ? strataDeepLink(selectedChain.source_type, selectedChain.source_id, scope) : null;
+const guide = pageGuide("history", locale);
+const recommendedActions = historyRecommendedActions(data, detail, selectedDeepLink, locale);
+const healthyCopy = historyHealthyCopy(locale, data.chains.length > 0);
+const briefingTitle = insightBriefingTitle(locale);
+const primaryReviewAction = recommendedActions[0] ?? null;
+const otherAttentionChains = attentionChains.filter((chain) => chain.id !== selectedChain?.id);
+const reviewCandidateCount = recommendedActions.length + otherAttentionChains.length;
+const dataState: "ready" | "empty" | "partial" | "error" = loadError
+  ? "error"
+  : data.truncated || data.has_more || Boolean(detail?.truncated.revisions || detail?.truncated.sources || selectedChain?.partial)
+    ? "partial"
+    : data.chains.length > 0 ? "ready" : "empty";
+const uiCopy = {
+  en: { source: "Org Brain knowledge history", window: "Recorded lineage", included: "History, revisions, relationships, and sources matching the current project and lineage filter.", excluded: "Other projects, filtered lineage types, and revisions or sources omitted by response limits.", unavailableTitle: "Knowledge history cannot be judged", unavailableBody: "The history request failed. Retry before treating the lineage as empty or reviewed." },
+  ja: { source: "Org Brain 知識履歴", window: "記録済みの全期間", included: "現在のプロジェクト・系譜フィルターに合う履歴、変更、関係、参照元。", excluded: "他プロジェクト、フィルター外の系譜、応答上限で省略された変更・参照元。", unavailableTitle: "知識の履歴を判断できません", unavailableBody: "履歴データを取得できませんでした。空・確認済みとして扱わず、更新後に判断してください。" },
+  zh: { source: "Org Brain 知识历史", window: "已记录的全部期间", included: "符合当前项目和谱系筛选的历史、修订、关系和来源。", excluded: "其他项目、筛选外谱系以及因响应上限省略的记录。", unavailableTitle: "无法判断知识历史", unavailableBody: "历史数据获取失败，请刷新后再判断。" }
+}[locale];
 const ticks = Array.from({ length: 4 }, (_, index) => bounds.start + ((bounds.end - bounds.start) * index) / 3);
 const tone = (event: StrataTimelineEvent) => {
   if (event.attention?.severity === "critical") return "critical";
@@ -86,7 +162,7 @@ const tone = (event: StrataTimelineEvent) => {
   if (event.selected || /current|active|confirmed|reviewed/i.test(event.state)) return "canonical";
   return "support";
 };
-const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatDate(event.timestamp)}, ${event.operation}, ${event.state}`;
+const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatDate(event.timestamp)}, ${friendlyOperation(event.operation)}, ${friendlyState(event.state)}`;
 ---
 <section class="intelligence-surface memory-strata" aria-labelledby="strata-title">
   <header class="strata-header">
@@ -97,12 +173,20 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
       <p>{copy.strata.description}</p>
     </div>
     <div class="strata-actions">
-      {attentionChains.length > 0 && <a class="primary-action" href="#strata-attention">{copy.strata.reviewChanges}</a>}
+      {reviewCandidateCount > 0 && <a class="primary-action" href="#strata-attention">{copy.strata.reviewChanges} ({reviewCandidateCount})</a>}
       <IntelligencePoller refreshUrl={refreshUrl} initialData={data} generatedAt={data.generated_at} locale={locale} />
     </div>
   </header>
 
-  <div class="strata-filterbar">
+  <InsightPageGuide guide={guide} />
+  <InsightScopeRail params={params} locale={locale} windowLabel={uiCopy.window} sourceLabel={uiCopy.source} included={uiCopy.included} excluded={uiCopy.excluded} state={dataState} generatedAt={data.generated_at} />
+  {loadError ? (
+    <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
+  ) : (
+    <RecommendedActions title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
+  )}
+
+  {!loadError && <div class="strata-filterbar">
     <form method="get" action="/decisions/history">
       {scope.get("tenant_id") && <input type="hidden" name="tenant_id" value={scope.get("tenant_id")} />}
       {scope.get("lang") && <input type="hidden" name="lang" value={scope.get("lang")} />}
@@ -111,9 +195,20 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
       <button type="submit">{copy.strata.apply}</button>
     </form>
     {selectedChain && <div class="selected-chain-summary"><span>{copy.strata.selected}</span><strong>{selectedChain.title}</strong><small>{selectedChain.revision_count} {copy.common.revisions} · {selectedChain.source_count} {copy.common.sources}</small>{selectedDeepLink && <a href={selectedDeepLink}>{copy.strata.openCanonical}</a>}</div>}
-  </div>
+  </div>}
 
-  {events.length > 0 ? (
+  {!loadError && selectedChain && (
+    <section class="history-overview" aria-label={plainHistoryCopy.currentSummary}>
+      <dl>
+        <div><dt>{plainHistoryCopy.currentSummary}</dt><dd>{selectedChain.title}</dd><small>{friendlyState(selectedChain.current_state)}</small></div>
+        <div><dt>{plainHistoryCopy.latestChange}</dt><dd>{newestRevision?.summary ?? plainHistoryCopy.noChange}</dd><small>{newestRevision ? `${friendlyOperation(newestRevision.operation)} · ${formatDate(newestRevision.recorded_at)}` : plainHistoryCopy.noChange}</small></div>
+        <div><dt>{plainHistoryCopy.evidence}</dt><dd>{selectedChain.source_count} {copy.common.sources}</dd><small>{selectedChain.revision_count} {plainHistoryCopy.revisions}</small></div>
+        <div><dt>{plainHistoryCopy.reviewState}</dt><dd>{primaryReviewAction?.title ?? plainHistoryCopy.noReview}</dd><small>{primaryReviewAction?.evidence ?? friendlyState(selectedChain.current_state)}</small></div>
+      </dl>
+    </section>
+  )}
+
+  {!loadError && (events.length > 0 ? (
     <>
       <section class="strata-board" aria-labelledby="strata-board-title">
         <h2 id="strata-board-title" class="sr-only">{copy.strata.timelineAria}</h2>
@@ -128,7 +223,9 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
                 const previous = events.filter((candidate) => candidate.selected)[index];
                 const laneIndex = STRATA_LANES.findIndex((lane) => lane.id === event.lane);
                 const previousLaneIndex = STRATA_LANES.findIndex((lane) => lane.id === previous.lane);
-                return <path d={`M ${timelinePercent(previous.timestamp, bounds) * 10} ${76 + previousLaneIndex * 102} C ${timelinePercent(previous.timestamp, bounds) * 10 + 48} ${76 + previousLaneIndex * 102}, ${timelinePercent(event.timestamp, bounds) * 10 - 48} ${76 + laneIndex * 102}, ${timelinePercent(event.timestamp, bounds) * 10} ${76 + laneIndex * 102}`}></path>;
+                const previousX = ((timelinePlacements.find((point) => point.event.id === previous.id)?.x ?? 0) / strataTrackWidth) * 1000;
+                const currentX = ((timelinePlacements.find((point) => point.event.id === event.id)?.x ?? 0) / strataTrackWidth) * 1000;
+                return <path pathLength="1" d={`M ${previousX} ${76 + previousLaneIndex * 102} C ${previousX + 48} ${76 + previousLaneIndex * 102}, ${currentX - 48} ${76 + laneIndex * 102}, ${currentX} ${76 + laneIndex * 102}`}></path>;
               })}
             </svg>
           )}
@@ -152,7 +249,7 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
                       >
                         <strong>{event.title}</strong>
                         <time datetime={dateTime(event.timestamp)}>{formatDate(event.timestamp)}</time>
-                        <small>{event.operation} · {event.state}{event.partial ? ` · ${copy.common.partial}` : ""}</small>
+                        <small>{friendlyOperation(event.operation)} · {friendlyState(event.state)}{event.partial ? ` · ${copy.common.partial}` : ""}</small>
                       </a>
                     ))}
                   </div>
@@ -175,7 +272,7 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
           {[...events].sort((left, right) => right.timestamp - left.timestamp).map((event) => (
             <li class={`mobile-event mobile-event-${tone(event)}`}>
               <span>{copy.strata.lanes[event.lane].label}</span>
-              <a href={selectChainHref(event)} aria-current={selectedChain?.id === event.chainId ? "true" : undefined}><strong>{event.title}</strong><small><time datetime={dateTime(event.timestamp)}>{formatDate(event.timestamp)}</time> · {event.operation} · {event.state}</small></a>
+              <a href={selectChainHref(event)} aria-current={selectedChain?.id === event.chainId ? "true" : undefined}><strong>{event.title}</strong><small><time datetime={dateTime(event.timestamp)}>{formatDate(event.timestamp)}</time> · {friendlyOperation(event.operation)} · {friendlyState(event.state)}</small></a>
             </li>
           ))}
         </ol>
@@ -183,9 +280,9 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
     </>
   ) : (
     <div class="intelligence-empty" role="status"><strong>{copy.strata.emptyTitle}</strong><span>{copy.strata.emptyBody}</span></div>
-  )}
+  ))}
 
-  {selectedChain && detail && (
+  {!loadError && selectedChain && detail && (
     <section class="selected-chain-history" id="selected-chain-history" aria-labelledby="selected-chain-history-title">
       <header class="history-heading">
         <div>
@@ -203,15 +300,18 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
         </div>
       )}
 
-      <dl class="history-current-state" aria-label={copy.strata.currentStateAria}>
-        <div><dt>{copy.strata.currentState}</dt><dd>{selectedChain.current_state}</dd></div>
-        <div><dt>{copy.strata.snapshotState}</dt><dd>{currentStatus ? formatSnapshotValue(currentStatus.key, currentStatus.value) : copy.common.notRecorded}</dd></div>
-        <div><dt>{copy.strata.confirmationState}</dt><dd>{currentConfirmation ? formatSnapshotValue(currentConfirmation.key, currentConfirmation.value) : copy.common.notRecorded}</dd></div>
-        <div><dt>{copy.strata.validFrom}</dt><dd>{formatOptionalDate(selectedChain.valid_from)}</dd></div>
-        <div><dt>{copy.strata.validUntil}</dt><dd>{formatOptionalDate(selectedChain.valid_until)}</dd></div>
-        <div><dt>{copy.strata.supersession}</dt><dd>{currentSupersession ? formatSnapshotValue(currentSupersession.key, currentSupersession.value) : copy.common.notRecorded}</dd></div>
-        <div><dt>{copy.strata.snapshot}</dt><dd>{selectedChain.partial ? copy.common.partial : copy.common.complete}</dd></div>
-      </dl>
+      <details class="history-technical">
+        <summary>{plainHistoryCopy.technicalDetails}</summary>
+        <dl class="history-current-state" aria-label={copy.strata.currentStateAria}>
+          <div><dt>{copy.strata.currentState}</dt><dd>{selectedChain.current_state}</dd></div>
+          <div><dt>{copy.strata.snapshotState}</dt><dd>{currentStatus ? formatSnapshotValue(currentStatus.key, currentStatus.value) : copy.common.notRecorded}</dd></div>
+          <div><dt>{copy.strata.confirmationState}</dt><dd>{currentConfirmation ? formatSnapshotValue(currentConfirmation.key, currentConfirmation.value) : copy.common.notRecorded}</dd></div>
+          <div><dt>{copy.strata.validFrom}</dt><dd>{formatOptionalDate(selectedChain.valid_from)}</dd></div>
+          <div><dt>{copy.strata.validUntil}</dt><dd>{formatOptionalDate(selectedChain.valid_until)}</dd></div>
+          <div><dt>{copy.strata.supersession}</dt><dd>{currentSupersession ? formatSnapshotValue(currentSupersession.key, currentSupersession.value) : copy.common.notRecorded}</dd></div>
+          <div><dt>{copy.strata.snapshot}</dt><dd>{selectedChain.partial ? copy.common.partial : copy.common.complete}</dd></div>
+        </dl>
+      </details>
 
       <div class="history-detail-layout">
         <section class="revision-history" aria-labelledby="revision-history-title">
@@ -226,18 +326,21 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
                 return (
                   <li class:list={["revision-card", revision.partial && "revision-partial"]}>
                     <header>
-                      <div><span>{revision.operation}</span><time datetime={dateTime(revision.recorded_at)}>{formatDate(revision.recorded_at)}</time></div>
-                      <strong>{revision.state}</strong>
+                      <div><span>{friendlyOperation(revision.operation)}</span><time datetime={dateTime(revision.recorded_at)}>{formatDate(revision.recorded_at)}</time></div>
+                      <strong>{friendlyState(revision.state)}</strong>
                       {revision.partial && <span class="partial-badge">{copy.common.partial}</span>}
                     </header>
-                    <p>{revision.summary}</p>
-                    <dl class="revision-metadata">
-                      {status && <div><dt>{fieldLabel(status.key)}</dt><dd>{formatSnapshotValue(status.key, status.value)}</dd></div>}
-                      {confirmation && <div><dt>{copy.strata.confirmationState}</dt><dd>{formatSnapshotValue(confirmation.key, confirmation.value)}</dd></div>}
-                      <div><dt>{copy.strata.validFrom}</dt><dd>{formatOptionalDate(revision.valid_from)}</dd></div>
-                      <div><dt>{copy.strata.validUntil}</dt><dd>{formatOptionalDate(revision.valid_until)}</dd></div>
-                      {supersession && <div><dt>{copy.strata.supersession}</dt><dd>{formatSnapshotValue(supersession.key, supersession.value)}</dd></div>}
-                    </dl>
+                    <dl class="revision-context"><div><dt>{plainHistoryCopy.changeReason}</dt><dd>{revision.summary}</dd></div><div><dt>{plainHistoryCopy.reviewer}</dt><dd>{revision.actor_id || plainHistoryCopy.noReviewer}</dd></div></dl>
+                    <details class="revision-technical">
+                      <summary>{plainHistoryCopy.technicalDetails}</summary>
+                      <dl class="revision-metadata">
+                        {status && <div><dt>{fieldLabel(status.key)}</dt><dd>{formatSnapshotValue(status.key, status.value)}</dd></div>}
+                        {confirmation && <div><dt>{copy.strata.confirmationState}</dt><dd>{formatSnapshotValue(confirmation.key, confirmation.value)}</dd></div>}
+                        <div><dt>{copy.strata.validFrom}</dt><dd>{formatOptionalDate(revision.valid_from)}</dd></div>
+                        <div><dt>{copy.strata.validUntil}</dt><dd>{formatOptionalDate(revision.valid_until)}</dd></div>
+                        {supersession && <div><dt>{copy.strata.supersession}</dt><dd>{formatSnapshotValue(supersession.key, supersession.value)}</dd></div>}
+                      </dl>
+                    </details>
                     <div class="revision-diff" aria-label={diff.previousRevision ? copy.strata.changesFrom.replace("{id}", diff.previousRevision.id) : copy.strata.firstRecord}>
                       <h4>{diff.previousRevision ? copy.strata.changesSincePrevious : copy.strata.firstRecord}</h4>
                       {!diff.previousRevision ? (
@@ -287,11 +390,19 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
     </section>
   )}
 
-  <section class="strata-attention" id="strata-attention" aria-labelledby="strata-attention-title">
-    <header><div><p class="intelligence-eyebrow">{copy.strata.attentionEyebrow}</p><h2 id="strata-attention-title">{copy.strata.attentionTitle}</h2></div><span>{attentionChains.length}</span></header>
-    {attentionChains.length > 0 ? (
+  {!loadError && <section class="strata-attention" id="strata-attention" aria-labelledby="strata-attention-title">
+    <header><div><p class="intelligence-eyebrow">{copy.strata.attentionEyebrow}</p><h2 id="strata-attention-title">{copy.strata.attentionTitle}</h2></div><span>{reviewCandidateCount}</span></header>
+    {reviewCandidateCount > 0 ? (
       <div class="attention-grid">
-        {attentionChains.map((chain) => {
+        {recommendedActions.map((action) => (
+          <article class:list={[action.tone === "critical" && "attention-critical"]}>
+            <div><span>{action.evidence}</span><span>{plainHistoryCopy.reviewState}</span></div>
+            <h3>{action.title}</h3>
+            <p>{action.reason}</p>
+            <a href={action.href === "#strata-attention" ? (selectedDeepLink ?? "#selected-chain-history") : action.href}>{action.cta}</a>
+          </article>
+        ))}
+        {otherAttentionChains.map((chain) => {
           const event: StrataTimelineEvent = { id: chain.id, chainId: chain.id, lane: chain.type, title: chain.title, timestamp: chain.changed_at, state: chain.current_state, operation: "current", sourceType: chain.source_type, sourceId: chain.source_id, selected: false, attention: chain.attention, partial: chain.partial };
           return (
             <article class:list={[chain.attention?.severity === "critical" && "attention-critical"]}>
@@ -304,24 +415,28 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
         })}
       </div>
     ) : <div class="intelligence-empty compact">{copy.strata.noAttention}</div>}
-  </section>
+  </section>}
 </section>
 
 <style>
   .memory-strata { min-height: calc(100vh - 7rem); }
+  .data-unavailable { margin-bottom: 1rem; border: 1px solid rgba(255,92,103,.38); border-radius: 14px; background: rgba(76,18,27,.28); padding: 1rem; color: #ffd4d7; }.data-unavailable p { margin-top: .35rem; color: #d7aeb3; font-size: .76rem; line-height: 1.6; }
   .strata-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1.5rem; align-items: end; padding: 1rem 0 1.2rem; }.strata-header .surface-switcher { margin-bottom: 1.1rem; }.strata-header h1 { margin-top: .45rem; color: var(--intelligence-text); font-size: clamp(2rem,3.25vw,3rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.15; }.strata-header > div > p:last-child { margin-top: .65rem; color: var(--intelligence-muted); line-height: 1.75; }
   .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: "Fira Code", monospace; font-size: .68rem; letter-spacing: .15em; text-transform: uppercase; }.strata-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .75rem; }.primary-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid #2998ff; border-radius: 10px; background: linear-gradient(180deg,#168cff,#0569ee); padding: .65rem 1rem; color: white; font-size: .8rem; font-weight: 600; box-shadow: 0 0 28px rgba(22,135,255,.18); }
   .strata-filterbar { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: end; margin-bottom: .8rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(8,13,21,.72); padding: .75rem; }.strata-filterbar form { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }.strata-filterbar label { min-width: 11rem; margin: 0; }.strata-filterbar label span { display: block; margin-bottom: .32rem; color: var(--intelligence-muted); font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }.strata-filterbar input,.strata-filterbar select { min-height: 44px; border-radius: 10px; padding: .5rem .75rem; font-size: .76rem; }.strata-filterbar button { min-height: 44px; border-radius: 10px; background: rgba(22,135,255,.12); box-shadow: none; color: #c7e7ff; }
   .selected-chain-summary { display: grid; min-width: 17rem; gap: .16rem; border-left: 2px solid var(--intelligence-blue); padding-left: .75rem; }.selected-chain-summary > span,.selected-chain-summary small { color: var(--intelligence-muted); font-size: .61rem; }.selected-chain-summary strong { overflow: hidden; max-width: 22rem; color: var(--intelligence-text); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }.selected-chain-summary a { display: inline-flex; min-height: 44px; align-items: center; margin-top: .2rem; color: var(--intelligence-blue-bright); font-size: .67rem; }
+  .history-overview { margin-bottom: .8rem; overflow: hidden; border: 1px solid rgba(103,180,242,.18); border-radius: 14px; background: linear-gradient(100deg,rgba(17,38,64,.56),rgba(5,11,19,.82)); }.history-overview dl { display: grid; grid-template-columns: 1.25fr 1.5fr .75fr 1fr; margin: 0; }.history-overview dl > div { min-width: 0; padding: .85rem 1rem; }.history-overview dl > div + div { border-left: 1px solid rgba(103,180,242,.12); }.history-overview dt { color: var(--intelligence-blue-bright); font-size: .62rem; font-weight: 650; letter-spacing: .06em; }.history-overview dd { margin: .42rem 0 0; overflow: hidden; color: var(--intelligence-text); font-size: .76rem; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }.history-overview small { display: block; margin-top: .3rem; overflow: hidden; color: rgba(206,226,241,.8); font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
   .strata-board { position: relative; min-width: 0; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--intelligence-border); border-radius: 16px; background: linear-gradient(90deg,rgba(8,13,22,.95),rgba(2,6,12,.98)); box-shadow: 0 28px 80px rgba(0,0,0,.35); scrollbar-gutter: stable; }.strata-canvas { position: relative; min-width: 100%; }.strata-axis { position: relative; height: 44px; margin-left: 12.5rem; border-bottom: 1px solid var(--intelligence-border); }.strata-axis span { position: absolute; top: 14px; transform: translateX(-50%); color: var(--intelligence-muted); font-size: .67rem; white-space: nowrap; }.strata-track-overlay { position: absolute; z-index: 4; top: 44px; bottom: 50px; left: 12.5rem; pointer-events: none; }.today-marker { position: absolute; top: 0; bottom: 0; width: 1px; background: #1687ff; box-shadow: 0 0 14px 2px rgba(22,135,255,.75); }.today-marker span { position: absolute; top: -19px; transform: translateX(-50%); border: 1px solid rgba(22,135,255,.5); border-radius: 999px; background: #092b5a; padding: .26rem .65rem; color: #e3f3ff; font-size: .62rem; white-space: nowrap; }
   .strata-lanes { position: relative; z-index: 2; }.strata-lane { display: grid; grid-template-columns: 12.5rem minmax(0,1fr); min-height: 102px; border-bottom: 1px solid rgba(137,157,184,.12); background: linear-gradient(90deg,rgba(14,31,55,.78),rgba(8,20,38,.46)); }.strata-lane-learning,.strata-lane-source { background: linear-gradient(90deg,rgba(39,45,55,.78),rgba(22,27,35,.5)); }.strata-lane-assumption { background: linear-gradient(90deg,rgba(70,46,10,.72),rgba(50,32,7,.45)); }.strata-lane > header { position: sticky; z-index: 5; left: 0; display: flex; gap: .7rem; align-items: center; border-right: 1px solid var(--intelligence-border); background: rgba(8,16,28,.94); padding: .8rem 1rem; backdrop-filter: blur(12px); }.strata-lane-learning > header,.strata-lane-source > header { background: rgba(26,31,40,.95); }.strata-lane-assumption > header { background: rgba(52,34,9,.95); }.lane-marker { width: 2rem; height: 2rem; flex: 0 0 auto; border: 1px solid rgba(22,135,255,.52); border-radius: 999px; background: rgba(22,135,255,.12); box-shadow: 0 0 20px rgba(22,135,255,.12); }.strata-lane-learning .lane-marker,.strata-lane-source .lane-marker { border-color: rgba(225,232,241,.4); background: rgba(225,232,241,.08); }.strata-lane-assumption .lane-marker { border-color: rgba(246,173,50,.65); background: rgba(246,173,50,.13); }.strata-lane h3 { color: var(--intelligence-text); font-size: .82rem; }.strata-lane header p { margin-top: .25rem; color: var(--intelligence-muted); font-size: .58rem; }
-  .lane-track { position: relative; min-width: 0; }.lane-row-line { position: absolute; right: 0; left: 0; height: 1px; background: rgba(129,151,181,.2); }.strata-event { position: absolute; z-index: 3; width: 10.8rem; min-height: 66px; transform: translateX(-50%); border: 1px solid rgba(132,156,190,.38); border-radius: 10px; background: rgba(16,27,43,.93); padding: .58rem .7rem; color: var(--intelligence-text); box-shadow: 0 12px 32px rgba(0,0,0,.22); }.strata-event strong,.strata-event time,.strata-event small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.strata-event strong { font-size: .68rem; }.strata-event time { margin-top: .34rem; color: #aeb8c8; font-size: .57rem; }.strata-event small { margin-top: .22rem; color: #728095; font-size: .52rem; }.strata-event-canonical,.strata-event-selected { border-color: #2a9cff; box-shadow: 0 0 22px rgba(22,135,255,.28),0 12px 32px rgba(0,0,0,.22); }.strata-event-warning { border-color: rgba(246,173,50,.62); background: rgba(50,34,10,.94); }.strata-event-critical { border-color: rgba(255,92,103,.66); background: rgba(46,15,20,.95); }
+  .lane-track { position: relative; min-width: 0; }.lane-row-line { position: absolute; right: 0; left: 0; height: 1px; background: rgba(129,151,181,.2); }.strata-event { position: absolute; z-index: 3; width: 10.8rem; min-height: 66px; transform: translateX(-50%); border: 1px solid rgba(132,156,190,.38); border-radius: 10px; background: rgba(16,27,43,.93); padding: .58rem .7rem; color: var(--intelligence-text); box-shadow: 0 12px 32px rgba(0,0,0,.22); }.strata-event strong,.strata-event time,.strata-event small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.strata-event strong { font-size: .72rem; }.strata-event time { margin-top: .3rem; color: #b8c5d6; font-size: .62rem; }.strata-event small { margin-top: .2rem; color: #9aabc0; font-size: .6rem; }.strata-event-canonical,.strata-event-selected { border-color: #2a9cff; box-shadow: 0 0 22px rgba(22,135,255,.28),0 12px 32px rgba(0,0,0,.22); }.strata-event-warning { border-color: rgba(246,173,50,.62); background: rgba(50,34,10,.94); }.strata-event-critical { border-color: rgba(255,92,103,.66); background: rgba(46,15,20,.95); }
   .lineage-lines { position: absolute; z-index: 1; top: 44px; left: 12.5rem; height: 510px; pointer-events: none; }.lineage-lines path { fill: none; stroke: rgba(54,159,255,.62); stroke-width: 1.4; stroke-dasharray: 5 5; vector-effect: non-scaling-stroke; }
   .strata-legend { display: flex; flex-wrap: wrap; gap: .65rem 1.2rem; min-height: 50px; align-items: center; padding: .7rem 1rem; color: var(--intelligence-muted); font-size: .64rem; }.strata-legend span::before { display: inline-block; width: 1.2rem; height: 3px; margin-right: .45rem; background: #1687ff; content: ""; vertical-align: middle; }.strata-legend .legend-support::before { background: #8791a1; }.strata-legend .legend-warning::before { background: var(--intelligence-warning); }.strata-legend .legend-truncated { margin-left: auto; color: var(--intelligence-warning); }.strata-legend .legend-truncated::before { display: none; }
   .strata-mobile { display: none; }.strata-attention { margin-top: 1rem; }.strata-attention > header { display: flex; align-items: end; justify-content: space-between; padding: .7rem 0; }.strata-attention h2 { margin-top: .25rem; font-size: 1.1rem; }.strata-attention header > span { display: grid; width: 1.55rem; height: 1.55rem; place-items: center; border-radius: 999px; background: rgba(22,135,255,.22); color: #bfe4ff; font-size: .7rem; }.attention-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem; }.attention-grid article { min-height: 10.5rem; border: 1px solid var(--intelligence-border); border-radius: 13px; background: linear-gradient(145deg,rgba(16,22,32,.9),rgba(8,12,19,.9)); padding: 1rem; }.attention-grid article.attention-critical { border-color: rgba(246,173,50,.38); background: linear-gradient(145deg,rgba(66,43,7,.92),rgba(38,25,6,.9)); }.attention-grid article > div { display: flex; justify-content: space-between; color: var(--intelligence-muted); font-size: .61rem; }.attention-grid h3 { margin-top: .9rem; color: var(--intelligence-text); font-size: .85rem; line-height: 1.5; }.attention-grid p { margin-top: .5rem; color: var(--intelligence-muted); font-size: .66rem; }.attention-grid a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 1rem; border: 1px solid var(--intelligence-border); border-radius: 8px; padding: .4rem .65rem; color: #dce5f1; font-size: .67rem; }
-  .selected-chain-history { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 15px; background: rgba(5,10,17,.8); }.history-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--intelligence-border); padding: 1rem 1.1rem; }.history-heading h2 { margin-top: .25rem; font-size: 1.05rem; }.history-heading div > p:last-child,.history-heading > span { margin-top: .3rem; color: var(--intelligence-muted); font-size: .68rem; }.history-truncation { display: grid; gap: .25rem; border-bottom: 1px solid rgba(246,173,50,.24); background: rgba(246,173,50,.07); padding: .65rem 1.1rem; color: #ffd89a; font-size: .7rem; }.history-current-state { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: .55rem; border-bottom: 1px solid var(--intelligence-border); padding: .8rem 1rem; }.history-current-state div { min-width: 0; border: 1px solid rgba(126,158,195,.13); border-radius: 9px; background: rgba(255,255,255,.018); padding: .6rem; }.history-current-state dt { color: var(--intelligence-muted); font-size: .58rem; }.history-current-state dd { margin-top: .3rem; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .7rem; }.history-detail-layout { display: grid; grid-template-columns: minmax(0,1fr) 19rem; }.revision-history { min-width: 0; padding: 1rem; }.revision-history > h3,.history-evidence h3 { font-size: .82rem; }.revision-history ol { display: grid; gap: .75rem; margin-top: .75rem; }.revision-card { border: 1px solid rgba(128,157,194,.18); border-radius: 12px; background: rgba(11,20,33,.7); padding: .85rem; }.revision-card.revision-partial { border-style: dashed; }.revision-card > header { display: flex; flex-wrap: wrap; gap: .45rem .7rem; align-items: center; }.revision-card > header div { display: flex; gap: .55rem; align-items: center; }.revision-card > header div span { color: var(--intelligence-blue-bright); font-family: "Fira Code",monospace; font-size: .63rem; text-transform: uppercase; }.revision-card time { color: var(--intelligence-muted); font-size: .62rem; }.revision-card > header strong { margin-left: auto; color: var(--intelligence-text); font-size: .7rem; }.partial-badge { border: 1px solid rgba(246,173,50,.35); border-radius: 999px; padding: .15rem .4rem; color: var(--intelligence-warning); font-size: .55rem; text-transform: uppercase; }.revision-card > p { margin-top: .65rem; color: #d9e6f1; font-size: .76rem; line-height: 1.6; }.revision-metadata { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin-top: .65rem; }.revision-metadata div { display: flex; gap: .35rem; }.revision-metadata dt { color: var(--intelligence-muted); font-size: .58rem; }.revision-metadata dd { color: #dceeff; font-size: .6rem; overflow-wrap: anywhere; }.revision-diff { margin-top: .75rem; border-top: 1px solid rgba(128,157,194,.14); padding-top: .7rem; }.revision-diff h4 { color: #b9c7d5; font-size: .64rem; }.revision-diff > p { margin-top: .4rem; color: var(--intelligence-muted); font-size: .63rem; }.revision-diff ul { display: grid; gap: .42rem; margin-top: .55rem; }.revision-diff li { display: grid; grid-template-columns: 3.8rem 9rem minmax(0,1fr); gap: .55rem; align-items: start; border-radius: 8px; background: rgba(255,255,255,.018); padding: .48rem .55rem; }.change-kind { border-radius: 999px; padding: .15rem .35rem; color: #bfe5ff; font-size: .52rem; text-align: center; text-transform: uppercase; }.change-added { background: rgba(67,220,173,.12); color: #8ee8ca; }.change-removed { background: rgba(255,92,103,.12); color: #ffadb4; }.change-changed { background: rgba(22,135,255,.13); }.revision-diff li > strong { overflow-wrap: anywhere; color: #dfeaf3; font-size: .62rem; }.change-values { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: .45rem; align-items: center; }.change-values > span:not([aria-hidden]) { min-width: 0; }.change-values small { display: block; color: var(--intelligence-muted); font-size: .5rem; }.change-values code { display: block; margin-top: .15rem; overflow-wrap: anywhere; color: #d8e7f3; font-family: "Fira Code",monospace; font-size: .57rem; white-space: pre-wrap; }.history-evidence { display: grid; align-content: start; gap: 1rem; border-left: 1px solid var(--intelligence-border); padding: 1rem; }.history-evidence section + section { border-top: 1px solid var(--intelligence-border); padding-top: 1rem; }.history-evidence h3 { display: flex; justify-content: space-between; }.history-evidence h3 span { color: var(--intelligence-muted); font-size: .65rem; }.history-evidence ul { display: grid; gap: .5rem; margin-top: .65rem; }.history-evidence li { display: grid; gap: .2rem; border: 1px solid rgba(128,157,194,.13); border-radius: 9px; padding: .58rem; }.history-evidence strong { overflow-wrap: anywhere; color: #dcecff; font-size: .65rem; }.history-evidence li span,.history-evidence small,.history-evidence p,.history-empty { overflow-wrap: anywhere; color: var(--intelligence-muted); font-size: .58rem; }.history-evidence p { margin-top: .6rem; }.history-empty { margin-top: .7rem; }
+  .selected-chain-history { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 15px; background: rgba(5,10,17,.8); }.history-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--intelligence-border); padding: 1rem 1.1rem; }.history-heading h2 { margin-top: .25rem; font-size: 1.05rem; }.history-heading div > p:last-child,.history-heading > span { margin-top: .3rem; color: var(--intelligence-muted); font-size: .68rem; }.history-truncation { display: grid; gap: .25rem; border-bottom: 1px solid rgba(246,173,50,.24); background: rgba(246,173,50,.07); padding: .65rem 1.1rem; color: #ffd89a; font-size: .7rem; }.history-current-state { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: .55rem; border-bottom: 1px solid var(--intelligence-border); padding: .8rem 1rem; }.history-current-state div { min-width: 0; border: 1px solid rgba(126,158,195,.13); border-radius: 9px; background: rgba(255,255,255,.018); padding: .6rem; }.history-current-state dt { color: var(--intelligence-muted); font-size: .58rem; }.history-current-state dd { margin-top: .3rem; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .7rem; }.history-detail-layout { display: grid; grid-template-columns: minmax(0,1fr) 19rem; }.revision-history { min-width: 0; padding: 1rem; }.revision-history > h3,.history-evidence h3 { font-size: .82rem; }.revision-history ol { display: grid; gap: .75rem; margin-top: .75rem; }.revision-card { border: 1px solid rgba(128,157,194,.18); border-radius: 12px; background: rgba(11,20,33,.7); padding: .85rem; }.revision-card.revision-partial { border-style: dashed; }.revision-card > header { display: flex; flex-wrap: wrap; gap: .45rem .7rem; align-items: center; }.revision-card > header div { display: flex; gap: .55rem; align-items: center; }.revision-card > header div span { color: var(--intelligence-blue-bright); font-family: "Fira Code",monospace; font-size: .63rem; text-transform: uppercase; }.revision-card time { color: var(--intelligence-muted); font-size: .62rem; }.revision-card > header strong { margin-left: auto; color: var(--intelligence-text); font-size: .7rem; }.partial-badge { border: 1px solid rgba(246,173,50,.35); border-radius: 999px; padding: .15rem .4rem; color: var(--intelligence-warning); font-size: .55rem; text-transform: uppercase; }.revision-context { display: grid; grid-template-columns: minmax(0,2fr) minmax(8rem,1fr); gap: .6rem; margin-top: .7rem; }.revision-context div { border-left: 2px solid rgba(54,159,255,.34); padding-left: .6rem; }.revision-context dt { color: var(--intelligence-muted); font-size: .56rem; }.revision-context dd { margin-top: .25rem; overflow-wrap: anywhere; color: #d9e6f1; font-size: .72rem; line-height: 1.5; }.revision-metadata { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin-top: .65rem; }.revision-metadata div { display: flex; gap: .35rem; }.revision-metadata dt { color: var(--intelligence-muted); font-size: .58rem; }.revision-metadata dd { color: #dceeff; font-size: .6rem; overflow-wrap: anywhere; }.revision-diff { margin-top: .75rem; border-top: 1px solid rgba(128,157,194,.14); padding-top: .7rem; }.revision-diff h4 { color: #b9c7d5; font-size: .64rem; }.revision-diff > p { margin-top: .4rem; color: var(--intelligence-muted); font-size: .63rem; }.revision-diff ul { display: grid; gap: .42rem; margin-top: .55rem; }.revision-diff li { display: grid; grid-template-columns: 3.8rem 9rem minmax(0,1fr); gap: .55rem; align-items: start; border-radius: 8px; background: rgba(255,255,255,.018); padding: .48rem .55rem; }.change-kind { border-radius: 999px; padding: .15rem .35rem; color: #bfe5ff; font-size: .52rem; text-align: center; text-transform: uppercase; }.change-added { background: rgba(67,220,173,.12); color: #8ee8ca; }.change-removed { background: rgba(255,92,103,.12); color: #ffadb4; }.change-changed { background: rgba(22,135,255,.13); }.revision-diff li > strong { overflow-wrap: anywhere; color: #dfeaf3; font-size: .62rem; }.change-values { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: .45rem; align-items: center; }.change-values > span:not([aria-hidden]) { min-width: 0; }.change-values small { display: block; color: var(--intelligence-muted); font-size: .5rem; }.change-values code { display: block; margin-top: .15rem; overflow-wrap: anywhere; color: #d8e7f3; font-family: "Fira Code",monospace; font-size: .57rem; white-space: pre-wrap; }.history-evidence { display: grid; align-content: start; gap: 1rem; border-left: 1px solid var(--intelligence-border); padding: 1rem; }.history-evidence section + section { border-top: 1px solid var(--intelligence-border); padding-top: 1rem; }.history-evidence h3 { display: flex; justify-content: space-between; }.history-evidence h3 span { color: var(--intelligence-muted); font-size: .65rem; }.history-evidence ul { display: grid; gap: .5rem; margin-top: .65rem; }.history-evidence li { display: grid; gap: .2rem; border: 1px solid rgba(128,157,194,.13); border-radius: 9px; padding: .58rem; }.history-evidence strong { overflow-wrap: anywhere; color: #dcecff; font-size: .65rem; }.history-evidence li span,.history-evidence small,.history-evidence p,.history-empty { overflow-wrap: anywhere; color: var(--intelligence-muted); font-size: .58rem; }.history-evidence p { margin-top: .6rem; }.history-empty { margin-top: .7rem; }
+  .history-technical { border-bottom: 1px solid var(--intelligence-border); }.history-technical summary { display: flex; min-height: 44px; align-items: center; gap: .5rem; padding: .65rem 1rem; color: #c9dfef; cursor: pointer; font-size: .68rem; font-weight: 650; list-style: none; }.history-technical summary::-webkit-details-marker { display: none; }.history-technical summary::before { color: var(--intelligence-blue-bright); content: "+"; font-family: "Fira Code",monospace; }.history-technical[open] summary::before { content: "−"; }.history-technical .history-current-state { border-top: 1px solid var(--intelligence-border); border-bottom: 0; }
+  .revision-technical { margin-top: .55rem; }.revision-technical summary { display: inline-flex; min-height: 32px; align-items: center; gap: .35rem; color: #9fb7c9; cursor: pointer; font-size: .58rem; list-style: none; }.revision-technical summary::-webkit-details-marker { display: none; }.revision-technical summary::before { color: var(--intelligence-blue-bright); content: "+"; }.revision-technical[open] summary::before { content: "−"; }
   .intelligence-empty { display: grid; min-height: 24rem; gap: .6rem; place-content: center; border: 1px dashed var(--intelligence-border); border-radius: 14px; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 7rem; }
-  @media (max-width: 1050px) { .strata-filterbar { grid-template-columns: 1fr; }.selected-chain-summary { min-width: 0; }.strata-board { display: none; }.strata-mobile { display: block; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(5,9,15,.78); }.strata-mobile > h2 { padding: 1rem; border-bottom: 1px solid var(--intelligence-border); font-size: .95rem; }.strata-mobile ol { display: grid; }.mobile-event { display: grid; grid-template-columns: 7.5rem minmax(0,1fr); gap: 1rem; border-bottom: 1px solid rgba(139,159,185,.12); padding: .85rem 1rem; }.mobile-event > span { color: var(--intelligence-muted); font-size: .65rem; }.mobile-event a { border-left: 2px solid var(--intelligence-blue); padding-left: .8rem; }.mobile-event-warning a { border-color: var(--intelligence-warning); }.mobile-event-critical a { border-color: var(--intelligence-danger); }.mobile-event strong,.mobile-event small { display: block; }.mobile-event strong { color: var(--intelligence-text); font-size: .78rem; }.mobile-event small { margin-top: .35rem; color: var(--intelligence-muted); font-size: .62rem; }.attention-grid { grid-template-columns: 1fr 1fr; }.history-current-state { grid-template-columns: repeat(3,minmax(0,1fr)); }.history-detail-layout { grid-template-columns: 1fr; }.history-evidence { grid-template-columns: 1fr 1fr; border-top: 1px solid var(--intelligence-border); border-left: 0; }.history-evidence section + section { border-top: 0; padding-top: 0; } }
-  @media (max-width: 720px) { .strata-header { grid-template-columns: 1fr; }.strata-actions { justify-content: flex-start; }.strata-filterbar form { display: grid; grid-template-columns: 1fr; }.strata-filterbar label { min-width: 0; }.attention-grid { grid-template-columns: 1fr; }.mobile-event { grid-template-columns: 1fr; gap: .45rem; }.strata-header h1 { font-size: 2rem; }.history-heading { align-items: start; }.history-current-state { grid-template-columns: 1fr 1fr; }.revision-history { padding: .75rem; }.revision-diff li { grid-template-columns: auto minmax(0,1fr); }.change-values { grid-column: 1 / -1; }.history-evidence { grid-template-columns: 1fr; }.history-evidence section + section { border-top: 1px solid var(--intelligence-border); padding-top: 1rem; } }
-  @media (prefers-reduced-motion: no-preference) { .today-marker { animation: today-glow 2.7s ease-in-out infinite; } @keyframes today-glow { 50% { box-shadow: 0 0 22px 4px rgba(22,135,255,.86); } } }
+  @media (max-width: 1050px) { .strata-filterbar { grid-template-columns: 1fr; }.selected-chain-summary { min-width: 0; }.history-overview dl { grid-template-columns: 1fr 1fr; }.history-overview dl > div:nth-child(3) { border-left: 0; }.history-overview dl > div:nth-child(n+3) { border-top: 1px solid rgba(103,180,242,.12); }.strata-board { display: none; }.strata-mobile { display: block; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(5,9,15,.78); }.strata-mobile > h2 { padding: 1rem; border-bottom: 1px solid var(--intelligence-border); font-size: .95rem; }.strata-mobile ol { display: grid; }.mobile-event { display: grid; grid-template-columns: 7.5rem minmax(0,1fr); gap: 1rem; border-bottom: 1px solid rgba(139,159,185,.12); padding: .85rem 1rem; }.mobile-event > span { color: var(--intelligence-muted); font-size: .65rem; }.mobile-event a { border-left: 2px solid var(--intelligence-blue); padding-left: .8rem; }.mobile-event-warning a { border-color: var(--intelligence-warning); }.mobile-event-critical a { border-color: var(--intelligence-danger); }.mobile-event strong,.mobile-event small { display: block; }.mobile-event strong { color: var(--intelligence-text); font-size: .78rem; }.mobile-event small { margin-top: .35rem; color: var(--intelligence-muted); font-size: .62rem; }.attention-grid { grid-template-columns: 1fr 1fr; }.history-current-state { grid-template-columns: repeat(3,minmax(0,1fr)); }.history-detail-layout { grid-template-columns: 1fr; }.history-evidence { grid-template-columns: 1fr 1fr; border-top: 1px solid var(--intelligence-border); border-left: 0; }.history-evidence section + section { border-top: 0; padding-top: 0; } }
+  @media (max-width: 720px) { .strata-header { grid-template-columns: 1fr; }.strata-actions { justify-content: flex-start; }.strata-filterbar form { display: grid; grid-template-columns: 1fr; }.strata-filterbar label { min-width: 0; }.history-overview dl { grid-template-columns: 1fr; }.history-overview dl > div + div { border-top: 1px solid rgba(103,180,242,.12); border-left: 0; }.history-overview dd,.history-overview small { white-space: normal; }.attention-grid { grid-template-columns: 1fr; }.mobile-event { grid-template-columns: 1fr; gap: .45rem; }.strata-header h1 { font-size: 2rem; }.history-heading { align-items: start; }.history-current-state { grid-template-columns: 1fr 1fr; }.revision-context { grid-template-columns: 1fr; }.revision-history { padding: .75rem; }.revision-diff li { grid-template-columns: auto minmax(0,1fr); }.change-values { grid-column: 1 / -1; }.history-evidence { grid-template-columns: 1fr; }.history-evidence section + section { border-top: 1px solid var(--intelligence-border); padding-top: 1rem; } }
+  @media (prefers-reduced-motion: no-preference) { .today-marker { animation: today-glow 2.7s ease-in-out infinite; }.lineage-lines path { animation: lineage-reveal .38s ease-out both; stroke-dasharray: 1; stroke-dashoffset: 1; } @keyframes today-glow { 50% { box-shadow: 0 0 22px 4px rgba(22,135,255,.86); } } @keyframes lineage-reveal { to { stroke-dashoffset: 0; } } }
 </style>

@@ -1,45 +1,65 @@
 ---
 import brandMark from "../../../../../assets/brand/org-brain-avatar.png";
 import IntelligencePoller from "./IntelligencePoller.astro";
+import InsightPageGuide from "./InsightPageGuide.astro";
+import InsightScopeRail from "./InsightScopeRail.astro";
+import RecommendedActions from "./RecommendedActions.astro";
 import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { activityHealthyCopy, activityRecommendedActions, insightBriefingTitle, pageGuide } from "../../lib/insight-guidance";
 import {
+  activityCapabilityForEvent,
   activityTimelineWidth,
+  ACTIVITY_PERIODS,
+  buildActivityCapabilitySummaries,
   buildProjectPulses,
   eventDeepLink,
   hasDashboardActivityContent,
   layoutActivityTimeline,
   relativeTime,
+  resolveActivityCapability,
+  resolveActivityPeriod,
+  type ActivityCapabilityKey,
   type ActivityEvent,
-  type DashboardActivity
+  type DashboardActivity,
+  type ObservedAgent
 } from "../../lib/nervous-system-ui";
 
 const {
   data,
+  comparisonData = null,
+  loadError = null,
   refreshUrl,
   params,
   locale = "en"
-} = Astro.props as { data: DashboardActivity; refreshUrl: string; params: URLSearchParams; locale?: IntelligenceLocale };
+} = Astro.props as { data: DashboardActivity; comparisonData?: DashboardActivity | null; loadError?: string | null; refreshUrl: string; params: URLSearchParams; locale?: IntelligenceLocale };
 const copy = intelligencePageCopy(locale);
+const period = resolveActivityPeriod(params.get("period"));
+const periodLabel = copy.nervous.periods[period.key];
+const periodCopy = (template: string) => template.replace("{period}", periodLabel);
 const hasActivityContent = hasDashboardActivityContent(data);
 const actors = data.observed_agents.slice(0, 6);
 const allProjects = buildProjectPulses(data.events);
 const projects = allProjects.slice(0, 5);
+const activeCapability = resolveActivityCapability(params.get("activity_capability"));
+const timelineEvents = activeCapability
+  ? data.events.filter((event) => activityCapabilityForEvent(event) === activeCapability)
+  : data.events;
 const selectedEventId = params.get("event");
-const selectedEvent = data.events.find((event) => event.id === selectedEventId) ?? data.events[0] ?? null;
+const selectedEvent = timelineEvents.find((event) => event.id === selectedEventId) ?? timelineEvents[0] ?? null;
 const attention = data.attention.slice(0, 3);
 const omittedActors = data.observed_agents.slice(actors.length);
 const omittedProjects = allProjects.slice(projects.length);
 const omittedAttention = data.attention.slice(attention.length);
 const hasOmissions = data.has_more || omittedActors.length > 0 || omittedProjects.length > 0 || omittedAttention.length > 0;
 const now = data.generated_at || Date.now();
-const start = now - 86_400_000;
+const start = now - period.durationMs;
 const formatTime = (timestamp: number) => timestamp
   ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp))
   : copy.nervous.timeUnknown;
 const dateTime = (timestamp: number) => new Date(timestamp).toISOString();
 const pointY = (index: number, count: number) => count <= 1 ? 220 : 72 + index * (296 / (count - 1));
-const timelineWidth = activityTimelineWidth(data.events.length);
-const timelinePoints = layoutActivityTimeline(data.events, start, now, timelineWidth);
+const timelineWidth = activityTimelineWidth(timelineEvents.length);
+const timelinePoints = layoutActivityTimeline(timelineEvents, start, now, timelineWidth);
 const timelineRowCount = Math.max(1, ...timelinePoints.map((point) => point.row + 1));
 const timelineHeight = timelineRowCount * 44;
 const scope = new URLSearchParams();
@@ -54,8 +74,119 @@ const selectEventHref = (event: ActivityEvent) => {
   return `${pathname}?${next.toString()}`;
 };
 const selectedDeepLink = selectedEvent ? eventDeepLink(selectedEvent, scope) : null;
+const guide = pageGuide("activity", locale);
+const recommendedActions = activityRecommendedActions(data, params, Astro.url.pathname === "/" ? "/" : "/overview", locale);
+const healthyCopy = activityHealthyCopy(locale);
+const briefingTitle = insightBriefingTitle(locale);
+const selectedActorId = selectedEvent?.actor.id ?? null;
+const selectedProjectId = selectedEvent?.project_id ?? null;
+const selectedCapability = selectedEvent ? activityCapabilityForEvent(selectedEvent) : null;
+const highlightedCapability = activeCapability ?? selectedCapability;
 const severityLabel = (severity: ActivityEvent["severity"]) => copy.common.severity[severity];
 const countCopy = (template: string, count: number) => template.replace("{count}", String(count));
+const activityPathname = Astro.url.pathname === "/" ? "/" : "/overview";
+const capabilityDefinitions = {
+  remember: { title: copy.nervous.remember, note: copy.nervous.storeStructure, x: 462, y: 87 },
+  understand: { title: copy.nervous.understand, note: copy.nervous.searchRelate, x: 636, y: 87 },
+  evaluate: { title: copy.nervous.evaluate, note: copy.nervous.trustFreshness, x: 462, y: 271 },
+  apply: { title: copy.nervous.use, note: copy.nervous.shareGenerate, x: 636, y: 271 }
+} satisfies Record<ActivityCapabilityKey, { title: string; note: string; x: number; y: number }>;
+const capabilitySummaries = buildActivityCapabilitySummaries(data.events).map((summary) => ({
+  ...summary,
+  ...capabilityDefinitions[summary.key]
+}));
+const compactSummary = (value: string) => Array.from(value).slice(0, 15).join("");
+const capabilityHref = (key: ActivityCapabilityKey) => {
+  const next = new URLSearchParams(params);
+  next.delete("event");
+  if (activeCapability === key) next.delete("activity_capability");
+  else next.set("activity_capability", key);
+  return `${activityPathname}?${next.toString()}#activity-timeline`;
+};
+const capabilityAriaLabel = (key: ActivityCapabilityKey, title: string) => activeCapability === key
+  ? copy.nervous.showAllActivity
+  : copy.nervous.filterByCapability.replace("{capability}", title);
+const timelineCountLabel = activeCapability
+  ? copy.nervous.filteredEventCount
+      .replace("{capability}", capabilityDefinitions[activeCapability].title)
+      .replace("{count}", String(timelineEvents.length))
+      .replace("{total}", String(data.events.length))
+  : `${data.events.length} ${copy.common.events}`;
+const periodHref = (key: typeof ACTIVITY_PERIODS[number]["key"]) => {
+  const next = new URLSearchParams(params);
+  next.delete("event");
+  if (key === "24h") next.delete("period");
+  else next.set("period", key);
+  return `${activityPathname}?${next.toString()}`;
+};
+const dayTicks = period.key === "3d"
+  ? [3, 2, 1, 0]
+  : period.key === "7d"
+    ? [7, 6, 5, 4, 3, 2, 1, 0]
+    : [30, 25, 20, 15, 10, 5, 0];
+const timelineTicks = period.key === "24h"
+  ? [24, 20, 16, 12, 8, 4, 0].map((hours) => ({ key: `hour-${hours}`, label: hours === 0 ? copy.nervous.now : copy.nervous.hoursAgo.replace("{hours}", String(hours)) }))
+  : dayTicks.map((days) => ({ key: `day-${days}`, label: days === 0 ? copy.nervous.now : copy.nervous.daysAgo.replace("{days}", String(days)) }));
+const uiCopy = {
+  en: {
+    source: "Org Brain activity API",
+    included: `Task, memory, decision, and agent events linked to the current project during ${periodLabel}.`,
+    excluded: "Other projects, events outside this period, and records not linked to the current project.",
+    unavailableTitle: "Activity cannot be judged",
+    unavailableBody: "The activity request failed. Retry before treating this as a healthy or empty state.",
+    comparison: "Compared with the last 24 hours",
+    events: "Events",
+    agents: "Observed agents",
+    newAgents: "Newly observed",
+    noNewAgents: "No additional agents",
+    executing: "Executing now",
+    observed: "Observed in this period",
+    lastSeen: "Last observed",
+    provenance: "Observed from",
+    projectRule: "Only projects attached to returned events are shown. Other projects are outside the current project filter."
+  },
+  ja: {
+    source: "Org Brain 活動データ",
+    included: `現在のプロジェクトに関連付いた過去${periodLabel}のTask・メモリ・意思決定・Agentイベント。`,
+    excluded: "他プロジェクト、期間外、現在のプロジェクトに関連付いていない記録。",
+    unavailableTitle: "活動状況を判断できません",
+    unavailableBody: "活動データを取得できませんでした。正常・空状態として扱わず、更新後に判断してください。",
+    comparison: "過去24時間との比較",
+    events: "イベント",
+    agents: "観測Agent",
+    newAgents: "新たに観測",
+    noNewAgents: "追加のAgentなし",
+    executing: "現在実行中",
+    observed: "この期間に観測",
+    lastSeen: "最終観測",
+    provenance: "観測元",
+    projectRule: "返却イベントに関連付いたプロジェクトだけを表示します。他プロジェクトは現在のprojectフィルター対象外です。"
+  },
+  zh: {
+    source: "Org Brain 活动数据",
+    included: `当前项目中过去${periodLabel}的任务、记忆、决策和Agent事件。`,
+    excluded: "其他项目、时间范围外以及未关联当前项目的记录。",
+    unavailableTitle: "无法判断活动状态",
+    unavailableBody: "活动数据获取失败，请刷新后再判断。",
+    comparison: "与过去24小时比较",
+    events: "事件",
+    agents: "已观察Agent",
+    newAgents: "新观察",
+    noNewAgents: "没有新增Agent",
+    executing: "当前执行中",
+    observed: "本期间观察到",
+    lastSeen: "最后观察",
+    provenance: "观察来源",
+    projectRule: "只显示与返回事件相关的项目，其他项目不在当前项目筛选范围内。"
+  }
+}[locale];
+const comparisonAgentIds = new Set(comparisonData?.observed_agents.map((actor) => actor.id) ?? []);
+const newlyObservedAgents = comparisonData ? actors.filter((actor) => !comparisonAgentIds.has(actor.id)) : [];
+const eventDelta = comparisonData ? data.events.length - comparisonData.events.length : 0;
+const agentDelta = comparisonData ? data.observed_agents.length - comparisonData.observed_agents.length : 0;
+const agentEventKinds = (actorId: string) => [...new Set(data.events.filter((event) => event.actor.id === actorId).map((event) => event.type))];
+const agentStateLabel = (actor: ObservedAgent) => actor.state === "active" && actor.active_task_count > 0 ? uiCopy.executing : uiCopy.observed;
+const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" : hasOmissions ? "partial" : hasActivityContent ? "ready" : "empty";
 ---
 <section class="intelligence-surface nervous-system" aria-labelledby="nervous-system-title">
   <header class="intelligence-header">
@@ -65,13 +196,40 @@ const countCopy = (template: string, count: number) => template.replace("{count}
       <p>{copy.nervous.description}</p>
     </div>
     <div class="header-actions">
+      <nav class="activity-period" aria-label={copy.nervous.periodLabel}>
+        <span>{copy.nervous.periodLabel}</span>
+        <div>
+          {ACTIVITY_PERIODS.map((option) => (
+            <a href={periodHref(option.key)} aria-current={option.key === period.key ? "page" : undefined}>{copy.nervous.periods[option.key]}</a>
+          ))}
+        </div>
+      </nav>
       {attention.length > 0 && <a class="primary-action" href="#attention-signals">{copy.nervous.reviewSignals} ({data.attention.length})</a>}
-      <a class="secondary-action" href="#activity-timeline">{copy.nervous.replay24}</a>
-      <IntelligencePoller refreshUrl={refreshUrl} initialData={data} generatedAt={data.generated_at} locale={locale} incrementalField={data.newest_cursor != null ? "events" : undefined} />
+      <a class="secondary-action" href="#activity-timeline">{periodCopy(copy.nervous.replayPeriod)}</a>
+      <IntelligencePoller refreshUrl={refreshUrl} initialData={data} generatedAt={data.generated_at} locale={locale} incrementalField={data.newest_cursor != null ? "events" : undefined} windowMs={period.durationMs} />
     </div>
   </header>
 
-  {hasOmissions && (
+  <InsightPageGuide guide={guide} />
+  <InsightScopeRail params={params} locale={locale} windowLabel={periodLabel} sourceLabel={uiCopy.source} included={uiCopy.included} excluded={uiCopy.excluded} state={dataState} generatedAt={data.generated_at} />
+  {loadError ? (
+    <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
+  ) : (
+    <RecommendedActions title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
+  )}
+
+  {!loadError && comparisonData && (
+    <section class="period-comparison" aria-label={uiCopy.comparison}>
+      <div><span>{uiCopy.comparison}</span><strong>{periodLabel}</strong></div>
+      <dl>
+        <div><dt>{uiCopy.events}</dt><dd>{data.events.length}<small>{eventDelta >= 0 ? "+" : ""}{eventDelta}</small></dd></div>
+        <div><dt>{uiCopy.agents}</dt><dd>{data.observed_agents.length}<small>{agentDelta >= 0 ? "+" : ""}{agentDelta}</small></dd></div>
+        <div><dt>{uiCopy.newAgents}</dt><dd>{newlyObservedAgents.length > 0 ? newlyObservedAgents.map((actor) => actor.label).join(" · ") : uiCopy.noNewAgents}</dd></div>
+      </dl>
+    </section>
+  )}
+
+  {!loadError && hasOmissions && (
     <details class="activity-omissions">
       <summary>{copy.nervous.omittedSummary}</summary>
       <ul>
@@ -83,7 +241,7 @@ const countCopy = (template: string, count: number) => template.replace("{count}
     </details>
   )}
 
-  {!hasActivityContent ? (
+  {!loadError && (!hasActivityContent ? (
     <div class="intelligence-empty" role="status">
       <strong>{copy.nervous.noActivityTitle}</strong>
       <span>{copy.nervous.noActivityBody}</span>
@@ -96,7 +254,7 @@ const countCopy = (template: string, count: number) => template.replace("{count}
 
       <svg class="topology-map" viewBox="0 0 1200 440" role="img" aria-labelledby="topology-title topology-description">
         <title id="topology-title">{copy.nervous.topologyTitle}</title>
-        <desc id="topology-description">{copy.nervous.topologyDescription}</desc>
+        <desc id="topology-description">{periodCopy(copy.nervous.topologyDescriptionPeriod)}</desc>
         <defs>
           <filter id="blue-glow" x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur stdDeviation="6" result="blur"></feGaussianBlur>
@@ -106,19 +264,22 @@ const countCopy = (template: string, count: number) => template.replace("{count}
           <linearGradient id="flow-critical" x1="0" x2="1"><stop offset="0" stop-color="#1687ff"></stop><stop offset="1" stop-color="#ff5c67"></stop></linearGradient>
         </defs>
 
-        {actors.map((_, index) => {
+        {actors.map((actor, index) => {
           const y = pointY(index, actors.length);
           return (
             <g>
-              <path class="flow flow-in" d={`M 142 ${y} C 300 ${y}, 360 220, 548 220`}></path>
-              {[0.25, 0.52, 0.76].map((progress) => <circle class="flow-pulse" cx={142 + progress * 406} cy={y + (220 - y) * progress} r="3.4"></circle>)}
+              <path class:list={["flow", "flow-in", actor.id === selectedActorId && "flow-selected"]} d={`M 142 ${y} C 300 ${y}, 360 220, 548 220`}></path>
+              {[0.25, 0.52, 0.76].map((progress) => <circle class:list={["flow-pulse", actor.id === selectedActorId && "flow-pulse-selected"]} cx={142 + progress * 406} cy={y + (220 - y) * progress} r="3.4"></circle>)}
             </g>
           );
         })}
         {projects.map((project, index) => {
           const y = pointY(index, projects.length);
           return (
-            <path class={project.criticalCount > 0 ? "flow flow-out flow-critical" : "flow flow-out"} d={`M 652 220 C 835 220, 900 ${y}, 1048 ${y}`}></path>
+              <g>
+                <path class:list={["flow", "flow-out", project.criticalCount > 0 && "flow-critical", project.id === selectedProjectId && "flow-selected"]} d={`M 652 220 C 835 220, 900 ${y}, 1048 ${y}`}></path>
+                <circle class="flow-pulse flow-pulse-out" cx="850" cy={220 + (y - 220) * .5} r="3.4"><title>{project.eventCount} {copy.common.events}</title></circle>
+              </g>
           );
         })}
 
@@ -130,12 +291,13 @@ const countCopy = (template: string, count: number) => template.replace("{count}
           const y = pointY(index, actors.length);
           const initial = actor.label.replace(/[^A-Za-z0-9一-龠ぁ-んァ-ヶ]/gu, "").slice(0, 2).toUpperCase() || "AI";
           return (
-            <g>
+            <g class:list={[actor.id === selectedActorId && "topology-entity-selected"]}>
+              <title>{actor.label} · {agentStateLabel(actor)} · {uiCopy.lastSeen} {formatTime(actor.last_seen_at)} · {uiCopy.provenance} {agentEventKinds(actor.id).join(" / ") || copy.nervous.timeUnknown}</title>
               <circle class="actor-ring" cx="80" cy={y} r="31"></circle>
               <text class="actor-initial" x="80" y={y + 5} text-anchor="middle">{initial}</text>
-              <circle class={actor.state === "active" ? "agent-state agent-state-active" : "agent-state"} cx="105" cy={y - 23} r="4"><title>{actor.state === "active" ? copy.nervous.active : copy.nervous.idle}</title></circle>
+              <circle class={actor.state === "active" && actor.active_task_count > 0 ? "agent-state agent-state-active" : "agent-state"} cx="105" cy={y - 23} r="4"><title>{agentStateLabel(actor)}</title></circle>
               <text class="actor-label" x="122" y={y - 5}>{actor.label}</text>
-              <text class="actor-detail" x="122" y={y + 15}>{actor.model || `${actor.active_task_count} ${copy.common.activeTasks}`}</text>
+              <text class="actor-detail" x="122" y={y + 15}>{agentStateLabel(actor)} · {relativeTime(actor.last_seen_at, now, locale)}</text>
               <text class="actor-counter" x="122" y={y + 34}>{copy.common.read} {actor.read_count} · {copy.common.write} {actor.write_count}</text>
             </g>
           );
@@ -144,7 +306,7 @@ const countCopy = (template: string, count: number) => template.replace("{count}
         {projects.map((project, index) => {
           const y = pointY(index, projects.length);
           return (
-            <g>
+            <g class:list={[project.id === selectedProjectId && "topology-entity-selected"]}>
               <rect class={project.criticalCount > 0 ? "project-card project-card-critical" : "project-card"} x="1048" y={y - 34} width="144" height="68" rx="12"></rect>
               <text class="project-label" x="1064" y={y - 6}>{project.label.slice(0, 20)}</text>
               <text class="project-detail" x="1064" y={y + 15}>{project.eventCount} {copy.common.events} · {project.criticalCount} {copy.common.critical}</text>
@@ -152,29 +314,47 @@ const countCopy = (template: string, count: number) => template.replace("{count}
           );
         })}
 
-        <g class="brain-capability">
-          <rect x="472" y="105" width="92" height="64" rx="12"></rect>
-          <text x="518" y="133" text-anchor="middle">{copy.nervous.remember}</text><text class="capability-note" x="518" y="151" text-anchor="middle">{copy.nervous.storeStructure}</text>
-        </g>
-        <g class="brain-capability">
-          <rect x="636" y="105" width="92" height="64" rx="12"></rect>
-          <text x="682" y="133" text-anchor="middle">{copy.nervous.understand}</text><text class="capability-note" x="682" y="151" text-anchor="middle">{copy.nervous.searchRelate}</text>
-        </g>
-        <g class="brain-capability">
-          <rect x="472" y="274" width="92" height="64" rx="12"></rect>
-          <text x="518" y="302" text-anchor="middle">{copy.nervous.evaluate}</text><text class="capability-note" x="518" y="320" text-anchor="middle">{copy.nervous.trustFreshness}</text>
-        </g>
-        <g class="brain-capability">
-          <rect x="636" y="274" width="92" height="64" rx="12"></rect>
-          <text x="682" y="302" text-anchor="middle">{copy.nervous.use}</text><text class="capability-note" x="682" y="320" text-anchor="middle">{copy.nervous.shareGenerate}</text>
-        </g>
+        {capabilitySummaries.map((capability) => {
+          const centerX = capability.x + 51;
+          const latest = capability.latestEvent?.summary ?? copy.nervous.noCapabilityActivity;
+          return (
+            <a
+              class:list={["brain-capability-link", highlightedCapability === capability.key && "brain-capability-active"]}
+              href={capabilityHref(capability.key)}
+              aria-label={capabilityAriaLabel(capability.key, capability.title)}
+              aria-current={activeCapability === capability.key ? "true" : undefined}
+            >
+              <g class="brain-capability">
+                <title>{capability.title}: {capability.count} {copy.common.events}. {latest}</title>
+                <rect x={capability.x} y={capability.y} width="102" height="82" rx="12"></rect>
+                <text x={centerX} y={capability.y + 24} text-anchor="middle">{capability.title}</text>
+                <text class="capability-note" x={centerX} y={capability.y + 41} text-anchor="middle">{capability.note}</text>
+                <text class="capability-count" x={centerX} y={capability.y + 58} text-anchor="middle">{copy.nervous.capabilityCount.replace("{count}", String(capability.count))}</text>
+                <text class="capability-latest" x={centerX} y={capability.y + 73} text-anchor="middle">{compactSummary(latest)}</text>
+              </g>
+            </a>
+          );
+        })}
       </svg>
 
       <div class="topology-fallback">
+        <section aria-labelledby="capability-list-title">
+          <h2 id="capability-list-title">{copy.nervous.capabilitiesHeading}</h2>
+          <ul class="capability-fallback-list">
+            {capabilitySummaries.map((capability) => (
+              <li>
+                <a href={capabilityHref(capability.key)} aria-current={activeCapability === capability.key ? "true" : undefined}>
+                  <strong>{capability.title} · {copy.nervous.capabilityCount.replace("{count}", String(capability.count))}</strong>
+                  <span>{capability.note} · {capability.latestEvent?.summary ?? copy.nervous.noCapabilityActivity}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
         <section aria-labelledby="actors-list-title">
           <h2 id="actors-list-title">{copy.nervous.observedAgents}</h2>
           <ul>
-            {actors.map((actor) => <li><strong>{actor.label}</strong><span>{actor.state === "active" ? copy.nervous.active : copy.nervous.idle} · {copy.common.read} {actor.read_count} · {copy.common.write} {actor.write_count}</span></li>)}
+            {actors.map((actor) => <li><strong>{actor.label}</strong><span>{agentStateLabel(actor)} · {uiCopy.lastSeen} {relativeTime(actor.last_seen_at, now, locale)} · {uiCopy.provenance} {agentEventKinds(actor.id).join(" / ") || copy.nervous.timeUnknown}</span></li>)}
           </ul>
         </section>
         <section aria-labelledby="projects-list-title">
@@ -182,6 +362,7 @@ const countCopy = (template: string, count: number) => template.replace("{count}
           <ul>
             {projects.map((project) => <li><strong>{project.label}</strong><span>{project.eventCount} {copy.common.events} · {relativeTime(project.lastSeenAt, now, locale)}</span></li>)}
           </ul>
+          <p class="project-scope-note">{uiCopy.projectRule}</p>
         </section>
       </div>
 
@@ -200,9 +381,9 @@ const countCopy = (template: string, count: number) => template.replace("{count}
         </section>
       )}
     </div>
-  )}
+  ))}
 
-  {selectedEvent && (
+  {!loadError && selectedEvent && (
     <section class="selected-event" aria-labelledby="selected-event-title">
       <div class="selected-event-summary">
         <span class:list={["event-dot", `event-dot-${selectedEvent.severity}`]}></span>
@@ -213,16 +394,16 @@ const countCopy = (template: string, count: number) => template.replace("{count}
         <div><dt>{copy.nervous.status}</dt><dd>{selectedEvent.status || selectedEvent.type}</dd></div>
         <div><dt>{copy.nervous.occurredAt}</dt><dd><time datetime={dateTime(selectedEvent.occurred_at)}>{formatTime(selectedEvent.occurred_at)}</time></dd></div>
       </dl>
-      {selectedDeepLink && <a class="secondary-action" href={selectedDeepLink}>{copy.nervous.openTrace}</a>}
+      {selectedDeepLink && <a class="secondary-action" href={selectedDeepLink}>{selectedEvent.task_id ? copy.nervous.openTask : copy.nervous.openTrace}</a>}
     </section>
   )}
 
-  <section class="activity-timeline" id="activity-timeline" aria-labelledby="activity-timeline-title">
-    <header><div><p class="intelligence-eyebrow">{copy.nervous.replayEyebrow}</p><h2 id="activity-timeline-title">{copy.nervous.replayTitle}</h2></div><span>{data.events.length} {copy.common.events}</span></header>
-    {data.events.length > 0 ? (
+  {!loadError && <section class="activity-timeline" id="activity-timeline" aria-labelledby="activity-timeline-title">
+    <header><div><p class="intelligence-eyebrow">{copy.nervous.replayEyebrow}</p><h2 id="activity-timeline-title">{periodCopy(copy.nervous.replayTitlePeriod)}</h2></div><span>{timelineCountLabel}</span></header>
+    {timelineEvents.length > 0 ? (
       <div class="timeline-scroll">
         <div class="timeline-canvas" style={`width:${timelineWidth}px`}>
-          <div class="timeline-hours" aria-hidden="true">{[24, 20, 16, 12, 8, 4, 0].map((hours) => <span>{hours === 0 ? copy.nervous.now : copy.nervous.hoursAgo.replace("{hours}", String(hours))}</span>)}</div>
+          <div class="timeline-hours" aria-hidden="true">{timelineTicks.map((tick) => <span data-tick={tick.key}>{tick.label}</span>)}</div>
           <div class="timeline-track" style={`height:${timelineHeight}px`}>
             {Array.from({ length: timelineRowCount }, (_, row) => <span class="timeline-line" style={`top:${row * 44 + 22}px`}></span>)}
             {timelinePoints.map(({ event, x, row }) => (
@@ -239,20 +420,20 @@ const countCopy = (template: string, count: number) => template.replace("{count}
         </div>
       </div>
     ) : <div class="intelligence-empty compact">{copy.nervous.noPeriodEvents}</div>}
-    {data.events.length > 0 && (
+    {timelineEvents.length > 0 && (
       <>
         <div class="timeline-legend" aria-label={copy.nervous.eventTypes}>
-          {[...new Set(data.events.map((event) => event.type))].slice(0, 8).map((type) => <span>{type}</span>)}
+          {[...new Set(timelineEvents.map((event) => event.type))].slice(0, 8).map((type) => <span>{type}</span>)}
         </div>
         <details class="timeline-event-list">
-          <summary>{copy.nervous.eventList} <span>{data.events.length}</span></summary>
+          <summary>{copy.nervous.eventList} <span>{timelineEvents.length}</span></summary>
           <ol>
-            {data.events.map((event) => <li><a href={selectEventHref(event)} aria-current={selectedEvent?.id === event.id ? "true" : undefined}><strong>{event.summary}</strong><span>{event.actor.label} · <time datetime={dateTime(event.occurred_at)}>{formatTime(event.occurred_at)}</time> · {severityLabel(event.severity)}</span></a></li>)}
+            {timelineEvents.map((event) => <li><a href={selectEventHref(event)} aria-current={selectedEvent?.id === event.id ? "true" : undefined}><strong>{event.summary}</strong><span>{event.actor.label} · <time datetime={dateTime(event.occurred_at)}>{formatTime(event.occurred_at)}</time> · {severityLabel(event.severity)}</span></a></li>)}
           </ol>
         </details>
       </>
     )}
-  </section>
+  </section>}
 </section>
 
 <style>
@@ -261,17 +442,28 @@ const countCopy = (template: string, count: number) => template.replace("{count}
   .intelligence-header h1 { margin-top: .55rem; max-width: 26ch; color: var(--intelligence-text); font-size: clamp(2rem, 3.3vw, 3.25rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.12; }
   .intelligence-header > div > p:last-child { margin-top: .75rem; max-width: 55rem; color: var(--intelligence-muted); line-height: 1.75; }
   .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: "Fira Code", monospace; font-size: .69rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
-  .header-actions { display: flex; max-width: 31rem; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; }
+  .header-actions { display: flex; max-width: 46rem; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; }
+  .activity-period { display: flex; min-height: 44px; align-items: center; gap: .65rem; border: 1px solid var(--intelligence-border); border-radius: 12px; background: rgba(5,10,18,.72); padding: .25rem .3rem .25rem .75rem; }
+  .activity-period > span { color: var(--intelligence-muted); font-size: .68rem; font-weight: 600; white-space: nowrap; }
+  .activity-period > div { display: flex; gap: .2rem; }
+  .activity-period a { display: inline-flex; min-width: 3.6rem; min-height: 44px; align-items: center; justify-content: center; border-radius: 9px; color: #aeb9c8; font-size: .72rem; font-weight: 600; }
+  .activity-period a[aria-current="page"] { background: rgba(22,135,255,.18); color: #eaf6ff; box-shadow: inset 0 0 0 1px rgba(73,170,255,.45), 0 0 18px rgba(22,135,255,.14); }
   .primary-action, .secondary-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 11px; padding: .65rem 1rem; font-size: .82rem; font-weight: 600; }
   .primary-action { border: 1px solid #2b9bff; background: linear-gradient(180deg, #178bff, #0568ed); color: white; box-shadow: 0 0 28px rgba(13, 123, 255, .2); }
   .secondary-action { border: 1px solid var(--intelligence-border); background: rgba(255,255,255,.025); color: var(--intelligence-text); }
+  .data-unavailable { display: grid; min-height: 9rem; gap: .45rem; place-content: center; border: 1px solid color-mix(in srgb,var(--intelligence-danger) 38%,transparent); border-radius: 14px; background: color-mix(in srgb,var(--intelligence-danger) 7%,transparent); padding: 1rem; text-align: center; }.data-unavailable strong { color: #ffd7db; }.data-unavailable p { max-width: 48rem; color: var(--intelligence-muted); font-size: .78rem; line-height: 1.6; }
+  .period-comparison { display: grid; grid-template-columns: 13rem minmax(0,1fr); gap: 1rem; align-items: center; margin-bottom: 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: linear-gradient(100deg,rgba(14,36,63,.66),rgba(4,9,16,.72)); padding: .75rem 1rem; }.period-comparison > div { display: grid; gap: .25rem; }.period-comparison > div span { color: var(--intelligence-blue-bright); font-size: .68rem; }.period-comparison > div strong { font-size: 1rem; }.period-comparison dl { display: grid; grid-template-columns: .75fr .75fr 1.5fr; margin: 0; }.period-comparison dl > div { min-width: 0; border-left: 1px solid var(--intelligence-border); padding: .2rem 1rem; }.period-comparison dt { color: var(--intelligence-muted); font-size: .68rem; }.period-comparison dd { display: flex; gap: .55rem; align-items: baseline; margin-top: .3rem; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .9rem; }.period-comparison small { color: var(--intelligence-success); font-family: "Fira Code",monospace; font-size: .68rem; }
   .system-stage { position: relative; min-height: 31rem; overflow: hidden; border-top: 1px solid rgba(111,136,172,.12); border-bottom: 1px solid rgba(111,136,172,.14); background: radial-gradient(circle at 50% 48%, rgba(0,112,255,.12), transparent 24%); }
   .topology-map { width: 100%; min-height: 31rem; }
   .topology-heading { position: absolute; z-index: 2; top: 1rem; color: #b4bdcb; font-size: .72rem; font-weight: 600; }
   .topology-heading-actors { left: 3%; }.topology-heading-brain { left: 46%; }.topology-heading-projects { right: 3%; }
   .flow { fill: none; stroke: url(#flow-blue); stroke-width: 3; filter: url(#blue-glow); vector-effect: non-scaling-stroke; }
-  .flow-critical { stroke: url(#flow-critical); }
+  .flow-out { stroke: #54b6ff; opacity: .92; }.flow-critical { stroke: url(#flow-critical); }
   .flow-pulse { fill: #d8f1ff; filter: url(#blue-glow); }
+  .flow-selected { stroke-width: 5; opacity: 1; filter: url(#blue-glow); }
+  .flow-pulse-selected { fill: #fff; r: 4.4px; }
+  .topology-entity-selected .actor-ring,.topology-entity-selected .project-card { stroke: #8fd0ff; stroke-width: 2.5; filter: url(#blue-glow); }
+  .topology-entity-selected .actor-label,.topology-entity-selected .project-label { fill: #fff; }
   .brain-aura { fill: rgba(0,110,255,.1); stroke: rgba(45,155,255,.35); stroke-width: 2; filter: url(#blue-glow); }
   .brain-ring { fill: #050b14; stroke: #39a2ff; stroke-width: 2; filter: url(#blue-glow); }
   .actor-ring { fill: #080d15; stroke: #607691; stroke-width: 1.5; filter: url(#blue-glow); }
@@ -280,10 +472,14 @@ const countCopy = (template: string, count: number) => template.replace("{count}
   .actor-label, .project-label { fill: #f4f8ff; font-size: 13px; font-weight: 600; }
   .actor-detail, .project-detail, .actor-counter { fill: #8f99aa; font-size: 9px; }.actor-counter { fill: #46aaff; }
   .project-card { fill: rgba(10,15,23,.9); stroke: rgba(139,163,196,.28); }.project-card-critical { stroke: rgba(255,92,103,.65); }
-  .brain-capability rect { fill: rgba(9,17,29,.86); stroke: rgba(100,146,198,.28); }
-  .brain-capability text { fill: #e5f3ff; font-size: 11px; font-weight: 600; }.brain-capability .capability-note { fill: #8190a4; font-size: 8px; font-weight: 400; }
+  .brain-capability-link { cursor: pointer; outline: none; }
+  .brain-capability rect { fill: rgba(9,17,29,.9); stroke: rgba(100,146,198,.34); transition: fill 180ms ease, stroke 180ms ease, filter 180ms ease; }
+  .brain-capability text { fill: #e5f3ff; font-size: 11px; font-weight: 600; pointer-events: none; }.brain-capability .capability-note { fill: #91a0b4; font-size: 8px; font-weight: 400; }.brain-capability .capability-count { fill: #62b8ff; font-family: "Fira Code", monospace; font-size: 8px; }.brain-capability .capability-latest { fill: #77869b; font-size: 6.5px; font-weight: 400; }
+  .brain-capability-link:hover rect,.brain-capability-link:focus-visible rect,.brain-capability-active rect { fill: rgba(12,39,70,.96); stroke: #69bdff; stroke-width: 2; filter: url(#blue-glow); }
+  .brain-capability-link:focus-visible rect { stroke: #d9f1ff; stroke-width: 3; }
   .topology-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .attention-rail { position: absolute; z-index: 3; right: 1.5rem; bottom: 1.2rem; left: 1.5rem; display: grid; grid-template-columns: 12rem minmax(0,1fr); gap: 1rem; align-items: center; border: 1px solid rgba(246,173,50,.2); border-radius: 13px; background: rgba(6,10,17,.86); padding: .8rem 1rem; backdrop-filter: blur(16px); }
+  .capability-fallback-list { display: none; }
+  .attention-rail { position: relative; z-index: 3; display: grid; grid-template-columns: 12rem minmax(0,1fr); gap: 1rem; align-items: center; margin: 0 1.5rem 1.2rem; border: 1px solid rgba(246,173,50,.2); border-radius: 13px; background: rgba(6,10,17,.86); padding: .8rem 1rem; backdrop-filter: blur(16px); }
   .attention-rail h2 { margin-top: .2rem; font-size: .92rem; }.attention-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .6rem; }
   .attention-card { display: grid; gap: .22rem; border-left: 2px solid var(--intelligence-warning); padding-left: .7rem; }.attention-critical { border-color: var(--intelligence-danger); }
   .attention-card strong { overflow: hidden; color: #fff4d9; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }.attention-card span:last-child { color: var(--intelligence-muted); font-size: .65rem; }
@@ -298,7 +494,8 @@ const countCopy = (template: string, count: number) => template.replace("{count}
   .timeline-event { position: absolute; z-index: 2; display: grid; width: 44px; height: 44px; transform: translate(-50%,-50%); place-items: center; border: 0; border-radius: 999px; }.timeline-event-mark { display: block; width: .36rem; height: 1.05rem; border-radius: 3px; background: #e8f7ff; box-shadow: 0 0 10px rgba(61,173,255,.8); }.timeline-event-warning .timeline-event-mark { width: .72rem; height: .72rem; transform: rotate(45deg); border-radius: 2px; background: var(--intelligence-warning); }.timeline-event-critical .timeline-event-mark { width: .78rem; height: .78rem; border: 2px solid #ffd9dc; border-radius: 999px; background: var(--intelligence-danger); }.timeline-event-selected { outline: 2px solid #86d2ff; outline-offset: -4px; }.timeline-event-selected .timeline-event-mark { scale: 1.18; }
   .timeline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .55rem 1rem .8rem; color: var(--intelligence-muted); font-size: .65rem; }.timeline-legend span::before { display: inline-block; width: .4rem; height: .4rem; margin-right: .38rem; border-radius: 999px; background: var(--intelligence-blue); content: ""; }.timeline-event-list { border-top: 1px solid var(--intelligence-border); }.timeline-event-list summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: .65rem 1rem; color: #c7d8e8; cursor: pointer; font-size: .7rem; }.timeline-event-list ol { display: grid; max-height: 22rem; overflow-y: auto; border-top: 1px solid var(--intelligence-border); }.timeline-event-list li + li { border-top: 1px solid rgba(139,159,185,.1); }.timeline-event-list a { display: grid; min-height: 50px; gap: .2rem; padding: .55rem 1rem; }.timeline-event-list strong { color: var(--intelligence-text); font-size: .72rem; }.timeline-event-list a span { color: var(--intelligence-muted); font-size: .62rem; }
   .intelligence-empty { display: grid; gap: .55rem; min-height: 16rem; place-content: center; border: 1px dashed var(--intelligence-border); border-radius: 16px; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 6rem; }
-  @media (max-width: 1020px) { .intelligence-header { grid-template-columns: 1fr; }.header-actions { max-width: none; justify-content: flex-start; }.system-stage { padding-top: 2.5rem; }.topology-map { min-width: 880px; transform: translateX(calc((100% - 880px)/2)); }.attention-rail { position: relative; right: auto; bottom: auto; left: auto; margin: 0 1rem 1rem; grid-template-columns: 1fr; }.selected-event { grid-template-columns: 1fr; }.attention-list { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 720px) { .topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: flex; justify-content: space-between; gap: .8rem; color: var(--intelligence-muted); font-size: .7rem; }.topology-fallback strong { color: var(--intelligence-text); }.attention-list, .selected-event dl { grid-template-columns: 1fr; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-omissions li span { white-space: normal; } }
+  .project-scope-note { margin-top: .75rem; color: var(--intelligence-muted); font-size: .7rem; line-height: 1.5; }
+  @media (max-width: 1020px) { .intelligence-header { grid-template-columns: 1fr; }.header-actions { max-width: none; justify-content: flex-start; }.system-stage { padding-top: 2.5rem; }.topology-map { min-width: 880px; transform: translateX(calc((100% - 880px)/2)); }.attention-rail { margin: 0 1rem 1rem; grid-template-columns: 1fr; }.selected-event { grid-template-columns: 1fr; }.attention-list { grid-template-columns: 1fr 1fr; }.period-comparison { grid-template-columns: 1fr; }.period-comparison dl > div:first-child { border-left: 0; padding-left: 0; } }
+  @media (max-width: 720px) { .topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: grid; gap: .25rem; color: var(--intelligence-muted); font-size: .72rem; }.topology-fallback strong { color: var(--intelligence-text); }.capability-fallback-list a { display: grid; width: 100%; min-height: 44px; gap: .25rem; border-radius: 9px; padding: .5rem; }.capability-fallback-list a[aria-current="true"] { background: rgba(22,135,255,.14); box-shadow: inset 0 0 0 1px rgba(73,170,255,.4); }.capability-fallback-list span { color: var(--intelligence-muted); }.attention-list, .selected-event dl,.period-comparison dl { grid-template-columns: 1fr; }.period-comparison dl > div { border-top: 1px solid var(--intelligence-border); border-left: 0; padding: .7rem 0; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-omissions li span { white-space: normal; }.activity-period { width: 100%; justify-content: space-between; }.activity-period a { min-width: 3.25rem; } }
   @media (prefers-reduced-motion: no-preference) { .flow { stroke-dasharray: 10 12; animation: flow-dash 7s linear infinite; }.brain-aura { animation: brain-pulse 3.4s ease-in-out infinite; } @keyframes flow-dash { to { stroke-dashoffset: -88; } } @keyframes brain-pulse { 50% { opacity: .58; transform: scale(1.04); transform-origin: 600px 220px; } } }
 </style>

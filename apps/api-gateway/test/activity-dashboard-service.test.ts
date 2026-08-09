@@ -1771,11 +1771,13 @@ describe("getActivityDashboard", () => {
     ]);
   });
 
-  it("rejects ambiguous cursors and invalid activity windows before querying D1", async () => {
+  it("accepts a 30-day window and rejects larger or invalid windows", async () => {
     const env = dashboardEnv(new ActivityD1());
+    await expect(getActivityDashboard(env, "tenant-a", { from: 0, to: 30 * 86_400_000, now: 30 * 86_400_000 }))
+      .resolves.toMatchObject({ contract_version: "dashboard/v1" });
     await expect(getActivityDashboard(env, "tenant-a", { before: "a", after: "b" }))
       .rejects.toMatchObject({ status: 400, code: "ambiguous_cursor" });
-    await expect(getActivityDashboard(env, "tenant-a", { from: 0, to: 8 * 86_400_000 }))
+    await expect(getActivityDashboard(env, "tenant-a", { from: 0, to: 31 * 86_400_000 }))
       .rejects.toMatchObject({ status: 400, code: "activity_window_too_large" });
     await expect(getActivityDashboard(env, "tenant-a", { limit: 251 }))
       .rejects.toMatchObject({ status: 400, code: "invalid_limit" });

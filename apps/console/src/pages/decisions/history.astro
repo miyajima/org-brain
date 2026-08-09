@@ -58,5 +58,5 @@ if (sourceType && sourceId) {
       <span>{result.error || detailError}</span>
     </div>
   )}
-  <MemoryStrata data={result.data} detail={detail} refreshUrl={refreshUrl} params={params} locale={lang} />
+  <MemoryStrata data={result.data} detail={detail} loadError={result.error || detailError} refreshUrl={refreshUrl} params={params} locale={lang} />
 </BaseLayout>

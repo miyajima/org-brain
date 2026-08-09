@@ -1,0 +1,16 @@
+{
+  "page": "Org Brain insight surfaces — remediation round 2",
+  "goal": "Make scope, data trust, display rationale, and action result explicit on every insight surface.",
+  "sections": [
+    {"id":"scope-rail","type":"shared status rail","intent":"Show tenant, project, period/depth, included data, excluded data, and availability state before conclusions.","layout":"compact horizontal rail","priority":1,"primary_cta":"none","visual":"glass rail with semantic status dot","content_notes":["never claim healthy on error","plain-language scope rules"],"must_avoid":["raw URL dependence"]},
+    {"id":"mission-briefing","type":"recommended action rail","intent":"Show deterministic reason, evidence, and destination.","layout":"one horizontal rail or calm state","priority":2,"primary_cta":"authoritative record","visual":"existing mission briefing","content_notes":["review state must be shared with summaries"],"must_avoid":["self-link CTA"]},
+    {"id":"activity-workspace","type":"topology plus comparison","intent":"Separate active now from observed in period and explain agent/project provenance.","layout":"comparison strip then topology; attention stays in flow","priority":3,"primary_cta":"filter or event detail","visual":"blue paths and central brain","content_notes":["24-hour baseline for wider periods"],"must_avoid":["overlays"]},
+    {"id":"knowledge-workspace","type":"graph plus inspector","intent":"Expose edge direction/relation and distinguish missing metrics from zero.","layout":"graph two-thirds, inspector one-third","priority":3,"primary_cta":"source record or relationship list","visual":"selected-node glow and labeled selected edges","content_notes":["notify fallback selection"],"must_avoid":["silent fallback"]},
+    {"id":"history-workspace","type":"summary, strata, revision evidence","intent":"Use one review model and show reason/reviewer with before/after.","layout":"summary before strata; details after","priority":3,"primary_cta":"current content or review detail","visual":"strata and present marker","content_notes":["plain lifecycle labels"],"must_avoid":["contradictory review states"]}
+  ],
+  "responsive_strategy": {
+    "desktop": "scope rail stays horizontal; topology, graph, and strata retain their branded canvases",
+    "tablet": "scope values wrap; topology uses bounded map; graph inspector stacks",
+    "mobile": "primary navigation collapses into a menu; scope rail and comparison become single-column; topology uses semantic lists"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "reuse": "apps/console/src/styles/global.css intelligence tokens",
+  "motion": {"duration_ms":180,"easing":"cubic-bezier(0.2, 0.8, 0.2, 1)","continuous_focal_areas_per_page":1,"reduced_motion":"no pulse or automatic movement"},
+  "surface": {"radius_px":18,"guide_background":"low-contrast glass","action_background":"near-black mission rail"},
+  "semantic_color": {"selected":"intelligence-blue","warning":"intelligence-warning","critical":"intelligence-danger","healthy":"intelligence-success"}
+}

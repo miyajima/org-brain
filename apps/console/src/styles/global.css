@@ -215,6 +215,11 @@
     @apply relative;
   }
 
+  .console-mobile-nav {
+    display: none;
+    position: relative;
+  }
+
   .console-nav-menu summary {
     @apply flex min-h-10 cursor-pointer list-none items-center rounded-full px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/8 hover:text-white;
   }
@@ -245,6 +250,64 @@
   .console-nav-menu-panel a[aria-current="page"] {
     color: #e4f5ff;
     background: rgba(22, 135, 255, 0.13);
+  }
+
+  .console-mobile-nav summary {
+    display: flex;
+    min-height: 2.75rem;
+    cursor: pointer;
+    list-style: none;
+    align-items: center;
+    border: 1px solid rgba(63, 163, 255, 0.28);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    color: #e4f5ff;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .console-mobile-nav summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .console-mobile-nav-panel {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    display: grid;
+    width: min(20rem, calc(100vw - 2rem));
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    border: 1px solid var(--console-border);
+    border-radius: 18px;
+    background: rgba(8, 9, 13, 0.98);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    padding: 0.6rem;
+  }
+
+  .console-mobile-nav-panel a {
+    min-height: 2.75rem;
+    border-radius: 12px;
+    padding: 0.7rem 0.75rem;
+    color: #d4d4d8;
+    font-size: 0.8rem;
+  }
+
+  .console-mobile-nav-panel a[aria-current="page"] {
+    background: rgba(22, 135, 255, 0.15);
+    color: #e4f5ff;
+  }
+
+  .console-mobile-nav-panel span {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--console-border);
+    margin-top: 0.25rem;
+    padding: 0.65rem 0.75rem 0.25rem;
+    color: var(--console-muted);
+    font-size: 0.65rem;
+    font-weight: 650;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
   .console-labs-link {
@@ -310,23 +373,17 @@
   }
 
   .console-brand {
-    width: 100%;
+    width: auto;
   }
 
-  .console-primary-links {
-    flex: 1 1 auto;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    scrollbar-width: none;
-  }
-
-  .console-primary-links::-webkit-scrollbar {
+  .console-nav-insights .console-primary-links,
+  .console-nav-insights .console-nav-menu {
     display: none;
   }
 
-  .console-nav-link {
-    white-space: nowrap;
-    padding-inline: 0.85rem;
+  .console-mobile-nav {
+    display: block;
+    margin-left: auto;
   }
 }
 

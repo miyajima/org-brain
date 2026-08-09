@@ -4,18 +4,52 @@ test.describe("dashboard visualizations", () => {
   test("renders the observed activity home without sensitive payloads", async ({ page }) => {
     await page.goto("/?tenant_id=default&project_id=org-brain&lang=ja");
 
-    await expect(page.getByRole("heading", { name: "あなたの組織は、リアルタイムで学習しています" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "組織の活動" })).toBeVisible();
+    await expect(page.locator(".insight-page-guide dt").filter({ hasText: "この画面を使う場面" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "いま見るべきこと" })).toBeVisible();
+    await expect(page.locator(".insight-scope-rail")).toContainText("default");
+    await expect(page.locator(".insight-scope-rail")).toContainText("org-brain");
+    await expect(page.locator(".insight-scope-rail")).toContainText("含まれるデータ");
+    await expect(page.locator(".insight-scope-rail")).toContainText("含まれないデータ");
     await expect(page.getByText("Codex", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("A task failed and needs review")).toBeVisible();
+    await expect(page.locator(".recommended-actions").getByText("A task failed and needs review")).toBeVisible();
     await expect(page.getByRole("heading", { name: "過去24時間のイベント" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("input_ref");
     await expect(page.locator("body")).not.toContainText("raw query");
   });
 
+  test("switches the activity timeline beyond the default 24 hours", async ({ page }) => {
+    await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja&period=30d");
+    await expect(page.getByRole("navigation", { name: "表示期間" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "30日", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { name: "過去30日のイベント" })).toBeVisible();
+    await expect(page.getByText("30日前", { exact: true })).toBeVisible();
+    await expect(page.locator(".period-comparison")).toContainText("過去24時間との比較");
+    await expect(page.locator(".topology-fallback")).toContainText("この期間に観測");
+    await expect(page.locator(".topology-fallback")).toContainText("最終観測");
+    await expect(page.locator(".topology-fallback")).toContainText("観測元");
+  });
+
+  test("turns the four Org Brain capabilities into activity filters", async ({ page }) => {
+    await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja");
+    const understand = page.getByRole("link", { name: "タイムラインを「理解する」で絞り込む" });
+    await expect(understand).toBeVisible();
+    await expect(page.locator(".brain-capability-link")).toHaveCount(4);
+    await understand.focus();
+    await expect(understand).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/activity_capability=understand/u);
+    await expect(page.locator(".activity-timeline > header > span")).toHaveText("理解する：1 / 2件");
+    const filteredEvents = page.locator(".timeline-event-list");
+    await expect(filteredEvents.getByText("Codex read Login principal group ACL design")).toHaveCount(1);
+    await expect(filteredEvents.getByText("Task failed: Index parity check")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "すべての活動を表示" })).toHaveAttribute("aria-current", "true");
+  });
+
   test("supports keyboard graph selection and source deep links", async ({ page }) => {
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja");
 
-    await expect(page.getByRole("heading", { name: "ナレッジ・コンステレーション" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "知識のつながり" })).toBeVisible();
     const decision = page.locator('.knowledge-node[href*="selected=decision%3Adecision-e2e"]');
     await decision.focus();
     await expect(decision).toBeFocused();
@@ -23,7 +57,7 @@ test.describe("dashboard visualizations", () => {
 
     await expect(page).toHaveURL(/selected=decision%3Adecision-e2e/);
     await expect(page.getByRole("heading", { name: "Use authenticated principals for shared memory" })).toBeVisible();
-    const sourceHref = await page.getByRole("link", { name: "記録を開く" }).getAttribute("href");
+    const sourceHref = await page.getByRole("link", { name: "内容を確認" }).getAttribute("href");
     const sourceUrl = new URL(sourceHref ?? "", page.url());
     expect(sourceUrl.pathname).toBe("/decisions");
     expect(sourceUrl.searchParams.get("tenant_id")).toBe("default");
@@ -31,18 +65,30 @@ test.describe("dashboard visualizations", () => {
     expect(sourceUrl.searchParams.get("lang")).toBe("ja");
     await expect(page.getByRole("heading", { name: "表示中の知識" })).toBeVisible();
     await page.getByText(/^表示中の関係/).click();
-    await expect(page.getByText("derived_from", { exact: true })).toBeVisible();
+    await expect(page.locator(".inspector-relations").getByText("derived_from", { exact: true })).toBeVisible();
+    await expect(page.locator(".inspector-relations")).toContainText("この知識から");
+  });
+
+  test("recovers from a missing graph deep link and explains the fallback", async ({ page }) => {
+    await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=memory%3Amissing");
+    await expect(page).not.toHaveURL(/selected=/u);
+    await expect(page).toHaveURL(/notice=selection-fallback/u);
+    await expect(page.locator(".selection-fallback")).toContainText("指定された知識は見つかりませんでした");
   });
 
   test("switches Strata to a vertical timeline at 390px", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/decisions/history?tenant_id=default&project_id=org-brain&lang=ja");
 
-    await expect(page.getByRole("heading", { name: "いま、あなたの組織が知っていること" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "知識の履歴" })).toBeVisible();
+    await expect(page.getByText("現在の内容", { exact: true })).toBeVisible();
     await expect(page.locator(".strata-mobile")).toBeVisible();
     await expect(page.locator(".strata-board")).toBeHidden();
     await expect(page.getByRole("heading", { name: "知識の更新履歴" })).toBeVisible();
     await expect(page.locator(".selected-chain-summary strong")).toHaveText("Login principal group ACL design");
+    const reviewTitle = await page.locator(".recommended-actions .action-card").first().locator("strong").textContent();
+    await expect(page.locator(".history-overview")).toContainText(reviewTitle ?? "");
+    await expect(page.locator("#strata-attention")).toContainText(reviewTitle ?? "");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
@@ -51,19 +97,22 @@ test.describe("dashboard visualizations", () => {
     await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja");
     await expect(page.locator(".topology-fallback")).toBeVisible();
     await expect(page.getByRole("heading", { name: "観測中のエージェント" })).toBeVisible();
+    await expect(page.locator(".console-primary-links")).toBeHidden();
+    await page.locator(".console-mobile-nav summary").click();
+    await expect(page.locator(".console-mobile-nav-panel").getByRole("link", { name: "知識のつながり" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja");
     await expect(page.getByRole("heading", { name: "表示中の知識" })).toBeVisible();
     const graphViewport = page.locator(".graph-viewport");
-    expect(await graphViewport.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await graphViewport.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
   test("uses the on-mode navigation and retains scope in its classic fallback", async ({ page }) => {
     await page.goto("/?tenant_id=default&project_id=org-brain&lang=ja");
-    await expect(page.getByRole("link", { name: "概要" })).toHaveAttribute("aria-current", "page");
-    await page.getByText("管理", { exact: true }).click();
+    await expect(page.getByRole("link", { name: "活動", exact: true })).toHaveAttribute("aria-current", "page");
+    await page.locator(".console-nav-menu summary").click();
     const legacyHref = await page.getByRole("link", { name: "従来のダッシュボード" }).getAttribute("href");
     const legacyUrl = new URL(legacyHref ?? "", page.url());
     expect(legacyUrl.pathname).toBe("/dashboard");
@@ -92,13 +141,15 @@ test.describe("dashboard visualizations", () => {
 
     await page.goto("/decisions/history?tenant_id=default&project_id=e2e-partial-error&lang=ja");
     await expect(page.getByRole("alert")).toContainText("Strata detail fixture unavailable");
-    await expect(page.getByRole("heading", { name: "いま、あなたの組織が知っていること" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "知識の履歴" })).toBeVisible();
   });
 
   test("surfaces API errors and explicit truncation", async ({ page }) => {
     await page.goto("/overview?tenant_id=default&project_id=e2e-error&lang=ja");
     await expect(page.getByRole("alert")).toContainText("Dashboard fixture unavailable");
-    await expect(page.getByText("表示できるアクティビティはまだありません")).toBeVisible();
+    await expect(page.getByText("活動状況を判断できません")).toBeVisible();
+    await expect(page.getByText("表示できるアクティビティはまだありません")).toHaveCount(0);
+    await expect(page.getByText("現在、対応が必要なシグナルはありません")).toHaveCount(0);
 
     await page.goto("/memories/constellation?tenant_id=default&project_id=e2e-truncated&lang=ja");
     await expect(page.getByText(/42/)).toBeVisible();
@@ -184,12 +235,12 @@ test.describe("dashboard visualizations", () => {
     await page.clock.fastForward(30_000);
     await expect.poll(() => incrementalRequests).toBe(1);
     await expect(page.locator("intelligence-poller")).toHaveAttribute("data-poll-state", "backoff");
-    await expect(page.getByText("A task failed and needs review")).toBeVisible();
+    await expect(page.locator(".recommended-actions").getByText("A task failed and needs review")).toBeVisible();
 
     await page.clock.fastForward(59_999);
     expect(incrementalRequests).toBe(1);
     await page.clock.fastForward(1);
     await expect.poll(() => incrementalRequests).toBe(2);
-    await expect(page.getByText("A task failed and needs review")).toBeVisible();
+    await expect(page.locator(".recommended-actions").getByText("A task failed and needs review")).toBeVisible();
   });
 });

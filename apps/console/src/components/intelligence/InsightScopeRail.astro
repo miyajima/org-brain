@@ -1,0 +1,125 @@
+---
+import { intelligenceDateLocale, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { isPollingSnapshotStale } from "../../lib/intelligence-polling";
+
+type DataState = "ready" | "empty" | "partial" | "error";
+
+const {
+  params,
+  locale = "en",
+  windowLabel,
+  sourceLabel,
+  included,
+  excluded,
+  state = "ready",
+  generatedAt = 0
+} = Astro.props as {
+  params: URLSearchParams;
+  locale?: IntelligenceLocale;
+  windowLabel: string;
+  sourceLabel: string;
+  included: string;
+  excluded: string;
+  state?: DataState;
+  generatedAt?: number;
+};
+
+const COPY = {
+  en: {
+    region: "Current scope and data state",
+    tenant: "Tenant",
+    project: "Project",
+    window: "Range",
+    source: "Source",
+    includes: "Included",
+    excludes: "Not included",
+    global: "All projects",
+    states: {
+      ready: ["Available", "The visible data can be used for this review."],
+      empty: ["No records", "The request succeeded, but no matching records were returned."],
+      partial: ["Partial", "Some records were omitted; review the omission notice before deciding."],
+      stale: ["Stale", "The data is older than the live threshold. Check the update time before deciding."],
+      error: ["Unavailable", "The request failed, so the current state cannot be judged."]
+    }
+  },
+  ja: {
+    region: "現在の対象範囲とデータ状態",
+    tenant: "テナント",
+    project: "対象プロジェクト",
+    window: "表示範囲",
+    source: "取得元",
+    includes: "含まれるデータ",
+    excludes: "含まれないデータ",
+    global: "すべてのプロジェクト",
+    states: {
+      ready: ["利用可能", "表示中のデータをこの確認に利用できます。"],
+      empty: ["該当記録なし", "取得には成功しましたが、条件に合う記録はありません。"],
+      partial: ["一部省略", "一部の記録が省略されています。判断前に省略内容を確認してください。"],
+      stale: ["データが古い", "最新状態とは限りません。判断前に最終更新時刻を確認してください。"],
+      error: ["判断できません", "データを取得できなかったため、現在の状態は判断できません。"]
+    }
+  },
+  zh: {
+    region: "当前范围与数据状态",
+    tenant: "租户",
+    project: "项目",
+    window: "显示范围",
+    source: "来源",
+    includes: "包含数据",
+    excludes: "不包含数据",
+    global: "所有项目",
+    states: {
+      ready: ["可用", "当前数据可用于本次确认。"],
+      empty: ["无匹配记录", "请求成功，但没有符合条件的记录。"],
+      partial: ["部分省略", "部分记录被省略，请先查看省略说明。"],
+      stale: ["数据较旧", "当前数据可能不是最新状态，请确认更新时间。"],
+      error: ["无法判断", "数据获取失败，因此无法判断当前状态。"]
+    }
+  }
+} as const;
+
+const copy = COPY[locale] ?? COPY.en;
+const effectiveState = generatedAt > 0 && state !== "error" && state !== "empty" && state !== "partial" && isPollingSnapshotStale(generatedAt)
+  ? "stale"
+  : state;
+const stateCopy = copy.states[effectiveState];
+const tenant = params.get("tenant_id")?.trim() || "default";
+const project = params.get("project_id")?.trim() || copy.global;
+const formatted = generatedAt
+  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", dateStyle: "medium", timeStyle: "short" }).format(new Date(generatedAt))
+  : null;
+---
+
+<section class:list={["insight-scope-rail", `scope-${effectiveState}`]} aria-label={copy.region}>
+  <dl>
+    <div><dt>{copy.tenant}</dt><dd>{tenant}</dd></div>
+    <div><dt>{copy.project}</dt><dd>{project}</dd></div>
+    <div><dt>{copy.window}</dt><dd>{windowLabel}</dd></div>
+    <div><dt>{copy.source}</dt><dd>{sourceLabel}</dd></div>
+  </dl>
+  <div class="scope-state" role="status">
+    <span class="scope-state-dot" aria-hidden="true"></span>
+    <div><strong>{stateCopy[0]}</strong><p>{stateCopy[1]}{formatted ? ` · ${formatted}` : ""}</p></div>
+  </div>
+  <div class="scope-coverage">
+    <p><strong>{copy.includes}</strong><span>{included}</span></p>
+    <p><strong>{copy.excludes}</strong><span>{excluded}</span></p>
+  </div>
+</section>
+
+<style>
+  .insight-scope-rail { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(18rem,.75fr); gap: .7rem 1rem; margin: .85rem 0 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: linear-gradient(105deg,rgba(15,35,60,.72),rgba(5,11,19,.82)); }
+  dl { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; }
+  dl > div { min-width: 0; padding: .72rem .85rem; }
+  dl > div + div { border-left: 1px solid rgba(103,180,242,.13); }
+  dt,.scope-coverage strong { color: var(--intelligence-blue-bright); font-size: .68rem; font-weight: 650; letter-spacing: .04em; }
+  dd { margin: .3rem 0 0; overflow: hidden; color: var(--intelligence-text); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+  .scope-state { display: flex; gap: .7rem; align-items: center; border-left: 1px solid var(--intelligence-border); padding: .72rem .9rem; }
+  .scope-state-dot { width: .56rem; height: .56rem; flex: 0 0 auto; border-radius: 999px; background: var(--intelligence-success); box-shadow: 0 0 12px color-mix(in srgb,var(--intelligence-success) 70%,transparent); }
+  .scope-partial .scope-state-dot,.scope-stale .scope-state-dot { background: var(--intelligence-warning); }.scope-error .scope-state-dot { background: var(--intelligence-danger); }.scope-empty .scope-state-dot { background: #9eacbb; }
+  .scope-state strong { color: var(--intelligence-text); font-size: .76rem; }.scope-state p { margin-top: .18rem; color: var(--intelligence-muted); font-size: .7rem; line-height: 1.45; }
+  .scope-coverage { display: grid; grid-column: 1 / -1; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(103,180,242,.13); background: rgba(2,7,13,.38); }
+  .scope-coverage p { display: grid; grid-template-columns: 8rem minmax(0,1fr); gap: .65rem; padding: .62rem .85rem; }.scope-coverage p + p { border-left: 1px solid rgba(103,180,242,.13); }.scope-coverage span { color: var(--intelligence-muted); font-size: .72rem; line-height: 1.5; }
+  @media (max-width: 920px) { .insight-scope-rail { grid-template-columns: 1fr; }.scope-state { border-top: 1px solid var(--intelligence-border); border-left: 0; } }
+  @media (max-width: 720px) { dl,.scope-coverage { grid-template-columns: 1fr; }.insight-scope-rail dl > div + div,.scope-coverage p + p { border-top: 1px solid rgba(103,180,242,.13); border-left: 0; }.scope-coverage p { grid-template-columns: 1fr; gap: .25rem; } }
+</style>
