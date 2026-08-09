@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   confirmDecisionMemory,
   createDecisionMemory,
@@ -289,6 +289,10 @@ function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryR
 }
 
 describe("context-engine-service", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("blocks a pre-action gate when active decisions conflict", async () => {
     const db = new FakeD1();
     db.decisionMemories = [
@@ -505,6 +509,7 @@ describe("context-engine-service", () => {
   it("keeps the context response when usage telemetry fails in best-effort mode", async () => {
     const db = new UsageRecordingFailureD1();
     db.decisionMemories = [baseDecision({ id: "dm-telemetry" })];
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = (await enrichContext(
       { OPEN_BRAIN_DB: db } as any,
@@ -518,6 +523,14 @@ describe("context-engine-service", () => {
 
     expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-telemetry"]);
     expect(result.meta).toMatchObject({ usage_recorded: false });
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith({
+      event: "orgbrain.context.usage_recording_skipped",
+      tenant_id: "org_123",
+      project_id: "proj_abc",
+      error_code: "unknown"
+    });
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("usage recording unavailable");
   });
 
   it("does not allow a request body user_id to impersonate another principal", async () => {
