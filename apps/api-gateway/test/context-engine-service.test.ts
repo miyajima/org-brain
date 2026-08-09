@@ -239,6 +239,23 @@ class FakeD1 {
   }
 }
 
+class UsageRecordingFailureD1 extends FakeD1 {
+  override prepare(sql: string) {
+    if (sql.includes("FROM memory_usage_events")) {
+      return {
+        bind() {
+          return {
+            async all() {
+              throw new Error("usage recording unavailable");
+            }
+          };
+        }
+      } as any;
+    }
+    return super.prepare(sql);
+  }
+}
+
 function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryRecord {
   const now = Date.now();
   return {
@@ -483,6 +500,24 @@ describe("context-engine-service", () => {
     )) as any;
 
     expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-alice-only"]);
+  });
+
+  it("keeps the context response when usage telemetry fails in best-effort mode", async () => {
+    const db = new UsageRecordingFailureD1();
+    db.decisionMemories = [baseDecision({ id: "dm-telemetry" })];
+
+    const result = (await enrichContext(
+      { OPEN_BRAIN_DB: db } as any,
+      {
+        orgId: "org_123",
+        projectId: "proj_abc",
+        task: { title: "Resume the existing chat" }
+      },
+      { principal: "service:test", bestEffortUsage: true }
+    )) as any;
+
+    expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-telemetry"]);
+    expect(result.meta).toMatchObject({ usage_recorded: false });
   });
 
   it("does not allow a request body user_id to impersonate another principal", async () => {
