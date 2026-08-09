@@ -1475,6 +1475,7 @@ async function tryHandleContextEnrichFastPath(
     return null;
   }
   if (!isContextEnrichJsonRpcRequest(body)) return null;
+  if (request.headers.get("mcp-name") !== "orgbrain_context_enrich") return null;
 
   const parsed = contextEnrichInputSchema.safeParse(body.params?.arguments);
   if (!parsed.success) return null;
