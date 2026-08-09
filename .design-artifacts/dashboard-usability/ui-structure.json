@@ -1,0 +1,15 @@
+{
+  "page": "Org Brain insight surfaces",
+  "sections": [
+    {"id":"page-guide","role":"orientation","content":["when to use","what you learn","where to start"],"responsive":"three columns to one column"},
+    {"id":"action-rail","role":"mission briefing","content":["review candidates","evidence","source CTA","calm state"],"responsive":"horizontal cards to stacked cards"},
+    {"id":"activity","role":"animated activity topology","focal_motion":"selected event paths"},
+    {"id":"connections","role":"responsive relationship map with inspector","focal_motion":"selected node and connected edges"},
+    {"id":"history","role":"lineage summary, strata timeline, progressive technical detail","focal_motion":"present-time marker"}
+  ],
+  "responsive_strategy": {
+    "desktop": "guide and briefing above the existing visual workspace; graph uses two-thirds plus one-third inspector",
+    "tablet": "stack visual workspace and inspector",
+    "mobile": "single-column guide and briefing; scaled sparse graph with list fallback; vertical strata feed"
+  }
+}

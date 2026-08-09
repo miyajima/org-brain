@@ -593,7 +593,7 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
           </p>
         </div>
         <div class="flex flex-wrap gap-2 xl:justify-end" aria-label={copy.language}>
-          {insightsRoutesEnabled && <a class="trust-chip" href={historyHref}>Memory Strata</a>}
+          {insightsRoutesEnabled && <a class="trust-chip" href={historyHref}>Knowledge history</a>}
           {LOCALES.map((item) => (
             <a class={["trust-chip", locale === item.code ? "trust-chip-good" : ""].join(" ")} href={makeHref({ lang: item.code })} aria-current={locale === item.code ? "page" : undefined}>
               {item.label}

@@ -1,0 +1,53 @@
+---
+import type { PageGuide } from "../../lib/insight-guidance";
+
+const { guide } = Astro.props as { guide: PageGuide };
+const items = [
+  { label: guide.useWhenLabel, value: guide.useWhen },
+  { label: guide.learnLabel, value: guide.learn },
+  { label: guide.startLabel, value: guide.start }
+];
+---
+<section class="insight-page-guide" aria-labelledby="insight-page-guide-title">
+  <h2 id="insight-page-guide-title">{guide.heading}</h2>
+  <dl>
+    {items.map((item, index) => (
+      <div>
+        <dt><span aria-hidden="true">0{index + 1}</span>{item.label}</dt>
+        <dd>{item.value}</dd>
+      </div>
+    ))}
+  </dl>
+</section>
+
+<style>
+  .insight-page-guide {
+    margin: .25rem 0 1rem;
+    overflow: hidden;
+    border: 1px solid rgba(103,180,242,.16);
+    border-radius: 18px;
+    background: linear-gradient(135deg,rgba(19,42,70,.38),rgba(5,12,22,.72));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.025),0 18px 55px rgba(0,0,0,.18);
+  }
+  h2 {
+    margin: 0;
+    border-bottom: 1px solid rgba(103,180,242,.12);
+    padding: .65rem 1rem;
+    color: #acd9fb;
+    font-family: "Fira Code","SFMono-Regular",Menlo,monospace;
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+  dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0; }
+  dl > div { min-width: 0; padding: .9rem 1rem 1rem; }
+  dl > div + div { border-left: 1px solid rgba(103,180,242,.12); }
+  dt { display: flex; gap: .55rem; align-items: center; color: rgba(196,222,241,.76); font-size: .68rem; font-weight: 650; }
+  dt span { color: var(--intelligence-blue-bright); font-family: "Fira Code","SFMono-Regular",Menlo,monospace; font-size: .58rem; }
+  dd { margin: .45rem 0 0; color: #edf8ff; font-size: .82rem; line-height: 1.55; }
+  @media (max-width: 720px) {
+    dl { grid-template-columns: 1fr; }
+    dl > div + div { border-top: 1px solid rgba(103,180,242,.12); border-left: 0; }
+  }
+</style>

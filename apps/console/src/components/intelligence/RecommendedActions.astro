@@ -1,0 +1,91 @@
+---
+import type { RecommendedAction } from "../../lib/insight-guidance";
+
+const { title, subtitle, actions, emptyTitle, emptyBody } = Astro.props as {
+  title: string;
+  subtitle?: string;
+  actions: RecommendedAction[];
+  emptyTitle: string;
+  emptyBody: string;
+};
+const actionCount = Math.min(actions.length, 3);
+---
+<section class="recommended-actions" aria-labelledby="recommended-actions-title">
+  <header>
+    <div>
+      <p>Mission briefing</p>
+      <h2 id="recommended-actions-title">{title}</h2>
+    </div>
+    {subtitle && <span>{subtitle}</span>}
+  </header>
+  {actions.length > 0 ? (
+    <div class:list={["action-grid", `action-grid-${actionCount}`]}>
+      {actions.map((action) => (
+        <article class:list={["action-card", `action-${action.tone}`]}>
+          <div class="action-heading">
+            <span class="action-tone">{action.tone}</span>
+            <strong>{action.title}</strong>
+          </div>
+          <p>{action.reason}</p>
+          <footer><span>{action.evidence}</span><a href={action.href}>{action.cta}</a></footer>
+        </article>
+      ))}
+    </div>
+  ) : (
+    <div class="healthy-state" role="status">
+      <span class="healthy-signal" aria-hidden="true"></span>
+      <div><strong>{emptyTitle}</strong><p>{emptyBody}</p></div>
+    </div>
+  )}
+</section>
+
+<style>
+  .recommended-actions {
+    margin: 1rem 0;
+    overflow: hidden;
+    border: 1px solid rgba(103,180,242,.2);
+    border-radius: 18px;
+    background: rgba(3,8,15,.86);
+    box-shadow: 0 24px 70px rgba(0,0,0,.28);
+  }
+  .recommended-actions > header { display: flex; gap: 1rem; align-items: end; justify-content: space-between; border-bottom: 1px solid rgba(103,180,242,.13); padding: .8rem 1rem; }
+  header p { margin: 0 0 .2rem; color: var(--intelligence-blue-bright); font-family: "Fira Code","SFMono-Regular",Menlo,monospace; font-size: .56rem; letter-spacing: .15em; text-transform: uppercase; }
+  h2 { margin: 0; color: var(--intelligence-text); font-size: 1rem; letter-spacing: -.02em; }
+  header > span { color: var(--intelligence-muted); font-size: .68rem; }
+  .action-grid { display: grid; grid-template-columns: repeat(var(--action-columns,3),minmax(0,1fr)); }
+  .action-grid-1 { --action-columns: 1; }
+  .action-grid-2 { --action-columns: 2; }
+  .action-grid-1 .action-card { display: grid; grid-template-columns: minmax(12rem,.7fr) minmax(0,1fr) auto; gap: 1rem; align-items: center; }
+  .action-grid-1 .action-card > p { min-height: 0; margin: 0; }
+  .action-grid-1 .action-card footer { min-width: 15rem; }
+  .action-card { position: relative; min-width: 0; padding: .9rem 1rem 1rem; }
+  .action-card + .action-card { border-left: 1px solid rgba(103,180,242,.12); }
+  .action-card::before { position: absolute; top: 0; right: 1rem; left: 1rem; height: 1px; background: var(--action-color,#63bdff); box-shadow: 0 0 14px color-mix(in srgb,var(--action-color,#63bdff) 55%,transparent); content: ""; }
+  .action-info { --action-color: var(--intelligence-blue-bright); }
+  .action-warning { --action-color: var(--intelligence-warning); }
+  .action-critical { --action-color: var(--intelligence-danger); }
+  .action-heading { display: flex; gap: .55rem; align-items: center; }
+  .action-tone { color: var(--action-color); font-family: "Fira Code","SFMono-Regular",Menlo,monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
+  .action-heading strong { overflow: hidden; color: #f0f8ff; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+  .action-card > p { min-height: 2.9em; margin: .6rem 0 .8rem; color: rgba(218,234,246,.84); font-size: .74rem; line-height: 1.45; }
+  .action-card footer { display: flex; gap: .75rem; align-items: center; justify-content: space-between; }
+  .action-card footer span { overflow: hidden; color: rgba(191,216,235,.78); font-family: "Fira Code","SFMono-Regular",Menlo,monospace; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+  .action-card a { display: inline-flex; min-height: 38px; flex: 0 0 auto; align-items: center; border: 1px solid color-mix(in srgb,var(--action-color) 48%,transparent); border-radius: 10px; padding: .35rem .65rem; color: #dff2ff; font-size: .66rem; font-weight: 650; }
+  .action-card a:hover { background: color-mix(in srgb,var(--action-color) 12%,transparent); }
+  .healthy-state { display: flex; gap: .85rem; align-items: center; min-height: 5.6rem; padding: 1rem; }
+  .healthy-signal { width: .7rem; height: .7rem; flex: 0 0 auto; border: 2px solid var(--intelligence-success); border-radius: 999px; box-shadow: 0 0 16px color-mix(in srgb,var(--intelligence-success) 68%,transparent); }
+  .healthy-state strong { color: #eafff8; font-size: .82rem; }
+  .healthy-state p { margin: .25rem 0 0; color: var(--intelligence-muted); font-size: .7rem; line-height: 1.45; }
+  @media (max-width: 900px) {
+    .action-grid { grid-template-columns: 1fr; }
+    .action-grid-1 .action-card { display: block; }
+    .action-grid-1 .action-card > p { margin: .6rem 0 .8rem; }
+    .action-grid-1 .action-card footer { min-width: 0; }
+    .action-card + .action-card { border-top: 1px solid rgba(103,180,242,.12); border-left: 0; }
+  }
+  @media (max-width: 560px) {
+    .recommended-actions > header { align-items: start; flex-direction: column; }
+    .action-card footer { align-items: start; flex-direction: column; }
+    .action-card a { width: 100%; justify-content: center; }
+  }
+</style>

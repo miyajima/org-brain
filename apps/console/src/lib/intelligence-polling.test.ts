@@ -128,6 +128,21 @@ describe("intelligence polling helpers", () => {
     stop();
   });
 
+  it("resolves a fresh request URL for every polling run", async () => {
+    vi.useFakeTimers();
+    installPollingGlobals();
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ revision: 1 })) as unknown as typeof fetch;
+    const url = vi.fn()
+      .mockReturnValueOnce("/api/activity?from=1&to=2")
+      .mockReturnValueOnce("/api/activity?from=2&to=3");
+    const stop = startVisiblePolling({ url, intervalMs: 100, fetcher, onData: vi.fn() });
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/activity?from=1&to=2", expect.any(Object));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/activity?from=2&to=3", expect.any(Object));
+    stop();
+  });
+
   it("exposes a 400 status so an expired activity cursor can reset via page reload", async () => {
     vi.useFakeTimers();
     installPollingGlobals();

@@ -8,7 +8,7 @@ export class PollingHttpError extends Error {
 }
 
 export type VisiblePollingOptions<T> = {
-  url: string;
+  url: string | (() => string);
   intervalMs?: number;
   maximumDelayMs?: number;
   fetcher?: typeof fetch;
@@ -94,7 +94,8 @@ export function startVisiblePolling<T>(options: VisiblePollingOptions<T>): () =>
     const requestController = new AbortController();
     controller = requestController;
     try {
-      const response = await fetcher(options.url, {
+      const requestUrl = typeof options.url === "function" ? options.url() : options.url;
+      const response = await fetcher(requestUrl, {
         headers: { accept: "application/json" },
         signal: requestController.signal
       });

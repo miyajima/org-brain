@@ -4,7 +4,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { intelligencePageCopy } from "../lib/intelligence-locale";
-import { normalizeDashboardActivity } from "../lib/nervous-system-ui";
+import { activityWindowParams, normalizeDashboardActivity, resolveActivityPeriod } from "../lib/nervous-system-ui";
 
 const insightsUiMode = await resolveRequestInsightsUiMode(
   Astro.locals,
@@ -12,18 +12,29 @@ const insightsUiMode = await resolveRequestInsightsUiMode(
 );
 const insightsBehavior = insightsUiBehavior(insightsUiMode);
 const { params, apiParams, lang } = dashboardPageParams(Astro.url);
+const activityPeriod = resolveActivityPeriod(params.get("period"));
 const intelligenceCopy = intelligencePageCopy(lang);
 let activityResult = { data: normalizeDashboardActivity({}), error: null as string | null };
+let activityComparison = null as ReturnType<typeof normalizeDashboardActivity> | null;
 let refreshUrl = "";
 let tasks: any[] = [];
 if (insightsBehavior.renderInsightsHome) {
-  const initialUrl = `/api/v1/dashboard/activity?${apiParams.toString()}`;
+  const activityApiParams = activityWindowParams(apiParams, activityPeriod);
+  const initialUrl = `/api/v1/dashboard/activity?${activityApiParams.toString()}`;
   activityResult = await fetchDashboardData(
     new URL(initialUrl, Astro.url),
     normalizeDashboardActivity,
     normalizeDashboardActivity({})
   );
-  const refreshParams = new URLSearchParams(apiParams);
+  if (activityPeriod.key !== "24h") {
+    const comparisonResult = await fetchDashboardData(
+      new URL(`/api/v1/dashboard/activity?${activityWindowParams(apiParams, resolveActivityPeriod("24h")).toString()}`, Astro.url),
+      normalizeDashboardActivity,
+      normalizeDashboardActivity({})
+    );
+    if (!comparisonResult.error) activityComparison = comparisonResult.data;
+  }
+  const refreshParams = new URLSearchParams(activityApiParams);
   if (activityResult.data.newest_cursor != null) refreshParams.set("after", String(activityResult.data.newest_cursor));
   refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
 } else {
@@ -53,7 +64,7 @@ const legacyTaskHref = (taskId: string) => {
           <span>{activityResult.error}</span>
         </div>
       )}
-      <NervousSystem data={activityResult.data} refreshUrl={refreshUrl} params={params} locale={lang} />
+      <NervousSystem data={activityResult.data} comparisonData={activityComparison} loadError={activityResult.error} refreshUrl={refreshUrl} params={params} locale={lang} />
     </>
   ) : (
     <>

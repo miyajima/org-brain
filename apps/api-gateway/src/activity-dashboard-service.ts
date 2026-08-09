@@ -13,7 +13,7 @@ import type { Env } from "./types";
 
 const DAY_MS = 86_400_000;
 const DEFAULT_WINDOW_MS = DAY_MS;
-const MAX_WINDOW_MS = 7 * DAY_MS;
+const MAX_WINDOW_MS = 30 * DAY_MS;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 250;
 const STALLED_TASK_MS = 30 * 60_000;
@@ -359,7 +359,7 @@ function parseOptions(options: ActivityDashboardOptions): ParsedOptions {
   const from = parseTimestamp(options.from, "from", Math.max(0, to - DEFAULT_WINDOW_MS));
   if (from > to) throw new HttpError(400, "invalid_range", "from must be before to");
   if (to - from > MAX_WINDOW_MS) {
-    throw new HttpError(400, "activity_window_too_large", "activity window must not exceed 7 days");
+    throw new HttpError(400, "activity_window_too_large", "activity window must not exceed 30 days");
   }
   if (options.before && options.after) {
     throw new HttpError(400, "ambiguous_cursor", "before and after cursors are mutually exclusive");

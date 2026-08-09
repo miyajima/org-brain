@@ -4,7 +4,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
 import { intelligencePageCopy } from "../lib/intelligence-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
-import { normalizeDashboardActivity } from "../lib/nervous-system-ui";
+import { activityWindowParams, normalizeDashboardActivity, resolveActivityPeriod } from "../lib/nervous-system-ui";
 
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
@@ -12,13 +12,22 @@ if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
 }
 const { params, apiParams, lang } = dashboardPageParams(Astro.url);
 const copy = intelligencePageCopy(lang);
-const initialUrl = `/api/v1/dashboard/activity?${apiParams.toString()}`;
+const activityPeriod = resolveActivityPeriod(params.get("period"));
+const activityApiParams = activityWindowParams(apiParams, activityPeriod);
+const initialUrl = `/api/v1/dashboard/activity?${activityApiParams.toString()}`;
 const result = await fetchDashboardData(
   new URL(initialUrl, Astro.url),
   normalizeDashboardActivity,
   normalizeDashboardActivity({})
 );
-const refreshParams = new URLSearchParams(apiParams);
+const comparisonResult = activityPeriod.key === "24h"
+  ? null
+  : await fetchDashboardData(
+      new URL(`/api/v1/dashboard/activity?${activityWindowParams(apiParams, resolveActivityPeriod("24h")).toString()}`, Astro.url),
+      normalizeDashboardActivity,
+      normalizeDashboardActivity({})
+    );
+const refreshParams = new URLSearchParams(activityApiParams);
 if (result.data.newest_cursor != null) refreshParams.set("after", String(result.data.newest_cursor));
 const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
 ---
@@ -29,5 +38,5 @@ const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
       <span>{result.error}</span>
     </div>
   )}
-  <NervousSystem data={result.data} refreshUrl={refreshUrl} params={params} locale={lang} />
+  <NervousSystem data={result.data} comparisonData={comparisonResult?.error ? null : comparisonResult?.data ?? null} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
 </BaseLayout>

@@ -1,0 +1,49 @@
+name = "open-brain-api-gateway-remote-d1"
+main = "src/index.ts"
+compatibility_date = "2026-03-03"
+compatibility_flags = ["nodejs_compat"]
+
+# Explicit opt-in profile for inspecting the production D1 from a local Worker.
+# The binding is read/write capable; use dashboard GET routes only unless a
+# remote mutation is intentionally requested.
+[vars]
+HYBRID_V3_MODE = "off"
+HYBRID_V4_MODE = "shadow"
+HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
+MEMORY_CLASSIFICATION_MODE = "observe"
+RETRIEVAL_GENERATION_ROUTING = "legacy"
+RETENTION_SWEEP_MODE = "observe"
+
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 1500
+period = 60
+
+[[d1_databases]]
+binding = "OPEN_BRAIN_DB"
+database_name = "open-brain"
+database_id = "0a34b2a0-27f8-4d18-9a12-8ef218670842"
+migrations_dir = "../../migrations"
+remote = true
+
+[[r2_buckets]]
+binding = "OPEN_BRAIN_BUCKET"
+bucket_name = "open-brain-bucket"
+
+[[queues.producers]]
+binding = "ORG_BUS_OUT"
+queue = "org-bus"
+
+[[queues.producers]]
+binding = "RETRIEVAL_PROJECTION_QUEUE"
+queue = "orgbrain-retrieval-projection-v3"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["OrgBrainMCP"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["OrgBrainMCP"]

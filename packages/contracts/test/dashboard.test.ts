@@ -25,8 +25,12 @@ describe("dashboard/v1 contracts", () => {
     expect(() => dashboardActivityQuerySchema.parse({ before: "a", after: "b" })).toThrow();
     expect(() => dashboardActivityQuerySchema.parse({
       from: 0,
-      to: 8 * 24 * 60 * 60 * 1000
+      to: 31 * 24 * 60 * 60 * 1000
     })).toThrow();
+    expect(dashboardActivityQuerySchema.parse({
+      from: 0,
+      to: 30 * 24 * 60 * 60 * 1000
+    })).toMatchObject({ from: 0, to: 30 * 24 * 60 * 60 * 1000 });
   });
 
   it("requires graph focus type and id together", () => {

@@ -8,7 +8,8 @@ const {
   generatedAt = 0,
   label: requestedLabel,
   locale = "en",
-  incrementalField
+  incrementalField,
+  windowMs = 0
 } = Astro.props as {
   refreshUrl: string;
   initialData: unknown;
@@ -16,6 +17,7 @@ const {
   label?: string;
   locale?: IntelligenceLocale;
   incrementalField?: string;
+  windowMs?: number;
 };
 const copy = intelligencePageCopy(locale);
 const label = requestedLabel ?? copy.poller.live;
@@ -33,6 +35,7 @@ const initiallyStale = isPollingSnapshotStale(generatedAt);
   data-signature={signature}
   data-incremental-field={incrementalField}
   data-incremental-baseline={incrementalBaseline}
+  data-window-ms={windowMs > 0 ? String(windowMs) : undefined}
   data-poll-state={initiallyStale ? "stale" : "idle"}
   data-poll-stale={initiallyStale ? "true" : "false"}
   data-copy-live={label}
@@ -61,6 +64,7 @@ const initiallyStale = isPollingSnapshotStale(generatedAt);
       const initialSignature = this.dataset.signature;
       const incrementalField = this.dataset.incrementalField;
       const incrementalBaseline = this.dataset.incrementalBaseline;
+      const windowMs = Number(this.dataset.windowMs || 0);
       const copyLive = this.dataset.copyLive || "Live";
       const copyNewData = this.dataset.copyNewData || "New data is available. Refreshing now.";
       const copyRetry = this.dataset.copyRetry || "Refresh failed. Retrying in {seconds} seconds.";
@@ -73,8 +77,18 @@ const initiallyStale = isPollingSnapshotStale(generatedAt);
       this.querySelector<HTMLButtonElement>("[data-poll-refresh]")?.addEventListener("click", () => window.location.reload());
       if (!url) return;
 
+      const pollingUrl = windowMs > 0
+        ? () => {
+            const target = new URL(url, window.location.href);
+            const to = Date.now();
+            target.searchParams.set("from", String(Math.max(0, to - windowMs)));
+            target.searchParams.set("to", String(to));
+            return target.toString();
+          }
+        : url;
+
       this.stopPolling = startVisiblePolling<unknown>({
-        url,
+        url: pollingUrl,
         intervalMs: 30_000,
         maximumDelayMs: 300_000,
         onData: (data) => {
@@ -97,6 +111,7 @@ const initiallyStale = isPollingSnapshotStale(generatedAt);
           if (status) status.textContent = copyRetry.replace("{seconds}", String(Math.round(retryInMs / 1000)));
         },
         onStateChange: (state) => {
+          this.setAttribute("aria-busy", state === "refreshing" ? "true" : "false");
           if (!label) return;
           if (state === "live") this.dataset.pollStale = "false";
           label.textContent = state === "refreshing"

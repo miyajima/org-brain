@@ -1,54 +1,83 @@
-# Org Brain Insights Design QA
+# Org Brain dashboard usability design QA
 
 ## Comparison target
 
-- Source visual truth paths:
-  - Organizational Nervous System: `/Users/miyajimakazuhiro/.codex/generated_images/019fdc38-54dc-7132-9c65-719b59790908/exec-2391b241-0f07-4192-ba2d-aed1a5a55ee2.png`
-  - Knowledge Constellation: `/Users/miyajimakazuhiro/.codex/generated_images/019fdc38-54dc-7132-9c65-719b59790908/exec-5d8001b2-d6bf-45d0-a69a-dbbdfffcde28.png`
-  - Memory Strata: `/Users/miyajimakazuhiro/.codex/generated_images/019fdc38-54dc-7132-9c65-719b59790908/exec-adc7f1f5-cf53-45b8-98c6-9e012060c6a1.png`
-- Implementation routes: `/`, `/memories/constellation`, `/decisions/history`
-- Implementation screenshot path: unavailable; the selected in-app browser rejects the local preview with `ERR_BLOCKED_BY_CLIENT`.
-- Intended viewport: 1440 × 1024 CSS px, with an additional 390 px responsive pass.
-- Source pixels: 1488 × 1058 for each reference.
-- Implementation pixels / density: unavailable. The intended capture is 1440 × 1024 at `deviceScaleFactor: 1`; density normalization has not been performed.
-- State: `INSIGHTS_UI_MODE=on`, dashboard mock API data, dark theme, default selection.
-
-## Evidence
-
-- Full-view comparison evidence: blocked because no implementation screenshot can be captured with the selected in-app browser.
-- Focused-region comparison evidence: not attempted; a valid normalized full-view pair is required first.
-- Browser-rendered implementation screenshot: unavailable.
-- Primary interactions tested separately from visual QA: the full Console E2E suite passed 15/15 in system Chrome, including route rendering, Knowledge Constellation keyboard selection and scoped deep links, 390 px layout, reduced motion, 30-second polling/hidden-tab resume/backoff, and existing Memory/Decision regressions. This does not substitute for image comparison.
-- Console errors checked: the Astro 6 runtime environment error found during local rendering was fixed; subsequent HTTP route checks returned 200. Browser-console visual inspection remains blocked.
+- Source visual truth:
+  - Activity: `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/org-brain-dashboard-audit/01-overview.png`
+  - Knowledge connections: `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/org-brain-dashboard-audit/02-constellation.png`
+  - Knowledge history: `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/org-brain-dashboard-audit/03-strata.png`
+- Browser-rendered implementation screenshots:
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/01-activity-desktop.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/02-connections-desktop.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/03-history-desktop.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/01-activity-mobile.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/02-connections-mobile.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/03-history-mobile.png`
+- Normalized side-by-side evidence, source on the left and implementation on the right:
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/comparison-activity.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/comparison-connections.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/comparison-history.png`
+  - `/Users/miyajimakazuhiro/.codex/visualizations/2026/08/08/019fdfec-c427-7c02-9f33-94e55fc95fe7/dashboard-usability-qa/comparison-mobile.png`
+- State: `INSIGHTS_UI_MODE=on`, Japanese locale, `default/org-brain` mock data, dark theme, default selection.
+- Desktop viewport and pixels: 1440 × 1024 CSS px and 1440 × 1024 screenshot px. Comparison captures were normalized to 1280 × 1234 px per side; the taller source screenshots were top-cropped without scaling.
+- Mobile viewport and pixels: 390 × 844 CSS px and 390 × 844 screenshot px.
+- Density normalization: the in-app Browser screenshot output is CSS-pixel normalized; no density resampling was required.
 
 ## Findings
 
-- [P1] Reference-to-implementation fidelity is unverified.
-  - Location: all three dashboard views.
-  - Evidence: the source images are available, but no browser-rendered implementation capture is available for a combined side-by-side comparison.
-  - Impact: typography, spacing, palette, density, and responsive fidelity cannot be accepted from code/build evidence alone.
-  - Fix: capture all three routes at 1440 × 1024 and Memory Strata at 390 px, normalize density, place each source and implementation capture in one comparison image, fix any P0/P1/P2 differences, and repeat.
+- No actionable P0, P1, or P2 differences remain.
+- The added guide and mission briefing intentionally move each visualization downward, but the focal visualization still starts within the desktop viewport and remains the dominant visual region. This is an accepted product change, not unintended drift.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: not visually verified.
-- Spacing and layout rhythm: not visually verified.
-- Colors and visual tokens: not visually verified.
-- Image quality and asset fidelity: source brand image is used, but rendered fidelity is not visually verified.
-- Copy and content: reviewed in code and functional tests; visual wrapping and truncation are not verified.
+- Fonts and typography: the existing Inter/system and Fira Code hierarchy is retained. New guide and briefing labels use the existing monospace accent. Body, heading, and metadata weights remain consistent; clipped graph labels were removed by fitting the sparse graph to its viewport.
+- Spacing and layout rhythm: existing 32 px desktop page margins, glass navigation, card radii, thin borders, and dark surface spacing are retained. The action rail is compact when only one action exists. Desktop graph proportions are approximately two-thirds graph and one-third inspector.
+- Colors and visual tokens: the existing navy/black surfaces, blue glow, cyan labels, amber warnings, and red critical state remain. Representative measured contrast ratios were 18.46:1 for headings, 6.86:1 for muted body text, 11.49:1 for action reasons, 9.22:1 for history summary notes, and 7.38:1 for timeline metadata.
+- Image quality and asset fidelity: the existing Org Brain brand mark is retained at native clarity. The focal topology, graph, and timeline are code-native product visualizations already present in the source implementation; no reference image or product asset was replaced.
+- Copy and content: page names and guidance are plain Japanese while original technical names remain as eyebrows or folded technical details. Empty states do not claim that a nonexistent selection is healthy. CTAs name their actual destination.
+- Responsiveness and accessibility: 390, 720 (200% zoom proxy), 768, 1280, and 1440 px checks showed no page-level horizontal overflow. Mobile navigation wraps without clipping. Graph nodes, timeline events, and strata items are keyboard reachable; Enter selection was verified for graph nodes. Reduced-motion behavior keeps static glow, line, and label meaning while continuous animation rules remain under `prefers-reduced-motion: no-preference`.
+
+## Full-view comparison evidence
+
+- Activity: the topology, path glow, central Org Brain mark, event detail, and timeline retain the original brand. The new guide and single-row briefing establish use and next action before the topology.
+- Knowledge connections: the original constellation aesthetic remains, while the implementation reduces the oversized introductory area, keeps the graph fully within its column, and exposes plain-language metrics in the inspector.
+- Knowledge history: the colored strata and current-time line remain. The implementation adds a compact current-state summary and moves raw status, snapshot, and validity fields behind technical-detail disclosures.
+- Mobile: the three-screen contact sheet confirms readable headings, full navigation labels, guide stacking, and zero horizontal overflow at 390 px.
+
+## Focused-region comparison evidence
+
+- Mission briefing: verified one-action, healthy, critical, empty, and truncated-history states. The single action uses the full rail width and links directly to the named Task destination.
+- Knowledge graph: verified selected-node 1.08 scale, blue glow, highlighted related edges, 2/3–1/3 desktop split, fitted sparse canvas, and equivalent relation list.
+- History timeline: verified first and last cards are clamped inside the track, plain-language state labels, current marker, selected lineage animation, and folded technical metadata.
+- Mobile navigation: verified all four main destinations and Management are visible without hidden horizontal scrolling.
+
+## Primary interactions and console check
+
+- Keyboard-selected a graph node with Enter and confirmed the selected deep link, glow/scale state, and highlighted edges.
+- Opened and closed the history technical-details disclosure and confirmed validity fields appear only when expanded.
+- Verified `Taskを確認` resolves to `/tasks/task-failed` with tenant, project, and language scope preserved.
+- Verified empty knowledge/history briefings and truncated-history review candidates.
+- Browser console warnings/errors on the three final desktop captures: none.
 
 ## Comparison history
 
-- Iteration 0: implementation completed and functional gates passed. Visual capture was blocked before the first comparison, so no visual fix iteration can be recorded.
-
-## Implementation checklist
-
-1. Capture the three desktop routes and the 390 px responsive state.
-2. Create normalized side-by-side comparison images with the supplied references.
-3. Resolve every actionable P0/P1/P2 finding and recapture.
+- Iteration 1 findings:
+  - [P2] A single recommended action occupied only one third of a wide rail, leaving a large empty region.
+  - [P2] The earliest history card was clipped against the left edge of the timeline.
+  - [P2] Mobile navigation hid part of `Task一覧` behind a horizontal scroller.
+  - [P2] Timeline metadata was too small and low contrast.
+- Fixes made:
+  - Added action-count-aware rail layouts and a compact single-action row.
+  - Clamped timeline card positions and aligned selected lineage paths to the clamped coordinates.
+  - Replaced hidden horizontal navigation scrolling with an explicit wrapped layout.
+  - Increased timeline metadata size and contrast; representative contrast now measures 7.38:1.
+- Post-fix evidence:
+  - The normalized desktop comparison images and final mobile contact sheet listed above show the corrected layouts.
+  - Browser measurements report no horizontal overflow at all tested widths.
+  - No actionable P0/P1/P2 issue was found in the post-fix comparison.
 
 ## Follow-up polish
 
-- Defer P3 polish until a valid visual comparison exists.
+- [P3] A future content pass could shorten the longest Japanese guide sentences on mobile, but current wrapping is readable and does not clip.
 
-final result: blocked
+final result: passed

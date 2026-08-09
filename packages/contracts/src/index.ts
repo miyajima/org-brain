@@ -397,8 +397,8 @@ export const dashboardActivityQuerySchema = z.object({
   if (value.from !== undefined && value.to !== undefined) {
     if (value.from > value.to) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["from"], message: "from must be before or equal to to" });
-    } else if (value.to - value.from > 7 * 24 * 60 * 60 * 1000) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["from"], message: "activity range cannot exceed 7 days" });
+    } else if (value.to - value.from > 30 * 24 * 60 * 60 * 1000) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["from"], message: "activity range cannot exceed 30 days" });
     }
   }
 });

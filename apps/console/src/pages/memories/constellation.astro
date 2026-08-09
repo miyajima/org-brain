@@ -32,6 +32,12 @@ const result = await fetchDashboardData(
   normalizeKnowledgeGraph,
   normalizeKnowledgeGraph({})
 );
+if (selected && !result.error && result.data.nodes.length > 0 && !result.data.nodes.some((node) => node.id === selected || node.source_id === selected)) {
+  const next = new URLSearchParams(params);
+  next.delete("selected");
+  next.set("notice", "selection-fallback");
+  return Astro.redirect(`/memories/constellation?${next.toString()}`);
+}
 ---
 <BaseLayout title={copy.routes.constellationTitle} lang={lang} wide>
   {result.error && (
@@ -40,5 +46,5 @@ const result = await fetchDashboardData(
       <span>{result.error}</span>
     </div>
   )}
-  <KnowledgeConstellation data={result.data} refreshUrl={refreshUrl} params={params} locale={lang} />
+  <KnowledgeConstellation data={result.data} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
 </BaseLayout>

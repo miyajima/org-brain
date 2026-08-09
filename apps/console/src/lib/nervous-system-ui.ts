@@ -11,6 +11,25 @@ export type ActivityEvent = DashboardActivityEvent;
 export type ObservedAgent = DashboardObservedAgent;
 export type AttentionSignal = DashboardAttention;
 
+const HOUR_MS = 60 * 60 * 1000;
+
+export const ACTIVITY_PERIODS = [
+  { key: "24h", durationMs: 24 * HOUR_MS },
+  { key: "3d", durationMs: 3 * 24 * HOUR_MS },
+  { key: "7d", durationMs: 7 * 24 * HOUR_MS },
+  { key: "30d", durationMs: 30 * 24 * HOUR_MS }
+] as const;
+
+export type ActivityPeriod = (typeof ACTIVITY_PERIODS)[number];
+export type ActivityPeriodKey = ActivityPeriod["key"];
+export type ActivityCapabilityKey = "remember" | "understand" | "evaluate" | "apply";
+
+export type ActivityCapabilitySummary = {
+  key: ActivityCapabilityKey;
+  count: number;
+  latestEvent: ActivityEvent | null;
+};
+
 export type DashboardActivity = Omit<DashboardActivityResponse, "contract_version" | "oldest_cursor" | "newest_cursor"> & {
   oldest_cursor: string | number | null;
   newest_cursor: string | number | null;
@@ -46,6 +65,52 @@ function numeric(value: unknown, fallback = 0): number {
 function nullableText(value: unknown): string | null {
   const parsed = text(value);
   return parsed || null;
+}
+
+export function resolveActivityPeriod(value: string | null | undefined): ActivityPeriod {
+  return ACTIVITY_PERIODS.find((period) => period.key === value) ?? ACTIVITY_PERIODS[0];
+}
+
+export function activityWindowParams(
+  scope: URLSearchParams,
+  period: ActivityPeriod,
+  now = Date.now()
+): URLSearchParams {
+  const params = new URLSearchParams(scope);
+  params.set("from", String(Math.max(0, now - period.durationMs)));
+  params.set("to", String(now));
+  params.set("limit", "250");
+  return params;
+}
+
+export function activityCapabilityForEvent(event: Pick<ActivityEvent, "type">): ActivityCapabilityKey | null {
+  if (event.type === "memory.write" || event.type === "decision.write") return "remember";
+  if (event.type === "memory.read" || event.type === "memory.retrieval") return "understand";
+  if (event.type === "memory.effect") return "evaluate";
+  if (event.type.startsWith("task.") || event.type.startsWith("agent.run.") || event.type.startsWith("handoff.")) return "apply";
+  return null;
+}
+
+export function resolveActivityCapability(value: string | null | undefined): ActivityCapabilityKey | null {
+  return value === "remember" || value === "understand" || value === "evaluate" || value === "apply" ? value : null;
+}
+
+export function buildActivityCapabilitySummaries(events: ActivityEvent[]): ActivityCapabilitySummary[] {
+  const summaries: ActivityCapabilitySummary[] = ["remember", "understand", "evaluate", "apply"].map((key) => ({
+    key: key as ActivityCapabilityKey,
+    count: 0,
+    latestEvent: null
+  }));
+  const byKey = new Map(summaries.map((summary) => [summary.key, summary]));
+  for (const event of events) {
+    const key = activityCapabilityForEvent(event);
+    if (!key) continue;
+    const summary = byKey.get(key);
+    if (!summary) continue;
+    summary.count += 1;
+    if (!summary.latestEvent || event.occurred_at > summary.latestEvent.occurred_at) summary.latestEvent = event;
+  }
+  return summaries;
 }
 
 export function normalizeDashboardActivity(value: unknown): DashboardActivity {
