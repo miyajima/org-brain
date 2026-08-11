@@ -11,11 +11,10 @@
     "diff": {
       "additions": 2,
       "available": true,
-      "base_ref": "a2aba67073c2c73d111b98c8418e4f9ad5eaa0fe",
+      "base_ref": "4229c15d4192d093bd92f037c3d7fd3116a49dd6",
       "binary_files": 0,
-      "changed_file_count": 2,
+      "changed_file_count": 1,
       "changed_files": [
-        "apps/console/.astro/settings.json",
         "apps/console/.astro/types.d.ts"
       ],
       "changed_files_truncated": 0,
@@ -24,15 +23,15 @@
         "apps"
       ],
       "components_truncated": 0,
-      "content_sha256": "7c1252a2e23d62a437813425bffc6c06dd69c1faf9552c2139439452447bd07d",
-      "deletions": 3,
-      "fingerprint": "6db5794236d053e9783d520e038fbeaf87ebd1ff227ac703c5215aac10aee952",
-      "head_sha": "a2aba67073c2c73d111b98c8418e4f9ad5eaa0fe",
-      "line_changes": 5
+      "content_sha256": "e560e2bbb2e5a37bfc0dabf5f1db2ebb13a68322e0183f2e16d24f657bddd8ab",
+      "deletions": 1,
+      "fingerprint": "b698fc00299c3dfb5514cbc92b57f39c4ba6f72a3434c1379a61e86806c5b41c",
+      "head_sha": "4229c15d4192d093bd92f037c3d7fd3116a49dd6",
+      "line_changes": 3
     },
     "level": "moderate",
     "reasons": [
-      "localized diff touches 2 file(s)",
+      "localized diff touches 1 file(s)",
       "manifest declares 3 risks"
     ],
     "risk_count": 3,
@@ -53,9 +52,55 @@
       "stop_when": "the same external blocker repeats and the exact blocker is recorded in review.json and gate.json"
     },
     "model_policy": {
-      "complex": "Use the strongest available reasoning model when the execution environment allows model choice.",
-      "moderate": "Use stronger reasoning for cross-file behavior, quality-gate, or template contract changes when available.",
-      "simple": "Use the default model unless verification fails."
+      "complex": "Codex: gpt-5.6-sol with xhigh reasoning; other hosts: deepest_reasoning tier.",
+      "dispatch_contract": [
+        "Before each eligible agent dispatch, use the route matching the current effective difficulty.",
+        "On Codex, pass the route's model and reasoning_effort as explicit dispatch overrides.",
+        "On another host, choose a concrete available model matching the route tier and record it.",
+        "Do not silently use a weaker route."
+      ],
+      "fallback": {
+        "action": "Use the strongest available model at the same tier or higher.",
+        "allowed_when": "The selected model or reasoning effort is unavailable to the host.",
+        "evidence_target": "docs/harness/review.json",
+        "record": [
+          "requested_model",
+          "requested_reasoning_effort",
+          "actual_model",
+          "actual_reasoning_effort",
+          "reason"
+        ]
+      },
+      "mode": "explicit_difficulty_route",
+      "moderate": "Codex: gpt-5.6-sol with high reasoning; other hosts: deep_reasoning tier.",
+      "routes": {
+        "complex": {
+          "codex": {
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "xhigh"
+          },
+          "tier": "deepest_reasoning",
+          "use_when": "Security-sensitive, architectural, large, or ambiguous work."
+        },
+        "moderate": {
+          "codex": {
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "high"
+          },
+          "tier": "deep_reasoning",
+          "use_when": "Cross-file behavior, quality-gate, or template contract changes."
+        },
+        "simple": {
+          "codex": {
+            "model": "gpt-5.6-terra",
+            "reasoning_effort": "medium"
+          },
+          "tier": "balanced",
+          "use_when": "Localized, low-risk work with bounded verification."
+        }
+      },
+      "selected_route": "moderate",
+      "simple": "Codex: gpt-5.6-terra with medium reasoning; other hosts: balanced tier."
     },
     "primary_agent": "copilot",
     "subagent_policy": {
@@ -86,10 +131,10 @@
   "memory_recall": {
     "backend": "org_brain",
     "limit": 3,
-    "query": "Implement OSS and Enterprise user identity, organization administration, email OTP, business category UI, and Enterprise SCIM parity",
+    "query": "Implement multi-machine multi-client MCP authentication with Access OAuth, per-installation hook service tokens, stateless proxy, client installers, and management UI",
     "result_count": 0,
     "results": [],
-    "searched_at": "2026-08-07T10:17:24.223102+00:00",
+    "searched_at": "2026-08-10T12:40:29.270997+00:00",
     "status": "completed"
   },
   "repo": "org-brain",
@@ -104,14 +149,17 @@
     "Local SQLite schema migrations, retention, suppression, and permanent deletion are data-sensitive operations.",
     "Benchmark and leadership claims require pinned revisions, reproducible evidence, and complete acceptance gates."
   ],
-  "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
+  "run_id": "org-brain-20260810T124026.261674Z-33fd6331",
   "schema_version": 2,
   "success_criteria": [
-    "OSS and Enterprise users can set full and display names with full-name privacy",
-    "Tenant admins manage users, roles, local groups, organization settings, and business categories",
-    "Allowed-domain users authenticate with email OTP and Enterprise SCIM synchronizes users and groups safely",
-    "Cross-tenant isolation and existing principal compatibility pass focused and full gates"
+    "Interactive Codex Claude Code and Cursor use Access OAuth; hook credentials are independently enrollable and revocable per machine-client; no raw conversations or secrets are stored; focused and full manifest checks pass"
   ],
-  "task": "Implement OSS and Enterprise user identity, organization administration, email OTP, business category UI, and Enterprise SCIM parity",
+  "task": "Implement multi-machine multi-client MCP authentication with Access OAuth, per-installation hook service tokens, stateless proxy, client installers, and management UI",
+  "task_intent_assessment": {
+    "level": "simple",
+    "reasons": [
+      "bounded task intent"
+    ]
+  },
   "workflow_contract": "strict-v1"
 }

@@ -10,7 +10,13 @@ import {
 } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
-import { authorizeMcpRequest } from "./mcp-security";
+import {
+  accessServiceSubject,
+  authorizeMcpRequest,
+  verifyMcpAccessAssertion,
+  type McpAuthResult
+} from "./mcp-security";
+import { activateMcpClientInstallation } from "./mcp-client-installation-service";
 import {
   ackAgentMessage,
   getAgentMessage,
@@ -71,6 +77,11 @@ type AgentProps = {
   principal: string;
   allowedTenants: string[];
   defaultRole: OrgRole;
+  authSource?: McpAuthResult["source"];
+  runtimeActor?: string;
+  clientInstallationId?: string;
+  clientType?: string;
+  allowedTools?: string[];
 };
 
 const sourceRefSchema = z.object({
@@ -216,7 +227,13 @@ class OrgBrainMcpTools {
         resourceId: null,
         requestId: null,
         outcome: "succeeded",
-        metadata: { transport: "mcp" }
+        metadata: {
+          transport: "mcp",
+          auth_source: this.props.authSource ?? "unknown",
+          runtime_actor: this.props.runtimeActor ?? principal,
+          client_installation_id: this.props.clientInstallationId ?? null,
+          client_type: this.props.clientType ?? null
+        }
       });
       return result;
     } catch (error) {
@@ -229,7 +246,13 @@ class OrgBrainMcpTools {
         resourceId: null,
         requestId: null,
         outcome: "failed",
-        metadata: { transport: "mcp" }
+        metadata: {
+          transport: "mcp",
+          auth_source: this.props.authSource ?? "unknown",
+          runtime_actor: this.props.runtimeActor ?? principal,
+          client_installation_id: this.props.clientInstallationId ?? null,
+          client_type: this.props.clientType ?? null
+        }
       }).catch(() => undefined);
       throw error;
     }
@@ -1506,10 +1529,94 @@ async function tryHandleContextEnrichFastPath(
   }
 }
 
+export async function assertMcpToolAllowed(request: Request, props: AgentProps): Promise<void> {
+  if (!props.allowedTools) return;
+  if (request.method !== "POST") {
+    throw new HttpError(403, "forbidden", "This MCP client installation can only call its allowed hook tool");
+  }
+  const body = await request.clone().json<{
+    method?: unknown;
+    params?: { name?: unknown };
+  }>().catch(() => null);
+  if (
+    body?.method !== "tools/call" ||
+    typeof body.params?.name !== "string" ||
+    !props.allowedTools.includes(body.params.name)
+  ) {
+    throw new HttpError(403, "forbidden", "This MCP client installation cannot call that MCP method or tool");
+  }
+}
+
 export function mountMcp(app: Hono<any>) {
+  app.post("/mcp/client-installations/activate", async (c) => {
+    try {
+      const claims = await verifyMcpAccessAssertion(c.req.raw, c.env);
+      const accessSubject = accessServiceSubject(claims);
+      if (!accessSubject) throw new HttpError(401, "unauthorized", "A Cloudflare Access service token is required");
+      const body = await c.req.json<{ enrollment_code?: unknown; client_type?: unknown }>();
+      if (
+        typeof body.enrollment_code !== "string" ||
+        (body.client_type !== "codex" && body.client_type !== "claude" && body.client_type !== "cursor")
+      ) {
+        throw new HttpError(400, "invalid_payload", "enrollment_code and a valid client_type are required");
+      }
+      const installation = await activateMcpClientInstallation(
+        c.env,
+        body.enrollment_code,
+        accessSubject,
+        body.client_type
+      );
+      await appendAuditEvent(c.env, {
+        tenantId: installation.tenant_id,
+        principal: installation.owner_principal,
+        action: "mcp.client_installation.activate",
+        resourceType: "mcp_client_installation",
+        resourceId: installation.id,
+        outcome: "succeeded",
+        metadata: {
+          auth_source: "access-service",
+          runtime_actor: `client:${installation.id}`,
+          client_installation_id: installation.id,
+          client_type: installation.client_type
+        }
+      }).catch((error) => {
+        console.warn({
+          event: "orgbrain.mcp.client_installation.audit_failed",
+          client_installation_id: installation.id,
+          error_code: error instanceof HttpError ? error.code : "audit_write_failed"
+        });
+      });
+      return c.json({ ok: true, data: installation }, 200);
+    } catch (error) {
+      if (error instanceof HttpError) return c.text(error.message, error.status as 400);
+      return c.text(error instanceof Error ? error.message : String(error), 500);
+    }
+  });
+
+  app.get("/mcp/client-installations/status", async (c) => {
+    try {
+      const auth = await authorizeMcpRequest(c.req.raw, c.env);
+      if (auth.source !== "access-service" || !auth.clientInstallationId || !auth.clientType) {
+        throw new HttpError(401, "unauthorized", "A registered Cloudflare Access service token is required");
+      }
+      return c.json({
+        ok: true,
+        data: {
+          id: auth.clientInstallationId,
+          tenant_id: auth.tenantId,
+          client_type: auth.clientType,
+          runtime_actor: auth.runtimeActor
+        }
+      });
+    } catch (error) {
+      if (error instanceof HttpError) return c.text(error.message, error.status as 400);
+      return c.text(error instanceof Error ? error.message : String(error), 500);
+    }
+  });
+
   app.mount("/mcp", async (request, env, ctx) => {
     try {
-      const auth = authorizeMcpRequest(request, env);
+      const auth = await authorizeMcpRequest(request, env);
       await assertRequestRateLimit(env, {
         tenantId: auth.tenantId,
         principal: auth.principal,
@@ -1519,10 +1626,16 @@ export function mountMcp(app: Hono<any>) {
         tenantId: auth.tenantId,
         principal: auth.principal,
         allowedTenants: auth.allowedTenants,
-        defaultRole: auth.defaultRole
+        defaultRole: auth.defaultRole,
+        authSource: auth.source,
+        runtimeActor: auth.runtimeActor,
+        clientInstallationId: auth.clientInstallationId,
+        clientType: auth.clientType,
+        allowedTools: auth.allowedTools
       };
       const transportValidationResponse = mcpTransportValidationResponse(request);
       if (transportValidationResponse) return transportValidationResponse;
+      await assertMcpToolAllowed(request, props);
       const fastPathResponse = await tryHandleContextEnrichFastPath(request, env, props);
       if (fastPathResponse) return fastPathResponse;
       const handler = createMcpHandler(

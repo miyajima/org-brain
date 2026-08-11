@@ -110,6 +110,11 @@ import {
 import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
 import { mountMcp } from "./mcp";
 import {
+  createMcpClientInstallation,
+  listMcpClientInstallations,
+  revokeMcpClientInstallation
+} from "./mcp-client-installation-service";
+import {
   getMemoryImpactExecution,
   getMemoryImpactSummary,
   reportMemoryImpact,
@@ -118,6 +123,7 @@ import {
 import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
 import {
   assertPermission,
+  authorizePermission,
   deleteRoleAssignment,
   listRoleAssignments,
   upsertRoleAssignment
@@ -268,6 +274,7 @@ app.use("/api/*", apiKeyAuth);
 
 function permissionForRequest(method: string, path: string): OrgPermission {
   if (path.startsWith("/v1/auth/")) return method === "GET" ? "read" : "write";
+  if (path.startsWith("/v1/mcp-client-installations")) return "read";
   if (
     path === "/v1/organization" ||
     path.startsWith("/v1/users") ||
@@ -630,6 +637,55 @@ app.post("/v1/scoped-tokens", async (c) => {
 app.delete("/v1/scoped-tokens/:id", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   return jsonOk(c, await revokeScopedToken(c.env, tenantId, c.req.param("id")));
+});
+
+app.get("/v1/mcp-client-installations", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const auth = getApiAuthContext(c);
+  const tenantScope = c.req.query("scope") === "tenant";
+  if (tenantScope) {
+    await assertPermission(c.env, {
+      tenantId,
+      principal: auth.principal,
+      permission: "admin",
+      fallbackRole: auth.defaultRole
+    });
+  }
+  return jsonOk(c, {
+    installations: await listMcpClientInstallations(
+      c.env,
+      tenantId,
+      tenantScope ? undefined : auth.principal
+    )
+  });
+});
+
+app.post("/v1/mcp-client-installations", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(
+    c,
+    await createMcpClientInstallation(c.env, tenantId, getApiPrincipal(c), body),
+    201
+  );
+});
+
+app.delete("/v1/mcp-client-installations/:id", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const auth = getApiAuthContext(c);
+  const adminDecision = await authorizePermission(c.env, {
+    tenantId,
+    principal: auth.principal,
+    permission: "admin",
+    fallbackRole: auth.defaultRole
+  });
+  return jsonOk(c, await revokeMcpClientInstallation(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    auth.principal,
+    adminDecision.allowed
+  ));
 });
 
 app.get("/v1/retention-policies", async (c) => {

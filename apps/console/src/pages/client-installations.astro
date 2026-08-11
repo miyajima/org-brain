@@ -1,0 +1,135 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+Astro.response.headers.set("Cache-Control", "no-store");
+
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = async (path: string, init: RequestInit = {}) =>
+  fetch(new URL(path, Astro.url), {
+    ...init,
+    headers: { cookie, ...(init.headers ?? {}) }
+  });
+
+let message = "";
+let error = "";
+let enrollment: { code: string; expiresAt: number } | null = null;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = String(form.get("action") ?? "create");
+  const csrf = String(form.get("csrf_token") ?? "");
+  if (action === "revoke") {
+    const id = String(form.get("installation_id") ?? "");
+    const response = await api(
+      `/api/v1/mcp-client-installations/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(tenantId)}`,
+      { method: "DELETE", headers: { "x-csrf-token": csrf } }
+    );
+    if (response.ok) message = "Client installation revoked.";
+    else error = "Client installation could not be revoked.";
+  } else {
+    const response = await api("/api/v1/mcp-client-installations", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrf },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        client_type: String(form.get("client_type") ?? ""),
+        device_label: String(form.get("device_label") ?? "")
+      })
+    });
+    const payload: any = await response.json().catch(() => null);
+    if (response.ok && payload?.data?.enrollment_code) {
+      enrollment = {
+        code: payload.data.enrollment_code,
+        expiresAt: Number(payload.data.enrollment_expires_at)
+      };
+      message = "Pending client installation created.";
+    } else {
+      error = payload?.error?.message ?? "Client installation could not be created.";
+    }
+  }
+}
+
+const response = await api(
+  `/api/v1/mcp-client-installations?tenant_id=${encodeURIComponent(tenantId)}`
+);
+const payload: any = await response.json().catch(() => null);
+const installations: any[] = payload?.data?.installations ?? [];
+const formatDate = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? new Date(value).toLocaleString("ja-JP")
+    : "未使用";
+---
+<BaseLayout title="Client installations">
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
+      <p class="surface-label">{tenantId}</p>
+      <h1 class="mt-2 text-3xl font-semibold">Client installations</h1>
+      <p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
+        Codex、Claude Code、Cursorの無人hook credentialをマシン・クライアント単位で管理します。
+        対話型OAuth sessionはCloudflare Accessと各クライアントが管理します。
+      </p>
+    </header>
+
+    {message && <p class="text-emerald-200">{message}</p>}
+    {error && <p class="text-rose-200">{error}</p>}
+
+    {enrollment && (
+      <aside class="rounded-[20px] border border-amber-300/30 bg-amber-300/[0.08] p-5">
+        <p class="font-semibold text-amber-100">登録コードは今回だけ表示されます</p>
+        <code class="mt-3 block break-all rounded-xl bg-black/40 p-3 text-sm">{enrollment.code}</code>
+        <p class="mt-2 text-xs text-amber-100/70">
+          有効期限: {formatDate(enrollment.expiresAt)}。service tokenのsecretとは別に安全に扱ってください。
+        </p>
+      </aside>
+    )}
+
+    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3">
+      <input type="hidden" name="csrf_token" class="csrf-token" />
+      <input type="hidden" name="action" value="create" />
+      <label>
+        <span class="field-label">Client</span>
+        <select name="client_type" required>
+          <option value="codex">Codex</option>
+          <option value="claude">Claude Code</option>
+          <option value="cursor">Cursor</option>
+        </select>
+      </label>
+      <label class="md:col-span-2">
+        <span class="field-label">Device label</span>
+        <input name="device_label" maxlength="80" placeholder="Work Mac" required />
+      </label>
+      <div class="md:col-span-3"><button type="submit">Create enrollment</button></div>
+    </form>
+
+    <div class="grid gap-3">
+      {installations.map((installation) => (
+        <article class="grid gap-3 rounded-[18px] border border-white/8 bg-white/[0.035] p-4 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <strong>{installation.device_label}</strong>
+              <span class="rounded-full border border-white/10 px-2 py-0.5 text-xs">{installation.client_type}</span>
+              <span class="rounded-full border border-white/10 px-2 py-0.5 text-xs">{installation.status}</span>
+            </div>
+            <p class="mt-2 text-xs text-zinc-500">
+              作成 {formatDate(installation.created_at)} · 最終利用 {formatDate(installation.last_used_at)}
+            </p>
+          </div>
+          {installation.status !== "revoked" && (
+            <form method="post">
+              <input type="hidden" name="csrf_token" class="csrf-token" />
+              <input type="hidden" name="action" value="revoke" />
+              <input type="hidden" name="installation_id" value={installation.id} />
+              <button type="submit">Revoke</button>
+            </form>
+          )}
+        </article>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  document.querySelectorAll<HTMLInputElement>(".csrf-token").forEach((input) => {
+    input.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  });
+</script>

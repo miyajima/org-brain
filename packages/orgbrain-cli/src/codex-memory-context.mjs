@@ -45,7 +45,10 @@ async function workspaceScope(cwdInput, env) {
   const config = await loadWorkspaceConfig(workspacesFileFromEnv(env));
   const mapped = config.workspaces[cwd] ?? null;
   const mode = resolveMemoryMode(env);
-  if (mode.cloudMemoryEnabled || mode.configurationError) return null;
+  if (
+    (mode.cloudMemoryEnabled || mode.configurationError) &&
+    env.ORGBRAIN_LOCAL_CONTEXT_ENABLED !== "true"
+  ) return null;
   const tenantId = mapped?.tenant_id ?? tenantFallbackFromEnv(env, {
     organizationSharing: mode.orgSharingEnabled
   });

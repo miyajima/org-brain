@@ -1,7 +1,7 @@
 {
   "automation": {
-    "auto_improve": true,
-    "auto_review": true,
+    "auto_improve": false,
+    "auto_review": false,
     "final_needs_improvement": false,
     "improvement_reports": []
   },
@@ -9,7 +9,7 @@
     "Governed docs check passed without missing required documents."
   ],
   "exact_blockers": [],
-  "gate_attempt_id": "20260807T115902.456015Z-70eea5f1",
+  "gate_attempt_id": "20260810T151610.598160Z-9faaf1ae",
   "gate_change": {
     "final": {
       "score": 100,
@@ -21,67 +21,111 @@
     },
     "score_delta": 0
   },
-  "generated_at": "2026-08-07T12:00:08.600617+00:00",
+  "generated_at": "2026-08-10T15:15:24.824615+00:00",
   "manual_notes": {},
+  "model_execution": {
+    "status": "passed",
+    "effective_difficulty": "complex",
+    "requested_route": {
+      "codex": {
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "xhigh"
+      },
+      "difficulty": "complex",
+      "required": true,
+      "tier": "deepest_reasoning",
+      "use_when": "Security-sensitive, architectural, large, or ambiguous work."
+    },
+    "actual": {
+      "host": "codex",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "xhigh"
+    },
+    "fallback": {
+      "used": false,
+      "reason": null
+    }
+  },
   "overall_review": [
-    "Quality gate completed with status pass.",
-    "Quality score is 100 with deductions: []."
+    "Full quality gate completed with status pass.",
+    "Quality score is 100 with no deductions."
   ],
   "reliability_review": [
     "Manifest command stage has no blocked or failed commands."
   ],
   "repo": "org-brain",
   "residual_risk": [
-    "No residual risk detected by deterministic gate stages."
+    "Cloudflare Access, D1 migration, service-token creation, deployment, and live multi-machine smoke remain approval-gated and unexecuted."
   ],
   "reviewer_evidence": {
-    "actor": "identity_reviewer",
-    "completed_at": "2026-08-07T11:50:26Z",
-    "diff_fingerprint": "e55e7904e305982c80379ce3d6ecebfb6769e051d04ae26be747e36c7f4b0743",
-    "findings": [
-      "Enterprise OTP failure attempts now commit before returning 401.",
-      "Enterprise local groups now use a partial external-ID uniqueness index.",
-      "Enterprise OIDC now claims an existing legacy user:<sub> tenant role principal.",
-      "OSS tenant admins can manage all local groups without becoming members."
-    ],
+    "actor": "019febf6-0ad6-7ef3-bc67-455c43cb0424",
+    "completed_at": "2026-08-10T15:07:47Z",
+    "diff_fingerprint": "147ee46b17e01827236a11dca8a06280905e3451c175925b54af4158b6963354",
+    "findings": [],
     "independent": true,
-    "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
+    "run_id": "org-brain-20260810T124026.261674Z-33fd6331",
     "scope": [
-      "OSS identity and administration APIs",
-      "OTP and session security",
-      "profile privacy and tenant isolation",
-      "local and SCIM group ownership",
-      "Console, CLI, migrations, and compatibility",
-      "Enterprise OIDC, PostgreSQL RLS, and SCIM"
+      "JWT and principal resolution",
+      "installation ownership and revocation",
+      "hook-only MCP authorization",
+      "thin proxy header forwarding",
+      "client credential handling",
+      "outbox claim ordering and identity revalidation",
+      "management API and console",
+      "additive migration and search isolation"
     ],
     "source": "subagent",
-    "status": "completed",
-    "summary": "Focused read-only re-review passed with no remaining blockers after all four P1 findings were fixed.",
-    "task_id": "identity_reviewer"
+    "status": "passed",
+    "summary": "Independent final review covered the complete authentication, installation, client-type, revocation, proxy, hook, outbox, UI, and migration diff and found no unresolved P1 or P2 findings.",
+    "task_id": "independent-mcp-auth-review"
   },
-  "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
+  "run_id": "org-brain-20260810T124026.261674Z-33fd6331",
   "schema_version": 2,
   "security_review": [
     "The automated loop records deterministic gate metadata and does not collect secrets.",
     "Command output remains scoped to gate and improvement artifacts."
   ],
   "self_review": [
-    "Final gate status is pass with score 100/85."
+    "Final full gate status is pass with score 100/85."
   ],
   "verifier_evidence": {
-    "actor": "identity_verifier",
+    "actor": "019febf6-269b-71c2-92a2-b1870a1c559b",
     "checks": [
       {
+        "command": "rtk pnpm --dir apps/api-gateway exec vitest run test/mcp-security.test.ts test/mcp-client-installation-service.test.ts test/mcp-routing.test.ts test/mcp-installation-routing.test.ts test/mcp-client-installation-http.test.ts test/auth.test.ts",
+        "completed_at": "2026-08-10T15:05:23Z",
+        "name": "API authentication and routing",
+        "output_sha256": "31c68719ad3bfba6e8eac30c64a2e606ff8f49abde2e238b3586b207ab8b0453",
+        "returncode": 0,
+        "status": "passed"
+      },
+      {
+        "command": "rtk node --test scripts/connector-setup.test.mjs",
+        "completed_at": "2026-08-10T15:05:31Z",
+        "name": "Client connector setup",
+        "output_sha256": "d75fe3f6312390c43f6fc552fffcf28ba13f6ed55fd252a9fdf85b91156a9034",
+        "returncode": 0,
+        "status": "passed"
+      },
+      {
+        "command": "rtk pnpm exec vitest run scripts/hook-memory-bridge.test.mjs",
+        "completed_at": "2026-08-10T15:05:39Z",
+        "name": "Realtime hook bridge",
+        "output_sha256": "cc58fb28af54a1adcfe147961c921682430b15e3a24011bb54a42de5528121b3",
+        "returncode": 0,
+        "status": "passed"
+      },
+      {
         "command": "rtk git diff --check",
-        "completed_at": "2026-08-07T11:52:24Z",
-        "name": "OSS diff check",
-        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "completed_at": "2026-08-10T15:05:45Z",
+        "name": "Diff whitespace validation",
+        "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
         "returncode": 0,
         "status": "passed"
       }
     ],
-    "completed_at": "2026-08-07T11:52:24Z",
-    "diff_fingerprint": "e55e7904e305982c80379ce3d6ecebfb6769e051d04ae26be747e36c7f4b0743",
+    "completed_at": "2026-08-10T15:05:45Z",
+    "diff_fingerprint": "147ee46b17e01827236a11dca8a06280905e3451c175925b54af4158b6963354",
     "independent": true,
     "required_check_fields": [
       "name",
@@ -91,10 +135,10 @@
       "completed_at",
       "output_sha256"
     ],
-    "run_id": "org-brain-20260807T101724.031229Z-7eb68edb",
+    "run_id": "org-brain-20260810T124026.261674Z-33fd6331",
     "source": "subagent",
-    "status": "completed",
-    "summary": "Independent verification confirmed the new OTP expiry/hour-limit and tenant-admin group tests, 99 passing API tests, contract coverage, diff checks, and the recorded PostgreSQL integration evidence.",
-    "task_id": "identity_verifier"
+    "status": "passed",
+    "summary": "Independent verification passed 38 API tests, 13 connector tests, 34 hook tests, and git diff whitespace validation on the current diff.",
+    "task_id": "independent-mcp-auth-verification"
   }
 }

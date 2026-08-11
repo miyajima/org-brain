@@ -31,6 +31,7 @@ export type Env = {
   SESSION_ALLOWED_ORIGIN?: string;
   MCP_TENANT_POLICY_JSON?: string;
   MCP_ACCESS_AUD?: string;
+  MCP_AUTH_MODE?: "legacy" | "dual" | "access";
   MCP_SERVICE_TOKENS_JSON?: string;
   MCP_SERVICE_TOKENS_ADDITIONAL_JSON?: string;
   MCP_SERVICE_TOKENS_MACHINE_JSON?: string;
