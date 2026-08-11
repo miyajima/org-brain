@@ -2,7 +2,7 @@
 
 import crypto from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
@@ -33,6 +33,21 @@ const DEFAULT_ENV_FILES = [
 ];
 const MCP_PROTOCOL_VERSION = "2026-07-28";
 const MCP_CAPTURE_TOOL = "orgbrain_memories_capture_rationale";
+const INSTALLATION_CREDENTIAL_KEYS = new Set([
+  "ORGBRAIN_MCP_URL",
+  "ORGBRAIN_MCP_CLIENT_ID",
+  "ORGBRAIN_MCP_CLIENT_SECRET",
+  "ORGBRAIN_CLIENT_INSTALLATION_ID",
+  "ORGBRAIN_HOOK_OUTBOX",
+  "ORGBRAIN_TENANT_ID"
+]);
+const LEGACY_HOOK_CREDENTIAL_KEYS = new Set([
+  "ORGBRAIN_API_URL",
+  "ORGBRAIN_API_BASE",
+  "ORGBRAIN_API_KEY"
+]);
+const validatedMcpConfigurations = new WeakSet();
+const OUTBOX_CLAIM_STALE_MS = 5 * 60 * 1000;
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
@@ -172,15 +187,29 @@ export async function loadEnvFallbacks() {
     .map((entry) => resolveHome(entry.trim()))
     .filter(Boolean);
 
-  for (const file of files) {
+  if (configured) {
+    // An explicitly selected installation file is an identity boundary. Never
+    // inherit these values when that file is missing, unreadable, or incomplete.
+    for (const key of INSTALLATION_CREDENTIAL_KEYS) delete process.env[key];
+    for (const key of LEGACY_HOOK_CREDENTIAL_KEYS) delete process.env[key];
+  }
+
+  for (const [index, file] of files.entries()) {
     try {
       const raw = await readFile(file, "utf8");
       const parsed = parseEnvText(raw);
       for (const [key, value] of Object.entries(parsed)) {
-        if (!process.env[key]) process.env[key] = value;
+        if (configured && LEGACY_HOOK_CREDENTIAL_KEYS.has(key)) {
+          continue;
+        } else if (configured && INSTALLATION_CREDENTIAL_KEYS.has(key)) {
+          if (index === 0) process.env[key] = value;
+        } else if (!process.env[key]) {
+          process.env[key] = value;
+        }
       }
     } catch {
-      // Ignore missing or unreadable env files.
+      if (configured && index === 0) break;
+      // Ignore missing or unreadable fallback env files.
     }
   }
 }
@@ -891,12 +920,16 @@ export function resolveMcpConfig(env = process.env) {
   const clientSecret = typeof env.ORGBRAIN_MCP_CLIENT_SECRET === "string"
     ? env.ORGBRAIN_MCP_CLIENT_SECRET.trim()
     : "";
-  const configured = Boolean(url || clientId || clientSecret);
+  const installationId = typeof env.ORGBRAIN_CLIENT_INSTALLATION_ID === "string"
+    ? env.ORGBRAIN_CLIENT_INSTALLATION_ID.trim()
+    : "";
+  const configured = Boolean(url || clientId || clientSecret || installationId);
   const missing = configured
     ? [
         !url ? "ORGBRAIN_MCP_URL" : "",
         !clientId ? "ORGBRAIN_MCP_CLIENT_ID" : "",
-        !clientSecret ? "ORGBRAIN_MCP_CLIENT_SECRET" : ""
+        !clientSecret ? "ORGBRAIN_MCP_CLIENT_SECRET" : "",
+        !installationId ? "ORGBRAIN_CLIENT_INSTALLATION_ID" : ""
       ].filter(Boolean)
     : [];
   return {
@@ -905,7 +938,182 @@ export function resolveMcpConfig(env = process.env) {
     url,
     clientId,
     clientSecret,
-    missing
+    missing,
+    installationId,
+    outboxFile: resolveHome(
+      typeof env.ORGBRAIN_HOOK_OUTBOX === "string" && env.ORGBRAIN_HOOK_OUTBOX.trim()
+        ? env.ORGBRAIN_HOOK_OUTBOX.trim()
+        : "~/.config/org-brain/hook-capture-outbox.jsonl"
+    )
+  };
+}
+
+async function writePrivateOutbox(file, rows) {
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  const staged = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await writeFile(staged, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""), {
+    encoding: "utf8",
+    mode: 0o600
+  });
+  await chmod(staged, 0o600);
+  await rename(staged, file);
+  await chmod(file, 0o600);
+}
+
+export async function enqueueHookCapture(config, tenantId, sourceName, record, errorCode = "delivery_failed") {
+  const file = config.outboxFile;
+  const identityResolved = Boolean(config.installationId) && errorCode !== "identity_unresolved";
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  await withWorkspaceConfigLock(file, async () => {
+    await appendFile(file, `${JSON.stringify({
+      schema_version: 1,
+      queued_at: Date.now(),
+      tenant_id: tenantId,
+      source: sourceName,
+      installation_id: config.installationId || null,
+      identity_state: identityResolved ? "resolved" : "identity_unresolved",
+      error_code: errorCode,
+      record
+    })}\n`, { encoding: "utf8", mode: 0o600 });
+    await chmod(file, 0o600);
+  });
+}
+
+function parseOutboxRows(raw) {
+  return raw.split(/\r?\n/u).filter(Boolean).flatMap((line) => {
+    const parsed = safeJsonParse(line);
+    return parsed && typeof parsed === "object" ? [parsed] : [];
+  });
+}
+
+async function readOutboxRows(file) {
+  const raw = await readFile(file, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  });
+  return parseOutboxRows(raw);
+}
+
+export async function claimHookCaptureRows(config, limit, options = {}) {
+  const file = config.outboxFile;
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  return withWorkspaceConfigLock(file, async () => {
+    const now = Date.now();
+    const prefix = `${path.basename(file)}.claim-`;
+    const entries = await readdir(path.dirname(file), { withFileTypes: true }).catch(() => []);
+    const staleClaims = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.startsWith(prefix) || !entry.name.endsWith(".jsonl")) continue;
+      const claimFile = path.join(path.dirname(file), entry.name);
+      const claimStat = await stat(claimFile).catch(() => null);
+      if (claimStat && now - claimStat.mtimeMs >= OUTBOX_CLAIM_STALE_MS) staleClaims.push(claimFile);
+    }
+    const recovered = [];
+    for (const claimFile of staleClaims) recovered.push(...await readOutboxRows(claimFile));
+    const rows = [...recovered, ...await readOutboxRows(file)];
+    if (rows.length === 0) return { rows: [], claimFile: null };
+    const count = Math.max(1, Math.min(100, limit));
+    const attempted = rows.slice(0, count);
+    const claimFile = `${file}.claim-${now}-${process.pid}-${crypto.randomUUID()}.jsonl`;
+    // Persist the claim before removing anything from the primary outbox. A crash
+    // in the following rewrite can cause an idempotent retry, but cannot lose a row.
+    await writePrivateOutbox(claimFile, attempted);
+    await options.onClaimPersisted?.({ claimFile, rows: attempted });
+    await writePrivateOutbox(file, rows.slice(count));
+    await Promise.all(staleClaims.map((stale) => unlink(stale).catch(() => undefined)));
+    return { rows: attempted, claimFile };
+  });
+}
+
+async function releaseHookCaptureClaim(config, claimFile, unsent) {
+  if (!claimFile) return;
+  await withWorkspaceConfigLock(config.outboxFile, async () => {
+    if (unsent.length > 0) {
+      const current = await readOutboxRows(config.outboxFile);
+      await writePrivateOutbox(config.outboxFile, [...unsent, ...current]);
+    }
+    await unlink(claimFile).catch(() => undefined);
+  });
+}
+
+export async function validateMcpInstallation(config) {
+  if (!config.installationId) return false;
+  const target = new URL(config.url);
+  target.pathname = `${target.pathname.replace(/\/+$/u, "")}/client-installations/status`;
+  const response = await fetch(target, {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      "CF-Access-Client-Id": config.clientId,
+      "CF-Access-Client-Secret": config.clientSecret
+    }
+  });
+  const body = await response.json().catch(() => null);
+  const valid = Boolean(response.ok && body?.ok && body.data?.id === config.installationId);
+  if (valid) validatedMcpConfigurations.add(config);
+  else validatedMcpConfigurations.delete(config);
+  return valid;
+}
+
+async function ensureMcpInstallationIdentity(config) {
+  if (validatedMcpConfigurations.has(config)) return;
+  if (!await validateMcpInstallation(config)) {
+    throw new Error("org-brain MCP hook identity validation failed (403): installation mismatch or revocation");
+  }
+}
+
+export async function flushHookCaptureOutbox(config, limit = 100) {
+  const claimed = await claimHookCaptureRows(config, limit);
+  const attempted = claimed.rows;
+  if (attempted.length === 0) return { attempted: 0, sent: 0, pending: 0 };
+  const remaining = [];
+  let sent = 0;
+  let identityValidated;
+  for (let index = 0; index < attempted.length; index += 1) {
+    let item = attempted[index];
+    if (
+      item.identity_state === "identity_unresolved" &&
+      item.installation_id &&
+      config.installationId &&
+      item.installation_id === config.installationId
+    ) {
+      identityValidated ??= await validateMcpInstallation(config).catch(() => false);
+      if (identityValidated) {
+        item = { ...item, identity_state: "resolved", error_code: "identity_revalidated" };
+      }
+    }
+    if (
+      item.identity_state !== "resolved" ||
+      !item.installation_id ||
+      !config.installationId ||
+      item.installation_id !== config.installationId
+    ) {
+      remaining.push(item);
+      continue;
+    }
+    try {
+      await postMemoryViaMcp(config, item.tenant_id, item.source, item.record);
+      sent += 1;
+    } catch (error) {
+      const errorCode = hookDeliveryErrorCode(error);
+      if (errorCode === "identity_unresolved") {
+        remaining.push({
+          ...item,
+          identity_state: "identity_unresolved",
+          error_code: errorCode
+        });
+        remaining.push(...attempted.slice(index + 1));
+      } else {
+        remaining.push(...attempted.slice(index));
+      }
+      break;
+    }
+  }
+  await releaseHookCaptureClaim(config, claimed.claimFile, remaining);
+  return {
+    attempted: attempted.length,
+    sent,
+    pending: (await readOutboxRows(config.outboxFile)).length
   };
 }
 
@@ -943,6 +1151,7 @@ export function buildMcpCaptureRequest(tenantId, sourceName, record) {
 }
 
 export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
+  await ensureMcpInstallationIdentity(config);
   const response = await fetch(config.url, {
     method: "POST",
     headers: {
@@ -959,6 +1168,7 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
   });
   const body = await response.json().catch(() => null);
   if (!response.ok || !body || body.error || body.result?.isError) {
+    if (response.status === 401 || response.status === 403) validatedMcpConfigurations.delete(config);
     const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
     throw new Error(`org-brain MCP hook capture failed (${response.status}): ${detail}`);
   }
@@ -971,6 +1181,12 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
   } catch {
     throw new Error("org-brain MCP hook capture returned invalid JSON");
   }
+}
+
+function hookDeliveryErrorCode(error) {
+  return error instanceof Error && /\(40[13]\)/u.test(error.message)
+    ? "identity_unresolved"
+    : "delivery_failed";
 }
 
 async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
@@ -1127,9 +1343,35 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     });
   }
 
-  const result = mcp.complete
-    ? await postMemoryViaMcp(mcp, tenantId, sourceName, prepared.record)
-    : await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
+  let result;
+  if (mcp.complete) {
+    await flushHookCaptureOutbox(mcp, 100).catch(() => undefined);
+    try {
+      result = await postMemoryViaMcp(mcp, tenantId, sourceName, prepared.record);
+    } catch (error) {
+      const errorCode = hookDeliveryErrorCode(error);
+      await enqueueHookCapture(
+        mcp,
+        tenantId,
+        sourceName,
+        prepared.record,
+        errorCode
+      ).catch(() => undefined);
+      return finish({
+        ok: true,
+        queued: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        external_key: prepared.record.externalKey,
+        identity_state: errorCode === "identity_unresolved" || !mcp.installationId
+          ? "identity_unresolved"
+          : "resolved",
+        ...memoryModeFields(memoryMode)
+      });
+    }
+  } else {
+    result = await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
+  }
   return finish({
     ok: true,
     source: sourceName,
