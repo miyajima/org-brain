@@ -52,6 +52,7 @@ const organizationSlug = Astro.url.searchParams.get("organization")?.trim() || "
     if (payload?.data?.csrf_token) sessionStorage.setItem("orgbrain_csrf", payload.data.csrf_token);
     const tenantId = payload?.data?.tenant_id || payload?.data?.user?.tenant_id || "default";
     localStorage.setItem("orgbrain_tenant", tenantId);
+    document.cookie = `orgbrain_tenant=${encodeURIComponent(tenantId)}; Path=/; SameSite=Lax`;
     window.location.assign(`/profile?tenant_id=${encodeURIComponent(tenantId)}`);
   });
 </script>

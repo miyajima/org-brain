@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "./dashboard-page";
+import {
+  dashboardApiPath,
+  dashboardPageParams,
+  dashboardTaskPageParams,
+  fetchDashboardData,
+  normalizeDashboardTasks
+} from "./dashboard-page";
 
 describe("dashboard page helpers", () => {
   it("normalizes scope and keeps a default tenant explicit", () => {
@@ -74,5 +80,47 @@ describe("dashboard page helpers", () => {
       if (originalInternalApiKey === undefined) delete processEnv.INTERNAL_API_KEY;
       else processEnv.INTERNAL_API_KEY = originalInternalApiKey;
     }
+  });
+
+  it("uses the tenant cookie when the URL has no explicit tenant scope", () => {
+    const scoped = dashboardPageParams(
+      new URL("https://console.test/overview?project_id=p-1"),
+      "orgbrain_tenant=tenant-a; other=value"
+    );
+    expect(scoped.tenantId).toBe("tenant-a");
+    expect(scoped.apiParams.get("tenant_id")).toBe("tenant-a");
+    expect(scoped.params.get("tenant_id")).toBe("tenant-a");
+  });
+
+  it("builds bounded task search, status, and pagination parameters", () => {
+    const scoped = dashboardTaskPageParams(new URL(
+      "https://console.test/dashboard?tenant_id=tenant-a&task_q=login&task_status=failed&task_page=2&lang=ja"
+    ));
+    expect(scoped.taskPage).toBe(2);
+    expect(scoped.taskPageSize).toBe(20);
+    expect(scoped.apiParams.toString()).toBe(
+      "tenant_id=tenant-a&q=login&status=failed&limit=21&offset=40"
+    );
+
+    const invalidStatus = dashboardTaskPageParams(new URL(
+      "https://console.test/dashboard?tenant_id=tenant-a&task_status=not%20a%20status&task_page=-4"
+    ));
+    expect(invalidStatus.taskStatus).toBe("");
+    expect(invalidStatus.taskPage).toBe(0);
+    expect(invalidStatus.apiParams.get("status")).toBeNull();
+    expect(invalidStatus.params.get("task_status")).toBeNull();
+    expect(invalidStatus.params.get("task_page")).toBeNull();
+  });
+
+  it("rejects malformed task payloads instead of treating them as empty", () => {
+    expect(() => normalizeDashboardTasks({ tasks: [] })).toThrow("Dashboard task payload was invalid");
+    expect(() => normalizeDashboardTasks([
+      { id: "task-1", capability: "memory", status: "failed", updated_at: "not-a-date" }
+    ])).toThrow("Dashboard task payload was invalid");
+    expect(normalizeDashboardTasks([
+      { id: "task-1", tenant_id: "tenant-a", project_id: null, capability: "memory", status: "failed", updated_at: 1 }
+    ])).toEqual([
+      { id: "task-1", tenant_id: "tenant-a", project_id: null, capability: "memory", status: "failed", updated_at: 1 }
+    ]);
   });
 });

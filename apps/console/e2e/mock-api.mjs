@@ -361,12 +361,91 @@ function ok(data) {
   return { ok: true, data };
 }
 
+function taskFixtures(tenantId, projectId) {
+  if (projectId === "e2e-task-dense") {
+    return Array.from({ length: 21 }, (_, index) => ({
+      id: "task-dense-" + (index + 1),
+      tenant_id: tenantId,
+      project_id: projectId,
+      capability: index % 2 === 0 ? "memory_measurement" : "knowledge_graph",
+      status: index % 3 === 0 ? "failed" : "succeeded",
+      updated_at: now - index * 60_000
+    }));
+  }
+  return [
+    {
+      id: "task-e2e",
+      tenant_id: tenantId,
+      project_id: projectId || "org-brain",
+      capability: "memory_measurement",
+      status: "succeeded",
+      updated_at: now
+    },
+    {
+      id: "task-failed",
+      tenant_id: tenantId,
+      project_id: projectId || "org-brain",
+      capability: "knowledge_graph",
+      status: "failed",
+      updated_at: now - 9 * 60_000
+    }
+  ];
+}
+
+function operationsStatus(tenantId) {
+  return {
+    tenant_id: tenantId,
+    scheduled_jobs: [{ job_name: "memory_measurement", latest_status: "succeeded", stale: false, last_success_at: now, success_age_ms: 3_600_000, next_expected_at: now + 3_600_000 }],
+    retention_queue: { pending: 2, overdue: 0, failed: 0, manual_review: 0 },
+    memories: { total: 12, conflicting: 1, expired: 0 },
+    decision_review: { unconfirmed: 2, low_confidence: 1 },
+    tasks: { active: 1, failed: 1, stuck: 0, failed_items: [{ id: "task-failed", capability: "knowledge_graph", status: "failed", updated_at: now - 9 * 60_000 }] },
+    audit: { events_24h: 24, denied_24h: 1, failed_24h: 1 },
+    authorization: { roles: [{ role: "tenant_admin", permissions: ["memory:read", "task:replay"], assignments: 1, principals: 1 }] },
+    retrieval: { searches_24h: 18, hit_rate_24h: 0.9, fallback_rate_24h: 0.1, average_latency_ms_24h: 42, semantic_configured: true, lexical: "ready", graph: "ready" },
+    scoped_tokens: { active: 1 },
+    retention: { legal_holds: 0 },
+    slo_targets: { rpo_minutes: 15, rto_minutes: 60 }
+  };
+}
+
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
   const path = url.pathname;
 
   if (path === "/health") {
     json(response, 200, { ok: true });
+    return;
+  }
+
+  if (path === "/v1/tasks" && request.method === "GET") {
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    if (projectId === "e2e-task-error") {
+      json(response, 503, { ok: false, error: { code: "task_unavailable", message: "Task fixture unavailable" } });
+      return;
+    }
+    const tenantId = url.searchParams.get("tenant_id") || "default";
+    const query = (url.searchParams.get("q") || "").toLowerCase();
+    const status = url.searchParams.get("status") || "";
+    const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+    const limit = Math.max(1, Number(url.searchParams.get("limit") || 50));
+    const tasks = taskFixtures(tenantId, projectId)
+      .filter((task) => !status || task.status === status)
+      .filter((task) => !query || (" " + task.id + " " + task.capability + " " + task.project_id).toLowerCase().includes(query));
+    json(response, 200, ok(tasks.slice(offset, offset + limit)));
+    return;
+  }
+
+  if (path === "/v1/ops/status" && request.method === "GET") {
+    const tenantId = url.searchParams.get("tenant_id") || "default";
+    json(response, 200, ok(operationsStatus(tenantId)));
+    return;
+  }
+
+  if (path.startsWith("/v1/ops/tasks/") && path.endsWith("/replay") && request.method === "POST") {
+    const body = await readJson(request);
+    const tenantId = body.tenant_id || "default";
+    json(response, 201, ok({ task_id: "replayed-" + tenantId, tenant_id: tenantId }));
     return;
   }
 

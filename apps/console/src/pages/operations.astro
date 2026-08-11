@@ -1,7 +1,10 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams } from "../lib/dashboard-page";
 
-const response = await fetch(new URL("/api/v1/ops/status?tenant_id=default", Astro.url));
+const { tenantId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const opsParams = new URLSearchParams({ tenant_id: tenantId });
+const response = await fetch(new URL(dashboardApiPath("/api/v1/ops/status", opsParams), Astro.url));
 const payload: any = response.ok ? await response.json() : { ok: false, data: null };
 const status = payload.ok ? payload.data : null;
 const scheduledJobs = Array.isArray(status?.scheduled_jobs) ? status.scheduled_jobs : [];
@@ -26,7 +29,7 @@ const duration = (value: unknown) => {
     <span class="surface-chip">Operations</span>
     <h1 class="mt-4 text-3xl font-semibold">運用ステータス</h1>
     <p class="surface-muted mt-2">
-      権限・競合・古い記憶・検索品質・キュー状態を、tenant単位で確認します。
+      権限・競合・古い記憶・検索品質・キュー状態を、tenant単位で確認します。対象: <strong>{tenantId}</strong>
     </p>
     {!status && (
       <p class="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/8 p-4 text-rose-100">
@@ -146,7 +149,7 @@ const duration = (value: unknown) => {
                   <td>{task.capability}</td>
                   <td>{task.status}</td>
                   <td>{new Date(task.updated_at).toLocaleString("ja-JP")}</td>
-                  <td><button class="replay-task" data-task-id={task.id}>再実行</button></td>
+                  <td><button class="replay-task" data-task-id={task.id} data-tenant-id={tenantId}>再実行</button></td>
                 </tr>
               ))}
             </tbody>
@@ -180,7 +183,7 @@ const duration = (value: unknown) => {
         const response = await fetch(`/api/v1/ops/tasks/${encodeURIComponent(taskId)}/replay`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ tenant_id: "default" })
+          body: JSON.stringify({ tenant_id: button.dataset.tenantId })
         });
         const payload = await response.json() as {
           ok?: boolean;

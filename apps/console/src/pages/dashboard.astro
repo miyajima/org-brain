@@ -1,55 +1,26 @@
 ---
+import LegacyTaskDashboard from "../components/LegacyTaskDashboard.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { dashboardApiPath, dashboardPageParams } from "../lib/dashboard-page";
+import { dashboardApiPath, dashboardTaskPageParams, fetchDashboardData, normalizeDashboardTasks } from "../lib/dashboard-page";
 
-const { params, apiParams, lang } = dashboardPageParams(Astro.url);
-const response = await fetch(new URL(dashboardApiPath("/api/v1/tasks", apiParams, { limit: 20 }), Astro.url));
-const payload: any = response.ok ? await response.json() : { ok: false, data: [] };
-const tasks = payload.ok ? payload.data : [];
-const counters = tasks.reduce((acc: Record<string, number>, task: { status: string }) => {
-  acc[task.status] = (acc[task.status] ?? 0) + 1;
-  return acc;
-}, {});
-const taskHref = (taskId: string) => {
-  const scope = new URLSearchParams();
-  for (const key of ["tenant_id", "project_id", "lang"]) {
-    const value = params.get(key);
-    if (value) scope.set(key, value);
-  }
-  return `/tasks/${encodeURIComponent(taskId)}${scope.size ? `?${scope.toString()}` : ""}`;
-};
+const cookieHeader = Astro.request.headers.get("cookie");
+const taskView = dashboardTaskPageParams(Astro.url, cookieHeader);
+const taskResult = await fetchDashboardData(
+  new URL(dashboardApiPath("/api/v1/tasks", taskView.apiParams), Astro.url),
+  normalizeDashboardTasks,
+  []
+);
 ---
-<BaseLayout title="Org Brain Dashboard" lang={lang}>
-  <section class="card">
-    <h1>Org Bus Dashboard</h1>
-    <p class="muted">最近のタスクとステータス分布を表示します。</p>
-    <table>
-      <thead><tr><th>Status</th><th>Count</th></tr></thead>
-      <tbody>
-        {Object.keys(counters).length === 0 ? (
-          <tr><td colspan="2">データなし</td></tr>
-        ) : Object.entries(counters).map(([status, count]) => (
-          <tr><td>{status}</td><td>{count}</td></tr>
-        ))}
-      </tbody>
-    </table>
-  </section>
-  <section class="card">
-    <h2>Recent Tasks</h2>
-    <table>
-      <thead><tr><th>Task ID</th><th>Capability</th><th>Status</th><th>Updated</th></tr></thead>
-      <tbody>
-        {tasks.length === 0 ? (
-          <tr><td colspan="4">データなし</td></tr>
-        ) : tasks.slice(0, 10).map((task: any) => (
-          <tr>
-            <td><a href={taskHref(task.id)}>{task.id}</a></td>
-            <td>{task.capability}</td>
-            <td>{task.status}</td>
-            <td>{new Date(task.updated_at).toLocaleString("ja-JP")}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </section>
+<BaseLayout title="Org Brain Dashboard" lang={taskView.lang}>
+  <LegacyTaskDashboard
+    tasks={taskResult.data}
+    error={taskResult.error}
+    params={taskView.params}
+    lang={taskView.lang}
+    page={taskView.taskPage}
+    pageSize={taskView.taskPageSize}
+    query={taskView.taskQuery}
+    status={taskView.taskStatus}
+    hasMore={taskResult.data.length > taskView.taskPageSize}
+  />
 </BaseLayout>

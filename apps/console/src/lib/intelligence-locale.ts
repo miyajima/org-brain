@@ -110,6 +110,9 @@ const EN_COPY = {
     title: "Knowledge connections",
     description: "Select a piece of knowledge to see the decisions, sources, projects, and tasks connected to it.",
     area: "Domain",
+    search: "Search knowledge",
+    searchPlaceholder: "Title, summary, or ID",
+    apply: "Apply",
     nodeTypes: {
       all: "All domains",
       memory: "Memory",
@@ -367,6 +370,9 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       title: "知識のつながり",
       description: "知識を選び、関連する判断・資料・プロジェクト・Taskと影響範囲を探索します。",
       area: "領域",
+      search: "知識を検索",
+      searchPlaceholder: "タイトル・要約・ID",
+      apply: "適用",
       nodeTypes: {
         all: "すべての領域",
         memory: "メモリ",
@@ -615,6 +621,9 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       title: "知识关联",
       description: "选择知识，探索相关决策、资料、项目、任务及其影响范围。",
       area: "领域",
+      search: "搜索知识",
+      searchPlaceholder: "标题、摘要或 ID",
+      apply: "应用",
       nodeTypes: {
         all: "所有领域",
         memory: "记忆",

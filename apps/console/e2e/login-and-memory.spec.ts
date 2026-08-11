@@ -21,7 +21,7 @@ test.describe("authenticated console flows", () => {
     await page.goto("/memories");
 
     await expect(page.getByRole("heading", { name: "Memory Explorer" })).toBeVisible();
-    await expect(page.getByRole("navigation").getByRole("link", { name: "Memories" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("navigation").getByRole("link", { name: "Knowledge connections" })).toBeVisible();
     await expect(page.getByText("Login principal group ACL design").first()).toBeVisible();
     await expect(page.getByText("1 visible")).toBeVisible();
     await expect(page.getByText("1 canonical")).toBeVisible();

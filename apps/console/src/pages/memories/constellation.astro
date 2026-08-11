@@ -10,7 +10,7 @@ const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processIns
 if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
   return Astro.redirect(`/memories${Astro.url.search}`);
 }
-const { params, apiParams, lang } = dashboardPageParams(Astro.url);
+const { params, apiParams, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = intelligencePageCopy(lang);
 const query = params.get("q")?.trim();
 if (query) apiParams.set("q", query);

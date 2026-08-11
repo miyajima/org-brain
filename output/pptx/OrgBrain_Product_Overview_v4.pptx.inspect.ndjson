@@ -1,0 +1,470 @@
+{"kind":"deck","id":"pr/mxyte3","name":"Deck"}
+{"kind":"layout","layoutId":"af0cf01f-c617-4b39-a365-4db8f92edfb1","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"1dede19b-8e2d-4505-a12b-41ac123fe7cf","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/f7w9oe","slide":1,"title":"ORG BRAIN","textShapes":5}
+{"kind":"shape","id":"sh/cbilkrud","slide":1,"bbox":[0,0,720,720]}
+{"kind":"textbox","id":"sh/dcrmdwvy","slide":1,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[76,64,280,26]}
+{"kind":"textbox","id":"sh/2lg3ehcb","slide":1,"text":"AIが動くたび、\n組織が学ぶ","textPreview":"AIが動くたび、 | 組織が学ぶ","textChars":14,"textLines":2,"bbox":[76,150,670,190]}
+{"kind":"textbox","id":"sh/3mp472dw","slide":1,"text":"判断の背景を、次のAI実行が使える組織知へ\n理由・制約・結果を残し、同じ失敗を繰り返さない","textPreview":"判断の背景を、次のAI実行が使える組織知へ | 理由・制約・結果を残し、同じ失敗を繰り返さない","textChars":45,"textLines":2,"bbox":[78,374,610,86]}
+{"kind":"shape","id":"sh/onylg7uh","slide":1,"bbox":[78,494,120,0]}
+{"kind":"textbox","id":"sh/po7m9cvm","slide":1,"text":"AI利用を、組織知に","textPreview":"AI利用を、組織知に","textChars":10,"textLines":1,"bbox":[78,512,520,28]}
+{"kind":"textbox","id":"sh/mhknq1cf","slide":1,"text":"OrgBrain","textPreview":"OrgBrain","textChars":8,"textLines":1,"bbox":[78,620,280,38]}
+{"kind":"image","id":"im/61oj6t0n","slide":1,"name":"","alt":"抽象的な組織メモリーネットワーク","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/f7w9oe","slide":1,"text":"[Sources]\n- OrgBrain README in the local repository, accessed 2026-08-07.\n- Generated visual: OpenAI Image Generation, organizational-memory-hero.png, 2026-08-07."}
+{"kind":"slide","id":"sl/dazpze","slide":2,"title":"ORG BRAIN","textShapes":15}
+{"kind":"textbox","id":"sh/6dcfa9w7","slide":2,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/tg3e5ovi","slide":2,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/8fuxcjex","slide":2,"text":"OrgBrain サマリー","textPreview":"OrgBrain サマリー","textChars":13,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/vi5g7ydo","slide":2,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/uhwfetw3","slide":2,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/hkny98vu","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/gjexg3e9","slide":2,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[72,126,900,44]}
+{"kind":"textbox","id":"sh/3m5gbydk","slide":2,"text":"課題","textPreview":"課題","textChars":2,"textLines":1,"bbox":[86,202,180,34]}
+{"kind":"textbox","id":"sh/ilwfitwf","slide":2,"text":"判断理由が会話・ログ・人に散在し、人もAIも毎回ゼロから再調査","textPreview":"判断理由が会話・ログ・人に散在し、人もAIも毎回ゼロから再調査","textChars":31,"textLines":1,"bbox":[286,198,880,44]}
+{"kind":"shape","id":"sh/wzup4f61","slide":2,"bbox":[86,256,1080,0]}
+{"kind":"textbox","id":"sh/h036xknm","slide":2,"text":"仕組み","textPreview":"仕組み","textChars":3,"textLines":1,"bbox":[86,290,180,34]}
+{"kind":"textbox","id":"sh/uxc725ov","slide":2,"text":"結論・理由・制約・却下案・出典を仕事の痕跡から記憶し、次のAI実行で想起","textPreview":"結論・理由・制約・却下案・出典を仕事の痕跡から記憶し、次のAI実行で想起","textChars":36,"textLines":1,"bbox":[286,286,880,44]}
+{"kind":"shape","id":"sh/vylova5g","slide":2,"bbox":[86,344,1080,0]}
+{"kind":"textbox","id":"sh/43up8f6x","slide":2,"text":"導入効果","textPreview":"導入効果","textChars":4,"textLines":1,"bbox":[86,378,180,34]}
+{"kind":"textbox","id":"sh/543q1kni","slide":2,"text":"100人組織で年間約3,000万円・6,000時間の改善余地（試算）","textPreview":"100人組織で年間約3,000万円・6,000時間の改善余地（試算）","textChars":34,"textLines":1,"bbox":[286,374,880,44]}
+{"kind":"shape","id":"sh/i1c765o7","slide":2,"bbox":[86,432,1080,0]}
+{"kind":"textbox","id":"sh/j2loza5s","slide":2,"text":"導入方法","textPreview":"導入方法","textChars":4,"textLines":1,"bbox":[86,466,180,34]}
+{"kind":"textbox","id":"sh/srepcz69","slide":2,"text":"組織単位3万円/月〜、1チーム・8週間のPoCから開始","textPreview":"組織単位3万円/月〜、1チーム・8週間のPoCから開始","textChars":27,"textLines":1,"bbox":[286,462,880,44]}
+{"kind":"shape","id":"sh/dsnq54nu","slide":2,"bbox":[72,572,1136,70]}
+{"kind":"textbox","id":"sh/1czy90bm","slide":2,"text":"人数ではなく、組織メモリーをどこまで広く・深く使うかで課金","textPreview":"人数ではなく、組織メモリーをどこまで広く・深く使うかで課金","textChars":29,"textLines":1,"bbox":[102,590,1076,32]}
+{"kind":"notes","id":"nt/dazpze","slide":2,"text":"[Sources]\n- Summary of the product positioning, value model, pricing concept, and PoC proposal in this deck.\n- Financial impact is an illustrative opportunity model, not a reported customer result."}
+{"kind":"slide","id":"sl/fkcnz7","slide":3,"title":"ORG BRAIN","textShapes":31}
+{"kind":"textbox","id":"sh/90bm1kzy","slide":3,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/mdknqpgn","slide":3,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/nyt4zuhs","slide":3,"text":"「これって、なんでこうしたんだっけ？」をなくす","textPreview":"「これって、なんでこうしたんだっけ？」をなくす","textChars":23,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/w325wzyp","slide":3,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/x4vm54fa","slide":3,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/a1knupgj","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/v2t43ux4","slide":3,"text":"現状","textPreview":"現状","textChars":2,"textLines":1,"bbox":[72,146,220,26]}
+{"kind":"textbox","id":"sh/47m50jyl","slide":3,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[660,146,220,26]}
+{"kind":"shape","id":"sh/58vmtof6","slide":3,"bbox":[620,150,0,354]}
+{"kind":"textbox","id":"sh/1ofudcru","slide":3,"text":"理由が、会話・ログ・人に散在","textPreview":"理由が、会話・ログ・人に散在","textChars":14,"textLines":1,"bbox":[72,182,500,38]}
+{"kind":"textbox","id":"sh/0n6t47ap","slide":3,"text":"判断した瞬間に、理由ごと記憶","textPreview":"判断した瞬間に、理由ごと記憶","textChars":14,"textLines":1,"bbox":[660,182,548,38]}
+{"kind":"textbox","id":"sh/fmxcb294","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[76,240,52,28]}
+{"kind":"textbox","id":"sh/elob2xsj","slide":3,"text":"横断検索","textPreview":"横断検索","textChars":4,"textLines":1,"bbox":[138,236,184,34]}
+{"kind":"textbox","id":"sh/pczuhcr6","slide":3,"text":"Slack・Issue・議事録を探す","textPreview":"Slack・Issue・議事録を探す","textChars":18,"textLines":1,"bbox":[328,238,250,30]}
+{"kind":"textbox","id":"sh/ob6d87al","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[76,316,52,28]}
+{"kind":"textbox","id":"sh/naxcfm90","slide":3,"text":"背景を再推論","textPreview":"背景を再推論","textChars":6,"textLines":1,"bbox":[138,312,184,34]}
+{"kind":"textbox","id":"sh/29ob6hsf","slide":3,"text":"断片から『なぜ』を推測","textPreview":"断片から『なぜ』を推測","textChars":11,"textLines":1,"bbox":[328,314,250,30]}
+{"kind":"textbox","id":"sh/5gvu5sr2","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[76,392,52,28]}
+{"kind":"textbox","id":"sh/4fmtwnah","slide":3,"text":"人に確認","textPreview":"人に確認","textChars":4,"textLines":1,"bbox":[138,388,184,34]}
+{"kind":"textbox","id":"sh/wzqtcnid","slide":3,"text":"担当者不在なら答えが消失","textPreview":"担当者不在なら答えが消失","textChars":12,"textLines":1,"bbox":[328,390,250,30]}
+{"kind":"textbox","id":"sh/h0zulszi","slide":3,"text":"人もAIも、毎回ゼロから","textPreview":"人もAIも、毎回ゼロから","textChars":12,"textLines":1,"bbox":[138,474,370,28]}
+{"kind":"shape","id":"sh/uxobad07","slide":3,"bbox":[816,312,22,0]}
+{"kind":"shape","id":"sh/vyhcjihs","slide":3,"bbox":[998,312,22,0]}
+{"kind":"shape","id":"sh/43qdg7i9","slide":3,"bbox":[660,244,160,138]}
+{"kind":"textbox","id":"sh/5ozupszu","slide":3,"text":"1  記録","textPreview":"1  記録","textChars":5,"textLines":1,"bbox":[676,260,128,28]}
+{"kind":"textbox","id":"sh/i18vex03","slide":3,"text":"Slack・GitHub\nAI実行","textPreview":"Slack・GitHub | AI実行","textChars":17,"textLines":2,"bbox":[672,304,136,54]}
+{"kind":"shape","id":"sh/j2hcn2ho","slide":3,"bbox":[842,244,160,138]}
+{"kind":"textbox","id":"sh/sradk7i5","slide":3,"text":"2  構造化","textPreview":"2  構造化","textChars":6,"textLines":1,"bbox":[858,260,128,28]}
+{"kind":"textbox","id":"sh/tsjutczq","slide":3,"text":"理由・制約\n却下案・出典","textPreview":"理由・制約 | 却下案・出典","textChars":12,"textLines":2,"bbox":[854,304,136,54]}
+{"kind":"shape","id":"sh/ny5oza54","slide":3,"bbox":[1024,244,160,138]}
+{"kind":"textbox","id":"sh/2xwn65oz","slide":3,"text":"3  想起","textPreview":"3  想起","textChars":5,"textLines":1,"bbox":[1040,260,128,28]}
+{"kind":"textbox","id":"sh/90n610na","slide":3,"text":"権限に合う\n記憶を検索","textPreview":"権限に合う | 記憶を検索","textChars":11,"textLines":2,"bbox":[1036,304,136,54]}
+{"kind":"textbox","id":"sh/oze58f6p","slide":3,"text":"次のAI実行で、根拠付き回答","textPreview":"次のAI実行で、根拠付き回答","textChars":14,"textLines":1,"bbox":[720,408,430,30]}
+{"kind":"shape","id":"sh/fulovq58","slide":3,"bbox":[72,528,1136,118]}
+{"kind":"textbox","id":"sh/etcn2lon","slide":3,"text":"AIへの質問","textPreview":"AIへの質問","textChars":6,"textLines":1,"bbox":[96,544,180,24]}
+{"kind":"textbox","id":"sh/1wn6x0ne","slide":3,"text":"なぜA社だけ例外仕様？","textPreview":"なぜA社だけ例外仕様？","textChars":11,"textLines":1,"bbox":[96,574,360,38]}
+{"kind":"shape","id":"sh/0ve54v6t","slide":3,"bbox":[478,548,0,78]}
+{"kind":"textbox","id":"sh/jqpo7u5c","slide":3,"text":"根拠付きの出力例","textPreview":"根拠付きの出力例","textChars":8,"textLines":1,"bbox":[510,544,220,24]}
+{"kind":"textbox","id":"sh/ypg7epor","slide":3,"text":"SAML要件の期限が理由。全顧客同時リリースは納期超過で却下","textPreview":"SAML要件の期限が理由。全顧客同時リリースは納期超過で却下","textChars":30,"textLines":1,"bbox":[510,570,660,30]}
+{"kind":"textbox","id":"sh/6dwr29kb","slide":3,"text":"出典：Slackの議論 / GitHub Issue / 仕様書","textPreview":"出典：Slackの議論 / GitHub Issue / 仕様書","textChars":32,"textLines":1,"bbox":[510,604,660,24]}
+{"kind":"notes","id":"nt/fkcnz7","slide":3,"text":"[Sources]\n- OrgBrain README in the local repository, sections The Problem and What OrgBrain Does, accessed 2026-08-07.\n- packages/shared/src/memory-lifecycle-types.ts and apps/api-gateway/src/context-engine-service.ts.\n- The AI answer is an illustrative output example, not a reported customer result."}
+{"kind":"slide","id":"sl/qvjpuq","slide":4,"title":"ORG BRAIN","textShapes":5}
+{"kind":"shape","id":"sh/sjy9wbah","slide":4,"bbox":[0,0,1280,190]}
+{"kind":"textbox","id":"sh/tkrq5gb2","slide":4,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,24,260,18]}
+{"kind":"textbox","id":"sh/itgrq1sf","slide":4,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,24,418,18]}
+{"kind":"textbox","id":"sh/jup8zmtk","slide":4,"text":"人が辞めるたび、組織は記憶をなくす","textPreview":"人が辞めるたび、組織は記憶をなくす","textChars":17,"textLines":1,"bbox":[72,52,1136,66]}
+{"kind":"textbox","id":"sh/4vy9sra5","slide":4,"text":"退職者とともに、判断理由・失敗・暗黙の制約まで組織から抜け落ちる","textPreview":"退職者とともに、判断理由・失敗・暗黙の制約まで組織から抜け落ちる","textChars":32,"textLines":1,"bbox":[160,128,960,34]}
+{"kind":"shape","id":"sh/5w7q1wbq","slide":4,"bbox":[194,570,892,78]}
+{"kind":"textbox","id":"sh/2p0r2lsj","slide":4,"text":"同じ失敗の再発は、組織が覚えていないことの帰結","textPreview":"同じ失敗の再発は、組織が覚えていないことの帰結","textChars":23,"textLines":1,"bbox":[226,591,828,36]}
+{"kind":"image","id":"im/i9w369g7","slide":4,"name":"","alt":"退職する人とともに組織の知識ネットワークが抜け落ちる抽象表現","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/qvjpuq","slide":4,"text":"[Sources]\n- User-provided OrgBrain_AI_Memory.pdf, slide 3.\n- Generated visual: OpenAI Image Generation, organizational-memory-loss-v2.png, 2026-08-07."}
+{"kind":"slide","id":"sl/kxxm1x","slide":5,"title":"ORG BRAIN","textShapes":18}
+{"kind":"textbox","id":"sh/58ri9o76","slide":5,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/i50jy98v","slide":5,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/j6907epg","slide":5,"text":"人もAIも、同じ質問に毎回ゼロから回答","textPreview":"人もAIも、同じ質問に毎回ゼロから回答","textChars":19,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/sb21436x","slide":5,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/twbid87i","slide":5,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/69kj2tor","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/rat0bypc","slide":5,"text":"WITHOUT ORGBRAIN","textPreview":"WITHOUT ORGBRAIN","textChars":16,"textLines":1,"bbox":[86,154,260,26]}
+{"kind":"textbox","id":"sh/gz21836t","slide":5,"text":"WITH ORGBRAIN","textPreview":"WITH ORGBRAIN","textChars":13,"textLines":1,"bbox":[692,154,240,26]}
+{"kind":"shape","id":"sh/10v2h87e","slide":5,"bbox":[620,154,0,454]}
+{"kind":"textbox","id":"sh/p0j61gf6","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[92,220,52,40]}
+{"kind":"textbox","id":"sh/ozap8bel","slide":5,"text":"人がSlackを再検索","textPreview":"人がSlackを再検索","textChars":11,"textLines":1,"bbox":[164,220,370,40]}
+{"kind":"shape","id":"sh/3y1oz6xg","slide":5,"bbox":[117,270,0,40]}
+{"kind":"textbox","id":"sh/2xs761wv","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[92,324,52,40]}
+{"kind":"textbox","id":"sh/do365gvi","slide":5,"text":"AIもログと文書を再検索","textPreview":"AIもログと文書を再検索","textChars":12,"textLines":1,"bbox":[164,324,370,40]}
+{"kind":"shape","id":"sh/cnupcbex","slide":5,"bbox":[117,374,0,40]}
+{"kind":"textbox","id":"sh/b2lo36xc","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[92,428,52,40]}
+{"kind":"textbox","id":"sh/q1c7alwr","slide":5,"text":"人もAIも背景を再推論","textPreview":"人もAIも背景を再推論","textChars":11,"textLines":1,"bbox":[164,428,370,40]}
+{"kind":"textbox","id":"sh/tsz6twfy","slide":5,"text":"「なぜA社だけ例外仕様なの？」","textPreview":"「なぜA社だけ例外仕様なの？」","textChars":15,"textLines":1,"bbox":[690,210,500,42]}
+{"kind":"shape","id":"sh/srq50ret","slide":5,"bbox":[690,274,500,240]}
+{"kind":"textbox","id":"sh/kbupgrm9","slide":5,"text":"A社のSAML要件により先行対応。\n代替案Bは、納期と権限設計の制約で却下されました。","textPreview":"A社のSAML要件により先行対応。 | 代替案Bは、納期と権限設計の制約で却下されました。","textChars":43,"textLines":2,"bbox":[720,304,442,94]}
+{"kind":"shape","id":"sh/lc369wnu","slide":5,"bbox":[720,422,412,0]}
+{"kind":"textbox","id":"sh/y9c7eh4j","slide":5,"text":"理由・制約・却下案・出典をセットで想起","textPreview":"理由・制約・却下案・出典をセットで想起","textChars":19,"textLines":1,"bbox":[720,441,420,28]}
+{"kind":"textbox","id":"sh/jalo7m54","slide":5,"text":"出典：Slackの議論 / GitHub Issue / 仕様書","textPreview":"出典：Slackの議論 / GitHub Issue / 仕様書","textChars":32,"textLines":1,"bbox":[720,477,420,24]}
+{"kind":"textbox","id":"sh/sfepkrml","slide":5,"text":"※利用イメージ","textPreview":"※利用イメージ","textChars":7,"textLines":1,"bbox":[1038,630,150,20]}
+{"kind":"notes","id":"nt/kxxm1x","slide":5,"text":"[Sources]\n- Illustrative scenario based on the user-provided product concept; not a reported customer result."}
+{"kind":"slide","id":"sl/e36sjr","slide":6,"title":"ORG BRAIN","textShapes":21}
+{"kind":"textbox","id":"sh/b2hkzixg","slide":6,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/w3ql8ne1","slide":6,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/x4zm1sf6","slide":6,"text":"普段の仕事が、そのまま組織の記憶に","textPreview":"普段の仕事が、そのまま組織の記憶に","textChars":17,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/y5s3axwr","slide":6,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/j6143ixc","slide":6,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/k7alcnex","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/l8jm5sfi","slide":6,"text":"追加入力なしで、既存の仕事の痕跡から必要な文脈を整理","textPreview":"追加入力なしで、既存の仕事の痕跡から必要な文脈を整理","textChars":26,"textLines":1,"bbox":[72,122,1000,32]}
+{"kind":"shape","id":"sh/e9o3ytgn","slide":6,"bbox":[310,300,165,0]}
+{"kind":"shape","id":"sh/zaxkryx8","slide":6,"bbox":[805,300,165,0]}
+{"kind":"shape","id":"sh/jqho3y1w","slide":6,"bbox":[640,390,0,84]}
+{"kind":"shape","id":"sh/yp87ut0b","slide":6,"bbox":[82,216,240,170]}
+{"kind":"textbox","id":"sh/lsz658jm","slide":6,"text":"仕事の痕跡","textPreview":"仕事の痕跡","textChars":5,"textLines":1,"bbox":[112,240,180,32]}
+{"kind":"textbox","id":"sh/krqpw3i1","slide":6,"text":"Slack  /  GitHub\nNotion  /  AI実行","textPreview":"Slack  /  GitHub | Notion  /  AI実行","textChars":32,"textLines":2,"bbox":[112,290,180,62]}
+{"kind":"shape","id":"sh/b2xozy1k","slide":6,"bbox":[475,190,330,220]}
+{"kind":"textbox","id":"sh/a1o7qt0z","slide":6,"text":"OrgBrain","textPreview":"OrgBrain","textChars":8,"textLines":1,"bbox":[515,246,250,44]}
+{"kind":"textbox","id":"sh/x4z61ojq","slide":6,"text":"組織記憶レイヤー","textPreview":"組織記憶レイヤー","textChars":8,"textLines":1,"bbox":[515,300,250,28]}
+{"kind":"textbox","id":"sh/w36psji5","slide":6,"text":"理由・関係・履歴を構造化","textPreview":"理由・関係・履歴を構造化","textChars":12,"textLines":1,"bbox":[515,342,250,24]}
+{"kind":"shape","id":"sh/nyxove1o","slide":6,"bbox":[958,216,240,170]}
+{"kind":"textbox","id":"sh/2xonm9k3","slide":6,"text":"次のAI実行時","textPreview":"次のAI実行時","textChars":7,"textLines":1,"bbox":[974,240,208,32]}
+{"kind":"textbox","id":"sh/qt47e94v","slide":6,"text":"関連記憶を想起し\nゼロから始めない","textPreview":"関連記憶を想起し | ゼロから始めない","textChars":17,"textLines":2,"bbox":[988,290,180,62]}
+{"kind":"textbox","id":"sh/rud87elg","slide":6,"text":"CAPTURE","textPreview":"CAPTURE","textChars":7,"textLines":1,"bbox":[234,494,180,20]}
+{"kind":"textbox","id":"sh/svmpgjm1","slide":6,"text":"記録","textPreview":"記録","textChars":2,"textLines":1,"bbox":[234,520,180,34]}
+{"kind":"shape","id":"sh/dwvq9o3m","slide":6,"bbox":[404,537,44,0]}
+{"kind":"textbox","id":"sh/exo7it4r","slide":6,"text":"DISTILL","textPreview":"DISTILL","textChars":7,"textLines":1,"bbox":[448,494,180,20]}
+{"kind":"textbox","id":"sh/fyx8belc","slide":6,"text":"選別","textPreview":"選別","textChars":2,"textLines":1,"bbox":[448,520,180,34]}
+{"kind":"shape","id":"sh/0z6pkjmx","slide":6,"bbox":[618,537,44,0]}
+{"kind":"textbox","id":"sh/10fqdo3i","slide":6,"text":"CONNECT","textPreview":"CONNECT","textChars":7,"textLines":1,"bbox":[662,494,180,20]}
+{"kind":"textbox","id":"sh/m1o7mt43","slide":6,"text":"接続","textPreview":"接続","textChars":2,"textLines":1,"bbox":[662,520,180,34]}
+{"kind":"shape","id":"sh/n2x8fylo","slide":6,"bbox":[832,537,44,0]}
+{"kind":"textbox","id":"sh/xwja5snq","slide":6,"text":"RECALL","textPreview":"RECALL","textChars":6,"textLines":1,"bbox":[876,494,180,20]}
+{"kind":"textbox","id":"sh/wvqtcn65","slide":6,"text":"想起","textPreview":"想起","textChars":2,"textLines":1,"bbox":[876,520,180,34]}
+{"kind":"notes","id":"nt/e36sjr","slide":6,"text":"[Sources]\n- OrgBrain README in the local repository, Shared memory loop: Capture, Distill, Connect, Recall, accessed 2026-08-07."}
+{"kind":"slide","id":"sl/hahayt","slide":7,"title":"ORG BRAIN","textShapes":18}
+{"kind":"textbox","id":"sh/d4rmx8jm","slide":7,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/q103mtkv","slide":7,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/r294vy1g","slide":7,"text":"記憶を、種類・範囲・状態・根拠で構造化","textPreview":"記憶を、種類・範囲・状態・根拠で構造化","textChars":19,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/0725s32x","slide":7,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/18bm18ji","slide":7,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/e503qdk7","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"shape","id":"sh/f694zi1s","slide":7,"bbox":[88,210,240,250]}
+{"kind":"textbox","id":"sh/gbylgj2t","slide":7,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[106,228,44,24]}
+{"kind":"textbox","id":"sh/hc7mpoje","slide":7,"text":"種類","textPreview":"種類","textChars":2,"textLines":1,"bbox":[106,264,200,42]}
+{"kind":"textbox","id":"sh/p8v6xwnq","slide":7,"text":"decision / constraint\npitfall / preference\nほか4種","textPreview":"decision / constraint | pitfall / preference | ほか4種","textChars":47,"textLines":3,"bbox":[106,322,196,84]}
+{"kind":"shape","id":"sh/o7m54r65","slide":7,"bbox":[370,246,240,232]}
+{"kind":"textbox","id":"sh/n6dovm5k","slide":7,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[388,264,44,24]}
+{"kind":"textbox","id":"sh/254n2hoz","slide":7,"text":"範囲","textPreview":"範囲","textChars":2,"textLines":1,"bbox":[388,300,200,42]}
+{"kind":"textbox","id":"sh/xwf61wnm","slide":7,"text":"project / org / tenant\nの3スコープ","textPreview":"project / org / tenant | の3スコープ","textChars":29,"textLines":2,"bbox":[388,358,196,84]}
+{"kind":"shape","id":"sh/cb6p8rm1","slide":7,"bbox":[652,282,240,214]}
+{"kind":"textbox","id":"sh/baxozm5w","slide":7,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[670,300,44,24]}
+{"kind":"textbox","id":"sh/a9on6hob","slide":7,"text":"状態","textPreview":"状態","textChars":2,"textLines":1,"bbox":[670,336,200,42]}
+{"kind":"textbox","id":"sh/l0z65gny","slide":7,"text":"有効・抑制・統合・昇格","textPreview":"有効・抑制・統合・昇格","textChars":11,"textLines":1,"bbox":[670,394,196,84]}
+{"kind":"shape","id":"sh/kz6pcbmd","slide":7,"bbox":[934,318,240,196]}
+{"kind":"textbox","id":"sh/43e98fup","slide":7,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[952,336,44,24]}
+{"kind":"textbox","id":"sh/547q1kvu","slide":7,"text":"根拠","textPreview":"根拠","textChars":2,"textLines":1,"bbox":[952,372,200,42]}
+{"kind":"textbox","id":"sh/ihwr65cj","slide":7,"text":"理由・却下案・制約\n出典・版・有効期限","textPreview":"理由・却下案・制約 | 出典・版・有効期限","textChars":19,"textLines":2,"bbox":[952,430,196,84]}
+{"kind":"textbox","id":"sh/ji58zad4","slide":7,"text":"質問と権限に応じて4軸を組み合わせ、根拠付きの記憶を次のAI実行へ","textPreview":"質問と権限に応じて4軸を組み合わせ、根拠付きの記憶を次のAI実行へ","textChars":33,"textLines":1,"bbox":[176,580,928,34]}
+{"kind":"notes","id":"nt/hahayt","slide":7,"text":"[Sources]\n- packages/shared/src/memory-lifecycle-types.ts: MEMORY_KINDS, MEMORY_LIFECYCLE_STATES, MEMORY_SCOPES.\n- apps/api-gateway/src/context-engine-service.ts: decision memory rationale, alternatives, constraints, source refs, versions, validity.\n- The former four drawers came from the user-provided OrgBrain_AI_Memory.pdf and were not a formal implementation schema."}
+{"kind":"slide","id":"sl/lkbs1g","slide":8,"title":"ORG BRAIN","textShapes":18}
+{"kind":"textbox","id":"sh/kr6doveh","slide":8,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/zqxwvqdw","slide":8,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/ypovmlwr","slide":8,"text":"結論だけでなく、理由・制約・出典まで記録","textPreview":"結論だけでなく、理由・制約・出典まで記録","textChars":20,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/xofetgv6","slide":8,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/cn6dkbel","slide":8,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/b2dwrqd0","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/a14vilwf","slide":8,"text":"DECISION MEMORY","textPreview":"DECISION MEMORY","textChars":15,"textLines":1,"bbox":[84,148,260,26]}
+{"kind":"textbox","id":"sh/p0vupgvu","slide":8,"text":"A社だけSAML対応を先行する","textPreview":"A社だけSAML対応を先行する","textChars":15,"textLines":1,"bbox":[84,188,700,52]}
+{"kind":"shape","id":"sh/ozmdgbe9","slide":8,"bbox":[84,256,1110,0]}
+{"kind":"textbox","id":"sh/u5knyl4f","slide":8,"text":"理由","textPreview":"理由","textChars":2,"textLines":1,"bbox":[86,294,130,32]}
+{"kind":"textbox","id":"sh/v6t4rq50","slide":8,"text":"契約更新までにSSOが必須","textPreview":"契約更新までにSSOが必須","textChars":13,"textLines":1,"bbox":[222,294,650,32]}
+{"kind":"textbox","id":"sh/g7250vm5","slide":8,"text":"制約","textPreview":"制約","textChars":2,"textLines":1,"bbox":[86,360,130,32]}
+{"kind":"textbox","id":"sh/h8bmt0nq","slide":8,"text":"既存権限モデルを変更しない","textPreview":"既存権限モデルを変更しない","textChars":13,"textLines":1,"bbox":[222,360,650,32]}
+{"kind":"textbox","id":"sh/mh0nulo3","slide":8,"text":"却下案","textPreview":"却下案","textChars":3,"textLines":1,"bbox":[86,426,130,32]}
+{"kind":"textbox","id":"sh/7it4n65o","slide":8,"text":"全顧客向け同時リリースは納期超過","textPreview":"全顧客向け同時リリースは納期超過","textChars":16,"textLines":1,"bbox":[222,426,650,32]}
+{"kind":"textbox","id":"sh/8j25wb69","slide":8,"text":"出典","textPreview":"出典","textChars":2,"textLines":1,"bbox":[86,492,130,32]}
+{"kind":"textbox","id":"sh/tkbmpgnu","slide":8,"text":"Slack / GitHub Issue / 仕様書","textPreview":"Slack / GitHub Issue / 仕様書","textChars":26,"textLines":1,"bbox":[222,492,650,32]}
+{"kind":"shape","id":"sh/yd0nq1o7","slide":8,"bbox":[900,190,290,330]}
+{"kind":"textbox","id":"sh/ze94j65s","slide":8,"text":"次のAI実行で\nできること","textPreview":"次のAI実行で | できること","textChars":13,"textLines":2,"bbox":[930,224,230,74]}
+{"kind":"shape","id":"sh/ni5kr2lk","slide":8,"bbox":[940,318,210,0]}
+{"kind":"textbox","id":"sh/2hwjix4z","slide":8,"text":"説明責任のある回答\n例外条件の再利用\n同じ失敗の事前警告","textPreview":"説明責任のある回答 | 例外条件の再利用 | 同じ失敗の事前警告","textChars":28,"textLines":3,"bbox":[930,346,230,122]}
+{"kind":"textbox","id":"sh/pk72tc3a","slide":8,"text":"※利用イメージ","textPreview":"※利用イメージ","textChars":7,"textLines":1,"bbox":[1046,630,142,20]}
+{"kind":"notes","id":"nt/lkbs1g","slide":8,"text":"[Sources]\n- Illustrative decision-memory example derived from the user-provided product positioning; not customer evidence."}
+{"kind":"slide","id":"sl/ucwhti","slide":9,"title":"ORG BRAIN","textShapes":23}
+{"kind":"textbox","id":"sh/2p07u50z","slide":9,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/psrqpkza","slide":9,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/4ripwfip","slide":9,"text":"同一ハーネスで、検索品質と安全性を確認","textPreview":"同一ハーネスで、検索品質と安全性を確認","textChars":19,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/f2p8jq18","slide":9,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/u1g7ql0n","slide":9,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/h47ql0je","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/g3ypsvit","slide":9,"text":"OrgBrainが上回った指標のみ掲載","textPreview":"OrgBrainが上回った指標のみ掲載","textChars":19,"textLines":1,"bbox":[72,124,500,26]}
+{"kind":"shape","id":"sh/7yp8fq1c","slide":9,"bbox":[72,172,1136,88]}
+{"kind":"textbox","id":"sh/6xg7ml0r","slide":9,"text":"検索精度","textPreview":"検索精度","textChars":4,"textLines":1,"bbox":[94,188,190,26]}
+{"kind":"textbox","id":"sh/4r2d83e9","slide":9,"text":"100%","textPreview":"100%","textChars":4,"textLines":1,"bbox":[288,180,220,42]}
+{"kind":"textbox","id":"sh/5sbuhovu","slide":9,"text":"Mem0 80% / Mnemosyne 56% / Hindsight 50%","textPreview":"Mem0 80% / Mnemosyne 56% / Hindsight 50%","textChars":40,"textLines":1,"bbox":[520,182,630,28]}
+{"kind":"textbox","id":"sh/ipkv6twj","slide":9,"text":"矛盾・古さ・権限・判断文脈を含む200問で正答","textPreview":"矛盾・古さ・権限・判断文脈を含む200問で正答","textChars":23,"textLines":1,"bbox":[288,221,862,24]}
+{"kind":"shape","id":"sh/jqtcfyd4","slide":9,"bbox":[72,280,1136,88]}
+{"kind":"textbox","id":"sh/w3it4jed","slide":9,"text":"Pass^5","textPreview":"Pass^5","textChars":6,"textLines":1,"bbox":[94,296,190,26]}
+{"kind":"textbox","id":"sh/horudovy","slide":9,"text":"100%","textPreview":"100%","textChars":4,"textLines":1,"bbox":[288,288,220,42]}
+{"kind":"textbox","id":"sh/a10b29w7","slide":9,"text":"Mem0 70% / Mnemosyne 51%","textPreview":"Mem0 70% / Mnemosyne 51%","textChars":24,"textLines":1,"bbox":[520,290,630,28]}
+{"kind":"textbox","id":"sh/v29cbeds","slide":9,"text":"同じ検索を5回繰り返しても安定して正答","textPreview":"同じ検索を5回繰り返しても安定して正答","textChars":19,"textLines":1,"bbox":[288,329,862,24]}
+{"kind":"shape","id":"sh/gzmdgneh","slide":9,"bbox":[72,388,1136,88]}
+{"kind":"textbox","id":"sh/1kvupsv2","slide":9,"text":"情報漏えい","textPreview":"情報漏えい","textChars":5,"textLines":1,"bbox":[94,404,190,26]}
+{"kind":"textbox","id":"sh/pgru98n6","slide":9,"text":"0%","textPreview":"0%","textChars":2,"textLines":1,"bbox":[288,396,220,42]}
+{"kind":"textbox","id":"sh/ofid036l","slide":9,"text":"3競合はいずれも20%","textPreview":"3競合はいずれも20%","textChars":11,"textLines":1,"bbox":[520,398,630,28]}
+{"kind":"textbox","id":"sh/ne9c7i5g","slide":9,"text":"テナント・権限境界を越えた検索結果なし","textPreview":"テナント・権限境界を越えた検索結果なし","textChars":19,"textLines":1,"bbox":[288,437,862,24]}
+{"kind":"shape","id":"sh/2d0bydov","slide":9,"bbox":[72,496,1136,88]}
+{"kind":"textbox","id":"sh/1cru58na","slide":9,"text":"検索p95","textPreview":"検索p95","textChars":5,"textLines":1,"bbox":[94,512,190,26]}
+{"kind":"textbox","id":"sh/0bitw36p","slide":9,"text":"13.39ms","textPreview":"13.39ms","textChars":7,"textLines":1,"bbox":[288,504,220,42]}
+{"kind":"textbox","id":"sh/fapc3y54","slide":9,"text":"Mem0 51.07ms / Hindsight 660.25ms","textPreview":"Mem0 51.07ms / Hindsight 660.25ms","textChars":33,"textLines":1,"bbox":[520,506,630,28]}
+{"kind":"textbox","id":"sh/e9gbutoj","slide":9,"text":"AI実行前の想起を低遅延で追加","textPreview":"AI実行前の想起を低遅延で追加","textChars":15,"textLines":1,"bbox":[288,545,862,24]}
+{"kind":"textbox","id":"sh/do7u1ony","slide":9,"text":"条件：retrieval-only / 200タスク / Apple M2 / 2026-07-31　※OSS全体での普遍的首位を主張する結果ではありません","textPreview":"条件：retrieval-only / 200タスク / Apple M2 / 2026-07-31　※OSS全体での普遍的首位を主張する結果ではありません","textChars":78,"textLines":1,"bbox":[72,624,1136,20]}
+{"kind":"notes","id":"nt/ucwhti","slide":9,"text":"[Sources]\n- artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-orgbrain-v4-fixed-repeat5.json.\n- artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-local-repeat5.json.\n- artifacts/benchmarks/2026-07-31/competitive-memory-reduced3-hindsight-repeat1.json.\n- Hindsight Pass^5 is omitted because its available result is repeat1. Mnemosyne latency is omitted because it was faster than OrgBrain."}
+{"kind":"slide","id":"sl/bovjoe","slide":10,"title":"ORG BRAIN","textShapes":23}
+{"kind":"textbox","id":"sh/vqp47uts","slide":10,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/wry5gzad","slide":10,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/hc7m94by","slide":10,"text":"代表4職種で、AIと人の“やり直し”を削減","textPreview":"代表4職種で、AIと人の“やり直し”を削減","textChars":21,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/idgni9sj","slide":10,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/jep4bet4","slide":10,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/4fi5kjap","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/5grmdobu","slide":10,"text":"日常業務での利用ストーリー","textPreview":"日常業務での利用ストーリー","textChars":13,"textLines":1,"bbox":[72,122,520,28]}
+{"kind":"textbox","id":"sh/yhw365cf","slide":10,"text":"ソフトウェア開発","textPreview":"ソフトウェア開発","textChars":8,"textLines":1,"bbox":[72,188,244,54]}
+{"kind":"textbox","id":"sh/zi54zatk","slide":10,"text":"4.5h","textPreview":"4.5h","textChars":4,"textLines":1,"bbox":[72,254,244,70]}
+{"kind":"textbox","id":"sh/nyxk7at4","slide":10,"text":"削減 / 月（試算）","textPreview":"削減 / 月（試算）","textChars":10,"textLines":1,"bbox":[72,324,244,24]}
+{"kind":"textbox","id":"sh/mxo3e5sj","slide":10,"text":"遭遇済みエラーと失敗を\n実行前に想起\n調査・修正ループを避け\nトークンと手戻りを削減","textPreview":"遭遇済みエラーと失敗を | 実行前に想起 | 調査・修正ループを避け | トークンと手戻りを削減","textChars":42,"textLines":4,"bbox":[72,382,244,156]}
+{"kind":"shape","id":"sh/90fm9kba","slide":10,"bbox":[338,190,0,390]}
+{"kind":"textbox","id":"sh/oz6lgfap","slide":10,"text":"PdM","textPreview":"PdM","textChars":3,"textLines":1,"bbox":[356,188,244,54]}
+{"kind":"textbox","id":"sh/zuxk3ats","slide":10,"text":"6.0h","textPreview":"6.0h","textChars":4,"textLines":1,"bbox":[356,254,244,70]}
+{"kind":"textbox","id":"sh/et43a5cn","slide":10,"text":"削減 / 月（試算）","textPreview":"削減 / 月（試算）","textChars":10,"textLines":1,"bbox":[356,324,244,24]}
+{"kind":"textbox","id":"sh/1wf25kby","slide":10,"text":"判断理由・却下案・顧客制約を\n仕様検討時に想起\n過去の議論と合意形成の\nやり直しを削減","textPreview":"判断理由・却下案・顧客制約を | 仕様検討時に想起 | 過去の議論と合意形成の | やり直しを削減","textChars":43,"textLines":4,"bbox":[356,382,244,156]}
+{"kind":"shape","id":"sh/0v6lcfud","slide":10,"bbox":[622,190,0,390]}
+{"kind":"textbox","id":"sh/r6dkzqtw","slide":10,"text":"営業","textPreview":"営業","textChars":2,"textLines":1,"bbox":[640,188,244,54]}
+{"kind":"textbox","id":"sh/q5436lcb","slide":10,"text":"3.0h","textPreview":"3.0h","textChars":4,"textLines":1,"bbox":[640,254,244,70]}
+{"kind":"textbox","id":"sh/u1k3ilw3","slide":10,"text":"削減 / 月（試算）","textPreview":"削減 / 月（試算）","textChars":10,"textLines":1,"bbox":[640,324,244,24]}
+{"kind":"textbox","id":"sh/v2t4rqdo","slide":10,"text":"顧客ごとの合意・例外・過去提案を\n商談前に想起\n合意違反と社内確認の\n往復を防止","textPreview":"顧客ごとの合意・例外・過去提案を | 商談前に想起 | 合意違反と社内確認の | 往復を防止","textChars":40,"textLines":4,"bbox":[640,382,244,156]}
+{"kind":"shape","id":"sh/g3mlkve9","slide":10,"bbox":[906,190,0,390]}
+{"kind":"textbox","id":"sh/h4vmt0vu","slide":10,"text":"バックオフィス","textPreview":"バックオフィス","textChars":7,"textLines":1,"bbox":[924,188,244,54]}
+{"kind":"textbox","id":"sh/ip4nm5wf","slide":10,"text":"4.0h","textPreview":"4.0h","textChars":4,"textLines":1,"bbox":[924,254,244,70]}
+{"kind":"textbox","id":"sh/3qd4vad0","slide":10,"text":"削減 / 月（試算）","textPreview":"削減 / 月（試算）","textChars":10,"textLines":1,"bbox":[924,324,244,24]}
+{"kind":"textbox","id":"sh/4rm5ofe5","slide":10,"text":"例外承認の理由と基準を\n担当者間で共有\n判断のばらつきと\n引き継ぎ負荷を削減","textPreview":"例外承認の理由と基準を | 担当者間で共有 | 判断のばらつきと | 引き継ぎ負荷を削減","textChars":38,"textLines":4,"bbox":[924,382,244,156]}
+{"kind":"shape","id":"sh/5svmx0vq","slide":10,"bbox":[72,594,1136,46]}
+{"kind":"textbox","id":"sh/qt4nq5wb","slide":10,"text":"AIが既知の失敗を回避するほど、完了タスク当たりの再検索・再推論・トークン消費を削減","textPreview":"AIが既知の失敗を回避するほど、完了タスク当たりの再検索・再推論・トークン消費を削減","textChars":42,"textLines":1,"bbox":[98,605,1084,24]}
+{"kind":"notes","id":"nt/bovjoe","slide":10,"text":"[Sources]\n- User-provided OrgBrain_AI_Memory.pdf, slide 8. Figures are presented as illustrative estimates, not reported results."}
+{"kind":"slide","id":"sl/eu98ju","slide":11,"title":"ORG BRAIN","textShapes":20}
+{"kind":"textbox","id":"sh/8z2dkv2x","slide":11,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/7ytwbalc","slide":11,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/mxkvi5kr","slide":11,"text":"100人組織で、年間約3,000万円の改善余地","textPreview":"100人組織で、年間約3,000万円の改善余地","textChars":23,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/h4vehk3e","slide":11,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/w3mdof2t","slide":11,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/v2dwfalo","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/u14vm5k3","slide":11,"text":"年間 3,000万円","textPreview":"年間 3,000万円","textChars":10,"textLines":1,"bbox":[72,144,600,76]}
+{"kind":"textbox","id":"sh/5sfelkjq","slide":11,"text":"6,000時間相当","textPreview":"6,000時間相当","textChars":9,"textLines":1,"bbox":[740,157,450,58]}
+{"kind":"textbox","id":"sh/4r6xsf25","slide":11,"text":"探し直し","textPreview":"探し直し","textChars":4,"textLines":1,"bbox":[84,244,280,32]}
+{"kind":"textbox","id":"sh/2tszahwf","slide":11,"text":"1,200万円","textPreview":"1,200万円","textChars":7,"textLines":1,"bbox":[370,240,220,40]}
+{"kind":"textbox","id":"sh/3u1g3mdk","slide":11,"text":"Slack・GitHub・Notionの横断検索\n当時の担当者への確認","textPreview":"Slack・GitHub・Notionの横断検索 | 当時の担当者への確認","textChars":35,"textLines":2,"bbox":[620,236,540,54]}
+{"kind":"textbox","id":"sh/ovuhcre5","slide":11,"text":"6分/日 × 20日 × 12か月 × 100人 × 5,000円/h","textPreview":"6分/日 × 20日 × 12か月 × 100人 × 5,000円/h","textChars":35,"textLines":1,"bbox":[370,290,790,24]}
+{"kind":"shape","id":"sh/pw3y5wvq","slide":11,"bbox":[84,330,1076,0]}
+{"kind":"textbox","id":"sh/qhcze1wb","slide":11,"text":"記録・引き継ぎ","textPreview":"記録・引き継ぎ","textChars":7,"textLines":1,"bbox":[84,362,280,32]}
+{"kind":"textbox","id":"sh/bilg76dw","slide":11,"text":"1,500万円","textPreview":"1,500万円","textChars":7,"textLines":1,"bbox":[370,358,220,40]}
+{"kind":"textbox","id":"sh/cjuhgreh","slide":11,"text":"会議・AI出力の再整理\n理由・制約・変更履歴の手作業による文書化","textPreview":"会議・AI出力の再整理 | 理由・制約・変更履歴の手作業による文書化","textChars":32,"textLines":2,"bbox":[620,354,540,54]}
+{"kind":"textbox","id":"sh/dk3y9wv2","slide":11,"text":"0.5h × 月5回 × 12か月 × 100人 × 5,000円/h","textPreview":"0.5h × 月5回 × 12か月 × 100人 × 5,000円/h","textChars":35,"textLines":1,"bbox":[370,408,790,24]}
+{"kind":"shape","id":"sh/618f2xw7","slide":11,"bbox":[84,448,1076,0]}
+{"kind":"textbox","id":"sh/7mhgv2xs","slide":11,"text":"既知障害・AI失敗の再発","textPreview":"既知障害・AI失敗の再発","textChars":12,"textLines":1,"bbox":[84,480,280,32]}
+{"kind":"textbox","id":"sh/v6xw3ytk","slide":11,"text":"300万円","textPreview":"300万円","textChars":5,"textLines":1,"bbox":[370,476,220,40]}
+{"kind":"textbox","id":"sh/a5ovatcz","slide":11,"text":"遭遇済みエラーをAIが再実装\n原因調査・ロールバック・再レビュー","textPreview":"遭遇済みエラーをAIが再実装 | 原因調査・ロールバック・再レビュー","textChars":32,"textLines":2,"bbox":[620,472,540,54]}
+{"kind":"textbox","id":"sh/xsfe58ba","slide":11,"text":"12件/年 × 50万円/件 × 50%回避","textPreview":"12件/年 × 50万円/件 × 50%回避","textChars":22,"textLines":1,"bbox":[370,526,790,24]}
+{"kind":"textbox","id":"sh/w76dc3up","slide":11,"text":"前提：平均人件費5,000円/h。失敗1件50万円は、開発・QA・緊急対応を含む試算例","textPreview":"前提：平均人件費5,000円/h。失敗1件50万円は、開発・QA・緊急対応を含む試算例","textChars":43,"textLines":1,"bbox":[72,622,1136,22]}
+{"kind":"notes","id":"nt/eu98ju","slide":11,"text":"Lead with this as an opportunity model, not a guaranteed result. Confirm the customer's volumes and adoption assumptions before using it as an ROI commitment.\n\n[Sources]\n- User-provided OrgBrain_AI_Memory.pdf, slides 6-7.\n- Updated illustrative recurrence scenario: 12 repeated incidents per year × JPY500,000 impact per incident × 50% avoided = JPY3,000,000.\n- The incident impact represents developer investigation, rollback, QA, review, and urgent response; it is not a reported customer result."}
+{"kind":"slide","id":"sl/iv8eea","slide":12,"title":"ORG BRAIN","textShapes":22}
+{"kind":"textbox","id":"sh/wre9cnq5","slide":12,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/vq5s3i9k","slide":12,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/upwrad8z","slide":12,"text":"効果を測る4つの実装ログ","textPreview":"効果を測る4つの実装ログ","textChars":12,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/9ona18re","slide":12,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/8nu983qt","slide":12,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/nmlszy9o","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"shape","id":"sh/mlcr6t83","slide":12,"bbox":[72,154,548,194]}
+{"kind":"textbox","id":"sh/tk7adcry","slide":12,"text":"検索ログ","textPreview":"検索ログ","textChars":4,"textLines":1,"bbox":[96,172,230,30]}
+{"kind":"textbox","id":"sh/sjytk7qd","slide":12,"text":"retrieval_events","textPreview":"retrieval_events","textChars":16,"textLines":1,"bbox":[96,210,500,24]}
+{"kind":"textbox","id":"sh/y9cjqt4z","slide":12,"text":"ヒット率・fallback率・p95遅延・検索回数","textPreview":"ヒット率・fallback率・p95遅延・検索回数","textChars":25,"textLines":1,"bbox":[96,246,500,48]}
+{"kind":"shape","id":"sh/zalkze5k","slide":12,"bbox":[96,302,500,0]}
+{"kind":"textbox","id":"sh/kbu1sjm5","slide":12,"text":"探し直しと検索性能","textPreview":"探し直しと検索性能","textChars":9,"textLines":1,"bbox":[96,310,500,24]}
+{"kind":"shape","id":"sh/lcn21onq","slide":12,"bbox":[642,154,548,194]}
+{"kind":"textbox","id":"sh/a5cjm943","slide":12,"text":"メモリー影響ログ","textPreview":"メモリー影響ログ","textChars":8,"textLines":1,"bbox":[666,172,230,30]}
+{"kind":"textbox","id":"sh/b6lkve5o","slide":12,"text":"memory_impact_events","textPreview":"memory_impact_events","textChars":20,"textLines":1,"bbox":[666,210,500,24]}
+{"kind":"textbox","id":"sh/c7u1ojm9","slide":12,"text":"memory_used・avoided_lookup・参照Memory ID","textPreview":"memory_used・avoided_lookup・参照Memory ID","textChars":38,"textLines":1,"bbox":[666,246,500,48]}
+{"kind":"shape","id":"sh/x832xonu","slide":12,"bbox":[666,302,500,0]}
+{"kind":"textbox","id":"sh/u1w3yd47","slide":12,"text":"再検索回避と記憶の寄与","textPreview":"再検索回避と記憶の寄与","textChars":11,"textLines":1,"bbox":[666,310,500,24]}
+{"kind":"shape","id":"sh/v25k7y5s","slide":12,"bbox":[72,378,548,194]}
+{"kind":"textbox","id":"sh/rmhgjql4","slide":12,"text":"比較計測ログ","textPreview":"比較計測ログ","textChars":6,"textLines":1,"bbox":[96,396,230,30]}
+{"kind":"textbox","id":"sh/ql8zq5kz","slide":12,"text":"measurement_variants / comparisons","textPreview":"measurement_variants / comparisons","textChars":34,"textLines":1,"bbox":[96,434,500,24]}
+{"kind":"textbox","id":"sh/dozyl03a","slide":12,"text":"control対treatmentのtoken・cost・duration・quality","textPreview":"control対treatmentのtoken・cost・duration・quality","textChars":45,"textLines":1,"bbox":[96,470,500,48]}
+{"kind":"shape","id":"sh/snqhsv2p","slide":12,"bbox":[96,526,500,0]}
+{"kind":"textbox","id":"sh/fahgnalg","slide":12,"text":"トークン節約と完了効率","textPreview":"トークン節約と完了効率","textChars":11,"textLines":1,"bbox":[96,534,500,24]}
+{"kind":"shape","id":"sh/e98zu5kv","slide":12,"bbox":[642,378,548,194]}
+{"kind":"textbox","id":"sh/1cjipk3m","slide":12,"text":"タスク・監査ログ","textPreview":"タスク・監査ログ","textChars":8,"textLines":1,"bbox":[666,396,230,30]}
+{"kind":"textbox","id":"sh/0bqhwf21","slide":12,"text":"tasks / audit_events","textPreview":"tasks / audit_events","textChars":20,"textLines":1,"bbox":[666,434,500,24]}
+{"kind":"textbox","id":"sh/ne10ralc","slide":12,"text":"完了時間・失敗・denied・権限外アクセス","textPreview":"完了時間・失敗・denied・権限外アクセス","textChars":22,"textLines":1,"bbox":[666,470,500,48]}
+{"kind":"shape","id":"sh/2dszypkr","slide":12,"bbox":[666,526,500,0]}
+{"kind":"textbox","id":"sh/kjaxozi5","slide":12,"text":"業務成果と安全性","textPreview":"業務成果と安全性","textChars":8,"textLines":1,"bbox":[666,534,500,24]}
+{"kind":"shape","id":"sh/lk3yhkzq","slide":12,"bbox":[72,614,1136,38]}
+{"kind":"textbox","id":"sh/yhsfmp0z","slide":12,"text":"PoCでは導入前ベースラインと8週間後を比較し、検索時間・トークン・完了時間・権限違反を判定","textPreview":"PoCでは導入前ベースラインと8週間後を比較し、検索時間・トークン・完了時間・権限違反を判定","textChars":46,"textLines":1,"bbox":[96,621,1088,22]}
+{"kind":"notes","id":"nt/iv8eea","slide":12,"text":"[Sources]\n- apps/cap-runner/src/retrieval-metrics.ts and migrations/0004_retrieval_metrics.sql.\n- apps/api-gateway/src/memory-impact-service.ts and migrations/0018_memory_impact.sql.\n- apps/cap-runner/src/index.ts: measurement_variants and measurement_comparisons writes.\n- apps/api-gateway/src/operations-service.ts and migrations/0015_rbac_audit.sql."}
+{"kind":"slide","id":"sl/mh1mzc","slide":13,"title":"ORG BRAIN","textShapes":13}
+{"kind":"textbox","id":"sh/a9k3m9kn","slide":13,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/xcbmh4jy","slide":13,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/wb25oj2t","slide":13,"text":"課金単位","textPreview":"課金単位","textChars":4,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/jet4je14","slide":13,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/idknq9kj","slide":13,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/5gvmloja","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/kfm5sj2p","slide":13,"text":"一般的なSaaS","textPreview":"一般的なSaaS","textChars":8,"textLines":1,"bbox":[110,184,420,36]}
+{"kind":"textbox","id":"sh/zi94nu10","slide":13,"text":"OrgBrain","textPreview":"OrgBrain","textChars":8,"textLines":1,"bbox":[750,184,420,36]}
+{"kind":"shape","id":"sh/yh03epkf","slide":13,"bbox":[110,250,420,180]}
+{"kind":"textbox","id":"sh/k72h8vi9","slide":13,"text":"ユーザー数 × 単価","textPreview":"ユーザー数 × 単価","textChars":10,"textLines":1,"bbox":[146,288,348,44]}
+{"kind":"textbox","id":"sh/l8by10zu","slide":13,"text":"利用を広げるほどコストが増える","textPreview":"利用を広げるほどコストが増える","textChars":15,"textLines":1,"bbox":[146,354,348,28]}
+{"kind":"textbox","id":"sh/y50f650j","slide":13,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[590,304,100,54]}
+{"kind":"shape","id":"sh/j6tgzq1o","slide":13,"bbox":[750,250,420,180]}
+{"kind":"textbox","id":"sh/8b2hcfil","slide":13,"text":"組織基本料 ＋ 利用範囲","textPreview":"組織基本料 ＋ 利用範囲","textChars":12,"textLines":1,"bbox":[778,288,364,44]}
+{"kind":"textbox","id":"sh/tcby5kz6","slide":13,"text":"全社員・全AIが利用可能","textPreview":"全社員・全AIが利用可能","textChars":12,"textLines":1,"bbox":[778,354,364,28]}
+{"kind":"shape","id":"sh/69kza50f","slide":13,"bbox":[144,500,992,100]}
+{"kind":"textbox","id":"sh/7atg3ah0","slide":13,"text":"全社利用による、記憶のつながりと1人当たり価値の拡大","textPreview":"全社利用による、記憶のつながりと1人当たり価値の拡大","textChars":26,"textLines":1,"bbox":[176,530,928,42]}
+{"kind":"notes","id":"nt/mh1mzc","slide":13,"text":"[Sources]\n- User-provided pricing philosophy in the Codex task, 2026-08-07."}
+{"kind":"slide","id":"sl/w3yxh7","slide":14,"title":"ORG BRAIN","textShapes":27}
+{"kind":"textbox","id":"sh/07ap4fu5","slide":14,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/z61ovatk","slide":14,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/e5s725cz","slide":14,"text":"4つのプランと基本料金","textPreview":"4つのプランと基本料金","textChars":11,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/d4j6t0be","slide":14,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/s3ap0vut","slide":14,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/ri1orqt8","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/qhsnylcn","slide":14,"text":"Organization単位の基本料金に、全社員・全AIの利用を包含","textPreview":"Organization単位の基本料金に、全社員・全AIの利用を包含","textChars":34,"textLines":1,"bbox":[72,120,900,28]}
+{"kind":"textbox","id":"sh/x0n654bi","slide":14,"text":"TEAM","textPreview":"TEAM","textChars":4,"textLines":1,"bbox":[72,184,252,34]}
+{"kind":"textbox","id":"sh/wzepczud","slide":14,"text":"3〜5万円","textPreview":"3〜5万円","textChars":5,"textLines":1,"bbox":[72,248,252,60]}
+{"kind":"textbox","id":"sh/6tcnad43","slide":14,"text":"/ 月","textPreview":"/ 月","textChars":3,"textLines":1,"bbox":[72,310,252,24]}
+{"kind":"textbox","id":"sh/rul4ji5o","slide":14,"text":"小規模チーム","textPreview":"小規模チーム","textChars":6,"textLines":1,"bbox":[72,366,252,34]}
+{"kind":"textbox","id":"sh/svu5cnm9","slide":14,"text":"共有メモリーを\n小さく始める","textPreview":"共有メモリーを | 小さく始める","textChars":14,"textLines":2,"bbox":[72,428,252,72]}
+{"kind":"shape","id":"sh/tw3ml8nu","slide":14,"bbox":[340,190,0,400]}
+{"kind":"textbox","id":"sh/i5sn6t47","slide":14,"text":"COMPANY","textPreview":"COMPANY","textChars":7,"textLines":1,"bbox":[356,184,252,34]}
+{"kind":"textbox","id":"sh/j614fy5s","slide":14,"text":"10〜20万円","textPreview":"10〜20万円","textChars":7,"textLines":1,"bbox":[356,248,252,60]}
+{"kind":"textbox","id":"sh/47a583mx","slide":14,"text":"/ 月","textPreview":"/ 月","textChars":3,"textLines":1,"bbox":[356,310,252,24]}
+{"kind":"textbox","id":"sh/5sjmh8ni","slide":14,"text":"複数部門","textPreview":"複数部門","textChars":4,"textLines":1,"bbox":[356,366,252,34]}
+{"kind":"textbox","id":"sh/21wnix4b","slide":14,"text":"AdapterとDomainを\n段階的に拡張","textPreview":"AdapterとDomainを | 段階的に拡張","textChars":22,"textLines":2,"bbox":[356,428,252,72]}
+{"kind":"shape","id":"sh/325or25w","slide":14,"bbox":[344,168,276,370]}
+{"kind":"shape","id":"sh/zudsnqhw","slide":14,"bbox":[624,190,0,400]}
+{"kind":"textbox","id":"sh/et4bulgb","slide":14,"text":"ENTERPRISE","textPreview":"ENTERPRISE","textChars":10,"textLines":1,"bbox":[640,184,252,34]}
+{"kind":"textbox","id":"sh/1wfap0z2","slide":14,"text":"30〜50万円〜","textPreview":"30〜50万円〜","textChars":8,"textLines":1,"bbox":[640,248,252,60]}
+{"kind":"textbox","id":"sh/0vmtwvyh","slide":14,"text":"/ 月","textPreview":"/ 月","textChars":3,"textLines":1,"bbox":[640,310,252,24]}
+{"kind":"textbox","id":"sh/nyxsrah8","slide":14,"text":"全社利用","textPreview":"全社利用","textChars":4,"textLines":1,"bbox":[640,366,252,34]}
+{"kind":"textbox","id":"sh/mxoby5gn","slide":14,"text":"高度な権限・監査\nSLAに対応","textPreview":"高度な権限・監査 | SLAに対応","textChars":15,"textLines":2,"bbox":[640,428,252,72]}
+{"kind":"shape","id":"sh/90futkze","slide":14,"bbox":[908,190,0,400]}
+{"kind":"textbox","id":"sh/oz6t0fyt","slide":14,"text":"ENTERPRISE PLUS","textPreview":"ENTERPRISE PLUS","textChars":15,"textLines":1,"bbox":[924,184,252,34]}
+{"kind":"textbox","id":"sh/b2xcvah4","slide":14,"text":"100万円〜","textPreview":"100万円〜","textChars":6,"textLines":1,"bbox":[924,248,252,60]}
+{"kind":"textbox","id":"sh/a1ob25gj","slide":14,"text":"/ 月","textPreview":"/ 月","textChars":3,"textLines":1,"bbox":[924,310,252,24]}
+{"kind":"textbox","id":"sh/8rq9sfex","slide":14,"text":"グループ・専用環境","textPreview":"グループ・専用環境","textChars":9,"textLines":1,"bbox":[924,366,252,34]}
+{"kind":"textbox","id":"sh/tszalkvi","slide":14,"text":"個別要件と専用運用を\n包括提供","textPreview":"個別要件と専用運用を | 包括提供","textChars":15,"textLines":2,"bbox":[924,428,252,72]}
+{"kind":"textbox","id":"sh/6p8rqpwr","slide":14,"text":"価格は利用範囲・セキュリティ要件・運用形態に応じたイメージです。","textPreview":"価格は利用範囲・セキュリティ要件・運用形態に応じたイメージです。","textChars":32,"textLines":1,"bbox":[72,620,1136,22]}
+{"kind":"notes","id":"nt/w3yxh7","slide":14,"text":"[Sources]\n- User-provided plan names and price images in the Codex task, 2026-08-07. Plan positioning is an illustrative packaging proposal."}
+{"kind":"slide","id":"sl/l5hfgo","slide":15,"title":"ORG BRAIN","textShapes":32}
+{"kind":"textbox","id":"sh/rytw3yp0","slide":15,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/szmxwjql","slide":15,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/d0vy5o76","slide":15,"text":"追加の従量課金","textPreview":"追加の従量課金","textChars":7,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/i9kfq98j","slide":15,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/jatwzep4","slide":15,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/4b2xsjqp","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"shape","id":"sh/5wbe1o7a","slide":15,"bbox":[84,150,1112,64]}
+{"kind":"textbox","id":"sh/u50fm98n","slide":15,"text":"Organization基本料金","textPreview":"Organization基本料金","textChars":16,"textLines":1,"bbox":[110,164,410,36]}
+{"kind":"textbox","id":"sh/v69wve9s","slide":15,"text":"全社員・全AI / コア機能 / 基本メモリー容量","textPreview":"全社員・全AI / コア機能 / 基本メモリー容量","textChars":25,"textLines":1,"bbox":[560,168,600,30]}
+{"kind":"textbox","id":"sh/z2lkb69c","slide":15,"text":"課金項目","textPreview":"課金項目","textChars":4,"textLines":1,"bbox":[94,232,220,22]}
+{"kind":"textbox","id":"sh/y1c3218r","slide":15,"text":"課金単位","textPreview":"課金単位","textChars":4,"textLines":1,"bbox":[330,232,180,22]}
+{"kind":"textbox","id":"sh/l4n2dgri","slide":15,"text":"価格案（税別）","textPreview":"価格案（税別）","textChars":7,"textLines":1,"bbox":[524,232,180,22]}
+{"kind":"textbox","id":"sh/03el4bqx","slide":15,"text":"内容","textPreview":"内容","textChars":2,"textLines":1,"bbox":[718,232,440,22]}
+{"kind":"textbox","id":"sh/n65kfq9o","slide":15,"text":"ADAPTER","textPreview":"ADAPTER","textChars":7,"textLines":1,"bbox":[94,268,220,28]}
+{"kind":"textbox","id":"sh/m5w36l83","slide":15,"text":"1接続 / 月","textPreview":"1接続 / 月","textChars":7,"textLines":1,"bbox":[330,268,180,28]}
+{"kind":"textbox","id":"sh/98n2h0re","slide":15,"text":"1万円〜","textPreview":"1万円〜","textChars":4,"textLines":1,"bbox":[524,266,180,32]}
+{"kind":"textbox","id":"sh/87el8vq9","slide":15,"text":"Slack・Notion・GitHub・Salesforce・Teams","textPreview":"Slack・Notion・GitHub・Salesforce・Teams","textChars":36,"textLines":1,"bbox":[718,268,440,34]}
+{"kind":"shape","id":"sh/3a1k3m94","slide":15,"bbox":[94,312,1064,0]}
+{"kind":"textbox","id":"sh/29sjuh8z","slide":15,"text":"MEMORY DOMAIN","textPreview":"MEMORY DOMAIN","textChars":13,"textLines":1,"bbox":[94,336,220,28]}
+{"kind":"textbox","id":"sh/650nips7","slide":15,"text":"1領域 / 月","textPreview":"1領域 / 月","textChars":7,"textLines":1,"bbox":[330,336,180,28]}
+{"kind":"textbox","id":"sh/769obuts","slide":15,"text":"2万円〜","textPreview":"2万円〜","textChars":4,"textLines":1,"bbox":[524,334,180,32]}
+{"kind":"textbox","id":"sh/sri5kzad","slide":15,"text":"Engineering・Sales・Management Brain","textPreview":"Engineering・Sales・Management Brain","textChars":34,"textLines":1,"bbox":[718,336,440,34]}
+{"kind":"shape","id":"sh/tsr6d4by","slide":15,"bbox":[94,380,1064,0]}
+{"kind":"textbox","id":"sh/i1gnepsb","slide":15,"text":"AI OPERATIONS","textPreview":"AI OPERATIONS","textChars":13,"textLines":1,"bbox":[94,404,220,28]}
+{"kind":"textbox","id":"sh/j29o7utw","slide":15,"text":"1,000処理","textPreview":"1,000処理","textChars":7,"textLines":1,"bbox":[330,404,180,28]}
+{"kind":"textbox","id":"sh/k3i5gzah","slide":15,"text":"5,000円〜","textPreview":"5,000円〜","textChars":7,"textLines":1,"bbox":[524,402,180,32]}
+{"kind":"textbox","id":"sh/54r69kbm","slide":15,"text":"矛盾検知・資料修正・統合・分析","textPreview":"矛盾検知・資料修正・統合・分析","textChars":15,"textLines":1,"bbox":[718,404,440,34]}
+{"kind":"shape","id":"sh/axgna5sz","slide":15,"bbox":[94,448,1064,0]}
+{"kind":"textbox","id":"sh/vyp43atk","slide":15,"text":"GOVERNANCE / SECURITY","textPreview":"GOVERNANCE / SECURITY","textChars":21,"textLines":1,"bbox":[94,472,220,28]}
+{"kind":"textbox","id":"sh/dsvq98b2","slide":15,"text":"1組織 / 月","textPreview":"1組織 / 月","textChars":7,"textLines":1,"bbox":[330,472,180,28]}
+{"kind":"textbox","id":"sh/crm9g3ux","slide":15,"text":"10万円〜","textPreview":"10万円〜","textChars":5,"textLines":1,"bbox":[524,470,180,32]}
+{"kind":"textbox","id":"sh/bqd87idc","slide":15,"text":"高度な権限・監査・SLA／専用環境は個別見積","textPreview":"高度な権限・監査・SLA／専用環境は個別見積","textChars":22,"textLines":1,"bbox":[718,472,440,34]}
+{"kind":"shape","id":"sh/qp4redcr","slide":15,"bbox":[94,516,1064,0]}
+{"kind":"textbox","id":"sh/povq58v6","slide":15,"text":"MEMORY OVERAGE","textPreview":"MEMORY OVERAGE","textChars":14,"textLines":1,"bbox":[94,540,220,28]}
+{"kind":"textbox","id":"sh/onm9c3ul","slide":15,"text":"10GB / 月","textPreview":"10GB / 月","textChars":8,"textLines":1,"bbox":[330,540,180,28]}
+{"kind":"textbox","id":"sh/3md83yd0","slide":15,"text":"5,000円〜","textPreview":"5,000円〜","textChars":7,"textLines":1,"bbox":[524,538,180,32]}
+{"kind":"textbox","id":"sh/2lk7atcf","slide":15,"text":"基本容量の超過分のみ","textPreview":"基本容量の超過分のみ","textChars":10,"textLines":1,"bbox":[718,540,440,34]}
+{"kind":"textbox","id":"sh/h0bq1ova","slide":15,"text":"※価格案。契約条件・処理負荷・専用環境の要件により変動","textPreview":"※価格案。契約条件・処理負荷・専用環境の要件により変動","textChars":27,"textLines":1,"bbox":[84,620,1112,22]}
+{"kind":"notes","id":"nt/l5hfgo","slide":15,"text":"[Sources]\n- User-provided billing components in the Codex task, 2026-08-07.\n- Unit prices are an illustrative packaging proposal added for this revision; they are not approved or published prices."}
+{"kind":"slide","id":"sl/ntuvz5","slide":16,"title":"ORG BRAIN","textShapes":18}
+{"kind":"textbox","id":"sh/elgny58z","slide":16,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/1or69k7a","slide":16,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/gny50fqp","slide":16,"text":"ライセンス形態","textPreview":"ライセンス形態","textChars":7,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/ryp43qp8","slide":16,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/6xgnul8n","slide":16,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/tk7m507e","slide":16,"text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"shape","id":"sh/sjy5wvqt","slide":16,"bbox":[86,190,350,330]}
+{"kind":"textbox","id":"sh/be9ofups","slide":16,"text":"LOCAL","textPreview":"LOCAL","textChars":5,"textLines":1,"bbox":[114,220,294,28]}
+{"kind":"textbox","id":"sh/qt0n6p87","slide":16,"text":"Free","textPreview":"Free","textChars":4,"textLines":1,"bbox":[114,282,294,58]}
+{"kind":"textbox","id":"sh/sri5o36h","slide":16,"text":"SQLite","textPreview":"SQLite","textChars":6,"textLines":1,"bbox":[114,358,294,30]}
+{"kind":"textbox","id":"sh/tsrmh872","slide":16,"text":"個人・プロジェクトで\nまず試す","textPreview":"個人・プロジェクトで | まず試す","textChars":15,"textLines":2,"bbox":[114,420,294,72]}
+{"kind":"shape","id":"sh/650nmt8r","slide":16,"bbox":[466,190,350,330]}
+{"kind":"textbox","id":"sh/7q94fypw","slide":16,"text":"SELF-HOSTED","textPreview":"SELF-HOSTED","textChars":11,"textLines":1,"bbox":[494,220,294,28]}
+{"kind":"textbox","id":"sh/k3y5kjql","slide":16,"text":"Infrastructure","textPreview":"Infrastructure","textChars":14,"textLines":1,"bbox":[494,282,294,58]}
+{"kind":"textbox","id":"sh/547mdo76","slide":16,"text":"Cloudflare stack","textPreview":"Cloudflare stack","textChars":16,"textLines":1,"bbox":[494,358,294,30]}
+{"kind":"textbox","id":"sh/i1gni98f","slide":16,"text":"自社運用で\nデータを保持","textPreview":"自社運用で | データを保持","textChars":12,"textLines":2,"bbox":[494,420,294,72]}
+{"kind":"shape","id":"sh/j2p4bep0","slide":16,"bbox":[846,190,350,330]}
+{"kind":"textbox","id":"sh/wzy5gjq9","slide":16,"text":"MANAGED SaaS","textPreview":"MANAGED SaaS","textChars":12,"textLines":1,"bbox":[874,220,294,28]}
+{"kind":"textbox","id":"sh/x07m9o7u","slide":16,"text":"Team → Enterprise Plus","textPreview":"Team → Enterprise Plus","textChars":22,"textLines":1,"bbox":[874,282,294,58]}
+{"kind":"textbox","id":"sh/dkfuxgvm","slide":16,"text":"Managed OrgBrain","textPreview":"Managed OrgBrain","textChars":16,"textLines":1,"bbox":[874,358,294,30]}
+{"kind":"textbox","id":"sh/cj6tobe1","slide":16,"text":"インフラ保守なしで\n全社展開","textPreview":"インフラ保守なしで | 全社展開","textChars":14,"textLines":2,"bbox":[874,420,294,72]}
+{"kind":"textbox","id":"sh/bixcv6dg","slide":16,"text":"Local-firstから、共有・統制・運用支援まで段階的に拡張","textPreview":"Local-firstから、共有・統制・運用支援まで段階的に拡張","textChars":32,"textLines":1,"bbox":[120,574,1040,38]}
+{"kind":"notes","id":"nt/ntuvz5","slide":16,"text":"[Sources]\n- OrgBrain README in the local repository, Choose Your Mode section, accessed 2026-08-07.\n- User-provided managed plan concept in the Codex task, 2026-08-07."}
+{"kind":"slide","id":"sl/nihahk","slide":17,"title":"ORG BRAIN","textShapes":16}
+{"kind":"textbox","id":"sh/fmhs72pw","slide":17,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/gna9g76h","slide":17,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/hoja9c72","slide":17,"text":"PoCのご提案","textPreview":"PoCのご提案","textChars":7,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/6x8raxof","slide":17,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/7yhs3ip0","slide":17,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/szq9cn65","slide":17,"text":"17","textPreview":"17","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/tkza5s7q","slide":17,"text":"1チーム・8週間で、継続判断に必要なROIとリスクを可視化","textPreview":"1チーム・8週間で、継続判断に必要なROIとリスクを可視化","textChars":29,"textLines":1,"bbox":[72,122,900,30]}
+{"kind":"shape","id":"sh/qtsbmhoj","slide":17,"bbox":[176,318,928,0]}
+{"kind":"shape","id":"sh/rulsfmp4","slide":17,"bbox":[220,292,28,28]}
+{"kind":"textbox","id":"sh/fypgb6ps","slide":17,"text":"WEEK 0-2","textPreview":"WEEK 0-2","textChars":8,"textLines":1,"bbox":[110,208,250,24]}
+{"kind":"textbox","id":"sh/edgf2l87","slide":17,"text":"ベースライン","textPreview":"ベースライン","textChars":6,"textLines":1,"bbox":[110,354,250,44]}
+{"kind":"textbox","id":"sh/107ydg7y","slide":17,"text":"検索時間・手戻り・\nAIコストを計測","textPreview":"検索時間・手戻り・ | AIコストを計測","textChars":18,"textLines":2,"bbox":[110,416,250,72]}
+{"kind":"shape","id":"sh/gzyh4bqd","slide":17,"bbox":[620,292,28,28]}
+{"kind":"textbox","id":"sh/32pgfqpo","slide":17,"text":"WEEK 3-6","textPreview":"WEEK 3-6","textChars":8,"textLines":1,"bbox":[510,208,250,24]}
+{"kind":"textbox","id":"sh/21gz6l83","slide":17,"text":"運用","textPreview":"運用","textChars":2,"textLines":1,"bbox":[510,354,250,44]}
+{"kind":"textbox","id":"sh/p4ryh07u","slide":17,"text":"1〜2 Adapterを接続し\n実業務で利用","textPreview":"1〜2 Adapterを接続し | 実業務で利用","textChars":22,"textLines":2,"bbox":[510,416,250,72]}
+{"kind":"shape","id":"sh/o3yh8vq9","slide":17,"bbox":[1020,292,28,28]}
+{"kind":"textbox","id":"sh/b69gjqp0","slide":17,"text":"WEEK 7-8","textPreview":"WEEK 7-8","textChars":8,"textLines":1,"bbox":[910,208,250,24]}
+{"kind":"textbox","id":"sh/q50za58f","slide":17,"text":"評価","textPreview":"評価","textChars":2,"textLines":1,"bbox":[910,354,250,44]}
+{"kind":"textbox","id":"sh/m1kj2psn","slide":17,"text":"KPI・ROI・安全性を\n共同レビュー","textPreview":"KPI・ROI・安全性を | 共同レビュー","textChars":19,"textLines":2,"bbox":[910,416,250,72]}
+{"kind":"shape","id":"sh/n2tkbu98","slide":17,"bbox":[170,554,940,72]}
+{"kind":"textbox","id":"sh/8nm14zat","slide":17,"text":"SlackまたはGitHubを接続し、“探し直し”の削減量を実測","textPreview":"SlackまたはGitHubを接続し、“探し直し”の削減量を実測","textChars":32,"textLines":1,"bbox":[202,573,876,34]}
+{"kind":"notes","id":"nt/nihahk","slide":17,"text":"[Sources]\n- Illustrative PoC approach proposed for this deck; schedule and targets should be tailored to the customer environment."}
+{"kind":"slide","id":"sl/msrx9j","slide":18,"title":"ORG BRAIN","textShapes":10}
+{"kind":"textbox","id":"sh/hgzi9ore","slide":18,"text":"ORG BRAIN","textPreview":"ORG BRAIN","textChars":9,"textLines":1,"bbox":[72,32,360,18]}
+{"kind":"textbox","id":"sh/ud8zyts3","slide":18,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[790,32,418,18]}
+{"kind":"textbox","id":"sh/veh07e9o","slide":18,"text":"お問い合わせ","textPreview":"お問い合わせ","textChars":6,"textLines":1,"bbox":[72,58,1136,68]}
+{"kind":"shape","id":"sh/43q143q5","slide":18,"bbox":[72,680,1136,0]}
+{"kind":"textbox","id":"sh/54jid8rq","slide":18,"text":"ORGBRAIN","textPreview":"ORGBRAIN","textChars":8,"textLines":1,"bbox":[72,687,180,18]}
+{"kind":"textbox","id":"sh/ih8j2t8z","slide":18,"text":"18","textPreview":"18","textChars":2,"textLines":1,"bbox":[1150,687,58,18]}
+{"kind":"textbox","id":"sh/3ih0by9k","slide":18,"text":"AI利用を、組織知に","textPreview":"AI利用を、組織知に","textChars":10,"textLines":1,"bbox":[72,132,1136,42]}
+{"kind":"shape","id":"sh/k76hsza1","slide":18,"bbox":[500,206,280,0]}
+{"kind":"textbox","id":"sh/l8fi14r6","slide":18,"text":"OrgBrain","textPreview":"OrgBrain","textChars":8,"textLines":1,"bbox":[72,250,1136,64]}
+{"kind":"textbox","id":"sh/hozqtczu","slide":18,"text":"導入相談　/　PoC設計　/　Enterprise見積","textPreview":"導入相談　/　PoC設計　/　Enterprise見積","textChars":27,"textLines":1,"bbox":[72,336,1136,36]}
+{"kind":"shape","id":"sh/wnqpk7i9","slide":18,"bbox":[286,420,708,82]}
+{"kind":"textbox","id":"sh/vmhor2ho","slide":18,"text":"github.com/miyajima/org-brain","textPreview":"github.com/miyajima/org-brain","textChars":29,"textLines":1,"bbox":[320,441,640,38]}
+{"kind":"textbox","id":"sh/ul87ix03","slide":18,"text":"AIが動くたび、組織が学ぶ","textPreview":"AIが動くたび、組織が学ぶ","textChars":13,"textLines":1,"bbox":[72,562,1136,38]}
+{"kind":"notes","id":"nt/msrx9j","slide":18,"text":"[Sources]\n- OrgBrain repository: https://github.com/miyajima/org-brain, accessed 2026-08-07."}

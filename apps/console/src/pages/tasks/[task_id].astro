@@ -1,12 +1,15 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../../lib/dashboard-page";
 
 const taskId = Astro.params.task_id!;
-const tenantId = Astro.url.searchParams.get("tenant_id") ?? "default";
+const { tenantId, projectId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const taskParams = new URLSearchParams({ tenant_id: tenantId });
+if (projectId) taskParams.set("project_id", projectId);
 
 const [taskResponse, eventResponse] = await Promise.all([
-  fetch(new URL(`/api/v1/tasks/${taskId}?tenant_id=${tenantId}`, Astro.url)),
-  fetch(new URL(`/api/v1/tasks/${taskId}/events?tenant_id=${tenantId}&limit=200`, Astro.url))
+  fetch(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}?${taskParams.toString()}`, Astro.url)),
+  fetch(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}/events?${taskParams.toString()}&limit=200`, Astro.url))
 ]);
 
 const taskPayload: any = taskResponse.ok ? await taskResponse.json() : { ok: false, data: null };

@@ -3,6 +3,29 @@ export type DashboardFetchResult<T> = {
   error: string | null;
 };
 
+export type DashboardTask = {
+  id: string;
+  tenant_id: string | null;
+  project_id: string | null;
+  capability: string;
+  status: string;
+  updated_at: number | string;
+};
+
+export const DASHBOARD_TASK_PAGE_SIZE = 20;
+export const DASHBOARD_TASK_STATUSES = [
+  "created",
+  "queued",
+  "leased",
+  "running",
+  "succeeded",
+  "failed",
+  "dead_letter",
+  "canceled"
+] as const;
+
+export type DashboardTaskViewParams = ReturnType<typeof dashboardTaskPageParams>;
+
 type ApiEnvelope<T> = {
   ok?: boolean;
   data?: T;
@@ -30,6 +53,25 @@ function buildDashboardApiUrl(url: URL, baseUrl: string): URL {
   const target = new URL(path, normalizedBaseUrl);
   target.search = url.search;
   return target;
+}
+
+function cookieValue(cookieHeader: string | null | undefined, name: string): string | null {
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const [key, ...valueParts] = part.trim().split("=");
+    if (key !== name) continue;
+    const value = valueParts.join("=");
+    try {
+      return decodeURIComponent(value).trim() || null;
+    } catch {
+      return value.trim() || null;
+    }
+  }
+  return null;
+}
+
+export function dashboardTenantFromCookie(cookieHeader: string | null | undefined): string | null {
+  return cookieValue(cookieHeader, "orgbrain_tenant");
 }
 
 async function fetchDashboardResponse(url: URL): Promise<Response> {
@@ -74,7 +116,7 @@ async function fetchDashboardResponse(url: URL): Promise<Response> {
   return fetch(url, { headers: { accept: "application/json" } });
 }
 
-export function dashboardPageParams(url: URL): {
+export function dashboardPageParams(url: URL, cookieHeader?: string | null): {
   params: URLSearchParams;
   apiParams: URLSearchParams;
   tenantId: string;
@@ -82,7 +124,7 @@ export function dashboardPageParams(url: URL): {
   lang: "en" | "ja" | "zh";
 } {
   const params = new URLSearchParams(url.searchParams);
-  const tenantId = params.get("tenant_id")?.trim() || "default";
+  const tenantId = params.get("tenant_id")?.trim() || dashboardTenantFromCookie(cookieHeader) || "default";
   const projectId = params.get("project_id")?.trim() || null;
   const requestedLang = params.get("lang");
   const lang = requestedLang === "ja" || requestedLang === "zh" ? requestedLang : "en";
@@ -92,6 +134,65 @@ export function dashboardPageParams(url: URL): {
   const apiParams = new URLSearchParams({ tenant_id: tenantId });
   if (projectId) apiParams.set("project_id", projectId);
   return { params, apiParams, tenantId, projectId, lang };
+}
+
+export function dashboardTaskPageParams(url: URL, cookieHeader?: string | null) {
+  const scope = dashboardPageParams(url, cookieHeader);
+  const rawPage = Number.parseInt(url.searchParams.get("task_page") ?? "0", 10);
+  const taskPage = Number.isFinite(rawPage) ? Math.min(1000, Math.max(0, rawPage)) : 0;
+  const taskQuery = url.searchParams.get("task_q")?.trim().slice(0, 120) ?? "";
+  const requestedStatus = url.searchParams.get("task_status")?.trim().slice(0, 64) ?? "";
+  const taskStatus = /^[a-z][a-z0-9_-]{0,63}$/u.test(requestedStatus) ? requestedStatus : "";
+  const apiParams = new URLSearchParams(scope.apiParams);
+  const params = new URLSearchParams(scope.params);
+  if (taskQuery) params.set("task_q", taskQuery);
+  else params.delete("task_q");
+  if (taskStatus) params.set("task_status", taskStatus);
+  else params.delete("task_status");
+  if (taskPage > 0) params.set("task_page", String(taskPage));
+  else params.delete("task_page");
+  if (taskQuery) apiParams.set("q", taskQuery);
+  if (taskStatus) apiParams.set("status", taskStatus);
+  apiParams.set("limit", String(DASHBOARD_TASK_PAGE_SIZE + 1));
+  apiParams.set("offset", String(taskPage * DASHBOARD_TASK_PAGE_SIZE));
+  return {
+    ...scope,
+    params,
+    apiParams,
+    taskPage,
+    taskPageSize: DASHBOARD_TASK_PAGE_SIZE,
+    taskQuery,
+    taskStatus
+  };
+}
+
+export function normalizeDashboardTasks(value: unknown): DashboardTask[] {
+  if (!Array.isArray(value)) throw new Error("Dashboard task payload was invalid");
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("Dashboard task payload was invalid");
+    }
+    const record = item as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id.trim() : "";
+    const capability = typeof record.capability === "string" ? record.capability.trim() : "";
+    const status = typeof record.status === "string" ? record.status.trim() : "";
+    const updatedAt = typeof record.updated_at === "number" && Number.isFinite(record.updated_at)
+      ? record.updated_at
+      : typeof record.updated_at === "string" && record.updated_at.trim() && Number.isFinite(Date.parse(record.updated_at))
+        ? record.updated_at
+        : null;
+    if (!id || !capability || !status || updatedAt == null) {
+      throw new Error("Dashboard task payload was invalid");
+    }
+    return {
+      id,
+      tenant_id: typeof record.tenant_id === "string" ? record.tenant_id : null,
+      project_id: typeof record.project_id === "string" ? record.project_id : null,
+      capability,
+      status,
+      updated_at: updatedAt
+    };
+  });
 }
 
 export function dashboardApiPath(
