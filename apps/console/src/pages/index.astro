@@ -1,7 +1,8 @@
 ---
 import NervousSystem from "../components/intelligence/NervousSystem.astro";
+import LegacyTaskDashboard from "../components/LegacyTaskDashboard.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { dashboardApiPath, dashboardPageParams, dashboardTaskPageParams, fetchDashboardData, normalizeDashboardTasks, type DashboardTask } from "../lib/dashboard-page";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { intelligencePageCopy } from "../lib/intelligence-locale";
 import { activityWindowParams, normalizeDashboardActivity, resolveActivityPeriod } from "../lib/nervous-system-ui";
@@ -11,13 +12,15 @@ const insightsUiMode = await resolveRequestInsightsUiMode(
   processInsightsUiModeFallback()
 );
 const insightsBehavior = insightsUiBehavior(insightsUiMode);
-const { params, apiParams, lang } = dashboardPageParams(Astro.url);
+const cookieHeader = Astro.request.headers.get("cookie");
+const { params, apiParams, lang } = dashboardPageParams(Astro.url, cookieHeader);
+const taskView = dashboardTaskPageParams(Astro.url, cookieHeader);
 const activityPeriod = resolveActivityPeriod(params.get("period"));
 const intelligenceCopy = intelligencePageCopy(lang);
 let activityResult = { data: normalizeDashboardActivity({}), error: null as string | null };
 let activityComparison = null as ReturnType<typeof normalizeDashboardActivity> | null;
 let refreshUrl = "";
-let tasks: any[] = [];
+let taskResult = { data: [] as DashboardTask[], error: null as string | null };
 if (insightsBehavior.renderInsightsHome) {
   const activityApiParams = activityWindowParams(apiParams, activityPeriod);
   const initialUrl = `/api/v1/dashboard/activity?${activityApiParams.toString()}`;
@@ -38,22 +41,12 @@ if (insightsBehavior.renderInsightsHome) {
   if (activityResult.data.newest_cursor != null) refreshParams.set("after", String(activityResult.data.newest_cursor));
   refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
 } else {
-  const response = await fetch(new URL(dashboardApiPath("/api/v1/tasks", apiParams, { limit: 20 }), Astro.url));
-  const payload: any = response.ok ? await response.json() : { ok: false, data: [] };
-  tasks = payload.ok ? payload.data : [];
+  taskResult = await fetchDashboardData(
+    new URL(dashboardApiPath("/api/v1/tasks", taskView.apiParams), Astro.url),
+    normalizeDashboardTasks,
+    []
+  );
 }
-const counters = tasks.reduce((acc: Record<string, number>, task: { status: string }) => {
-  acc[task.status] = (acc[task.status] ?? 0) + 1;
-  return acc;
-}, {});
-const legacyTaskHref = (taskId: string) => {
-  const scope = new URLSearchParams();
-  for (const key of ["tenant_id", "project_id", "lang"]) {
-    const value = params.get(key);
-    if (value) scope.set(key, value);
-  }
-  return `/tasks/${encodeURIComponent(taskId)}${scope.size ? `?${scope.toString()}` : ""}`;
-};
 ---
 <BaseLayout title={insightsBehavior.renderInsightsHome ? intelligenceCopy.routes.nervousTitle : "Org Brain Dashboard"} lang={lang} wide={insightsBehavior.renderInsightsHome}>
   {insightsBehavior.renderInsightsHome ? (
@@ -67,44 +60,16 @@ const legacyTaskHref = (taskId: string) => {
       <NervousSystem data={activityResult.data} comparisonData={activityComparison} loadError={activityResult.error} refreshUrl={refreshUrl} params={params} locale={lang} />
     </>
   ) : (
-    <>
-      <section class="card">
-        <h1>Org Bus Dashboard</h1>
-        <p class="muted">最近のタスクとステータス分布を表示します。</p>
-        <table>
-          <thead>
-            <tr><th>Status</th><th>Count</th></tr>
-          </thead>
-          <tbody>
-            {Object.keys(counters).length === 0 ? (
-              <tr><td colspan="2">データなし</td></tr>
-            ) : Object.entries(counters).map(([status, count]) => (
-              <tr><td>{status}</td><td>{count}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section class="card">
-        <h2>Recent Tasks</h2>
-        <table>
-          <thead>
-            <tr><th>Task ID</th><th>Capability</th><th>Status</th><th>Updated</th></tr>
-          </thead>
-          <tbody>
-            {tasks.length === 0 ? (
-              <tr><td colspan="4">データなし</td></tr>
-            ) : tasks.slice(0, 10).map((task: any) => (
-              <tr>
-                <td><a href={legacyTaskHref(task.id)}>{task.id}</a></td>
-                <td>{task.capability}</td>
-                <td>{task.status}</td>
-                <td>{new Date(task.updated_at).toLocaleString("ja-JP")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-    </>
+    <LegacyTaskDashboard
+      tasks={taskResult.data}
+      error={taskResult.error}
+      params={taskView.params}
+      lang={taskView.lang}
+      page={taskView.taskPage}
+      pageSize={taskView.taskPageSize}
+      query={taskView.taskQuery}
+      status={taskView.taskStatus}
+      hasMore={taskResult.data.length > taskView.taskPageSize}
+    />
   )}
 </BaseLayout>

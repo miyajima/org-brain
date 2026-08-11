@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/types";
 
 const getActivityDashboardMock = vi.hoisted(() => vi.fn());
+const listTasksMock = vi.hoisted(() => vi.fn());
+const createTaskMock = vi.hoisted(() => vi.fn());
+const getTaskMock = vi.hoisted(() => vi.fn());
+const getTaskEventsMock = vi.hoisted(() => vi.fn());
 const appendAuditEventMock = vi.hoisted(() => vi.fn(async () => undefined));
 const assertPermissionMock = vi.hoisted(() => vi.fn(async () => undefined));
 const assertRequestRateLimitMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -17,6 +21,14 @@ vi.mock("agents/mcp", () => {
 
 vi.mock("../src/activity-dashboard-service", () => ({
   getActivityDashboard: getActivityDashboardMock
+}));
+
+vi.mock("../src/task-service", () => ({
+  createTask: createTaskMock,
+  getTask: getTaskMock,
+  getTaskEvents: getTaskEventsMock,
+  listTasks: listTasksMock,
+  replayFailedTask: vi.fn()
 }));
 
 vi.mock("../src/audit-service", () => ({
@@ -169,5 +181,86 @@ describe("GET /v1/dashboard/activity", () => {
     } finally {
       info.mockRestore();
     }
+  });
+});
+
+describe("GET /v1/tasks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    listTasksMock.mockResolvedValue([]);
+  });
+
+  it("enforces tenant access and forwards bounded task filters", async () => {
+    const { default: worker } = await import("../src/index");
+    const response = await worker.fetch(
+      new Request("https://api.example.test/v1/tasks?tenant_id=tenant-a&status=failed&q=login&limit=21&offset=40", {
+        headers: { "x-api-key": "trusted-key" }
+      }),
+      env,
+      {} as ExecutionContext
+    );
+
+    expect(response.status).toBe(200);
+    expect(listTasksMock).toHaveBeenCalledWith(env, "tenant-a", 21, "failed", "login", 40);
+  });
+
+  it("rejects a task query for a tenant outside the API-key grant", async () => {
+    const { default: worker } = await import("../src/index");
+    const response = await worker.fetch(
+      new Request("https://api.example.test/v1/tasks?tenant_id=tenant-b", {
+        headers: { "x-api-key": "trusted-key" }
+      }),
+      env,
+      {} as ExecutionContext
+    );
+
+    expect(response.status).toBe(403);
+    expect(listTasksMock).not.toHaveBeenCalled();
+  });
+
+  it("applies the same tenant grant to task creation and detail reads", async () => {
+    createTaskMock.mockResolvedValue({ task_id: "task-created" });
+    getTaskMock.mockResolvedValue({ id: "task-a" });
+    getTaskEventsMock.mockResolvedValue([]);
+    const { default: worker } = await import("../src/index");
+
+    const createAllowed = await worker.fetch(
+      new Request("https://api.example.test/v1/tasks", {
+        method: "POST",
+        headers: { "x-api-key": "trusted-key", "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: "tenant-a", capability: "memory_measurement", input_ref: "spec://e2e" })
+      }),
+      env,
+      {} as ExecutionContext
+    );
+    expect(createAllowed.status).toBe(201);
+    expect(createTaskMock).toHaveBeenCalled();
+
+    const createDenied = await worker.fetch(
+      new Request("https://api.example.test/v1/tasks", {
+        method: "POST",
+        headers: { "x-api-key": "trusted-key", "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: "tenant-b", capability: "memory_measurement", input_ref: "spec://e2e" })
+      }),
+      env,
+      {} as ExecutionContext
+    );
+    expect(createDenied.status).toBe(403);
+
+    const detailDenied = await worker.fetch(
+      new Request("https://api.example.test/v1/tasks/task-b?tenant_id=tenant-b", { headers: { "x-api-key": "trusted-key" } }),
+      env,
+      {} as ExecutionContext
+    );
+    expect(detailDenied.status).toBe(403);
+    expect(getTaskMock).not.toHaveBeenCalled();
+
+    const eventsDenied = await worker.fetch(
+      new Request("https://api.example.test/v1/tasks/task-b/events?tenant_id=tenant-b", { headers: { "x-api-key": "trusted-key" } }),
+      env,
+      {} as ExecutionContext
+    );
+    expect(eventsDenied.status).toBe(403);
+    expect(getTaskEventsMock).not.toHaveBeenCalled();
   });
 });

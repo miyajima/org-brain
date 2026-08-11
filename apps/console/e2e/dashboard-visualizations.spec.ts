@@ -50,6 +50,9 @@ test.describe("dashboard visualizations", () => {
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja");
 
     await expect(page.getByRole("heading", { name: "知識のつながり" })).toBeVisible();
+    await page.getByRole("searchbox", { name: "知識を検索" }).fill("ACL");
+    await page.getByRole("button", { name: "適用" }).click();
+    await expect(page).toHaveURL(/q=ACL/);
     const decision = page.locator('.knowledge-node[href*="selected=decision%3Adecision-e2e"]');
     await decision.focus();
     await expect(decision).toBeFocused();
@@ -67,6 +70,16 @@ test.describe("dashboard visualizations", () => {
     await page.getByText(/^表示中の関係/).click();
     await expect(page.locator(".inspector-relations").getByText("derived_from", { exact: true })).toBeVisible();
     await expect(page.locator(".inspector-relations")).toContainText("この知識から");
+  });
+
+  test("makes observed actors and projects keyboard-operable", async ({ page }) => {
+    await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja");
+
+    const actor = page.locator(".topology-entity-link").first();
+    await actor.focus();
+    await expect(actor).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/event=usage%3Aevt-1/);
   });
 
   test("recovers from a missing graph deep link and explains the fallback", async ({ page }) => {
@@ -157,6 +170,34 @@ test.describe("dashboard visualizations", () => {
     await page.goto("/decisions/history?tenant_id=default&project_id=e2e-truncated&lang=ja");
     await expect(page.getByText("古いリビジョンの一部は表示上限により省略されています。")).toBeVisible();
     await expect(page.getByText("参照元の一部は表示上限により省略されています。")).toBeVisible();
+  });
+
+  test("keeps the classic task dashboard honest and filterable", async ({ page }) => {
+    await page.goto("/dashboard?tenant_id=default&project_id=e2e-task-error&lang=ja");
+    await expect(page.getByRole("alert")).toContainText("Taskを取得できませんでした");
+    await expect(page.getByText("Task fixture unavailable")).toBeVisible();
+    await expect(page.getByText("現在のスコープに一致するTaskはありません。")).toHaveCount(0);
+
+    await page.goto("/dashboard?tenant_id=default&project_id=e2e-task-dense&lang=ja&task_q=memory&task_status=succeeded");
+    await expect(page.getByRole("searchbox", { name: "Taskを検索" })).toHaveValue("memory");
+    await expect(page.getByRole("combobox", { name: "ステータス" })).toHaveValue("succeeded");
+    await expect(page.getByRole("table")).toContainText("memory_measurement");
+    await expect(page.getByText("1ページ目")).toBeVisible();
+  });
+
+  test("keeps Operations tenant-scoped through status and replay", async ({ page }) => {
+    await page.context().addCookies([{ name: "orgbrain_tenant", value: "tenant-a", domain: "127.0.0.1", path: "/" }]);
+    const replayRequests = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/v1/ops/tasks/") && request.method() === "POST") replayRequests.push(request);
+    });
+
+    await page.goto("/operations");
+    await expect(page.getByText("対象: tenant-a")).toBeVisible();
+    await page.getByRole("button", { name: "再実行" }).click();
+    await expect.poll(() => replayRequests.length).toBe(1);
+    expect(JSON.parse(replayRequests[0].postData() ?? "{}").tenant_id).toBe("tenant-a");
+    await expect(page.locator("#replay-result")).toContainText("replayed-tenant-a");
   });
 
   test("keeps sparse and high-density dashboard states usable", async ({ page }) => {

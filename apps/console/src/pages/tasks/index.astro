@@ -1,9 +1,17 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams } from "../../lib/dashboard-page";
 
-const response = await fetch(new URL("/api/v1/tasks?limit=100", Astro.url));
+const { tenantId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const taskParams = new URLSearchParams({ tenant_id: tenantId, limit: "100" });
+const response = await fetch(new URL(dashboardApiPath("/api/v1/tasks", taskParams), Astro.url));
 const payload: any = response.ok ? await response.json() : { ok: false, data: [] };
 const tasks = payload.ok ? payload.data : [];
+const taskHref = (task: { id: string; project_id?: string | null }) => {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (task.project_id) params.set("project_id", task.project_id);
+  return `/tasks/${encodeURIComponent(task.id)}?${params.toString()}`;
+};
 ---
 <BaseLayout title="Tasks">
   <section class="card">
@@ -24,7 +32,7 @@ const tasks = payload.ok ? payload.data : [];
           <tr><td colspan="6">Taskなし</td></tr>
         ) : tasks.map((task: any) => (
           <tr>
-            <td><a href={`/tasks/${task.id}`}>{task.id}</a></td>
+            <td><a href={taskHref(task)}>{task.id}</a></td>
             <td>{task.tenant_id}</td>
             <td>{task.project_id ?? "-"}</td>
             <td>{task.capability}</td>

@@ -1,0 +1,250 @@
+---
+import {
+  DASHBOARD_TASK_STATUSES,
+  type DashboardTask
+} from "../lib/dashboard-page";
+
+const {
+  tasks,
+  error = null,
+  params,
+  lang = "en",
+  page = 0,
+  pageSize = 20,
+  query = "",
+  status = "",
+  hasMore = false
+} = Astro.props as {
+  tasks: DashboardTask[];
+  error?: string | null;
+  params: URLSearchParams;
+  lang?: "en" | "ja" | "zh";
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  status?: string;
+  hasMore?: boolean;
+};
+
+const copy = {
+  en: {
+    title: "Org Brain Dashboard",
+    description: "Recent tasks and their current status.",
+    preview: "Classic task view",
+    search: "Search tasks",
+    searchPlaceholder: "ID, capability, or project",
+    status: "Status",
+    all: "All statuses",
+    apply: "Apply",
+    clear: "Clear",
+    currentPage: "Status on this page",
+    results: "Showing {count}{suffix} tasks · Page {page}",
+    empty: "No tasks match the current scope.",
+    unavailable: "Tasks could not be loaded",
+    retry: "Retry",
+    taskId: "Task ID",
+    capability: "Capability",
+    updated: "Updated",
+    previous: "Previous",
+    next: "Next",
+    more: "More tasks are available on the next page.",
+    tenant: "Tenant",
+    pagination: "Task pagination"
+  },
+  ja: {
+    title: "Org Brain ダッシュボード",
+    description: "最近のTaskと現在のステータスを確認します。",
+    preview: "従来のTaskビュー",
+    search: "Taskを検索",
+    searchPlaceholder: "ID・Capability・Project",
+    status: "ステータス",
+    all: "すべてのステータス",
+    apply: "適用",
+    clear: "クリア",
+    currentPage: "このページのステータス",
+    results: "{count}件{suffix}を表示 · {page}ページ目",
+    empty: "現在のスコープに一致するTaskはありません。",
+    unavailable: "Taskを取得できませんでした",
+    retry: "再試行",
+    taskId: "Task ID",
+    capability: "Capability",
+    updated: "更新日時",
+    previous: "前へ",
+    next: "次へ",
+    more: "次のページに続きがあります。",
+    tenant: "Tenant",
+    pagination: "Taskページ"
+  },
+  zh: {
+    title: "Org Brain 仪表盘",
+    description: "查看最近的任务及其当前状态。",
+    preview: "经典任务视图",
+    search: "搜索任务",
+    searchPlaceholder: "ID、能力或项目",
+    status: "状态",
+    all: "所有状态",
+    apply: "应用",
+    clear: "清除",
+    currentPage: "本页状态",
+    results: "显示 {count}{suffix} 个任务 · 第 {page} 页",
+    empty: "当前范围内没有匹配的任务。",
+    unavailable: "无法获取任务",
+    retry: "重试",
+    taskId: "任务 ID",
+    capability: "能力",
+    updated: "更新时间",
+    previous: "上一页",
+    next: "下一页",
+    more: "下一页还有更多任务。",
+    tenant: "Tenant",
+    pagination: "任务分页"
+  }
+}[lang];
+
+const visibleTasks = tasks.slice(0, pageSize);
+const statuses = [...new Set([
+  ...DASHBOARD_TASK_STATUSES,
+  ...visibleTasks.map((task) => task.status)
+])];
+const path = Astro.url.pathname;
+const scopedParams = () => {
+  const next = new URLSearchParams();
+  for (const key of ["tenant_id", "project_id", "lang"]) {
+    const value = params.get(key);
+    if (value) next.set(key, value);
+  }
+  return next;
+};
+const pageHref = (nextPage: number) => {
+  const next = new URLSearchParams(params);
+  if (nextPage > 0) next.set("task_page", String(nextPage));
+  else next.delete("task_page");
+  return `${path}?${next.toString()}`;
+};
+const clearHref = () => {
+  const next = scopedParams();
+  return `${path}?${next.toString()}`;
+};
+const hiddenScope = [...scopedParams().entries()];
+const retryHref = `${path}${Astro.url.search}`;
+const taskHref = (taskId: string) => {
+  const next = scopedParams();
+  return `/tasks/${encodeURIComponent(taskId)}${next.size ? `?${next.toString()}` : ""}`;
+};
+const countSuffix = hasMore ? "+" : "";
+const resultLabel = copy.results
+  .replace("{count}", String(visibleTasks.length))
+  .replace("{suffix}", countSuffix)
+  .replace("{page}", String(page + 1));
+const counters = visibleTasks.reduce<Record<string, number>>((acc, task) => {
+  acc[task.status] = (acc[task.status] ?? 0) + 1;
+  return acc;
+}, {});
+---
+
+{error && (
+  <div class="intelligence-route-alert" role="alert">
+    <strong>{copy.unavailable}</strong>
+    <span>{error}</span>
+    <a href={retryHref}>{copy.retry}</a>
+  </div>
+)}
+
+<section class="card legacy-dashboard-card">
+  <header class="legacy-dashboard-header">
+    <div>
+      <span class="surface-chip">{copy.preview}</span>
+      <h1>{copy.title}</h1>
+      <p class="muted">{copy.description}</p>
+    </div>
+    <p class="surface-muted">{copy.tenant}: <strong>{params.get("tenant_id") ?? "default"}</strong></p>
+  </header>
+
+  <form class="legacy-task-filters" method="get" action={path}>
+    {hiddenScope.map(([key, value]) => <input type="hidden" name={key} value={value} />)}
+    <label>
+      <span>{copy.search}</span>
+      <input type="search" name="task_q" value={query} placeholder={copy.searchPlaceholder} maxlength="120" />
+    </label>
+    <label>
+      <span>{copy.status}</span>
+      <select name="task_status">
+        <option value="" selected={!status}>{copy.all}</option>
+        {statuses.map((value) => <option value={value} selected={status === value}>{value}</option>)}
+      </select>
+    </label>
+    <button type="submit">{copy.apply}</button>
+    {(query || status) && <a class="secondary-action" href={clearHref()}>{copy.clear}</a>}
+  </form>
+
+  {!error && (
+    <>
+      <div class="legacy-dashboard-summary" role="status">
+        <span>{resultLabel}</span>
+        {hasMore && <span>{copy.more}</span>}
+      </div>
+
+      <section class="legacy-status-summary" aria-labelledby="legacy-status-title">
+        <h2 id="legacy-status-title">{copy.currentPage}</h2>
+        <dl>
+          {Object.keys(counters).length === 0 ? (
+            <div><dt>{copy.all}</dt><dd>0</dd></div>
+          ) : Object.entries(counters).map(([taskStatus, count]) => (
+            <div><dt>{taskStatus}</dt><dd>{count}</dd></div>
+          ))}
+        </dl>
+      </section>
+
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr><th scope="col">{copy.taskId}</th><th scope="col">{copy.capability}</th><th scope="col">{copy.status}</th><th scope="col">{copy.updated}</th></tr>
+          </thead>
+          <tbody>
+            {visibleTasks.length === 0 ? (
+              <tr><td colspan="4">{copy.empty}</td></tr>
+            ) : visibleTasks.map((task) => (
+              <tr>
+                <td><a href={taskHref(task.id)}>{task.id}</a></td>
+                <td>{task.capability}</td>
+                <td>{task.status}</td>
+                <td>{new Date(task.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {(page > 0 || hasMore) && (
+        <nav class="legacy-task-pagination" aria-label={copy.pagination}>
+          {page > 0 ? <a href={pageHref(page - 1)}>{copy.previous}</a> : <span aria-hidden="true">{copy.previous}</span>}
+          <span aria-current="page">{page + 1}</span>
+          {hasMore ? <a href={pageHref(page + 1)}>{copy.next}</a> : <span aria-hidden="true">{copy.next}</span>}
+        </nav>
+      )}
+    </>
+  )}
+</section>
+
+<style>
+  .legacy-dashboard-card { display: grid; gap: 1.25rem; }
+  .legacy-dashboard-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+  .legacy-dashboard-header h1 { margin-top: .8rem; }
+  .legacy-task-filters { display: grid; grid-template-columns: minmax(0, 1fr) 14rem auto auto; align-items: end; gap: .75rem; padding: 1rem; border: 1px solid var(--console-border); border-radius: 1rem; background: rgba(255,255,255,.03); }
+  .legacy-task-filters label { display: grid; gap: .35rem; }
+  .legacy-task-filters label span { color: var(--console-muted); font-size: .78rem; }
+  .legacy-task-filters button { min-height: 3rem; }
+  .legacy-dashboard-summary { display: flex; justify-content: space-between; gap: 1rem; color: var(--console-muted); font-size: .88rem; }
+  .legacy-status-summary { display: grid; gap: .6rem; }
+  .legacy-status-summary h2 { font-size: .9rem; color: var(--console-muted); }
+  .legacy-status-summary dl { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; }
+  .legacy-status-summary dl div { display: flex; gap: .45rem; padding: .45rem .7rem; border: 1px solid var(--console-border); border-radius: 999px; }
+  .legacy-status-summary dt { color: var(--console-muted); }
+  .legacy-status-summary dd { margin: 0; font-weight: 700; }
+  .legacy-task-pagination { display: flex; justify-content: center; align-items: center; gap: .9rem; }
+  .legacy-task-pagination span[aria-current="page"] { min-width: 2rem; text-align: center; font-weight: 700; }
+  @media (max-width: 760px) {
+    .legacy-dashboard-header, .legacy-dashboard-summary { display: grid; }
+    .legacy-task-filters { grid-template-columns: 1fr; }
+  }
+</style>

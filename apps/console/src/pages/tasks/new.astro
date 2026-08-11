@@ -1,12 +1,15 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../../lib/dashboard-page";
+
+const { tenantId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 ---
 <BaseLayout title="Create Task">
   <section class="card">
     <h1>Task作成</h1>
     <form id="create-task-form">
       <label>Tenant ID</label>
-      <input name="tenant_id" value="default" />
+      <input name="tenant_id" value={tenantId} />
 
       <label>Project ID</label>
       <input name="project_id" required />

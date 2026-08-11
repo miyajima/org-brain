@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import brandMark from "../../../../assets/brand/org-brain-avatar.png";
+import { dashboardTenantFromCookie } from "../lib/dashboard-page";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 
 const { title = "Org Brain Console", lang = "en", wide = false } = Astro.props;
@@ -86,7 +87,7 @@ const insightsUiMode = await resolveRequestInsightsUiMode(
   processInsightsUiModeFallback()
 );
 const insightsBehavior = insightsUiBehavior(insightsUiMode);
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim();
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || dashboardTenantFromCookie(Astro.request.headers.get("cookie"));
 const projectId = Astro.url.searchParams.get("project_id")?.trim();
 const requestedLang = Astro.url.searchParams.get("lang")?.trim();
 const withScope = (href: string) => {

@@ -85,6 +85,16 @@ const highlightedCapability = activeCapability ?? selectedCapability;
 const severityLabel = (severity: ActivityEvent["severity"]) => copy.common.severity[severity];
 const countCopy = (template: string, count: number) => template.replace("{count}", String(count));
 const activityPathname = Astro.url.pathname === "/" ? "/" : "/overview";
+const actorEvent = (actor: ObservedAgent) => data.events.find((event) => event.actor.id === actor.id) ?? null;
+const actorHref = (actor: ObservedAgent) => {
+  const event = actorEvent(actor);
+  return event ? selectEventHref(event) : `${activityPathname}?${scope.toString()}#activity-timeline`;
+};
+const projectEvent = (project: { id: string }) => data.events.find((event) => event.project_id === project.id) ?? null;
+const projectHref = (project: { id: string }) => {
+  const event = projectEvent(project);
+  return event ? selectEventHref(event) : `${activityPathname}?${scope.toString()}#activity-timeline`;
+};
 const capabilityDefinitions = {
   remember: { title: copy.nervous.remember, note: copy.nervous.storeStructure, x: 462, y: 87 },
   understand: { title: copy.nervous.understand, note: copy.nervous.searchRelate, x: 636, y: 87 },
@@ -291,6 +301,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
           const y = pointY(index, actors.length);
           const initial = actor.label.replace(/[^A-Za-z0-9一-龠ぁ-んァ-ヶ]/gu, "").slice(0, 2).toUpperCase() || "AI";
           return (
+            <a href={actorHref(actor)} class="topology-entity-link" aria-label={`${actor.label} · ${agentStateLabel(actor)}`}>
             <g class:list={[actor.id === selectedActorId && "topology-entity-selected"]}>
               <title>{actor.label} · {agentStateLabel(actor)} · {uiCopy.lastSeen} {formatTime(actor.last_seen_at)} · {uiCopy.provenance} {agentEventKinds(actor.id).join(" / ") || copy.nervous.timeUnknown}</title>
               <circle class="actor-ring" cx="80" cy={y} r="31"></circle>
@@ -300,17 +311,20 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
               <text class="actor-detail" x="122" y={y + 15}>{agentStateLabel(actor)} · {relativeTime(actor.last_seen_at, now, locale)}</text>
               <text class="actor-counter" x="122" y={y + 34}>{copy.common.read} {actor.read_count} · {copy.common.write} {actor.write_count}</text>
             </g>
+            </a>
           );
         })}
 
         {projects.map((project, index) => {
           const y = pointY(index, projects.length);
           return (
+            <a href={projectHref(project)} class="topology-entity-link" aria-label={`${project.label} · ${project.eventCount} ${copy.common.events}`}>
             <g class:list={[project.id === selectedProjectId && "topology-entity-selected"]}>
               <rect class={project.criticalCount > 0 ? "project-card project-card-critical" : "project-card"} x="1048" y={y - 34} width="144" height="68" rx="12"></rect>
               <text class="project-label" x="1064" y={y - 6}>{project.label.slice(0, 20)}</text>
               <text class="project-detail" x="1064" y={y + 15}>{project.eventCount} {copy.common.events} · {project.criticalCount} {copy.common.critical}</text>
             </g>
+            </a>
           );
         })}
 
@@ -354,13 +368,13 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
         <section aria-labelledby="actors-list-title">
           <h2 id="actors-list-title">{copy.nervous.observedAgents}</h2>
           <ul>
-            {actors.map((actor) => <li><strong>{actor.label}</strong><span>{agentStateLabel(actor)} · {uiCopy.lastSeen} {relativeTime(actor.last_seen_at, now, locale)} · {uiCopy.provenance} {agentEventKinds(actor.id).join(" / ") || copy.nervous.timeUnknown}</span></li>)}
+            {actors.map((actor) => <li><a href={actorHref(actor)}><strong>{actor.label}</strong><span>{agentStateLabel(actor)} · {uiCopy.lastSeen} {relativeTime(actor.last_seen_at, now, locale)} · {uiCopy.provenance} {agentEventKinds(actor.id).join(" / ") || copy.nervous.timeUnknown}</span></a></li>)}
           </ul>
         </section>
         <section aria-labelledby="projects-list-title">
           <h2 id="projects-list-title">{copy.nervous.relatedProjects}</h2>
           <ul>
-            {projects.map((project) => <li><strong>{project.label}</strong><span>{project.eventCount} {copy.common.events} · {relativeTime(project.lastSeenAt, now, locale)}</span></li>)}
+            {projects.map((project) => <li><a href={projectHref(project)}><strong>{project.label}</strong><span>{project.eventCount} {copy.common.events} · {relativeTime(project.lastSeenAt, now, locale)}</span></a></li>)}
           </ul>
           <p class="project-scope-note">{uiCopy.projectRule}</p>
         </section>
@@ -455,6 +469,8 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
   .period-comparison { display: grid; grid-template-columns: 13rem minmax(0,1fr); gap: 1rem; align-items: center; margin-bottom: 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: linear-gradient(100deg,rgba(14,36,63,.66),rgba(4,9,16,.72)); padding: .75rem 1rem; }.period-comparison > div { display: grid; gap: .25rem; }.period-comparison > div span { color: var(--intelligence-blue-bright); font-size: .68rem; }.period-comparison > div strong { font-size: 1rem; }.period-comparison dl { display: grid; grid-template-columns: .75fr .75fr 1.5fr; margin: 0; }.period-comparison dl > div { min-width: 0; border-left: 1px solid var(--intelligence-border); padding: .2rem 1rem; }.period-comparison dt { color: var(--intelligence-muted); font-size: .68rem; }.period-comparison dd { display: flex; gap: .55rem; align-items: baseline; margin-top: .3rem; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .9rem; }.period-comparison small { color: var(--intelligence-success); font-family: "Fira Code",monospace; font-size: .68rem; }
   .system-stage { position: relative; min-height: 31rem; overflow: hidden; border-top: 1px solid rgba(111,136,172,.12); border-bottom: 1px solid rgba(111,136,172,.14); background: radial-gradient(circle at 50% 48%, rgba(0,112,255,.12), transparent 24%); }
   .topology-map { width: 100%; min-height: 31rem; }
+  .topology-entity-link { outline: none; }
+  .topology-entity-link:focus-visible .actor-ring,.topology-entity-link:focus-visible .project-card { stroke: #d9f1ff; stroke-width: 3; }
   .topology-heading { position: absolute; z-index: 2; top: 1rem; color: #b4bdcb; font-size: .72rem; font-weight: 600; }
   .topology-heading-actors { left: 3%; }.topology-heading-brain { left: 46%; }.topology-heading-projects { right: 3%; }
   .flow { fill: none; stroke: url(#flow-blue); stroke-width: 3; filter: url(#blue-glow); vector-effect: non-scaling-stroke; }

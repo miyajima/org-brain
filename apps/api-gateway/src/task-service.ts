@@ -313,15 +313,30 @@ export async function listTasks(
   env: Env,
   tenantId: string,
   limit = 50,
-  status?: string
+  status?: string,
+  query?: string,
+  offset = 0
 ): Promise<Array<Record<string, unknown>>> {
-  const hasStatus = typeof status === "string" && status.length > 0;
-  const sql = hasStatus
-    ? "SELECT id, tenant_id, project_id, capability, status, priority, input_ref, output_ref, trace_id, wait_event_type, created_at, updated_at FROM tasks WHERE tenant_id = ? AND status = ? ORDER BY updated_at DESC LIMIT ?"
-    : "SELECT id, tenant_id, project_id, capability, status, priority, input_ref, output_ref, trace_id, wait_event_type, created_at, updated_at FROM tasks WHERE tenant_id = ? ORDER BY updated_at DESC LIMIT ?";
+  const filters = ["tenant_id = ?"];
+  const bindings: unknown[] = [tenantId];
+  const normalizedStatus = typeof status === "string" ? status.trim().slice(0, 64) : "";
+  const normalizedQuery = typeof query === "string" ? query.trim().slice(0, 120) : "";
+  if (normalizedStatus) {
+    filters.push("status = ?");
+    bindings.push(normalizedStatus);
+  }
+  if (normalizedQuery) {
+    filters.push("(id LIKE ? OR capability LIKE ? OR COALESCE(project_id, '') LIKE ?)");
+    const pattern = `%${normalizedQuery}%`;
+    bindings.push(pattern, pattern, pattern);
+  }
+  const safeLimit = Math.min(101, Math.max(1, Math.trunc(Number.isFinite(limit) ? limit : 50)));
+  const safeOffset = Math.min(100_000, Math.max(0, Math.trunc(Number.isFinite(offset) ? offset : 0)));
+  const sql = `SELECT id, tenant_id, project_id, capability, status, priority, input_ref, output_ref, trace_id, wait_event_type, created_at, updated_at
+    FROM tasks WHERE ${filters.join(" AND ")} ORDER BY updated_at DESC LIMIT ? OFFSET ?`;
 
   const stmt = env.OPEN_BRAIN_DB.prepare(sql);
-  const bound = hasStatus ? stmt.bind(tenantId, status, limit) : stmt.bind(tenantId, limit);
+  const bound = stmt.bind(...bindings, safeLimit, safeOffset);
   const result = await bound.all<Record<string, unknown>>();
   return result.results;
 }

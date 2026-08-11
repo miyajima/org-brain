@@ -881,28 +881,38 @@ app.post("/v1/agent-messages/:messageId/ack", async (c) => {
 
 app.post("/v1/tasks", async (c) => {
   const body = await c.req.json<unknown>();
+  assertApiTenantAccess(c, tenantFromBody(body));
   const created = await createTask(c.env, body, { actorPrincipal: getApiPrincipal(c) });
   return jsonOk(c, created, 201);
 });
 
 app.get("/v1/tasks", async (c) => {
-  const tenantId = c.req.query("tenant_id") ?? "default";
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const status = c.req.query("status");
+  const query = c.req.query("q");
   const limit = Number.parseInt(c.req.query("limit") ?? "50", 10);
-  const tasks = await listTasks(c.env, tenantId, Number.isNaN(limit) ? 50 : limit, status);
+  const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const tasks = await listTasks(
+    c.env,
+    tenantId,
+    Number.isNaN(limit) ? 50 : limit,
+    status,
+    query,
+    Number.isNaN(offset) ? 0 : offset
+  );
   return jsonOk(c, tasks);
 });
 
 app.get("/v1/tasks/:taskId", async (c) => {
   const taskId = c.req.param("taskId");
-  const tenantId = c.req.query("tenant_id") ?? "default";
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const task = await getTask(c.env, tenantId, taskId);
   return jsonOk(c, task);
 });
 
 app.get("/v1/tasks/:taskId/events", async (c) => {
   const taskId = c.req.param("taskId");
-  const tenantId = c.req.query("tenant_id") ?? "default";
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const limit = Number.parseInt(c.req.query("limit") ?? "50", 10);
   const cursorValue = c.req.query("cursor");
   const cursor = cursorValue ? Number.parseInt(cursorValue, 10) : undefined;
