@@ -37,7 +37,7 @@ describe("insights UI mode", () => {
 
   it.each([
     ["off", { enableInsightsRoutes: false, renderInsightsHome: false, useInsightsNavigation: false, showOverviewLab: false, showLegacyDashboard: false }],
-    ["beta", { enableInsightsRoutes: true, renderInsightsHome: false, useInsightsNavigation: false, showOverviewLab: true, showLegacyDashboard: false }],
+    ["beta", { enableInsightsRoutes: true, renderInsightsHome: false, useInsightsNavigation: true, showOverviewLab: true, showLegacyDashboard: false }],
     ["on", { enableInsightsRoutes: true, renderInsightsHome: true, useInsightsNavigation: true, showOverviewLab: false, showLegacyDashboard: true }]
   ] as const)("keeps %s route and navigation behavior aligned", (mode, expected) => {
     expect(insightsUiBehavior(mode)).toEqual(expected);

@@ -1,28 +1,62 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
+import { dashboardLabel } from "../../lib/dashboard-copy";
 
-const { tenantId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const copy = {
+  en: {
+    title: "Create Task",
+    heading: "Create Task",
+    tenant: "Tenant ID",
+    project: "Project ID",
+    capability: "Capability",
+    inputRef: "Input reference",
+    inputPlaceholder: "r2://... or memory://... or plain text",
+    submit: "Create Task"
+  },
+  ja: {
+    title: "Task作成",
+    heading: "Task作成",
+    tenant: "テナントID",
+    project: "プロジェクトID",
+    capability: "処理",
+    inputRef: "入力元",
+    inputPlaceholder: "r2://... または memory://... またはテキスト",
+    submit: "Taskを作成"
+  },
+  zh: {
+    title: "新建任务",
+    heading: "新建任务",
+    tenant: "Tenant ID",
+    project: "项目 ID",
+    capability: "能力",
+    inputRef: "输入引用",
+    inputPlaceholder: "r2://... 或 memory://... 或纯文本",
+    submit: "创建任务"
+  }
+}[lang];
+const capability = dashboardLabel("capability", "memory_measurement", lang);
 ---
-<BaseLayout title="Create Task">
+<BaseLayout title={copy.title} lang={lang}>
   <section class="card">
-    <h1>Task作成</h1>
+    <h1>{copy.heading}</h1>
     <form id="create-task-form">
-      <label>Tenant ID</label>
-      <input name="tenant_id" value={tenantId} />
+      <label for="create-task-tenant">{copy.tenant}</label>
+      <input id="create-task-tenant" name="tenant_id" value={tenantId} />
 
-      <label>Project ID</label>
-      <input name="project_id" required />
+      <label for="create-task-project">{copy.project}</label>
+      <input id="create-task-project" name="project_id" required />
 
-      <label>Capability</label>
-      <select name="capability">
-        <option value="memory_measurement">memory_measurement</option>
+      <label for="create-task-capability">{copy.capability}</label>
+      <select id="create-task-capability" name="capability">
+        <option value="memory_measurement" title="memory_measurement">{capability}</option>
       </select>
 
-      <label>Input Ref</label>
-      <textarea name="input_ref" rows="5" placeholder="r2://... or memory://... or plain text" required></textarea>
+      <label for="create-task-input-ref">{copy.inputRef}</label>
+      <textarea id="create-task-input-ref" name="input_ref" rows="5" placeholder={copy.inputPlaceholder} required></textarea>
 
-      <button type="submit">Create Task</button>
+      <button type="submit">{copy.submit}</button>
     </form>
     <pre id="result">未送信</pre>
   </section>

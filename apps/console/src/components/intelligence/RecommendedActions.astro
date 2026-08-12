@@ -1,19 +1,23 @@
 ---
 import type { RecommendedAction } from "../../lib/insight-guidance";
+import { intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
 
-const { title, subtitle, actions, emptyTitle, emptyBody } = Astro.props as {
+const { title, subtitle, actions, emptyTitle, emptyBody, locale } = Astro.props as {
   title: string;
   subtitle?: string;
   actions: RecommendedAction[];
   emptyTitle: string;
   emptyBody: string;
+  locale?: IntelligenceLocale;
 };
 const actionCount = Math.min(actions.length, 3);
+const copy = intelligencePageCopy(locale);
+const briefingLabel = locale === "ja" ? "対応サマリー" : locale === "zh" ? "任务简报" : "Mission briefing";
 ---
-<section class="recommended-actions" aria-labelledby="recommended-actions-title">
+<section class="recommended-actions" id="recommended-actions" aria-labelledby="recommended-actions-title">
   <header>
     <div>
-      <p>Mission briefing</p>
+      <p>{briefingLabel}</p>
       <h2 id="recommended-actions-title">{title}</h2>
     </div>
     {subtitle && <span>{subtitle}</span>}
@@ -23,7 +27,7 @@ const actionCount = Math.min(actions.length, 3);
       {actions.map((action) => (
         <article class:list={["action-card", `action-${action.tone}`]}>
           <div class="action-heading">
-            <span class="action-tone">{action.tone}</span>
+            <span class="action-tone">{copy.common.severity[action.tone]}</span>
             <strong>{action.title}</strong>
           </div>
           <p>{action.reason}</p>

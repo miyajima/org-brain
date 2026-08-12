@@ -18,6 +18,12 @@ describe("knowledge graph view model", () => {
   it("drops dangling edges and chooses the highest-signal focus", () => {
     expect(graph.edges.map((edge) => edge.id)).toEqual(["e"]);
     expect(chooseFocusNode(graph.nodes)?.id).toBe("m");
+    expect(graph.generated_at).toBe(0);
+  });
+
+  it("normalizes the graph generation timestamp for freshness UI", () => {
+    expect(normalizeKnowledgeGraph({ generated_at: 1_234, nodes: [], edges: [], clusters: [] }).generated_at).toBe(1_234);
+    expect(normalizeKnowledgeGraph({ generated_at: "invalid", nodes: [], edges: [], clusters: [] }).generated_at).toBe(0);
   });
 
   it("lays out identical data deterministically inside the viewport", () => {
@@ -41,7 +47,7 @@ describe("knowledge graph view model", () => {
       clusters: []
     });
     expect(layoutKnowledgeGraph(single)).toMatchObject([
-      { id: "only", selected: true, neighbor: false, x: 470, y: 331.2 }
+      { id: "only", selected: true, neighbor: false, x: 470, y: 257.6 }
     ]);
   });
 

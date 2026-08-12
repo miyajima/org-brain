@@ -209,6 +209,7 @@ describe("knowledge graph dashboard service", () => {
     });
 
     expect(dashboardKnowledgeGraphResponseSchema.parse(first)).toEqual(first);
+    expect(first.generated_at).toBe(1_000);
     expect(second).toEqual(first);
     expect(first.contract_version).toBe("dashboard/v1");
     expect(first.nodes.map((node) => node.id)).toEqual(expect.arrayContaining([
@@ -301,6 +302,32 @@ describe("knowledge graph dashboard service", () => {
       focus_type: "resource",
       focus_id: "missing"
     })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("supports a project focus without expanding the graph count query into an invalid compound select", async () => {
+    const { database, env } = testEnv();
+    insertMemory(database, "project-focus-memory", { projectId: "project-a", updatedAt: 200 });
+    database.prepare("INSERT INTO decision_memories VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(
+      "project-focus-decision", "tenant-a", "project-a", "engineering", "Project decision", "Keep the scope visible",
+      "active", "confirmed", 0.9, "tenant", "[]", null, 180, 10
+    );
+
+    const result = await getKnowledgeGraph(env, "tenant-a", {
+      focus_type: "project",
+      focus_id: "project-a",
+      project_id: "project-a",
+      q: "project-a",
+      depth: 2,
+      node_limit: 20,
+      edge_limit: 20,
+      now: 1_000
+    });
+
+    expect(result.nodes.map((node) => node.id)).toEqual(expect.arrayContaining([
+      "project:project-a",
+      "memory:project-focus-memory",
+      "decision:project-focus-decision"
+    ]));
   });
 
   it("scans past newer unreadable candidates without leaking them into truncation", async () => {

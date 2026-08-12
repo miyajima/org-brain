@@ -5,6 +5,7 @@ import InsightPageGuide from "./InsightPageGuide.astro";
 import InsightScopeRail from "./InsightScopeRail.astro";
 import RecommendedActions from "./RecommendedActions.astro";
 import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { dashboardLabel } from "../../lib/dashboard-copy";
 import { activityHealthyCopy, activityRecommendedActions, insightBriefingTitle, pageGuide } from "../../lib/insight-guidance";
 import {
   activityCapabilityForEvent,
@@ -45,7 +46,7 @@ const timelineEvents = activeCapability
   ? data.events.filter((event) => activityCapabilityForEvent(event) === activeCapability)
   : data.events;
 const selectedEventId = params.get("event");
-const selectedEvent = timelineEvents.find((event) => event.id === selectedEventId) ?? timelineEvents[0] ?? null;
+const selectedEvent = selectedEventId ? timelineEvents.find((event) => event.id === selectedEventId) ?? null : null;
 const attention = data.attention.slice(0, 3);
 const omittedActors = data.observed_agents.slice(actors.length);
 const omittedProjects = allProjects.slice(projects.length);
@@ -106,6 +107,16 @@ const capabilitySummaries = buildActivityCapabilitySummaries(data.events).map((s
   ...capabilityDefinitions[summary.key]
 }));
 const compactSummary = (value: string) => Array.from(value).slice(0, 15).join("");
+const activityEventSummary = (event: ActivityEvent) => {
+  if (locale !== "ja") return event.summary;
+  const subject = event.subject.label || event.subject.id;
+  if (event.type === "task.failed") return `Task「${subject}」が失敗しました。`;
+  if (event.type === "memory.read") return `「${subject}」を参照しました。`;
+  if (event.type === "memory.write") return `「${subject}」を更新しました。`;
+  if (event.type === "memory.retrieval") return `「${subject}」を検索しました。`;
+  return event.summary;
+};
+const activityEventType = (eventType: string) => dashboardLabel("event", eventType, locale);
 const capabilityHref = (key: ActivityCapabilityKey) => {
   const next = new URLSearchParams(params);
   next.delete("event");
@@ -157,20 +168,20 @@ const uiCopy = {
   },
   ja: {
     source: "Org Brain 活動データ",
-    included: `現在のプロジェクトに関連付いた過去${periodLabel}のTask・メモリ・意思決定・Agentイベント。`,
+    included: `現在のプロジェクトに関連付いた過去${periodLabel}のTask・メモリ・意思決定・エージェントイベント。`,
     excluded: "他プロジェクト、期間外、現在のプロジェクトに関連付いていない記録。",
     unavailableTitle: "活動状況を判断できません",
     unavailableBody: "活動データを取得できませんでした。正常・空状態として扱わず、更新後に判断してください。",
     comparison: "過去24時間との比較",
     events: "イベント",
-    agents: "観測Agent",
+    agents: "観測エージェント",
     newAgents: "新たに観測",
-    noNewAgents: "追加のAgentなし",
+    noNewAgents: "追加のエージェントなし",
     executing: "現在実行中",
     observed: "この期間に観測",
     lastSeen: "最終観測",
     provenance: "観測元",
-    projectRule: "返却イベントに関連付いたプロジェクトだけを表示します。他プロジェクトは現在のprojectフィルター対象外です。"
+    projectRule: "返却イベントに関連付いたプロジェクトだけを表示します。他プロジェクトは現在のプロジェクトフィルター対象外です。"
   },
   zh: {
     source: "Org Brain 活动数据",
@@ -214,7 +225,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
           ))}
         </div>
       </nav>
-      {attention.length > 0 && <a class="primary-action" href="#attention-signals">{copy.nervous.reviewSignals} ({data.attention.length})</a>}
+      {attention.length > 0 && <a class="primary-action" href="#recommended-actions">{copy.nervous.reviewSignals} ({data.attention.length})</a>}
       <a class="secondary-action" href="#activity-timeline">{periodCopy(copy.nervous.replayPeriod)}</a>
       <IntelligencePoller refreshUrl={refreshUrl} initialData={data} generatedAt={data.generated_at} locale={locale} incrementalField={data.newest_cursor != null ? "events" : undefined} windowMs={period.durationMs} />
     </div>
@@ -225,7 +236,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
   {loadError ? (
     <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
   ) : (
-    <RecommendedActions title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
+    <RecommendedActions locale={locale} title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
   )}
 
   {!loadError && comparisonData && (
@@ -251,13 +262,30 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
     </details>
   )}
 
+  {!loadError && selectedEvent && (
+    <section class="selected-event" aria-labelledby="selected-event-title">
+      <div class="selected-event-summary">
+        <span class:list={["event-dot", `event-dot-${selectedEvent.severity}`]}></span>
+        <div><p class="intelligence-eyebrow">{copy.nervous.selectedEvent} · {severityLabel(selectedEvent.severity)}</p><h2 id="selected-event-title">{activityEventSummary(selectedEvent)}</h2><p>{selectedEvent.actor.label} → {selectedEvent.target?.label || selectedEvent.subject.label}</p></div>
+      </div>
+      <dl>
+        <div><dt>{copy.nervous.target}</dt><dd>{selectedEvent.subject.label}</dd></div>
+        <div><dt>{copy.nervous.status}</dt><dd>{selectedEvent.status ? dashboardLabel("status", selectedEvent.status, locale) : selectedEvent.type}</dd></div>
+        <div><dt>{copy.nervous.occurredAt}</dt><dd><time datetime={dateTime(selectedEvent.occurred_at)}>{formatTime(selectedEvent.occurred_at)}</time></dd></div>
+      </dl>
+      {selectedDeepLink && <a class="secondary-action" href={selectedDeepLink}>{selectedEvent.task_id ? copy.nervous.openTask : copy.nervous.openTrace}</a>}
+    </section>
+  )}
+
   {!loadError && (!hasActivityContent ? (
     <div class="intelligence-empty" role="status">
       <strong>{copy.nervous.noActivityTitle}</strong>
       <span>{copy.nervous.noActivityBody}</span>
     </div>
   ) : (
-    <div class="system-stage">
+    <details class="activity-topology" open={recommendedActions.length === 0}>
+      <summary>{copy.nervous.topologyTitle}</summary>
+      <div class="system-stage">
       <div class="topology-heading topology-heading-actors">{copy.nervous.agentsHeading}</div>
       <div class="topology-heading topology-heading-brain">{copy.nervous.brainHeading}</div>
       <div class="topology-heading topology-heading-projects">{copy.nervous.projectsHeading}</div>
@@ -330,7 +358,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
 
         {capabilitySummaries.map((capability) => {
           const centerX = capability.x + 51;
-          const latest = capability.latestEvent?.summary ?? copy.nervous.noCapabilityActivity;
+          const latest = capability.latestEvent ? activityEventSummary(capability.latestEvent) : copy.nervous.noCapabilityActivity;
           return (
             <a
               class:list={["brain-capability-link", highlightedCapability === capability.key && "brain-capability-active"]}
@@ -339,7 +367,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
               aria-current={activeCapability === capability.key ? "true" : undefined}
             >
               <g class="brain-capability">
-                <title>{capability.title}: {capability.count} {copy.common.events}. {latest}</title>
+              <title>{capability.title}: {capability.count} {copy.common.events}. {latest}</title>
                 <rect x={capability.x} y={capability.y} width="102" height="82" rx="12"></rect>
                 <text x={centerX} y={capability.y + 24} text-anchor="middle">{capability.title}</text>
                 <text class="capability-note" x={centerX} y={capability.y + 41} text-anchor="middle">{capability.note}</text>
@@ -359,7 +387,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
               <li>
                 <a href={capabilityHref(capability.key)} aria-current={activeCapability === capability.key ? "true" : undefined}>
                   <strong>{capability.title} · {copy.nervous.capabilityCount.replace("{count}", String(capability.count))}</strong>
-                  <span>{capability.note} · {capability.latestEvent?.summary ?? copy.nervous.noCapabilityActivity}</span>
+                  <span>{capability.note} · {capability.latestEvent ? activityEventSummary(capability.latestEvent) : copy.nervous.noCapabilityActivity}</span>
                 </a>
               </li>
             ))}
@@ -380,37 +408,9 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
         </section>
       </div>
 
-      {attention.length > 0 && (
-        <section class="attention-rail" id="attention-signals" aria-labelledby="attention-title">
-          <div><p class="intelligence-eyebrow">{copy.nervous.attentionEyebrow}</p><h2 id="attention-title">{copy.nervous.attentionTitle}</h2></div>
-          <div class="attention-list">
-            {attention.map((signal) => (
-              <article class:list={["attention-card", signal.severity === "critical" && "attention-critical"]}>
-                <span class="attention-severity">{severityLabel(signal.severity)}</span>
-                <strong>{signal.reason}</strong>
-                <span>{signal.kind} · {relativeTime(signal.detected_at, now, locale)}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  ))}
-
-  {!loadError && selectedEvent && (
-    <section class="selected-event" aria-labelledby="selected-event-title">
-      <div class="selected-event-summary">
-        <span class:list={["event-dot", `event-dot-${selectedEvent.severity}`]}></span>
-        <div><p class="intelligence-eyebrow">{copy.nervous.selectedEvent} · {severityLabel(selectedEvent.severity)}</p><h2 id="selected-event-title">{selectedEvent.summary}</h2><p>{selectedEvent.actor.label} → {selectedEvent.target?.label || selectedEvent.subject.label}</p></div>
       </div>
-      <dl>
-        <div><dt>{copy.nervous.target}</dt><dd>{selectedEvent.subject.label}</dd></div>
-        <div><dt>{copy.nervous.status}</dt><dd>{selectedEvent.status || selectedEvent.type}</dd></div>
-        <div><dt>{copy.nervous.occurredAt}</dt><dd><time datetime={dateTime(selectedEvent.occurred_at)}>{formatTime(selectedEvent.occurred_at)}</time></dd></div>
-      </dl>
-      {selectedDeepLink && <a class="secondary-action" href={selectedDeepLink}>{selectedEvent.task_id ? copy.nervous.openTask : copy.nervous.openTrace}</a>}
-    </section>
-  )}
+    </details>
+  ))}
 
   {!loadError && <section class="activity-timeline" id="activity-timeline" aria-labelledby="activity-timeline-title">
     <header><div><p class="intelligence-eyebrow">{copy.nervous.replayEyebrow}</p><h2 id="activity-timeline-title">{periodCopy(copy.nervous.replayTitlePeriod)}</h2></div><span>{timelineCountLabel}</span></header>
@@ -422,12 +422,12 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
             {Array.from({ length: timelineRowCount }, (_, row) => <span class="timeline-line" style={`top:${row * 44 + 22}px`}></span>)}
             {timelinePoints.map(({ event, x, row }) => (
               <a
-                class:list={["timeline-event", `timeline-event-${event.severity}`, selectedEvent.id === event.id && "timeline-event-selected"]}
+                class:list={["timeline-event", `timeline-event-${event.severity}`, selectedEvent?.id === event.id && "timeline-event-selected"]}
                 style={`left:${x}px;top:${row * 44 + 22}px`}
                 href={selectEventHref(event)}
-                aria-label={`${event.summary}, ${formatTime(event.occurred_at)}, ${severityLabel(event.severity)}`}
-                aria-current={selectedEvent.id === event.id ? "true" : undefined}
-                title={event.summary}
+                aria-label={`${activityEventSummary(event)}, ${formatTime(event.occurred_at)}, ${severityLabel(event.severity)}`}
+                aria-current={selectedEvent?.id === event.id ? "true" : undefined}
+                title={activityEventSummary(event)}
               ><span class="timeline-event-mark" aria-hidden="true"></span></a>
             ))}
           </div>
@@ -437,12 +437,12 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
     {timelineEvents.length > 0 && (
       <>
         <div class="timeline-legend" aria-label={copy.nervous.eventTypes}>
-          {[...new Set(timelineEvents.map((event) => event.type))].slice(0, 8).map((type) => <span>{type}</span>)}
+          {[...new Set(timelineEvents.map((event) => event.type))].slice(0, 8).map((type) => <span>{activityEventType(type)}</span>)}
         </div>
         <details class="timeline-event-list">
           <summary>{copy.nervous.eventList} <span>{timelineEvents.length}</span></summary>
           <ol>
-            {timelineEvents.map((event) => <li><a href={selectEventHref(event)} aria-current={selectedEvent?.id === event.id ? "true" : undefined}><strong>{event.summary}</strong><span>{event.actor.label} · <time datetime={dateTime(event.occurred_at)}>{formatTime(event.occurred_at)}</time> · {severityLabel(event.severity)}</span></a></li>)}
+            {timelineEvents.map((event) => <li><a href={selectEventHref(event)} aria-current={selectedEvent?.id === event.id ? "true" : undefined}><strong>{activityEventSummary(event)}</strong><span>{event.actor.label} · <time datetime={dateTime(event.occurred_at)}>{formatTime(event.occurred_at)}</time> · {severityLabel(event.severity)}</span></a></li>)}
           </ol>
         </details>
       </>
@@ -452,6 +452,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
 
 <style>
   .nervous-system { padding-bottom: 2rem; }
+  .activity-topology { margin-top: 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(4,8,14,.72); overflow: hidden; }.activity-topology > summary { display: flex; min-height: 48px; align-items: center; justify-content: space-between; padding: .8rem 1rem; color: var(--intelligence-text); cursor: pointer; font-size: .86rem; font-weight: 650; }.activity-topology > summary::after { color: var(--intelligence-muted); content: "表示"; font-size: .68rem; font-weight: 400; }.activity-topology[open] > summary { border-bottom: 1px solid var(--intelligence-border); }.activity-topology[open] > summary::after { content: "折りたたむ"; }
   .intelligence-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem; align-items: end; padding: 1.8rem 0 1.5rem; }
   .intelligence-header h1 { margin-top: .55rem; max-width: 26ch; color: var(--intelligence-text); font-size: clamp(2rem, 3.3vw, 3.25rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.12; }
   .intelligence-header > div > p:last-child { margin-top: .75rem; max-width: 55rem; color: var(--intelligence-muted); line-height: 1.75; }
@@ -495,11 +496,6 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
   .brain-capability-link:focus-visible rect { stroke: #d9f1ff; stroke-width: 3; }
   .topology-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .capability-fallback-list { display: none; }
-  .attention-rail { position: relative; z-index: 3; display: grid; grid-template-columns: 12rem minmax(0,1fr); gap: 1rem; align-items: center; margin: 0 1.5rem 1.2rem; border: 1px solid rgba(246,173,50,.2); border-radius: 13px; background: rgba(6,10,17,.86); padding: .8rem 1rem; backdrop-filter: blur(16px); }
-  .attention-rail h2 { margin-top: .2rem; font-size: .92rem; }.attention-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .6rem; }
-  .attention-card { display: grid; gap: .22rem; border-left: 2px solid var(--intelligence-warning); padding-left: .7rem; }.attention-critical { border-color: var(--intelligence-danger); }
-  .attention-card strong { overflow: hidden; color: #fff4d9; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }.attention-card span:last-child { color: var(--intelligence-muted); font-size: .65rem; }
-  .attention-severity { color: var(--intelligence-warning); font-family: "Fira Code", monospace; font-size: .58rem; text-transform: uppercase; }
   .activity-omissions { margin-bottom: 1rem; border: 1px solid rgba(246,173,50,.25); border-radius: 12px; background: rgba(246,173,50,.055); color: #f7d598; font-size: .72rem; }.activity-omissions summary { min-height: 44px; padding: .75rem 1rem; cursor: pointer; font-weight: 600; }.activity-omissions ul { display: grid; gap: .45rem; border-top: 1px solid rgba(246,173,50,.18); padding: .75rem 1rem; }.activity-omissions li { display: grid; gap: .2rem; }.activity-omissions li span { overflow: hidden; color: var(--intelligence-muted); text-overflow: ellipsis; white-space: nowrap; }
   .selected-event { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) auto; gap: 1rem; align-items: center; margin-top: 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(7,11,18,.72); padding: 1rem 1.2rem; }
   .selected-event-summary { display: flex; align-items: flex-start; gap: .75rem; }.selected-event h2 { margin-top: .35rem; color: var(--intelligence-text); font-size: 1.05rem; }.selected-event-summary p:last-child { margin-top: .32rem; color: var(--intelligence-muted); font-size: .75rem; }
@@ -511,7 +507,7 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError ? "error" :
   .timeline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .55rem 1rem .8rem; color: var(--intelligence-muted); font-size: .65rem; }.timeline-legend span::before { display: inline-block; width: .4rem; height: .4rem; margin-right: .38rem; border-radius: 999px; background: var(--intelligence-blue); content: ""; }.timeline-event-list { border-top: 1px solid var(--intelligence-border); }.timeline-event-list summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: .65rem 1rem; color: #c7d8e8; cursor: pointer; font-size: .7rem; }.timeline-event-list ol { display: grid; max-height: 22rem; overflow-y: auto; border-top: 1px solid var(--intelligence-border); }.timeline-event-list li + li { border-top: 1px solid rgba(139,159,185,.1); }.timeline-event-list a { display: grid; min-height: 50px; gap: .2rem; padding: .55rem 1rem; }.timeline-event-list strong { color: var(--intelligence-text); font-size: .72rem; }.timeline-event-list a span { color: var(--intelligence-muted); font-size: .62rem; }
   .intelligence-empty { display: grid; gap: .55rem; min-height: 16rem; place-content: center; border: 1px dashed var(--intelligence-border); border-radius: 16px; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 6rem; }
   .project-scope-note { margin-top: .75rem; color: var(--intelligence-muted); font-size: .7rem; line-height: 1.5; }
-  @media (max-width: 1020px) { .intelligence-header { grid-template-columns: 1fr; }.header-actions { max-width: none; justify-content: flex-start; }.system-stage { padding-top: 2.5rem; }.topology-map { min-width: 880px; transform: translateX(calc((100% - 880px)/2)); }.attention-rail { margin: 0 1rem 1rem; grid-template-columns: 1fr; }.selected-event { grid-template-columns: 1fr; }.attention-list { grid-template-columns: 1fr 1fr; }.period-comparison { grid-template-columns: 1fr; }.period-comparison dl > div:first-child { border-left: 0; padding-left: 0; } }
-  @media (max-width: 720px) { .topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: grid; gap: .25rem; color: var(--intelligence-muted); font-size: .72rem; }.topology-fallback strong { color: var(--intelligence-text); }.capability-fallback-list a { display: grid; width: 100%; min-height: 44px; gap: .25rem; border-radius: 9px; padding: .5rem; }.capability-fallback-list a[aria-current="true"] { background: rgba(22,135,255,.14); box-shadow: inset 0 0 0 1px rgba(73,170,255,.4); }.capability-fallback-list span { color: var(--intelligence-muted); }.attention-list, .selected-event dl,.period-comparison dl { grid-template-columns: 1fr; }.period-comparison dl > div { border-top: 1px solid var(--intelligence-border); border-left: 0; padding: .7rem 0; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-omissions li span { white-space: normal; }.activity-period { width: 100%; justify-content: space-between; }.activity-period a { min-width: 3.25rem; } }
+  @media (max-width: 1020px) { .intelligence-header { grid-template-columns: 1fr; }.header-actions { max-width: none; justify-content: flex-start; }.system-stage { padding-top: 2.5rem; }.topology-map { min-width: 880px; transform: translateX(calc((100% - 880px)/2)); }.selected-event { grid-template-columns: 1fr; }.period-comparison { grid-template-columns: 1fr; }.period-comparison dl > div:first-child { border-left: 0; padding-left: 0; } }
+  @media (max-width: 720px) { .topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: grid; gap: .25rem; color: var(--intelligence-muted); font-size: .72rem; }.topology-fallback strong { color: var(--intelligence-text); }.capability-fallback-list a { display: grid; width: 100%; min-height: 44px; gap: .25rem; border-radius: 9px; padding: .5rem; }.capability-fallback-list a[aria-current="true"] { background: rgba(22,135,255,.14); box-shadow: inset 0 0 0 1px rgba(73,170,255,.4); }.capability-fallback-list span { color: var(--intelligence-muted); }.selected-event dl,.period-comparison dl { grid-template-columns: 1fr; }.period-comparison dl > div { border-top: 1px solid var(--intelligence-border); border-left: 0; padding: .7rem 0; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-omissions li span { white-space: normal; }.activity-period { width: 100%; justify-content: space-between; }.activity-period a { min-width: 3.25rem; } }
   @media (prefers-reduced-motion: no-preference) { .flow { stroke-dasharray: 10 12; animation: flow-dash 7s linear infinite; }.brain-aura { animation: brain-pulse 3.4s ease-in-out infinite; } @keyframes flow-dash { to { stroke-dashoffset: -88; } } @keyframes brain-pulse { 50% { opacity: .58; transform: scale(1.04); transform-origin: 600px 220px; } } }
 </style>

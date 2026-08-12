@@ -140,6 +140,7 @@ export function normalizeKnowledgeGraph(value: unknown): KnowledgeGraph {
     nodes,
     edges,
     clusters,
+    generated_at: Math.max(0, numeric(source.generated_at)),
     truncated: source.truncated === true,
     omitted_node_count: Math.max(0, numeric(source.omitted_node_count))
   };
@@ -176,7 +177,7 @@ export function knowledgeGraphCanvasSize(nodeCount: number): KnowledgeGraphCanva
   const densitySteps = Math.max(0, Math.ceil((Math.max(0, Math.floor(nodeCount)) - 30) / 30));
   return {
     width: 940 + densitySteps * 260,
-    height: 720 + densitySteps * 140
+    height: 560 + densitySteps * 140
   };
 }
 

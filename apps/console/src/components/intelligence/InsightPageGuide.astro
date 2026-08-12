@@ -8,8 +8,11 @@ const items = [
   { label: guide.startLabel, value: guide.start }
 ];
 ---
-<section class="insight-page-guide" aria-labelledby="insight-page-guide-title">
-  <h2 id="insight-page-guide-title">{guide.heading}</h2>
+<details class="insight-page-guide">
+  <summary aria-labelledby="insight-page-guide-title">
+    <span id="insight-page-guide-title">{guide.heading}</span>
+    <span class="guide-toggle" aria-hidden="true">表示</span>
+  </summary>
   <dl>
     {items.map((item, index) => (
       <div>
@@ -18,7 +21,7 @@ const items = [
       </div>
     ))}
   </dl>
-</section>
+</details>
 
 <style>
   .insight-page-guide {
@@ -29,10 +32,15 @@ const items = [
     background: linear-gradient(135deg,rgba(19,42,70,.38),rgba(5,12,22,.72));
     box-shadow: inset 0 1px 0 rgba(255,255,255,.025),0 18px 55px rgba(0,0,0,.18);
   }
-  h2 {
-    margin: 0;
-    border-bottom: 1px solid rgba(103,180,242,.12);
-    padding: .65rem 1rem;
+  summary {
+    display: flex;
+    min-height: 44px;
+    cursor: pointer;
+    list-style: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .6rem 1rem;
     color: #acd9fb;
     font-family: "Fira Code","SFMono-Regular",Menlo,monospace;
     font-size: .66rem;
@@ -40,6 +48,11 @@ const items = [
     letter-spacing: .14em;
     text-transform: uppercase;
   }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { color: rgba(196,222,241,.6); content: "＋"; font-size: .9rem; }
+  .insight-page-guide[open] summary { border-bottom: 1px solid rgba(103,180,242,.12); }
+  .insight-page-guide[open] summary::after { content: "－"; }
+  .guide-toggle { margin-left: auto; color: rgba(196,222,241,.58); font-family: inherit; font-size: .58rem; letter-spacing: .08em; }
   dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0; }
   dl > div { min-width: 0; padding: .9rem 1rem 1rem; }
   dl > div + div { border-left: 1px solid rgba(103,180,242,.12); }

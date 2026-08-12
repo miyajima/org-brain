@@ -1265,7 +1265,12 @@ async function exactRelevantNodeCount(
   tenantId: string,
   options: ParsedOptions
 ): Promise<number> {
-  const focused = Boolean(options.focus_type && options.focus_id);
+  // A project focus is already normalized to project_id by getKnowledgeGraph.
+  // Treating it as a recursive relationship walk makes D1 compile the large
+  // relation-pairs compound query even though project membership is enough to
+  // determine the visible set. Keep the bounded count on the simple scoped
+  // path; this also avoids D1's compound SELECT term limit on large tenants.
+  const focused = Boolean(options.focus_type && options.focus_id && options.focus_type !== "project");
   if (!focused) {
     return exactUnfocusedNodeCount(env, tenantId, options);
   }
@@ -2246,6 +2251,7 @@ export async function getKnowledgeGraph(
     nodes,
     edges: selectedEdges,
     clusters: buildClusters(nodes),
+    generated_at: options.now,
     truncated: omittedNodeCount > 0 || eligibleEdges.length > selectedEdges.length ||
       entityLinkResult.truncated || edgeResult.truncated || focusHydration.truncated || directEntitySearch.truncated,
     omitted_node_count: omittedNodeCount

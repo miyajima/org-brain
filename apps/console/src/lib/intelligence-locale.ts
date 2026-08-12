@@ -366,7 +366,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       eventList: "すべてのイベントを一覧表示"
     },
     constellation: {
-      eyebrow: "Knowledge Constellation · ナレッジ・コンステレーション",
+      eyebrow: "知識のつながり · ナレッジ・コンステレーション",
       title: "知識のつながり",
       description: "知識を選び、関連する判断・資料・プロジェクト・Taskと影響範囲を探索します。",
       area: "領域",
@@ -420,7 +420,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       mutual: "相互"
     },
     strata: {
-      eyebrow: "Memory Strata · メモリ地層",
+      eyebrow: "知識の履歴 · メモリ地層",
       title: "知識の履歴",
       description: "現在採用されている内容と、その根拠になった意思決定・学び・仮説・一次情報を時間に沿って確認します。",
       reviewChanges: "今日の変更をレビュー",
@@ -447,8 +447,8 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       currentState: "現在の状態",
       snapshotState: "スナップショットの状態",
       confirmationState: "確認状態",
-      validFrom: "valid_from",
-      validUntil: "valid_until",
+      validFrom: "有効開始",
+      validUntil: "有効終了",
       supersession: "後継レコード",
       snapshot: "スナップショット",
       revisions: "リビジョン",

@@ -554,6 +554,7 @@ export const dashboardKnowledgeGraphResponseSchema = z.object({
   nodes: z.array(dashboardKnowledgeNodeSchema),
   edges: z.array(dashboardKnowledgeEdgeSchema),
   clusters: z.array(dashboardKnowledgeClusterSchema),
+  generated_at: z.number().int().nonnegative(),
   truncated: z.boolean(),
   omitted_node_count: z.number().int().nonnegative()
 });

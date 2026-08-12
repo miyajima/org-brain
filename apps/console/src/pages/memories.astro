@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
+import { memoryDisplayCopy } from "../lib/dashboard-copy";
 
 type MemoryRow = {
   id: string;
@@ -193,6 +194,10 @@ function trimText(value: string | null | undefined, limit = 180): string {
   return `${normalized.slice(0, Math.max(0, limit - 1))}...`;
 }
 
+function memoryCardCopy(summary: string | null | undefined, content: string | null | undefined) {
+  return memoryDisplayCopy(summary, content);
+}
+
 function makeHref(overrides: Record<string, string | null | undefined>): string {
   const next = new URLSearchParams(params);
   for (const [key, value] of Object.entries(overrides)) {
@@ -232,7 +237,7 @@ function buildDetailRecord(
     return {
       id: row.id,
       kind: "memory",
-      title: row.summary || trimText(row.content, 80),
+      title: memoryCardCopy(row.summary, row.content).title,
       summary: row.summary || "",
       preview: trimText(row.content, 320),
       source: row.source,
@@ -257,7 +262,7 @@ function buildDetailRecord(
     return {
       id: searchItem.id,
       kind: searchItem.kind,
-      title: searchItem.summary || trimText(searchItem.content_preview, 80),
+      title: memoryCardCopy(searchItem.summary, searchItem.content_preview).title,
       summary: searchItem.summary || "",
       preview: trimText(searchItem.content_preview, 320),
       source: searchItem.source,
@@ -281,7 +286,7 @@ function buildDetailRecord(
     return {
       id: profileItem.id,
       kind: "memory",
-      title: profileItem.summary,
+      title: memoryCardCopy(profileItem.summary, profileItem.content_preview).title,
       summary: profileItem.summary,
       preview: trimText(profileItem.content_preview, 320),
       source: profileItem.source,
@@ -663,8 +668,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                           <span class="text-xs text-zinc-500">{formatDate(item.created_at)}</span>
                         </div>
                         <div class="mt-3 space-y-2">
-                          <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
-                          <p class="text-sm leading-7 text-zinc-400">{trimText(item.content_preview, 180)}</p>
+                          <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                          {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
+                          <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                         </div>
                         <div class="mt-4 flex flex-wrap gap-2 text-xs text-zinc-500">
                           <span>{item.source}</span>
@@ -714,8 +720,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                                   <span>{item.source}</span>
                                   <span>{formatDate(item.created_at)}</span>
                                 </div>
-                                <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary || "Untitled result"}</h3>
-                                <p class="text-sm leading-7 text-zinc-400">{item.content_preview}</p>
+                                <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                                {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
+                                <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                               </div>
                             </div>
                             <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-zinc-300">
@@ -756,8 +763,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                                 <span>{item.project_id || "no-project"}</span>
                                 <span>{formatDate(item.created_at)}</span>
                               </div>
-                              <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary || trimText(item.content, 80) || "Untitled memory"}</h3>
-                              <p class="text-sm leading-7 text-zinc-400">{trimText(item.content, 180)}</p>
+                              <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
+                              {memoryCardCopy(item.summary, item.content).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content).context}</p>}
+                              <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content).preview}</p>
                             </div>
                           </div>
                           <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-zinc-300">
@@ -803,8 +811,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 <div class="mt-4 space-y-3">
                   {durableRows.length > 0 ? durableRows.map((item) => (
                     <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
-                      <h3 class="text-lg font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
-                      <p class="mt-2 text-sm leading-7 text-zinc-400">{item.content_preview}</p>
+                      <h3 class="text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                      {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
+                      <p class="mt-2 text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                       <span class="mt-3 block text-xs uppercase tracking-[0.16em] text-zinc-500">{item.source} / {formatDate(item.created_at)}</span>
                     </a>
                   )) : <div class="surface-soft-card !bg-white/[0.02] text-sm text-zinc-400">No durable rows.</div>}
@@ -822,8 +831,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 <div class="mt-4 space-y-3">
                   {recentRows.length > 0 ? recentRows.map((item) => (
                     <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
-                      <h3 class="text-lg font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
-                      <p class="mt-2 text-sm leading-7 text-zinc-400">{item.content_preview}</p>
+                      <h3 class="text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                      {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
+                      <p class="mt-2 text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                       <span class="mt-3 block text-xs uppercase tracking-[0.16em] text-zinc-500">{item.source} / {formatDate(item.created_at)}</span>
                     </a>
                   )) : <div class="surface-soft-card !bg-white/[0.02] text-sm text-zinc-400">No recent rows.</div>}
@@ -896,8 +906,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                               <span>{item.source}</span>
                               <span>{formatDate(item.created_at)}</span>
                             </div>
-                            <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{item.summary || trimText(item.content, 80) || "Untitled memory"}</h3>
-                            <p class="text-sm leading-7 text-zinc-400">{trimText(item.content, 180)}</p>
+                            <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
+                            {memoryCardCopy(item.summary, item.content).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content).context}</p>}
+                            <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content).preview}</p>
                           </div>
                         </div>
                         <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-zinc-300">
@@ -1093,8 +1104,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 {quickPickRows.length > 0 ? quickPickRows.map((item) => (
                   <a class={rowCardClass(false)} href={makeHref({ selected: item.id })}>
                     <p class="surface-label">{item.source}</p>
-                    <h3 class="mt-2 text-lg font-semibold tracking-[-0.03em] text-white">{item.summary}</h3>
-                    <p class="mt-2 text-sm leading-7 text-zinc-400">{trimText(item.content_preview, 140)}</p>
+                    <h3 class="mt-2 text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                    {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
+                    <p class="mt-2 text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                   </a>
                 )) : (
                   <div class="surface-soft-card !rounded-[24px] !p-4 text-sm text-zinc-400">まだ quick pick に出せる memory がありません。</div>
@@ -1107,6 +1119,16 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     </div>
   </section>
 </BaseLayout>
+
+<style>
+  .memory-card-context {
+    margin-top: .45rem;
+    color: rgba(169, 200, 226, .78);
+    font-family: "Fira Code", "SFMono-Regular", Menlo, monospace;
+    font-size: .68rem;
+    letter-spacing: .03em;
+  }
+</style>
 
 <script>
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-memory-action]")) {
