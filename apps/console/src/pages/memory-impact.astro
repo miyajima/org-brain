@@ -1,0 +1,217 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+type MetricRow = Record<string, unknown> & {
+  id?: string;
+  label?: string;
+  reference_count?: number;
+  used_count?: number;
+  consumer_count?: number;
+  net_saved_tokens?: number;
+  injected_tokens?: number;
+  utilization_rate?: number | null;
+  token_efficiency?: number | null;
+  measurement_state?: "verified" | "estimated" | "unmeasured";
+};
+
+type AnalyticsResponse = {
+  scope: "mine" | "org";
+  perspective: "work" | "spread";
+  period: { from: number; to: number };
+  summary: Record<string, unknown> & {
+    measurement_state: "verified" | "estimated" | "unmeasured";
+  };
+  trend: MetricRow[];
+  rankings: {
+    memories: MetricRow[];
+    owners: MetricRow[];
+    projects: MetricRow[];
+    consumers: MetricRow[];
+  };
+  diagnostics: Array<{
+    id: string;
+    severity: "info" | "warning" | "critical";
+    title: string;
+    reason: string;
+    recommendation: string;
+    measurement_state: "verified" | "estimated" | "unmeasured";
+  }>;
+  definitions: Record<string, string>;
+};
+
+type ApiResponse<T> = { ok: true; data: T } | { ok: false; error?: { message?: string } };
+
+const url = Astro.url;
+const params = url.searchParams;
+const tenantId = params.get("tenant_id")?.trim() || "default";
+const scope = params.get("scope") === "org" ? "org" : "mine";
+const perspective = scope === "mine" && params.get("perspective") === "spread" ? "spread" : "work";
+const days = [7, 30, 90].includes(Number(params.get("days"))) ? Number(params.get("days")) : 30;
+const projectId = params.get("project_id")?.trim() || "";
+const ownerPrincipal = params.get("owner_principal")?.trim() || "";
+const now = Date.now();
+const from = now - days * 24 * 60 * 60 * 1000;
+const to = now;
+
+async function fetchApi<T>(path: string): Promise<ApiResponse<T> | null> {
+  const response = await fetch(new URL(path, url));
+  const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
+  if (!response.ok) return { ok: false, error: { message: `HTTP ${response.status}` } };
+  return payload;
+}
+
+const payload = await fetchApi<AnalyticsResponse>(
+  `/api/v1/dashboard/memory-analytics?tenant_id=${encodeURIComponent(tenantId)}&scope=${scope}&perspective=${perspective}&project_id=${encodeURIComponent(projectId)}&owner_principal=${encodeURIComponent(ownerPrincipal)}&from=${from}&to=${to}`
+);
+const analytics = payload?.ok ? payload.data : null;
+const error = payload?.ok === false ? payload.error?.message || "分析データを読み込めませんでした。" : null;
+
+function href(overrides: Record<string, string | null | undefined>) {
+  const next = new URLSearchParams(params);
+  next.set("scope", scope);
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!value) next.delete(key);
+    else next.set(key, value);
+  }
+  return `${url.pathname}?${next.toString()}`;
+}
+
+function percent(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value * 100)}%` : "未計測";
+}
+
+function tokens(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "未計測";
+}
+
+function stateLabel(value: unknown) {
+  return value === "verified" ? "検証済み" : value === "estimated" ? "推定" : "未計測";
+}
+
+function rateClass(value: unknown) {
+  return typeof value === "number" ? (value >= 0.7 ? "metric-good" : value >= 0.3 ? "metric-mid" : "metric-low") : "metric-missing";
+}
+
+function rowLabel(row: MetricRow) {
+  return String(row.label ?? row.id ?? "unknown");
+}
+
+function maxTrendValue(key: string) {
+  const values = analytics?.trend.map((row) => Number(row[key] ?? 0)) ?? [];
+  return Math.max(1, ...values);
+}
+const rankingSections: Array<[string, MetricRow[], "reference_count"]> = [
+  ["最も参照されたメモリ", analytics?.rankings.memories ?? [], "reference_count"],
+  ["所有者別の広がり", analytics?.rankings.owners ?? [], "reference_count"],
+  ["プロジェクト別", analytics?.rankings.projects ?? [], "reference_count"],
+  ["利用者別", analytics?.rankings.consumers ?? [], "reference_count"]
+];
+---
+<BaseLayout title="Memory impact">
+  <section class="space-y-5">
+    <header class="impact-hero">
+      <div>
+        <p class="surface-label">Memory impact / measurement desk</p>
+        <h1>Memory impact</h1>
+        <p>参照された知識が、実際の作業をどれだけ前に進めたかを同じ定義で振り返ります。</p>
+      </div>
+      <div class="impact-hero-mark" aria-hidden="true"><span>used</span><strong>{analytics ? percent(analytics.summary.effective_utilization_rate) : "—"}</strong><small>effective utilization</small></div>
+    </header>
+
+    <section class="impact-toolbar">
+      <div class="impact-tabs" aria-label="Analytics scope">
+        <a class:list={[scope === "mine" && "is-active"]} href={href({ scope: "mine", perspective: "work" })}>自分</a>
+        <a class:list={[scope === "org" && "is-active"]} href={href({ scope: "org", perspective: "work" })}>組織</a>
+      </div>
+      {scope === "mine" && (
+        <div class="impact-tabs" aria-label="Personal perspective">
+          <a class:list={[perspective === "work" && "is-active"]} href={href({ perspective: "work" })}>自分の作業</a>
+          <a class:list={[perspective === "spread" && "is-active"]} href={href({ perspective: "spread" })}>自分のメモリの広がり</a>
+        </div>
+      )}
+      <div class="impact-tabs impact-period" aria-label="Period">
+        {[7, 30, 90].map((value) => <a class:list={[days === value && "is-active"]} href={href({ days: String(value) })}>{value}日</a>)}
+      </div>
+    </section>
+
+    {error && <section class="impact-error" role="alert"><strong>分析データを取得できません</strong><span>{error}</span></section>}
+
+    {analytics ? (
+      <>
+        <section class="impact-state-legend" aria-label="Measurement state">
+          <span><i class="state-dot state-verified"></i>検証済み</span><span><i class="state-dot state-estimated"></i>推定</span><span><i class="state-dot state-unmeasured"></i>未計測は0として扱いません</span>
+        </section>
+
+        <section class="metric-grid" aria-label="Summary metrics">
+          <article class="impact-metric"><span>活用率</span><strong class={rateClass(analytics.summary.utilization_rate)}>{percent(analytics.summary.utilization_rate)}</strong><small>memory used runs / evaluated runs</small></article>
+          <article class="impact-metric"><span>有効利用率</span><strong class={rateClass(analytics.summary.effective_utilization_rate)}>{percent(analytics.summary.effective_utilization_rate)}</strong><small>used references / references</small></article>
+          <article class="impact-metric"><span>組織内再利用</span><strong class={rateClass(analytics.summary.org_reuse_rate)}>{percent(analytics.summary.org_reuse_rate)}</strong><small>owner ≠ consumer</small></article>
+          <article class="impact-metric"><span>純削減 tokens</span><strong>{tokens(analytics.summary.net_saved_tokens)}</strong><small>estimated and verified attribution</small></article>
+          <article class="impact-metric"><span>token efficiency</span><strong class={rateClass(analytics.summary.token_efficiency)}>{percent(analytics.summary.token_efficiency)}</strong><small>net saved / injected</small></article>
+          <article class="impact-metric"><span>計測カバレッジ</span><strong class={rateClass(analytics.summary.measurement_coverage)}>{percent(analytics.summary.measurement_coverage)}</strong><small>terminal reports / target runs</small></article>
+        </section>
+
+        <section class="impact-grid impact-grid-main">
+          <article class="impact-panel impact-trend-panel">
+            <div class="impact-panel-heading"><div><p class="surface-label">Period trace</p><h2>参照と削減の推移</h2></div><span class={`state-pill state-${analytics.summary.measurement_state}`}>{stateLabel(analytics.summary.measurement_state)}</span></div>
+            {analytics.trend.length > 0 ? (
+              <div class="trend-chart" role="img" aria-label="Daily memory references and net saved tokens">
+                {analytics.trend.map((row) => <div class="trend-column"><div class="trend-bars"><span class="trend-bar refs" style={`height:${Math.max(8, Number(row.reference_count ?? 0) / maxTrendValue("reference_count") * 100)}%`}></span><span class="trend-bar savings" style={`height:${Math.max(8, Math.abs(Number(row.net_saved_tokens ?? 0)) / maxTrendValue("net_saved_tokens") * 100)}%`}></span></div><small>{String(row.day ?? "").slice(5)}</small></div>)}
+              </div>
+            ) : <div class="impact-empty">この期間の参照イベントはありません。未計測を0として補完していません。</div>}
+            <div class="chart-key"><span><i class="key-blue"></i>参照</span><span><i class="key-amber"></i>純削減</span></div>
+          </article>
+          <article class="impact-panel">
+            <div class="impact-panel-heading"><div><p class="surface-label">Harness diagnosis</p><h2>見直し候補</h2></div><span class="surface-chip">設定変更なし</span></div>
+            <div class="diagnostic-list">
+              {analytics.diagnostics.length > 0 ? analytics.diagnostics.map((item) => <div class={`diagnostic diagnostic-${item.severity}`}><div class="diagnostic-top"><strong>{item.title}</strong><span class={`state-pill state-${item.measurement_state}`}>{stateLabel(item.measurement_state)}</span></div><p>{item.reason}</p><small>{item.recommendation}</small></div>) : <div class="impact-empty">現在の計測値からは優先的な見直し候補はありません。</div>}
+            </div>
+          </article>
+        </section>
+
+        <section class="impact-grid impact-grid-rankings">
+          {rankingSections.map(([title, rows, metric]) => (
+            <article class="impact-panel ranking-panel"><div class="impact-panel-heading"><h2>{title}</h2><span class="surface-label">top 12</span></div>{(rows as MetricRow[]).length > 0 ? <ol>{(rows as MetricRow[]).slice(0, 6).map((row, index) => <li><span class="rank-index">{String(index + 1).padStart(2, "0")}</span><div><strong title={rowLabel(row)}>{rowLabel(row)}</strong><small>{row.project_id ? String(row.project_id) : ""}</small></div><b>{Number(row[metric] ?? 0).toLocaleString()}<em> refs</em></b></li>)}</ol> : <div class="impact-empty">未計測</div>}</article>
+          ))}
+        </section>
+
+        <details class="definition-panel"><summary>指標の定義を表示</summary><div>{Object.entries(analytics.definitions).map(([key, value]) => <p><strong>{key}</strong><span>{value}</span></p>)}</div></details>
+      </>
+    ) : (
+      <section class="impact-empty impact-empty-large">分析データがありません。APIとローカルD1の接続を確認してください。</section>
+    )}
+  </section>
+</BaseLayout>
+
+<style>
+  .impact-hero { display:grid; grid-template-columns:minmax(0,1fr) 15rem; gap:1.5rem; align-items:end; overflow:hidden; border:1px solid rgba(103,180,242,.2); border-radius:32px; padding:2rem; background:radial-gradient(circle at 75% 10%,rgba(22,135,255,.2),transparent 32%),linear-gradient(135deg,rgba(7,19,34,.98),rgba(3,8,16,.96)); box-shadow:0 30px 90px rgba(0,0,0,.38); }
+  .impact-hero h1 { margin-top:.65rem; font-size:clamp(2.6rem,6vw,5.8rem); line-height:.95; letter-spacing:-.075em; font-weight:650; color:#f2fbff; }
+  .impact-hero p:not(.surface-label) { max-width:44rem; margin-top:1.2rem; color:rgba(209,229,243,.74); line-height:1.8; }
+  .impact-hero-mark { display:grid; gap:.2rem; justify-items:end; padding:1.2rem 0; color:rgba(99,189,255,.8); font-family:"Fira Code",monospace; text-transform:uppercase; letter-spacing:.1em; }
+  .impact-hero-mark strong { color:#f3fbff; font-family:Inter,sans-serif; font-size:3.8rem; letter-spacing:-.08em; line-height:1; }
+  .impact-hero-mark small { color:rgba(191,216,235,.55); font-size:.65rem; }
+  .impact-toolbar { display:flex; flex-wrap:wrap; gap:.65rem; align-items:center; justify-content:space-between; border:1px solid rgba(90,172,238,.16); border-radius:24px; padding:.65rem; background:rgba(7,17,31,.78); }
+  .impact-tabs { display:flex; flex-wrap:wrap; gap:.35rem; }
+  .impact-tabs a { display:inline-flex; min-height:2.7rem; align-items:center; border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:0 .9rem; color:rgba(214,229,239,.7); font-size:.82rem; font-weight:600; }
+  .impact-tabs a:hover,.impact-tabs a.is-active { border-color:rgba(99,189,255,.52); background:rgba(22,135,255,.16); color:#effaff; }
+  .impact-state-legend,.chart-key { display:flex; flex-wrap:wrap; gap:1rem; color:rgba(191,216,235,.62); font-size:.75rem; }
+  .impact-state-legend span,.chart-key span { display:inline-flex; align-items:center; gap:.4rem; }
+  .state-dot,.chart-key i { width:.55rem; height:.55rem; display:inline-block; border-radius:50%; }
+  .state-verified,.key-blue { background:#43dcad; }.state-estimated,.key-amber { background:#ffb84d; }.state-unmeasured { background:rgba(191,216,235,.35); }
+  .metric-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.75rem; }
+  .impact-metric { min-height:9rem; display:flex; flex-direction:column; justify-content:space-between; border:1px solid rgba(90,172,238,.16); border-radius:22px; padding:1rem; background:rgba(8,20,36,.75); }
+  .impact-metric span { color:rgba(191,216,235,.62); font-size:.72rem; text-transform:uppercase; letter-spacing:.11em; }
+  .impact-metric strong { margin-top:1rem; color:#f1fbff; font-size:clamp(1.6rem,2.6vw,2.25rem); letter-spacing:-.06em; }
+  .impact-metric small { color:rgba(191,216,235,.45); font-size:.68rem; line-height:1.5; }
+  .metric-good { color:#72e4c0 !important; }.metric-mid { color:#ffd071 !important; }.metric-low { color:#ff8994 !important; }.metric-missing { color:rgba(238,248,255,.48) !important; }
+  .impact-grid { display:grid; gap:.85rem; }.impact-grid-main { grid-template-columns:minmax(0,1.35fr) minmax(20rem,.85fr); }.impact-grid-rankings { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .impact-panel { border:1px solid rgba(90,172,238,.16); border-radius:26px; padding:1.2rem; background:linear-gradient(180deg,rgba(8,20,36,.9),rgba(4,11,21,.86)); box-shadow:0 18px 55px rgba(0,0,0,.18); }
+  .impact-panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }.impact-panel h2 { margin-top:.35rem; color:#effaff; font-size:1.08rem; letter-spacing:-.03em; }.state-pill { display:inline-flex; align-items:center; border:1px solid rgba(255,255,255,.1); border-radius:999px; padding:.3rem .55rem; color:rgba(221,238,246,.72); font-size:.65rem; white-space:nowrap; }.state-pill.state-verified { border-color:rgba(67,220,173,.35); color:#8ff1ce; }.state-pill.state-estimated { border-color:rgba(255,184,77,.35); color:#ffd78a; }
+  .trend-chart { height:14rem; display:flex; align-items:stretch; gap:.35rem; margin-top:1.5rem; padding:1rem .25rem .25rem; border-bottom:1px solid rgba(255,255,255,.08); }.trend-column { flex:1; min-width:.3rem; display:flex; flex-direction:column; justify-content:flex-end; gap:.45rem; }.trend-bars { height:100%; display:flex; align-items:end; justify-content:center; gap:2px; }.trend-bar { display:block; width:42%; min-height:4px; border-radius:4px 4px 1px 1px; }.trend-bar.refs { background:#369aff; }.trend-bar.savings { background:#ffb84d; }.trend-column small { overflow:hidden; color:rgba(191,216,235,.5); font: .58rem "Fira Code",monospace; text-align:center; }.chart-key { margin-top:1rem; }
+  .diagnostic-list { display:grid; gap:.55rem; margin-top:1rem; }.diagnostic { border-left:3px solid rgba(255,255,255,.2); border-radius:0 14px 14px 0; padding:.75rem .85rem; background:rgba(255,255,255,.035); }.diagnostic-warning { border-color:#ffb84d; }.diagnostic-critical { border-color:#ff5c67; }.diagnostic-top { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }.diagnostic strong { color:#f4fbff; font-size:.82rem; }.diagnostic p { margin-top:.35rem; color:rgba(213,231,241,.7); font-size:.75rem; line-height:1.5; }.diagnostic small { display:block; margin-top:.45rem; color:rgba(191,216,235,.48); font-size:.68rem; line-height:1.5; }
+  .ranking-panel ol { display:grid; gap:.35rem; margin-top:1rem; }.ranking-panel li { display:grid; grid-template-columns:1.5rem minmax(0,1fr) auto; gap:.5rem; align-items:center; min-width:0; padding:.55rem 0; border-top:1px solid rgba(255,255,255,.06); }.rank-index { color:rgba(99,189,255,.62); font: .68rem "Fira Code",monospace; }.ranking-panel li div { min-width:0; }.ranking-panel li strong,.ranking-panel li small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.ranking-panel li strong { color:#eaf8ff; font-size:.75rem; }.ranking-panel li small { margin-top:.2rem; color:rgba(191,216,235,.42); font-size:.64rem; }.ranking-panel li b { color:#f6fbff; font:600 .78rem "Fira Code",monospace; white-space:nowrap; }.ranking-panel li em { color:rgba(191,216,235,.42); font-style:normal; font-size:.6rem; }
+  .definition-panel { border:1px solid rgba(90,172,238,.14); border-radius:22px; padding:1rem 1.2rem; background:rgba(7,17,31,.6); }.definition-panel summary { cursor:pointer; color:rgba(226,242,249,.8); font-size:.82rem; font-weight:600; }.definition-panel div { display:grid; gap:.5rem; margin-top:1rem; }.definition-panel p { display:grid; grid-template-columns:15rem minmax(0,1fr); gap:1rem; color:rgba(191,216,235,.58); font-size:.75rem; }.definition-panel strong { color:#dbf2ff; font-family:"Fira Code",monospace; font-size:.68rem; }.impact-empty { display:grid; place-items:center; min-height:9rem; color:rgba(191,216,235,.52); font-size:.8rem; text-align:center; }.impact-empty-large { min-height:22rem; border:1px solid rgba(90,172,238,.16); border-radius:26px; background:rgba(8,20,36,.7); }.impact-error { display:grid; gap:.35rem; border:1px solid rgba(255,92,103,.3); border-radius:20px; padding:1rem 1.2rem; background:rgba(255,92,103,.08); }.impact-error strong { color:#ffdce0; }.impact-error span { color:rgba(255,220,224,.7); font-size:.8rem; }
+  @media (max-width:1100px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.impact-grid-rankings{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  @media (max-width:760px){.impact-hero{grid-template-columns:1fr;padding:1.35rem;}.impact-hero-mark{justify-items:start;padding:0;}.impact-toolbar{align-items:stretch;}.impact-period{width:100%;}.impact-grid-main,.impact-grid-rankings{grid-template-columns:1fr;}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.impact-metric{min-height:8rem;}.definition-panel p{grid-template-columns:1fr;gap:.25rem;}}
+  @media (prefers-reduced-motion:reduce){.impact-tabs a,.impact-panel{transition:none;}}
+</style>

@@ -557,21 +557,25 @@ async function saveCurrentSnapshot(
   }
 
   statements.push(
-    env.OPEN_BRAIN_DB.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(args.memoryId, args.tenantId),
-    env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
-      args.memoryId,
-      args.tenantId,
-      `${snapshot.summary}\n${snapshot.content}`
-    ),
-    buildVersionInsert(env, {
-      tenantId: args.tenantId,
-      memoryId: args.memoryId,
-      version: args.version,
-      operation: "capture",
-      snapshot,
-      contentHash
-    })
+    env.OPEN_BRAIN_DB.prepare("DELETE FROM memories_fts WHERE memory_id = ? AND tenant_id = ?").bind(args.memoryId, args.tenantId)
   );
+  if (lifecycleState !== "suppressed") {
+    statements.push(
+      env.OPEN_BRAIN_DB.prepare("INSERT INTO memories_fts(memory_id, tenant_id, content) VALUES(?,?,?)").bind(
+        args.memoryId,
+        args.tenantId,
+        `${snapshot.summary}\n${snapshot.content}`
+      )
+    );
+  }
+  statements.push(buildVersionInsert(env, {
+    tenantId: args.tenantId,
+    memoryId: args.memoryId,
+    version: args.version,
+    operation: "capture",
+    snapshot,
+    contentHash
+  }));
   for (const generation of dynamicGenerations) {
     statements.push(
       env.OPEN_BRAIN_DB.prepare(
@@ -872,6 +876,7 @@ export async function reviseMemory(
     memoryId: string;
     actorType?: string | null;
     actorId?: string | null;
+    projectId?: string | null;
     content?: string;
     summary?: string | null;
     tags?: string[];
@@ -913,7 +918,7 @@ export async function reviseMemory(
     summary: args.summary ?? existing.summary,
     tags: args.tags ?? parseStoredTags(existing.tags_json),
     created_at: Date.now(),
-    project_id: existing.project_id,
+    project_id: args.projectId === undefined ? existing.project_id : args.projectId,
     actor_type: args.actorType ?? existing.actor_type,
     actor_id: args.actorId ?? existing.actor_id,
     kind: normalizeMemoryKind(existing.kind),

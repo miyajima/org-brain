@@ -138,6 +138,8 @@ const MEMORY_COLUMNS = {
   external_key: "TEXT",
   actor_type: "TEXT",
   actor_id: "TEXT",
+  owner_principal: "TEXT",
+  created_by_principal: "TEXT",
   created_at: "INTEGER NOT NULL DEFAULT 0",
   updated_at: "INTEGER NOT NULL DEFAULT 0",
   valid_from: "INTEGER",
@@ -157,7 +159,10 @@ const MEMORY_COLUMNS = {
   consolidated_at: "INTEGER",
   promoted_at: "INTEGER",
   expires_at: "INTEGER",
-  revised_at: "INTEGER"
+  revised_at: "INTEGER",
+  deleted_at: "INTEGER",
+  deleted_by_principal: "TEXT",
+  delete_reason: "TEXT"
 };
 
 function hashContent(content) {
@@ -227,6 +232,8 @@ function memoryFromRow(row) {
     external_key: row.external_key,
     actor_type: row.actor_type,
     actor_id: row.actor_id,
+    owner_principal: row.owner_principal ?? null,
+    created_by_principal: row.created_by_principal ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     valid_from: row.valid_from,
@@ -238,7 +245,10 @@ function memoryFromRow(row) {
     rationale: row.rationale,
     evidence: parseJson(row.evidence_json),
     conflicts: parseJson(row.conflicts_json),
-    permissions: parseJson(row.permissions_json)
+    permissions: parseJson(row.permissions_json),
+    deleted_at: row.deleted_at ?? null,
+    deleted_by_principal: row.deleted_by_principal ?? null,
+    delete_reason: row.delete_reason ?? null
   };
 }
 
@@ -336,6 +346,8 @@ function createCanonicalTables(db) {
       external_key TEXT,
       actor_type TEXT,
       actor_id TEXT,
+      owner_principal TEXT,
+      created_by_principal TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       valid_from INTEGER,
@@ -355,7 +367,10 @@ function createCanonicalTables(db) {
       consolidated_at INTEGER,
       promoted_at INTEGER,
       expires_at INTEGER,
-      revised_at INTEGER
+      revised_at INTEGER,
+      deleted_at INTEGER,
+      deleted_by_principal TEXT,
+      delete_reason TEXT
     );
     CREATE TABLE IF NOT EXISTS memory_versions (
       id TEXT PRIMARY KEY,
@@ -1081,7 +1096,7 @@ function rebuildFts(db) {
     INSERT INTO memories_fts(memory_id, tenant_id, content, summary, tags, entities)
     SELECT id, tenant_id, content, COALESCE(summary, ''), tags_json, entities_json
     FROM memories
-    WHERE lifecycle_state != 'suppressed'
+    WHERE lifecycle_state != 'suppressed' AND deleted_at IS NULL
   `);
 }
 

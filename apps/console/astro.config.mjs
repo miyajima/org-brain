@@ -12,6 +12,11 @@ export default defineConfig({
   adapter,
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      // Pre-bundle the lazy map dependency so Chrome receives a stable ESM chunk
+      // instead of resolving the CommonJS force-layout dependency directly.
+      include: ["3d-force-graph"]
+    },
     build: {
       rollupOptions: {
         external: ["cloudflare:workers"]

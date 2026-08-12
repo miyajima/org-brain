@@ -1,0 +1,1287 @@
+---
+type MemoryMapNode = {
+  id: string;
+  node_type?: "memory" | "decision" | "project" | "entity" | "tenant";
+  memory_id: string | null;
+  decision_id?: string | null;
+  related_memory_id?: string | null;
+  entity_id?: string | null;
+  entity_type?: string | null;
+  entity_link_count?: number;
+  cross_project_link_count?: number;
+  member_count?: number;
+  tenant_id?: string | null;
+  label: string;
+  summary?: string | null;
+  project_id: string | null;
+  owner_principal: string | null;
+  created_by_principal: string | null;
+  reference_count: number;
+  consumer_count: number;
+  used_count: number;
+  utilization_rate: number | null;
+  net_saved_tokens: number;
+  injected_tokens: number;
+  updated_at?: number | null;
+  cluster_key?: string;
+  decision_type?: string | null;
+  confirmation_state?: string | null;
+  confidence_score?: number | null;
+  fx?: number;
+  fy?: number;
+  fz?: number;
+};
+
+type MemoryMapData = {
+  scope: "mine" | "org";
+  cluster_mode: boolean;
+  total_count: number;
+  visible_count?: number;
+  memory_visible_count?: number;
+  project_count?: number;
+  entity_count?: number;
+  decision_count?: number;
+  related_count?: number;
+  relationship_count?: number;
+  cross_project_link_count?: number;
+  truncated?: boolean;
+  nodes: MemoryMapNode[];
+  links: Array<{ id: string; source: string; target: string; relation: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean }>;
+  clusters: Array<{ id: string; kind: string; label: string; node_ids: string[] }>;
+};
+
+const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal = "", fromDate = "", toDate = "", scope = "org", selectedId: initialSelectedId = "" } = Astro.props as {
+  data: MemoryMapData;
+  tenantId?: string;
+  projectId?: string;
+  query?: string;
+  ownerPrincipal?: string;
+  fromDate?: string;
+  toDate?: string;
+  scope?: "mine" | "org";
+  selectedId?: string;
+};
+const serialized = JSON.stringify(data);
+const listParams = new URLSearchParams({ tenant_id: tenantId, scope });
+if (projectId) listParams.set("project_id", projectId);
+if (query) listParams.set("q", query);
+if (ownerPrincipal) listParams.set("owner_principal", ownerPrincipal);
+if (fromDate) listParams.set("from_date", fromDate);
+if (toDate) listParams.set("to_date", toDate);
+const listHref = `/memories?${listParams.toString()}`;
+const fallbackParams = new URLSearchParams(listParams);
+fallbackParams.set("map_fallback", "1");
+const fallbackHref = `/memories?${fallbackParams.toString()}`;
+const projectOptionMap = new Map<string, string>();
+for (const node of data.nodes) {
+  if (node.node_type === "project" && node.project_id) projectOptionMap.set(node.project_id, node.label || node.project_id);
+}
+const projectOptions = [...projectOptionMap.entries()].sort(([left], [right]) => left.localeCompare(right));
+const ownerOptions = [...new Set(
+  data.nodes
+    .filter((node) => node.node_type === "memory" && node.owner_principal)
+    .map((node) => node.owner_principal as string)
+)].sort((left, right) => left.localeCompare(right));
+---
+<section class="memory-map-shell" data-memory-map-root data-map={serialized} data-list-href={fallbackHref} data-tenant-id={tenantId} data-project-id={projectId} data-scope={scope} data-selected-id={initialSelectedId}>
+  <header class="memory-map-header">
+    <div>
+      <p class="intelligence-eyebrow">Memory constellation / WebGL</p>
+      <h1>3D memory map</h1>
+    </div>
+  </header>
+
+  <div class="memory-map-toolbar">
+    <label class="memory-map-search"><span>Search map</span><input type="search" data-map-search placeholder="memory ID / summary / owner" /></label>
+    <div class="memory-map-presets" aria-label="Map color presets">
+      <button type="button" class="is-active" data-map-preset="project">Project</button>
+      <button type="button" data-map-preset="owner">Owner</button>
+      <button type="button" data-map-preset="utilization">Utilization</button>
+    </div>
+    <a class="memory-map-list-link" href={listHref}>一覧で見る</a>
+  </div>
+  <form class="memory-map-filters" method="get" action="/memories/constellation">
+    <input type="hidden" name="tenant_id" value={tenantId} />
+    <input type="hidden" name="scope" value={scope} />
+    <label><span>Project</span><select name="project_id"><option value="" selected={!projectId}>All projects</option>{projectOptions.map(([value, label]) => <option value={value} selected={projectId === value}>{label}</option>)}</select></label>
+    <label><span>Owner</span><select name="owner_principal" disabled={scope === "mine"}><option value="" selected={!ownerPrincipal}>{scope === "mine" ? "自分" : "All owners"}</option>{ownerOptions.map((value) => <option value={value} selected={ownerPrincipal === value}>{value}</option>)}</select></label>
+    <fieldset class="memory-map-date-range"><legend>Period</legend><label><span>From</span><input type="date" name="from_date" value={fromDate} /></label><span class="memory-map-range-arrow" aria-hidden="true">→</span><label><span>To</span><input type="date" name="to_date" value={toDate} /></label></fieldset>
+    <button type="submit">Apply filters</button>
+  </form>
+
+  <div class="memory-map-layout">
+    <div class="memory-map-stage-shell" data-map-stage-shell>
+      <div class="memory-map-stage" data-map-stage role="application" aria-label="3D memory map"></div>
+      <svg class="memory-map-glow-overlay" data-map-glow-overlay aria-hidden="true" focusable="false">
+        <defs>
+          <filter id="memory-map-gaussian-glow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+            <feGaussianBlur stdDeviation="3.5" />
+          </filter>
+        </defs>
+        <g data-map-svg-glow filter="url(#memory-map-gaussian-glow)"></g>
+      </svg>
+    </div>
+    <div class="memory-map-fallback" data-map-fallback hidden>
+      <div class="memory-map-fallback-note"><strong>3D表示を利用できないため一覧へ移動します</strong><span>同じ条件のメモリ一覧を開いています。自動で移動しない場合は、下のリンクを使用してください。</span><a data-map-fallback-link href={fallbackHref}>メモリ一覧を開く</a></div>
+      <ul data-map-fallback-list></ul>
+    </div>
+    <aside class="memory-map-inspector" data-map-inspector aria-live="polite">
+      <p class="intelligence-eyebrow">Selected node</p>
+      <span class="memory-map-node-kind" data-map-inspector-kind>Nothing selected</span>
+      <h2 data-map-inspector-title>ノードを選択</h2>
+      <p data-map-inspector-summary>星を選択すると、所有者・参照数・純削減を確認できます。</p>
+      <dl class="memory-map-inspector-summary-grid">
+        <div><dt>Project</dt><dd data-map-inspector-project>—</dd></div>
+        <div><dt>Owner</dt><dd data-map-inspector-owner>—</dd></div>
+        <div><dt>References</dt><dd data-map-inspector-refs>—</dd></div>
+        <div><dt>Utilization</dt><dd data-map-inspector-utilization>—</dd></div>
+        <div><dt>Net saved</dt><dd data-map-inspector-saved>—</dd></div>
+      </dl>
+      <p class="memory-map-inspector-status" data-map-inspector-status hidden></p>
+      <div class="memory-map-inspector-detail" data-map-inspector-detail hidden>
+        <dl class="memory-map-inspector-metadata" data-map-inspector-metadata></dl>
+        <section class="memory-map-inspector-section" data-map-inspector-tags-section hidden>
+          <h3>Tags</h3>
+          <div class="memory-map-tag-list" data-map-inspector-tags></div>
+        </section>
+        <section class="memory-map-inspector-section" data-map-inspector-content-section hidden>
+          <h3>本文</h3>
+          <pre class="memory-map-inspector-content" data-map-inspector-content></pre>
+        </section>
+        <section class="memory-map-inspector-section" data-map-inspector-rationales-section hidden>
+          <h3>判断・根拠</h3>
+          <div class="memory-map-inspector-records" data-map-inspector-rationales></div>
+        </section>
+        <section class="memory-map-inspector-section" data-map-inspector-versions-section hidden>
+          <h3>変更履歴</h3>
+          <div class="memory-map-inspector-records" data-map-inspector-versions></div>
+        </section>
+      </div>
+      <a class="memory-map-open" data-map-inspector-link href="/memories">メモリライブラリで開く</a>
+    </aside>
+  </div>
+
+  <footer class="memory-map-footer">
+    <div class="memory-map-legend"><div class="memory-map-project-legend" data-project-legend></div><span class="legend-line legend-line-source"></span><span>line color = source node</span><span class="legend-arrow">→</span><span>directed relation</span></div>
+  </footer>
+</section>
+
+<script>
+  type MapNode = {
+    id: string;
+    node_type?: "memory" | "decision" | "project" | "entity" | "tenant";
+    memory_id: string | null;
+    decision_id?: string | null;
+    related_memory_id?: string | null;
+    entity_id?: string | null;
+    entity_type?: string | null;
+    entity_link_count?: number;
+    cross_project_link_count?: number;
+    member_count?: number;
+    tenant_id?: string | null;
+    label: string;
+    summary?: string | null;
+    project_id: string | null;
+    owner_principal: string | null;
+    created_by_principal: string | null;
+    reference_count: number;
+    consumer_count: number;
+    used_count: number;
+    utilization_rate: number | null;
+    net_saved_tokens: number;
+    injected_tokens: number;
+    updated_at?: number | null;
+    cluster_key?: string;
+    decision_type?: string | null;
+    confirmation_state?: string | null;
+    confidence_score?: number | null;
+    fx?: number;
+    fy?: number;
+    fz?: number;
+  };
+
+  type MemoryDetailPayload = {
+    ok?: boolean;
+    error?: { message?: string };
+    data?: {
+      memory_id: string;
+      memory: {
+        id?: string;
+        source?: string | null;
+        external_key?: string | null;
+        created_at?: number | null;
+        kind?: string | null;
+        current_version?: number | null;
+        last_accessed_at?: number | null;
+        confidence_score?: number | null;
+        utility_score?: number | null;
+        actor_type?: string | null;
+        actor_id?: string | null;
+        owner_principal?: string | null;
+        created_by_principal?: string | null;
+        deleted_at?: number | null;
+        deleted_by_principal?: string | null;
+        delete_reason?: string | null;
+        project_id?: string | null;
+        content?: string | null;
+        summary?: string | null;
+        tags?: string[];
+        lifecycle_state?: string | null;
+        updated_at?: number | null;
+        reference_count?: number | null;
+        used_count?: number | null;
+        consumer_count?: number | null;
+        net_saved_tokens?: number | null;
+        injected_tokens?: number | null;
+      } | null;
+      versions: Array<{
+        version: number;
+        operation: string;
+        summary: string | null;
+        kind: string;
+        lifecycle_state: string;
+        actor_type: string | null;
+        actor_id: string | null;
+        created_at: number;
+      }>;
+      rationales: Array<{
+        id: string;
+        decision_type: string;
+        conclusion: string;
+        reason_summary: string;
+        status: string;
+        confirmation_state: string;
+        confidence_score: number | null;
+        created_at: number;
+        confirmed_at: number | null;
+        evidence: Array<{
+          id: string;
+          evidence_type: string;
+          evidence_ref: string;
+          relation: string;
+          note: string | null;
+          weight_score: number | null;
+        }>;
+      }>;
+      meta?: { usage_id?: string; verification_sampled?: boolean };
+    };
+  };
+
+  const root = document.querySelector<HTMLElement>("[data-memory-map-root]");
+  if (root) {
+    const data = JSON.parse(root.dataset.map || "{}") as { nodes: MapNode[]; links: Array<{ id?: string; source: string; target: string; relation: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean }>; cluster_mode: boolean; total_count?: number; visible_count?: number; memory_visible_count?: number; project_count?: number; entity_count?: number; decision_count?: number; related_count?: number; relationship_count?: number; cross_project_link_count?: number; truncated?: boolean };
+    const stage = root.querySelector<HTMLElement>("[data-map-stage]");
+    const glowOverlay = root.querySelector<SVGSVGElement>("[data-map-glow-overlay]");
+    const svgGlowGroup = root.querySelector<SVGGElement>("[data-map-svg-glow]");
+    const fallback = root.querySelector<HTMLElement>("[data-map-fallback]");
+    const fallbackList = root.querySelector<HTMLUListElement>("[data-map-fallback-list]");
+    const search = root.querySelector<HTMLInputElement>("[data-map-search]");
+    const inspectorTitle = root.querySelector<HTMLElement>("[data-map-inspector-title]");
+    const inspectorSummary = root.querySelector<HTMLElement>("[data-map-inspector-summary]");
+    const inspectorProject = root.querySelector<HTMLElement>("[data-map-inspector-project]");
+    const inspectorOwner = root.querySelector<HTMLElement>("[data-map-inspector-owner]");
+    const inspectorRefs = root.querySelector<HTMLElement>("[data-map-inspector-refs]");
+    const inspectorUtilization = root.querySelector<HTMLElement>("[data-map-inspector-utilization]");
+    const inspectorSaved = root.querySelector<HTMLElement>("[data-map-inspector-saved]");
+    const inspectorKind = root.querySelector<HTMLElement>("[data-map-inspector-kind]");
+    const inspectorStatus = root.querySelector<HTMLElement>("[data-map-inspector-status]");
+    const inspectorDetail = root.querySelector<HTMLElement>("[data-map-inspector-detail]");
+    const inspectorMetadata = root.querySelector<HTMLElement>("[data-map-inspector-metadata]");
+    const inspectorTagsSection = root.querySelector<HTMLElement>("[data-map-inspector-tags-section]");
+    const inspectorTags = root.querySelector<HTMLElement>("[data-map-inspector-tags]");
+    const inspectorContentSection = root.querySelector<HTMLElement>("[data-map-inspector-content-section]");
+    const inspectorContent = root.querySelector<HTMLElement>("[data-map-inspector-content]");
+    const inspectorRationalesSection = root.querySelector<HTMLElement>("[data-map-inspector-rationales-section]");
+    const inspectorRationales = root.querySelector<HTMLElement>("[data-map-inspector-rationales]");
+    const inspectorVersionsSection = root.querySelector<HTMLElement>("[data-map-inspector-versions-section]");
+    const inspectorVersions = root.querySelector<HTMLElement>("[data-map-inspector-versions]");
+    const projectLegend = root.querySelector<HTMLElement>("[data-project-legend]");
+    const inspectorLink = root.querySelector<HTMLAnchorElement>("[data-map-inspector-link]");
+    let fallbackScheduled = false;
+    let preset = "project";
+    let selectedId = root.dataset.selectedId || "";
+    type GraphLink = { id?: string; source: string | MapNode; target: string | MapNode; relation?: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean };
+    type GraphInstance = {
+      backgroundColor(value: string): GraphInstance;
+      width(value: number): GraphInstance;
+      height(value: number): GraphInstance;
+      showNavInfo(value: boolean): GraphInstance;
+      nodeLabel(fn: (node: MapNode) => string): GraphInstance;
+      nodeVal(fn: (node: MapNode) => number): GraphInstance;
+      nodeColor(fn: (node: MapNode) => string): GraphInstance;
+      nodeThreeObject(fn: (node: MapNode) => unknown): GraphInstance;
+      nodeThreeObjectExtend(value: boolean): GraphInstance;
+      nodeOpacity(value: number): GraphInstance;
+      nodeVisibility(fn: (node: MapNode) => boolean): GraphInstance;
+      linkColor(fn: (link: GraphLink) => string): GraphInstance;
+      linkVisibility(fn: (link: GraphLink) => boolean): GraphInstance;
+      linkWidth(fn: (link: GraphLink) => number): GraphInstance;
+      linkCurvature(fn: (link: GraphLink) => number): GraphInstance;
+      linkOpacity(value: number): GraphInstance;
+      linkDirectionalArrowLength(value: number | ((link: GraphLink) => number)): GraphInstance;
+      linkDirectionalArrowRelPos(value: number): GraphInstance;
+      linkDirectionalParticles(fn: (link: GraphLink) => number): GraphInstance;
+      linkDirectionalParticleSpeed(value: number): GraphInstance;
+      linkDirectionalParticleWidth(value: number): GraphInstance;
+      linkDirectionalParticleColor(fn: (link: GraphLink) => string): GraphInstance;
+      onBackgroundClick(fn: (event: MouseEvent) => void): GraphInstance;
+      d3Force(name: string): { strength?(value: number): unknown } | null;
+      camera(): unknown;
+      cameraPosition(): { x: number; y: number; z: number };
+      cameraPosition(position: { x?: number; y?: number; z?: number }, lookAt?: { x: number; y: number; z: number }, transitionMs?: number): GraphInstance;
+      zoomToFit(durationMs?: number, padding?: number, nodeFilter?: (node: MapNode) => boolean): GraphInstance;
+      onNodeClick(fn: (node: MapNode) => void): GraphInstance;
+      graphData(value: { nodes: MapNode[]; links: GraphLink[] }): GraphInstance;
+    };
+    let graph: GraphInstance | null = null;
+    let threeInstance: any = null;
+    let svgProjectionVector: any = null;
+    let glowPhase = 0;
+    let selectedRelatedIds = new Set<string>();
+    let pendingFocusId = "";
+    let hasFocusedNode = false;
+    let svgGlowLoopActive = false;
+    type GlowLayer = {
+      scale: { set(x: number, y: number, z: number): void };
+      material: { color: { set(value: string): void }; opacity: number };
+      coreSize: number;
+    };
+    const glowLayers = new Map<string, { core: GlowLayer; halo: GlowLayer; outer: GlowLayer }>();
+    let glowTexture: any = null;
+
+    const palette = [
+      "#4bb8ff", "#9c87ff", "#ffb454", "#42d6ac",
+      "#ff6f91", "#d9e85f", "#6f98ff", "#ef8fd1",
+      "#56d6dc", "#ff8d5c", "#9bd95b", "#c6a0ff",
+      "#f4ce5f", "#5fa8ff", "#ff9dbb", "#72d9ad"
+    ];
+    const projectKeys = [...new Set(
+      data.nodes
+        .filter((node) => node.node_type === "project" && node.project_id)
+        .map((node) => node.project_id as string)
+    )].sort((left, right) => left.localeCompare(right));
+    const projectColorIndex = new Map(projectKeys.map((key, index) => [key, index % palette.length]));
+    const hashColor = (value: string | null | undefined) => {
+      const key = String(value || "unassigned");
+      const assignedIndex = projectColorIndex.get(key);
+      if (assignedIndex !== undefined) return palette[assignedIndex];
+      let hash = 0;
+      for (const character of key) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+      return palette[hash % palette.length];
+    };
+    const nodeId = (item: string | MapNode) => typeof item === "string" ? item : item.id;
+    const isSelectedLink = (link: GraphLink) => Boolean(selectedId && [link.source, link.target].some((item) => nodeId(item) === selectedId));
+    const isCrossProjectLink = (link: GraphLink) => Boolean(link.cross_project) || link.relation?.startsWith("shared-cross:") || link.relation?.startsWith("entity-cross:") || link.relation?.startsWith("cross:");
+    const isTenantLink = (link: GraphLink) => link.relation?.startsWith("tenant:") ?? false;
+    const relatedNodeIdsFor = (id: string) => {
+      const related = new Set<string>();
+      if (!id) return related;
+      related.add(id);
+
+      const firstHop = new Set<string>();
+      for (const link of data.links) {
+        const source = nodeId(link.source);
+        const target = nodeId(link.target);
+        if (source === id) firstHop.add(target);
+        if (target === id) firstHop.add(source);
+      }
+      for (const neighbor of firstHop) related.add(neighbor);
+
+      // Project, concept, and decision hubs are intentionally treated as
+      // one-hop bridges so the connected memory cluster keeps its project
+      // colors when one memory is selected.
+      const hubIds = [...firstHop].filter((neighbor) => {
+        const node = data.nodes.find((candidate) => candidate.id === neighbor);
+        return node?.node_type === "tenant" || node?.node_type === "project" || node?.node_type === "entity" || node?.node_type === "decision";
+      });
+      if (hubIds.length > 0) {
+        const hubs = new Set(hubIds);
+        for (const link of data.links) {
+          const source = nodeId(link.source);
+          const target = nodeId(link.target);
+          if (hubs.has(source)) related.add(target);
+          if (hubs.has(target)) related.add(source);
+        }
+      }
+      return related;
+    };
+    const directRelatedNodeIdsFor = (id: string) => {
+      const related = new Set<string>(id ? [id] : []);
+      if (!id) return related;
+      for (const link of data.links) {
+        const source = nodeId(link.source);
+        const target = nodeId(link.target);
+        if (source === id) related.add(target);
+        if (target === id) related.add(source);
+      }
+      return related;
+    };
+    const baseColorFor = (node: MapNode) => {
+      if (node.node_type === "tenant") return "#f4d58b";
+      if (node.node_type === "entity") return preset === "utilization" ? "#8496a3" : "#d8e6ee";
+      if (node.node_type === "project") {
+        if (preset === "owner") return "#c3a7ff";
+        if (preset === "utilization") return "#8d9aa3";
+        return hashColor(node.project_id);
+      }
+      if (node.node_type === "decision") {
+        if (preset === "owner") return "#ffbf72";
+        if (preset === "utilization") return "#8c7a68";
+        return hashColor(node.project_id);
+      }
+      if (preset === "owner") return hashColor(node.owner_principal);
+      if (preset === "utilization") {
+        if (node.utilization_rate === null) return "#5e7180";
+        const hue = Math.max(0, Math.min(125, node.utilization_rate * 125));
+        return `hsl(${hue} 84% 62%)`;
+      }
+      return hashColor(node.project_id);
+    };
+    const colorFor = (node: MapNode) => {
+      if (node.id === selectedId) return "#ffffff";
+      if (selectedId && !selectedRelatedIds.has(node.id)) return "rgba(107,135,158,.2)";
+      return baseColorFor(node);
+    };
+    const nodeValue = (node: MapNode) => {
+      const base = node.node_type === "tenant"
+        ? Math.max(14, Math.log2((node.member_count || node.reference_count) + 2) * 3.2)
+        : node.node_type === "project"
+          ? Math.max(7, Math.log2((node.member_count || node.reference_count) + 2) * 5)
+        : node.node_type === "entity"
+          ? Math.max(1.7, Math.log2(node.reference_count + 2) * 1.8)
+          : node.node_type === "decision" ? 1.4 : Math.max(1.5, Math.log2(node.reference_count + 2) * 2.4);
+      return base;
+    };
+    const totalNodeCount = Number(data.total_count ?? data.nodes.length);
+    // Calculate once at display start: sparse maps need a readable halo, while
+    // dense maps keep the same visual language without turning into a light wall.
+    const budgetedGlow = totalNodeCount > 1500 || data.nodes.length > 1500;
+    const ambientGlowIntensity = Math.max(0.78, Math.min(1.5, 2.2 - Math.log10(Math.max(1, totalNodeCount)) * 0.25));
+    const ambientGlowSize = 0.82 + ambientGlowIntensity * 0.28;
+    const svgAmbientOpacity = Math.min(budgetedGlow ? 0.4 : 0.62, (budgetedGlow ? 0.26 : 0.28) * ambientGlowIntensity);
+    const svgGlowBudget = budgetedGlow ? 192 : 256;
+    const glowImportance = (node: MapNode) => {
+      const typeWeight = node.node_type === "tenant"
+        ? 1_000_000_000
+        : node.node_type === "project"
+          ? 100_000_000
+          : node.node_type === "entity" || node.node_type === "decision" ? 10_000_000 : 0;
+      return typeWeight + node.reference_count * 100 + node.consumer_count * 10 + Math.max(0, node.net_saved_tokens);
+    };
+    const svgGlowNodes = [...data.nodes]
+      .sort((left, right) => glowImportance(right) - glowImportance(left))
+      .slice(0, svgGlowBudget);
+    const svgGlowCircles = new Map<string, SVGCircleElement>();
+    const svgSelectedGlow = glowOverlay && svgGlowGroup
+      ? document.createElementNS("http://www.w3.org/2000/svg", "circle")
+      : null;
+    if (svgGlowGroup) {
+      for (const node of svgGlowNodes) {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.dataset.nodeId = node.id;
+        svgGlowGroup.appendChild(circle);
+        svgGlowCircles.set(node.id, circle);
+      }
+      if (svgSelectedGlow) {
+        svgSelectedGlow.dataset.selectedGlow = "true";
+        svgGlowGroup.appendChild(svgSelectedGlow);
+      }
+    }
+    const setSvgCirclePosition = (circle: SVGCircleElement, node: MapNode, selected = false) => {
+      if (!graph || !threeInstance || !stage || !visible(node)) {
+        circle.setAttribute("display", "none");
+        return;
+      }
+      const positionedNode = node as MapNode & { x?: number; y?: number; z?: number };
+      if (![positionedNode.x, positionedNode.y, positionedNode.z].every((value) => typeof value === "number" && Number.isFinite(value))) {
+        circle.setAttribute("display", "none");
+        return;
+      }
+      if (!selected && selectedId && !selectedRelatedIds.has(node.id)) {
+        circle.setAttribute("display", "none");
+        return;
+      }
+      const projected = (svgProjectionVector || (svgProjectionVector = new threeInstance.Vector3()))
+        .set(positionedNode.x, positionedNode.y, positionedNode.z)
+        .project(graph.camera());
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      const x = (projected.x + 1) * 0.5 * width;
+      const y = (1 - projected.y) * 0.5 * height;
+      const inViewport = projected.z >= -1 && projected.z <= 1 && x >= -24 && x <= width + 24 && y >= -24 && y <= height + 24;
+      if (!inViewport) {
+        circle.setAttribute("display", "none");
+        return;
+      }
+      const radius = selected
+        ? 8.5 + glowPhase * 0.8
+        : (node.node_type === "project" || node.node_type === "tenant" ? 3.6 : 2.4) * ambientGlowSize;
+      circle.setAttribute("display", "inline");
+      circle.setAttribute("cx", x.toFixed(1));
+      circle.setAttribute("cy", y.toFixed(1));
+      circle.setAttribute("r", radius.toFixed(1));
+      circle.setAttribute("fill", selected ? "#ffffff" : baseColorFor(node));
+      circle.setAttribute("fill-opacity", selected ? "0.95" : svgAmbientOpacity.toFixed(2));
+    };
+    const updateSvgGlow = () => {
+      if (!glowOverlay || !svgGlowGroup || !graph || !threeInstance) return;
+      for (const node of svgGlowNodes) {
+        const circle = svgGlowCircles.get(node.id);
+        if (circle) setSvgCirclePosition(circle, node);
+      }
+      if (svgSelectedGlow) {
+        const selectedNode = data.nodes.find((node) => node.id === selectedId);
+        if (selectedNode) {
+          setSvgCirclePosition(svgSelectedGlow, selectedNode, true);
+        } else {
+          svgSelectedGlow.setAttribute("display", "none");
+        }
+      }
+    };
+    const startSvgGlowLoop = () => {
+      if (svgGlowLoopActive || !glowOverlay) return;
+      svgGlowLoopActive = true;
+      glowOverlay.removeAttribute("hidden");
+      const frame = () => {
+        if (!svgGlowLoopActive) return;
+        if (budgetedGlow) glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
+        updateSvgGlow();
+        window.requestAnimationFrame(frame);
+      };
+      window.requestAnimationFrame(frame);
+    };
+    const updateGlowAppearance = () => {
+      if (budgetedGlow) return;
+      for (const node of data.nodes) {
+        const layers = glowLayers.get(node.id);
+        if (!layers) continue;
+        const selected = node.id === selectedId;
+        const dimmed = Boolean(selectedId && !selected && !selectedRelatedIds.has(node.id));
+        const color = selected ? "#ffffff" : dimmed ? "#6b879e" : baseColorFor(node);
+        const pulse = selected ? 0.5 + glowPhase * 0.5 : 0.5;
+        layers.core.material.color.set(color);
+        layers.halo.material.color.set(color);
+        layers.outer.material.color.set(color);
+        layers.core.material.opacity = selected ? 1 : dimmed ? 0.34 : 0.88;
+        layers.halo.material.opacity = selected ? 0.62 + pulse * 0.14 : dimmed ? 0.022 : Math.min(0.36, 0.2 * ambientGlowIntensity);
+        layers.outer.material.opacity = selected ? 0.24 + pulse * 0.08 : dimmed ? 0.008 : Math.min(0.11, 0.06 * ambientGlowIntensity);
+        const coreScale = selected ? 1.28 + pulse * 0.08 : dimmed ? 0.9 : 1;
+        layers.core.scale.set(coreScale, coreScale, coreScale);
+        const haloSize = layers.core.coreSize * (selected ? 11 + pulse * 0.5 : dimmed ? 2.8 : 5.4 * ambientGlowSize);
+        const outerSize = layers.core.coreSize * (selected ? 18 + pulse * 0.8 : dimmed ? 4.6 : 8.5 * ambientGlowSize);
+        layers.halo.scale.set(haloSize, haloSize, 1);
+        layers.outer.scale.set(outerSize, outerSize, 1);
+      }
+    };
+    const createGlowNodeObject = (node: MapNode, THREE: typeof import("three")) => {
+      const coreSize = Math.max(1.1, Math.cbrt(nodeValue(node)) * 1.3);
+      const coreMaterial = new THREE.MeshBasicMaterial({
+        color: baseColorFor(node),
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false
+      });
+      const core = new THREE.Mesh(new THREE.SphereGeometry(coreSize, budgetedGlow ? 8 : 18, budgetedGlow ? 8 : 18), coreMaterial);
+      core.renderOrder = 2;
+      const group = new THREE.Group();
+      if (budgetedGlow) {
+        group.add(core);
+        return group;
+      }
+      if (!glowTexture) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128;
+        canvas.height = 128;
+        const context = canvas.getContext("2d");
+        if (!context) return null;
+        const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gradient.addColorStop(0, "rgba(255,255,255,.95)");
+        gradient.addColorStop(0.18, "rgba(255,255,255,.58)");
+        gradient.addColorStop(0.5, "rgba(255,255,255,.18)");
+        gradient.addColorStop(1, "rgba(255,255,255,0)");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 128, 128);
+        glowTexture = new THREE.CanvasTexture(canvas);
+      }
+      const haloMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: baseColorFor(node),
+        transparent: true,
+        opacity: 0.1,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending
+      });
+      const outerMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: baseColorFor(node),
+        transparent: true,
+        opacity: 0.025,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending
+      });
+      const halo = new THREE.Sprite(haloMaterial);
+      const outer = new THREE.Sprite(outerMaterial);
+      halo.scale.set(coreSize * 3.1, coreSize * 3.1, 1);
+      outer.scale.set(coreSize * 4.8, coreSize * 4.8, 1);
+      outer.renderOrder = 0;
+      halo.renderOrder = 1;
+      group.add(outer, halo, core);
+      glowLayers.set(node.id, {
+        core: { scale: core.scale, material: coreMaterial, coreSize },
+        halo: { scale: halo.scale, material: haloMaterial, coreSize },
+        outer: { scale: outer.scale, material: outerMaterial, coreSize }
+      });
+      return group;
+    };
+    const sourceNodeFor = (link: GraphLink) => typeof link.source === "string"
+      ? data.nodes.find((candidate) => candidate.id === link.source)
+      : link.source;
+    const linkColorFor = (link: GraphLink) => {
+      const source = sourceNodeFor(link);
+      return source
+        ? baseColorFor(source)
+        : link.inferred ? "rgba(145,190,220,.48)" : "rgba(120,180,220,.66)";
+    };
+    const linkWidthFor = (link: GraphLink) => isCrossProjectLink(link)
+      ? 1.25
+      : isTenantLink(link)
+        ? 1.5
+        : link.relation?.startsWith("project:")
+          ? 0.4
+          : link.relation?.startsWith("entity:")
+            ? 0.7
+            : link.relation?.startsWith("shared:")
+              ? 0.55
+              : link.relation?.startsWith("decision:") ? 0.9 : 0.55;
+    const linkCurvatureFor = (link: GraphLink) => isCrossProjectLink(link) ? 0.28 : isTenantLink(link) ? 0.04 : link.relation?.startsWith("shared:") ? 0.06 : 0;
+    const linkParticlesFor = (link: GraphLink) => isCrossProjectLink(link) ? 2 : 0;
+    const linkVisible = (link: GraphLink) => visibleNode(link.source) && visibleNode(link.target) && (!selectedId || isSelectedLink(link));
+    function visibleNode(item: string | MapNode) {
+      const node = typeof item === "string" ? data.nodes.find((candidate) => candidate.id === item) : item;
+      return Boolean(node && visible(node));
+    }
+    const visible = (node: MapNode) => {
+      const query = search?.value.trim().toLowerCase() || "";
+      if (!query) return true;
+      return [node.id, node.label, node.project_id, node.owner_principal, node.decision_type, node.entity_type].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
+    };
+    const formatTimestamp = (value: number | null | undefined) => {
+      if (value === null || value === undefined || !Number.isFinite(Number(value)) || Number(value) <= 0) return "—";
+      return new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(Number(value)));
+    };
+    const formatNumber = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(Number(value)) ? "—" : Number(value).toLocaleString();
+    const appendText = (parent: HTMLElement, tag: string, text: string, className = "") => {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      element.textContent = text;
+      parent.appendChild(element);
+      return element;
+    };
+    const renderMetadata = (items: Array<[string, string]>) => {
+      if (!inspectorMetadata) return;
+      inspectorMetadata.innerHTML = "";
+      for (const [label, value] of items) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "memory-map-inspector-field";
+        appendText(wrapper, "dt", label, "memory-map-inspector-field-label");
+        appendText(wrapper, "dd", value || "—", "memory-map-inspector-field-value");
+        inspectorMetadata.appendChild(wrapper);
+      }
+      if (inspectorDetail) inspectorDetail.hidden = false;
+    };
+    const clearInspectorDetails = () => {
+      if (inspectorDetail) inspectorDetail.hidden = true;
+      if (inspectorStatus) {
+        inspectorStatus.hidden = true;
+        inspectorStatus.textContent = "";
+      }
+      for (const section of [inspectorTagsSection, inspectorContentSection, inspectorRationalesSection, inspectorVersionsSection]) {
+        if (section) section.hidden = true;
+      }
+      for (const element of [inspectorMetadata, inspectorTags, inspectorRationales, inspectorVersions]) {
+        if (element) element.innerHTML = "";
+      }
+      if (inspectorContent) inspectorContent.textContent = "";
+    };
+    const renderNodeMetadata = (node: MapNode) => {
+      const nodeType = node.node_type || "memory";
+      renderMetadata([
+        ["ID", node.id],
+        ["Node type", nodeType],
+        ["Label", node.label],
+        ["Summary", node.summary || "—"],
+        ["Tenant", node.tenant_id || root.dataset.tenantId || "default"],
+        ["Project", node.project_id || "プロジェクト未設定"],
+        ["Owner", node.owner_principal || "未割り当て"],
+        ["Creator", node.created_by_principal || "未割り当て"],
+        ["Members", formatNumber(node.member_count)],
+        ["References", formatNumber(node.reference_count)],
+        ["Used", formatNumber(node.used_count)],
+        ["Consumers", formatNumber(node.consumer_count)],
+        ["Utilization", node.utilization_rate === null || node.utilization_rate === undefined ? "未計測" : `${Math.round(node.utilization_rate * 100)}%`],
+        ["Net saved tokens", formatNumber(node.net_saved_tokens)],
+        ["Injected tokens", formatNumber(node.injected_tokens)],
+        ["Updated", formatTimestamp(node.updated_at)],
+        ["Cluster", node.cluster_key || "—"],
+        ["Entity type", node.entity_type || "—"],
+        ["Decision type", node.decision_type || "—"],
+        ["Confirmation", node.confirmation_state || "—"],
+        ["Confidence", node.confidence_score === null || node.confidence_score === undefined ? "—" : String(node.confidence_score)]
+      ]);
+    };
+    const renderMemoryDetail = (payload: NonNullable<MemoryDetailPayload["data"]>, node: MapNode) => {
+      const memory = payload.memory;
+      if (!memory) throw new Error("memory detail is empty");
+      const referenceCount = Number(memory.reference_count ?? node.reference_count ?? 0);
+      const usedCount = Number(memory.used_count ?? node.used_count ?? 0);
+      renderMetadata([
+        ["ID", memory.id || payload.memory_id || node.memory_id || node.id],
+        ["Node type", "memory"],
+        ["Source", memory.source || "—"],
+        ["External key", memory.external_key || "—"],
+        ["Kind", memory.kind || "—"],
+        ["Lifecycle", memory.lifecycle_state || "—"],
+        ["Current version", formatNumber(memory.current_version)],
+        ["Tenant", root.dataset.tenantId || "default"],
+        ["Summary", memory.summary || "—"],
+        ["Project", memory.project_id || "プロジェクト未設定"],
+        ["Owner", memory.owner_principal || "未割り当て"],
+        ["Creator", memory.created_by_principal || "未割り当て"],
+        ["Actor", [memory.actor_type, memory.actor_id].filter(Boolean).join(" / ") || "—"],
+        ["Created", formatTimestamp(memory.created_at)],
+        ["Updated", formatTimestamp(memory.updated_at)],
+        ["Last accessed", formatTimestamp(memory.last_accessed_at)],
+        ["Confidence", memory.confidence_score === null || memory.confidence_score === undefined ? "—" : String(memory.confidence_score)],
+        ["Utility", memory.utility_score === null || memory.utility_score === undefined ? "—" : String(memory.utility_score)],
+        ["References", formatNumber(referenceCount)],
+        ["Used", formatNumber(usedCount)],
+        ["Consumers", formatNumber(memory.consumer_count)],
+        ["Utilization", referenceCount > 0 ? `${Math.round((usedCount / referenceCount) * 100)}%` : "未計測"],
+        ["Net saved tokens", formatNumber(memory.net_saved_tokens)],
+        ["Injected tokens", formatNumber(memory.injected_tokens)],
+        ["Deleted at", formatTimestamp(memory.deleted_at)],
+        ["Deleted by", memory.deleted_by_principal || "—"],
+        ["Delete reason", memory.delete_reason || "—"],
+        ["Detail usage ID", payload.meta?.usage_id || "—"],
+        ["Verification sampled", payload.meta?.verification_sampled === undefined ? "—" : payload.meta.verification_sampled ? "yes" : "no"]
+      ]);
+
+      const tags = memory.tags ?? [];
+      if (inspectorTagsSection && inspectorTags) {
+        inspectorTagsSection.hidden = tags.length === 0;
+        inspectorTags.innerHTML = "";
+        for (const tag of tags) appendText(inspectorTags, "span", tag, "memory-map-tag");
+      }
+      const content = String(memory.content ?? "");
+      if (inspectorContentSection && inspectorContent) {
+        inspectorContentSection.hidden = content.length === 0;
+        inspectorContent.textContent = content;
+      }
+      const rationales = payload.rationales ?? [];
+      if (inspectorRationalesSection && inspectorRationales) {
+        inspectorRationalesSection.hidden = rationales.length === 0;
+        inspectorRationales.innerHTML = "";
+        for (const rationale of rationales) {
+          const card = document.createElement("article");
+          card.className = "memory-map-record";
+          appendText(card, "strong", rationale.conclusion || rationale.decision_type);
+          appendText(card, "small", `${rationale.id} · ${rationale.decision_type} · ${rationale.status} · ${rationale.confirmation_state} · confidence ${rationale.confidence_score ?? "—"} · confirmed ${formatTimestamp(rationale.confirmed_at)}`);
+          appendText(card, "p", rationale.reason_summary || "—");
+          for (const evidence of rationale.evidence ?? []) {
+            appendText(card, "code", `${evidence.id} · ${evidence.relation} / ${evidence.evidence_type}: ${evidence.evidence_ref}${evidence.note ? ` · ${evidence.note}` : ""} · weight ${evidence.weight_score ?? "—"}`);
+          }
+          inspectorRationales.appendChild(card);
+        }
+      }
+      const versions = payload.versions ?? [];
+      if (inspectorVersionsSection && inspectorVersions) {
+        inspectorVersionsSection.hidden = versions.length === 0;
+        inspectorVersions.innerHTML = "";
+        for (const version of versions) {
+          const card = document.createElement("article");
+          card.className = "memory-map-record memory-map-version";
+          appendText(card, "strong", `v${version.version} / ${version.operation}`);
+          appendText(card, "small", `${formatTimestamp(version.created_at)} · ${version.kind} · ${version.lifecycle_state} · ${version.actor_type || "—"} / ${version.actor_id || "—"}`);
+          appendText(card, "p", version.summary || "—");
+          inspectorVersions.appendChild(card);
+        }
+      }
+    };
+    let detailRequestId = 0;
+    const loadMemoryDetail = async (node: MapNode) => {
+      if (!node.memory_id) return;
+      const requestId = ++detailRequestId;
+      if (inspectorStatus) {
+        inspectorStatus.hidden = false;
+        inspectorStatus.textContent = "本文・履歴・根拠を読み込んでいます…";
+      }
+      try {
+        const response = await fetch(`/api/v1/memories/${encodeURIComponent(node.memory_id)}/details?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`, { headers: { accept: "application/json" } });
+        const payload = await response.json() as MemoryDetailPayload;
+        if (requestId !== detailRequestId || selectedId !== node.id) return;
+        if (!response.ok || !payload.data) throw new Error(payload.error?.message || "memory detail could not be loaded");
+        renderMemoryDetail(payload.data, node);
+        if (inspectorStatus) {
+          inspectorStatus.hidden = true;
+          inspectorStatus.textContent = "";
+        }
+      } catch (error) {
+        if (requestId !== detailRequestId || selectedId !== node.id) return;
+        if (inspectorStatus) {
+          inspectorStatus.hidden = false;
+          inspectorStatus.textContent = `詳細を取得できないため、マップ上の情報を表示しています。${error instanceof Error ? ` ${error.message}` : ""}`;
+        }
+      }
+    };
+    const renderLegend = () => {
+      if (!projectLegend) return;
+      projectLegend.innerHTML = "";
+      if (preset === "utilization") {
+        const gradient = document.createElement("span");
+        gradient.className = "legend-utilization-gradient";
+        gradient.title = "low → high utilization";
+        projectLegend.appendChild(gradient);
+        return;
+      }
+        const values = preset === "owner"
+        ? [...new Set(data.nodes.filter((node) => node.node_type === "memory" && node.owner_principal).map((node) => node.owner_principal as string))].sort()
+        : projectKeys;
+      for (const value of values) {
+        const projectNode = preset === "project"
+          ? data.nodes.find((node) => node.node_type === "project" && node.project_id === value)
+          : undefined;
+        const item = document.createElement(projectNode ? "button" : "span");
+        item.className = `memory-map-project-legend-item${projectNode ? " is-clickable" : ""}`;
+        if (projectNode) {
+          (item as HTMLButtonElement).type = "button";
+          item.dataset.projectId = value;
+          item.dataset.projectLegendItem = "true";
+          item.setAttribute("aria-pressed", "false");
+          item.title = `${value} をマップ上でフォーカス`;
+          item.setAttribute("aria-label", `${value} をマップ上でフォーカス`);
+          item.addEventListener("click", () => focusProjectNode(projectNode));
+        }
+        const dot = document.createElement("i");
+        const color = hashColor(value);
+        dot.style.background = color;
+        const label = document.createElement("span");
+        label.textContent = value;
+        label.style.color = color;
+        item.appendChild(dot);
+        item.appendChild(label);
+        projectLegend.appendChild(item);
+      }
+    };
+    const focusGraphNode = (node: MapNode) => {
+      if (!graph) {
+        pendingFocusId = node.id;
+        return;
+      }
+      hasFocusedNode = true;
+      pendingFocusId = "";
+      const focusIds = directRelatedNodeIdsFor(node.id);
+      graph.zoomToFit(800, node.node_type === "project" ? 72 : 52, (candidate) => focusIds.has(candidate.id));
+    };
+    const focusProjectNode = (node: MapNode) => {
+      selectNode(node);
+      focusGraphNode(node);
+    };
+    const selectNode = (node: MapNode | null) => {
+      selectedId = node?.id || "";
+      detailRequestId += 1;
+      selectedRelatedIds = node ? relatedNodeIdsFor(node.id) : new Set<string>();
+      root.querySelectorAll<HTMLElement>("[data-project-legend-item]").forEach((item) => {
+        const focused = Boolean(node?.node_type === "project" && node.project_id && item.dataset.projectId === node.project_id);
+        item.classList.toggle("is-focused", focused);
+        item.setAttribute("aria-pressed", String(focused));
+      });
+      const isDecision = node?.node_type === "decision";
+      const isProject = node?.node_type === "project";
+      const isEntity = node?.node_type === "entity";
+      const isTenant = node?.node_type === "tenant";
+      const isMemory = node?.node_type === "memory" || Boolean(node?.memory_id);
+      clearInspectorDetails();
+      if (node) {
+        renderNodeMetadata(node);
+      }
+      if (inspectorKind) inspectorKind.textContent = node ? ({ tenant: "Tenant root", project: "Project hub", entity: "Shared concept", decision: "Decision", memory: "Memory" }[node.node_type || "memory"] || "Node") : "Nothing selected";
+      if (inspectorTitle) inspectorTitle.textContent = node?.label || "ノードを選択";
+      if (inspectorSummary) inspectorSummary.textContent = node
+        ? isDecision
+          ? `Decision / ${node.decision_type || "related rationale"} · ${node.confirmation_state || "unconfirmed"}`
+          : isTenant
+            ? `Tenant root · ${node.member_count || 0} projects · ${node.reference_count.toLocaleString()} memories`
+          : isProject
+            ? `Project hub · ${node.member_count || node.reference_count} visible members`
+            : isEntity
+              ? `Shared concept / ${node.entity_type || "entity"} · ${node.reference_count} memories`
+              : (node.summary || node.label)
+        : "星を選択すると、所有者・参照数・純削減を確認できます。";
+      if (inspectorProject) inspectorProject.textContent = node?.project_id || (isTenant ? "テナント直下" : "未設定");
+      if (inspectorOwner) inspectorOwner.textContent = node?.owner_principal || "未割り当て";
+      if (inspectorRefs) inspectorRefs.textContent = node
+        ? isDecision
+          ? `related memory · ${node.related_memory_id || "—"}`
+          : isTenant
+            ? `${node.member_count || 0} projects / ${node.reference_count.toLocaleString()} memories`
+          : isProject
+            ? `${node.member_count || node.reference_count} members`
+            : isEntity
+              ? `${node.reference_count} memories / ${node.entity_link_count || node.reference_count} links`
+              : `${node.reference_count} refs / ${node.consumer_count} people`
+        : "—";
+      if (inspectorUtilization) inspectorUtilization.textContent = node?.utilization_rate === null || !node ? "未計測" : `${Math.round(node.utilization_rate * 100)}%`;
+      if (inspectorSaved) inspectorSaved.textContent = node ? `${node.net_saved_tokens.toLocaleString()} tokens` : "—";
+      if (inspectorLink) inspectorLink.href = node?.memory_id
+        ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}&view=search&page=1&selected=${encodeURIComponent(node.memory_id)}`
+        : node?.decision_id
+          ? `/decisions?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&selected=${encodeURIComponent(node.decision_id)}`
+          : isTenant
+            ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}`
+          : isProject
+            ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}&project_id=${encodeURIComponent(node.project_id || "")}`
+            : isEntity
+              ? `/memories/constellation?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}&q=${encodeURIComponent(node.label)}`
+          : "/memories";
+      if (isMemory && node) void loadMemoryDetail(node);
+      updateGlowAppearance();
+      graph?.nodeColor?.(colorFor);
+      graph?.linkColor?.(linkColorFor);
+      graph?.linkVisibility?.(linkVisible);
+      graph?.linkWidth?.(linkWidthFor);
+    };
+    renderLegend();
+    const initialNode = data.nodes.find((node) => node.id === selectedId || node.memory_id === selectedId || node.decision_id === selectedId || node.id === selectedId.replace(/^memory:/, ""));
+    if (initialNode) selectNode(initialNode);
+    const renderFallback = (reason: string) => {
+      if (stage) stage.hidden = true;
+      if (fallback) fallback.hidden = false;
+      if (fallbackList) {
+        fallbackList.innerHTML = "";
+        for (const node of data.nodes.filter((candidate) => candidate.node_type === "memory").filter(visible).slice(0, 24)) {
+          const item = document.createElement("li");
+          item.innerHTML = `<span class="fallback-node-dot" style="background:${colorFor(node)}"></span><div><strong></strong><small></small></div><b></b>`;
+          const strong = item.querySelector("strong");
+          const small = item.querySelector("small");
+          const count = item.querySelector("b");
+          if (strong) strong.textContent = node.label;
+          if (small) small.textContent = `${node.project_id || "no-project"} · ${node.owner_principal || "unassigned"}`;
+          if (count) count.textContent = `${node.reference_count} refs`;
+          item.addEventListener("click", () => selectNode(node));
+          fallbackList.appendChild(item);
+        }
+      }
+      if (inspectorSummary && reason) inspectorSummary.textContent = `${reason} ${inspectorSummary.textContent || ""}`.trim();
+    };
+    const redirectToList = (reason: string) => {
+      renderFallback(reason);
+      if (fallbackScheduled) return;
+      fallbackScheduled = true;
+      window.setTimeout(() => {
+        window.location.replace(root.dataset.listHref || "/memories");
+      }, 450);
+    };
+    const supports3D = () => {
+      const mobile = window.matchMedia("(max-width: 760px)").matches;
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const canvas = document.createElement("canvas");
+      const webgl = Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+      return !mobile && !reduced && webgl;
+    };
+    const updateGraph = () => {
+      if (!graph) return;
+      updateGlowAppearance();
+      graph?.nodeColor?.(colorFor);
+      graph?.nodeVal?.(nodeValue);
+      graph?.nodeVisibility?.(visible);
+      graph?.linkColor?.(linkColorFor);
+      graph?.linkVisibility?.(linkVisible);
+      graph?.linkWidth?.(linkWidthFor);
+    };
+    const centerGraph = (durationMs = 450) => {
+      if (!graph) return;
+      graph.zoomToFit(durationMs, 32);
+      window.setTimeout(() => {
+        if (!graph) return;
+        const positionedNodes = data.nodes as Array<MapNode & { x?: number; y?: number; z?: number }>;
+        const placed = positionedNodes.filter((node) => [node.x, node.y, node.z].every((value) => typeof value === "number" && Number.isFinite(value)));
+        if (placed.length === 0) return;
+        const bounds = placed.reduce((acc, node) => ({
+          minX: Math.min(acc.minX, node.x as number),
+          maxX: Math.max(acc.maxX, node.x as number),
+          minY: Math.min(acc.minY, node.y as number),
+          maxY: Math.max(acc.maxY, node.y as number),
+          minZ: Math.min(acc.minZ, node.z as number),
+          maxZ: Math.max(acc.maxZ, node.z as number)
+        }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity });
+        const center = {
+          x: (bounds.minX + bounds.maxX) / 2,
+          y: (bounds.minY + bounds.maxY) / 2,
+          z: (bounds.minZ + bounds.maxZ) / 2
+        };
+        if (!Object.values(center).every((value) => Number.isFinite(value))) return;
+        const camera = graph.cameraPosition();
+        graph.cameraPosition({ x: camera.x + center.x, y: camera.y + center.y, z: camera.z + center.z }, center, durationMs);
+      }, Math.max(120, durationMs));
+    };
+    let resizeTimer = 0;
+    const resizeObserver = stage && typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => {
+          if (!graph || !stage) return;
+          graph.width(stage.clientWidth).height(stage.clientHeight);
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(() => centerGraph(350), 120);
+        })
+      : null;
+    search?.addEventListener("input", updateGraph);
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-map-preset]")) {
+      button.addEventListener("click", () => {
+        preset = button.dataset.mapPreset || "project";
+        root.querySelectorAll("[data-map-preset]").forEach((candidate) => candidate.classList.toggle("is-active", candidate === button));
+        renderLegend();
+        updateGraph();
+      });
+    }
+    if (!supports3D()) {
+      redirectToList(data.cluster_mode ? "クラスタ表示へ切り替えられないため一覧表示にします。" : "モバイル、WebGL非対応、または軽減モーション設定のため一覧表示にします。");
+    } else if (stage) {
+      (async () => {
+        try {
+          const [module, THREE] = await Promise.race([
+            Promise.all([
+              import("3d-force-graph"),
+              import("three")
+            ]),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("3D library load timeout")), 5000))
+          ]);
+          const ForceGraph3D = module.default as unknown as new (element: HTMLElement) => GraphInstance;
+          threeInstance = THREE;
+          svgProjectionVector = new THREE.Vector3();
+          graph = new ForceGraph3D(stage)
+            .backgroundColor("#050a12")
+            .showNavInfo(false)
+            .nodeLabel((node: MapNode) => {
+              if (node.node_type === "tenant") return `Tenant root · ${node.label}<br/>${node.member_count || 0} projects · ${node.reference_count || 0} memories`;
+              if (node.node_type === "project") return `Project hub · ${node.label}<br/>${node.member_count || node.reference_count} members`;
+              if (node.node_type === "entity") return `Shared concept · ${node.label}<br/>${node.reference_count} memories`;
+              if (node.node_type === "decision") return `Decision · ${node.label}<br/>${node.confirmation_state || "unconfirmed"}`;
+              return `${node.label}<br/>${node.owner_principal || "unassigned"} · ${node.reference_count} refs`;
+            })
+            .nodeThreeObject((node: MapNode) => createGlowNodeObject(node, THREE))
+            .nodeThreeObjectExtend(false)
+            .nodeVal(nodeValue)
+            .nodeColor(colorFor)
+            .nodeOpacity(0.92)
+            .linkColor(linkColorFor)
+            .linkVisibility(linkVisible)
+            .linkWidth(linkWidthFor)
+            .linkCurvature(linkCurvatureFor)
+            .linkOpacity(0.6)
+            .linkDirectionalArrowLength((link: GraphLink) => link.directed === false ? 0 : 2.4)
+            .linkDirectionalArrowRelPos(1)
+            .linkDirectionalParticles(linkParticlesFor)
+            .linkDirectionalParticleSpeed(0.012)
+            .linkDirectionalParticleWidth(1.3)
+            .linkDirectionalParticleColor(linkColorFor)
+            .onNodeClick(selectNode)
+            .onBackgroundClick(() => selectNode(null))
+            .graphData({ nodes: data.nodes, links: data.links });
+          updateGlowAppearance();
+          graph.width(stage.clientWidth).height(stage.clientHeight);
+          graph.d3Force("charge")?.strength?.(-65);
+          window.setTimeout(() => {
+            if (pendingFocusId) return;
+            if (!hasFocusedNode) centerGraph(650);
+          }, 900);
+          window.setTimeout(() => {
+            if (pendingFocusId) return;
+            if (!hasFocusedNode) centerGraph(500);
+          }, 2400);
+          if (pendingFocusId) {
+            const pendingNode = data.nodes.find((node) => node.id === pendingFocusId);
+            if (pendingNode) window.setTimeout(() => focusGraphNode(pendingNode), 1100);
+          }
+          stage.hidden = false;
+          if (fallback) fallback.hidden = true;
+          startSvgGlowLoop();
+          resizeObserver?.observe(stage);
+          stage.querySelector("canvas")?.addEventListener("webglcontextlost", () => {
+            redirectToList("3D描画が停止したため一覧表示にします。");
+          }, { once: true });
+          window.setTimeout(() => {
+            const canvas = stage.querySelector("canvas");
+            const bounds = stage.getBoundingClientRect();
+            if (!canvas || canvas.width < 2 || canvas.height < 2 || bounds.width < 10 || bounds.height < 10) {
+              redirectToList("3D描画を確認できなかったため一覧表示にします。");
+            }
+          }, 2500);
+          if (data.nodes.length > 0 && !budgetedGlow) {
+            window.setInterval(() => {
+              glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
+              updateGlowAppearance();
+              graph?.nodeColor?.(colorFor);
+              graph?.nodeVal?.(nodeValue);
+            }, 90);
+          }
+        } catch (error) {
+          console.error("MemoryMap3D initialization failed", error);
+          redirectToList("3Dライブラリの読み込みに失敗したため一覧表示にします。");
+        }
+      })();
+    }
+  }
+</script>
+
+<style>
+  .memory-map-shell { display:grid; gap:1rem; }.memory-map-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:end; padding:1.5rem 0 .5rem; }.memory-map-header h1 { margin-top:.45rem; color:#effaff; font-size:clamp(2.2rem,5vw,4.5rem); letter-spacing:-.075em; line-height:.95; }.memory-map-header p:not(.intelligence-eyebrow) { max-width:50rem; margin-top:1rem; color:rgba(191,216,235,.7); line-height:1.7; }.memory-map-count { display:grid; gap:.2rem; justify-items:end; color:rgba(191,216,235,.52); font: .7rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.12em; }.memory-map-count strong { color:#f2fbff; font:600 3rem Inter,sans-serif; letter-spacing:-.08em; }.memory-map-toolbar { display:flex; flex-wrap:wrap; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(90,172,238,.2); border-radius:22px; background:rgba(7,17,31,.78); }.memory-map-search { flex:1 1 18rem; margin:0; }.memory-map-search span { display:block; margin-bottom:.35rem; }.memory-map-search input { min-height:2.7rem; border-radius:14px; }.memory-map-presets { display:flex; gap:.3rem; }.memory-map-presets button { min-height:2.7rem; border-radius:999px; padding:0 .8rem; border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(224,241,248,.7); box-shadow:none; font-size:.75rem; }.memory-map-presets button.is-active,.memory-map-presets button:hover { border-color:rgba(99,189,255,.5); background:rgba(22,135,255,.17); color:#effaff; }.memory-map-list-link { display:inline-flex; min-height:2.7rem; align-items:center; padding:0 .9rem; border:1px solid rgba(255,184,77,.28); border-radius:999px; color:#ffd989; font-size:.78rem; font-weight:600; }.memory-map-filters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(255,255,255,.08); border-radius:18px; background:rgba(4,11,21,.7); }.memory-map-filters label { display:grid; gap:.35rem; margin:0; }.memory-map-filters span { color:rgba(191,216,235,.48); font: .65rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.08em; }.memory-map-filters input { min-height:2.5rem; border-radius:12px; }.memory-map-filters button { min-height:2.5rem; white-space:nowrap; }.memory-map-layout { display:grid; grid-template-columns:minmax(0,1fr) 20rem; gap:1rem; }.memory-map-stage { min-height:38rem; overflow:hidden; border:1px solid rgba(90,172,238,.2); border-radius:28px; background:#050a12; box-shadow:inset 0 0 80px rgba(22,135,255,.06),0 25px 80px rgba(0,0,0,.28); }.memory-map-inspector { align-self:start; position:sticky; top:5rem; display:grid; gap:.8rem; border:1px solid rgba(90,172,238,.2); border-radius:24px; padding:1.1rem; background:linear-gradient(180deg,rgba(8,20,36,.94),rgba(4,11,21,.92)); }.memory-map-inspector h2 { color:#f1fbff; font-size:1.15rem; letter-spacing:-.035em; }.memory-map-inspector > p:not(.intelligence-eyebrow) { color:rgba(191,216,235,.64); font-size:.78rem; line-height:1.6; }.memory-map-inspector dl { display:grid; gap:.5rem; margin-top:.4rem; }.memory-map-inspector dl div { display:flex; justify-content:space-between; gap:.75rem; padding-top:.5rem; border-top:1px solid rgba(255,255,255,.07); }.memory-map-inspector dt { color:rgba(191,216,235,.46); font-size:.68rem; }.memory-map-inspector dd { max-width:10rem; overflow:hidden; color:#eaf8ff; font: .7rem "Fira Code",monospace; text-align:right; text-overflow:ellipsis; white-space:nowrap; }.memory-map-open { display:inline-flex; min-height:2.6rem; align-items:center; justify-content:center; border:1px solid rgba(99,189,255,.32); border-radius:14px; background:rgba(22,135,255,.12); color:#dff5ff; font-size:.78rem; font-weight:600; }.memory-map-fallback { min-height:38rem; overflow:auto; border:1px solid rgba(90,172,238,.2); border-radius:28px; padding:1rem; background:rgba(5,12,22,.9); }.memory-map-fallback-note { display:grid; gap:.3rem; margin-bottom:1rem; padding:.8rem; border-radius:16px; background:rgba(255,184,77,.08); }.memory-map-fallback-note strong { color:#ffe4ad; font-size:.8rem; }.memory-map-fallback-note span { color:rgba(255,228,173,.65); font-size:.72rem; }.memory-map-fallback-note a { display:inline-flex; width:max-content; margin-top:.3rem; padding:.45rem .65rem; border:1px solid rgba(255,216,137,.32); border-radius:10px; color:#ffe4ad; font-size:.72rem; font-weight:600; }.memory-map-fallback ul { display:grid; gap:.35rem; }.memory-map-fallback li { display:grid; grid-template-columns:.6rem minmax(0,1fr) auto; gap:.65rem; align-items:center; cursor:pointer; padding:.65rem .5rem; border-bottom:1px solid rgba(255,255,255,.06); }.fallback-node-dot { width:.55rem; height:.55rem; border-radius:50%; }.memory-map-fallback li strong,.memory-map-fallback li small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.memory-map-fallback li strong { color:#eefaff; font-size:.78rem; }.memory-map-fallback li small { margin-top:.2rem; color:rgba(191,216,235,.5); font-size:.65rem; }.memory-map-fallback li b { color:#ffd989; font: .68rem "Fira Code",monospace; white-space:nowrap; }.memory-map-footer { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; color:rgba(191,216,235,.48); font-size:.7rem; }.memory-map-legend { display:flex; align-items:center; gap:.4rem; color:rgba(191,216,235,.66); }.legend-sample { width:.55rem; height:.55rem; display:inline-block; border-radius:50%; }.legend-blue { background:#54b7ff; }.legend-amber { background:#ffb84d; }.legend-mint { background:#55dfbb; }.legend-line { width:1.1rem; height:1px; display:inline-block; opacity:.8; }.legend-line-project { background:#91aabe; }.legend-line-entity { background:#d5e7ef; }
+  @media (max-width:1100px){.memory-map-filters{grid-template-columns:repeat(2,minmax(0,1fr));}}@media (max-width:900px){.memory-map-layout{grid-template-columns:1fr;}.memory-map-inspector{position:static;}.memory-map-stage{min-height:30rem;}}@media (max-width:760px){.memory-map-header{grid-template-columns:1fr;}.memory-map-count{justify-items:start;}.memory-map-toolbar{align-items:stretch;}.memory-map-presets{width:100%;}.memory-map-presets button{flex:1;}.memory-map-list-link{justify-content:center;}.memory-map-filters{grid-template-columns:1fr;}.memory-map-filters button{width:100%;}.memory-map-stage{min-height:0;}.memory-map-footer{align-items:flex-start;flex-direction:column;}}
+</style>
+
+<style>
+  .memory-map-inspector { max-height: calc(100vh - 6rem); overflow-y: auto; scrollbar-color: rgba(99,189,255,.42) rgba(255,255,255,.04); }
+  .memory-map-node-kind { color: #ffd989; font: .64rem "Fira Code", monospace; letter-spacing: .12em; text-transform: uppercase; }
+  .memory-map-inspector-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-top: .1rem; }
+  .memory-map-inspector-summary-grid div { display: grid; align-content: start; gap: .28rem; min-height: 4.2rem; padding: .62rem .68rem; border: 1px solid rgba(99,189,255,.13); border-radius: 13px; background: linear-gradient(145deg, rgba(99,189,255,.08), rgba(255,255,255,.025)); }
+  .memory-map-inspector-summary-grid dt { color: rgba(159,195,219,.58); font: .58rem "Fira Code", monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .memory-map-inspector-summary-grid dd { max-width: none; overflow-wrap: anywhere; color: #effaff; font: 600 .76rem/1.35 "Fira Code", monospace; text-align: left; white-space: normal; }
+  .memory-map-inspector-detail { display: grid; gap: .9rem; }
+  .memory-map-inspector-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .memory-map-inspector-metadata .memory-map-inspector-field { display: grid; grid-template-columns: 1fr; gap: .24rem; min-width: 0; padding: .62rem .68rem; border: 1px solid rgba(255,255,255,.08); border-radius: 13px; background: rgba(255,255,255,.035); }
+  .memory-map-inspector-metadata .memory-map-inspector-field-label { color: rgba(159,195,219,.52); font: .58rem "Fira Code", monospace; letter-spacing: .07em; text-transform: uppercase; }
+  .memory-map-inspector-metadata .memory-map-inspector-field-value { max-width: none; overflow-wrap: anywhere; color: #dff5ff; font: .7rem/1.45 "Fira Code", monospace; text-align: left; white-space: pre-wrap; }
+  .memory-map-inspector-metadata .memory-map-inspector-field:nth-child(4n + 1), .memory-map-inspector-metadata .memory-map-inspector-field:nth-child(4n + 2) { background: rgba(99,189,255,.055); }
+  .memory-map-inspector-status { padding: .65rem .7rem; border: 1px solid rgba(255,184,77,.22); border-radius: 12px; background: rgba(255,184,77,.08); color: #ffe4ad; font-size: .7rem; line-height: 1.55; }
+  .memory-map-inspector-section { display: grid; gap: .55rem; padding-top: .8rem; border-top: 1px solid rgba(255,255,255,.08); }
+  .memory-map-inspector-section h3 { color: #dff5ff; font-size: .75rem; letter-spacing: .04em; }
+  .memory-map-inspector-content { max-height: 18rem; overflow: auto; margin: 0; padding: .75rem; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(0,0,0,.2); color: rgba(224,241,248,.78); font: .68rem/1.7 "Fira Code", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memory-map-tag-list { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .memory-map-tag { display: inline-flex; padding: .28rem .48rem; border: 1px solid rgba(99,189,255,.22); border-radius: 999px; background: rgba(99,189,255,.08); color: #cdefff; font: .64rem "Fira Code", monospace; }
+  .memory-map-records { display: grid; gap: .5rem; }
+  .memory-map-record { display: grid; gap: .28rem; padding: .65rem .7rem; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.035); }
+  .memory-map-record strong { color: #f2fbff; font-size: .73rem; line-height: 1.4; }
+  .memory-map-record small { color: rgba(191,216,235,.48); font: .61rem/1.5 "Fira Code", monospace; }
+  .memory-map-record p { color: rgba(224,241,248,.7); font-size: .68rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memory-map-record code { padding: .35rem .45rem; border-radius: 8px; background: rgba(0,0,0,.2); color: rgba(191,216,235,.62); font: .61rem/1.45 "Fira Code", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memory-map-project-legend { display: flex; flex-wrap: wrap; gap: .28rem .45rem; max-width: min(58rem, 100%); max-height: 4.2rem; overflow: auto; }
+  .memory-map-project-legend-item { display: inline-flex; align-items: center; gap: .22rem; color: rgba(191,216,235,.62); font: .6rem "Fira Code", monospace; white-space: nowrap; }
+  .memory-map-project-legend-item i { width: .48rem; height: .48rem; display: inline-block; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+  .legend-utilization-gradient { width: 4.5rem; height: .48rem; display: inline-block; border-radius: 99px; background: linear-gradient(90deg, #e85c5c, #d9e85f, #42d6ac); }
+  .legend-line-source { background: #9cc9df; box-shadow: 0 0 8px rgba(156,201,223,.45); }
+  @media (max-width: 900px) { .memory-map-inspector { max-height: none; overflow: visible; } }
+  @media (max-width: 520px) { .memory-map-inspector-summary-grid, .memory-map-inspector-metadata { grid-template-columns: 1fr; } }
+
+  /* Compact command deck: keep the graph in the first viewport. */
+  .memory-map-shell { gap: .55rem; }
+  .memory-map-header { grid-template-columns: 1fr; gap: .12rem; align-items: start; padding: .25rem 0 .1rem; }
+  .memory-map-header h1 { margin-top: .18rem; font-size: clamp(1.8rem, 4vw, 3.25rem); }
+  .memory-map-header .intelligence-eyebrow { margin: 0; font-size: .58rem; }
+  .memory-map-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .45rem; align-items: center; padding: .45rem; border-radius: 16px; }
+  .memory-map-search span { display: none; }
+  .memory-map-search input { min-height: 2.35rem; border-radius: 11px; }
+  .memory-map-presets button, .memory-map-list-link { min-height: 2.35rem; }
+  .memory-map-presets button { padding: 0 .62rem; }
+  .memory-map-list-link { padding: 0 .7rem; }
+  .memory-map-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(18rem, 1.55fr) auto; gap: .45rem; align-items: end; padding: .45rem; border-radius: 16px; }
+  .memory-map-filters label { gap: .2rem; min-width: 0; }
+  .memory-map-filters span, .memory-map-date-range legend { font-size: .57rem; letter-spacing: .06em; }
+  .memory-map-filters select, .memory-map-filters input { width: 100%; min-width: 0; min-height: 2.3rem; border-radius: 11px; }
+  .memory-map-filters button { min-height: 2.3rem; padding: 0 .8rem; }
+  .memory-map-date-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .35rem; align-items: end; min-width: 0; margin: 0; padding: .28rem .42rem .34rem; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; }
+  .memory-map-date-range legend { padding: 0 .24rem; color: rgba(191,216,235,.48); font: .65rem "Fira Code", monospace; text-transform: uppercase; }
+  .memory-map-date-range label { gap: .16rem; }
+  .memory-map-date-range label span { font-size: .52rem; }
+  .memory-map-range-arrow { align-self: center; padding-bottom: .15rem; color: rgba(191,216,235,.42); font: .8rem "Fira Code", monospace; }
+  .memory-map-layout { grid-template-columns: minmax(0, 1fr) 30rem; gap: .75rem; }
+  .memory-map-stage, .memory-map-fallback { min-height: clamp(28rem, calc(100vh - 13rem), 38rem); }
+  .memory-map-inspector { width: auto; padding: .95rem; }
+  .memory-map-project-legend { max-height: 3.1rem; }
+  .memory-map-legend { flex-wrap: wrap; gap: .25rem .4rem; }
+  .memory-map-project-legend-item { font-size: .59rem; }
+  .memory-map-inspector,
+  .memory-map-inspector > *,
+  .memory-map-inspector-summary-grid,
+  .memory-map-inspector-summary-grid > div,
+  .memory-map-inspector-detail,
+  .memory-map-inspector-detail > *,
+  .memory-map-inspector-section > *,
+  .memory-map-inspector-metadata,
+  .memory-map-inspector-metadata > * { min-width: 0; }
+  .memory-map-inspector h2,
+  .memory-map-inspector p,
+  .memory-map-inspector dd,
+  .memory-map-inspector-field-value { overflow-wrap: anywhere; word-break: break-word; }
+  @media (max-width: 1100px) {
+    .memory-map-layout { grid-template-columns: minmax(0, 1fr) 26rem; }
+    .memory-map-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(16rem, 1.45fr) auto; }
+  }
+  @media (max-width: 900px) {
+    .memory-map-layout { grid-template-columns: 1fr; }
+    .memory-map-inspector { width: 100%; }
+  }
+  @media (max-width: 760px) {
+    .memory-map-toolbar { display: flex; align-items: stretch; }
+    .memory-map-search { flex: 1 1 100%; }
+    .memory-map-presets { flex: 1 1 auto; }
+    .memory-map-list-link { flex: 0 0 auto; }
+    .memory-map-filters { grid-template-columns: 1fr; }
+    .memory-map-date-range { min-height: 4.4rem; }
+    .memory-map-filters button { width: 100%; }
+  }
+</style>
+
+<style is:global>
+  /* Metadata and history rows are created after hydration, so keep their visual contract global. */
+  .memory-map-stage-shell { position: relative; overflow: hidden; border: 1px solid rgba(90,172,238,.2); border-radius: 28px; background: #050a12; box-shadow: inset 0 0 80px rgba(22,135,255,.06), 0 25px 80px rgba(0,0,0,.28); }
+  .memory-map-stage-shell > .memory-map-stage { border: 0; border-radius: inherit; box-shadow: none; }
+  .memory-map-stage { position: relative; }
+  .memory-map-glow-overlay { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .memory-map-glow-overlay [data-map-svg-glow] { mix-blend-mode: screen; }
+  .memory-map-inspector-detail > *,
+  .memory-map-inspector-section > *,
+  .memory-map-inspector-metadata,
+  .memory-map-inspector-metadata > * { min-width: 0; }
+  .memory-map-inspector-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .memory-map-inspector-metadata .memory-map-inspector-field { display: grid; grid-template-columns: 1fr; gap: .24rem; min-width: 0; padding: .62rem .68rem; border: 1px solid rgba(255,255,255,.08); border-radius: 13px; background: rgba(255,255,255,.035); }
+  .memory-map-inspector-metadata .memory-map-inspector-field-label { color: rgba(159,195,219,.52); font: .58rem "Fira Code", monospace; letter-spacing: .07em; text-transform: uppercase; }
+  .memory-map-inspector-metadata .memory-map-inspector-field-value { max-width: none; min-width: 0; overflow-wrap: anywhere; color: #dff5ff; font: .7rem/1.45 "Fira Code", monospace; text-align: left; white-space: pre-wrap; word-break: break-word; }
+  .memory-map-inspector-metadata .memory-map-inspector-field:nth-child(4n + 1),
+  .memory-map-inspector-metadata .memory-map-inspector-field:nth-child(4n + 2) { background: rgba(99,189,255,.055); }
+  .memory-map-inspector-records { display: grid; gap: .5rem; min-width: 0; }
+  .memory-map-record { display: grid; gap: .28rem; min-width: 0; max-width: 100%; padding: .65rem .7rem; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.035); }
+  .memory-map-record strong { min-width: 0; max-width: 100%; color: #f2fbff; font-size: .73rem; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
+  .memory-map-record small { min-width: 0; max-width: 100%; color: rgba(191,216,235,.48); font: .61rem/1.5 "Fira Code", monospace; overflow-wrap: anywhere; word-break: break-word; }
+  .memory-map-record p { min-width: 0; max-width: 100%; color: rgba(224,241,248,.7); font-size: .68rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  .memory-map-record code { display: block; min-width: 0; max-width: 100%; padding: .35rem .45rem; border-radius: 8px; background: rgba(0,0,0,.2); color: rgba(191,216,235,.62); font: .61rem/1.45 "Fira Code", monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  .memory-map-tag-list { display: flex; flex-wrap: wrap; gap: .35rem; min-width: 0; }
+  .memory-map-tag { display: inline-flex; max-width: 100%; padding: .28rem .48rem; border: 1px solid rgba(99,189,255,.22); border-radius: 999px; background: rgba(99,189,255,.08); color: #cdefff; font: .64rem "Fira Code", monospace; overflow-wrap: anywhere; word-break: break-word; }
+  .memory-map-project-legend-item.is-clickable { appearance: none; cursor: pointer; padding: .18rem .28rem; border: 1px solid transparent; border-radius: 7px; background: transparent; font: inherit; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+  .memory-map-project-legend-item.is-clickable:hover,
+  .memory-map-project-legend-item.is-clickable:focus-visible,
+  .memory-map-project-legend-item.is-clickable.is-focused { border-color: color-mix(in srgb, currentColor 42%, transparent); background: rgba(99,189,255,.08); outline: none; transform: translateY(-1px); }
+  .memory-map-project-legend-item.is-clickable:focus-visible { box-shadow: 0 0 0 2px rgba(99,189,255,.25); }
+  .legend-arrow { color: #d9e9f2; font: 1rem "Fira Code", monospace; text-shadow: 0 0 8px rgba(213,231,239,.42); }
+
+  /* The inspector is a reading surface: keep its data one step above the map chrome. */
+  .memory-map-inspector { font-size: 1rem; }
+  .memory-map-inspector .memory-map-node-kind { font-size: .72rem; }
+  .memory-map-inspector h2 { font-size: 1.3rem; }
+  .memory-map-inspector > p:not(.intelligence-eyebrow) { font-size: .88rem; line-height: 1.7; }
+  .memory-map-inspector-summary-grid dt { font-size: .64rem; }
+  .memory-map-inspector-summary-grid dd { font-size: .84rem; line-height: 1.45; }
+  .memory-map-inspector-metadata .memory-map-inspector-field-label { font-size: .64rem; }
+  .memory-map-inspector-metadata .memory-map-inspector-field-value { font-size: .78rem; line-height: 1.55; }
+  .memory-map-inspector-status { font-size: .78rem; }
+  .memory-map-inspector-section h3 { font-size: .84rem; }
+  .memory-map-inspector-content { font-size: .76rem; line-height: 1.75; }
+  .memory-map-tag { font-size: .7rem; }
+  .memory-map-record strong { font-size: .82rem; }
+  .memory-map-record small { font-size: .68rem; }
+  .memory-map-record p { font-size: .74rem; line-height: 1.65; }
+  .memory-map-record code { font-size: .68rem; line-height: 1.55; }
+  .memory-map-open { font-size: .86rem; }
+  @media (max-width: 520px) {
+    .memory-map-inspector-metadata { grid-template-columns: 1fr; }
+  }
+</style>

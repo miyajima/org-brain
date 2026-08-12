@@ -1,5 +1,6 @@
 ---
 import KnowledgeConstellation from "../../components/intelligence/KnowledgeConstellation.astro";
+import MemoryMap3D from "../../components/intelligence/MemoryMap3D.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
 import { intelligencePageCopy } from "../../lib/intelligence-locale";
@@ -10,9 +11,21 @@ const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processIns
 if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
   return Astro.redirect(`/memories${Astro.url.search}`);
 }
-const { params, apiParams, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const { params, apiParams, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = intelligencePageCopy(lang);
 const query = params.get("q")?.trim();
+const ownerPrincipal = params.get("owner_principal")?.trim() || "";
+const dateValue = (raw: string | null, endOfDay = false): number | null => {
+  if (!raw) return null;
+  const numericValue = Number(raw);
+  if (Number.isFinite(numericValue)) return numericValue;
+  const parsed = Date.parse(`${raw}T${endOfDay ? "23:59:59.999" : "00:00:00"}+09:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const fromTimestamp = dateValue(params.get("from_date")) ?? dateValue(params.get("from"));
+const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.get("to"), true);
+const fromDate = params.get("from_date")?.trim() || (fromTimestamp ? new Date(fromTimestamp).toISOString().slice(0, 10) : "");
+const toDate = params.get("to_date")?.trim() || (toTimestamp ? new Date(toTimestamp).toISOString().slice(0, 10) : "");
 if (query) apiParams.set("q", query);
 apiParams.set("depth", "2");
 const selected = params.get("selected")?.trim();
@@ -32,6 +45,70 @@ const result = await fetchDashboardData(
   normalizeKnowledgeGraph,
   normalizeKnowledgeGraph({})
 );
+type MemoryMapData = {
+  scope: "mine" | "org";
+  cluster_mode: boolean;
+  total_count: number;
+  visible_count?: number;
+  memory_visible_count?: number;
+  project_count?: number;
+  entity_count?: number;
+  decision_count?: number;
+  related_count?: number;
+  relationship_count?: number;
+  cross_project_link_count?: number;
+  truncated?: boolean;
+  nodes: Array<{
+    id: string;
+    node_type?: "memory" | "decision" | "project" | "entity" | "tenant";
+    memory_id: string | null;
+    decision_id?: string | null;
+    related_memory_id?: string | null;
+    entity_id?: string | null;
+    entity_type?: string | null;
+    entity_link_count?: number;
+    member_count?: number;
+    label: string;
+    summary?: string | null;
+    project_id: string | null;
+    owner_principal: string | null;
+    created_by_principal: string | null;
+    reference_count: number;
+    consumer_count: number;
+    used_count: number;
+    utilization_rate: number | null;
+    net_saved_tokens: number;
+    injected_tokens: number;
+    updated_at?: number | null;
+    cluster_key?: string;
+    decision_type?: string | null;
+    confirmation_state?: string | null;
+    confidence_score?: number | null;
+    cross_project_link_count?: number;
+    fx?: number;
+    fy?: number;
+    fz?: number;
+  }>;
+  links: Array<{ id: string; source: string; target: string; relation: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean }>;
+  clusters: Array<{ id: string; kind: string; label: string; node_ids: string[] }>;
+};
+const mapParams = new URLSearchParams({
+  tenant_id: params.get("tenant_id") || "default",
+  scope: params.get("scope") === "mine" ? "mine" : "org",
+  display: "top",
+  limit: "80"
+});
+if (projectId) mapParams.set("project_id", projectId);
+if (query) mapParams.set("q", query);
+if (ownerPrincipal) mapParams.set("owner_principal", ownerPrincipal);
+if (fromTimestamp !== null) mapParams.set("from", String(fromTimestamp));
+if (toTimestamp !== null) mapParams.set("to", String(toTimestamp));
+const mapResult = await fetchDashboardData<MemoryMapData>(
+  new URL(`/api/v1/dashboard/memory-map?${mapParams.toString()}`, Astro.url),
+  (value) => value as MemoryMapData,
+  { scope: mapParams.get("scope") as "mine" | "org", cluster_mode: false, total_count: 0, visible_count: 0, truncated: false, nodes: [], links: [], clusters: [] }
+);
+const legacy2d = params.get("legacy_2d") === "1";
 if (selected && !result.error && result.data.nodes.length > 0 && !result.data.nodes.some((node) => node.id === selected || node.source_id === selected)) {
   const next = new URLSearchParams(params);
   next.delete("selected");
@@ -46,5 +123,17 @@ if (selected && !result.error && result.data.nodes.length > 0 && !result.data.no
       <span>{result.error}</span>
     </div>
   )}
-  <KnowledgeConstellation data={result.data} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
+  {mapResult.error && (
+    <div class="intelligence-route-alert" role="alert">
+      <strong>3D memory map unavailable</strong>
+      <span>{mapResult.error}</span>
+    </div>
+  )}
+  {legacy2d ? (
+    <KnowledgeConstellation data={result.data} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
+  ) : (
+    <>
+      <MemoryMap3D data={mapResult.data} tenantId={params.get("tenant_id") || "default"} projectId={projectId || ""} query={query || ""} ownerPrincipal={ownerPrincipal} fromDate={fromDate} toDate={toDate} scope={mapParams.get("scope") as "mine" | "org"} selectedId={selected || ""} />
+    </>
+  )}
 </BaseLayout>

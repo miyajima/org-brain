@@ -16,6 +16,7 @@ dbx-db/
 .codegraph/
 .benchmark/
 tmp/
+.local/
 /plan.json
 /tasks.json
 /review.json

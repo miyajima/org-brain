@@ -22,6 +22,7 @@ import {
   deleteMemory,
   loadExistingMemoryIdsByExternalKeys,
   refreshMemory,
+  restoreSuppressedMemory,
   reviseMemory,
   runBatchChunks,
   suppressMemory
@@ -76,6 +77,17 @@ type UpsertMemoryItem = {
   permissions_json?: string | null;
   source_refs_json?: string | null;
   conflicts_json?: string | null;
+  owner_principal?: string | null;
+  created_by_principal?: string | null;
+  deleted_at?: number | null;
+  deleted_by_principal?: string | null;
+  delete_reason?: string | null;
+  updated_at?: number | null;
+  reference_count?: number | null;
+  used_count?: number | null;
+  consumer_count?: number | null;
+  net_saved_tokens?: number | null;
+  injected_tokens?: number | null;
 };
 
 type UpsertMemoryRequest = {
@@ -134,6 +146,8 @@ type MemoryRow = {
   source: string;
   external_key: string | null;
   created_at: number;
+  actor_type?: string | null;
+  actor_id?: string | null;
   kind?: string | null;
   lifecycle_state?: string | null;
   current_version?: number | null;
@@ -145,6 +159,17 @@ type MemoryRow = {
   permissions_json?: string | null;
   source_refs_json?: string | null;
   conflicts_json?: string | null;
+  owner_principal?: string | null;
+  created_by_principal?: string | null;
+  deleted_at?: number | null;
+  deleted_by_principal?: string | null;
+  delete_reason?: string | null;
+  updated_at?: number | null;
+  reference_count?: number | null;
+  used_count?: number | null;
+  consumer_count?: number | null;
+  net_saved_tokens?: number | null;
+  injected_tokens?: number | null;
 };
 
 type RetrievalGenerationRow = {
@@ -208,6 +233,8 @@ type ReviseMemoryRequest = {
   utility_score?: number | null;
   actor_type?: string | null;
   actor_id?: string | null;
+  project_id?: string | null;
+  owner_principal?: string | null;
   entities?: string[];
   source_references?: Array<Record<string, unknown>>;
   valid_from?: number | null;
@@ -236,6 +263,17 @@ type SuppressMemoryRequest = {
   actor_id?: string | null;
 };
 
+type TrashMemoryRequest = {
+  tenant_id?: string;
+  memory_id?: string;
+  reason?: string;
+};
+
+type RestoreMemoryRequest = {
+  tenant_id?: string;
+  memory_id?: string;
+};
+
 type ListMemoriesOptions = {
   limit?: number;
   offset?: number;
@@ -243,11 +281,19 @@ type ListMemoriesOptions = {
   projectId?: string | null;
   businessCategoryId?: string | null;
   workType?: MemoryWorkType | null;
+  ownerPrincipal?: string | null;
+  createdByPrincipal?: string | null;
+  lifecycle?: "active" | "review" | "trash" | "all";
+  includeTrashed?: boolean;
+  from?: number | null;
+  to?: number | null;
+  sort?: "created" | "updated" | "usage";
 };
 
 type PrincipalActorOptions = {
   actorPrincipal?: string | null;
   recordUsage?: boolean;
+  canManageAll?: boolean;
 };
 
 export type MemoryListPage = {
@@ -271,6 +317,17 @@ export type MemoryListPage = {
     utility_score: number | null;
     business_category_id: string | null;
     work_type: MemoryWorkType | null;
+    owner_principal: string | null;
+    created_by_principal: string | null;
+    deleted_at: number | null;
+    deleted_by_principal: string | null;
+    delete_reason: string | null;
+    updated_at: number | null;
+    reference_count: number;
+    used_count: number;
+    consumer_count: number;
+    net_saved_tokens: number;
+    injected_tokens: number;
   }>;
   meta: {
     limit: number;
@@ -288,8 +345,33 @@ export type MemoryDetail = {
   tenant_id: string;
   memory_id: string;
   memory: {
+    id: string;
+    source: string;
+    external_key: string | null;
+    created_at: number;
+    kind: string;
+    current_version: number;
+    last_accessed_at: number | null;
+    confidence_score: number | null;
+    utility_score: number | null;
     actor_type: string | null;
     actor_id: string | null;
+    owner_principal: string | null;
+    created_by_principal: string | null;
+    deleted_at: number | null;
+    deleted_by_principal: string | null;
+    delete_reason: string | null;
+    project_id: string | null;
+    content: string;
+    summary: string | null;
+    tags: string[];
+    lifecycle_state: string;
+    updated_at: number | null;
+    reference_count: number;
+    used_count: number;
+    consumer_count: number;
+    net_saved_tokens: number;
+    injected_tokens: number;
   } | null;
   versions: Array<{
     version: number;
@@ -440,6 +522,53 @@ function parseMemorySearchMode(value: unknown, field: string, fallback: MemorySe
 function normalizeActorPrincipal(principal: string | null | undefined): string | null {
   const trimmed = principal?.trim();
   return trimmed ? trimmed.slice(0, 128) : null;
+}
+
+async function assignMemoryOwnership(
+  env: Env,
+  tenantId: string,
+  memoryIds: string[],
+  creatorPrincipal: string | null
+): Promise<void> {
+  const normalizedCreator = normalizeActorPrincipal(creatorPrincipal);
+  const mapping = normalizedCreator
+    ? await env.OPEN_BRAIN_DB.prepare(
+        `SELECT owner_principal FROM principal_owner_mappings
+         WHERE tenant_id = ? AND producer_principal = ?`
+      ).bind(tenantId, normalizedCreator).first<{ owner_principal: string }>()
+    : null;
+  const ownerPrincipal = mapping?.owner_principal ?? normalizedCreator;
+  if (!ownerPrincipal && !normalizedCreator) return;
+  const uniqueIds = [...new Set(memoryIds.filter(Boolean))];
+  await runBatchChunks(env.OPEN_BRAIN_DB, uniqueIds.map((memoryId) => env.OPEN_BRAIN_DB.prepare(
+    `UPDATE memories
+     SET owner_principal = COALESCE(owner_principal, ?),
+         created_by_principal = COALESCE(created_by_principal, ?)
+     WHERE tenant_id = ? AND id = ?`
+  ).bind(ownerPrincipal, normalizedCreator, tenantId, memoryId)));
+}
+
+type MemoryOwnershipRow = {
+  owner_principal: string | null;
+  deleted_at: number | null;
+};
+
+async function assertMemoryManageAccess(
+  env: Env,
+  tenantId: string,
+  memoryId: string,
+  options: PrincipalActorOptions
+): Promise<MemoryOwnershipRow> {
+  const row = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT owner_principal, deleted_at FROM memories WHERE tenant_id = ? AND id = ?"
+  ).bind(tenantId, memoryId).first<MemoryOwnershipRow>();
+  if (!row) throw new HttpError(404, "memory_not_found", "memory not found");
+  if (options.canManageAll) return row;
+  const principal = normalizeActorPrincipal(options.actorPrincipal);
+  if (!principal || row.owner_principal !== principal) {
+    throw new HttpError(403, "memory_owner_required", "Only the memory owner or a tenant admin can change this memory");
+  }
+  return row;
 }
 
 function withPrincipalActor(rawBody: unknown, principal: string | null | undefined): unknown {
@@ -836,6 +965,12 @@ function buildMemoryListFilterSql(options: {
   projectId?: string | null;
   businessCategoryId?: string | null;
   workType?: MemoryWorkType | null;
+  ownerPrincipal?: string | null;
+  createdByPrincipal?: string | null;
+  lifecycle?: "active" | "review" | "trash" | "all";
+  includeTrashed?: boolean;
+  from?: number | null;
+  to?: number | null;
 }) {
   const clauses: string[] = [];
   const bindings: unknown[] = [];
@@ -858,8 +993,36 @@ function buildMemoryListFilterSql(options: {
     bindings.push(options.workType);
   }
 
-  clauses.push("(lifecycle_state IS NULL OR lifecycle_state != ?)");
-  bindings.push("suppressed");
+  if (typeof options.ownerPrincipal === "string" && options.ownerPrincipal.trim()) {
+    clauses.push("owner_principal = ?");
+    bindings.push(options.ownerPrincipal.trim());
+  }
+  if (typeof options.createdByPrincipal === "string" && options.createdByPrincipal.trim()) {
+    clauses.push("created_by_principal = ?");
+    bindings.push(options.createdByPrincipal.trim());
+  }
+  if (options.from !== undefined && options.from !== null) {
+    clauses.push("COALESCE(updated_at, created_at) >= ?");
+    bindings.push(options.from);
+  }
+  if (options.to !== undefined && options.to !== null) {
+    clauses.push("COALESCE(updated_at, created_at) <= ?");
+    bindings.push(options.to);
+  }
+
+  if (options.lifecycle === "trash") {
+    clauses.push("deleted_at IS NOT NULL");
+  } else if (options.lifecycle === "all") {
+    if (!options.includeTrashed) clauses.push("deleted_at IS NULL");
+  } else {
+    clauses.push("deleted_at IS NULL");
+    clauses.push("(lifecycle_state IS NULL OR lifecycle_state != ?)");
+    bindings.push("suppressed");
+    if (options.lifecycle === "review") {
+      clauses.push("(confidence_score IS NULL OR confidence_score < 0.6 OR utility_score IS NULL OR utility_score < 0.4 OR last_accessed_at IS NULL)");
+    }
+  }
+
   const sql = clauses.length > 0 ? ` AND ${clauses.join(" AND ")}` : "";
   return { sql, bindings };
 }
@@ -896,6 +1059,12 @@ export async function upsertMemories(env: Env, rawBody: unknown, options: Princi
     );
   }
   const result = await captureMemoryItems(env, { tenantId, source, items, operation: "capture" });
+  await assignMemoryOwnership(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id),
+    options.actorPrincipal ?? null
+  );
   const retrieval_projection = await syncMemoryIdsToSemanticIndex(
     env,
     tenantId,
@@ -933,13 +1102,35 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
   const safeLimit = Math.max(1, Math.min(500, options.limit ?? 100));
   const safeOffset = Math.max(0, options.offset ?? 0);
   const filter = buildMemoryListFilterSql(options);
+  const orderBy = options.sort === "usage"
+    ? "reference_count DESC, COALESCE(updated_at, created_at) DESC"
+    : options.sort === "updated"
+      ? "COALESCE(updated_at, created_at) DESC"
+      : "created_at DESC";
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, project_id, content, summary, tags_json, source, external_key, created_at,
             kind, lifecycle_state, current_version, last_accessed_at,
-            confidence_score, utility_score, business_category_id, work_type
+            confidence_score, utility_score, business_category_id, work_type,
+            owner_principal, created_by_principal, deleted_at, deleted_by_principal, delete_reason,
+            updated_at,
+            (SELECT COUNT(*) FROM memory_usage_items ui
+             WHERE ui.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS reference_count,
+            (SELECT COUNT(*) FROM memory_usage_items ui
+             WHERE ui.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id
+               AND ui.used_state = 'used') AS used_count,
+            (SELECT COUNT(DISTINCT ue.actor_principal) FROM memory_usage_items ui
+             JOIN memory_usage_events ue ON ue.tenant_id = ui.tenant_id AND ue.id = ui.usage_event_id
+             WHERE ui.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id
+               AND ue.actor_principal IS NOT NULL) AS consumer_count,
+            (SELECT COALESCE(SUM(ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
+             JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
+             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS net_saved_tokens,
+            (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
+             JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
+             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens
      FROM memories
      WHERE tenant_id = ?${filter.sql}
-     ORDER BY created_at DESC
+     ORDER BY ${orderBy}
      LIMIT ?
      OFFSET ?`
   )
@@ -962,7 +1153,18 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
       confidence_score: row.confidence_score ?? null,
       utility_score: row.utility_score ?? null,
       business_category_id: row.business_category_id ?? null,
-      work_type: row.work_type ?? null
+      work_type: row.work_type ?? null,
+      owner_principal: row.owner_principal ?? null,
+      created_by_principal: row.created_by_principal ?? null,
+      deleted_at: row.deleted_at ?? null,
+      deleted_by_principal: row.deleted_by_principal ?? null,
+      delete_reason: row.delete_reason ?? null,
+      updated_at: row.updated_at ?? null,
+      reference_count: Number(row.reference_count ?? 0),
+      used_count: Number(row.used_count ?? 0),
+      consumer_count: Number(row.consumer_count ?? 0),
+      net_saved_tokens: Number(row.net_saved_tokens ?? 0),
+      injected_tokens: Number(row.injected_tokens ?? 0)
   }));
 }
 
@@ -976,7 +1178,14 @@ export async function listMemoriesPage(env: Env, tenantId: string, options: List
     source: options.source,
     projectId: options.projectId,
     businessCategoryId: options.businessCategoryId,
-    workType: options.workType
+    workType: options.workType,
+    ownerPrincipal: options.ownerPrincipal,
+    createdByPrincipal: options.createdByPrincipal,
+    lifecycle: options.lifecycle,
+    includeTrashed: options.includeTrashed,
+    from: options.from,
+    to: options.to,
+    sort: options.sort
   });
 
   const countRows = await env.OPEN_BRAIN_DB.prepare(
@@ -1908,12 +2117,31 @@ export async function getMemoryDetails(
   options: PrincipalActorOptions = {}
 ): Promise<MemoryDetail> {
   const memory = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT actor_type, actor_id, current_version
+    `SELECT id, source, external_key, created_at, kind, current_version, last_accessed_at,
+            confidence_score, utility_score,
+            actor_type, actor_id, owner_principal, created_by_principal,
+            deleted_at, deleted_by_principal, delete_reason,
+            project_id, content, summary, tags_json, lifecycle_state, updated_at,
+            (SELECT COUNT(*) FROM memory_usage_items ui
+             WHERE ui.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS reference_count,
+            (SELECT COUNT(*) FROM memory_usage_items ui
+             WHERE ui.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id
+               AND ui.used_state = 'used') AS used_count,
+            (SELECT COUNT(DISTINCT ue.actor_principal) FROM memory_usage_items ui
+             JOIN memory_usage_events ue ON ue.tenant_id = ui.tenant_id AND ue.id = ui.usage_event_id
+             WHERE ui.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id
+               AND ue.actor_principal IS NOT NULL) AS consumer_count,
+            (SELECT COALESCE(SUM(ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
+             JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
+             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS net_saved_tokens,
+            (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
+             JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
+             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
     .bind(tenantId, memoryId)
-    .first<{ actor_type: string | null; actor_id: string | null; current_version: number }>();
+    .first<MemoryRow>();
 
   const versions = await env.OPEN_BRAIN_DB.prepare(
     `SELECT version, operation, summary, kind, lifecycle_state, actor_type, actor_id, created_at
@@ -2009,8 +2237,33 @@ export async function getMemoryDetails(
     memory_id: memoryId,
     memory: memory
       ? {
-          actor_type: memory.actor_type,
-          actor_id: memory.actor_id
+          id: memory.id,
+          source: memory.source,
+          external_key: memory.external_key ?? null,
+          created_at: memory.created_at,
+          kind: memory.kind ?? "episodic",
+          current_version: Number(memory.current_version ?? 1),
+          last_accessed_at: memory.last_accessed_at ?? null,
+          confidence_score: memory.confidence_score ?? null,
+          utility_score: memory.utility_score ?? null,
+          actor_type: memory.actor_type ?? null,
+          actor_id: memory.actor_id ?? null,
+          owner_principal: memory.owner_principal ?? null,
+          created_by_principal: memory.created_by_principal ?? null,
+          deleted_at: memory.deleted_at ?? null,
+          deleted_by_principal: memory.deleted_by_principal ?? null,
+          delete_reason: memory.delete_reason ?? null,
+          project_id: memory.project_id,
+          content: memory.content,
+          summary: memory.summary,
+          tags: parseTagsJson(memory.tags_json),
+          lifecycle_state: memory.lifecycle_state ?? "active",
+          updated_at: memory.updated_at ?? null,
+          reference_count: Number(memory.reference_count ?? 0),
+          used_count: Number(memory.used_count ?? 0),
+          consumer_count: Number(memory.consumer_count ?? 0),
+          net_saved_tokens: Number(memory.net_saved_tokens ?? 0),
+          injected_tokens: Number(memory.injected_tokens ?? 0)
         }
       : null,
     versions: versions.results,
@@ -2083,6 +2336,12 @@ export async function captureMemories(env: Env, rawBody: unknown, options: Princ
     items: classification.items,
     operation: "capture"
   });
+  await assignMemoryOwnership(
+    env,
+    tenantId,
+    result.items.map((item) => item.memory_id),
+    options.actorPrincipal ?? null
+  );
   const retrieval_projection = await syncMemoryIdsToSemanticIndex(
     env,
     tenantId,
@@ -2124,6 +2383,13 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
     { required: env.MEMORY_CLASSIFICATION_MODE === "require" }
   );
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
+  const requestedOwner = body.owner_principal === undefined
+    ? undefined
+    : parseOptionalActorField(body.owner_principal, "owner_principal", 128);
+  if (requestedOwner !== undefined && !options.canManageAll) {
+    throw new HttpError(403, "owner_change_requires_admin", "Only a tenant admin can change memory ownership");
+  }
+  await assertMemoryManageAccess(env, tenantId, memoryId, options);
   const previousV3Projection = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
   const previousV4Projection = await removeMemoryIdsFromV4SemanticIndex(env, tenantId, [memoryId]);
   if (previousV3Projection.error || previousV4Projection.error) {
@@ -2136,6 +2402,9 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   const result = await reviseMemory(env, {
     tenantId,
     memoryId,
+    projectId: body.project_id === undefined
+      ? undefined
+      : parseOptionalString(body.project_id, "project_id", 128),
     actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
     actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128),
     content: typeof body.content === "string" ? body.content.slice(0, 20_000) : undefined,
@@ -2158,6 +2427,11 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
       : classification.business_category_id
     , workType: body.work_type === undefined ? undefined : classification.work_type
   });
+  if (requestedOwner !== undefined) {
+    await env.OPEN_BRAIN_DB.prepare(
+      "UPDATE memories SET owner_principal = ?, updated_at = ? WHERE tenant_id = ? AND id = ?"
+    ).bind(requestedOwner, Date.now(), tenantId, memoryId).run();
+  }
   return {
     ...result,
     retrieval_projection: await syncMemoryIdsToSemanticIndex(env, tenantId, [memoryId]),
@@ -2176,9 +2450,14 @@ export async function refreshMemoryByRequest(env: Env, rawBody: unknown, options
   const body = rawBody as RefreshMemoryRequest;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
+  const memoryId = parseString(body.memory_id, "memory_id");
+  const ownership = await assertMemoryManageAccess(env, tenantId, memoryId, options);
+  if (ownership.deleted_at !== null) {
+    throw new HttpError(409, "memory_in_trash", "Restore the memory before refreshing it");
+  }
   return refreshMemory(env, {
     tenantId,
-    memoryId: parseString(body.memory_id, "memory_id"),
+    memoryId,
     actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
     actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128),
     confidenceDelta: parseOptionalFiniteNumber(body.confidence_delta, "confidence_delta")
@@ -2193,6 +2472,10 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   const memoryId = parseString(body.memory_id, "memory_id");
+  const ownership = await assertMemoryManageAccess(env, tenantId, memoryId, options);
+  if (ownership.deleted_at !== null) {
+    throw new HttpError(409, "memory_in_trash", "Restore the memory before suppressing it");
+  }
   const retrievalProjectionV3 = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
   const retrievalProjectionV4 = await removeMemoryIdsFromV4SemanticIndex(env, tenantId, [memoryId]);
   const retrievalProjection = await removeMemoryIdsFromSemanticIndex(env, tenantId, [memoryId]);
@@ -2221,6 +2504,92 @@ export async function suppressMemoryByRequest(env: Env, rawBody: unknown, option
   };
 }
 
+export async function trashMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as TrashMemoryRequest;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const memoryId = parseString(body.memory_id, "memory_id");
+  const ownership = await assertMemoryManageAccess(env, tenantId, memoryId, options);
+  if (ownership.deleted_at !== null) {
+    throw new HttpError(409, "memory_already_trashed", "memory is already in the trash");
+  }
+  const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
+  const reason = typeof body.reason === "string" && body.reason.trim()
+    ? body.reason.trim().slice(0, 500)
+    : "moved to trash from memory library";
+  const retrievalProjectionV3 = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
+  const retrievalProjectionV4 = await removeMemoryIdsFromV4SemanticIndex(env, tenantId, [memoryId]);
+  const retrievalProjection = await removeMemoryIdsFromSemanticIndex(env, tenantId, [memoryId]);
+  if (retrievalProjection.error || retrievalProjectionV3.error || retrievalProjectionV4.error) {
+    throw new HttpError(
+      503,
+      "retrieval_projection_failed",
+      retrievalProjection.error ?? retrievalProjectionV3.error ?? retrievalProjectionV4.error ?? "retrieval projection failed"
+    );
+  }
+  const result = await suppressMemory(env, {
+    tenantId,
+    memoryId,
+    reason,
+    actorType: actorPrincipal ? "principal" : null,
+    actorId: actorPrincipal
+  });
+  const deletedAt = Date.now();
+  await env.OPEN_BRAIN_DB.prepare(
+    `UPDATE memories
+     SET deleted_at = ?, deleted_by_principal = ?, delete_reason = ?, updated_at = ?
+     WHERE tenant_id = ? AND id = ?`
+  ).bind(deletedAt, actorPrincipal, reason, deletedAt, tenantId, memoryId).run();
+  return {
+    ...result,
+    operation: "trash" as const,
+    deleted_at: deletedAt,
+    deleted_by_principal: actorPrincipal,
+    delete_reason: reason,
+    retrieval_projection: retrievalProjection,
+    retrieval_projection_v3: retrievalProjectionV3,
+    retrieval_projection_v4: retrievalProjectionV4
+  };
+}
+
+export async function restoreMemoryByRequest(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
+  if (!rawBody || typeof rawBody !== "object") {
+    throw new HttpError(400, "invalid_payload", "request body must be an object");
+  }
+  const body = rawBody as RestoreMemoryRequest;
+  const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
+  const memoryId = parseString(body.memory_id, "memory_id");
+  const ownership = await assertMemoryManageAccess(env, tenantId, memoryId, options);
+  if (ownership.deleted_at === null) {
+    throw new HttpError(409, "memory_not_in_trash", "Only a trashed memory can be restored");
+  }
+  const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
+  const result = await restoreSuppressedMemory(env, {
+    tenantId,
+    memoryId,
+    actorType: actorPrincipal ? "principal" : null,
+    actorId: actorPrincipal
+  });
+  await env.OPEN_BRAIN_DB.prepare(
+    `UPDATE memories
+     SET deleted_at = NULL, deleted_by_principal = NULL, delete_reason = NULL, updated_at = ?
+     WHERE tenant_id = ? AND id = ?`
+  ).bind(Date.now(), tenantId, memoryId).run();
+  const retrievalProjection = await syncMemoryIdsToSemanticIndex(env, tenantId, [memoryId]);
+  const retrievalProjectionV3 = await syncMemoryIdsToV3SemanticIndex(env, tenantId, [memoryId]);
+  const retrievalProjectionV4 = await syncMemoryIdsToV4SemanticIndex(env, tenantId, [memoryId]);
+  return {
+    ...result,
+    operation: "restore" as const,
+    lifecycle_state: "active" as const,
+    retrieval_projection: retrievalProjection,
+    retrieval_projection_v3: retrievalProjectionV3,
+    retrieval_projection_v4: retrievalProjectionV4
+  };
+}
+
 export async function deleteMemoryById(
   env: Env,
   tenantId: string,
@@ -2230,6 +2599,22 @@ export async function deleteMemoryById(
   const actorPrincipal = normalizeActorPrincipal(options.actorPrincipal);
   const normalizedTenantId = parseString(tenantId, "tenant_id");
   const normalizedMemoryId = parseString(memoryId, "memory_id");
+  // The HTTP route always passes an explicit authorization result. Keep the
+  // service's historical direct-call behavior for internal callers while
+  // making an explicit non-admin decision authoritative at the boundary.
+  const enforceTrashLifecycle = typeof options.canManageAll === "boolean";
+  if (enforceTrashLifecycle && options.canManageAll !== true) {
+    throw new HttpError(403, "tenant_admin_required", "Only a tenant admin can permanently delete a memory");
+  }
+  if (enforceTrashLifecycle) {
+    const row = await env.OPEN_BRAIN_DB.prepare(
+      "SELECT deleted_at FROM memories WHERE tenant_id = ? AND id = ?"
+    ).bind(normalizedTenantId, normalizedMemoryId).first<{ deleted_at: number | null }>();
+    if (!row) throw new HttpError(404, "memory_not_found", "memory not found");
+    if (row.deleted_at === null) {
+      throw new HttpError(409, "memory_must_be_trashed", "Move the memory to the trash before permanently deleting it");
+    }
+  }
   await assertMemoryNotOnLegalHold(env, normalizedTenantId, normalizedMemoryId);
   const retrievalProjectionV3 = await removeMemoryIdsFromV3SemanticIndex(
     env,

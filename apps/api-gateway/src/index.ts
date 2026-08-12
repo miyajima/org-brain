@@ -101,13 +101,22 @@ import {
   listMemories,
   listMemoriesPage,
   refreshMemoryByRequest,
+  restoreMemoryByRequest,
   reviseMemoryByRequest,
   retrieveMemoryContext,
   searchMemories,
   suppressMemoryByRequest,
+  trashMemoryByRequest,
   upsertMemories
 } from "./memory-service";
+import {
+  getPrincipalOwnerMapping,
+  listPrincipalOwnerMappings,
+  upsertOwnPrincipalOwnerMapping,
+  upsertPrincipalOwnerMapping
+} from "./memory-ownership-service";
 import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
+import { getMemoryAnalytics, getMemoryMap } from "./memory-dashboard-service";
 import { mountMcp } from "./mcp";
 import {
   getMemoryImpactExecution,
@@ -118,6 +127,7 @@ import {
 import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
 import {
   assertPermission,
+  authorizePermission,
   deleteRoleAssignment,
   listRoleAssignments,
   upsertRoleAssignment
@@ -240,6 +250,18 @@ function assertRetrievalOperator(env: Env, principal: string) {
   if (!operators.includes(principal)) {
     throw new HttpError(403, "retrieval_operator_required", "global retrieval generation operations require an explicit operator principal");
   }
+}
+
+async function isTenantAdmin(c: Context<ApiContextEnv>, tenantId: string): Promise<boolean> {
+  const auth = getApiAuthContext(c);
+  if (auth.defaultRole === "tenant_admin") return true;
+  const decision = await authorizePermission(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    permission: "admin",
+    fallbackRole: auth.defaultRole
+  });
+  return decision.matched_roles.includes("tenant_admin");
 }
 
 mountMcp(app);
@@ -450,6 +472,74 @@ app.get("/v1/dashboard/knowledge-graph", async (c) => {
     (result) => ({ count: result.nodes.length, truncated: result.truncated })
   );
   return jsonOk(c, data);
+});
+
+function dashboardPeriod(c: Context<ApiContextEnv>) {
+  const now = Date.now();
+  const from = Number(c.req.query("from"));
+  const to = Number(c.req.query("to"));
+  const resolvedFrom = Number.isFinite(from) ? from : now - 30 * 24 * 60 * 60 * 1000;
+  const resolvedTo = Number.isFinite(to) ? to : now;
+  if (resolvedFrom > resolvedTo) {
+    throw new HttpError(400, "invalid_period", "from must be before or equal to to");
+  }
+  if (resolvedTo - resolvedFrom > 180 * 24 * 60 * 60 * 1000) {
+    throw new HttpError(400, "invalid_period", "analytics period cannot exceed 180 days");
+  }
+  return { from: resolvedFrom, to: resolvedTo };
+}
+
+app.get("/v1/dashboard/memory-analytics", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const scope = c.req.query("scope") === "mine" ? "mine" : "org";
+  const perspective = c.req.query("perspective") === "spread" ? "spread" : "work";
+  const period = dashboardPeriod(c);
+  const canViewConsumerDetails = scope === "mine" && perspective === "spread"
+    ? true
+    : await isTenantAdmin(c, tenantId);
+  return jsonOk(c, await getMemoryAnalytics(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    scope,
+    perspective,
+    projectId: c.req.query("project_id"),
+    ownerPrincipal: scope === "org" ? c.req.query("owner_principal") : null,
+    consumerPrincipal: c.req.query("consumer_principal"),
+    canViewConsumerDetails,
+    ...period
+  }));
+});
+
+app.get("/v1/dashboard/memory-map", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const scope = c.req.query("scope") === "mine" ? "mine" : "org";
+  const rawFrom = c.req.query("from")?.trim();
+  const rawTo = c.req.query("to")?.trim();
+  const fromValue = rawFrom ? Number(rawFrom) : Number.NaN;
+  const toValue = rawTo ? Number(rawTo) : Number.NaN;
+  if ((Number.isFinite(fromValue) && !Number.isFinite(toValue)) || (!Number.isFinite(fromValue) && Number.isFinite(toValue))) {
+    throw new HttpError(400, "invalid_period", "from and to must be supplied together");
+  }
+  if (Number.isFinite(fromValue) && Number.isFinite(toValue) && fromValue > toValue) {
+    throw new HttpError(400, "invalid_period", "from must be before or equal to to");
+  }
+  if (Number.isFinite(fromValue) && Number.isFinite(toValue) && toValue - fromValue > 180 * 24 * 60 * 60 * 1000) {
+    throw new HttpError(400, "invalid_period", "memory map period cannot exceed 180 days");
+  }
+  const limit = Number.parseInt(c.req.query("limit") ?? "1500", 10);
+  const display = c.req.query("display") === "top" ? "top" : c.req.query("display") === "cluster" ? "cluster" : undefined;
+  return jsonOk(c, await getMemoryMap(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    scope,
+    display,
+    projectId: c.req.query("project_id"),
+    ownerPrincipal: scope === "org" ? c.req.query("owner_principal") : null,
+    q: c.req.query("q"),
+    from: Number.isFinite(fromValue) ? fromValue : null,
+    to: Number.isFinite(toValue) ? toValue : null,
+    limit: Number.isFinite(limit) ? limit : 1500
+  }));
 });
 
 app.get("/v1/dashboard/strata", async (c) => {
@@ -956,10 +1046,24 @@ app.get("/v1/memory-impact-summary", async (c) => {
 
 app.get("/v1/memories", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const scope = c.req.query("scope") === "mine" ? "mine" : "org";
   const source = c.req.query("source");
   const projectId = c.req.query("project_id");
   const businessCategoryId = c.req.query("business_category_id");
   const workType = c.req.query("work_type") as import("@org-brain/shared").MemoryWorkType | undefined;
+  const lifecycle = ["active", "review", "trash", "all"].includes(c.req.query("lifecycle") ?? "")
+    ? c.req.query("lifecycle") as "active" | "review" | "trash" | "all"
+    : "active";
+  const ownerPrincipal = scope === "mine" ? getApiPrincipal(c) : c.req.query("owner_principal");
+  const createdByPrincipal = c.req.query("created_by_principal");
+  const includeTrashed = c.req.query("include_trashed") === "true" || c.req.query("include_trashed") === "1";
+  const rawFrom = c.req.query("from")?.trim();
+  const rawTo = c.req.query("to")?.trim();
+  const fromValue = rawFrom ? Number(rawFrom) : Number.NaN;
+  const toValue = rawTo ? Number(rawTo) : Number.NaN;
+  const sort = ["created", "updated", "usage"].includes(c.req.query("sort") ?? "")
+    ? c.req.query("sort") as "created" | "updated" | "usage"
+    : "created";
   const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
   const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
   const paginated = c.req.query("paginated") === "1";
@@ -970,7 +1074,14 @@ app.get("/v1/memories", async (c) => {
       source,
       projectId,
       businessCategoryId,
-      workType
+      workType,
+      ownerPrincipal,
+      createdByPrincipal,
+      lifecycle,
+      includeTrashed,
+      from: Number.isFinite(fromValue) ? fromValue : null,
+      to: Number.isFinite(toValue) ? toValue : null,
+      sort
     });
     return jsonOk(c, page);
   }
@@ -981,9 +1092,44 @@ app.get("/v1/memories", async (c) => {
     source,
     projectId,
     businessCategoryId,
-    workType
+    workType,
+    ownerPrincipal,
+    createdByPrincipal,
+    lifecycle,
+    includeTrashed,
+    from: Number.isFinite(fromValue) ? fromValue : null,
+    to: Number.isFinite(toValue) ? toValue : null,
+    sort
   });
   return jsonOk(c, memories);
+});
+
+app.get("/v1/principal-owner-mappings", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!(await isTenantAdmin(c, tenantId))) {
+    throw new HttpError(403, "tenant_admin_required", "Only a tenant admin can view producer-owner mappings");
+  }
+  return jsonOk(c, await listPrincipalOwnerMappings(c.env, tenantId));
+});
+
+app.get("/v1/principal-owner-mappings/me", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getPrincipalOwnerMapping(c.env, tenantId, getApiPrincipal(c)));
+});
+
+app.put("/v1/principal-owner-mappings/me", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await upsertOwnPrincipalOwnerMapping(c.env, tenantId, body, getApiPrincipal(c)));
+});
+
+app.put("/v1/principal-owner-mappings", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  if (!(await isTenantAdmin(c, tenantId))) {
+    throw new HttpError(403, "tenant_admin_required", "Only a tenant admin can manage producer-owner mappings");
+  }
+  return jsonOk(c, await upsertPrincipalOwnerMapping(c.env, tenantId, body, getApiPrincipal(c)));
 });
 
 app.get("/v1/business-categories", async (c) => {
@@ -1148,29 +1294,63 @@ app.post("/v1/memories/confirm", async (c) => {
 
 app.post("/v1/memories/revise", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await reviseMemoryByRequest(c.env, body, { actorPrincipal: getApiPrincipal(c) });
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await reviseMemoryByRequest(c.env, body, {
+    actorPrincipal: getApiPrincipal(c),
+    canManageAll: await isTenantAdmin(c, tenantId)
+  });
   return jsonOk(c, result);
 });
 
 app.post("/v1/memories/refresh", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await refreshMemoryByRequest(c.env, body, { actorPrincipal: getApiPrincipal(c) });
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await refreshMemoryByRequest(c.env, body, {
+    actorPrincipal: getApiPrincipal(c),
+    canManageAll: await isTenantAdmin(c, tenantId)
+  });
   return jsonOk(c, result);
 });
 
 app.post("/v1/memories/suppress", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await suppressMemoryByRequest(c.env, body, { actorPrincipal: getApiPrincipal(c) });
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const result = await suppressMemoryByRequest(c.env, body, {
+    actorPrincipal: getApiPrincipal(c),
+    canManageAll: await isTenantAdmin(c, tenantId)
+  });
   return jsonOk(c, result);
+});
+
+app.post("/v1/memories/:memoryId/trash", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const bodyWithId = body && typeof body === "object" && !Array.isArray(body)
+    ? { ...(body as Record<string, unknown>), memory_id: c.req.param("memoryId") }
+    : { memory_id: c.req.param("memoryId") };
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(bodyWithId));
+  return jsonOk(c, await trashMemoryByRequest(c.env, bodyWithId, {
+    actorPrincipal: getApiPrincipal(c),
+    canManageAll: await isTenantAdmin(c, tenantId)
+  }));
+});
+
+app.post("/v1/memories/:memoryId/restore", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const bodyWithId = body && typeof body === "object" && !Array.isArray(body)
+    ? { ...(body as Record<string, unknown>), memory_id: c.req.param("memoryId") }
+    : { memory_id: c.req.param("memoryId") };
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(bodyWithId));
+  return jsonOk(c, await restoreMemoryByRequest(c.env, bodyWithId, {
+    actorPrincipal: getApiPrincipal(c),
+    canManageAll: await isTenantAdmin(c, tenantId)
+  }));
 });
 
 app.delete("/v1/memories/:memoryId", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   const result = await deleteMemoryById(c.env, tenantId, c.req.param("memoryId"), {
-    actorPrincipal: getApiPrincipal(c)
+    actorPrincipal: getApiPrincipal(c),
+    canManageAll: await isTenantAdmin(c, tenantId)
   });
   return jsonOk(c, result);
 });
