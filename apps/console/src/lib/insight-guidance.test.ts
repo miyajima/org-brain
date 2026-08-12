@@ -15,6 +15,7 @@ import {
 describe("insight guidance", () => {
   it("explains every surface in plain Japanese", () => {
     expect(pageGuide("activity", "ja").useWhen).toContain("状況確認");
+    expect(pageGuide("activity", "ja").start).toContain("タイムライン");
     expect(pageGuide("connections", "ja").learn).toContain("影響範囲");
     expect(pageGuide("history", "ja").start).toContain("時間軸");
   });

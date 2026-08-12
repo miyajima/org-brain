@@ -33,7 +33,7 @@ const COPY = {
     guide: {
       heading: "How to use this view",
       labels: ["Use this when", "What you can learn", "Start here"],
-      activity: ["Checking daily operations or investigating a failure or stall", "Who did what and where attention is needed", "Review the most important signal in the mission briefing"],
+      activity: ["Checking daily operations or investigating a failure or stall", "Who did what and how activity moved through Org Brain", "Start with the activity paths, then use the timeline to inspect recent events"],
       connections: ["Before using or changing an important piece of knowledge", "Which decisions, sources, projects, and tasks it affects", "Select a node, then read its evidence and review candidates"],
       history: ["Validating current knowledge or understanding why it changed", "What changed, when it changed, and which evidence supports it", "Read the current summary before exploring the timeline"]
     },
@@ -77,7 +77,7 @@ const COPY = {
     guide: {
       heading: "この画面の使い方",
       labels: ["この画面を使う場面", "ここでわかること", "最初に見る場所"],
-      activity: ["日々の状況確認や、失敗・停滞の原因を調べるとき", "誰が何を行い、どこに対応が必要か", "「いま見るべきこと」の重大シグナルから確認"],
+      activity: ["日々の状況確認や、失敗・停滞の原因を調べるとき", "誰が何を行い、Org Brainを通じて活動がどう動いたか", "活動経路で全体を見てから、タイムラインで直近イベントを確認"],
       connections: ["重要な知識を利用・変更する前", "関連する判断・資料・プロジェクト・Taskと影響範囲", "ノードを選び、根拠と確認候補を確認"],
       history: ["現在の知識が正しいか、なぜ変わったか確認するとき", "何がいつ変わり、どの根拠に支えられているか", "現在の要約を読んでから時間軸を探索"]
     },
@@ -121,7 +121,7 @@ const COPY = {
     guide: {
       heading: "如何使用此页面",
       labels: ["何时使用", "可以了解什么", "从哪里开始"],
-      activity: ["每日检查，或调查失败和停滞时", "谁做了什么，以及哪里需要处理", "先查看任务简报中的重要信号"],
+      activity: ["每日检查，或调查失败和停滞时", "谁做了什么，以及活动如何通过Org Brain流转", "先查看活动路径，再用时间线检查最近事件"],
       connections: ["使用或修改重要知识之前", "相关决策、资料、项目、任务及影响范围", "选择节点后查看证据和待确认事项"],
       history: ["确认当前知识或了解变更原因时", "变更内容、时间以及支撑证据", "先阅读当前摘要，再探索时间线"]
     },

@@ -20,13 +20,6 @@ const result = await fetchDashboardData(
   normalizeDashboardActivity,
   normalizeDashboardActivity({})
 );
-const comparisonResult = activityPeriod.key === "24h"
-  ? null
-  : await fetchDashboardData(
-      new URL(`/api/v1/dashboard/activity?${activityWindowParams(apiParams, resolveActivityPeriod("24h")).toString()}`, Astro.url),
-      normalizeDashboardActivity,
-      normalizeDashboardActivity({})
-    );
 const refreshParams = new URLSearchParams(activityApiParams);
 if (result.data.newest_cursor != null) refreshParams.set("after", String(result.data.newest_cursor));
 const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
@@ -38,5 +31,5 @@ const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
       <span>{result.error}</span>
     </div>
   )}
-  <NervousSystem data={result.data} comparisonData={comparisonResult?.error ? null : comparisonResult?.data ?? null} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
+  <NervousSystem data={result.data} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
 </BaseLayout>

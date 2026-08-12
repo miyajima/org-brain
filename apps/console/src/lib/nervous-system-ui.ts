@@ -49,6 +49,23 @@ export type ActivityTimelinePoint = {
   row: number;
 };
 
+export type ActivityTimelineBucket = {
+  index: number;
+  startAt: number;
+  endAt: number;
+  count: number;
+  warningCount: number;
+  criticalCount: number;
+  latestEvent: ActivityEvent | null;
+};
+
+export type ActivityEventContext = {
+  project: string | null;
+  category: string | null;
+  title: string;
+  structured: boolean;
+};
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -111,6 +128,33 @@ export function buildActivityCapabilitySummaries(events: ActivityEvent[]): Activ
     if (!summary.latestEvent || event.occurred_at > summary.latestEvent.occurred_at) summary.latestEvent = event;
   }
   return summaries;
+}
+
+export function activityEventContext(
+  event: Pick<ActivityEvent, "project_id" | "subject">
+): ActivityEventContext {
+  const subjectLabel = event.subject.label?.trim() || event.subject.id;
+  const segments = subjectLabel.split(/\s*\|\s*/u).map((segment) => segment.trim()).filter(Boolean);
+  let project = event.project_id?.trim() || null;
+  let structured = false;
+
+  if (!project && segments.length >= 3 && segments[0].length <= 64) {
+    project = segments.shift() ?? null;
+    structured = true;
+  } else if (project && segments[0]?.toLocaleLowerCase() === project.toLocaleLowerCase()) {
+    segments.shift();
+    structured = true;
+  }
+
+  const category = segments.length >= 2 && segments[0].length <= 32 ? segments.shift() ?? null : null;
+  if (category) structured = true;
+
+  return {
+    project,
+    category,
+    title: segments.join(" | ") || subjectLabel,
+    structured
+  };
 }
 
 export function normalizeDashboardActivity(value: unknown): DashboardActivity {
@@ -229,6 +273,42 @@ export function layoutActivityTimeline(
       lastXByRow[row] = x;
       return { event, x, row };
     });
+}
+
+export function bucketActivityTimeline(
+  events: ActivityEvent[],
+  start: number,
+  end: number,
+  bucketCount = 12
+): ActivityTimelineBucket[] {
+  const count = Math.max(1, Math.floor(bucketCount));
+  const span = Math.max(1, end - start);
+  const bucketSpan = span / count;
+  const buckets = Array.from({ length: count }, (_, index): ActivityTimelineBucket => ({
+    index,
+    startAt: start + index * bucketSpan,
+    endAt: index === count - 1 ? end : start + (index + 1) * bucketSpan,
+    count: 0,
+    warningCount: 0,
+    criticalCount: 0,
+    latestEvent: null
+  }));
+
+  for (const event of events) {
+    const ratio = Math.max(0, Math.min(1, (event.occurred_at - start) / span));
+    const index = Math.min(count - 1, Math.floor(ratio * count));
+    const bucket = buckets[index];
+    bucket.count += 1;
+    if (event.severity === "warning") bucket.warningCount += 1;
+    if (event.severity === "critical") bucket.criticalCount += 1;
+    if (
+      !bucket.latestEvent
+      || event.occurred_at > bucket.latestEvent.occurred_at
+      || (event.occurred_at === bucket.latestEvent.occurred_at && event.id.localeCompare(bucket.latestEvent.id) > 0)
+    ) bucket.latestEvent = event;
+  }
+
+  return buckets;
 }
 
 export function eventDeepLink(event: ActivityEvent, scope: URLSearchParams): string | null {
