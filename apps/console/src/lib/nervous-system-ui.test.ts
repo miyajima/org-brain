@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityCapabilityForEvent, activityTimelineWidth, activityWindowParams, buildActivityCapabilitySummaries, buildProjectPulses, eventDeepLink, hasDashboardActivityContent, layoutActivityTimeline, normalizeDashboardActivity, relativeTime, resolveActivityCapability, resolveActivityPeriod } from "./nervous-system-ui";
+import { activityCapabilityForEvent, activityEventContext, activityTimelineWidth, activityWindowParams, bucketActivityTimeline, buildActivityCapabilitySummaries, buildProjectPulses, eventDeepLink, hasDashboardActivityContent, layoutActivityTimeline, normalizeDashboardActivity, relativeTime, resolveActivityCapability, resolveActivityPeriod } from "./nervous-system-ui";
 
 describe("nervous system view model", () => {
   it("builds deterministic activity windows through 30 days", () => {
@@ -33,6 +33,30 @@ describe("nervous system view model", () => {
     ]);
     expect(resolveActivityCapability("evaluate")).toBe("evaluate");
     expect(resolveActivityCapability("unknown")).toBeNull();
+  });
+
+  it("separates structured memory labels from their readable title", () => {
+    const [event] = normalizeDashboardActivity({
+      events: [{
+        id: "read",
+        type: "memory.read",
+        project_id: null,
+        occurred_at: 1,
+        actor: { id: "user:local-dev" },
+        subject: {
+          id: "memory-1",
+          type: "memory",
+          label: "factoreview | diagnosis | 収集・適用企業:0社(リモートD1認証で開始前に失敗)"
+        }
+      }]
+    }).events;
+
+    expect(activityEventContext(event)).toEqual({
+      project: "factoreview",
+      category: "diagnosis",
+      title: "収集・適用企業:0社(リモートD1認証で開始前に失敗)",
+      structured: true
+    });
   });
 
   it("normalizes and orders real activity records", () => {
@@ -104,5 +128,25 @@ describe("nervous system view model", () => {
       const xs = first.filter((point) => point.row === row).map((point) => point.x).sort((left, right) => left - right);
       expect(xs.every((x, index) => index === 0 || x - xs[index - 1] >= 46)).toBe(true);
     }
+  });
+
+  it("aggregates dense activity into a bounded timeline without losing severity or selection", () => {
+    const start = Date.UTC(2026, 7, 7);
+    const end = start + 24 * 60 * 60 * 1000;
+    const events = normalizeDashboardActivity({
+      events: [
+        { id: "start", occurred_at: start, actor: {}, subject: { id: "a" } },
+        { id: "middle-warning", occurred_at: start + 12 * 60 * 60 * 1000, severity: "warning", actor: {}, subject: { id: "b" } },
+        { id: "middle-critical", occurred_at: start + 12 * 60 * 60 * 1000 + 1, severity: "critical", actor: {}, subject: { id: "c" } },
+        { id: "end", occurred_at: end, actor: {}, subject: { id: "d" } }
+      ]
+    }).events;
+
+    const buckets = bucketActivityTimeline(events, start, end, 12);
+    expect(buckets).toHaveLength(12);
+    expect(buckets[0]).toMatchObject({ count: 1, latestEvent: expect.objectContaining({ id: "start" }) });
+    expect(buckets[6]).toMatchObject({ count: 2, warningCount: 1, criticalCount: 1, latestEvent: expect.objectContaining({ id: "middle-critical" }) });
+    expect(buckets[11]).toMatchObject({ count: 1, latestEvent: expect.objectContaining({ id: "end" }) });
+    expect(buckets.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(events.length);
   });
 });

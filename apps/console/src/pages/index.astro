@@ -18,7 +18,6 @@ const taskView = dashboardTaskPageParams(Astro.url, cookieHeader);
 const activityPeriod = resolveActivityPeriod(params.get("period"));
 const intelligenceCopy = intelligencePageCopy(lang);
 let activityResult = { data: normalizeDashboardActivity({}), error: null as string | null };
-let activityComparison = null as ReturnType<typeof normalizeDashboardActivity> | null;
 let refreshUrl = "";
 let taskResult = { data: [] as DashboardTask[], error: null as string | null };
 if (insightsBehavior.renderInsightsHome) {
@@ -29,14 +28,6 @@ if (insightsBehavior.renderInsightsHome) {
     normalizeDashboardActivity,
     normalizeDashboardActivity({})
   );
-  if (activityPeriod.key !== "24h") {
-    const comparisonResult = await fetchDashboardData(
-      new URL(`/api/v1/dashboard/activity?${activityWindowParams(apiParams, resolveActivityPeriod("24h")).toString()}`, Astro.url),
-      normalizeDashboardActivity,
-      normalizeDashboardActivity({})
-    );
-    if (!comparisonResult.error) activityComparison = comparisonResult.data;
-  }
   const refreshParams = new URLSearchParams(activityApiParams);
   if (activityResult.data.newest_cursor != null) refreshParams.set("after", String(activityResult.data.newest_cursor));
   refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
@@ -57,7 +48,7 @@ if (insightsBehavior.renderInsightsHome) {
           <span>{activityResult.error}</span>
         </div>
       )}
-      <NervousSystem data={activityResult.data} comparisonData={activityComparison} loadError={activityResult.error} refreshUrl={refreshUrl} params={params} locale={lang} />
+      <NervousSystem data={activityResult.data} loadError={activityResult.error} refreshUrl={refreshUrl} params={params} locale={lang} />
     </>
   ) : (
     <LegacyTaskDashboard

@@ -324,7 +324,7 @@ function buildDetailRecord(
       project_id: row.project_id,
       external_key: row.external_key,
       created_at: row.created_at,
-      tags: row.tags,
+      tags: row.tags ?? [],
       score: searchResults.find((item) => item.id === selected)?.score ?? null,
       content: row.content,
       memory_kind: row.kind,
@@ -332,15 +332,15 @@ function buildDetailRecord(
       current_version: row.current_version,
       last_accessed_at: row.last_accessed_at,
       confidence_score: row.confidence_score,
-      utility_score: row.utility_score
-      , owner_principal: row.owner_principal,
-      created_by_principal: row.created_by_principal,
-      deleted_at: row.deleted_at,
-      reference_count: row.reference_count,
-      used_count: row.used_count,
-      consumer_count: row.consumer_count,
-      net_saved_tokens: row.net_saved_tokens,
-      injected_tokens: row.injected_tokens
+      utility_score: row.utility_score,
+      owner_principal: row.owner_principal ?? null,
+      created_by_principal: row.created_by_principal ?? null,
+      deleted_at: row.deleted_at ?? null,
+      reference_count: row.reference_count ?? 0,
+      used_count: row.used_count ?? 0,
+      consumer_count: row.consumer_count ?? 0,
+      net_saved_tokens: row.net_saved_tokens ?? 0,
+      injected_tokens: row.injected_tokens ?? 0
     };
   }
 
@@ -425,7 +425,7 @@ function buildDetailRecordFromMemoryDetail(payload: MemoryDetailResponse | null)
     project_id: memory.project_id,
     external_key: memory.external_key,
     created_at: memory.created_at,
-    tags: memory.tags,
+    tags: memory.tags ?? [],
     score: null,
     content: memory.content,
     memory_kind: memory.kind,
@@ -434,14 +434,14 @@ function buildDetailRecordFromMemoryDetail(payload: MemoryDetailResponse | null)
     last_accessed_at: memory.last_accessed_at,
     confidence_score: memory.confidence_score,
     utility_score: memory.utility_score,
-    owner_principal: memory.owner_principal,
-    created_by_principal: memory.created_by_principal,
-    deleted_at: memory.deleted_at,
-    reference_count: memory.reference_count,
-    used_count: memory.used_count,
-    consumer_count: memory.consumer_count,
-    net_saved_tokens: memory.net_saved_tokens,
-    injected_tokens: memory.injected_tokens
+    owner_principal: memory.owner_principal ?? null,
+    created_by_principal: memory.created_by_principal ?? null,
+    deleted_at: memory.deleted_at ?? null,
+    reference_count: memory.reference_count ?? 0,
+    used_count: memory.used_count ?? 0,
+    consumer_count: memory.consumer_count ?? 0,
+    net_saved_tokens: memory.net_saved_tokens ?? 0,
+    injected_tokens: memory.injected_tokens ?? 0
   };
 }
 
@@ -474,19 +474,18 @@ function extractSearchTerms(value: string | null | undefined): string[] {
 
 function rowCardClass(selected: boolean): string {
   return [
-    "group relative overflow-hidden rounded-[24px] border p-4 transition duration-200",
-    "shadow-[0_20px_60px_rgba(0,0,0,0.24)]",
+    "memory-list-row group relative min-w-0 overflow-hidden rounded-[18px] border px-4 py-3 transition duration-200",
     selected
-      ? "border-amber-300/45 bg-white/[0.09] ring-1 ring-amber-300/20"
-      : "border-white/8 bg-white/[0.04] hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06]"
+      ? "border-sky-300/45 bg-sky-300/[0.08] ring-1 ring-sky-300/15"
+      : "border-white/8 bg-white/[0.035] hover:border-sky-200/25 hover:bg-white/[0.055]"
   ].join(" ");
 }
 
 function tabClass(active: boolean): string {
   return [
-    "inline-flex min-h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold transition duration-200",
+    "inline-flex min-h-9 items-center justify-center rounded-[10px] border px-3 text-xs font-semibold transition duration-200",
     active
-      ? "border-amber-300/40 bg-amber-300/20 text-amber-50 shadow-[0_12px_40px_rgba(212,175,55,0.18)]"
+      ? "border-sky-300/40 bg-sky-300/15 text-sky-50"
       : "border-white/8 bg-white/[0.04] text-zinc-300 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
   ].join(" ");
 }
@@ -631,79 +630,71 @@ if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") 
 }
 const constellationHref = `/memories/constellation?${constellationParams.toString()}`;
 ---
-<BaseLayout title="Memory Explorer">
+<BaseLayout title="Memory Explorer" wide>
   {mapFallback && (
     <div class="intelligence-route-alert" role="status">
       <strong>3D表示からメモリ一覧へ切り替えました</strong>
       <span>この環境では3D描画を安定して表示できないため、同じ条件の一覧を表示しています。</span>
     </div>
   )}
-  <section class="space-y-5">
-    <header class="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(7,7,8,0.96)_0%,rgba(10,10,12,0.92)_100%)] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.36)] sm:p-8">
-      <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-        <div class="space-y-4">
+  <section class="memory-explorer space-y-4">
+    <header class="memory-page-header">
+      <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <div class="space-y-2">
           <p class="surface-label">Memory workspace</p>
-          <div class="space-y-3">
-            <h1 class="max-w-[11ch] text-5xl font-semibold tracking-[-0.06em] text-white sm:text-6xl xl:text-7xl">Memory Explorer</h1>
-            <p class="max-w-3xl text-base leading-8 text-zinc-300 sm:text-lg">
-              記憶を探す前から最近の流れが見えるようにして、検索の入口自体も強くしました。まずは recent lane と popular searches から入れます。
-            </p>
-          </div>
+          <h1 class="text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">Memory Explorer</h1>
         </div>
-        <div class="flex flex-wrap gap-2 xl:justify-end">
-          {insightsRoutesEnabled && <a class="surface-chip" href={constellationHref}>Knowledge connections</a>}
-          <span class="surface-chip">{listPage?.meta.total ?? 0} visible</span>
-          <span class="surface-chip">{listPage?.meta.canonical_count ?? 0} canonical</span>
-          <span class="surface-chip">{listPage?.meta.digest_count ?? 0} digest</span>
-          <span class="surface-chip">{listPage?.meta.compacted_count ?? 0} compacted</span>
-          <span class="surface-chip">{profile?.meta.recent_count ?? 0} recent</span>
-        </div>
+        {insightsRoutesEnabled && <a class="memory-map-link" href={constellationHref}><span>Knowledge connections</span><span aria-hidden="true">↗</span></a>}
       </div>
     </header>
 
-    <section class="rounded-[32px] border border-white/8 bg-white/[0.04] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
-      <div class="flex flex-wrap gap-2">
-        <a class={tabClass(view === "search")} href={searchTabHref}>Search</a>
-        <a class={tabClass(view === "profile")} href={profileTabHref}>Profile</a>
-        <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>Maintenance</a>
-      </div>
-
-      <div class="mt-5 grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
+    <section class="memory-command-surface">
+      <div class="memory-command-nav">
+        <div class="flex flex-wrap gap-2">
+          <a class={tabClass(view === "search")} href={searchTabHref}>Search</a>
+          <a class={tabClass(view === "profile")} href={profileTabHref}>Profile</a>
+          <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>Maintenance</a>
+        </div>
         <div class="flex flex-wrap gap-2" aria-label="Memory scope">
           <a class={tabClass(scope === "mine")} href={makeHref({ scope: "mine", owner_principal: "", lifecycle: lifecycle === "trash" ? "active" : lifecycle, page: "1", selected: "" })}>自分のメモリ</a>
           <a class={tabClass(scope === "org")} href={makeHref({ scope: "org", page: "1", selected: "" })}>組織のメモリ</a>
         </div>
-        <div class="flex flex-wrap gap-2 lg:justify-end" aria-label="Memory lifecycle">
+        <div class="flex flex-wrap gap-2" aria-label="Memory lifecycle">
           <a class={tabClass(lifecycle === "active")} href={activeTabHref}>有効</a>
           <a class={tabClass(lifecycle === "review")} href={reviewTabHref}>要確認</a>
           <a class={tabClass(lifecycle === "trash")} href={trashTabHref}>ゴミ箱</a>
         </div>
       </div>
 
-      <div class="mt-4 grid gap-3 md:grid-cols-4">
-        <div class="surface-soft-card !rounded-[22px] !p-4">
-          <p class="surface-label">このビュー</p>
-          <strong class="mt-2 block text-2xl font-semibold text-white">{listPage?.meta.total ?? 0}</strong>
-          <span class="mt-1 block text-xs text-zinc-500">{scope === "mine" ? "owner = 自分" : "閲覧可能な組織メモリ"}</span>
+      <div class="memory-metrics" data-memory-metrics>
+        <div class="memory-metric">
+          <p class="surface-label">{query ? "検索結果" : "このビュー"}</p>
+          <strong>{query && searchPayload?.ok ? searchPayload.data.meta.returned_count : listPage?.meta.total ?? 0}</strong>
+          <span>{query ? "表示中の一致" : scope === "mine" ? "owner = 自分" : "閲覧可能な組織メモリ"}</span>
         </div>
-        <div class="surface-soft-card !rounded-[22px] !p-4">
+        <div class="memory-metric">
           <p class="surface-label">参照</p>
-          <strong class="mt-2 block text-2xl font-semibold text-white">{analyticsPayload?.ok ? analyticsPayload.data.summary.reference_count : "—"}</strong>
-          <span class="mt-1 block text-xs text-zinc-500">期間内の参照イベント</span>
+          <strong>{analyticsPayload?.ok ? analyticsPayload.data.summary.reference_count : "—"}</strong>
+          <span>期間内の参照イベント</span>
         </div>
-        <div class="surface-soft-card !rounded-[22px] !p-4">
+        <div class="memory-metric">
           <p class="surface-label">最も参照</p>
-          <strong class="mt-2 block truncate text-sm font-semibold text-white">{scope === "org" && analyticsPayload?.ok && analyticsPayload.data.rankings.memories[0] ? analyticsPayload.data.rankings.memories[0].label : "—"}</strong>
-          <span class="mt-1 block text-xs text-zinc-500">{scope === "org" && analyticsPayload?.ok && analyticsPayload.data.rankings.memories[0] ? `${analyticsPayload.data.rankings.memories[0].reference_count} refs` : "組織ビューで表示"}</span>
+          <strong class="memory-metric-label">{scope === "org" && analyticsPayload?.ok && analyticsPayload.data.rankings.memories[0] ? analyticsPayload.data.rankings.memories[0].label : "—"}</strong>
+          <span>{scope === "org" && analyticsPayload?.ok && analyticsPayload.data.rankings.memories[0] ? `${analyticsPayload.data.rankings.memories[0].reference_count} refs` : "組織ビューで表示"}</span>
         </div>
-        <div class="surface-soft-card !rounded-[22px] !p-4">
+        <div class="memory-metric">
           <p class="surface-label">純削減</p>
-          <strong class="mt-2 block text-2xl font-semibold text-white">{analyticsPayload?.ok ? analyticsPayload.data.summary.net_saved_tokens.toLocaleString() : "—"}</strong>
-          <span class="mt-1 block text-xs text-zinc-500">計測済みの純削減tokens</span>
+          <strong>{analyticsPayload?.ok ? analyticsPayload.data.summary.net_saved_tokens.toLocaleString() : "—"}</strong>
+          <span>計測済みの純削減tokens</span>
         </div>
       </div>
 
-      <div class="mt-5 grid gap-4">
+      <details class="memory-search-panel" data-memory-search-panel>
+        <summary>
+          <span><strong>検索・フィルター</strong><small>{query ? `“${trimText(query, 34)}”` : `${projectId || "全プロジェクト"} · ${ownerPrincipal || (scope === "mine" ? "自分" : "全所有者")}`}</small></span>
+          <span class="memory-search-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="memory-search-body">
         <form class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_12rem]" method="get" action="/memories">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="page" value="1" />
@@ -711,7 +702,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
           <input type="hidden" name="lifecycle" value={lifecycle} />
           <label class="relative block">
             <span class="surface-label">Search memories</span>
-            <svg class="pointer-events-none absolute left-4 top-[3.25rem] h-5 w-5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <svg class="memory-search-icon pointer-events-none absolute h-4 w-4 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
               <circle cx="11" cy="11" r="7"></circle>
               <path d="m20 20-3.5-3.5"></path>
             </svg>
@@ -730,7 +721,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
           {datalistSuggestions.map((term) => <option value={term} />)}
         </datalist>
 
-        <div class="rounded-[24px] border border-white/8 bg-black/20 p-4">
+        <div class="memory-popular-searches">
           <div class="flex flex-wrap items-center gap-2">
             <p class="surface-label mr-2">Popular searches</p>
             {searchSuggestions.map((term) => (
@@ -747,13 +738,12 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
               </a>
             )}
           </div>
-          <p class="mt-3 text-sm leading-7 text-zinc-400">
-            サジェストは recent / durable / corpus のタグと summary から組み立てています。完全一致が思いつかない前提で、先に入口を見せます。
-          </p>
         </div>
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-          <form class="grid gap-4 md:grid-cols-2 xl:grid-cols-5" method="get" action="/memories">
+        <details class="memory-advanced-panel">
+          <summary>詳細条件</summary>
+          <div class="memory-advanced-body">
+          <form class="grid gap-3 md:grid-cols-2 xl:grid-cols-5" method="get" action="/memories">
             <input type="hidden" name="view" value={view} />
             <input type="hidden" name="q" value={query} />
             <input type="hidden" name="page" value="1" />
@@ -806,6 +796,13 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
               </select>
             </label>
             <label>
+              <span class="surface-label">History context</span>
+              <select name="include_history">
+                <option value="1" selected={includeHistory}>on</option>
+                <option value="0" selected={!includeHistory}>off</option>
+              </select>
+            </label>
+            <label>
               <span class="surface-label">Page size</span>
               <select name="page_size">
                 <option value="10" selected={pageSize === 10}>10</option>
@@ -839,14 +836,14 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             <button class="md:col-span-2 xl:col-span-5" type="submit">Apply filters</button>
           </form>
 
-          <div class="rounded-[24px] border border-white/8 bg-black/25 p-4 xl:max-w-xs">
-            <p class="surface-label">Search behavior</p>
-            <p class="mt-2 text-sm leading-7 text-zinc-300">
-              `{includeHistory ? "history on" : "history off"}` で recent context を検索に混ぜます。空検索でも recent lane は先に表示します。
-            </p>
+          <div class="memory-search-behavior">
+            <strong>履歴コンテキスト: {includeHistory ? "ON" : "OFF"}</strong>
+            <span>最近参照した内容を検索候補に含める設定です。検索語が空のときは「最近のメモリ」を表示します。</span>
           </div>
+          </div>
+        </details>
         </div>
-      </div>
+      </details>
     </section>
 
     {loadErrors.length > 0 && (
@@ -858,25 +855,18 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
       </section>
     )}
 
-    <div class="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_22rem] xl:items-start">
+    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_22rem]">
       <section class="space-y-5">
-        <div class="card">
+        <div class="card memory-results-card">
           {view === "search" ? (
             <div class="space-y-6">
               {!query && searchLandingRows.length > 0 && (
                 <section class="space-y-4">
-                  <div class="flex items-end justify-between gap-4">
-                    <div>
-                      <p class="surface-label">{searchLandingKind === "recent" ? "Recent memory lane" : "Durable memory lane"}</p>
-                      <h2 class="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">
-                        {searchLandingKind === "recent" ? "検索しなくても直近 3 件を先に出す" : "Recent が薄いときは durable を先に出す"}
-                      </h2>
-                    </div>
-                    <p class="max-w-xs text-sm leading-7 text-zinc-400">
-                      {searchLandingKind === "recent"
-                        ? "直近の context を最初から見せて、検索前の手がかり不足を減らします。"
-                        : "recent が空でも durable context を入口にして、空画面を避けます。"}
-                    </p>
+                  <div>
+                    <p class="surface-label">{searchLandingKind === "recent" ? "Recent" : "Durable"}</p>
+                    <h2 class="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                      {searchLandingKind === "recent" ? "最近のメモリ" : "おすすめのメモリ"}
+                    </h2>
                   </div>
                   <div class="grid gap-4 lg:grid-cols-3">
                     {searchLandingRows.map((item) => (
@@ -886,9 +876,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                           <span class="text-xs text-zinc-500">{formatDate(item.created_at)}</span>
                         </div>
                         <div class="mt-3 space-y-2">
-                          <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                          <h3 class="memory-row-title text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
                           {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
-                          <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
+                          <p class="memory-row-preview text-sm leading-6 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                         </div>
                         <div class="mt-4 flex flex-wrap gap-2 text-xs text-zinc-500">
                           <span>{item.source}</span>
@@ -904,14 +894,10 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 <div class="flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <p class="surface-label">{query ? "Search results" : "Corpus browser"}</p>
-                    <h2 class="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">
-                      {query ? "Ranked matches" : "Search after you skim"}
+                    <h2 class="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+                      {query ? "Ranked matches" : "すべてのメモリ"}
                     </h2>
-                    <p class="mt-2 max-w-2xl text-sm leading-7 text-zinc-400">
-                      {query
-                        ? "query があるときは top match を優先表示します。search strategy と variant 数も横で確認できます。"
-                        : "corpus はページングで維持しつつ、最初の視線は recent lane に寄せています。"}
-                    </p>
+                    {query && <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">一致度の高い順に表示します。</p>}
                   </div>
                   {query && searchPayload?.ok && (
                     <div class="flex flex-wrap gap-2">
@@ -927,23 +913,23 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                     <div class="space-y-3">
                       {searchResults.map((item, index) => (
                         <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
-                          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div class="flex min-w-0 gap-4">
-                              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/12 font-mono text-sm font-semibold text-amber-100">
+                          <div class="memory-row-layout">
+                            <div class="flex min-w-0 items-start gap-3">
+                              <div class="memory-kind-badge">
                                 {index + 1}
                               </div>
-                              <div class="min-w-0 space-y-2">
-                                <div class="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                              <div class="min-w-0 space-y-1.5 overflow-hidden">
+                                <div class="memory-row-meta">
                                   <span>{item.kind}</span>
                                   <span>{item.source}</span>
                                   <span>{formatDate(item.created_at)}</span>
                                 </div>
-                                <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
+                                <h3 class="memory-row-title text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content_preview).title}</h3>
                                 {memoryCardCopy(item.summary, item.content_preview).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content_preview).context}</p>}
-                                <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
+                                <p class="memory-row-preview text-sm leading-6 text-zinc-400">{memoryCardCopy(item.summary, item.content_preview).preview}</p>
                               </div>
                             </div>
-                            <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-zinc-300">
+                            <div class="memory-score-badge">
                               {item.score === null ? "n/a" : item.score.toFixed(3)}
                             </div>
                           </div>
@@ -970,24 +956,24 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                   <div class="space-y-3">
                     {corpusItems.map((item) => (
                       <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id })}>
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div class="flex min-w-0 gap-4">
-                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] font-mono text-sm font-semibold text-amber-100">
+                        <div class="memory-row-layout">
+                          <div class="flex min-w-0 items-start gap-3">
+                            <div class="memory-kind-badge">
                               {item.tags.includes("canonical-memory") ? "C" : item.tags.includes("memory-digest") ? "D" : item.tags.includes("compacted") ? "X" : "M"}
                             </div>
-                            <div class="min-w-0 space-y-2">
-                              <div class="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                            <div class="min-w-0 space-y-1.5 overflow-hidden">
+                              <div class="memory-row-meta">
                                 <span>{item.source}</span>
                                 <span>{item.project_id || "no-project"}</span>
                                 <span>{item.owner_principal || "owner-unassigned"}</span>
                                 <span>{formatDate(item.created_at)}</span>
                               </div>
-                              <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
+                              <h3 class="memory-row-title text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
                               {memoryCardCopy(item.summary, item.content).context && <p class="memory-card-context">{memoryCardCopy(item.summary, item.content).context}</p>}
-                              <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content).preview}</p>
+                              <p class="memory-row-preview text-sm leading-6 text-zinc-400">{memoryCardCopy(item.summary, item.content).preview}</p>
                             </div>
                           </div>
-                          <div class="flex max-w-[14rem] shrink-0 flex-wrap justify-end gap-2 text-xs uppercase tracking-[0.12em] text-zinc-300">
+                          <div class="memory-row-badges">
                             <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{item.reference_count} refs</span>
                             <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{item.used_count}/{item.reference_count || 0} used</span>
                             {item.tags.slice(0, 2).map((tag) => <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{tag}</span>)}
@@ -1149,12 +1135,12 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
         </div>
       </section>
 
-      <aside class="xl:sticky xl:top-24">
-        <div class="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(16,16,19,0.94)_0%,rgba(10,10,12,0.92)_100%)] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+      <aside class="lg:sticky lg:top-24">
+        <div class="memory-detail-panel">
           <div class="flex items-center justify-between gap-4">
             <div>
               <p class="surface-label">Selected memory</p>
-              <h2 class="mt-2 text-3xl font-semibold tracking-[-0.05em] text-white">{detail ? detail.title : "Pick a row"}</h2>
+              <h2 class="memory-detail-title mt-1.5 text-xl font-semibold tracking-[-0.04em] text-white">{detail ? detail.title : "Pick a row"}</h2>
             </div>
             {detail?.score !== null && detail?.score !== undefined && (
               <span class="surface-chip">{detail.score.toFixed(3)}</span>
@@ -1162,49 +1148,40 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
           </div>
 
           {detail ? (
-            <div class="mt-5 space-y-4">
-              <dl class="grid gap-3 sm:grid-cols-2">
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">ID</dt>
-                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{detail.id}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Source</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.source}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
+            <div class="mt-4 space-y-3">
+              <dl class="memory-detail-primary">
+                <div>
                   <dt class="surface-label">Project</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.project_id || "no-project"}</dd>
+                  <dd>{detail.project_id || "no-project"}</dd>
                 </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
+                <div>
                   <dt class="surface-label">Owner</dt>
-                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{memoryDetail?.memory?.owner_principal || detail.owner_principal || "unassigned"}</dd>
+                  <dd>{memoryDetail?.memory?.owner_principal || detail.owner_principal || "unassigned"}</dd>
                 </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Creator</dt>
-                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{memoryDetail?.memory?.created_by_principal || detail.created_by_principal || "unassigned"}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
+                <div>
                   <dt class="surface-label">Created</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{formatDate(detail.created_at)}</dd>
+                  <dd>{formatDate(detail.created_at)}</dd>
                 </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Kind</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.kind} / {detail.memory_kind}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
+                <div>
                   <dt class="surface-label">Lifecycle</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.lifecycle_state}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Version</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">v{detail.current_version}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">External key</dt>
-                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{detail.external_key || "n/a"}</dd>
+                  <dd>{detail.lifecycle_state}</dd>
                 </div>
               </dl>
+
+              <details class="memory-detail-more">
+                <summary>その他のメタデータ</summary>
+                <dl>
+                  <div><dt>ID</dt><dd>{detail.id}</dd></div>
+                  <div><dt>Source</dt><dd>{detail.source}</dd></div>
+                  <div><dt>Creator</dt><dd>{memoryDetail?.memory?.created_by_principal || detail.created_by_principal || "unassigned"}</dd></div>
+                  <div><dt>Kind</dt><dd>{detail.kind} / {detail.memory_kind}</dd></div>
+                  <div><dt>Version</dt><dd>v{detail.current_version}</dd></div>
+                  <div><dt>External key</dt><dd>{detail.external_key || "n/a"}</dd></div>
+                  <div><dt>Last accessed</dt><dd>{detail.last_accessed_at ? formatDate(detail.last_accessed_at) : "n/a"}</dd></div>
+                  <div><dt>Confidence</dt><dd>{detail.confidence_score ?? "n/a"}</dd></div>
+                  <div><dt>Utility</dt><dd>{detail.utility_score ?? "n/a"}</dd></div>
+                </dl>
+              </details>
 
               {detail.tags.length > 0 && (
                 <div class="flex flex-wrap gap-2">
@@ -1212,31 +1189,16 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 </div>
               )}
 
-              <div class="grid gap-3 sm:grid-cols-3">
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Last accessed</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.last_accessed_at ? formatDate(detail.last_accessed_at) : "n/a"}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Confidence</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.confidence_score ?? "n/a"}</dd>
-                </div>
-                <div class="surface-soft-card !rounded-[22px] !p-4">
-                  <dt class="surface-label">Utility</dt>
-                  <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.utility_score ?? "n/a"}</dd>
-                </div>
+              <div class="memory-detail-stats">
+                <div><dt>References</dt><dd>{memoryDetail?.memory?.reference_count ?? detail.reference_count}</dd></div>
+                <div><dt>Used rate</dt><dd>{memoryDetail?.memory && memoryDetail.memory.reference_count ? `${Math.round((memoryDetail.memory.used_count / memoryDetail.memory.reference_count) * 100)}%` : detail.reference_count ? `${Math.round((detail.used_count / detail.reference_count) * 100)}%` : "未計測"}</dd></div>
+                <div><dt>Consumers</dt><dd>{memoryDetail?.memory?.consumer_count ?? detail.consumer_count}</dd></div>
+                <div><dt>Net saved</dt><dd>{Number(memoryDetail?.memory?.net_saved_tokens ?? detail.net_saved_tokens ?? 0).toLocaleString()}</dd></div>
               </div>
 
-              <div class="grid gap-3 sm:grid-cols-4">
-                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">References</dt><dd class="mt-2 text-lg font-semibold text-white">{memoryDetail?.memory?.reference_count ?? detail.reference_count}</dd></div>
-                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">Used rate</dt><dd class="mt-2 text-lg font-semibold text-white">{memoryDetail?.memory && memoryDetail.memory.reference_count ? `${Math.round((memoryDetail.memory.used_count / memoryDetail.memory.reference_count) * 100)}%` : detail.reference_count ? `${Math.round((detail.used_count / detail.reference_count) * 100)}%` : "未計測"}</dd></div>
-                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">Consumers</dt><dd class="mt-2 text-lg font-semibold text-white">{memoryDetail?.memory?.consumer_count ?? detail.consumer_count}</dd></div>
-                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">Net saved</dt><dd class="mt-2 text-lg font-semibold text-white">{(memoryDetail?.memory?.net_saved_tokens ?? detail.net_saved_tokens).toLocaleString()}</dd></div>
-              </div>
-
-              <section class="surface-soft-card !rounded-[24px] !p-4">
+              <section class="surface-soft-card !rounded-[16px] !p-3">
                 <h3 class="text-base font-semibold text-white">Preview</h3>
-                <p class="mt-3 text-sm leading-7 text-zinc-300">{detail.preview}</p>
+                <p class="memory-detail-preview mt-2 text-sm leading-6 text-zinc-300">{detail.preview}</p>
               </section>
 
               {detail.kind === "memory" && (
@@ -1387,6 +1349,367 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
 </BaseLayout>
 
 <style>
+  .memory-page-header {
+    padding: .55rem .15rem .35rem;
+  }
+  .memory-map-link {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: .65rem;
+    border: 1px solid rgba(99, 189, 255, .38);
+    border-radius: 11px;
+    background: rgba(22, 135, 255, .1);
+    padding: .55rem .8rem;
+    color: #dff4ff;
+    font-size: .76rem;
+    font-weight: 650;
+    transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  }
+  .memory-map-link:hover {
+    border-color: rgba(99, 189, 255, .7);
+    background: rgba(22, 135, 255, .18);
+    transform: translateY(-1px);
+  }
+  .memory-map-link span:last-child {
+    color: #63bdff;
+    font-size: .95rem;
+  }
+  .memory-command-surface {
+    overflow: hidden;
+    border: 1px solid rgba(103, 180, 242, .16);
+    border-radius: 18px;
+    background: rgba(6, 16, 29, .68);
+    box-shadow: 0 18px 55px rgba(0, 24, 48, .18);
+  }
+  .memory-command-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem 1rem;
+    border-bottom: 1px solid rgba(103, 180, 242, .12);
+    padding: .6rem .7rem;
+  }
+  .memory-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .memory-metric {
+    min-width: 0;
+    padding: .65rem .8rem .7rem;
+  }
+  .memory-metric + .memory-metric {
+    border-left: 1px solid rgba(103, 180, 242, .12);
+  }
+  .memory-metric strong {
+    display: block;
+    margin-top: .25rem;
+    overflow: hidden;
+    color: #f3fbff;
+    font-size: 1.05rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memory-metric .memory-metric-label {
+    font-size: .75rem;
+  }
+  .memory-metric > span {
+    display: block;
+    margin-top: .18rem;
+    overflow: hidden;
+    color: rgba(191, 216, 235, .48);
+    font-size: .62rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memory-search-panel {
+    border-top: 1px solid rgba(103, 180, 242, .12);
+  }
+  .memory-search-panel > summary {
+    display: grid;
+    min-height: 44px;
+    cursor: pointer;
+    list-style: none;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .75rem;
+    align-items: center;
+    padding: .55rem .8rem;
+  }
+  .memory-search-panel > summary::-webkit-details-marker,
+  .memory-advanced-panel > summary::-webkit-details-marker {
+    display: none;
+  }
+  .memory-search-panel > summary > span:first-child {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: .65rem;
+  }
+  .memory-search-panel > summary strong {
+    flex: 0 0 auto;
+    color: #eaf8ff;
+    font-size: .76rem;
+  }
+  .memory-search-panel > summary small {
+    min-width: 0;
+    overflow: hidden;
+    color: rgba(191, 216, 235, .48);
+    font: .61rem "Fira Code", monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memory-search-chevron {
+    width: .5rem;
+    height: .5rem;
+    margin-right: .2rem;
+    border-right: 1px solid rgba(191, 216, 235, .7);
+    border-bottom: 1px solid rgba(191, 216, 235, .7);
+    transform: rotate(45deg) translateY(-2px);
+    transition: transform 160ms ease;
+  }
+  .memory-search-panel[open] .memory-search-chevron {
+    transform: rotate(225deg) translate(-1px, -1px);
+  }
+  .memory-search-body {
+    display: grid;
+    gap: .65rem;
+    border-top: 1px solid rgba(103, 180, 242, .1);
+    padding: .7rem;
+  }
+  .memory-explorer input,
+  .memory-explorer select,
+  .memory-explorer textarea {
+    border-radius: 11px;
+    padding: .62rem .75rem;
+    font-size: .78rem;
+  }
+  .memory-explorer select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%239bb3c7' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .85rem center;
+    background-size: .7rem .45rem;
+    padding-right: 2.25rem;
+  }
+  .memory-search-icon {
+    top: 2.05rem;
+    left: .85rem;
+  }
+  .memory-search-body input[type="search"] {
+    padding-left: 2.35rem;
+  }
+  .memory-search-body button {
+    min-height: 40px;
+    padding: .55rem .8rem;
+    font-size: .75rem;
+  }
+  .memory-popular-searches {
+    padding: .3rem .1rem;
+  }
+  .memory-advanced-panel {
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .07);
+    border-radius: 13px;
+    background: rgba(0, 0, 0, .14);
+  }
+  .memory-advanced-panel > summary {
+    min-height: 40px;
+    cursor: pointer;
+    list-style: none;
+    padding: .65rem .75rem;
+    color: #cfe7f7;
+    font-size: .72rem;
+    font-weight: 650;
+  }
+  .memory-advanced-panel > summary::after {
+    float: right;
+    color: rgba(191, 216, 235, .5);
+    content: "+";
+  }
+  .memory-advanced-panel[open] > summary::after {
+    content: "−";
+  }
+  .memory-advanced-body {
+    display: grid;
+    gap: .65rem;
+    border-top: 1px solid rgba(255, 255, 255, .07);
+    padding: .7rem;
+  }
+  .memory-search-behavior {
+    display: grid;
+    gap: .2rem;
+    color: rgba(191, 216, 235, .56);
+    font-size: .68rem;
+    line-height: 1.5;
+  }
+  .memory-search-behavior strong {
+    color: #dceffa;
+    font-size: .7rem;
+  }
+  .memory-results-card {
+    min-width: 0;
+    border-radius: 18px;
+    padding: 1rem;
+  }
+  .memory-row-layout {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .75rem;
+    align-items: start;
+  }
+  .memory-kind-badge {
+    display: flex;
+    width: 2.35rem;
+    height: 2.35rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(99, 189, 255, .2);
+    border-radius: 10px;
+    background: rgba(99, 189, 255, .07);
+    color: #d9f1ff;
+    font: 650 .72rem "Fira Code", monospace;
+  }
+  .memory-row-meta {
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    gap: .35rem .6rem;
+    color: rgba(191, 216, 235, .48);
+    font: .58rem "Fira Code", monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .memory-row-meta span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .memory-row-title,
+  .memory-row-preview,
+  .memory-card-context {
+    overflow-wrap: anywhere;
+  }
+  .memory-row-title,
+  .memory-row-preview {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+  }
+  .memory-row-title { -webkit-line-clamp: 2; }
+  .memory-row-preview { -webkit-line-clamp: 2; }
+  .memory-score-badge,
+  .memory-row-badges span {
+    max-width: 100%;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .09);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .035);
+    padding: .3rem .55rem;
+    color: rgba(224, 241, 248, .7);
+    font: .58rem "Fira Code", monospace;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .memory-row-badges {
+    display: flex;
+    max-width: 10rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .3rem;
+  }
+  .memory-detail-panel {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(103, 180, 242, .17);
+    border-radius: 18px;
+    background: rgba(5, 14, 25, .82);
+    padding: .85rem;
+    box-shadow: 0 18px 55px rgba(0, 24, 48, .2);
+  }
+  .memory-detail-title {
+    display: -webkit-box;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  .memory-detail-primary,
+  .memory-detail-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .45rem;
+  }
+  .memory-detail-primary > div,
+  .memory-detail-stats > div {
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, .07);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, .025);
+    padding: .55rem .6rem;
+  }
+  .memory-detail-primary dd,
+  .memory-detail-stats dd {
+    margin-top: .25rem;
+    overflow: hidden;
+    color: #e8f5fc;
+    font-size: .69rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memory-detail-stats dt {
+    color: rgba(191, 216, 235, .45);
+    font: .56rem "Fira Code", monospace;
+    text-transform: uppercase;
+  }
+  .memory-detail-stats dd {
+    font-size: .9rem;
+    font-weight: 650;
+  }
+  .memory-detail-more {
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .07);
+    border-radius: 11px;
+  }
+  .memory-detail-more > summary {
+    min-height: 38px;
+    cursor: pointer;
+    list-style: none;
+    padding: .6rem;
+    color: rgba(224, 241, 248, .72);
+    font-size: .68rem;
+    font-weight: 650;
+  }
+  .memory-detail-more > summary::-webkit-details-marker { display: none; }
+  .memory-detail-more > summary::after { float: right; content: "+"; }
+  .memory-detail-more[open] > summary::after { content: "−"; }
+  .memory-detail-more dl {
+    display: grid;
+    border-top: 1px solid rgba(255, 255, 255, .07);
+  }
+  .memory-detail-more dl > div {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: .5rem;
+    padding: .45rem .6rem;
+  }
+  .memory-detail-more dl > div + div { border-top: 1px solid rgba(255, 255, 255, .05); }
+  .memory-detail-more dt { color: rgba(191, 216, 235, .42); font: .56rem "Fira Code", monospace; text-transform: uppercase; }
+  .memory-detail-more dd { overflow: hidden; color: #dcecf5; font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
+  .memory-detail-preview {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+  }
   .memory-card-context {
     margin-top: .45rem;
     color: rgba(169, 200, 226, .78);
@@ -1394,9 +1717,59 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     font-size: .68rem;
     letter-spacing: .03em;
   }
+  @media (max-width: 760px) {
+    .memory-command-nav { align-items: flex-start; flex-direction: column; }
+    .memory-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .memory-metric:nth-child(3) { border-left: 0; border-top: 1px solid rgba(103, 180, 242, .12); }
+    .memory-metric:nth-child(4) { border-top: 1px solid rgba(103, 180, 242, .12); }
+    .memory-search-panel > summary > span:first-child { display: grid; gap: .15rem; }
+    .memory-row-layout { grid-template-columns: 1fr; }
+    .memory-row-badges { max-width: none; justify-content: flex-start; }
+  }
 </style>
 
 <script>
+  const memorySelectionScrollKey = "org-brain:memory-selection-scroll";
+
+  for (const link of document.querySelectorAll<HTMLAnchorElement>("a.memory-list-row[href*='selected=']")) {
+    link.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const destination = new URL(link.href, window.location.href);
+      const selected = destination.searchParams.get("selected");
+      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname || !selected) return;
+      try {
+        window.sessionStorage.setItem(memorySelectionScrollKey, JSON.stringify({
+          selected,
+          scrollY: window.scrollY,
+          savedAt: Date.now()
+        }));
+      } catch {
+        // Selection still works when storage is unavailable; only scroll restoration is skipped.
+      }
+    });
+  }
+
+  try {
+    const stored = window.sessionStorage.getItem(memorySelectionScrollKey);
+    const currentSelected = new URLSearchParams(window.location.search).get("selected");
+    if (stored && currentSelected) {
+      const saved = JSON.parse(stored) as { selected?: string; scrollY?: number; savedAt?: number };
+      window.sessionStorage.removeItem(memorySelectionScrollKey);
+      const isFresh = typeof saved.savedAt === "number" && Date.now() - saved.savedAt < 30_000;
+      if (saved.selected === currentSelected && typeof saved.scrollY === "number" && isFresh) {
+        const restoreScroll = () => window.scrollTo({ top: saved.scrollY, behavior: "instant" });
+        window.requestAnimationFrame(() => window.requestAnimationFrame(restoreScroll));
+        window.addEventListener("load", restoreScroll, { once: true });
+      }
+    }
+  } catch {
+    try {
+      window.sessionStorage.removeItem(memorySelectionScrollKey);
+    } catch {
+      // Storage can be disabled by browser privacy settings.
+    }
+  }
+
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-memory-action]")) {
     button.addEventListener("click", async () => {
       const action = button.dataset.memoryAction;

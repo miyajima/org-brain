@@ -5,18 +5,25 @@ test.describe("dashboard visualizations", () => {
     await page.goto("/?tenant_id=default&project_id=org-brain&lang=ja");
 
     await expect(page.getByRole("heading", { name: "組織の活動" })).toBeVisible();
-    await expect(page.locator(".insight-page-guide")).toBeVisible();
-    await expect(page.locator(".insight-page-guide dt").filter({ hasText: "この画面を使う場面" })).toBeHidden();
-    await page.locator(".insight-page-guide summary").click();
-    await expect(page.locator(".insight-page-guide dt").filter({ hasText: "この画面を使う場面" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "いま見るべきこと" })).toBeVisible();
-    await expect(page.locator(".insight-scope-rail")).toContainText("default");
-    await expect(page.locator(".insight-scope-rail")).toContainText("org-brain");
-    await expect(page.locator(".insight-scope-rail")).toContainText("含まれるデータ");
-    await expect(page.locator(".insight-scope-rail")).toContainText("含まれないデータ");
+    await expect(page.locator(".intelligence-header > div:first-child > p:not(.intelligence-eyebrow)")).toHaveCount(0);
+    await expect(page.locator(".insight-page-guide")).toHaveCount(0);
+    const headerLayout = await page.locator(".intelligence-header").evaluate((header) => {
+      const title = header.firstElementChild?.getBoundingClientRect();
+      const actions = header.lastElementChild?.getBoundingClientRect();
+      const bounds = header.getBoundingClientRect();
+      return { height: bounds.height, titleRight: title?.right ?? 0, actionsLeft: actions?.left ?? 0 };
+    });
+    expect(headerLayout.height).toBeLessThan(130);
+    expect(headerLayout.actionsLeft).toBeGreaterThan(headerLayout.titleRight);
+    await expect(page.locator(".insight-scope-rail")).toHaveCount(0);
+    await expect(page.locator(".recommended-actions")).toHaveCount(0);
+    await expect(page.locator(".activity-omissions")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "エージェント、Org Brain、プロジェクト間のアクティビティ経路" })).toBeVisible();
+    await expect(page.getByText("中央の項目を選ぶと、下のReplayをその種類に絞り込みます。", { exact: false })).toBeVisible();
     await expect(page.getByText("Codex", { exact: true }).first()).toBeVisible();
-    await expect(page.locator(".recommended-actions").getByText("Taskが失敗しており、確認が必要です。")).toBeVisible();
     await expect(page.getByRole("heading", { name: "過去24時間のイベント" })).toBeVisible();
+    await expect(page.locator(".timeline-bucket")).toHaveCount(12);
+    await expect(page.locator(".timeline-recent").getByText("Task「Index parity check」が失敗しました。")).toBeVisible();
     await expect(page.locator("body")).not.toContainText("input_ref");
     await expect(page.locator("body")).not.toContainText("raw query");
   });
@@ -27,8 +34,7 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByRole("link", { name: "30日", exact: true })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { name: "過去30日のイベント" })).toBeVisible();
     await expect(page.getByText("30日前", { exact: true })).toBeVisible();
-    await expect(page.locator(".period-comparison")).toContainText("過去24時間との比較");
-    await page.locator(".activity-topology > summary").click();
+    await expect(page.locator(".period-comparison")).toHaveCount(0);
     await expect(page.locator(".topology-fallback")).toContainText("この期間に観測");
     await expect(page.locator(".topology-fallback")).toContainText("最終観測");
     await expect(page.locator(".topology-fallback")).toContainText("観測元");
@@ -44,7 +50,7 @@ test.describe("dashboard visualizations", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/activity_capability=understand/u);
     await expect(page.locator(".activity-timeline > header > span")).toHaveText("理解する：1 / 2件");
-    const filteredEvents = page.locator(".timeline-event-list");
+    const filteredEvents = page.locator(".timeline-recent");
     await expect(filteredEvents.getByText("「Login principal group ACL design」を参照しました。")).toHaveCount(1);
     await expect(filteredEvents.getByText("Task「Index parity check」が失敗しました。")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "すべての活動を表示" })).toHaveAttribute("aria-current", "true");
@@ -77,11 +83,44 @@ test.describe("dashboard visualizations", () => {
     await expect(page.locator(".inspector-relations")).toContainText("この知識から");
   });
 
+  test("keeps the 3D map search and filters collapsed in one panel", async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+
+    try {
+      await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja");
+
+      await expect(page.getByRole("heading", { name: "3D memory map" })).toBeVisible();
+      const controls = page.locator("[data-map-controls]");
+      const summary = controls.locator("summary");
+      const toolbar = controls.locator(".memory-map-toolbar");
+      const filters = controls.locator(".memory-map-filters");
+
+      await expect(controls).not.toHaveAttribute("open", "");
+      await expect(summary).toContainText("Search & filters");
+      await expect(summary).toContainText("org-brain");
+      await expect(toolbar).toBeHidden();
+      await expect(filters).toBeHidden();
+
+      await summary.click();
+      await expect(controls).toHaveAttribute("open", "");
+      await expect(toolbar).toBeVisible();
+      await expect(filters).toBeVisible();
+      await expect(filters.locator("legend")).toHaveCount(0);
+      expect(await filters.locator(".memory-map-date-range").evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("none");
+      expect(await controls.locator(".memory-map-controls-body").evaluate((element) => {
+        const [toolbar, filters] = Array.from(element.children).map((child) => child.getBoundingClientRect());
+        return Math.abs(toolbar.bottom - filters.top);
+      })).toBeLessThan(1);
+    } finally {
+      await context.close();
+    }
+  });
+
   test("makes observed actors and projects keyboard-operable", async ({ page }) => {
     await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja");
 
     const actor = page.locator(".topology-entity-link").first();
-    await page.locator(".activity-topology > summary").click();
     await actor.focus();
     await expect(actor).toBeFocused();
     await page.keyboard.press("Enter");
@@ -114,12 +153,13 @@ test.describe("dashboard visualizations", () => {
   test("keeps the activity fallback and bounded graph usable at 390px", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja");
-    await page.locator(".activity-topology > summary").click();
     await expect(page.locator(".topology-fallback")).toBeVisible();
     await expect(page.getByRole("heading", { name: "観測中のエージェント" })).toBeVisible();
     await expect(page.locator(".console-primary-links")).toBeHidden();
     await page.locator(".console-mobile-nav summary").click();
     await expect(page.locator(".console-mobile-nav-panel").getByRole("link", { name: "知識のつながり" })).toBeVisible();
+    expect(await page.locator(".activity-timeline").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await page.locator(".timeline-overview").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(180);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja");
@@ -224,10 +264,12 @@ test.describe("dashboard visualizations", () => {
 
     await page.goto("/overview?tenant_id=default&project_id=e2e-dense&lang=ja");
     await expect(page.locator(".activity-timeline > header > span")).toContainText("250");
+    await expect(page.locator(".timeline-bucket")).toHaveCount(12);
+    expect(await page.locator(".activity-timeline").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.locator(".timeline-event-list > summary").click();
-    const lastDenseActivity = page.getByText("Dense activity 250");
-    await lastDenseActivity.scrollIntoViewIfNeeded();
-    await expect(lastDenseActivity).toBeVisible();
+    await expect(page.locator(".timeline-event-list li")).toHaveCount(244);
+    await page.locator(".timeline-event-list li").last().scrollIntoViewIfNeeded();
+    await expect(page.locator(".timeline-event-list li").last()).toBeVisible();
 
     await page.goto("/memories/constellation?tenant_id=default&project_id=e2e-dense&lang=ja");
     await expect(page.locator(".knowledge-node")).toHaveCount(150);
@@ -237,6 +279,23 @@ test.describe("dashboard visualizations", () => {
     await page.goto("/decisions/history?tenant_id=default&project_id=e2e-dense&lang=ja");
     await expect(page.locator(".strata-event")).toHaveCount(101);
     await expect(page.locator(".legend-truncated")).toBeVisible();
+  });
+
+  test("keeps the activity timeline compact without horizontal overflow", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/overview?tenant_id=default&project_id=e2e-dense&lang=ja");
+
+    await expect(page.locator(".activity-timeline > header > span")).toContainText("250");
+    await expect(page.locator(".timeline-bucket")).toHaveCount(12);
+    await expect(page.locator(".timeline-recent li")).toHaveCount(6);
+    expect(await page.locator(".activity-timeline").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await page.locator(".timeline-overview").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(180);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+    await page.locator(".timeline-event-list > summary").click();
+    await expect(page.locator(".timeline-event-list li")).toHaveCount(244);
+    await page.locator(".timeline-event-list li").last().scrollIntoViewIfNeeded();
+    await expect(page.locator(".timeline-event-list li").last()).toBeVisible();
   });
 
   test("polls at 30 seconds, pauses while hidden, and resumes immediately", async ({ page }) => {
@@ -290,12 +349,12 @@ test.describe("dashboard visualizations", () => {
     await page.clock.fastForward(30_000);
     await expect.poll(() => incrementalRequests).toBe(1);
     await expect(page.locator("intelligence-poller")).toHaveAttribute("data-poll-state", "backoff");
-    await expect(page.locator(".recommended-actions").getByText("Taskが失敗しており、確認が必要です。")).toBeVisible();
+    await expect(page.locator(".timeline-recent").getByText("Task「Index parity check」が失敗しました。")).toBeVisible();
 
     await page.clock.fastForward(59_999);
     expect(incrementalRequests).toBe(1);
     await page.clock.fastForward(1);
     await expect.poll(() => incrementalRequests).toBe(2);
-    await expect(page.locator(".recommended-actions").getByText("Taskが失敗しており、確認が必要です。")).toBeVisible();
+    await expect(page.locator(".timeline-recent").getByText("Task「Index parity check」が失敗しました。")).toBeVisible();
   });
 });
