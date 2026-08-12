@@ -179,15 +179,15 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(4, 10, 18, 0.78);
     box-shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
-    @apply sticky top-3 z-30 mx-auto mt-3 flex max-w-[96rem] flex-wrap items-center gap-2 rounded-[22px] px-4 py-2.5 backdrop-blur-2xl sm:px-5;
+    @apply sticky top-3 z-30 mx-auto mt-3 flex max-w-[96rem] flex-nowrap items-center gap-2 overflow-visible rounded-[22px] px-3 py-2 backdrop-blur-2xl sm:px-4;
   }
 
   .console-primary-links {
-    @apply flex flex-wrap items-center gap-1;
+    @apply flex flex-nowrap items-center gap-1;
   }
 
   .console-nav-link {
-    @apply inline-flex min-h-10 items-center rounded-full px-4 text-sm font-medium text-zinc-300 transition duration-200 hover:-translate-y-0.5 hover:bg-white/8 hover:text-white;
+    @apply inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-sm font-medium text-zinc-300 transition duration-200 hover:-translate-y-0.5 hover:bg-white/8 hover:text-white;
   }
 
   .console-nav-link[aria-current="page"] {
@@ -203,7 +203,7 @@
     font-weight: 600;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    @apply mr-auto inline-flex min-h-10 items-center gap-2 whitespace-nowrap pr-3;
+    @apply inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap pr-2;
   }
 
   .console-brand img {
@@ -377,7 +377,9 @@
   }
 
   .console-nav-insights .console-primary-links,
-  .console-nav-insights .console-nav-menu {
+  .console-nav-insights .console-nav-menu,
+  .console-nav:not(.console-nav-insights) .console-primary-links,
+  .console-nav:not(.console-nav-insights) .console-nav-menu {
     display: none;
   }
 

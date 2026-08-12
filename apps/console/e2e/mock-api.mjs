@@ -105,6 +105,7 @@ const dashboardGraph = {
     { id: "cluster:memory_kind:semantic", kind: "memory_kind", label: "semantic", node_ids: [`memory:${memory.id}`] },
     { id: "cluster:domain:architecture", kind: "domain", label: "architecture", node_ids: ["decision:decision-e2e"] }
   ],
+  generated_at: now,
   truncated: false,
   omitted_node_count: 0
 };
@@ -395,6 +396,7 @@ function taskFixtures(tenantId, projectId) {
 function operationsStatus(tenantId) {
   return {
     tenant_id: tenantId,
+    generated_at: now,
     scheduled_jobs: [{ job_name: "memory_measurement", latest_status: "succeeded", stale: false, last_success_at: now, success_age_ms: 3_600_000, next_expected_at: now + 3_600_000 }],
     retention_queue: { pending: 2, overdue: 0, failed: 0, manual_review: 0 },
     memories: { total: 12, conflicting: 1, expired: 0 },

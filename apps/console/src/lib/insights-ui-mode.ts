@@ -64,7 +64,7 @@ export function insightsUiBehavior(mode: InsightsUiMode): InsightsUiBehavior {
   return {
     enableInsightsRoutes: mode !== "off",
     renderInsightsHome: mode === "on",
-    useInsightsNavigation: mode === "on",
+    useInsightsNavigation: mode !== "off",
     showOverviewLab: mode === "beta",
     showLegacyDashboard: mode === "on"
   };

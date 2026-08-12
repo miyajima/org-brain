@@ -3,6 +3,7 @@ import {
   DASHBOARD_TASK_STATUSES,
   type DashboardTask
 } from "../lib/dashboard-page";
+import { dashboardLabel, dashboardStatusTone } from "../lib/dashboard-copy";
 
 const {
   tasks,
@@ -28,9 +29,9 @@ const {
 
 const copy = {
   en: {
-    title: "Org Brain Dashboard",
+    title: "Org Brain Tasks",
     description: "Recent tasks and their current status.",
-    preview: "Classic task view",
+    preview: "Task list",
     search: "Search tasks",
     searchPlaceholder: "ID, capability, or project",
     status: "Status",
@@ -52,11 +53,11 @@ const copy = {
     pagination: "Task pagination"
   },
   ja: {
-    title: "Org Brain ダッシュボード",
+    title: "Org Brain Task一覧",
     description: "最近のTaskと現在のステータスを確認します。",
-    preview: "従来のTaskビュー",
+    preview: "Task一覧",
     search: "Taskを検索",
-    searchPlaceholder: "ID・Capability・Project",
+    searchPlaceholder: "ID・処理名・プロジェクト",
     status: "ステータス",
     all: "すべてのステータス",
     apply: "適用",
@@ -67,12 +68,12 @@ const copy = {
     unavailable: "Taskを取得できませんでした",
     retry: "再試行",
     taskId: "Task ID",
-    capability: "Capability",
+    capability: "処理",
     updated: "更新日時",
     previous: "前へ",
     next: "次へ",
     more: "次のページに続きがあります。",
-    tenant: "Tenant",
+    tenant: "テナント",
     pagination: "Taskページ"
   },
   zh: {
@@ -140,6 +141,7 @@ const counters = visibleTasks.reduce<Record<string, number>>((acc, task) => {
   acc[task.status] = (acc[task.status] ?? 0) + 1;
   return acc;
 }, {});
+const label = (kind: "status" | "capability", value: string) => dashboardLabel(kind, value, lang);
 ---
 
 {error && (
@@ -170,7 +172,7 @@ const counters = visibleTasks.reduce<Record<string, number>>((acc, task) => {
       <span>{copy.status}</span>
       <select name="task_status">
         <option value="" selected={!status}>{copy.all}</option>
-        {statuses.map((value) => <option value={value} selected={status === value}>{value}</option>)}
+        {statuses.map((value) => <option value={value} selected={status === value}>{label("status", value)}</option>)}
       </select>
     </label>
     <button type="submit">{copy.apply}</button>
@@ -188,9 +190,9 @@ const counters = visibleTasks.reduce<Record<string, number>>((acc, task) => {
         <h2 id="legacy-status-title">{copy.currentPage}</h2>
         <dl>
           {Object.keys(counters).length === 0 ? (
-            <div><dt>{copy.all}</dt><dd>0</dd></div>
+            <div><dt>{status ? label("status", status) : copy.all}</dt><dd>0</dd></div>
           ) : Object.entries(counters).map(([taskStatus, count]) => (
-            <div><dt>{taskStatus}</dt><dd>{count}</dd></div>
+            <div><dt>{label("status", taskStatus)}</dt><dd>{count}</dd></div>
           ))}
         </dl>
       </section>
@@ -206,8 +208,8 @@ const counters = visibleTasks.reduce<Record<string, number>>((acc, task) => {
             ) : visibleTasks.map((task) => (
               <tr>
                 <td><a href={taskHref(task.id)}>{task.id}</a></td>
-                <td>{task.capability}</td>
-                <td>{task.status}</td>
+                <td title={task.capability}>{label("capability", task.capability)}</td>
+                <td><span class={`task-status task-status-${dashboardStatusTone(task.status)}`} title={task.status}>{label("status", task.status)}</span></td>
                 <td>{new Date(task.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td>
               </tr>
             ))}
@@ -241,6 +243,8 @@ const counters = visibleTasks.reduce<Record<string, number>>((acc, task) => {
   .legacy-status-summary dl div { display: flex; gap: .45rem; padding: .45rem .7rem; border: 1px solid var(--console-border); border-radius: 999px; }
   .legacy-status-summary dt { color: var(--console-muted); }
   .legacy-status-summary dd { margin: 0; font-weight: 700; }
+  .task-status { display: inline-flex; min-height: 1.6rem; align-items: center; border-radius: 999px; padding: .2rem .55rem; font-size: .75rem; font-weight: 650; }
+  .task-status-healthy { background: rgba(67,220,173,.12); color: #9ff4d4; }.task-status-warning { background: rgba(255,184,77,.13); color: #ffd58a; }.task-status-critical { background: rgba(255,92,103,.14); color: #ffb4bb; }.task-status-neutral { background: rgba(255,255,255,.07); color: var(--console-muted); }
   .legacy-task-pagination { display: flex; justify-content: center; align-items: center; gap: .9rem; }
   .legacy-task-pagination span[aria-current="page"] { min-width: 2rem; text-align: center; font-weight: 700; }
   @media (max-width: 760px) {

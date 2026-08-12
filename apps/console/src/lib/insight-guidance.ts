@@ -2,6 +2,7 @@ import type { IntelligenceLocale } from "./intelligence-locale";
 import type { KnowledgeGraphNode } from "./knowledge-graph-ui";
 import { eventDeepLink, type DashboardActivity } from "./nervous-system-ui";
 import type { StrataDetailPayload, StrataPayload } from "./memory-strata-ui";
+import { dashboardLabel } from "./dashboard-copy";
 
 export type InsightSurface = "activity" | "connections" | "history";
 
@@ -204,6 +205,22 @@ function activitySelectionHref(eventId: string, params: URLSearchParams, pathnam
   return `${pathname}?${next.toString()}`;
 }
 
+function activitySignalReason(kind: string, fallback: string, locale: Locale): string {
+  if (locale !== "ja") return fallback;
+  const reasons: Record<string, string> = {
+    task_failed: "Taskが失敗しており、確認が必要です。",
+    task_stalled: "Taskが停滞しています。状態と依存関係を確認してください。",
+    handoff_unacked: "引き継ぎが確認されていません。担当者と状態を確認してください。",
+    impact_unreported: "影響範囲が未報告です。関連する記録を確認してください。",
+    retrieval_miss: "検索で必要な知識が見つかっていません。根拠と検索条件を確認してください。",
+    negative_memory_effect: "記憶の利用結果に悪影響が記録されています。根拠を確認してください。",
+    decision_conflict: "判断の競合があります。関連する根拠を確認してください。",
+    memory_dormant: "最近利用されていない記憶があります。内容の鮮度を確認してください。",
+    memory_expired: "有効期限が切れた記憶があります。最新の記録を確認してください。"
+  };
+  return reasons[kind] ?? fallback;
+}
+
 export function activityRecommendedActions(
   data: DashboardActivity,
   params: URLSearchParams,
@@ -224,13 +241,13 @@ export function activityRecommendedActions(
         ? activitySelectionHref(event.id, params, pathname)
       : taskLike && signal.subject_id
         ? scopedPath(`/tasks/${encodeURIComponent(signal.subject_id)}`, params)
-        : "#attention-signals";
+        : "#recommended-actions";
     actions.push({
       id: signal.id,
       tone: signal.severity,
       title: copy.title,
-      reason: signal.reason,
-      evidence: `${copy.evidence} · ${signal.kind}`,
+      reason: activitySignalReason(signal.kind, signal.reason, locale),
+      evidence: `${copy.evidence} · ${dashboardLabel("signal", signal.kind, locale)}`,
       cta: taskLike ? copy.ctaTask : copy.ctaSignal,
       href
     });
@@ -242,8 +259,10 @@ export function activityRecommendedActions(
       id: event.id,
       tone: event.severity === "critical" ? "critical" : "warning",
       title: copy.title,
-      reason: event.summary,
-      evidence: `${event.type} · ${event.status ?? event.severity}`,
+      reason: locale === "ja" && event.status === "failed"
+        ? `Task「${event.subject.label}」が失敗しています。原因を確認してください。`
+        : event.summary,
+      evidence: `${dashboardLabel("event", event.type, locale)} · ${dashboardLabel("status", event.status ?? event.severity, locale)}`,
       cta: event.task_id ? copy.ctaTask : copy.ctaSignal,
       href: event.task_id ? eventDeepLink(event, scopedParams(params)) ?? activitySelectionHref(event.id, params, pathname) : activitySelectionHref(event.id, params, pathname)
     });

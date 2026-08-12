@@ -1,9 +1,10 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
+import { dashboardLabel } from "../../lib/dashboard-copy";
 
 const taskId = Astro.params.task_id!;
-const { tenantId, projectId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const taskParams = new URLSearchParams({ tenant_id: tenantId });
 if (projectId) taskParams.set("project_id", projectId);
 
@@ -16,27 +17,58 @@ const taskPayload: any = taskResponse.ok ? await taskResponse.json() : { ok: fal
 const eventPayload: any = eventResponse.ok ? await eventResponse.json() : { ok: false, data: [] };
 const task = taskPayload.ok ? taskPayload.data : null;
 const events = eventPayload.ok ? eventPayload.data : [];
+const copy = {
+  en: {
+    title: "Task detail",
+    missing: "Task not found.",
+    timeline: "Event timeline",
+    kind: "Kind",
+    at: "At",
+    payload: "Payload",
+    empty: "No events"
+  },
+  ja: {
+    title: "Task詳細",
+    missing: "Taskが見つかりません。",
+    timeline: "イベント履歴",
+    kind: "種類",
+    at: "発生日時",
+    payload: "内容",
+    empty: "イベントなし"
+  },
+  zh: {
+    title: "任务详情",
+    missing: "未找到任务。",
+    timeline: "事件记录",
+    kind: "类型",
+    at: "时间",
+    payload: "内容",
+    empty: "没有事件"
+  }
+}[lang];
+const eventKind = (value: unknown) => dashboardLabel("event", typeof value === "string" ? value : "", lang);
+const formatEventPayload = (value: unknown) => typeof value === "string" ? value : JSON.stringify(value, null, 2);
 ---
-<BaseLayout title={`Task ${taskId}`}>
+<BaseLayout title={`${copy.title} · ${taskId}`} lang={lang}>
   <section class="card">
-    <h1>Task詳細</h1>
-    {task ? <pre>{JSON.stringify(task, null, 2)}</pre> : <p>Taskが見つかりません。</p>}
+    <h1>{copy.title}</h1>
+    {task ? <pre>{JSON.stringify(task, null, 2)}</pre> : <p>{copy.missing}</p>}
   </section>
 
   <section class="card">
-    <h2>Event Timeline</h2>
+    <h2>{copy.timeline}</h2>
     <table>
       <thead>
-        <tr><th>Kind</th><th>At</th><th>Payload</th></tr>
+        <tr><th>{copy.kind}</th><th>{copy.at}</th><th>{copy.payload}</th></tr>
       </thead>
       <tbody>
         {events.length === 0 ? (
-          <tr><td colspan="3">Eventなし</td></tr>
+          <tr><td colspan="3">{copy.empty}</td></tr>
         ) : events.map((event: any) => (
           <tr>
-            <td>{event.kind}</td>
+            <td title={event.kind}>{eventKind(event.kind)}</td>
             <td>{new Date(event.created_at).toLocaleString("ja-JP")}</td>
-            <td><pre>{event.payload}</pre></td>
+            <td><pre>{formatEventPayload(event.payload)}</pre></td>
           </tr>
         ))}
       </tbody>

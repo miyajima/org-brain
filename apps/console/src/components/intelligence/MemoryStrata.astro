@@ -183,7 +183,7 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
   {loadError ? (
     <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
   ) : (
-    <RecommendedActions title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
+    <RecommendedActions locale={locale} title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
   )}
 
   {!loadError && <div class="strata-filterbar">

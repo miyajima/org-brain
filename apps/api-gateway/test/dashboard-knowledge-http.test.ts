@@ -57,6 +57,7 @@ const graphResponse = {
   nodes: [],
   edges: [],
   clusters: [],
+  generated_at: 1_000,
   truncated: false,
   omitted_node_count: 0
 };

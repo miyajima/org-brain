@@ -27,6 +27,8 @@ describe("insight guidance", () => {
     const actions = activityRecommendedActions(data, new URLSearchParams({ tenant_id: "acme", lang: "ja" }), "/overview", "ja");
     expect(actions).toHaveLength(1);
     expect(actions[0]).toMatchObject({ tone: "critical", cta: "Taskを確認" });
+    expect(actions[0].reason).toContain("Taskが失敗");
+    expect(actions[0].evidence).toContain("Taskの失敗");
     expect(actions[0].href).toContain("/tasks/task-1");
     expect(actions[0].href).toContain("tenant_id=acme");
   });

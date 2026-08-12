@@ -5,6 +5,7 @@ import InsightPageGuide from "./InsightPageGuide.astro";
 import InsightScopeRail from "./InsightScopeRail.astro";
 import RecommendedActions from "./RecommendedActions.astro";
 import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { dashboardLabel, memoryDisplayCopy } from "../../lib/dashboard-copy";
 import { insightBriefingTitle, knowledgeHealthyCopy, knowledgeMetricInterpretations, knowledgeRecommendedActions, pageGuide } from "../../lib/insight-guidance";
 import {
   chooseFocusNode,
@@ -28,6 +29,8 @@ const { data, loadError = null, refreshUrl, params, locale = "en" } = Astro.prop
 };
 const copy = intelligencePageCopy(locale);
 const selectedId = params.get("selected");
+const requestedView = params.get("view");
+const view: "graph" | "list" = requestedView === "list" ? "list" : "graph";
 const nodeTypes: Array<{ value: KnowledgeNodeType | "all"; label: string }> = [
   { value: "all", label: copy.constellation.nodeTypes.all },
   { value: "memory", label: copy.constellation.nodeTypes.memory },
@@ -56,6 +59,12 @@ const selectHref = (node: KnowledgeGraphNode) => {
   next.set("selected", node.id);
   return `/memories/constellation?${next.toString()}`;
 };
+const viewHref = (nextView: "graph" | "list") => {
+  const next = new URLSearchParams(params);
+  if (nextView === "graph") next.delete("view");
+  else next.set("view", nextView);
+  return `/memories/constellation?${next.toString()}`;
+};
 const selectedDeepLink = selected ? graphDeepLink(selected, scope) : null;
 const hasDirectRecord = selected ? ["memory", "decision", "resource", "task"].includes(selected.type) : false;
 const guide = pageGuide("connections", locale);
@@ -79,6 +88,16 @@ const hexagonPoints = (x: number, y: number, radius: number) => Array.from({ len
 }).join(" ");
 const activeVisualKinds = [...new Set(graph.nodes.map((node) => visualKind(node)))];
 const nodeTypeLabel = (type: KnowledgeNodeType) => copy.constellation.nodeTypes[type];
+const nodeKindLabel = (kind: string) => dashboardLabel("nodeKind", kind, locale);
+const displayCopy = (node: KnowledgeGraphNode) => node.type === "memory"
+  ? memoryDisplayCopy(node.label, node.summary)
+  : { title: node.label, context: null, preview: node.summary || "", rawLabel: node.label };
+const nodeLabelLines = (node: KnowledgeGraphNode) => {
+  const label = displayCopy(node).title;
+  const maxChars = 18;
+  const clipped = label.length > maxChars * 2 ? `${label.slice(0, maxChars * 2 - 1)}…` : label;
+  return [clipped.slice(0, maxChars), clipped.slice(maxChars, maxChars * 2)].filter(Boolean);
+};
 const clusterShapes = graph.clusters.map((cluster) => {
   const members = cluster.node_ids.map((id) => positionById.get(id)).filter(Boolean) as typeof positioned;
   if (members.length < 2) return null;
@@ -101,6 +120,9 @@ const uiCopy = {
     fallbackTitle: "The requested knowledge was not found",
     fallbackBody: "The URL was normalized and the most connected available knowledge was selected instead.",
     relationHeading: "Relationships from this knowledge",
+    viewLabel: "View mode",
+    graphView: "Graph",
+    listView: "List",
     outgoing: "outgoing",
     incoming: "incoming",
     mutual: "mutual",
@@ -116,6 +138,9 @@ const uiCopy = {
     fallbackTitle: "指定された知識は見つかりませんでした",
     fallbackBody: "URLを正規化し、利用可能な知識のうち接続の多い項目を代わりに選択しました。",
     relationHeading: "この知識からの関係",
+    viewLabel: "表示方法",
+    graphView: "グラフ",
+    listView: "一覧",
     outgoing: "この知識から",
     incoming: "この知識へ",
     mutual: "相互",
@@ -131,6 +156,9 @@ const uiCopy = {
     fallbackTitle: "未找到指定知识",
     fallbackBody: "URL已规范化，并改为选择可用知识中连接最多的项目。",
     relationHeading: "此知识的关系",
+    viewLabel: "显示方式",
+    graphView: "图谱",
+    listView: "列表",
     outgoing: "从此知识出发",
     incoming: "指向此知识",
     mutual: "相互",
@@ -141,7 +169,6 @@ const uiCopy = {
 <section class="intelligence-surface constellation" aria-labelledby="constellation-title">
   <header class="constellation-header">
     <div>
-      <ConsoleSurfaceNav section="memories" params={params} locale={locale} />
       <p class="intelligence-eyebrow">{copy.constellation.eyebrow}</p>
       <h1 id="constellation-title">{copy.constellation.title}</h1>
       <p>{copy.constellation.description}</p>
@@ -163,20 +190,69 @@ const uiCopy = {
         </label>
         <button type="submit">{copy.constellation.apply}</button>
       </form>
-      <IntelligencePoller refreshUrl={refreshUrl} initialData={data} label={copy.constellation.pollerLabel} locale={locale} />
+      <IntelligencePoller refreshUrl={refreshUrl} initialData={data} generatedAt={data.generated_at} label={copy.constellation.pollerLabel} locale={locale} />
     </div>
   </header>
 
+  <div class="constellation-surface-nav"><ConsoleSurfaceNav section="memories" params={params} locale={locale} /></div>
   <InsightPageGuide guide={guide} />
-  <InsightScopeRail params={params} locale={locale} windowLabel={uiCopy.window} sourceLabel={uiCopy.source} included={uiCopy.included} excluded={uiCopy.excluded} state={dataState} />
+  <InsightScopeRail params={params} locale={locale} windowLabel={uiCopy.window} sourceLabel={uiCopy.source} included={uiCopy.included} excluded={uiCopy.excluded} state={dataState} generatedAt={data.generated_at} />
   {selectionFallback && <section class="selection-fallback" role="status"><strong>{uiCopy.fallbackTitle}</strong><p>{uiCopy.fallbackBody}</p></section>}
   {loadError ? (
     <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
   ) : (
-    <RecommendedActions title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
+    <RecommendedActions locale={locale} title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
   )}
 
-  {!loadError && <div class="constellation-layout">
+  {!loadError && <nav class="constellation-view-switcher" aria-label={uiCopy.viewLabel}>
+    <span>{uiCopy.viewLabel}</span>
+    <a href={viewHref("graph")} aria-current={view === "graph" ? "page" : undefined}>{uiCopy.graphView}</a>
+    <a href={viewHref("list")} aria-current={view === "list" ? "page" : undefined}>{uiCopy.listView}</a>
+  </nav>}
+
+  {!loadError && <div class:list={["constellation-layout", `view-${view}`]}>
+    <aside class="node-inspector" aria-labelledby="node-inspector-title">
+      {selected ? (
+        <>
+          <div class="inspector-heading">
+            <span class:list={["inspector-emblem", `inspector-${visualKind(selected)}`]}><span>{visualKindLabel(visualKind(selected)).slice(0, 2)}</span></span>
+            <div><p class="intelligence-eyebrow">{nodeTypeLabel(selected.type)}</p><h2 id="node-inspector-title">{displayCopy(selected).title}</h2>{displayCopy(selected).context && <p class="memory-context">{displayCopy(selected).context}</p>}<p>{selected.updated_at ? <time datetime={dateTime(selected.updated_at)}>{formatDate(selected.updated_at)}</time> : formatDate(selected.updated_at)} · {nodeKindLabel(selected.kind)}</p></div>
+          </div>
+          {selected.project_id && <span class="project-pill">{selected.project_id}</span>}
+          <section><p class="inspector-label">{copy.constellation.summary}</p><p class="inspector-copy">{selected.summary || copy.constellation.noSummary}</p></section>
+          <section>
+            <p class="inspector-label">{copy.constellation.trustUse}</p>
+            <dl class="inspector-metrics">
+              <div><dt>{copy.constellation.confidence}</dt><dd>{percent(selected.confidence)}</dd>{metricInterpretations && <small>{metricInterpretations.confidence}</small>}</div>
+              <div><dt>{copy.constellation.usage30}</dt><dd>{selected.usage_count_30d_recorded ? selected.usage_count_30d : uiCopy.missing}</dd>{metricInterpretations && <small>{metricInterpretations.usage}</small>}</div>
+              <div><dt>{copy.constellation.degree}</dt><dd>{selected.degree_recorded ? selected.degree : uiCopy.missing}</dd>{metricInterpretations && <small>{metricInterpretations.links}</small>}</div>
+              <div><dt>{copy.constellation.lastUsed}</dt><dd>{selected.last_used_at ? <time datetime={dateTime(selected.last_used_at)}>{formatDate(selected.last_used_at)}</time> : formatDate(selected.last_used_at)}</dd></div>
+            </dl>
+          </section>
+          <section>
+            <p class="inspector-label">{copy.constellation.impact}</p>
+            <ul class="impact-list">
+              <li><span>{copy.constellation.status}</span><strong>{selected.status ? dashboardLabel("status", selected.status, locale) : copy.constellation.unset}</strong></li>
+              <li><span>{copy.constellation.clusters}</span><strong>{selected.cluster_ids.length}</strong></li>
+              <li><span>{copy.constellation.relatedEdges}</span><strong>{graph.edges.filter((edge) => edge.source === selected.id || edge.target === selected.id).length}</strong></li>
+            </ul>
+          </section>
+          <section class="inspector-relations">
+            <p class="inspector-label">{uiCopy.relationHeading}</p>
+            {selectedRelations.length > 0 ? <ul>{selectedRelations.map((edge) => {
+              const other = positionById.get(edge.source === selected.id ? edge.target : edge.source);
+              const direction = edge.directed ? edge.source === selected.id ? uiCopy.outgoing : uiCopy.incoming : uiCopy.mutual;
+              return <li><strong>{dashboardLabel("relation", edge.relation, locale)}</strong><span>{direction}</span><small>{other ? displayCopy(other).title : ""}</small></li>;
+            })}</ul> : <p class="inspector-copy">{metricInterpretations?.links}</p>}
+          </section>
+          <div class="inspector-actions">
+            {hasDirectRecord && <a class="primary-action" href={selectedDeepLink}>{copy.constellation.openRecord}</a>}
+            <a class="secondary-action" href={viewHref("list")}>{copy.constellation.exploreList}</a>
+          </div>
+        </>
+      ) : <div class="intelligence-empty compact" id="node-inspector-title">{copy.constellation.selectNode}</div>}
+    </aside>
+
       <div class="graph-panel">
       <div class="graph-legend" aria-label={copy.constellation.nodeTypesAria}>
         {activeVisualKinds.map((kind) => <span class={`legend-${kind}`}>{visualKindLabel(kind)}</span>)}
@@ -197,14 +273,14 @@ const uiCopy = {
             const target = positionById.get(edge.target);
             if (!source || !target) return null;
             const highlighted = selected && (edge.source === selected.id || edge.target === selected.id);
-            return <g><line aria-hidden="true" class:list={["knowledge-edge", highlighted && "knowledge-edge-highlighted"]} x1={source.x} y1={source.y} x2={target.x} y2={target.y} stroke-width={Math.max(1, Math.min(3, edge.weight))} marker-end={edge.directed ? "url(#edge-arrow)" : undefined}></line>{highlighted && <text class="edge-label" x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 7} text-anchor="middle">{edge.relation}{edge.directed ? " →" : " ↔"}</text>}</g>;
+            return <g><line aria-hidden="true" class:list={["knowledge-edge", highlighted && "knowledge-edge-highlighted"]} x1={source.x} y1={source.y} x2={target.x} y2={target.y} stroke-width={Math.max(1, Math.min(3, edge.weight))} marker-end={edge.directed ? "url(#edge-arrow)" : undefined}></line>{highlighted && <text class="edge-label" x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 7} text-anchor="middle">{dashboardLabel("relation", edge.relation, locale)}{edge.directed ? " →" : " ↔"}</text>}</g>;
           })}
           {positioned.map((node) => {
             const kind = visualKind(node);
             const radius = node.radius;
             const semanticLabel = visualKindLabel(kind);
             return (
-              <a class:list={["knowledge-node", `node-${kind}`, node.selected && "knowledge-node-selected", node.neighbor && "knowledge-node-neighbor"]} href={selectHref(node)} tabindex="0" aria-label={`${semanticLabel}: ${node.label}${node.status ? `, ${copy.constellation.status}: ${node.status}` : ""}`} aria-current={node.selected ? "true" : undefined}>
+              <a class:list={["knowledge-node", `node-${kind}`, node.selected && "knowledge-node-selected", node.neighbor && "knowledge-node-neighbor"]} href={selectHref(node)} tabindex="0" aria-label={`${semanticLabel}: ${displayCopy(node).title}${node.status ? `, ${copy.constellation.status}: ${dashboardLabel("status", node.status, locale)}` : ""}`} aria-current={node.selected ? "true" : undefined}>
                 <circle class="node-aura" cx={node.x} cy={node.y} r={radius + (node.selected ? 14 : 8)}></circle>
                 {kind === "warning" ? (
                   <polygon class="node-core" points={diamondPoints(node.x, node.y, radius)}></polygon>
@@ -220,8 +296,8 @@ const uiCopy = {
                   <circle class="node-core" cx={node.x} cy={node.y} r={radius}></circle>
                 )}
                 <text class="node-symbol" x={node.x} y={node.y + 5} text-anchor="middle">{semanticLabel.slice(0, 2)}</text>
-                <text class="node-label" x={node.x} y={node.y + radius + 19} text-anchor="middle">{node.label.slice(0, 20)}</text>
-                <text class="node-meta" x={node.x} y={node.y + radius + 34} text-anchor="middle">{semanticLabel} · {node.kind}</text>
+                {nodeLabelLines(node).map((line, index) => <text class="node-label" x={node.x} y={node.y + radius + 19 + index * 12} text-anchor="middle">{line}</text>)}
+                <text class="node-meta" x={node.x} y={node.y + radius + 46} text-anchor="middle">{semanticLabel} · {nodeKindLabel(node.kind)}</text>
                 <title>{semanticLabel}: {node.label} / {node.summary}</title>
               </a>
             );
@@ -238,47 +314,6 @@ const uiCopy = {
       </div>
     </div>
 
-    <aside class="node-inspector" aria-labelledby="node-inspector-title">
-      {selected ? (
-        <>
-          <div class="inspector-heading">
-            <span class:list={["inspector-emblem", `inspector-${visualKind(selected)}`]}><span>{visualKindLabel(visualKind(selected)).slice(0, 2)}</span></span>
-            <div><p class="intelligence-eyebrow">{nodeTypeLabel(selected.type)}</p><h2 id="node-inspector-title">{selected.label}</h2><p>{selected.updated_at ? <time datetime={dateTime(selected.updated_at)}>{formatDate(selected.updated_at)}</time> : formatDate(selected.updated_at)} · {selected.kind}</p></div>
-          </div>
-          {selected.project_id && <span class="project-pill">{selected.project_id}</span>}
-          <section><p class="inspector-label">{copy.constellation.summary}</p><p class="inspector-copy">{selected.summary || copy.constellation.noSummary}</p></section>
-          <section>
-            <p class="inspector-label">{copy.constellation.trustUse}</p>
-            <dl class="inspector-metrics">
-              <div><dt>{copy.constellation.confidence}</dt><dd>{percent(selected.confidence)}</dd>{metricInterpretations && <small>{metricInterpretations.confidence}</small>}</div>
-              <div><dt>{copy.constellation.usage30}</dt><dd>{selected.usage_count_30d_recorded ? selected.usage_count_30d : uiCopy.missing}</dd>{metricInterpretations && <small>{metricInterpretations.usage}</small>}</div>
-              <div><dt>{copy.constellation.degree}</dt><dd>{selected.degree_recorded ? selected.degree : uiCopy.missing}</dd>{metricInterpretations && <small>{metricInterpretations.links}</small>}</div>
-              <div><dt>{copy.constellation.lastUsed}</dt><dd>{selected.last_used_at ? <time datetime={dateTime(selected.last_used_at)}>{formatDate(selected.last_used_at)}</time> : formatDate(selected.last_used_at)}</dd></div>
-            </dl>
-          </section>
-          <section>
-            <p class="inspector-label">{copy.constellation.impact}</p>
-            <ul class="impact-list">
-              <li><span>{copy.constellation.status}</span><strong>{selected.status || copy.constellation.unset}</strong></li>
-              <li><span>{copy.constellation.clusters}</span><strong>{selected.cluster_ids.length}</strong></li>
-              <li><span>{copy.constellation.relatedEdges}</span><strong>{graph.edges.filter((edge) => edge.source === selected.id || edge.target === selected.id).length}</strong></li>
-            </ul>
-          </section>
-          <section class="inspector-relations">
-            <p class="inspector-label">{uiCopy.relationHeading}</p>
-            {selectedRelations.length > 0 ? <ul>{selectedRelations.map((edge) => {
-              const other = positionById.get(edge.source === selected.id ? edge.target : edge.source);
-              const direction = edge.directed ? edge.source === selected.id ? uiCopy.outgoing : uiCopy.incoming : uiCopy.mutual;
-              return <li><strong>{edge.relation}</strong><span>{direction}</span><small>{other?.label}</small></li>;
-            })}</ul> : <p class="inspector-copy">{metricInterpretations?.links}</p>}
-          </section>
-          <div class="inspector-actions">
-            {hasDirectRecord && <a class="primary-action" href={selectedDeepLink}>{copy.constellation.openRecord}</a>}
-            <a class="secondary-action" href="#knowledge-node-list">{copy.constellation.exploreList}</a>
-          </div>
-        </>
-      ) : <div class="intelligence-empty compact" id="node-inspector-title">{copy.constellation.selectNode}</div>}
-    </aside>
   </div>}
 
   {!loadError && <section class="knowledge-node-list" id="knowledge-node-list" aria-labelledby="knowledge-node-list-title">
@@ -286,7 +321,7 @@ const uiCopy = {
     <ul>
       {graph.nodes.map((node) => (
         <li class:list={[selected?.id === node.id && "is-selected"]}>
-          <a href={selectHref(node)} aria-current={selected?.id === node.id ? "true" : undefined}><span class={`list-tone list-tone-${visualKind(node)}`} aria-hidden="true"></span><span><strong title={node.label}>{node.label}</strong><small>{visualKindLabel(visualKind(node))} · {nodeTypeLabel(node.type)} · {node.kind}{node.status ? ` · ${copy.constellation.status}: ${node.status}` : ""} · {node.project_id || copy.common.global}</small></span><span>{node.degree_recorded ? node.degree : uiCopy.missing} {node.degree_recorded ? copy.common.links : ""}</span></a>
+          <a href={selectHref(node)} aria-current={selected?.id === node.id ? "true" : undefined}><span class={`list-tone list-tone-${visualKind(node)}`} aria-hidden="true"></span><span class="knowledge-node-copy"><strong title={node.label}>{displayCopy(node).title}</strong>{displayCopy(node).context && <small class="memory-context">{displayCopy(node).context}</small>}<small>{visualKindLabel(visualKind(node))} · {nodeTypeLabel(node.type)} · {nodeKindLabel(node.kind)}{node.status ? ` · ${copy.constellation.status}: ${dashboardLabel("status", node.status, locale)}` : ""} · {node.project_id || copy.common.global}</small>{displayCopy(node).preview && <span class="knowledge-node-preview">{displayCopy(node).preview}</span>}</span><span>{node.degree_recorded ? node.degree : uiCopy.missing} {node.degree_recorded ? copy.common.links : ""}</span></a>
         </li>
       ))}
     </ul>
@@ -300,9 +335,9 @@ const uiCopy = {
             if (!source || !target) return null;
             return (
               <li>
-                <a href={selectHref(source)}>{source.label}</a>
-                <span><strong>{edge.relation}</strong><small>{edge.directed ? copy.constellation.directed : copy.constellation.mutual}</small></span>
-                <a href={selectHref(target)}>{target.label}</a>
+                <a href={selectHref(source)}>{displayCopy(source).title}</a>
+                <span><strong>{dashboardLabel("relation", edge.relation, locale)}</strong><small>{edge.directed ? copy.constellation.directed : copy.constellation.mutual}</small></span>
+                <a href={selectHref(target)}>{displayCopy(target).title}</a>
               </li>
             );
           })}
@@ -327,26 +362,35 @@ const uiCopy = {
 
 <style>
   .constellation { min-height: calc(100vh - 7rem); }
-  .constellation-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1.5rem; align-items: end; padding: 1rem 0 1.2rem; }
-  .constellation-header .surface-switcher { margin-bottom: 1.1rem; }.constellation-header h1 { margin-top: .42rem; color: var(--intelligence-text); font-size: clamp(1.8rem,3vw,2.75rem); letter-spacing: -.04em; }.constellation-header > div > p:last-child { margin-top: .6rem; color: var(--intelligence-muted); line-height: 1.7; }
+  .constellation-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1.5rem; align-items: end; padding: 1rem 0 .8rem; }
+  .constellation-header h1 { margin-top: .42rem; color: var(--intelligence-text); font-size: clamp(1.8rem,3vw,2.75rem); letter-spacing: -.04em; }.constellation-header > div > p:last-child { margin-top: .6rem; color: var(--intelligence-muted); line-height: 1.7; }
+  .constellation-surface-nav { margin: 0 0 .75rem; }
   .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: "Fira Code", monospace; font-size: .68rem; letter-spacing: .15em; text-transform: uppercase; }
   .selection-fallback,.data-unavailable { display: grid; gap: .35rem; margin-bottom: 1rem; border: 1px solid var(--intelligence-border); border-radius: 13px; background: rgba(22,135,255,.07); padding: .8rem 1rem; }.selection-fallback strong,.data-unavailable strong { color: var(--intelligence-text); font-size: .8rem; }.selection-fallback p,.data-unavailable p { color: var(--intelligence-muted); font-size: .72rem; line-height: 1.5; }.data-unavailable { min-height: 9rem; place-content: center; border-color: color-mix(in srgb,var(--intelligence-danger) 38%,transparent); background: color-mix(in srgb,var(--intelligence-danger) 7%,transparent); text-align: center; }.data-unavailable strong { color: #ffd7db; }
   .constellation-controls { display: flex; flex-wrap: wrap; align-items: end; justify-content: flex-end; gap: .75rem; }.constellation-controls label { margin: 0; }.constellation-controls label span { display: block; margin-bottom: .35rem; color: var(--intelligence-muted); font-size: .65rem; }.constellation-controls input,.constellation-controls select { min-width: 11rem; min-height: 44px; border-radius: 11px; padding: .55rem .8rem; font-size: .78rem; }.constellation-controls button { min-height: 44px; border-radius: 11px; padding: .55rem .9rem; }
-  .constellation-layout { display: grid; grid-template-columns: minmax(0,1fr) 27rem; min-height: 46rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 18px; background: #03070d; box-shadow: 0 30px 90px rgba(0,0,0,.35); }
-  .graph-panel { position: relative; min-width: 0; overflow: hidden; background: radial-gradient(circle at 50% 46%, rgba(0,103,255,.13), transparent 24%), linear-gradient(145deg,rgba(16,25,41,.22),transparent 50%); }.graph-viewport { width: 100%; height: 46rem; overflow: hidden; scrollbar-gutter: stable; }.graph-viewport:focus-visible { outline: 2px solid var(--intelligence-blue-bright); outline-offset: -2px; }.knowledge-map { display: block; width: 100%; height: 100%; max-width: none; }.graph-viewport-dense { overflow: auto; }.graph-viewport-dense .knowledge-map { width: var(--graph-canvas-width); height: var(--graph-canvas-height); }
+  .constellation-view-switcher { display: flex; align-items: center; gap: .35rem; margin: .9rem 0 .75rem; }.constellation-view-switcher > span { margin-right: .35rem; color: var(--intelligence-muted); font-size: .7rem; }.constellation-view-switcher a { display: inline-flex; min-height: 44px; align-items: center; border: 1px solid var(--intelligence-border); border-radius: 10px; padding: .45rem .8rem; color: var(--intelligence-muted); font-size: .74rem; }.constellation-view-switcher a[aria-current="page"] { border-color: rgba(99,189,255,.55); background: rgba(22,135,255,.14); color: var(--intelligence-text); }
+  .constellation-layout { display: grid; grid-template-columns: 27rem minmax(0,1fr); min-height: 35rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 18px; background: #03070d; box-shadow: 0 30px 90px rgba(0,0,0,.35); }
+  .graph-panel { position: relative; min-width: 0; overflow: hidden; background: radial-gradient(circle at 50% 46%, rgba(0,103,255,.13), transparent 24%), linear-gradient(145deg,rgba(16,25,41,.22),transparent 50%); grid-column: 2; }.graph-viewport { width: 100%; height: 35rem; overflow: hidden; scrollbar-gutter: stable; }.graph-viewport:focus-visible { outline: 2px solid var(--intelligence-blue-bright); outline-offset: -2px; }.knowledge-map { display: block; width: 100%; height: 100%; max-width: none; }.graph-viewport-dense { overflow: auto; }.graph-viewport-dense .knowledge-map { width: var(--graph-canvas-width); height: var(--graph-canvas-height); }
+  .view-list { grid-template-columns: 1fr; min-height: auto; }.view-list .graph-panel { display: none; }.view-list .node-inspector { grid-column: 1; border-left: 0; }.view-graph + .knowledge-node-list { display: none; }
   .graph-legend { position: absolute; z-index: 2; top: 1rem; left: 1rem; display: flex; max-width: 18rem; flex-wrap: wrap; gap: .55rem; border: 1px solid var(--intelligence-border); border-radius: 12px; background: rgba(4,8,14,.78); padding: .7rem; backdrop-filter: blur(12px); }.graph-legend span { color: var(--intelligence-muted); font-size: .66rem; }.graph-legend span::before { display: inline-block; width: .52rem; height: .52rem; margin-right: .4rem; border: 1px solid #1687ff; border-radius: 999px; background: #1687ff; box-shadow: 0 0 10px rgba(22,135,255,.7); content: ""; }.graph-legend .legend-decision::before,.graph-legend .legend-evidence::before { border-radius: 1px; }.graph-legend .legend-evidence::before { border-color: #f4f7fb; background: #f4f7fb; }.graph-legend .legend-lesson::before { border-radius: 0; background: #67e8c2; clip-path: polygon(50% 0,100% 100%,0 100%); }.graph-legend .legend-warning::before { border-color: var(--intelligence-warning); border-radius: 1px; background: var(--intelligence-warning); transform: rotate(45deg); }.graph-legend .legend-project::before { border-color: #7d8899; border-radius: 0; background: transparent; box-shadow: none; clip-path: polygon(25% 7%,75% 7%,100% 50%,75% 93%,25% 93%,0 50%); }.graph-legend .legend-task::before { width: .72rem; border-radius: 999px; }
   .cluster circle { fill: rgba(255,255,255,.008); stroke: rgba(151,164,183,.32); stroke-dasharray: 3 4; }.cluster text { fill: #778294; font-size: 9px; }
   .knowledge-edge { stroke: rgba(126,149,180,.34); vector-effect: non-scaling-stroke; }.knowledge-edge-highlighted { stroke: #208eff; filter: url(#node-glow); }.edge-label { fill: #bfe6ff; paint-order: stroke; stroke: #03070d; stroke-width: 4px; font-size: 9px; font-weight: 650; }
   .knowledge-node { outline: none; transform-box: fill-box; transform-origin: center; }.node-aura { fill: rgba(22,135,255,.08); opacity: .38; }.node-core { fill: #09101b; stroke: #2493ff; stroke-width: 1.3; vector-effect: non-scaling-stroke; }.node-symbol { fill: #dff2ff; font-family: "Fira Code", monospace; font-size: 10px; font-weight: 600; }.node-label { fill: #f5f9ff; font-size: 10px; font-weight: 600; }.node-meta { fill: #8a95a6; font-size: 8px; }
   .node-evidence .node-core { fill: #e7ebf1; stroke: white; }.node-evidence .node-symbol { fill: #5a6472; }.node-lesson .node-core { fill: #08231f; stroke: #67e8c2; }.node-lesson .node-symbol { fill: #bfffee; }.node-warning .node-core { fill: #2b1d08; stroke: var(--intelligence-warning); }.node-warning .node-aura { fill: rgba(246,173,50,.18); }.node-warning .node-symbol { fill: #ffd890; }.node-project .node-core { fill: #070b12; stroke: #727e90; stroke-dasharray: 3 2; }.node-task .node-core { fill: #141027; stroke: #a894ff; }.knowledge-node-selected { transform: scale(1.08); }.knowledge-node-selected .node-core { stroke-width: 2.4; filter: url(#node-glow); }.knowledge-node-selected .node-aura { opacity: 1; filter: url(#node-glow); }.knowledge-node:focus-visible .node-core { stroke: white; stroke-width: 3; }
   .graph-status { position: absolute; right: 1rem; bottom: 1rem; display: flex; gap: .7rem; color: var(--intelligence-muted); font-family: "Fira Code", monospace; font-size: .62rem; }.graph-warning { color: var(--intelligence-warning); }
-  .node-inspector { border-left: 1px solid var(--intelligence-border); background: linear-gradient(145deg,rgba(14,21,32,.97),rgba(7,11,18,.98)); padding: 2rem 1.75rem; }.inspector-heading { display: flex; gap: 1rem; align-items: flex-start; }.inspector-emblem { display: grid; width: 3.5rem; height: 3.5rem; flex: 0 0 auto; place-items: center; border: 1px solid #228fff; border-radius: 999px; color: #a8d9ff; font-family: "Fira Code", monospace; font-size: .72rem; font-weight: 600; box-shadow: 0 0 24px rgba(22,135,255,.16); }.inspector-decision,.inspector-evidence { border-radius: 8px; }.inspector-lesson { border-color: #67e8c2; border-radius: 6px 6px 18px 18px; color: #bfffee; }.inspector-warning { border-color: var(--intelligence-warning); border-radius: 8px; color: #ffd690; transform: rotate(45deg); }.inspector-warning > span { transform: rotate(-45deg); }.inspector-project { border-radius: 16px 4px; }.inspector-task { width: 4.2rem; border-color: #a894ff; }.inspector-heading h2 { margin-top: .42rem; color: var(--intelligence-text); font-size: 1.32rem; line-height: 1.38; }.inspector-heading div > p:last-child { margin-top: .65rem; color: var(--intelligence-muted); font-size: .72rem; }.project-pill { display: inline-flex; margin-top: 1rem; border: 1px solid rgba(61,151,255,.3); border-radius: 7px; background: rgba(22,135,255,.08); padding: .35rem .65rem; color: #b4dcff; font-size: .7rem; }
+  .node-inspector { grid-column: 1; border-right: 1px solid var(--intelligence-border); background: linear-gradient(145deg,rgba(14,21,32,.97),rgba(7,11,18,.98)); padding: 2rem 1.75rem; }.inspector-heading { display: flex; gap: 1rem; align-items: flex-start; }.inspector-emblem { display: grid; width: 3.5rem; height: 3.5rem; flex: 0 0 auto; place-items: center; border: 1px solid #228fff; border-radius: 999px; color: #a8d9ff; font-family: "Fira Code", monospace; font-size: .72rem; font-weight: 600; box-shadow: 0 0 24px rgba(22,135,255,.16); }.inspector-decision,.inspector-evidence { border-radius: 8px; }.inspector-lesson { border-color: #67e8c2; border-radius: 6px 6px 18px 18px; color: #bfffee; }.inspector-warning { border-color: var(--intelligence-warning); border-radius: 8px; color: #ffd690; transform: rotate(45deg); }.inspector-warning > span { transform: rotate(-45deg); }.inspector-project { border-radius: 16px 4px; }.inspector-task { width: 4.2rem; border-color: #a894ff; }.inspector-heading h2 { margin-top: .42rem; color: var(--intelligence-text); font-size: 1.32rem; line-height: 1.38; }.inspector-heading div > p:last-child { margin-top: .65rem; color: var(--intelligence-muted); font-size: .72rem; }.project-pill { display: inline-flex; margin-top: 1rem; border: 1px solid rgba(61,151,255,.3); border-radius: 7px; background: rgba(22,135,255,.08); padding: .35rem .65rem; color: #b4dcff; font-size: .7rem; }
+  .node-inspector { grid-column: 1; border-right: 1px solid var(--intelligence-border); background: linear-gradient(145deg,rgba(14,21,32,.97),rgba(7,11,18,.98)); padding: 2rem 1.75rem; }.inspector-heading { display: flex; gap: 1rem; align-items: flex-start; }.inspector-emblem { display: grid; width: 3.5rem; height: 3.5rem; flex: 0 0 auto; place-items: center; border: 1px solid #228fff; border-radius: 999px; color: #a8d9ff; font-family: "Fira Code", monospace; font-size: .72rem; font-weight: 600; box-shadow: 0 0 24px rgba(22,135,255,.16); }.inspector-decision,.inspector-evidence { border-radius: 8px; }.inspector-lesson { border-color: #67e8c2; border-radius: 6px 6px 18px 18px; color: #bfffee; }.inspector-warning { border-color: var(--intelligence-warning); border-radius: 8px; color: #ffd690; transform: rotate(45deg); }.inspector-warning > span { transform: rotate(-45deg); }.inspector-project { border-radius: 16px 4px; }.inspector-task { width: 4.2rem; border-color: #a894ff; }.inspector-heading h2 { margin-top: .42rem; color: var(--intelligence-text); font-size: 1.32rem; line-height: 1.38; }.inspector-heading div > p:last-child { margin-top: .65rem; color: var(--intelligence-muted); font-size: .72rem; }.memory-context { margin-top: .38rem; color: #a9c8e2 !important; font-family: "Fira Code", monospace; font-size: .62rem !important; }.project-pill { display: inline-flex; margin-top: 1rem; border: 1px solid rgba(61,151,255,.3); border-radius: 7px; background: rgba(22,135,255,.08); padding: .35rem .65rem; color: #b4dcff; font-size: .7rem; }
   .node-inspector section { margin-top: 1.6rem; border-top: 1px solid var(--intelligence-border); padding-top: 1.3rem; }.inspector-label { color: #cbd3df; font-size: .78rem; font-weight: 600; }.inspector-copy { margin-top: .7rem; color: var(--intelligence-muted); font-size: .85rem; line-height: 1.8; }.inspector-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-top: .8rem; }.inspector-metrics div { border: 1px solid rgba(142,163,191,.13); border-radius: 10px; background: rgba(255,255,255,.022); padding: .7rem; }.inspector-metrics dt { color: var(--intelligence-muted); font-size: .62rem; }.inspector-metrics dd { margin-top: .35rem; color: var(--intelligence-text); font-family: "Fira Code", monospace; font-size: .82rem; }.inspector-metrics small { display: block; margin-top: .38rem; color: rgba(191,216,235,.68); font-size: .58rem; line-height: 1.42; }
   .impact-list { display: grid; gap: .6rem; margin-top: .75rem; }.impact-list li { display: flex; justify-content: space-between; color: var(--intelligence-muted); font-size: .75rem; }.impact-list strong { color: var(--intelligence-text); }.inspector-relations ul { display: grid; gap: .5rem; margin-top: .75rem; }.inspector-relations li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .2rem .65rem; border: 1px solid rgba(142,163,191,.13); border-radius: 9px; padding: .58rem .65rem; }.inspector-relations li strong { color: var(--intelligence-text); font-size: .72rem; }.inspector-relations li span,.inspector-relations li small { color: var(--intelligence-muted); font-size: .66rem; }.inspector-relations li small { grid-column: 1 / -1; overflow-wrap: anywhere; }.inspector-actions { display: grid; gap: .6rem; margin-top: 1.6rem; }.primary-action,.secondary-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 10px; padding: .65rem 1rem; font-size: .8rem; font-weight: 600; }.primary-action { border: 1px solid #2998ff; background: linear-gradient(180deg,#168cff,#0569ee); color: white; }.secondary-action { border: 1px solid var(--intelligence-border); background: rgba(255,255,255,.025); color: var(--intelligence-text); }
   .knowledge-node-list { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(5,9,15,.74); }.knowledge-node-list > header { display: flex; align-items: center; justify-content: space-between; padding: .9rem 1rem; border-bottom: 1px solid var(--intelligence-border); }.knowledge-node-list h2 { margin-top: .25rem; font-size: .95rem; }.knowledge-node-list header > span { color: var(--intelligence-muted); font-size: .7rem; }.knowledge-node-list > ul { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }.knowledge-node-list > ul > li { border-right: 1px solid rgba(143,163,189,.1); border-bottom: 1px solid rgba(143,163,189,.1); }.knowledge-node-list > ul > li.is-selected { background: rgba(22,135,255,.08); }.knowledge-node-list > ul > li > a { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: .65rem; align-items: center; min-height: 66px; padding: .7rem .85rem; }.knowledge-node-list > ul > li > a strong { display: block; overflow: hidden; color: var(--intelligence-text); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }.knowledge-node-list > ul > li > a small { display: block; margin-top: .25rem; overflow: hidden; color: var(--intelligence-muted); font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }.knowledge-node-list > ul > li > a > span:last-child { color: var(--intelligence-muted); font-family: "Fira Code", monospace; font-size: .6rem; }.list-tone { width: .5rem; height: .5rem; border: 1px solid var(--intelligence-blue); border-radius: 999px; background: var(--intelligence-blue); box-shadow: 0 0 10px rgba(22,135,255,.7); }.list-tone-decision,.list-tone-evidence { border-radius: 1px; }.list-tone-lesson { border-radius: 0; background: #67e8c2; clip-path: polygon(50% 0,100% 100%,0 100%); }.list-tone-warning { border-color: var(--intelligence-warning); border-radius: 1px; background: var(--intelligence-warning); transform: rotate(45deg); }.list-tone-evidence { background: #f0f4f8; }.list-tone-project { border: 1px solid #808b9a; border-radius: 0; background: transparent; box-shadow: none; clip-path: polygon(25% 7%,75% 7%,100% 50%,75% 93%,25% 93%,0 50%); }.list-tone-task { width: .72rem; border-color: #a894ff; border-radius: 999px; background: #a894ff; }
+  .knowledge-node-list > ul > li > a { min-height: 90px; }
+  .knowledge-node-list > ul > li > a .knowledge-node-copy { min-width: 0; }
+  .knowledge-node-list > ul > li > a .knowledge-node-copy strong { display: -webkit-box; line-height: 1.35; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .knowledge-node-list > ul > li > a .knowledge-node-copy small.memory-context { color: #a9c8e2; font-family: "Fira Code", monospace; }
+  .knowledge-node-list > ul > li > a .knowledge-node-preview { display: -webkit-box; margin-top: .35rem; overflow: hidden; color: rgba(213,226,239,.68); font-size: .66rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .knowledge-edge-list { border-top: 1px solid var(--intelligence-border); }.knowledge-edge-list summary { min-height: 44px; cursor: pointer; padding: .8rem 1rem; color: var(--intelligence-text); font-size: .76rem; font-weight: 600; }.knowledge-edge-list summary span { margin-left: .4rem; color: var(--intelligence-muted); font-family: "Fira Code", monospace; font-size: .62rem; font-weight: 400; }.knowledge-edge-list ul { display: grid; }.knowledge-edge-list li { display: grid; grid-template-columns: minmax(0,1fr) minmax(7rem,auto) minmax(0,1fr); gap: .75rem; align-items: center; min-height: 52px; border-top: 1px solid rgba(143,163,189,.1); padding: .55rem 1rem; }.knowledge-edge-list a { overflow: hidden; color: #cbe9ff; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }.knowledge-edge-list li > span { color: var(--intelligence-muted); text-align: center; }.knowledge-edge-list strong,.knowledge-edge-list small { display: block; font-size: .61rem; }.knowledge-edge-list small { margin-top: .2rem; color: #718096; }
   .intelligence-empty { display: grid; min-height: 30rem; gap: .6rem; place-content: center; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 10rem; }
-  @media (max-width: 1100px) { .constellation-layout { grid-template-columns: 1fr; }.node-inspector { border-top: 1px solid var(--intelligence-border); border-left: 0; }.graph-viewport { height: 40rem; }.knowledge-node-list > ul { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 720px) { .constellation-header { grid-template-columns: 1fr; }.constellation-controls { justify-content: flex-start; }.graph-viewport { height: 36.75rem; }.node-label,.node-meta { display: none; }.graph-legend { left: .8rem; max-width: calc(100% - 1.6rem); }.graph-status { right: auto; left: .8rem; width: max-content; max-width: calc(100% - 1.6rem); flex-wrap: wrap; padding: .7rem 1rem; background: rgba(4,8,14,.8); }.knowledge-node-list > ul { grid-template-columns: 1fr; }.knowledge-edge-list li { grid-template-columns: 1fr; gap: .35rem; }.knowledge-edge-list li > span { text-align: left; }.node-inspector { padding: 1.25rem 1rem; } }
+  @media (max-width: 1100px) { .constellation-layout { grid-template-columns: 1fr; }.node-inspector { border-top: 1px solid var(--intelligence-border); border-right: 0; }.graph-panel { grid-column: 1; grid-row: 2; }.view-list .node-inspector { grid-row: 1; }.graph-viewport { height: 32rem; }.knowledge-node-list > ul { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 720px) { .constellation-header { grid-template-columns: 1fr; }.constellation-controls { justify-content: flex-start; }.graph-viewport { height: 29rem; }.node-label,.node-meta { display: none; }.graph-legend { left: .8rem; max-width: calc(100% - 1.6rem); }.graph-status { right: auto; left: .8rem; width: max-content; max-width: calc(100% - 1.6rem); flex-wrap: wrap; padding: .7rem 1rem; background: rgba(4,8,14,.8); }.knowledge-node-list > ul { grid-template-columns: 1fr; }.knowledge-edge-list li { grid-template-columns: 1fr; gap: .35rem; }.knowledge-edge-list li > span { text-align: left; }.node-inspector { padding: 1.25rem 1rem; } }
   @media (prefers-reduced-motion: no-preference) { .knowledge-node { transition: transform 180ms ease-out; }.knowledge-node-selected .node-aura { animation: selected-pulse 3s ease-in-out infinite; } @keyframes selected-pulse { 50% { opacity: .45; } } }
 </style>
