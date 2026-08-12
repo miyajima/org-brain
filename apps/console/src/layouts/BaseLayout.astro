@@ -21,6 +21,7 @@ const navCopy = {
     dashboard: "Dashboard",
     labs: "Labs · Overview",
     memoryExplorer: "Memory Explorer",
+    memoryImpact: "Memory impact",
     decisionEditor: "Decision Editor",
     resources: "Resources",
     groups: "Groups",
@@ -44,6 +45,7 @@ const navCopy = {
     dashboard: "ダッシュボード",
     labs: "新しい概要",
     memoryExplorer: "メモリエクスプローラー",
+    memoryImpact: "活用分析",
     decisionEditor: "判断エディター",
     resources: "資料・成果物",
     groups: "グループ",
@@ -67,6 +69,7 @@ const navCopy = {
     dashboard: "仪表盘",
     labs: "Labs · 新概览",
     memoryExplorer: "记忆浏览器",
+    memoryImpact: "记忆活用分析",
     decisionEditor: "决策编辑器",
     resources: "资料与成果",
     groups: "群组",
@@ -115,6 +118,7 @@ const isActive = (href: string) => {
   if (href === "/business-categories") return currentPath === "/business-categories";
   if (href === "/profile") return currentPath === "/profile";
   if (href === "/operations") return currentPath === "/operations";
+  if (href === "/memory-impact") return currentPath === "/memory-impact";
   return currentPath === href;
 };
 ---
@@ -147,6 +151,7 @@ const isActive = (href: string) => {
               <summary>{navCopy.management}</summary>
               <div class="console-nav-menu-panel">
                 <a href={withScope("/memories")} aria-current={currentPath === "/memories" ? "page" : undefined}>{navCopy.memoryExplorer}</a>
+                <a href={withScope("/memory-impact")} aria-current={isActive("/memory-impact") ? "page" : undefined}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/decisions")} aria-current={currentPath === "/decisions" ? "page" : undefined}>{navCopy.decisionEditor}</a>
                 <a href={withScope("/resources")} aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
                 <a href={withScope("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
@@ -167,6 +172,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
                 <span>{navCopy.management}</span>
                 <a href={withScope("/memories")}>{navCopy.memoryExplorer}</a>
+                <a href={withScope("/memory-impact")}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/decisions")}>{navCopy.decisionEditor}</a>
                 <a href={withScope("/resources")}>{navCopy.resources}</a>
                 <a href={withScope("/operations")}>{navCopy.operations}</a>
@@ -193,6 +199,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
                 <a href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
                 <a href={withScope("/operations")} aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
+                <a href={withScope("/memory-impact")} aria-current={isActive("/memory-impact") ? "page" : undefined}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/tasks/new")} aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
               </div>
             </details>
@@ -211,6 +218,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/business-categories")}>{navCopy.categories}</a>
                 <a href={withScope("/profile")}>{navCopy.profile}</a>
                 <a href={withScope("/operations")}>{navCopy.operations}</a>
+                <a href={withScope("/memory-impact")}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/tasks/new")}>{navCopy.newTask}</a>
               </div>
             </details>

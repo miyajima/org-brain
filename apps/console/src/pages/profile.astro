@@ -23,6 +23,14 @@ type Identity = {
     avatar_url: string | null;
   };
 };
+type OwnerMapping = {
+  tenant_id: string;
+  producer_principal: string;
+  owner_principal: string;
+  created_by_principal: string;
+  created_at: number;
+  updated_at: number;
+};
 
 const url = Astro.url;
 const params = url.searchParams;
@@ -43,29 +51,51 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiRespons
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
-  const payload = {
-    tenant_id: tenantId,
-    display_name: String(form.get("display_name") ?? ""),
-    full_name: String(form.get("full_name") ?? ""),
-    email: String(form.get("email") ?? ""),
-    company_name: String(form.get("company_name") ?? ""),
-    avatar_url: String(form.get("avatar_url") ?? "")
-  };
-  const saved = await fetchApi("/api/v1/auth/me/profile", {
-    method: "PUT",
-    headers: {
-      "content-type": "application/json",
-      "x-csrf-token": String(form.get("csrf_token") ?? "")
-    },
-    body: JSON.stringify(payload)
-  });
-  if (saved?.ok) message = "Saved";
-  else error = saved?.error?.message ?? "Profile could not be saved";
+  const action = String(form.get("action") ?? "profile");
+  if (action === "ownership") {
+    const saved = await fetchApi("/api/v1/principal-owner-mappings/me", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": String(form.get("csrf_token") ?? "")
+      },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        owner_principal: String(form.get("owner_principal") ?? "")
+      })
+    });
+    if (saved?.ok) message = "Ownership mapping saved";
+    else error = saved?.error?.message ?? "Ownership mapping could not be saved";
+  } else {
+    const payload = {
+      tenant_id: tenantId,
+      display_name: String(form.get("display_name") ?? ""),
+      full_name: String(form.get("full_name") ?? ""),
+      email: String(form.get("email") ?? ""),
+      company_name: String(form.get("company_name") ?? ""),
+      avatar_url: String(form.get("avatar_url") ?? "")
+    };
+    const saved = await fetchApi("/api/v1/auth/me/profile", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": String(form.get("csrf_token") ?? "")
+      },
+      body: JSON.stringify(payload)
+    });
+    if (saved?.ok) message = "Saved";
+    else error = saved?.error?.message ?? "Profile could not be saved";
+  }
 }
 
 const identityPayload = await fetchApi<Identity>(`/api/v1/auth/me?tenant_id=${encodeURIComponent(tenantId)}`);
 const identity = identityPayload?.ok ? identityPayload.data : null;
 if (identityPayload?.ok === false) error = identityPayload.error?.message ?? "Profile could not be loaded";
+const mappingPayload = await fetchApi<OwnerMapping | null>(`/api/v1/principal-owner-mappings/me?tenant_id=${encodeURIComponent(tenantId)}`);
+const mapping = mappingPayload?.ok ? mappingPayload.data : null;
+if (mappingPayload?.ok === false && mappingPayload.error?.code !== "forbidden") {
+  error = mappingPayload.error?.message ?? "Ownership mapping could not be loaded";
+}
 ---
 <BaseLayout title="Profile">
   <section class="space-y-5">
@@ -79,6 +109,7 @@ if (identityPayload?.ok === false) error = identityPayload.error?.message ?? "Pr
     {error && <div class="rounded-lg border border-rose-300/20 bg-rose-400/10 p-3 text-sm text-rose-100">{error}</div>}
 
     <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-2">
+      <input type="hidden" name="action" value="profile" />
       <input type="hidden" name="tenant_id" value={tenantId} />
       <input type="hidden" name="csrf_token" id="csrf-token" />
       <label>
@@ -105,9 +136,30 @@ if (identityPayload?.ok === false) error = identityPayload.error?.message ?? "Pr
         <button type="submit">Save</button>
       </div>
     </form>
+
+    <section class="grid gap-4 rounded-[22px] border border-cyan-300/15 bg-cyan-300/[0.04] p-5">
+      <div>
+        <p class="surface-label">Memory ownership</p>
+        <h2 class="mt-2 text-xl font-semibold text-white">Producer → owner mapping</h2>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">このprincipalが記録したメモリの業務上の所有者を指定します。未設定の場合は記録者本人へ解決されます。</p>
+      </div>
+      <form method="post" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <input type="hidden" name="action" value="ownership" />
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="csrf_token" id="ownership-csrf-token" />
+        <label>
+          <span class="field-label">Owner principal</span>
+          <input name="owner_principal" value={mapping?.owner_principal ?? identity?.auth.principal ?? ""} required />
+        </label>
+        <button type="submit">Save mapping</button>
+      </form>
+      {mapping && <p class="text-xs text-zinc-500">Producer: {mapping.producer_principal} · updated {new Date(mapping.updated_at).toLocaleString()}</p>}
+    </section>
   </section>
 </BaseLayout>
 <script>
   const csrfInput = document.querySelector<HTMLInputElement>("#csrf-token");
   if (csrfInput) csrfInput.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  const ownershipCsrfInput = document.querySelector<HTMLInputElement>("#ownership-csrf-token");
+  if (ownershipCsrfInput) ownershipCsrfInput.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
 </script>

@@ -356,6 +356,9 @@ its SHA-256 checksum and include the bundle in the build-provenance attestation.
 
 Use this when you want team memory sharing, Remote MCP, the console, and the organization bus.
 
+For a local copy of the current production data used by memory evaluation and
+console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUCTION_SNAPSHOT.md).
+
 1. Install dependencies:
 
    ```bash

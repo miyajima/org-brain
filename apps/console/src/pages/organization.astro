@@ -8,27 +8,46 @@ const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, 
 let message = ""; let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
-  const response = await api("/api/v1/organization", { method: "PATCH", headers: {
-    "content-type": "application/json",
-    "x-csrf-token": String(form.get("csrf_token") ?? "")
-  }, body: JSON.stringify({
-    tenant_id: tenantId,
-    slug: String(form.get("slug") ?? ""),
-    display_name: String(form.get("display_name") ?? ""),
-    allowed_email_domains: String(form.get("allowed_email_domains") ?? "").split(/[\s,]+/u).filter(Boolean),
-    email_self_registration_enabled: form.get("email_self_registration_enabled") === "on"
-  }) });
-  if (response.ok) message = "Saved"; else error = "Organization could not be saved";
+  const action = String(form.get("action") ?? "organization");
+  const response = action === "mapping"
+    ? await api("/api/v1/principal-owner-mappings", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": String(form.get("csrf_token") ?? "")
+        },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          producer_principal: String(form.get("producer_principal") ?? ""),
+          owner_principal: String(form.get("owner_principal") ?? "")
+        })
+      })
+    : await api("/api/v1/organization", { method: "PATCH", headers: {
+        "content-type": "application/json",
+        "x-csrf-token": String(form.get("csrf_token") ?? "")
+      }, body: JSON.stringify({
+        tenant_id: tenantId,
+        slug: String(form.get("slug") ?? ""),
+        display_name: String(form.get("display_name") ?? ""),
+        allowed_email_domains: String(form.get("allowed_email_domains") ?? "").split(/[\s,]+/u).filter(Boolean),
+        email_self_registration_enabled: form.get("email_self_registration_enabled") === "on"
+      }) });
+  if (response.ok) message = action === "mapping" ? "Ownership mapping saved" : "Saved";
+  else error = action === "mapping" ? "Ownership mapping could not be saved" : "Organization could not be saved";
 }
 const response = await api(`/api/v1/organization?tenant_id=${encodeURIComponent(tenantId)}`);
 const payload: any = await response.json().catch(() => null);
 const organization = payload?.data;
+const mappingsResponse = await api(`/api/v1/principal-owner-mappings?tenant_id=${encodeURIComponent(tenantId)}`);
+const mappingsPayload: any = await mappingsResponse.json().catch(() => null);
+const mappings = mappingsResponse.ok && Array.isArray(mappingsPayload?.data) ? mappingsPayload.data : [];
 ---
 <BaseLayout title="Organization">
   <section class="space-y-5">
     <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5"><p class="surface-label">{tenantId}</p><h1 class="mt-2 text-3xl font-semibold">Organization</h1></header>
     {message && <p class="text-emerald-200">{message}</p>}{error && <p class="text-rose-200">{error}</p>}
     <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-2">
+      <input type="hidden" name="action" value="organization" />
       <input type="hidden" name="csrf_token" id="csrf-token" />
       <label><span class="field-label">Display name</span><input name="display_name" value={organization?.display_name ?? tenantId} required /></label>
       <label><span class="field-label">Slug</span><input name="slug" value={organization?.slug ?? tenantId} required /></label>
@@ -36,9 +55,34 @@ const organization = payload?.data;
       <label class="flex items-center gap-2"><input type="checkbox" name="email_self_registration_enabled" checked={organization?.email_self_registration_enabled} /> Allow email self-registration</label>
       <div class="md:col-span-2"><button type="submit">Save</button></div>
     </form>
+
+    <section class="grid gap-4 rounded-[22px] border border-amber-300/15 bg-amber-300/[0.04] p-5">
+      <div>
+        <p class="surface-label">Memory ownership</p>
+        <h2 class="mt-2 text-xl font-semibold text-white">Producer → owner mappings</h2>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">サービス・エージェントprincipalが記録したメモリを、業務上の所有者へ明示的に結び付けます。</p>
+      </div>
+      <form method="post" class="grid gap-4 md:grid-cols-2 md:items-end">
+        <input type="hidden" name="action" value="mapping" />
+        <input type="hidden" name="csrf_token" id="mapping-csrf-token" />
+        <label><span class="field-label">Producer principal</span><input name="producer_principal" placeholder="service:codex-hook" required /></label>
+        <label><span class="field-label">Owner principal</span><input name="owner_principal" placeholder="user:member" required /></label>
+        <div class="md:col-span-2"><button type="submit">Save mapping</button></div>
+      </form>
+      {mappings.length > 0 ? (
+        <div class="overflow-x-auto rounded-xl border border-white/8">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-zinc-500"><tr><th class="px-3 py-3">Producer</th><th class="px-3 py-3">Owner</th><th class="px-3 py-3">Updated</th></tr></thead>
+            <tbody>{mappings.map((mapping: any) => <tr class="border-t border-white/8 text-zinc-300"><td class="px-3 py-3 font-mono text-xs">{mapping.producer_principal}</td><td class="px-3 py-3 font-mono text-xs">{mapping.owner_principal}</td><td class="px-3 py-3 text-xs text-zinc-500">{new Date(mapping.updated_at).toLocaleString()}</td></tr>)}</tbody>
+          </table>
+        </div>
+      ) : <p class="text-sm text-zinc-500">No producer-owner mappings yet.</p>}
+    </section>
   </section>
 </BaseLayout>
 <script>
   const csrfInput = document.querySelector<HTMLInputElement>("#csrf-token");
   if (csrfInput) csrfInput.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  const mappingCsrfInput = document.querySelector<HTMLInputElement>("#mapping-csrf-token");
+  if (mappingCsrfInput) mappingCsrfInput.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
 </script>

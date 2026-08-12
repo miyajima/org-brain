@@ -18,6 +18,17 @@ type MemoryRow = {
   last_accessed_at: number | null;
   confidence_score: number | null;
   utility_score: number | null;
+  owner_principal: string | null;
+  created_by_principal: string | null;
+  deleted_at: number | null;
+  deleted_by_principal: string | null;
+  delete_reason: string | null;
+  updated_at: number | null;
+  reference_count: number;
+  used_count: number;
+  consumer_count: number;
+  net_saved_tokens: number;
+  injected_tokens: number;
 };
 
 type MemorySearchResult = {
@@ -98,6 +109,35 @@ type MemoryListPage = {
 type MemoryDetailResponse = {
   tenant_id: string;
   memory_id: string;
+  memory: {
+    id: string;
+    source: string;
+    external_key: string | null;
+    created_at: number;
+    kind: "episodic" | "semantic" | "org_knowledge";
+    current_version: number;
+    last_accessed_at: number | null;
+    confidence_score: number | null;
+    utility_score: number | null;
+    actor_type: string | null;
+    actor_id: string | null;
+    owner_principal: string | null;
+    created_by_principal: string | null;
+    deleted_at: number | null;
+    deleted_by_principal: string | null;
+    delete_reason: string | null;
+    project_id: string | null;
+    content: string;
+    summary: string | null;
+    tags: string[];
+    lifecycle_state: string;
+    updated_at: number | null;
+    reference_count: number;
+    used_count: number;
+    consumer_count: number;
+    net_saved_tokens: number;
+    injected_tokens: number;
+  } | null;
   versions: Array<{
     version: number;
     operation: string;
@@ -152,6 +192,27 @@ type DetailRecord = {
   last_accessed_at: number | null;
   confidence_score: number | null;
   utility_score: number | null;
+  owner_principal: string | null;
+  created_by_principal: string | null;
+  deleted_at: number | null;
+  reference_count: number;
+  used_count: number;
+  consumer_count: number;
+  net_saved_tokens: number;
+  injected_tokens: number;
+};
+
+type AnalyticsSummary = {
+  summary: {
+    reference_count: number;
+    used_count: number;
+    net_saved_tokens: number;
+    injected_tokens: number;
+  };
+  rankings: {
+    memories: Array<{ id: string; label: string; reference_count: number }>;
+    owners: Array<{ id: string; label: string; reference_count: number }>;
+  };
 };
 
 const url = Astro.url;
@@ -161,8 +222,27 @@ const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRou
 
 const tenantId = params.get("tenant_id")?.trim() || "default";
 const projectId = params.get("project_id")?.trim() || "";
+const scope = params.get("scope") === "org" ? "org" : "mine";
+const lifecycle = ["active", "review", "trash", "all"].includes(params.get("lifecycle") ?? "")
+  ? (params.get("lifecycle") as "active" | "review" | "trash" | "all")
+  : "active";
+const ownerPrincipal = params.get("owner_principal")?.trim() || "";
+const createdByPrincipal = params.get("created_by_principal")?.trim() || "";
+const sort = ["created", "updated", "usage"].includes(params.get("sort") ?? "")
+  ? (params.get("sort") as "created" | "updated" | "usage")
+  : "created";
+const dateValue = (raw: string | null, endOfDay = false): number | null => {
+  if (!raw) return null;
+  const numericValue = Number(raw);
+  if (Number.isFinite(numericValue)) return numericValue;
+  const parsed = Date.parse(`${raw}T${endOfDay ? "23:59:59.999" : "00:00:00"}+09:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const fromTimestamp = dateValue(params.get("from_date")) ?? dateValue(params.get("from"));
+const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.get("to"), true);
 const query = params.get("q")?.trim() || "";
 const selectedId = params.get("selected")?.trim() || "";
+const mapFallback = params.get("map_fallback") === "1";
 const view = ["search", "profile", "maintenance"].includes(params.get("view") ?? "")
   ? (params.get("view") as "search" | "profile" | "maintenance")
   : "search";
@@ -253,6 +333,14 @@ function buildDetailRecord(
       last_accessed_at: row.last_accessed_at,
       confidence_score: row.confidence_score,
       utility_score: row.utility_score
+      , owner_principal: row.owner_principal,
+      created_by_principal: row.created_by_principal,
+      deleted_at: row.deleted_at,
+      reference_count: row.reference_count,
+      used_count: row.used_count,
+      consumer_count: row.consumer_count,
+      net_saved_tokens: row.net_saved_tokens,
+      injected_tokens: row.injected_tokens
     };
   }
 
@@ -278,6 +366,14 @@ function buildDetailRecord(
       last_accessed_at: profileItem?.last_accessed_at ?? null,
       confidence_score: profileItem?.confidence_score ?? null,
       utility_score: profileItem?.utility_score ?? null
+      , owner_principal: null,
+      created_by_principal: null,
+      deleted_at: null,
+      reference_count: 0,
+      used_count: 0,
+      consumer_count: 0,
+      net_saved_tokens: 0,
+      injected_tokens: 0
     };
   }
 
@@ -302,10 +398,51 @@ function buildDetailRecord(
       last_accessed_at: profileItem.last_accessed_at,
       confidence_score: profileItem.confidence_score,
       utility_score: profileItem.utility_score
+      , owner_principal: null,
+      created_by_principal: null,
+      deleted_at: null,
+      reference_count: 0,
+      used_count: 0,
+      consumer_count: 0,
+      net_saved_tokens: 0,
+      injected_tokens: 0
     };
   }
 
   return null;
+}
+
+function buildDetailRecordFromMemoryDetail(payload: MemoryDetailResponse | null): DetailRecord | null {
+  const memory = payload?.memory;
+  if (!memory) return null;
+  return {
+    id: memory.id || payload?.memory_id || "",
+    kind: "memory",
+    title: memoryCardCopy(memory.summary, memory.content).title,
+    summary: memory.summary || "",
+    preview: trimText(memory.content, 320),
+    source: memory.source || "memory",
+    project_id: memory.project_id,
+    external_key: memory.external_key,
+    created_at: memory.created_at,
+    tags: memory.tags,
+    score: null,
+    content: memory.content,
+    memory_kind: memory.kind,
+    lifecycle_state: memory.lifecycle_state as DetailRecord["lifecycle_state"],
+    current_version: memory.current_version,
+    last_accessed_at: memory.last_accessed_at,
+    confidence_score: memory.confidence_score,
+    utility_score: memory.utility_score,
+    owner_principal: memory.owner_principal,
+    created_by_principal: memory.created_by_principal,
+    deleted_at: memory.deleted_at,
+    reference_count: memory.reference_count,
+    used_count: memory.used_count,
+    consumer_count: memory.consumer_count,
+    net_saved_tokens: memory.net_saved_tokens,
+    injected_tokens: memory.injected_tokens
+  };
 }
 
 function addSuggestion(counts: Map<string, number>, raw: string | null | undefined, weight = 1) {
@@ -355,7 +492,11 @@ function tabClass(active: boolean): string {
 }
 
 const listPayload = await fetchApi<MemoryListPage>(
-  `/api/v1/memories?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&limit=${pageSize}&offset=${offset}&paginated=1`
+  `/api/v1/memories?tenant_id=${encodeURIComponent(tenantId)}&scope=${scope}&project_id=${encodeURIComponent(projectId)}&owner_principal=${encodeURIComponent(ownerPrincipal)}&created_by_principal=${encodeURIComponent(createdByPrincipal)}&lifecycle=${lifecycle}&include_trashed=1&from=${fromTimestamp ?? ""}&to=${toTimestamp ?? ""}&sort=${sort}&limit=${pageSize}&offset=${offset}&paginated=1`
+);
+
+const analyticsPayload = await fetchApi<AnalyticsSummary>(
+  `/api/v1/dashboard/memory-analytics?tenant_id=${encodeURIComponent(tenantId)}&scope=${scope}&perspective=${scope === "mine" ? "spread" : "work"}&project_id=${encodeURIComponent(projectId)}&owner_principal=${encodeURIComponent(ownerPrincipal)}&from=${fromTimestamp ?? Date.now() - 30 * 24 * 60 * 60 * 1000}&to=${toTimestamp ?? Date.now()}`
 );
 
 const searchPayload =
@@ -455,17 +596,22 @@ const datalistSuggestions = [
   )
 ].slice(0, 12);
 
-const detail = buildDetailRecord(selectedId, corpusItems, searchResults, [...durableRows, ...recentRows]);
-const detailPayload =
-  detail?.kind === "memory"
-    ? await fetchApi<MemoryDetailResponse>(`/api/v1/memories/${encodeURIComponent(detail.id)}/details?tenant_id=${encodeURIComponent(tenantId)}`)
+const rowDetail = buildDetailRecord(selectedId, corpusItems, searchResults, [...durableRows, ...recentRows]);
+const preloadedDetailPayload =
+  selectedId && !rowDetail
+    ? await fetchApi<MemoryDetailResponse>(`/api/v1/memories/${encodeURIComponent(selectedId)}/details?tenant_id=${encodeURIComponent(tenantId)}`)
     : null;
+const detail = rowDetail ?? (preloadedDetailPayload?.ok ? buildDetailRecordFromMemoryDetail(preloadedDetailPayload.data) : null);
+const detailPayload = detail?.kind === "memory"
+  ? preloadedDetailPayload ?? await fetchApi<MemoryDetailResponse>(`/api/v1/memories/${encodeURIComponent(detail.id)}/details?tenant_id=${encodeURIComponent(tenantId)}`)
+  : preloadedDetailPayload;
 const memoryDetail = detailPayload?.ok ? detailPayload.data : null;
 const loadErrors = [...new Set([
   listPayload?.ok === false ? listPayload.error?.message ?? "Memory list could not be loaded" : null,
   searchPayload?.ok === false ? searchPayload.error?.message ?? "Memory search could not be loaded" : null,
   profilePayload?.ok === false ? profilePayload.error?.message ?? "Memory profile could not be loaded" : null,
   detailPayload?.ok === false ? detailPayload.error?.message ?? "Memory detail could not be loaded" : null
+  , analyticsPayload?.ok === false ? analyticsPayload.error?.message ?? "Memory analytics could not be loaded" : null
 ].filter(Boolean) as string[])];
 
 const prevPageHref = listPage?.meta.has_prev ? makeHref({ page: String(page - 1), selected: "" }) : null;
@@ -473,6 +619,9 @@ const nextPageHref = listPage?.meta.has_next ? makeHref({ page: String(page + 1)
 const searchTabHref = makeHref({ view: "search", page: String(page) });
 const profileTabHref = makeHref({ view: "profile", selected: "" });
 const maintenanceTabHref = makeHref({ view: "maintenance", page: String(page), selected: "" });
+const activeTabHref = makeHref({ lifecycle: "active", page: "1", selected: "" });
+const reviewTabHref = makeHref({ lifecycle: "review", page: "1", selected: "" });
+const trashTabHref = makeHref({ lifecycle: "trash", page: "1", selected: "" });
 const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
 const constellationParams = new URLSearchParams({ tenant_id: tenantId });
 if (projectId) constellationParams.set("project_id", projectId);
@@ -483,6 +632,12 @@ if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") 
 const constellationHref = `/memories/constellation?${constellationParams.toString()}`;
 ---
 <BaseLayout title="Memory Explorer">
+  {mapFallback && (
+    <div class="intelligence-route-alert" role="status">
+      <strong>3D表示からメモリ一覧へ切り替えました</strong>
+      <span>この環境では3D描画を安定して表示できないため、同じ条件の一覧を表示しています。</span>
+    </div>
+  )}
   <section class="space-y-5">
     <header class="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(7,7,8,0.96)_0%,rgba(10,10,12,0.92)_100%)] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.36)] sm:p-8">
       <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
@@ -513,10 +668,47 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
         <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>Maintenance</a>
       </div>
 
+      <div class="mt-5 grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
+        <div class="flex flex-wrap gap-2" aria-label="Memory scope">
+          <a class={tabClass(scope === "mine")} href={makeHref({ scope: "mine", owner_principal: "", lifecycle: lifecycle === "trash" ? "active" : lifecycle, page: "1", selected: "" })}>自分のメモリ</a>
+          <a class={tabClass(scope === "org")} href={makeHref({ scope: "org", page: "1", selected: "" })}>組織のメモリ</a>
+        </div>
+        <div class="flex flex-wrap gap-2 lg:justify-end" aria-label="Memory lifecycle">
+          <a class={tabClass(lifecycle === "active")} href={activeTabHref}>有効</a>
+          <a class={tabClass(lifecycle === "review")} href={reviewTabHref}>要確認</a>
+          <a class={tabClass(lifecycle === "trash")} href={trashTabHref}>ゴミ箱</a>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 md:grid-cols-4">
+        <div class="surface-soft-card !rounded-[22px] !p-4">
+          <p class="surface-label">このビュー</p>
+          <strong class="mt-2 block text-2xl font-semibold text-white">{listPage?.meta.total ?? 0}</strong>
+          <span class="mt-1 block text-xs text-zinc-500">{scope === "mine" ? "owner = 自分" : "閲覧可能な組織メモリ"}</span>
+        </div>
+        <div class="surface-soft-card !rounded-[22px] !p-4">
+          <p class="surface-label">参照</p>
+          <strong class="mt-2 block text-2xl font-semibold text-white">{analyticsPayload?.ok ? analyticsPayload.data.summary.reference_count : "—"}</strong>
+          <span class="mt-1 block text-xs text-zinc-500">期間内の参照イベント</span>
+        </div>
+        <div class="surface-soft-card !rounded-[22px] !p-4">
+          <p class="surface-label">最も参照</p>
+          <strong class="mt-2 block truncate text-sm font-semibold text-white">{scope === "org" && analyticsPayload?.ok && analyticsPayload.data.rankings.memories[0] ? analyticsPayload.data.rankings.memories[0].label : "—"}</strong>
+          <span class="mt-1 block text-xs text-zinc-500">{scope === "org" && analyticsPayload?.ok && analyticsPayload.data.rankings.memories[0] ? `${analyticsPayload.data.rankings.memories[0].reference_count} refs` : "組織ビューで表示"}</span>
+        </div>
+        <div class="surface-soft-card !rounded-[22px] !p-4">
+          <p class="surface-label">純削減</p>
+          <strong class="mt-2 block text-2xl font-semibold text-white">{analyticsPayload?.ok ? analyticsPayload.data.summary.net_saved_tokens.toLocaleString() : "—"}</strong>
+          <span class="mt-1 block text-xs text-zinc-500">計測済みの純削減tokens</span>
+        </div>
+      </div>
+
       <div class="mt-5 grid gap-4">
         <form class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_12rem]" method="get" action="/memories">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="scope" value={scope} />
+          <input type="hidden" name="lifecycle" value={lifecycle} />
           <label class="relative block">
             <span class="surface-label">Search memories</span>
             <svg class="pointer-events-none absolute left-4 top-[3.25rem] h-5 w-5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
@@ -565,6 +757,8 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             <input type="hidden" name="view" value={view} />
             <input type="hidden" name="q" value={query} />
             <input type="hidden" name="page" value="1" />
+            <input type="hidden" name="scope" value={scope} />
+            <input type="hidden" name="lifecycle" value={lifecycle} />
             <label>
               <span class="surface-label">Tenant</span>
               <input name="tenant_id" value={tenantId} />
@@ -572,6 +766,30 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             <label>
               <span class="surface-label">Project</span>
               <input name="project_id" value={projectId} placeholder="optional project filter" />
+            </label>
+            <label>
+              <span class="surface-label">Owner</span>
+              <input name="owner_principal" value={ownerPrincipal} placeholder={scope === "mine" ? "自分" : "user:..."} disabled={scope === "mine"} />
+            </label>
+            <label>
+              <span class="surface-label">Creator</span>
+              <input name="created_by_principal" value={createdByPrincipal} placeholder="user / agent" />
+            </label>
+            <label>
+              <span class="surface-label">Sort</span>
+              <select name="sort">
+                <option value="created" selected={sort === "created"}>新しい順</option>
+                <option value="updated" selected={sort === "updated"}>更新順</option>
+                <option value="usage" selected={sort === "usage"}>参照数順</option>
+              </select>
+            </label>
+            <label>
+              <span class="surface-label">From</span>
+              <input type="date" name="from_date" value={fromTimestamp ? new Date(fromTimestamp).toISOString().slice(0, 10) : ""} />
+            </label>
+            <label>
+              <span class="surface-label">To</span>
+              <input type="date" name="to_date" value={toTimestamp ? new Date(toTimestamp).toISOString().slice(0, 10) : ""} />
             </label>
             <label>
               <span class="surface-label">Search mode</span>
@@ -761,6 +979,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                               <div class="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
                                 <span>{item.source}</span>
                                 <span>{item.project_id || "no-project"}</span>
+                                <span>{item.owner_principal || "owner-unassigned"}</span>
                                 <span>{formatDate(item.created_at)}</span>
                               </div>
                               <h3 class="text-xl font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
@@ -768,8 +987,10 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                               <p class="text-sm leading-7 text-zinc-400">{memoryCardCopy(item.summary, item.content).preview}</p>
                             </div>
                           </div>
-                          <div class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-zinc-300">
-                            {item.tags.slice(0, 2).join(" / ") || "-"}
+                          <div class="flex max-w-[14rem] shrink-0 flex-wrap justify-end gap-2 text-xs uppercase tracking-[0.12em] text-zinc-300">
+                            <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{item.reference_count} refs</span>
+                            <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{item.used_count}/{item.reference_count || 0} used</span>
+                            {item.tags.slice(0, 2).map((tag) => <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{tag}</span>)}
                           </div>
                         </div>
                       </a>
@@ -956,6 +1177,14 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                   <dd class="mt-2 text-sm leading-7 text-zinc-200">{detail.project_id || "no-project"}</dd>
                 </div>
                 <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Owner</dt>
+                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{memoryDetail?.memory?.owner_principal || detail.owner_principal || "unassigned"}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
+                  <dt class="surface-label">Creator</dt>
+                  <dd class="mt-2 break-all text-sm leading-7 text-zinc-200">{memoryDetail?.memory?.created_by_principal || detail.created_by_principal || "unassigned"}</dd>
+                </div>
+                <div class="surface-soft-card !rounded-[22px] !p-4">
                   <dt class="surface-label">Created</dt>
                   <dd class="mt-2 text-sm leading-7 text-zinc-200">{formatDate(detail.created_at)}</dd>
                 </div>
@@ -998,10 +1227,39 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 </div>
               </div>
 
+              <div class="grid gap-3 sm:grid-cols-4">
+                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">References</dt><dd class="mt-2 text-lg font-semibold text-white">{memoryDetail?.memory?.reference_count ?? detail.reference_count}</dd></div>
+                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">Used rate</dt><dd class="mt-2 text-lg font-semibold text-white">{memoryDetail?.memory && memoryDetail.memory.reference_count ? `${Math.round((memoryDetail.memory.used_count / memoryDetail.memory.reference_count) * 100)}%` : detail.reference_count ? `${Math.round((detail.used_count / detail.reference_count) * 100)}%` : "未計測"}</dd></div>
+                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">Consumers</dt><dd class="mt-2 text-lg font-semibold text-white">{memoryDetail?.memory?.consumer_count ?? detail.consumer_count}</dd></div>
+                <div class="surface-soft-card !rounded-[22px] !p-4"><dt class="surface-label">Net saved</dt><dd class="mt-2 text-lg font-semibold text-white">{(memoryDetail?.memory?.net_saved_tokens ?? detail.net_saved_tokens).toLocaleString()}</dd></div>
+              </div>
+
               <section class="surface-soft-card !rounded-[24px] !p-4">
                 <h3 class="text-base font-semibold text-white">Preview</h3>
                 <p class="mt-3 text-sm leading-7 text-zinc-300">{detail.preview}</p>
               </section>
+
+              {detail.kind === "memory" && (
+                <section class="surface-soft-card !rounded-[24px] !p-4">
+                  <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p class="surface-label">Memory editor</p>
+                      <h3 class="mt-2 text-base font-semibold text-white">本文・要約・タグ・プロジェクト</h3>
+                    </div>
+                    <span class="text-xs text-zinc-500">owner: {memoryDetail?.memory?.owner_principal || detail.owner_principal || "unassigned"}</span>
+                  </div>
+                  <form class="mt-4 space-y-3" data-memory-edit-form>
+                    <input type="hidden" name="memory_id" value={detail.id} />
+                    <input type="hidden" name="tenant_id" value={tenantId} />
+                    <label><span class="surface-label">Summary</span><input name="summary" value={memoryDetail?.memory?.summary ?? detail.summary} /></label>
+                    <label><span class="surface-label">Project</span><input name="project_id" value={memoryDetail?.memory?.project_id ?? detail.project_id ?? ""} /></label>
+                    <label><span class="surface-label">Tags (comma separated)</span><input name="tags" value={(memoryDetail?.memory?.tags ?? detail.tags).join(", ")} /></label>
+                    <label><span class="surface-label">Content</span><textarea name="content" rows="7">{memoryDetail?.memory?.content ?? detail.content}</textarea></label>
+                    <button type="submit" data-memory-save>Save changes</button>
+                    <p class="text-xs leading-6 text-zinc-500" data-memory-edit-status>本人またはtenant_adminが編集できます。</p>
+                  </form>
+                </section>
+              )}
 
               {detail.kind === "memory" && (
                 <section class="surface-soft-card !rounded-[24px] !p-4">
@@ -1029,10 +1287,18 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                       >
                         Suppress
                       </button>
+                      {memoryDetail?.memory?.deleted_at ? (
+                        <button class="memory-action-button" type="button" data-memory-action="restore" data-memory-id={detail.id} data-tenant-id={tenantId}>Restore</button>
+                      ) : (
+                        <button class="memory-action-button" type="button" data-memory-action="trash" data-memory-id={detail.id} data-tenant-id={tenantId}>Move to trash</button>
+                      )}
+                      {memoryDetail?.memory?.deleted_at && (
+                        <button class="memory-action-button memory-danger-button" type="button" data-memory-action="permanent-delete" data-memory-id={detail.id} data-tenant-id={tenantId}>Delete permanently</button>
+                      )}
                     </div>
                   </div>
                   <p class="mt-3 text-sm leading-7 text-zinc-400" data-memory-action-status>
-                    Refresh records a recall event. Suppress hides the memory from normal retrieval; physical delete stays in cleanup scripts.
+                    Refresh records a recall event. ゴミ箱は復元できます。完全削除はtenant_adminだけがID確認後に実行できます。
                   </p>
                 </section>
               )}
@@ -1138,21 +1404,65 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
       const tenantId = button.dataset.tenantId || "default";
       const status = document.querySelector<HTMLElement>("[data-memory-action-status]");
       if (!action || !memoryId) return;
-      if (action === "suppress" && !window.confirm("Suppress this memory from normal retrieval?")) return;
+      if ((action === "suppress" || action === "trash") && !window.confirm(action === "trash" ? "このメモリをゴミ箱へ移動しますか？" : "Suppress this memory from normal retrieval?")) return;
+      if (action === "permanent-delete" && window.prompt(`完全削除するにはメモリIDを入力してください: ${memoryId}`) !== memoryId) return;
       button.disabled = true;
       if (status) status.textContent = `${action} running...`;
-      const route = action === "refresh" ? "/api/v1/memories/refresh" : "/api/v1/memories/suppress";
+      const route = action === "refresh"
+        ? "/api/v1/memories/refresh"
+        : action === "suppress"
+          ? "/api/v1/memories/suppress"
+          : action === "trash"
+            ? `/api/v1/memories/${encodeURIComponent(memoryId)}/trash`
+            : action === "restore"
+              ? `/api/v1/memories/${encodeURIComponent(memoryId)}/restore`
+              : `/api/v1/memories/${encodeURIComponent(memoryId)}?tenant_id=${encodeURIComponent(tenantId)}`;
       const body = action === "refresh"
         ? { tenant_id: tenantId, memory_id: memoryId }
-        : { tenant_id: tenantId, memory_id: memoryId, reason: "suppressed from console" };
+        : action === "suppress"
+          ? { tenant_id: tenantId, memory_id: memoryId, reason: "suppressed from console" }
+          : { tenant_id: tenantId, memory_id: memoryId, reason: "moved to trash from console" };
       const response = await fetch(route, {
-        method: "POST",
+        method: action === "permanent-delete" ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body)
+        ...(action === "permanent-delete" ? {} : { body: JSON.stringify(body) })
       });
       if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
       if (response.ok) window.location.reload();
       button.disabled = false;
     });
   }
+
+  const editForm = document.querySelector<HTMLFormElement>("[data-memory-edit-form]");
+  editForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(editForm);
+    const status = editForm.querySelector<HTMLElement>("[data-memory-edit-status]");
+    const saveButton = editForm.querySelector<HTMLButtonElement>("[data-memory-save]");
+    const content = String(form.get("content") || "").trim();
+    const summary = String(form.get("summary") || "").trim();
+    const projectId = String(form.get("project_id") || "").trim();
+    const tags = String(form.get("tags") || "").split(",").map((tag) => tag.trim()).filter(Boolean);
+    if (!content) {
+      if (status) status.textContent = "本文は空にできません。";
+      return;
+    }
+    if (saveButton) saveButton.disabled = true;
+    if (status) status.textContent = "saving...";
+    const response = await fetch("/api/v1/memories/revise", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tenant_id: form.get("tenant_id"),
+        memory_id: form.get("memory_id"),
+        content,
+        summary: summary || null,
+        project_id: projectId || null,
+        tags
+      })
+    });
+    if (status) status.textContent = response.ok ? "Saved. Reloading..." : "保存に失敗しました。権限と本文を確認してください。";
+    if (response.ok) window.location.reload();
+    if (saveButton) saveButton.disabled = false;
+  });
 </script>

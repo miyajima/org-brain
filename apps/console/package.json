@@ -14,6 +14,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "3d-force-graph": "^1.80.0",
+    "three": "0.185.1",
     "@astrojs/cloudflare": "^13.1.7",
     "@astrojs/node": "^10.1.4",
     "@org-brain/contracts": "workspace:*",
