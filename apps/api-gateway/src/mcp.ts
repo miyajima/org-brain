@@ -1,4 +1,4 @@
-import { HttpError, type OrgPermission, type OrgRole } from "@org-brain/shared";
+import { HttpError, observeMemoryLearningEvent, type OrgPermission, type OrgRole } from "@org-brain/shared";
 import type { Hono } from "hono";
 import {
   hostHeaderValidationResponse,
@@ -29,7 +29,7 @@ import {
 } from "./context-engine-service";
 import {
   getMemoryProfile,
-  listMemories,
+  listMemoriesCursorPage,
   refreshMemoryByRequest,
   retrieveMemoryContext,
   searchMemories,
@@ -240,6 +240,82 @@ class OrgBrainMcpTools {
       "implementation", "review", "debug", "proposal",
       "support", "research", "operations", "other"
     ]);
+    const captureEvidenceSchema = z.object({
+      evidence_type: z.enum(["memory", "task_event", "artifact", "doc", "file", "command", "thread", "external"]).optional(),
+      evidence_ref: z.string().min(1).max(512),
+      relation: z.enum(["supports", "contradicts", "context_for"]).optional(),
+      note: z.string().max(500).nullable().optional(),
+      weight_score: z.number().min(0).max(1).optional(),
+      content_hash: z.string().max(128).nullable().optional(),
+      observed_at: z.number().int().nullable().optional(),
+      attestation_ref: z.string().max(512).nullable().optional()
+    });
+    const captureRationaleItemSchema = z.object({
+      external_key: z.string().min(1).max(256),
+      content: z.string().min(1).max(20000),
+      summary: z.string().max(1000).optional(),
+      tags: z.array(z.string().min(1).max(64)).max(16).optional(),
+      created_at: z.number().int().optional(),
+      project_id: z.string().max(128).nullable().optional(),
+      business_category_id: z.string().max(128).nullable().optional(),
+      work_type: workTypeSchema.nullable().optional(),
+      canonical_key: z.string().min(1).max(256).nullable().optional(),
+      kind: z.enum(["decision", "constraint", "pitfall", "preference", "fact"]).optional(),
+      rationale: z.string().max(4000).nullable().optional(),
+      reuse_rule: z.string().max(1000).nullable().optional(),
+      evidence: z.array(captureEvidenceSchema).max(8).optional(),
+      source_references: z.array(z.object({
+        type: z.string().min(1).max(80),
+        ref: z.string().min(1).max(512),
+        title: z.string().max(240).optional(),
+        captured_at: z.number().int().optional()
+      })).max(32).optional(),
+      source_refs: z.array(z.object({
+        type: z.string().min(1).max(80),
+        ref: z.string().min(1).max(512),
+        title: z.string().max(240).optional(),
+        captured_at: z.number().int().optional()
+      })).max(32).optional(),
+      valid_until: z.number().int().nullable().optional(),
+      confidence_score: z.number().min(0).max(1).nullable().optional(),
+      utility_score: z.number().min(0).max(1).nullable().optional(),
+      visibility: z.enum(["tenant", "project", "restricted"]).optional(),
+      allowed_principals: z.array(z.string().min(1).max(128)).max(64).optional()
+      , capture_origin: z.enum(["observed", "synthetic", "repair", "legacy"]).optional()
+      , verification: z.object({
+        state: z.enum(["verified", "partial", "unverified", "rejected"]).optional(),
+        verified_at: z.number().int().nullable().optional(),
+        attestation_ref: z.string().max(512).nullable().optional()
+      }).optional()
+      , learning: z.record(z.string(), z.unknown()).nullable().optional()
+      , quality_dimensions: z.record(z.string(), z.number().min(0).max(100)).nullable().optional()
+    });
+    const learningEventShape = {
+      schema_version: z.literal(1),
+      lesson_type: z.enum(["success", "decision", "failure"]),
+      kind: z.enum(["decision", "constraint", "pitfall", "preference", "fact"]),
+      trigger: z.string().min(1).max(1000),
+      conclusion: z.string().min(1).max(1000),
+      rationale: z.string().min(1).max(2000),
+      reuse_rule: z.string().min(1).max(1000),
+      outcome: z.string().min(1).max(1000).nullable(),
+      applicability: z.object({
+        target_files: z.array(z.string().min(1).max(512)).max(16),
+        components: z.array(z.string().min(1).max(128)).max(16)
+      }),
+      evidence_selectors: z.array(z.object({
+        type: z.enum(["command", "file", "doc", "user_statement"]),
+        ref: z.string().min(1).max(1000)
+      })).min(1).max(16),
+      gaps: z.array(z.string().min(1).max(500)).max(16)
+    };
+    registerTool(this.server,
+      "orgbrain_memory_observe",
+      learningEventShape,
+      async (event) => toContent(await observeMemoryLearningEvent(event, {
+        sensitivePolicy: { mode: "deny", allowed_principals: [] }
+      }))
+    );
     registerTool(this.server, 
       "orgbrain_business_categories_list",
       {
@@ -300,12 +376,19 @@ class OrgBrainMcpTools {
       {
         tenant_id: z.string().optional(),
         source: z.string().optional(),
-        limit: z.number().int().min(1).max(500).optional()
+        limit: z.number().int().min(1).max(500).optional(),
+        cursor: z.string().max(512).optional(),
+        view: z.enum(["full", "compact"]).optional()
       },
-      async ({ tenant_id, source, limit }) => {
+      async ({ tenant_id, source, limit, cursor, view }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read");
-        const memories = await listMemories(this.env, tenantId, { limit: limit ?? 100, source });
+        const memories = await listMemoriesCursorPage(this.env, tenantId, {
+          limit: limit ?? (view === "compact" ? 500 : 100),
+          source,
+          cursor,
+          view
+        });
         return toContent(memories);
       }
     );
@@ -388,20 +471,21 @@ class OrgBrainMcpTools {
       {
         tenant_id: z.string().optional(),
         source: z.string().min(1).max(64).optional(),
-        item: z.object({
-          external_key: z.string().min(1).max(256),
-          content: z.string().min(1).max(20000),
-          summary: z.string().max(1000).optional(),
-          tags: z.array(z.string().min(1).max(64)).max(16).optional(),
-          created_at: z.number().int().optional(),
-          project_id: z.string().max(128).nullable().optional(),
-          business_category_id: z.string().max(128).nullable().optional(),
-          work_type: workTypeSchema.nullable().optional()
-        })
+        item: captureRationaleItemSchema.optional(),
+        items: z.array(captureRationaleItemSchema).min(1).max(3).optional()
       },
-      async ({ tenant_id, source, item }) => {
+      async ({ tenant_id, source, item, items }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
-        await this.requirePermission(tenantId, "write", item.project_id);
+        if (Boolean(item) === Boolean(items)) {
+          throw new HttpError(400, "invalid_payload", "exactly one of item or items is required");
+        }
+        const captureItems = items ?? (item ? [item] : []);
+        for (const projectId of new Set(captureItems.map((entry) => entry.project_id ?? null))) {
+          await this.requirePermission(tenantId, "write", projectId);
+          if (captureItems.some((entry) => entry.project_id === projectId && entry.verification?.state === "verified")) {
+            await this.requirePermission(tenantId, "memory:attest", projectId);
+          }
+        }
         const result = await this.auditedMutation(
           tenantId,
           "mcp.orgbrain_memories_capture_rationale",
@@ -411,8 +495,8 @@ class OrgBrainMcpTools {
             source: source?.trim() || "hook",
             actor_type: "principal",
             actor_id: this.props.principal,
-            item
-          })
+            ...(item ? { item } : { items })
+          }, { canAttest: captureItems.some((entry) => entry.verification?.state === "verified") })
         );
         return toContent(result);
       }

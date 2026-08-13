@@ -10,16 +10,23 @@ import {
   localEmbeddingText
 } from "./local-embedding.mjs";
 import {
+  cosineSimilarity,
+  decodeFloat32Vector,
+  encodeFloat32Vector,
+  localDenseEmbeddingProviderFromEnvironment
+} from "./local-dense-embedding.mjs";
+import {
   analyzeRetrievalIntent,
   buildRetrievalUnits,
   buildRetrievalUnitsV4,
+  buildVerifiedLearningRetrievalUnits,
   retrievalQueryTokens,
   retrievalSubjectQueryTokens,
   retrievalUnitLexicalSpecificity,
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 21;
+export const MEMORY_SCHEMA_VERSION = 23;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -29,7 +36,7 @@ const WORK_TYPES = new Set([
 const AVOIDED_LOOKUP_CATEGORIES = new Set(["source_search", "web_search", "past_context", "none"]);
 
 function classificationRequired() {
-  return process.env.ORGBRAIN_CLASSIFICATION_MODE === "require";
+  return (process.env.MEMORY_CLASSIFICATION_MODE ?? process.env.ORGBRAIN_CLASSIFICATION_MODE) === "require";
 }
 
 function cloudTelemetryEnabled() {
@@ -147,6 +154,7 @@ const MEMORY_COLUMNS = {
   content_hash: "TEXT NOT NULL DEFAULT ''",
   current_version: "INTEGER NOT NULL DEFAULT 1",
   rationale: "TEXT",
+  reuse_rule: "TEXT",
   evidence_json: "TEXT NOT NULL DEFAULT '[]'",
   conflicts_json: "TEXT NOT NULL DEFAULT '[]'",
   permissions_json: "TEXT NOT NULL DEFAULT '[]'",
@@ -158,6 +166,11 @@ const MEMORY_COLUMNS = {
   promoted_at: "INTEGER",
   expires_at: "INTEGER",
   revised_at: "INTEGER"
+  , capture_origin: "TEXT NOT NULL DEFAULT 'legacy'"
+  , verification_state: "TEXT NOT NULL DEFAULT 'unverified'"
+  , verified_at: "INTEGER"
+  , learning_json: "TEXT"
+  , quality_dimensions_json: "TEXT"
 };
 
 function hashContent(content) {
@@ -177,6 +190,16 @@ function parseJson(raw, fallback = []) {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseJsonObject(raw, fallback = null) {
+  if (typeof raw !== "string" || !raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
   }
@@ -236,9 +259,15 @@ function memoryFromRow(row) {
     content_hash: row.content_hash,
     current_version: row.current_version,
     rationale: row.rationale,
+    reuse_rule: row.reuse_rule,
     evidence: parseJson(row.evidence_json),
     conflicts: parseJson(row.conflicts_json),
     permissions: parseJson(row.permissions_json)
+    , capture_origin: row.capture_origin || "legacy"
+    , verification_state: row.verification_state || "unverified"
+    , verified_at: row.verified_at
+    , learning: parseJsonObject(row.learning_json)
+    , quality_dimensions: parseJsonObject(row.quality_dimensions_json)
   };
 }
 
@@ -345,6 +374,7 @@ function createCanonicalTables(db) {
       content_hash TEXT NOT NULL,
       current_version INTEGER NOT NULL DEFAULT 1,
       rationale TEXT,
+      reuse_rule TEXT,
       evidence_json TEXT NOT NULL DEFAULT '[]',
       conflicts_json TEXT NOT NULL DEFAULT '[]',
       permissions_json TEXT NOT NULL DEFAULT '[]',
@@ -356,6 +386,11 @@ function createCanonicalTables(db) {
       promoted_at INTEGER,
       expires_at INTEGER,
       revised_at INTEGER
+      , capture_origin TEXT NOT NULL DEFAULT 'legacy'
+      , verification_state TEXT NOT NULL DEFAULT 'unverified'
+      , verified_at INTEGER
+      , learning_json TEXT
+      , quality_dimensions_json TEXT
     );
     CREATE TABLE IF NOT EXISTS memory_versions (
       id TEXT PRIMARY KEY,
@@ -377,6 +412,7 @@ function createCanonicalTables(db) {
       canonical_key TEXT,
       business_category_id TEXT,
       work_type TEXT,
+      reuse_rule TEXT,
       snapshot_json TEXT NOT NULL,
       content_hash TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -989,6 +1025,22 @@ function createCurrentTables(db) {
     "gen_structured_context", "structured_context", 2, "retrieval-units", "4",
     null, "rank_default", "builtin:structured_context:1", "gen_baseline_units", "shadow", Date.now()
   );
+  db.prepare(
+    `INSERT OR IGNORE INTO retrieval_generations(
+       id, label, unit_schema_version, extractor_name, extractor_version,
+       embedding_profile_id, ranking_profile_id, config_hash,
+       baseline_generation_id, status, created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(
+    "gen_verified_learning", "verified_learning", 3, "verified-learning", "1",
+    LOCAL_EMBEDDING_PROVIDER, "rank_default", "builtin:verified-learning:1", "gen_structured_context", "shadow", Date.now()
+  );
+  db.prepare(
+    `UPDATE retrieval_generations
+     SET embedding_profile_id = ?
+     WHERE id = 'gen_verified_learning'
+       AND embedding_profile_id = 'qwen3-embedding-0.6b'`
+  ).run(LOCAL_EMBEDDING_PROVIDER);
 }
 
 function upgradeLegacyMemoryVersions(db) {
@@ -1008,6 +1060,7 @@ function upgradeLegacyMemoryVersions(db) {
     canonical_key: "TEXT",
     business_category_id: "TEXT",
     work_type: "TEXT",
+    reuse_rule: "TEXT",
     snapshot_json: "TEXT",
     content_hash: "TEXT NOT NULL DEFAULT ''"
   };
@@ -1036,6 +1089,8 @@ function upgradeLegacyMemories(db) {
          evidence_json = COALESCE(NULLIF(evidence_json, ''), '[]'),
          conflicts_json = COALESCE(NULLIF(conflicts_json, ''), '[]'),
          permissions_json = COALESCE(NULLIF(permissions_json, ''), '[]'),
+         capture_origin = COALESCE(NULLIF(capture_origin, ''), 'legacy'),
+         verification_state = COALESCE(NULLIF(verification_state, ''), 'unverified'),
          created_at = CASE WHEN created_at = 0 THEN ? ELSE created_at END,
          updated_at = CASE WHEN updated_at = 0 THEN created_at ELSE updated_at END,
          root_memory_id = COALESCE(root_memory_id, id),
@@ -1251,6 +1306,41 @@ function writeStableRetrievalUnits(db, record, writeFts = true, deleteExisting =
          WHERE generation_id = ? AND tenant_id = ? AND source_type = 'memory' AND source_id = ?`
       ).run(generation.id, record.tenant_id, record.id);
     }
+  }
+  for (const unit of buildVerifiedLearningRetrievalUnits({
+    ...record,
+    learning_json: record.learning ? json(record.learning) : null
+  })) {
+    const unitId = `gen_verified_learning:${unit.id}`;
+    db.prepare(
+      `INSERT INTO retrieval_units(
+         id, generation_id, tenant_id, project_id, source_type, source_id,
+         business_category_id, work_type, unit_type, text, speaker, event_at,
+         valid_from, valid_until, source_ref_json, source_span_start, source_span_end,
+         metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+         extraction_state, degraded_reason, created_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      unitId, "gen_verified_learning", unit.tenant_id, unit.project_id, "memory", unit.memory_id,
+      record.business_category_id ?? null, record.work_type ?? null, unit.unit_type, unit.text, unit.speaker,
+      unit.event_at, unit.valid_from, unit.valid_until, unit.source_ref_json, unit.source_span_start,
+      unit.source_span_end, unit.metadata_json, unit.segment_id, unit.content_hash, unit.extractor,
+      unit.extractor_version, unit.extraction_state, unit.degraded_reason, unit.created_at
+    );
+    const features = embedLocalText(unit.text);
+    for (const feature of features) {
+      db.prepare(
+        "INSERT INTO retrieval_unit_features(unit_id, generation_id, tenant_id, feature_hash, weight) VALUES(?,?,?,?,?)"
+      ).run(unitId, "gen_verified_learning", unit.tenant_id, feature.feature_hash, feature.weight);
+    }
+    db.prepare(
+      `INSERT INTO retrieval_unit_embeddings(
+         unit_id, generation_id, tenant_id, provider, feature_count, vector_format, vector_blob, updated_at
+       ) VALUES(?,?,?,?,?,?,?,?)`
+    ).run(unitId, "gen_verified_learning", unit.tenant_id, LOCAL_EMBEDDING_PROVIDER, features.length, "sparse-fallback", null, unit.created_at);
+    if (writeFts) db.prepare(
+      "INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)"
+    ).run(unitId, "gen_verified_learning", unit.tenant_id, unit.text);
   }
   if (updateFeatureStats) rebuildStableRetrievalFeatureStats(db);
 }
@@ -1586,6 +1676,10 @@ function addIndexes(db) {
       ON memories(tenant_id, business_category_id, work_type, lifecycle_state, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memories_lifecycle_updated
       ON memories(tenant_id, lifecycle_state, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memories_learning_origin_state
+      ON memories(tenant_id, capture_origin, verification_state, lifecycle_state, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_memories_learning_scope
+      ON memories(tenant_id, project_id, business_category_id, work_type, verification_state, valid_until);
     CREATE INDEX IF NOT EXISTS idx_memory_versions_created_v2
       ON memory_versions(tenant_id, memory_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_edges_from_v2
@@ -1682,8 +1776,8 @@ function initializeVersionHistory(db) {
       id, memory_id, tenant_id, version, operation, content, summary, tags_json,
       kind, lifecycle_state, scope_type, scope_key, actor_type, actor_id,
       confidence_score, utility_score, canonical_key, snapshot_json, content_hash, created_at
-      , business_category_id, work_type
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      , business_category_id, work_type, reuse_rule
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   );
   for (const row of rows) {
     const memory = memoryFromRow(row);
@@ -1693,7 +1787,7 @@ function initializeVersionHistory(db) {
       row.scope_type, row.scope_key, row.actor_type, row.actor_id,
       row.confidence_score, row.utility_score, row.canonical_key,
       JSON.stringify(memory), row.content_hash, row.updated_at,
-      row.business_category_id ?? null, row.work_type ?? null
+      row.business_category_id ?? null, row.work_type ?? null, row.reuse_rule ?? null
     );
   }
 }
@@ -2166,7 +2260,9 @@ function searchRetrievalUnitsV4(db, options) {
     minimumTotalScore,
     includeSuppressed,
     principalId,
-    at
+    at,
+    denseQueryVector = null,
+    denseProvider = null
   } = options;
   const intent = analyzeRetrievalIntent(query);
   const ftsQueries = buildFtsQueryVariants(query);
@@ -2285,6 +2381,49 @@ function searchRetrievalUnitsV4(db, options) {
       at,
       ...segmentMemoryIds
     );
+  const denseRows = !denseQueryVector || !denseProvider
+    ? []
+    : (() => {
+      const rows = db.prepare(
+        `SELECT u.memory_id, e.unit_id, e.feature_count, e.vector_blob
+         FROM memory_retrieval_unit_embeddings_v4 e
+         JOIN memory_retrieval_units_v4 u
+           ON u.id = e.unit_id
+          AND u.tenant_id = e.tenant_id
+         JOIN memories m
+           ON m.id = u.memory_id
+          AND m.tenant_id = u.tenant_id
+         WHERE e.tenant_id = ?
+           AND e.provider = ?
+           AND e.vector_format = 'dense-f32'
+           AND e.vector_blob IS NOT NULL
+           AND u.unit_type = 'segment'
+           AND (? IS NULL OR u.project_id = ?)
+           AND (? = 1 OR m.lifecycle_state != 'suppressed')
+           AND (u.valid_from IS NULL OR u.valid_from <= ?)
+           AND (u.valid_until IS NULL OR u.valid_until > ?)`
+      ).all(
+        tenantId,
+        denseProvider,
+        projectId,
+        projectId,
+        includeSuppressed ? 1 : 0,
+        at,
+        at
+      );
+      const bestByMemory = new Map();
+      for (const row of rows) {
+        const vector = decodeFloat32Vector(row.vector_blob, Number(row.feature_count));
+        const score = cosineSimilarity(denseQueryVector, vector);
+        const current = bestByMemory.get(row.memory_id);
+        if (!current || score > current.dense_score) {
+          bestByMemory.set(row.memory_id, { memory_id: row.memory_id, dense_score: score });
+        }
+      }
+      return [...bestByMemory.values()]
+        .sort((left, right) => right.dense_score - left.dense_score || left.memory_id.localeCompare(right.memory_id))
+        .slice(0, 50);
+    })();
   const scores = new Map();
   const addRrf = (rows, weight) => {
     rows.forEach((row, index) => {
@@ -2296,7 +2435,12 @@ function searchRetrievalUnitsV4(db, options) {
   addRrf(base, 1);
   addRrf(exactRows, 3);
   addRrf(sparseRows, 0.9);
+  addRrf(denseRows, 1.2);
   addRrf(segmentRows, 0.65);
+  for (const row of denseRows) {
+    const normalized = Math.max(0, Math.min(1, (row.dense_score + 1) / 2));
+    scores.set(row.memory_id, (scores.get(row.memory_id) ?? 0) + normalized * 0.5);
+  }
   const structuralScores = new Map();
   const addStructuralRrf = (rows, weight) => {
     rows.forEach((row, index) => {
@@ -2355,6 +2499,7 @@ function searchRetrievalUnitsV4(db, options) {
     const entry = baseById.get(id);
     if (!entry) return [];
     const total = scores.get(id) ?? 0;
+    const denseMatch = denseRows.find((row) => row.memory_id === id);
     if (minimumTotalScore !== null && total < minimumTotalScore) return [];
     return [{
       memory: entry.memory,
@@ -2362,7 +2507,11 @@ function searchRetrievalUnitsV4(db, options) {
         ...entry.score,
         total: Number(total.toFixed(6)),
         lexical: lexicalRows.some((row) => row.memory_id === id) ? 1 : entry.score.lexical,
-        semantic: sparseRows.some((row) => row.memory_id === id) ? 1 : entry.score.semantic,
+        semantic: denseMatch
+          ? Number(Math.max(0, Math.min(1, (denseMatch.dense_score + 1) / 2)).toFixed(6))
+          : sparseRows.some((row) => row.memory_id === id)
+            ? 1
+            : entry.score.semantic,
         time: timelineRows.some((row) => row.memory_id === id) ? 1 : entry.score.time
       }
     }];
@@ -2635,9 +2784,12 @@ function rebuildExecutionImpactDay(db, tenantId, projectId, day) {
 }
 
 export class LocalMemoryStore {
-  constructor(dbPath = DEFAULT_LOCAL_DB) {
+  constructor(dbPath = DEFAULT_LOCAL_DB, options = {}) {
     this.dbPath = resolve(dbPath);
     this.initialization = null;
+    this.denseEmbeddingProvider = options.denseEmbeddingProvider === undefined
+      ? localDenseEmbeddingProviderFromEnvironment()
+      : options.denseEmbeddingProvider;
   }
 
   async init() {
@@ -4051,12 +4203,12 @@ export class LocalMemoryStore {
   async capture(input) {
     await this.init();
     const db = this.open();
+    let result;
     try {
       db.exec("BEGIN IMMEDIATE");
       try {
-        const result = this.captureIntoDatabase(db, input);
+        result = this.captureIntoDatabase(db, input);
         db.exec("COMMIT");
-        return result;
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;
@@ -4065,6 +4217,7 @@ export class LocalMemoryStore {
       db.close();
       await enforcePrivatePermissions(this.dbPath);
     }
+    return this.attachDenseProjection(result, nullableString(input.tenant_id, 128) || "default");
   }
 
   async captureBatch(inputs) {
@@ -4072,10 +4225,11 @@ export class LocalMemoryStore {
     if (inputs.length === 0) return [];
     await this.init();
     const db = this.open();
+    let results;
     try {
       db.exec("BEGIN IMMEDIATE");
       try {
-        const results = inputs.map((input) =>
+        results = inputs.map((input) =>
           this.captureIntoDatabase(db, input, {
             updateFeatureStats: false,
             writeProjections: false
@@ -4087,7 +4241,6 @@ export class LocalMemoryStore {
         rebuildRetrievalUnitsV4(db);
         rebuildStableRetrievalUnits(db);
         db.exec("COMMIT");
-        return results;
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;
@@ -4095,6 +4248,55 @@ export class LocalMemoryStore {
     } finally {
       db.close();
       await enforcePrivatePermissions(this.dbPath);
+    }
+    if (!this.denseEmbeddingProvider) return results;
+    const byTenant = new Map();
+    results.forEach((result, index) => {
+      const tenantId = nullableString(inputs[index].tenant_id, 128) || "default";
+      byTenant.set(tenantId, [...(byTenant.get(tenantId) ?? []), { result, index }]);
+    });
+    const augmented = [...results];
+    for (const [tenantId, entries] of byTenant) {
+      try {
+        const projection = await this.rebuildDenseEmbeddings({
+          tenant_id: tenantId,
+          memory_ids: [...new Set(entries.map((entry) => entry.result.memory_id))]
+        });
+        for (const entry of entries) {
+          augmented[entry.index] = {
+            ...entry.result,
+            embedding_projection: { state: "indexed", ...projection }
+          };
+        }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        for (const entry of entries) {
+          augmented[entry.index] = {
+            ...entry.result,
+            embedding_projection: { state: "failed", reason }
+          };
+        }
+      }
+    }
+    return augmented;
+  }
+
+  async attachDenseProjection(result, tenantId) {
+    if (!this.denseEmbeddingProvider) return result;
+    try {
+      const projection = await this.rebuildDenseEmbeddings({
+        tenant_id: tenantId,
+        memory_ids: [result.memory_id]
+      });
+      return { ...result, embedding_projection: { state: "indexed", ...projection } };
+    } catch (error) {
+      return {
+        ...result,
+        embedding_projection: {
+          state: "failed",
+          reason: error instanceof Error ? error.message : String(error)
+        }
+      };
     }
   }
 
@@ -4130,6 +4332,26 @@ export class LocalMemoryStore {
       existing ? memoryFromRow(existing) : null
     );
     validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
+    if (record.canonical_key && record.lifecycle_state !== "suppressed") {
+      const canonicalExisting = db.prepare(
+        `SELECT id, current_version
+         FROM memories
+         WHERE tenant_id = ? AND canonical_key = ?
+           AND id != ?
+           AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
+         ORDER BY confidence_score DESC, utility_score DESC, updated_at DESC, id
+         LIMIT 1`
+      ).get(tenantId, record.canonical_key, record.id);
+      if (canonicalExisting) {
+        return {
+          memory_id: canonicalExisting.id,
+          version: Number(canonicalExisting.current_version ?? 1),
+          operation: "capture",
+          created: false,
+          deduplicated: true
+        };
+      }
+    }
     this.writeRecord(db, record, Boolean(existing), updateFeatureStats, writeProjections);
     this.writeVersion(db, record, "capture");
     return {
@@ -4287,6 +4509,26 @@ export class LocalMemoryStore {
       : projectId
         ? "project"
         : "tenant";
+    const captureOrigin = ["observed", "synthetic", "repair", "legacy"].includes(input.capture_origin)
+      ? input.capture_origin
+      : fallback?.capture_origin ?? "legacy";
+    const verificationState = ["verified", "partial", "unverified", "rejected"].includes(input.verification_state)
+      ? input.verification_state
+      : fallback?.verification_state ?? "unverified";
+    const learning = input.learning && typeof input.learning === "object" && !Array.isArray(input.learning)
+      ? input.learning
+      : fallback?.learning ?? null;
+    const qualityDimensions = input.quality_dimensions && typeof input.quality_dimensions === "object" && !Array.isArray(input.quality_dimensions)
+      ? Object.fromEntries(Object.entries(input.quality_dimensions).map(([key, raw]) => {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error("invalid_quality_dimension");
+        return [key.slice(0, 80), value];
+      }))
+      : fallback?.quality_dimensions ?? null;
+    const verifiedAt = finiteNumber(input.verified_at) ?? fallback?.verified_at ?? null;
+    if (verificationState === "verified" && (captureOrigin !== "observed" || !learning || !verifiedAt)) {
+      throw new Error("invalid_verified_learning");
+    }
     const now = Date.now();
     return {
       id: nullableString(input.id, 128) || fallback?.id || randomUUID(),
@@ -4316,6 +4558,7 @@ export class LocalMemoryStore {
       content_hash: hashContent(content),
       current_version: Math.max(1, Number(input.current_version || fallback?.current_version || 1)),
       rationale: nullableString(input.rationale, 4000),
+      reuse_rule: nullableString(input.reuse_rule, 1000),
       evidence: normalizeObjects(input.evidence),
       conflicts: normalizeStrings(input.conflicts),
       permissions: normalizeObjects(input.permissions),
@@ -4327,6 +4570,11 @@ export class LocalMemoryStore {
       promoted_at: finiteNumber(input.promoted_at),
       expires_at: finiteNumber(input.expires_at) ?? finiteNumber(input.valid_until),
       revised_at: finiteNumber(input.revised_at) || now
+      , capture_origin: captureOrigin
+      , verification_state: verificationState
+      , verified_at: verificationState === "verified" ? verifiedAt : null
+      , learning
+      , quality_dimensions: qualityDimensions
     };
   }
 
@@ -4337,7 +4585,8 @@ export class LocalMemoryStore {
       "actor_id", "created_at", "updated_at", "valid_from", "valid_until", "confidence_score", "utility_score",
       "content_hash", "current_version", "rationale", "evidence_json", "conflicts_json", "permissions_json",
       "canonical_key", "root_memory_id", "last_accessed_at", "suppressed_at", "consolidated_at", "promoted_at",
-      "expires_at", "revised_at"
+      "expires_at", "revised_at", "reuse_rule", "capture_origin", "verification_state", "verified_at",
+      "learning_json", "quality_dimensions_json"
     ];
     const values = {
       ...record,
@@ -4347,6 +4596,8 @@ export class LocalMemoryStore {
       evidence_json: json(record.evidence),
       conflicts_json: json(record.conflicts),
       permissions_json: json(record.permissions)
+      , learning_json: record.learning ? json(record.learning) : null
+      , quality_dimensions_json: record.quality_dimensions ? json(record.quality_dimensions) : null
     };
     if (exists) {
       const mutable = columns.filter((column) => column !== "id" && column !== "tenant_id");
@@ -4380,8 +4631,8 @@ export class LocalMemoryStore {
         id, memory_id, tenant_id, version, operation, content, summary, tags_json,
         kind, lifecycle_state, scope_type, scope_key, actor_type, actor_id,
         confidence_score, utility_score, canonical_key, snapshot_json, content_hash, created_at
-        , business_category_id, work_type
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        , business_category_id, work_type, reuse_rule
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       randomUUID(),
       record.id,
@@ -4412,7 +4663,8 @@ export class LocalMemoryStore {
       record.content_hash,
       record.updated_at,
       record.business_category_id,
-      record.work_type
+      record.work_type,
+      record.reuse_rule
     );
   }
 
@@ -4441,6 +4693,9 @@ export class LocalMemoryStore {
   }) {
     await this.init();
     if (searchMode === "hybrid_v3" || searchMode === "hybrid_v4") {
+      const denseQueryVector = searchMode === "hybrid_v4" && this.denseEmbeddingProvider
+        ? await this.denseEmbeddingProvider.embedQuery(query)
+        : null;
       const db = this.open({ readOnly: true });
       try {
         const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
@@ -4462,7 +4717,9 @@ export class LocalMemoryStore {
           minimumTotalScore: parsedMinimumTotalScore,
           includeSuppressed: include_suppressed,
           principalId,
-          at
+          at,
+          denseQueryVector,
+          denseProvider: this.denseEmbeddingProvider?.provider ?? null
         });
         return results.filter(({ memory }) =>
           (businessCategoryId === null || memory.business_category_id === businessCategoryId) &&
@@ -4928,6 +5185,85 @@ export class LocalMemoryStore {
     }
   }
 
+  async rebuildDenseEmbeddings({
+    tenant_id: tenantId = "default",
+    project_id: projectId = null,
+    memory_ids: memoryIds = null
+  } = {}) {
+    await this.init();
+    if (!this.denseEmbeddingProvider) throw new Error("local_dense_embedding_not_configured");
+    const uniqueMemoryIds = Array.isArray(memoryIds)
+      ? [...new Set(memoryIds.map((value) => nullableString(value, 128)).filter(Boolean))]
+      : null;
+    if (Array.isArray(memoryIds) && uniqueMemoryIds.length === 0) {
+      return {
+        provider: this.denseEmbeddingProvider.provider,
+        dimensions: this.denseEmbeddingProvider.dimensions,
+        indexed: 0,
+        tenant_id: tenantId,
+        project_id: projectId
+      };
+    }
+    const db = this.open();
+    try {
+      const rows = db.prepare(
+        `SELECT u.id, u.text
+         FROM memory_retrieval_units_v4 u
+         JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
+         WHERE u.tenant_id = ?
+           AND (? IS NULL OR u.project_id = ?)
+           AND m.lifecycle_state != 'suppressed'
+           ${uniqueMemoryIds ? `AND u.memory_id IN (${uniqueMemoryIds.map(() => "?").join(",")})` : ""}
+         ORDER BY u.id`
+      ).all(tenantId, projectId, projectId, ...(uniqueMemoryIds ?? []));
+      let indexed = 0;
+      for (let offset = 0; offset < rows.length; offset += 16) {
+        const batch = rows.slice(offset, offset + 16);
+        const vectors = await this.denseEmbeddingProvider.embedDocuments(batch.map((row) => row.text));
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          const upsert = db.prepare(
+            `INSERT INTO memory_retrieval_unit_embeddings_v4(
+               unit_id, tenant_id, provider, feature_count, vector_format, vector_blob, updated_at
+             ) VALUES(?,?,?,?,?,?,?)
+             ON CONFLICT(tenant_id, unit_id) DO UPDATE SET
+               provider = excluded.provider,
+               feature_count = excluded.feature_count,
+               vector_format = excluded.vector_format,
+               vector_blob = excluded.vector_blob,
+               updated_at = excluded.updated_at`
+          );
+          for (let index = 0; index < batch.length; index += 1) {
+            upsert.run(
+              batch[index].id,
+              tenantId,
+              this.denseEmbeddingProvider.provider,
+              vectors[index].length,
+              "dense-f32",
+              encodeFloat32Vector(vectors[index]),
+              Date.now()
+            );
+            indexed += 1;
+          }
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
+      }
+      return {
+        provider: this.denseEmbeddingProvider.provider,
+        dimensions: this.denseEmbeddingProvider.dimensions,
+        indexed,
+        tenant_id: tenantId,
+        project_id: projectId
+      };
+    } finally {
+      db.close();
+      await enforcePrivatePermissions(this.dbPath);
+    }
+  }
+
   async verify() {
     await this.init();
     const db = this.open({ readOnly: true });
@@ -5249,6 +5585,7 @@ export class LocalMemoryStore {
           confidence_score: columns.has("confidence_score") ? row.confidence_score : null,
           utility_score: columns.has("utility_score") ? row.utility_score : null,
           rationale: columns.has("rationale") ? row.rationale : null,
+          reuse_rule: columns.has("reuse_rule") ? row.reuse_rule : null,
           evidence: columns.has("evidence_json") ? parseJson(row.evidence_json) : [],
           conflicts: columns.has("conflicts_json") ? parseJson(row.conflicts_json) : [],
           permissions: columns.has("permissions_json") ? parseJson(row.permissions_json) : []

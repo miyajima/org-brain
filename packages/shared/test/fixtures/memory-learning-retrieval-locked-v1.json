@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "fixture_id": "verified-learning-retrieval-locked-v1",
+  "expansion": {
+    "themes": [
+      "hook batching", "command attestation", "file hash drift", "decision rationale", "failure avoidance",
+      "category assignment", "work type", "credential rejection", "ttl expiry", "conflict review",
+      "duplicate suppression", "semantic retrieval", "atomic projection", "profile applicability", "ledger outcome",
+      "timeline freshness", "reranker score", "compact list", "source lookup", "correct abstention"
+    ],
+    "query_styles": [
+      "exact", "symptom", "reason", "applicability", "avoidance",
+      "english paraphrase", "japanese paraphrase", "negative", "unrelated abstention", "next-task",
+      "root cause", "outcome", "component", "file scope", "temporal"
+    ]
+  },
+  "expected_query_count": 300,
+  "raw_transcript_persisted": false
+}
+

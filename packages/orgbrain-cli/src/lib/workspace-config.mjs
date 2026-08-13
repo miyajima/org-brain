@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-export const WORKSPACE_CONFIG_VERSION = 2;
+export const WORKSPACE_CONFIG_VERSION = 3;
 export const WORK_TYPES = new Set([
   "implementation", "review", "debug", "proposal",
   "support", "research", "operations", "other"
@@ -32,6 +32,27 @@ function emptyWorkspaceConfig() {
   return { version: WORKSPACE_CONFIG_VERSION, workspaces: {} };
 }
 
+export function normalizeSensitiveMemoryPolicy(raw) {
+  if (raw === undefined || raw === null) {
+    return { mode: "deny", allowed_principals: [] };
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("sensitive_memory must be an object");
+  }
+  const mode = raw.mode === "restricted_7d" ? "restricted_7d" : raw.mode === "deny" ? "deny" : null;
+  if (!mode) throw new Error("sensitive_memory.mode must be deny or restricted_7d");
+  const allowedPrincipals = Array.isArray(raw.allowed_principals)
+    ? [...new Set(raw.allowed_principals
+      .filter((value) => typeof value === "string")
+      .map((value) => value.trim().slice(0, 128))
+      .filter(Boolean))].slice(0, 64)
+    : [];
+  if (mode === "restricted_7d" && allowedPrincipals.length === 0) {
+    throw new Error("sensitive_memory.allowed_principals is required for restricted_7d");
+  }
+  return { mode, allowed_principals: allowedPrincipals };
+}
+
 function normalizeWorkspaceEntry(raw, workspaceRoot) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error(`workspace entry must be an object: ${workspaceRoot}`);
@@ -44,6 +65,13 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
   const defaultWorkType = raw.default_work_type === null || raw.default_work_type === undefined
     ? null
     : String(raw.default_work_type).trim();
+  const sensitiveMemory = normalizeSensitiveMemoryPolicy(raw.sensitive_memory);
+  const captureV2Mode = raw.memory_capture_v2_mode === undefined || raw.memory_capture_v2_mode === null
+    ? null
+    : String(raw.memory_capture_v2_mode).trim();
+  const learningMode = raw.memory_learning_mode === undefined || raw.memory_learning_mode === null
+    ? "off"
+    : String(raw.memory_learning_mode).trim();
   if (tenantId === null && raw.tenant_id !== null) {
     throw new Error(`workspace tenant_id is required or must be null: ${workspaceRoot}`);
   }
@@ -56,11 +84,20 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
   if (defaultWorkType !== null && !WORK_TYPES.has(defaultWorkType)) {
     throw new Error(`workspace default_work_type is invalid: ${workspaceRoot}`);
   }
+  if (captureV2Mode !== null && !["off", "shadow", "on"].includes(captureV2Mode)) {
+    throw new Error(`workspace memory_capture_v2_mode is invalid: ${workspaceRoot}`);
+  }
+  if (!["off", "shadow", "on"].includes(learningMode)) {
+    throw new Error(`workspace memory_learning_mode is invalid: ${workspaceRoot}`);
+  }
   return {
     tenant_id: tenantId,
     project_id: projectId,
     business_category_id: businessCategoryId,
-    default_work_type: defaultWorkType
+    default_work_type: defaultWorkType,
+    sensitive_memory: sensitiveMemory,
+    ...(captureV2Mode ? { memory_capture_v2_mode: captureV2Mode } : {}),
+    memory_learning_mode: learningMode
   };
 }
 
@@ -68,8 +105,8 @@ export function normalizeWorkspaceConfig(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("workspace config must be an object");
   }
-  if (![1, WORKSPACE_CONFIG_VERSION].includes(raw.version)) {
-    throw new Error(`workspace config version must be 1 or ${WORKSPACE_CONFIG_VERSION}`);
+  if (![1, 2, WORKSPACE_CONFIG_VERSION].includes(raw.version)) {
+    throw new Error(`workspace config version must be 1, 2, or ${WORKSPACE_CONFIG_VERSION}`);
   }
   if (!raw.workspaces || typeof raw.workspaces !== "object" || Array.isArray(raw.workspaces)) {
     throw new Error("workspace config workspaces must be an object");
@@ -208,7 +245,9 @@ export function migrateLegacyProjectNames(config, legacyNames, tenantId) {
       tenant_id: normalizedTenantId,
       project_id: projectId,
       business_category_id: null,
-      default_work_type: null
+      default_work_type: null,
+      sensitive_memory: { mode: "deny", allowed_principals: [] },
+      memory_learning_mode: "off"
     };
     changed = true;
   }

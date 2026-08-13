@@ -115,13 +115,16 @@ test("minimal Codex hook installer preserves existing hooks and is idempotent", 
   assert.match(env, /ORGBRAIN_ENABLE_CLOUD_MEMORY=false/u);
   assert.match(env, /ORGBRAIN_ENABLE_ORG_SHARING=false/u);
   assert.match(env, /ORGBRAIN_LOCAL_HOOK_CAPTURE=true/u);
+  assert.match(env, /ORGBRAIN_MEMORY_CAPTURE_V2_MODE=off/u);
   const mappings = JSON.parse(await readFile(plan.files.workspaces, "utf8"));
-  assert.equal(mappings.version, 2);
+  assert.equal(mappings.version, 3);
   assert.deepEqual(mappings.workspaces[workspace], {
     tenant_id: null,
     project_id: "example",
     business_category_id: null,
-    default_work_type: null
+    default_work_type: null,
+    sensitive_memory: { mode: "deny", allowed_principals: [] },
+    memory_learning_mode: "off"
   });
   assert.equal((await stat(plan.files.env)).mode & 0o777, 0o600);
   assert.equal((await stat(plan.files.hooks)).mode & 0o777, 0o600);

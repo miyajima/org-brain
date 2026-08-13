@@ -43,6 +43,17 @@ function columns(db, table) {
   return db.prepare(`PRAGMA table_info(${table})`).all().map((row) => String(row.name)).sort();
 }
 
+async function applyD1Migrations(db) {
+  const migrationDirectory = new URL("../migrations/", import.meta.url);
+  const files = (await readdir(migrationDirectory))
+    .filter((file) => /^\d{4}_.+\.sql$/.test(file))
+    .sort();
+  for (const file of files) {
+    const sql = await readFile(new URL(file, migrationDirectory), "utf8");
+    db.exec(sql);
+  }
+}
+
 test("local SQLite shared tables stay in parity with D1 migrations", async () => {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-schema-parity-"));
   const localPath = join(directory, "local.sqlite");
@@ -51,14 +62,7 @@ test("local SQLite shared tables stay in parity with D1 migrations", async () =>
     const store = new LocalMemoryStore(localPath);
     await store.init();
     const migrated = new DatabaseSync(migratedPath);
-    const migrationDirectory = new URL("../migrations/", import.meta.url);
-    const files = (await readdir(migrationDirectory))
-      .filter((file) => /^\d{4}_.+\.sql$/.test(file))
-      .sort();
-    for (const file of files) {
-      const sql = await readFile(new URL(file, migrationDirectory), "utf8");
-      migrated.exec(sql);
-    }
+    await applyD1Migrations(migrated);
     const local = new DatabaseSync(localPath, { readOnly: true });
     try {
       const differences = {};
@@ -75,6 +79,45 @@ test("local SQLite shared tables stay in parity with D1 migrations", async () =>
       migrated.close();
     }
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("D1 migration atomically rejects new active canonical duplicates", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "orgbrain-canonical-guard-"));
+  const migratedPath = join(directory, "migrated.sqlite");
+  const database = new DatabaseSync(migratedPath);
+  try {
+    await applyD1Migrations(database);
+    const insert = database.prepare(
+      `INSERT INTO memories(id, tenant_id, content, created_at, canonical_key, lifecycle_state)
+       VALUES(?, 'default', ?, 1, ?, ?)`
+    );
+    insert.run("memory-a", "first", "canonical-a", "active");
+    assert.throws(
+      () => insert.run("memory-b", "second", "canonical-a", "active"),
+      /duplicate_canonical_key/
+    );
+
+    insert.run("memory-suppressed", "historical", "canonical-a", "suppressed");
+    database.prepare("UPDATE memories SET content = ? WHERE id = ?").run("updated", "memory-a");
+    database.prepare("UPDATE memories SET lifecycle_state = 'suppressed' WHERE id = ?").run("memory-a");
+    insert.run("memory-b", "replacement", "canonical-a", "active");
+    assert.throws(
+      () => database.prepare(
+        "UPDATE memories SET lifecycle_state = 'active' WHERE id = ?"
+      ).run("memory-a"),
+      /duplicate_canonical_key/
+    );
+
+    const active = database.prepare(
+      `SELECT id FROM memories
+       WHERE tenant_id = 'default' AND canonical_key = 'canonical-a'
+         AND lifecycle_state != 'suppressed'`
+    ).all();
+    assert.deepEqual(active.map((row) => row.id), ["memory-b"]);
+  } finally {
+    database.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

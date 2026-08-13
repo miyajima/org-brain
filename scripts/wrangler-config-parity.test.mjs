@@ -15,6 +15,8 @@ test("API Gateway local and production Wrangler configs keep local-safe runtime 
     "HYBRID_V3_MODE",
     "HYBRID_V4_MODE",
     "HYBRID_V4_SHADOW_SAMPLE_RATE",
+    "ORGBRAIN_MEMORY_CAPTURE_V2_MODE",
+    "ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING",
     "MEMORY_CLASSIFICATION_MODE",
     "RETRIEVAL_GENERATION_ROUTING"
   ]) {

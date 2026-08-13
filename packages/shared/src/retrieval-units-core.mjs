@@ -526,6 +526,58 @@ export function buildRetrievalUnitsV4(record) {
   return units;
 }
 
+export function buildVerifiedLearningRetrievalUnits(record, now = Date.now()) {
+  if (record?.capture_origin !== "observed" || record?.verification_state !== "verified") return [];
+  if (Number.isFinite(record.valid_until) && record.valid_until <= now) return [];
+  let learning;
+  try { learning = JSON.parse(record.learning_json ?? "null"); } catch { return []; }
+  if (!learning || typeof learning !== "object") return [];
+  const conclusion = collapseWhitespace(learning.conclusion);
+  const rationale = collapseWhitespace(learning.rationale);
+  const trigger = collapseWhitespace(learning.trigger);
+  const reuseRule = collapseWhitespace(learning.reuse_rule);
+  const outcome = collapseWhitespace(learning.outcome ?? "decision recorded");
+  if (!conclusion || !rationale || !trigger || !reuseRule) return [];
+  const applicability = learning.applicability && typeof learning.applicability === "object" ? learning.applicability : {};
+  const scope = [
+    ...(Array.isArray(applicability.target_files) ? applicability.target_files : []),
+    ...(Array.isArray(applicability.components) ? applicability.components : [])
+  ].map(collapseWhitespace).filter(Boolean);
+  const specs = [
+    ["atomic", conclusion, { channel: "atomic", lesson_type: learning.lesson_type, kind: learning.kind }],
+    ["profile", `Trigger: ${trigger}. Reuse or avoid: ${reuseRule}. Applies to: ${scope.join(", ") || "project scope"}.`, { channel: "profile", scope }],
+    ["ledger", `Verified outcome: ${outcome}.`, { channel: "ledger", verification_state: "verified" }],
+    ["timeline", `Observed and verified at ${new Date(record.verified_at ?? record.updated_at).toISOString()}.`, { channel: "timeline" }],
+    ["segment", `${conclusion} Reason: ${rationale} Reuse or avoidance: ${reuseRule} Outcome: ${outcome}.`, { channel: "segment" }]
+  ];
+  return specs.map(([unitType, rawText, metadata], index) => {
+    const text = clip(rawText, RETRIEVAL_SEGMENT_MAX_CHARS);
+    return {
+      id: `learn_${hash(`${record.id}\0${unitType}\0${index}\0${text}`).slice(0, 27)}`,
+      memory_id: record.id,
+      tenant_id: record.tenant_id,
+      project_id: record.project_id ?? null,
+      unit_type: unitType,
+      speaker: null,
+      text,
+      event_at: unitType === "timeline" ? record.verified_at ?? record.updated_at : retrievalUnitEventAt(record),
+      valid_from: record.valid_from ?? null,
+      valid_until: record.valid_until ?? null,
+      source_ref_json: JSON.stringify(sourceReference(record)),
+      source_span_start: null,
+      source_span_end: null,
+      content_hash: hash(text),
+      metadata_json: JSON.stringify(metadata),
+      segment_id: unitType === "segment" ? `seg_${hash(`${record.id}\0${text}`).slice(0, 28)}` : null,
+      extractor: "verified-learning",
+      extractor_version: "1",
+      extraction_state: "ready",
+      degraded_reason: null,
+      created_at: record.updated_at ?? record.created_at ?? Date.now()
+    };
+  });
+}
+
 export function analyzeRetrievalIntent(query) {
   const text = collapseWhitespace(query).toLowerCase();
   const relativeMatch = text.match(

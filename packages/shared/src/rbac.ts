@@ -13,7 +13,8 @@ export const ORG_PERMISSIONS = [
   "share",
   "admin",
   "delete",
-  "export"
+  "export",
+  "memory:attest"
 ] as const;
 
 export type OrgRole = (typeof ORG_ROLES)[number];
@@ -24,7 +25,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<OrgRole, readonly OrgPermission[]
   project_owner: ORG_PERMISSIONS,
   contributor: ["read", "write", "share"],
   reader: ["read"],
-  service_agent: ["read", "write"],
+  service_agent: ["read", "write", "memory:attest"],
   auditor: ["read", "export"]
 };
 

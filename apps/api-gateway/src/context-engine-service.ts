@@ -7,6 +7,7 @@ import { recordMemoryUsage } from "./memory-effect-service";
 import { resolveRetrievalGenerationAssignment } from "./retrieval-generation-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const INFERRED_DECISION_TTL_MS = 180 * DAY_MS;
 const DEFAULT_MAX_TOKENS = 6000;
 const DEFAULT_SEARCH_LIMIT = 8;
 
@@ -34,7 +35,7 @@ type DecisionStatus = (typeof DECISION_STATUSES)[number];
 type DecisionVisibility = (typeof VISIBILITIES)[number];
 type ConfirmationState = (typeof CONFIRMATION_STATES)[number];
 
-type SourceRef = {
+export type SourceRef = {
   type?: string;
   id?: string;
   title?: string;
@@ -297,6 +298,11 @@ type PrincipalIdentityOptions = {
   principal?: string | null;
   recordUsage?: boolean;
   bestEffortUsage?: boolean;
+  autoOrigin?: {
+    memoryId: string;
+    source: string;
+    externalKey: string;
+  };
 };
 
 function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
@@ -465,9 +471,9 @@ function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
     confirmationNote: row.confirmation_note ?? null,
     confirmedAt: row.confirmed_at ?? null,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
-    , businessCategoryId: row.business_category_id ?? null
-    , workType: row.work_type ?? null
+    updatedAt: row.updated_at,
+    businessCategoryId: row.business_category_id ?? null,
+    workType: row.work_type ?? null
   };
 }
 
@@ -896,6 +902,13 @@ function parseCreateDecisionRequest(rawBody: unknown, principal?: string | null)
   const now = Date.now();
   const requestPrincipal = normalizePrincipal(principal);
   const visibility = parseEnum(body.visibility, "visibility", VISIBILITIES, "tenant");
+  const confirmationState = parseEnum(
+    body.confirmationState ?? body.confirmation_state,
+    "confirmationState",
+    CONFIRMATION_STATES,
+    "inferred_unconfirmed"
+  );
+  const requestedValidUntil = parseTimestamp(body.validUntil ?? body.valid_until, "validUntil");
   return {
     id: ulid(now),
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
@@ -911,7 +924,9 @@ function parseCreateDecisionRequest(rawBody: unknown, principal?: string | null)
     ownerRefs: ensurePrincipalOwner(parseOwnerRefs(body.ownerRefs ?? body.owner_refs, "ownerRefs", 16), requestPrincipal),
     reviewerRefs: parseOwnerRefs(body.reviewerRefs ?? body.reviewer_refs, "reviewerRefs", 16),
     validFrom: parseTimestamp(body.validFrom ?? body.valid_from, "validFrom"),
-    validUntil: parseTimestamp(body.validUntil ?? body.valid_until, "validUntil"),
+    validUntil: confirmationState === "inferred_unconfirmed" && requestedValidUntil === null
+      ? now + INFERRED_DECISION_TTL_MS
+      : requestedValidUntil,
     status: parseEnum(body.status, "status", DECISION_STATUSES, "active"),
     supersededBy: parseOptionalString(body.supersededBy ?? body.superseded_by, "supersededBy", 128),
     confidence: parseOptionalNumber(body.confidence, "confidence", 0.5, 0, 1),
@@ -923,13 +938,13 @@ function parseCreateDecisionRequest(rawBody: unknown, principal?: string | null)
             requestPrincipal
           )
         : parseStringArray(body.allowedPrincipals ?? body.allowed_principals, "allowedPrincipals", 64, 128),
-    confirmationState: parseEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES, "inferred_unconfirmed"),
+    confirmationState,
     confirmationNote: parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000),
     confirmedAt: null,
     createdAt: now,
-    updatedAt: now
-    , businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128)
-    , workType: body.work_type ?? null
+    updatedAt: now,
+    businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
+    workType: body.work_type ?? null
   };
 }
 
@@ -940,7 +955,9 @@ function parseSearchDecisionRequest(rawBody: unknown, principal?: string | null)
   return {
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
     projectId: parseOptionalString(body.projectId ?? body.project_id, "projectId", 128),
-    q: parseOptionalString(body.q, "q", 500) ?? "",
+    q: typeof body.q === "string" && body.q.trim() === ""
+      ? ""
+      : parseOptionalString(body.q, "q", 500) ?? "",
     limit: parseOptionalInteger(body.limit, "limit", DEFAULT_SEARCH_LIMIT, 1, 50),
     userId: requestPrincipal ?? parseOptionalString(body.userId ?? body.user_id, "userId", 128),
     agentId: requestPrincipal ?? parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
@@ -1056,9 +1073,9 @@ function snapshotDecisionMemory(memory: DecisionMemory): Record<string, unknown>
     confirmationNote: memory.confirmationNote,
     confirmedAt: memory.confirmedAt,
     createdAt: memory.createdAt,
-    updatedAt: memory.updatedAt
-    , businessCategoryId: memory.businessCategoryId
-    , workType: memory.workType
+    updatedAt: memory.updatedAt,
+    businessCategoryId: memory.businessCategoryId,
+    workType: memory.workType
   };
 }
 
@@ -1096,11 +1113,19 @@ async function insertDecisionMemoryVersion(env: Env, args: {
 function toPublicDecisionContext(item: ScoredDecisionMemory, includeSources: boolean, userId: string | null, agentId: string | null, debugScores: boolean) {
   return {
     id: item.memory.id,
+    projectId: item.memory.projectId,
+    businessCategoryId: item.memory.businessCategoryId,
+    workType: item.memory.workType,
     title: item.memory.title,
     decision: item.memory.decision,
     rationale: item.memory.rationale,
+    constraints: item.memory.constraints,
+    knownPitfalls: item.memory.knownPitfalls,
     status: item.memory.status,
     confidence: item.memory.confidence,
+    confirmationState: item.memory.confirmationState,
+    validFrom: item.memory.validFrom,
+    validUntil: item.memory.validUntil,
     sources: includeSources ? filterSourceRefs(item.memory.sourceRefs, userId, agentId) : undefined,
     score: debugScores ? item.score : undefined
   };
@@ -1227,13 +1252,44 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
   const knownPitfalls = Array.isArray(trimmed.knownPitfalls) ? trimmed.knownPitfalls : [];
   const constraints = Array.isArray(trimmed.constraints) ? trimmed.constraints : [];
   const nextActions = Array.isArray(trimmed.recommendedNextActions) ? trimmed.recommendedNextActions : [];
+  const conflicts = Array.isArray(trimmed.conflicts) ? trimmed.conflicts : [];
+  const overBudget = () => estimateTokens(trimmed) > maxTokens;
+  const popNested = (field: "knownPitfalls" | "constraints" | "sources") => {
+    for (let index = decisionContext.length - 1; index >= 0; index -= 1) {
+      const entry = decisionContext[index];
+      if (!entry || typeof entry !== "object") continue;
+      const values = (entry as Record<string, unknown>)[field];
+      if (Array.isArray(values) && values.length > 0) {
+        values.pop();
+        return true;
+      }
+    }
+    return false;
+  };
 
-  while (estimateTokens(trimmed) > maxTokens && knownPitfalls.length > 1) knownPitfalls.pop();
-  while (estimateTokens(trimmed) > maxTokens && nextActions.length > 1) nextActions.pop();
-  while (estimateTokens(trimmed) > maxTokens && constraints.length > 1) constraints.pop();
-  while (estimateTokens(trimmed) > maxTokens && decisionContext.length > 1) decisionContext.pop();
-  if (estimateTokens(trimmed) > maxTokens) {
-    trimmed.summary = String(trimmed.summary ?? "").slice(0, Math.max(80, maxTokens * 2));
+  while (overBudget() && knownPitfalls.length > 0) knownPitfalls.pop();
+  while (overBudget() && nextActions.length > 0) nextActions.pop();
+  while (overBudget() && constraints.length > 0) constraints.pop();
+  while (overBudget() && decisionContext.length > 1) decisionContext.pop();
+  while (overBudget() && popNested("knownPitfalls")) continue;
+  while (overBudget() && popNested("constraints")) continue;
+  while (overBudget() && popNested("sources")) continue;
+  while (overBudget() && conflicts.length > 0) conflicts.pop();
+
+  if (overBudget() && decisionContext[0] && typeof decisionContext[0] === "object") {
+    const entry = decisionContext[0] as Record<string, unknown>;
+    delete entry.provenance;
+    delete entry.trustSignals;
+    if (typeof entry.rationale === "string") entry.rationale = entry.rationale.slice(0, 320);
+    if (typeof entry.decision === "string") entry.decision = entry.decision.slice(0, 480);
+    if (typeof entry.title === "string") entry.title = entry.title.slice(0, 160);
+  }
+  if (overBudget()) {
+    trimmed.summary = String(trimmed.summary ?? "").slice(0, Math.max(80, Math.min(480, maxTokens)));
+  }
+  if (overBudget()) decisionContext.splice(0);
+  if (overBudget()) {
+    trimmed.summary = String(trimmed.summary ?? "").slice(0, 160);
   }
   return trimmed;
 }
@@ -1317,6 +1373,74 @@ async function projectDecisionMemory(env: Env, memory: DecisionMemory) {
   else for (const statement of statements) await statement.run();
 }
 
+export async function backfillDecisionRetrievalUnits(
+  env: Env,
+  options: {
+    tenantId: string;
+    projectId?: string | null;
+    cursor?: string | null;
+    limit?: number;
+  }
+) {
+  const limit = Math.max(1, Math.min(50, options.limit ?? 25));
+  const projectKey = options.projectId ?? "";
+  const checkpoint = options.cursor === undefined || options.cursor === null
+    ? await env.OPEN_BRAIN_DB.prepare(
+      `SELECT cursor, processed_decisions
+       FROM decision_retrieval_projection_backfills
+       WHERE tenant_id = ? AND project_id = ?`
+    ).bind(options.tenantId, projectKey).first<{
+      cursor: string;
+      processed_decisions: number;
+    }>()
+    : null;
+  const cursor = options.cursor ?? checkpoint?.cursor ?? "";
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id FROM decision_memories
+     WHERE tenant_id = ? AND status = 'active' AND id > ?
+       AND (? IS NULL OR project_id = ?)
+     ORDER BY id
+     LIMIT ?`
+  ).bind(
+    options.tenantId,
+    cursor,
+    options.projectId ?? null,
+    options.projectId ?? null,
+    limit
+  ).all<{ id: string }>();
+  for (const row of rows.results) {
+    await projectDecisionMemory(env, await loadDecisionMemoryById(env, options.tenantId, row.id));
+  }
+  const nextCursor = rows.results.at(-1)?.id ?? cursor;
+  const done = rows.results.length < limit;
+  const totalProcessed = Number(checkpoint?.processed_decisions ?? 0) + rows.results.length;
+  await env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO decision_retrieval_projection_backfills(
+       tenant_id, project_id, cursor, processed_decisions, state, updated_at
+     ) VALUES(?,?,?,?,?,?)
+     ON CONFLICT(tenant_id, project_id) DO UPDATE SET
+       cursor=excluded.cursor,
+       processed_decisions=excluded.processed_decisions,
+       state=excluded.state,
+       updated_at=excluded.updated_at`
+  ).bind(
+    options.tenantId,
+    projectKey,
+    nextCursor,
+    totalProcessed,
+    done ? "complete" : "running",
+    Date.now()
+  ).run();
+  return {
+    tenant_id: options.tenantId,
+    project_id: options.projectId ?? null,
+    processed_decisions: rows.results.length,
+    total_processed_decisions: totalProcessed,
+    next_cursor: nextCursor || null,
+    done
+  };
+}
+
 export async function createDecisionMemory(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const parsedMemory = parseCreateDecisionRequest(rawBody, options.principal);
   const classification = await validateBusinessClassification(
@@ -1351,8 +1475,9 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
        rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
        valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
        confirmation_state, confirmation_note, confirmed_at,
-       created_at, updated_at, business_category_id, work_type
-     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       created_at, updated_at, business_category_id, work_type,
+       origin_memory_id, origin_source, origin_external_key, auto_generated
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   )
     .bind(
       memory.id,
@@ -1381,7 +1506,11 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
       memory.createdAt,
       memory.updatedAt,
       memory.businessCategoryId,
-      memory.workType
+      memory.workType,
+      options.autoOrigin?.memoryId ?? null,
+      options.autoOrigin?.source ?? null,
+      options.autoOrigin?.externalKey ?? null,
+      options.autoOrigin ? 1 : 0
     )
     .run();
   await insertDecisionMemoryVersion(env, { memory, operation: "create", actorRefs: memory.ownerRefs, reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
@@ -1392,6 +1521,206 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
       ? { classification_warning: classification.classification_warning }
       : {})
   };
+}
+
+type AutoDecisionEvidence = {
+  evidence_type?: string;
+  evidence_ref?: string;
+  note?: string | null;
+};
+
+type AutoDecisionSourceReference = {
+  type?: unknown;
+  ref?: unknown;
+  id?: unknown;
+  title?: unknown;
+  url?: unknown;
+};
+
+function relativeRepositoryPath(value: string): boolean {
+  return Boolean(value) &&
+    !value.startsWith("/") &&
+    !value.startsWith("[external-path]") &&
+    !/^[A-Za-z]:[\\/]/u.test(value) &&
+    !value.includes("../");
+}
+
+function durableAutoDecisionSource(source: SourceRef): boolean {
+  const type = source.type?.toLowerCase() ?? "";
+  const reference = `${source.id ?? ""} ${source.url ?? ""} ${source.title ?? ""}`;
+  if (type === "current_code") {
+    return relativeRepositoryPath(source.id ?? "") && /\b[a-f0-9]{7,64}\b|sha-?256/iu.test(reference);
+  }
+  if (type === "commit") return /^[a-f0-9]{7,64}$/iu.test(source.id ?? "");
+  if (type === "merged_pr" || type === "adr") return Boolean(source.id || source.url);
+  if (type === "official_doc") return /^https?:\/\//iu.test(source.url ?? source.id ?? "");
+  if (type === "command") return /\bexit[_ -]?code\s*[:=]?\s*0\b|\b(?:passed|verified|succeeded)\b/iu.test(reference);
+  return false;
+}
+
+function durableAutoDecisionSourceIdentity(source: SourceRef): string | null {
+  if (!durableAutoDecisionSource(source)) return null;
+  const reference = `${source.id ?? ""} ${source.url ?? ""} ${source.title ?? ""}`;
+  const hash = reference.match(/\b[a-f0-9]{7,64}\b/iu)?.[0]?.toLowerCase();
+  if (hash) return `hash:${hash}`;
+  return `${source.type?.toLowerCase() ?? "unknown"}:${source.id ?? source.url ?? source.title ?? ""}`;
+}
+
+function normalizeAutoDecisionSources(
+  evidence: AutoDecisionEvidence[],
+  references: AutoDecisionSourceReference[]
+): SourceRef[] {
+  const commitHash = evidence
+    .map((item) => item.evidence_ref ?? "")
+    .find((value) => /^[a-f0-9]{7,64}$/iu.test(value));
+  const sources: SourceRef[] = [];
+  for (const entry of evidence) {
+    const ref = entry.evidence_ref?.trim();
+    if (!ref) continue;
+    const type = entry.evidence_type === "file"
+      ? "current_code"
+      : entry.evidence_type === "doc"
+        ? /(?:^|[/_-])adr(?:[/_.-]|\d)/iu.test(ref) ? "adr" : "official_doc"
+        : entry.evidence_type === "command"
+          ? "command"
+        : entry.evidence_type === "external" && /^[a-f0-9]{7,64}$/iu.test(ref)
+          ? "commit"
+          : entry.evidence_type === "external" && /^ADR[-_ ]?\d+$/iu.test(ref)
+            ? "adr"
+          : entry.evidence_type === "external" && /(?:pull\/\d+|PR\s*#?\d+)/iu.test(ref) && /merged/iu.test(entry.note ?? "")
+            ? "merged_pr"
+            : entry.evidence_type;
+    sources.push({
+      type,
+      id: ref.slice(0, 160),
+      ...(ref.startsWith("http://") || ref.startsWith("https://") ? { url: ref.slice(0, 500) } : {}),
+      ...((entry.note || (type === "current_code" && commitHash))
+        ? { title: `${entry.note ?? ""}${entry.note && commitHash ? "; " : ""}${commitHash ? `hash=${commitHash}` : ""}`.slice(0, 240) }
+        : {})
+    });
+  }
+  for (const entry of references) {
+    const ref = typeof entry.ref === "string" ? entry.ref : typeof entry.id === "string" ? entry.id : "";
+    const url = typeof entry.url === "string" ? entry.url : /^https?:\/\//iu.test(ref) ? ref : undefined;
+    sources.push({
+      type: typeof entry.type === "string" ? entry.type.slice(0, 80) : "unknown",
+      ...(ref ? { id: ref.slice(0, 160) } : {}),
+      ...(typeof entry.title === "string" ? { title: entry.title.slice(0, 240) } : {}),
+      ...(url ? { url: url.slice(0, 500) } : {})
+    });
+  }
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const key = `${source.type ?? ""}\0${source.id ?? ""}\0${source.url ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 16);
+}
+
+export function capAutoDecisionConfidence(args: {
+  requested: number;
+  decision: string;
+  rationale: string;
+  projectId: string | null;
+  sources: SourceRef[];
+}): number {
+  const explicitDecision = /\b(?:decided|decision|must|must not|required|prohibited|forbidden|never|always|will use)\b|(?:決定|採用|方針|必須|禁止|不可|制約|必ず)/iu.test(args.decision);
+  const durableEvidenceCount = new Set(
+    args.sources
+      .map(durableAutoDecisionSourceIdentity)
+      .filter((identity): identity is string => Boolean(identity))
+  ).size;
+  const eligible = explicitDecision && args.rationale.trim().length > 0 && Boolean(args.projectId);
+  const cap = !eligible || durableEvidenceCount === 0 ? 0.89 : durableEvidenceCount >= 2 ? 0.95 : 0.9;
+  return Number(Math.min(Math.max(args.requested, 0), cap).toFixed(2));
+}
+
+export async function upsertAutoDecisionMemory(env: Env, args: {
+  tenantId: string;
+  memoryId: string;
+  source: string;
+  externalKey: string | null;
+  projectId: string | null;
+  businessCategoryId: string | null;
+  workType: MemoryWorkType | null;
+  kind: "decision" | "constraint";
+  title: string;
+  decision: string;
+  rationale: string;
+  evidence: AutoDecisionEvidence[];
+  sourceReferences: AutoDecisionSourceReference[];
+  validFrom: number;
+  validUntil: number | null;
+  confidence: number;
+  visibility: DecisionVisibility;
+  allowedPrincipals: string[];
+  principal: string | null;
+}) {
+  if (!args.externalKey) {
+    throw new HttpError(400, "external_key_required", "external_key is required for automatic decision promotion");
+  }
+  const sourceRefs = normalizeAutoDecisionSources(args.evidence, args.sourceReferences);
+  const confidence = capAutoDecisionConfidence({
+    requested: args.confidence,
+    decision: args.decision,
+    rationale: args.rationale,
+    projectId: args.projectId,
+    sources: sourceRefs
+  });
+  const existing = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id FROM decision_memories
+     WHERE tenant_id = ? AND origin_source = ? AND origin_external_key = ? AND auto_generated = 1
+     LIMIT 1`
+  ).bind(args.tenantId, args.source, args.externalKey).first<{ id: string }>();
+  const body: DecisionMemoryCreateRequest = {
+    tenant_id: args.tenantId,
+    project_id: args.projectId,
+    domain: "engineering",
+    title: collapseWhitespace(args.title).slice(0, 240),
+    decision: args.decision,
+    rationale: args.rationale,
+    constraints: args.kind === "constraint" ? [args.decision] : [],
+    source_refs: sourceRefs,
+    valid_from: args.validFrom,
+    valid_until: args.validUntil ?? args.validFrom + INFERRED_DECISION_TTL_MS,
+    status: "active",
+    confidence,
+    visibility: args.visibility,
+    allowed_principals: args.allowedPrincipals,
+    confirmation_state: "inferred_unconfirmed",
+    confirmation_note: "Auto-generated from memory capture v2; review required unless strict blocking evidence rules pass.",
+    business_category_id: args.businessCategoryId,
+    work_type: args.workType
+  };
+  if (existing?.id) {
+    return reviseDecisionMemory(env, args.tenantId, existing.id, {
+      ...body,
+      note: "Idempotent refresh from the originating memory capture."
+    }, { principal: args.principal });
+  }
+  try {
+    return await createDecisionMemory(env, body, {
+      principal: args.principal,
+      autoOrigin: {
+        memoryId: args.memoryId,
+        source: args.source,
+        externalKey: args.externalKey
+      }
+    });
+  } catch (error) {
+    if (!String(error).includes("UNIQUE")) throw error;
+    const raced = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id FROM decision_memories
+       WHERE tenant_id = ? AND origin_source = ? AND origin_external_key = ? AND auto_generated = 1
+       LIMIT 1`
+    ).bind(args.tenantId, args.source, args.externalKey).first<{ id: string }>();
+    if (!raced?.id) throw error;
+    return reviseDecisionMemory(env, args.tenantId, raced.id, {
+      ...body,
+      note: "Idempotent refresh after concurrent automatic decision creation."
+    }, { principal: args.principal });
+  }
 }
 
 export async function searchDecisionMemories(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
@@ -1615,6 +1944,9 @@ function mergeDecisionMemory(current: DecisionMemory, rawBody: unknown): { memor
       : current.confirmationNote,
     updatedAt: now
   };
+  if (memory.confirmationState === "inferred_unconfirmed" && memory.validUntil === null) {
+    memory.validUntil = now + INFERRED_DECISION_TTL_MS;
+  }
   return {
     memory,
     actorRefs: parseOwnerRefs(body.actorRefs ?? body.actor_refs, "actorRefs", 16),
@@ -1979,57 +2311,9 @@ export async function preActionDecisionGate(
       ? clamp(body.minimum_confidence, 0, 1)
       : 0.45;
   const task = body.task && typeof body.task === "object" ? body.task : {};
-  const taskText = buildTaskText(task);
-  const tenantId = parseOptionalString(body.tenant_id ?? body.orgId, "tenant_id", 128) ?? "default";
   const projectId = parseOptionalString(body.project_id ?? body.projectId, "project_id", 128);
-  const policyTokens = tokenize(taskText).slice(0, 6);
-  const policyContext = policyTokens.length === 0
-    ? []
-    : (await env.OPEN_BRAIN_DB.prepare(
-        `SELECT id, project_id, kind, content, summary, source, source_refs_json,
-                confidence_score, valid_from, valid_until
-         FROM memories
-         WHERE tenant_id = ?
-           AND (? IS NULL OR project_id = ? OR project_id IS NULL)
-           AND kind IN ('constraint', 'pitfall', 'decision')
-           AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
-           AND (valid_from IS NULL OR valid_from <= ?)
-           AND (valid_until IS NULL OR valid_until > ?)
-           AND (${policyTokens.map(() => "(LOWER(content) LIKE ? OR LOWER(COALESCE(summary, '')) LIKE ?)").join(" OR ")})
-         ORDER BY confidence_score DESC, updated_at DESC
-         LIMIT 8`
-      )
-        .bind(
-          tenantId,
-          projectId,
-          projectId,
-          Date.now(),
-          Date.now(),
-          ...policyTokens.flatMap((token) => [`%${token.toLowerCase()}%`, `%${token.toLowerCase()}%`])
-        )
-        .all<{
-          id: string;
-          project_id: string | null;
-          kind: string;
-          content: string;
-          summary: string | null;
-          source: string;
-          source_refs_json: string | null;
-          confidence_score: number | null;
-          valid_from: number | null;
-          valid_until: number | null;
-        }>()).results.map((row) => ({
-          id: row.id,
-          project_id: row.project_id,
-          kind: row.kind,
-          summary: row.summary,
-          content: row.content,
-          source: row.source,
-          source_references: parseJsonArray<SourceRef>(row.source_refs_json),
-          confidence: row.confidence_score,
-          valid_from: row.valid_from,
-          valid_until: row.valid_until
-        }));
+  const businessCategoryId = parseOptionalString(body.business_category_id, "business_category_id", 128);
+  const workType = body.work_type ?? null;
   const context = await enrichContext(
     env,
     {
@@ -2043,27 +2327,88 @@ export async function preActionDecisionGate(
   ) as {
     confidence?: number;
     requiresHumanReview?: boolean;
-    conflicts?: Array<{ severity?: string; requiresHumanReview?: boolean }>;
-    decisionContext?: unknown[];
+    conflicts?: Array<{
+      severity?: string;
+      requiresHumanReview?: boolean;
+      preferredMemoryId?: string;
+      conflictingMemoryIds?: string[];
+    }>;
+    decisionContext?: Array<{
+      id?: string;
+      projectId?: string | null;
+      businessCategoryId?: string | null;
+      workType?: MemoryWorkType | null;
+      decision?: string;
+      rationale?: string;
+      constraints?: string[];
+      status?: string;
+      confidence?: number;
+      confirmationState?: string;
+      validFrom?: number | null;
+      validUntil?: number | null;
+      sources?: SourceRef[];
+    }>;
     [key: string]: unknown;
   };
   const confidence = Number(context.confidence ?? 0);
   const conflicts = Array.isArray(context.conflicts) ? context.conflicts : [];
-  const blockingConflict = conflicts.some(
+  const unresolvedConflict = conflicts.some(
     (conflict) => conflict.severity === "high" && conflict.requiresHumanReview === true
   );
-  const blockingPolicies = policyContext.filter((memory) =>
-    /\b(?:must not|never|prohibited|forbidden|do not)\b|(?:禁止|してはいけない|不可)/iu.test(memory.content)
-  );
+  const conflictingDecisionIds = new Set(conflicts.flatMap((conflict) => [
+    conflict.preferredMemoryId,
+    ...(conflict.conflictingMemoryIds ?? [])
+  ].filter((id): id is string => Boolean(id))));
+  const now = Date.now();
+  const decisionContext = context.decisionContext ?? [];
+  const isPolicyDecision = (decision: (typeof decisionContext)[number]) => {
+    const policyText = `${decision.decision ?? ""}\n${(decision.constraints ?? []).join("\n")}`;
+    return /\b(?:must not|never|prohibited|forbidden|do not|required|must)\b|(?:禁止|してはいけない|不可|必須|必ず)/iu.test(policyText);
+  };
+  const policyDecisions = decisionContext.filter(isPolicyDecision);
+  const blockingDecisions = decisionContext.filter((decision) => {
+    const policyText = `${decision.decision ?? ""}\n${(decision.constraints ?? []).join("\n")}`;
+    if (!isPolicyDecision(decision)) return false;
+    if (decision.status !== "active") return false;
+    if (decision.validFrom && decision.validFrom > now) return false;
+    if (decision.validUntil && decision.validUntil <= now) return false;
+    if (decision.id && conflictingDecisionIds.has(decision.id)) return false;
+    if (projectId && decision.projectId !== projectId) return false;
+    if (businessCategoryId && decision.businessCategoryId !== businessCategoryId) return false;
+    if (workType && decision.workType !== workType) return false;
+    const state = decision.confirmationState;
+    if (state === "user_confirmed" || state === "user_corrected" || state === "reviewed") {
+      return Number(decision.confidence ?? 0) >= minimumConfidence;
+    }
+    if (state !== "inferred_unconfirmed" || env.ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING !== "on") return false;
+    const threshold = Math.max(0.9, minimumConfidence);
+    const explicit = /\b(?:decided|decision|must|must not|required|prohibited|forbidden|never|always|will use)\b|(?:決定|採用|方針|必須|禁止|不可|制約|必ず)/iu.test(policyText);
+    const sameScope = Boolean(projectId) && Boolean(businessCategoryId) &&
+      decision.projectId === projectId && decision.businessCategoryId === businessCategoryId;
+    const sourceBacked = (decision.sources ?? []).some(durableAutoDecisionSource);
+    return Number(decision.confidence ?? 0) >= threshold &&
+      explicit && Boolean(decision.rationale?.trim()) && sameScope && sourceBacked;
+  });
+  const blockingDecisionIds = new Set(blockingDecisions.map((decision) => decision.id).filter(Boolean));
+  const reviewOnlyDecisionIds = policyDecisions
+    .filter((decision) => !decision.id || !blockingDecisionIds.has(decision.id))
+    .filter((decision) => decision.confirmationState === "inferred_unconfirmed" ||
+      decision.status !== "active" ||
+      Boolean(decision.validFrom && decision.validFrom > now) ||
+      Boolean(decision.validUntil && decision.validUntil <= now) ||
+      Boolean(decision.id && conflictingDecisionIds.has(decision.id)))
+    .map((decision) => decision.id)
+    .filter((id): id is string => Boolean(id));
   const reasons: string[] = [];
-  if (blockingConflict) reasons.push("conflicting active decisions require human resolution");
-  if (blockingPolicies.length > 0) reasons.push("a relevant policy or known prohibition applies");
+  if (unresolvedConflict) reasons.push("conflicting active decisions require human resolution");
+  if (blockingDecisions.length > 0) reasons.push("an eligible decision memory contains a relevant requirement or prohibition");
+  if (reviewOnlyDecisionIds.length > 0) reasons.push("a relevant decision requires review before it can block");
   if (confidence < minimumConfidence) reasons.push(`confidence ${confidence.toFixed(3)} is below ${minimumConfidence.toFixed(3)}`);
-  if ((context.decisionContext?.length ?? 0) === 0) reasons.push("no relevant decision memory was found");
+  if (decisionContext.length === 0) reasons.push("no relevant decision memory was found");
   if (context.requiresHumanReview && reasons.length === 0) reasons.push("selected decision memory requires human review");
-  const outcome = blockingConflict || blockingPolicies.length > 0
+  const outcome = blockingDecisions.length > 0
     ? "block"
-    : context.requiresHumanReview || confidence < minimumConfidence
+    : unresolvedConflict || reviewOnlyDecisionIds.length > 0 || context.requiresHumanReview || confidence < minimumConfidence
       ? "review"
       : "allow";
 
@@ -2073,14 +2418,16 @@ export async function preActionDecisionGate(
     reasons,
     policy: {
       minimum_confidence: minimumConfidence,
-      block_on_high_conflict: true,
+      inferred_unconfirmed_block_threshold: Math.max(0.9, minimumConfidence),
+      unconfirmed_blocking_enabled: env.ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING === "on",
+      block_on_high_conflict: false,
       fail_open_on_missing_context: false
     },
-    context: {
-      ...context,
-      policy_memory_context: policyContext,
-      blocking_policy_memory_ids: blockingPolicies.map((memory) => memory.id)
-    }
+      context: {
+        ...context,
+      blocking_decision_memory_ids: [...blockingDecisionIds],
+      review_decision_memory_ids: reviewOnlyDecisionIds
+      }
   };
 }
 

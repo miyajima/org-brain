@@ -82,6 +82,20 @@ export function stripProxyHeaders(headers: Headers): Headers {
   return next;
 }
 
+export function normalizeFallbackResponse(response: Response): Response {
+  const headers = new Headers(response.headers);
+  // Fetch runtimes transparently decode gzip/br payloads but retain the
+  // upstream encoding headers. Forwarding those headers makes Node clients
+  // attempt a second decode and turns valid JSON into an unreadable body.
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string): URL {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
   const fallbackUrl = new URL(path, baseUrl);
@@ -139,5 +153,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
   }
 
   const fallbackUrl = buildFallbackUrl(path, request.url, apiBaseUrl);
-  return fetch(fallbackUrl.toString(), init);
+  const fallbackResponse = await fetch(fallbackUrl.toString(), init);
+  await logUpstreamFailure(fallbackResponse);
+  return normalizeFallbackResponse(fallbackResponse);
 };

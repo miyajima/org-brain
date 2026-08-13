@@ -10,6 +10,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { memoryModeFields, resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
 import {
+  buildMemoryCaptureCandidateJson,
+  buildProjectCategoryIdentity,
+  extractDurableMemoryDrafts
+} from "../../shared/src/memory-capture-v2-runtime.mjs";
+import { MEMORY_CAPTURE_HOOK_PROFILE } from "../../shared/src/memory-capture-profile.generated.mjs";
+import { collectVerifiedLearningEvents } from "./lib/memory-learning-transcript.mjs";
+import {
   configuredTenantFromEnv,
   legacyProjectNamesFileFromEnv,
   loadLegacyProjectNames,
@@ -33,6 +40,7 @@ const DEFAULT_ENV_FILES = [
 ];
 const MCP_PROTOCOL_VERSION = "2026-07-28";
 const MCP_CAPTURE_TOOL = "orgbrain_memories_capture_rationale";
+const CAPTURE_TIMEOUT_MS = 5_000;
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
 const FIX_KEYWORDS = ["対処", "再発防止", "fix", "fixed", "workaround", "resolve", "resolved", "solution"];
@@ -222,7 +230,7 @@ const HOOK_SECRET_PATTERNS = [
   /\b(?:api[_-]?key|client[_-]?secret|password|passwd|token)\s*[:=]\s*["']?[^\s"',;]{8,}/giu
 ];
 const HOOK_EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu;
-const HOOK_PHONE_PATTERN = /(?<!\d)(?:\+?\d[\d ()-]{8,}\d)(?!\d)/gu;
+const HOOK_PHONE_PATTERN = /(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/gu;
 
 export function redactHookMemoryText(value) {
   let redacted = String(value ?? "");
@@ -231,7 +239,12 @@ export function redactHookMemoryText(value) {
   }
   return redacted
     .replace(HOOK_EMAIL_PATTERN, "[REDACTED_EMAIL]")
-    .replace(HOOK_PHONE_PATTERN, "[REDACTED_PHONE]");
+    .replace(HOOK_PHONE_PATTERN, (candidate) => {
+      const digits = candidate.replace(/\D/gu, "");
+      if (digits.length < 10 || digits.length > 15 || !/[+() -]/u.test(candidate)) return candidate;
+      if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/u.test(candidate)) return candidate;
+      return "[REDACTED_PHONE]";
+    });
 }
 
 function normalizeForAnalysis(value) {
@@ -807,7 +820,10 @@ export async function resolveWorkspaceContext(record, options = {}) {
         tenantId,
         projectId: record.projectId ?? null,
         businessCategoryId: record.businessCategoryId ?? mapped?.business_category_id ?? null,
-        workType: record.workType ?? mapped?.default_work_type ?? null,
+        workType: record.workType ?? mapped?.default_work_type ?? "other",
+        sensitiveMemory: mapped?.sensitive_memory ?? { mode: "deny", allowed_principals: [] },
+        memoryCaptureV2Mode: mapped?.memory_capture_v2_mode ?? null,
+        memoryLearningMode: mapped?.memory_learning_mode ?? "off",
         workspaceRoot: cwd || null,
         source: mapped ? "workspace+explicit-project" : "explicit-project"
       };
@@ -819,7 +835,10 @@ export async function resolveWorkspaceContext(record, options = {}) {
         tenantId,
         projectId: mapped.project_id,
         businessCategoryId: record.businessCategoryId ?? mapped.business_category_id ?? null,
-        workType: record.workType ?? mapped.default_work_type ?? null,
+        workType: record.workType ?? mapped.default_work_type ?? "other",
+        sensitiveMemory: mapped.sensitive_memory ?? { mode: "deny", allowed_principals: [] },
+        memoryCaptureV2Mode: mapped.memory_capture_v2_mode ?? null,
+        memoryLearningMode: mapped.memory_learning_mode ?? "off",
         workspaceRoot: cwd,
         source: "workspace"
       };
@@ -831,7 +850,10 @@ export async function resolveWorkspaceContext(record, options = {}) {
         tenantId,
         projectId: fallbackProjectId,
         businessCategoryId: record.businessCategoryId ?? null,
-        workType: record.workType ?? null,
+        workType: record.workType ?? "other",
+        sensitiveMemory: { mode: "deny", allowed_principals: [] },
+        memoryCaptureV2Mode: null,
+        memoryLearningMode: "off",
         workspaceRoot: cwd || null,
         source: "fallback"
       };
@@ -845,14 +867,19 @@ export async function resolveWorkspaceContext(record, options = {}) {
       tenant_id: configuredTenantId,
       project_id: selected,
       business_category_id: null,
-      default_work_type: null
+      default_work_type: null,
+      sensitive_memory: { mode: "deny", allowed_principals: [] },
+      memory_learning_mode: "off"
     };
     await saveWorkspaceConfig(workspacesFile, config);
     return {
       tenantId,
       projectId: selected,
       businessCategoryId: record.businessCategoryId ?? null,
-      workType: record.workType ?? null,
+      workType: record.workType ?? "other",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] },
+      memoryCaptureV2Mode: null,
+      memoryLearningMode: "off",
       workspaceRoot: cwd,
       source: "created"
     };
@@ -909,26 +936,223 @@ export function resolveMcpConfig(env = process.env) {
   };
 }
 
-export function buildMcpCaptureRequest(tenantId, sourceName, record) {
+export function resolveMemoryCaptureV2Mode(env = process.env) {
+  const value = firstString(env.ORGBRAIN_MEMORY_CAPTURE_V2_MODE, "off").toLowerCase();
+  return value === "on" || value === "shadow" ? value : "off";
+}
+
+function canonicalEvidence(record) {
+  return (record.evidence ?? []).map((item) => ({
+    type: firstString(item.type, item.evidence_type, "external"),
+    ref: firstString(item.ref, item.evidence_ref),
+    ...(firstString(item.note) ? { note: firstString(item.note) } : {}),
+    ...(Number.isFinite(item.weight ?? item.weight_score)
+      ? { weight: Number(item.weight ?? item.weight_score) }
+      : {})
+  })).filter((item) => item.ref);
+}
+
+export function captureCandidateJson(record) {
+  return buildMemoryCaptureCandidateJson({
+    ...record,
+    content: redactHookMemoryText(record.content),
+    summary: redactHookMemoryText(record.summary),
+    rationale: redactHookMemoryText(record.rationale),
+    reuseRule: redactHookMemoryText(record.reuseRule),
+    evidence: canonicalEvidence(record)
+  });
+}
+
+export function captureItemPayload(record) {
+  const candidate = captureCandidateJson(record);
+  return {
+    ...candidate,
+    evidence: (candidate.evidence ?? []).map((item, index) => ({
+      evidence_type: ["file", "command", "doc"].includes(item.type) ? item.type : "external",
+      evidence_ref: item.ref,
+      relation: "supports",
+      note: item.note ?? null,
+      weight_score: item.weight ?? null,
+      ...(record.evidence?.[index]?.contentHash ? { content_hash: record.evidence[index].contentHash } : {}),
+      ...(record.evidence?.[index]?.observedAt ? { observed_at: record.evidence[index].observedAt } : {}),
+      ...(record.evidence?.[index]?.attestationRef ? { attestation_ref: record.evidence[index].attestationRef } : {})
+    })),
+    ...(record.learning ? { learning: record.learning } : {}),
+    ...(record.captureOrigin ? { capture_origin: record.captureOrigin } : {}),
+    ...(record.verification ? { verification: record.verification } : {}),
+    ...(record.qualityDimensions ? { quality_dimensions: record.qualityDimensions } : {})
+  };
+}
+
+export async function prepareMemoryRecordsV2(record, workspace, tenantId) {
+  const extraction = extractDurableMemoryDrafts({
+    event_id: record.externalKey,
+    tenant_id: tenantId,
+    project_id: workspace.projectId,
+    source: record.sourceName,
+    occurred_at: record.createdAt,
+    text: record.assistantText
+  }, {
+    workspace_root: workspace.workspaceRoot,
+    sensitive_policy: workspace.sensitiveMemory,
+    max_candidates: MEMORY_CAPTURE_HOOK_PROFILE.max_candidates,
+    capture_profile: MEMORY_CAPTURE_HOOK_PROFILE
+  });
+  const categoryDigest = sha256(`${tenantId}\0${workspace.projectId || "global"}`);
+  const category = buildProjectCategoryIdentity(tenantId, workspace.projectId, categoryDigest);
+  const businessCategoryId = record.businessCategoryId ?? workspace.businessCategoryId ?? category.id;
+  const workType = record.workType ?? workspace.workType ?? "other";
+  const records = extraction.drafts.map((draft) => {
+    const canonicalKey = sha256(`${tenantId}\0${workspace.projectId || "global"}\0${draft.kind}\0${draft.canonical_text}`);
+    return {
+      externalKey: `v2:${sha256(`${record.externalKey}\0${canonicalKey}`)}`,
+      canonicalKey,
+      createdAt: record.createdAt,
+      cwd: record.cwd,
+      projectId: workspace.projectId,
+      projectIdExplicit: record.projectIdExplicit,
+      businessCategoryId,
+      businessCategory: category,
+      workType,
+      summary: draft.summary,
+      tags: dedupeTags([...draft.tags, record.eventType]),
+      content: draft.content,
+      kind: draft.kind,
+      rationale: draft.rationale,
+      reuseRule: draft.reuse_rule,
+      evidence: draft.evidence.map((item) => ({
+        type: ["file", "command", "doc"].includes(item.type) ? item.type : "external",
+        ref: item.ref,
+        ...(item.note ? { note: item.note } : {}),
+        weight: item.type === "file" || item.type === "doc" ? 0.9 : 0.8
+      })),
+      sourceReferences: draft.source_references,
+      validUntil: draft.valid_until,
+      confidenceScore: draft.confidence_score,
+      utilityScore: draft.utility_score,
+      visibility: draft.visibility,
+      allowedPrincipals: draft.allowed_principals,
+      qualityScore: draft.quality_score,
+      captureProfileId: draft.capture_profile_id,
+      actorType: "system",
+      actorId: buildActorId(record)
+    };
+  });
+  return {
+    records,
+    category,
+    report: {
+      candidate_count: records.length,
+      candidate_hashes: records.map((candidate) => sha256(JSON.stringify(captureCandidateJson(candidate)))),
+      capture_profile_id: MEMORY_CAPTURE_HOOK_PROFILE.profile_id,
+      capture_profile_source_hash: MEMORY_CAPTURE_HOOK_PROFILE.source_dataset_sha256,
+      quality_scores: records.map((candidate) => candidate.qualityScore ?? null),
+      excluded_reasons: [...new Set(extraction.excluded.map((item) => item.reason))],
+      sensitivity_reason: extraction.sensitivity.reason,
+      sensitive_counts: extraction.sensitivity.counts
+    }
+  };
+}
+
+export async function prepareObservedLearningRecords(record, workspace, tenantId) {
+  const transcript = await collectVerifiedLearningEvents({
+    transcriptPath: record.metadata?.transcriptPath,
+    turnId: record.metadata?.turnId,
+    workspaceRoot: workspace.workspaceRoot,
+    sensitivePolicy: workspace.sensitiveMemory
+  }).catch((error) => ({
+    events: [],
+    reviews: [{ reason_codes: ["transcript_read_failed"], detail_hash: sha256(String(error)) }],
+    raw_transcript_persisted: false
+  }));
+  const categoryDigest = sha256(`${tenantId}\0${workspace.projectId || "global"}`);
+  const category = buildProjectCategoryIdentity(tenantId, workspace.projectId, categoryDigest);
+  const businessCategoryId = record.businessCategoryId ?? workspace.businessCategoryId ?? category.id;
+  const workType = record.workType ?? workspace.workType ?? "other";
+  const ttl = { fact: 90, decision: 180, constraint: 180, pitfall: 180, preference: 180 };
+  const records = transcript.events.map(({ event_hash: eventHash, learning, verification }) => {
+    const canonicalText = normalizeWhitespace(learning.conclusion).toLocaleLowerCase();
+    const canonicalKey = sha256(`${tenantId}\0${workspace.projectId || "global"}\0${learning.kind}\0${canonicalText}`);
+    const validUntil = record.createdAt + ttl[learning.kind] * 24 * 60 * 60 * 1000;
+    return {
+      externalKey: `learning:${sha256(`${record.externalKey}\0${eventHash}\0${canonicalKey}`)}`,
+      canonicalKey,
+      createdAt: record.createdAt,
+      cwd: record.cwd,
+      projectId: workspace.projectId,
+      projectIdExplicit: record.projectIdExplicit,
+      businessCategoryId,
+      businessCategory: category,
+      workType,
+      summary: learning.conclusion,
+      tags: dedupeTags(["verified-learning", learning.lesson_type, learning.kind, record.eventType]),
+      content: learning.conclusion,
+      kind: learning.kind,
+      rationale: learning.rationale,
+      reuseRule: learning.reuse_rule,
+      evidence: verification.evidence.map((item) => ({
+        type: item.type,
+        ref: item.ref,
+        note: [
+          `content_hash=${item.content_hash}`,
+          `observed_at=${item.observed_at}`,
+          `attestation_ref=${item.attestation_ref}`,
+          Number.isInteger(item.exit_code) ? `exit_code=${item.exit_code}` : null
+        ].filter(Boolean).join("; "),
+        weight: 1,
+        contentHash: item.content_hash,
+        observedAt: item.observed_at,
+        attestationRef: item.attestation_ref
+      })),
+      sourceReferences: [{ type: "codex-turn", ref: `sha256:${eventHash}`, captured_at: record.createdAt }],
+      validUntil,
+      confidenceScore: verification.evidence.length >= 2 ? 0.95 : 0.9,
+      utilityScore: 0.95,
+      visibility: workspace.projectId ? "project" : "tenant",
+      allowedPrincipals: [],
+      qualityScore: verification.quality_score,
+      captureOrigin: "observed",
+      learning,
+      verification: {
+        state: verification.verification_state,
+        verified_at: verification.verified_at,
+        attestation_ref: `sha256:${eventHash}`
+      },
+      qualityDimensions: verification.quality_dimensions,
+      actorType: "system",
+      actorId: "hook:codex-stop"
+    };
+  });
+  return {
+    records,
+    category,
+    report: {
+      mode: workspace.memoryLearningMode,
+      observed_count: records.length,
+      review_count: transcript.reviews.length,
+      candidate_hashes: records.map((candidate) => sha256(JSON.stringify(captureItemPayload(candidate)))),
+      review_reason_codes: [...new Set(transcript.reviews.flatMap((item) => item.reason_codes ?? []))],
+      scanned_bytes: transcript.scanned_bytes ?? 0,
+      raw_transcript_persisted: false
+    }
+  };
+}
+
+export function buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords) {
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
+  const argumentsPayload = Array.isArray(recordOrRecords)
+    ? { items: records.map(captureItemPayload) }
+    : { item: captureItemPayload(records[0]) };
   return {
     jsonrpc: "2.0",
-    id: `hook:${record.externalKey}`,
+    id: `hook:${records[0]?.externalKey ?? sha256(JSON.stringify(argumentsPayload)).slice(0, 24)}`,
     method: "tools/call",
     params: {
       name: MCP_CAPTURE_TOOL,
       arguments: {
         tenant_id: tenantId,
         source: sourceName,
-        item: {
-          external_key: record.externalKey,
-          content: clip(redactHookMemoryText(record.content), 20_000),
-          summary: clip(redactHookMemoryText(record.summary), 1_000),
-          tags: record.tags,
-          created_at: record.createdAt,
-          project_id: record.projectId,
-          business_category_id: record.businessCategoryId ?? null,
-          work_type: record.workType ?? null
-        }
+        ...argumentsPayload
       },
       _meta: {
         "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
@@ -942,7 +1166,20 @@ export function buildMcpCaptureRequest(tenantId, sourceName, record) {
   };
 }
 
-export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
+export function hookCaptureLogFields(captureV2Mode, records, report, memoryIds = []) {
+  if (captureV2Mode !== "off") {
+    return {
+      candidate_count: records.length,
+      candidate_hashes: report?.candidate_hashes ?? []
+    };
+  }
+  return {
+    external_keys: records.map((record) => record.externalKey),
+    ...(memoryIds.length ? { memory_ids: memoryIds } : {})
+  };
+}
+
+export async function postMemoryViaMcp(config, tenantId, sourceName, recordOrRecords) {
   const response = await fetch(config.url, {
     method: "POST",
     headers: {
@@ -955,12 +1192,12 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
       "Mcp-Method": "tools/call",
       "Mcp-Name": MCP_CAPTURE_TOOL
     },
-    body: JSON.stringify(buildMcpCaptureRequest(tenantId, sourceName, record))
+    body: JSON.stringify(buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords)),
+    signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
   });
   const body = await response.json().catch(() => null);
   if (!response.ok || !body || body.error || body.result?.isError) {
-    const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
-    throw new Error(`org-brain MCP hook capture failed (${response.status}): ${detail}`);
+    throw new Error(`org-brain MCP hook capture failed (${response.status})`);
   }
   const text = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
   if (typeof text !== "string") {
@@ -973,7 +1210,11 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, record) {
   }
 }
 
-async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
+async function postMemory(apiBase, apiKey, tenantId, sourceName, recordOrRecords) {
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
+  const itemPayload = Array.isArray(recordOrRecords)
+    ? { items: records.map(captureItemPayload) }
+    : { item: captureItemPayload(records[0]) };
   const res = await fetch(buildApiUrl(apiBase, "/v1/memories/capture-rationale"), {
     method: "POST",
     headers: {
@@ -983,19 +1224,11 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
     body: JSON.stringify({
       tenant_id: tenantId,
       source: sourceName,
-      actor_type: record.actorType ?? "system",
-      actor_id: record.actorId ?? sourceName,
-      item: {
-        external_key: record.externalKey,
-        content: clip(redactHookMemoryText(record.content), 20_000),
-        summary: clip(redactHookMemoryText(record.summary), 1_000),
-        tags: record.tags,
-        created_at: record.createdAt,
-        project_id: record.projectId
-        , business_category_id: record.businessCategoryId ?? null
-        , work_type: record.workType ?? null
-      }
-    })
+      actor_type: records[0]?.actorType ?? "system",
+      actor_id: records[0]?.actorId ?? sourceName,
+      ...itemPayload
+    }),
+    signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
   });
 
   const body = await res.json().catch(() => null);
@@ -1005,50 +1238,82 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, record) {
   return body.data;
 }
 
-async function captureLocalMemory(sourceName, tenantId, record) {
+async function captureLocalMemories(sourceName, tenantId, recordOrRecords) {
   const { DEFAULT_LOCAL_DB, LocalMemoryStore } = await import("./lib/local-memory-store.mjs");
   const store = new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
-  const category = record.tags.find((tag) =>
-    ["policy", "diagnosis", "command-result", "workaround"].includes(tag)
-  );
-  const kind =
-    category === "policy"
-      ? "constraint"
-      : category === "diagnosis" || category === "workaround"
-        ? "pitfall"
-        : "fact";
-  return store.capture({
-    tenant_id: tenantId,
-    project_id: record.projectId,
-    business_category_id: record.businessCategoryId ?? null,
-    work_type: record.workType ?? null,
-    kind,
-    lifecycle_state: "active",
-    scope_type: record.projectId ? "project" : "tenant",
-    scope_key: record.projectId || tenantId,
-    content: clip(redactHookMemoryText(record.content), 20_000),
-    summary: clip(redactHookMemoryText(record.summary), 1_000),
-    tags: record.tags,
-    entities: [],
-    source: sourceName,
-    source_references: [{
-      type: "agent-event",
-      ref: record.externalKey,
-      captured_at: record.createdAt
-    }],
-    external_key: record.externalKey,
-    actor_type: record.actorType ?? "system",
-    actor_id: record.actorId ?? sourceName,
-    created_at: record.createdAt,
-    valid_from: record.createdAt,
-    valid_until: null,
-    confidence_score: category === "policy" ? 0.88 : 0.78,
-    utility_score: 0.75,
-    rationale: "Automatically distilled from a durable agent hook event.",
-    evidence: [{ type: "agent-event", ref: record.externalKey }],
-    conflicts: [],
-    permissions: []
-  });
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
+  const categories = await store.listBusinessCategories(tenantId, { includeInactive: true });
+  const categoryIds = new Set(categories.map((item) => item.id));
+  const results = [];
+  for (const record of records) {
+    const candidate = captureCandidateJson(record);
+    if (record.businessCategory && !categoryIds.has(record.businessCategory.id)) {
+      await store.createBusinessCategory(tenantId, record.businessCategory);
+      categoryIds.add(record.businessCategory.id);
+    }
+    const legacyCategory = record.tags.find((tag) =>
+      ["policy", "diagnosis", "command-result", "workaround"].includes(tag)
+    );
+    const kind = record.kind ?? (
+      legacyCategory === "policy"
+        ? "constraint"
+        : legacyCategory === "diagnosis" || legacyCategory === "workaround"
+          ? "pitfall"
+          : "fact"
+    );
+    results.push(await store.capture({
+      tenant_id: tenantId,
+      project_id: candidate.project_id,
+      business_category_id: candidate.business_category_id ?? null,
+      work_type: candidate.work_type ?? "other",
+      kind: candidate.kind ?? kind,
+      lifecycle_state: "active",
+      scope_type: candidate.project_id ? "project" : "tenant",
+      scope_key: candidate.project_id || tenantId,
+      content: candidate.content,
+      summary: candidate.summary,
+      tags: candidate.tags,
+      entities: [],
+      source: sourceName,
+      source_references: candidate.source_references ?? [{
+        type: "agent-event",
+        ref: candidate.external_key,
+        captured_at: candidate.created_at
+      }],
+      external_key: candidate.external_key,
+      actor_type: record.actorType ?? "system",
+      actor_id: record.actorId ?? sourceName,
+      created_at: candidate.created_at,
+      valid_from: candidate.valid_from,
+      valid_until: candidate.valid_until ?? null,
+      expires_at: candidate.valid_until ?? null,
+      confidence_score: candidate.confidence_score ?? (legacyCategory === "policy" ? 0.88 : 0.78),
+      utility_score: candidate.utility_score ?? 0.75,
+      canonical_key: candidate.canonical_key ?? null,
+      rationale: candidate.rationale || "Automatically distilled from a durable agent hook event.",
+      reuse_rule: candidate.reuse_rule ?? null,
+      evidence: record.evidence?.map((item) => ({
+        type: item.type,
+        ref: item.ref,
+        note: item.note ?? null,
+        content_hash: item.contentHash ?? null,
+        observed_at: item.observedAt ?? null,
+        attestation_ref: item.attestationRef ?? null
+      })) ?? candidate.evidence ?? [{ type: "agent-event", ref: candidate.external_key }],
+      conflicts: [],
+      permissions: (candidate.allowed_principals ?? []).map((principalId) => ({
+        principal_type: "principal",
+        principal_id: principalId,
+        permissions: ["read"]
+      })),
+      capture_origin: record.captureOrigin ?? "legacy",
+      verification_state: record.verification?.state ?? "unverified",
+      verified_at: record.verification?.verified_at ?? null,
+      learning: record.learning ?? null,
+      quality_dimensions: record.qualityDimensions ?? null
+    }));
+  }
+  return results;
 }
 
 export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
@@ -1066,22 +1331,56 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   await loadEnvFallbacks();
 
   const memoryMode = resolveMemoryMode();
+  let captureV2Mode = resolveMemoryCaptureV2Mode();
   let tenantId = ensureRequiredEnv("ORGBRAIN_TENANT_ID") || "default";
+  const normalizedRecord = normalizeRecord(inputSourceName, payloadText);
   const prepared = prepareMemoryRecordForUpsert(inputSourceName, payloadText);
-  if (prepared.action === "skip") {
+  const workspaceRecord = prepared.action === "promote" ? prepared.record : normalizedRecord;
+  const workspace = await resolveWorkspaceContext(workspaceRecord, { memoryMode });
+  tenantId = workspace.tenantId;
+  captureV2Mode = workspace.memoryCaptureV2Mode ?? captureV2Mode;
+  let records;
+  let shadowReport = null;
+  let learningReport = null;
+  if (inputSourceName === "codex-stop" && ["shadow", "on"].includes(workspace.memoryLearningMode)) {
+    const observed = await prepareObservedLearningRecords(normalizedRecord, workspace, tenantId);
+    learningReport = observed.report;
+    if (workspace.memoryLearningMode === "on") records = observed.records;
+  }
+  if (!records && workspace.memoryLearningMode !== "on" && (captureV2Mode === "on" || captureV2Mode === "shadow")) {
+    const v2 = await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId);
+    shadowReport = v2.report;
+    if (captureV2Mode === "on") records = v2.records;
+  }
+  if (!records && workspace.memoryLearningMode !== "on" && captureV2Mode !== "on") {
+    if (prepared.action === "skip") {
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        skipped: "low-signal-memory",
+        reason_code: prepared.reason,
+        ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+        ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    prepared.record.projectId = workspace.projectId;
+    prepared.record.businessCategoryId ??= workspace.businessCategoryId;
+    prepared.record.workType ??= workspace.workType ?? "other";
+    records = [prepared.record];
+  }
+  if (!records?.length) {
     return finish({
       ok: true,
       source: sourceName,
       tenant_id: tenantId,
-      skipped: "low-signal-memory",
+      skipped: "no-durable-candidates",
+      reason_codes: shadowReport?.excluded_reasons ?? [],
+      sensitivity_reason: shadowReport?.sensitivity_reason ?? null,
       ...memoryModeFields(memoryMode)
     });
   }
-  const workspace = await resolveWorkspaceContext(prepared.record, { memoryMode });
-  tenantId = workspace.tenantId;
-  prepared.record.projectId = workspace.projectId;
-  prepared.record.businessCategoryId ??= workspace.businessCategoryId;
-  prepared.record.workType ??= workspace.workType;
 
   if (!memoryMode.cloudWritesAllowed) {
     if (process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE === "false") {
@@ -1092,15 +1391,21 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         ...memoryModeFields(memoryMode)
       });
     }
-    const result = await captureLocalMemory(sourceName, tenantId, prepared.record);
+    const results = await captureLocalMemories(sourceName, tenantId, records);
     return finish({
       ok: true,
       source: sourceName,
       tenant_id: tenantId,
       mode: "local",
-      external_key: prepared.record.externalKey,
-      memory_id: result.memory_id,
-      created: result.created
+      ...hookCaptureLogFields(
+        captureV2Mode,
+        records,
+        shadowReport,
+        results.map((result) => result.memory_id)
+      ),
+      created: results.filter((result) => result.created).length,
+      ...(shadowReport ? { capture_v2_shadow: shadowReport } : {})
+      , ...(learningReport ? { verified_learning_shadow: learningReport } : {})
     });
   }
 
@@ -1127,17 +1432,22 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     });
   }
 
+  const batchRequired = captureV2Mode === "on" || workspace.memoryLearningMode === "on";
+  const captureInput = records.length === 1 && !batchRequired ? records[0] : records;
   const result = mcp.complete
-    ? await postMemoryViaMcp(mcp, tenantId, sourceName, prepared.record)
-    : await postMemory(apiBase, apiKey, tenantId, sourceName, prepared.record);
+    ? await postMemoryViaMcp(mcp, tenantId, sourceName, captureInput)
+    : await postMemory(apiBase, apiKey, tenantId, sourceName, captureInput);
   return finish({
     ok: true,
     source: sourceName,
     tenant_id: tenantId,
-    external_key: prepared.record.externalKey,
+    ...hookCaptureLogFields(captureV2Mode, records, shadowReport),
     inserted: Number(result?.inserted ?? 0),
     updated: Number(result?.updated ?? 0),
+    skipped_count: Number(result?.summary?.skipped ?? 0),
     transport: mcp.complete ? "mcp-2026-07-28" : "legacy-rest",
+    ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+    ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
     ...memoryModeFields(memoryMode)
   });
 }
