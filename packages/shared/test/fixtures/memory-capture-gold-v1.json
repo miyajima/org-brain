@@ -1,0 +1,287 @@
+{
+  "schema_version": 1,
+  "dataset_id": "orgbrain-memory-capture-gold-v1",
+  "profile_id": "strict-gold-v1",
+  "safety": {
+    "max_candidates": 3,
+    "reject_gaps": true,
+    "require_atomic_conclusion": true,
+    "require_distinct_rationale": true
+  },
+  "examples": [
+    {
+      "id": "accepted-decision-canonical-api-url",
+      "work_type": "implementation",
+      "input": {
+        "event_id": "gold-decision-api-url",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nORGBRAIN_API_URLを唯一の正規API環境変数として採用する。\n\n## Rationale\nAPI接続先を二つの環境変数で管理すると、connectorとhookの設定が分岐するため。\n\n## Reuse\n新しいconnectorまたはhookを追加する場合は、接続先をORGBRAIN_API_URLから取得する。\n\n## Evidence\ndocs/SPEC.md\npackages/orgbrain-cli/src/hook-memory-bridge.mjs"
+      },
+      "expected": {
+        "accept": true,
+        "candidates": [
+          {
+            "kind": "decision",
+            "content": "ORGBRAIN_API_URLを唯一の正規API環境変数として採用する。",
+            "rationale": "API接続先を二つの環境変数で管理すると、connectorとhookの設定が分岐するため。",
+            "reuse_rule": "新しいconnectorまたはhookを追加する場合は、接続先をORGBRAIN_API_URLから取得する。",
+            "evidence": [
+              { "type": "file", "ref": "docs/SPEC.md" },
+              { "type": "file", "ref": "packages/orgbrain-cli/src/hook-memory-bridge.mjs" }
+            ],
+            "ttl_days": 180
+          }
+        ]
+      }
+    },
+    {
+      "id": "accepted-constraint-single-batch",
+      "work_type": "implementation",
+      "input": {
+        "event_id": "gold-constraint-single-batch",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nStop hookは既知のcapture toolを必ず一回だけ呼ぶ。\n\n## Rationale\ntool discoveryと複数送信を避けることで、停止処理の遅延と重複保存を防げるため。\n\n## Reuse\n新しいagent lifecycle hookを実装する場合は、候補を一つのbatch requestへまとめる。\n\n## Evidence\npackages/orgbrain-cli/src/hook-memory-bridge.mjs\nscripts/hook-memory-bridge.test.mjs"
+      },
+      "expected": {
+        "accept": true,
+        "candidates": [
+          {
+            "kind": "constraint",
+            "content": "Stop hookは既知のcapture toolを必ず一回だけ呼ぶ。",
+            "rationale": "tool discoveryと複数送信を避けることで、停止処理の遅延と重複保存を防げるため。",
+            "reuse_rule": "新しいagent lifecycle hookを実装する場合は、候補を一つのbatch requestへまとめる。",
+            "evidence": [
+              { "type": "file", "ref": "packages/orgbrain-cli/src/hook-memory-bridge.mjs" },
+              { "type": "file", "ref": "scripts/hook-memory-bridge.test.mjs" }
+            ],
+            "ttl_days": 180
+          }
+        ]
+      }
+    },
+    {
+      "id": "accepted-pitfall-inline-code-evidence",
+      "work_type": "debug",
+      "input": {
+        "event_id": "gold-pitfall-inline-evidence",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\n根本原因は、インラインコードを検証なしでcommand evidenceとして扱っていたことだった。\n\n## Rationale\n`account_id`や`DevContainer`のような識別子まで根拠に数えられ、confidenceが過大になるため。\n\n## Reuse\nEvidenceを抽出する場合は、commandを終了コード0の実行結果があるものだけに限定する。\n\n## Evidence\npackages/shared/src/memory-capture-v2-runtime.mjs\npackages/shared/test/memory-capture-v2.test.ts"
+      },
+      "expected": {
+        "accept": true,
+        "candidates": [
+          {
+            "kind": "pitfall",
+            "content": "根本原因は、インラインコードを検証なしでcommand evidenceとして扱っていたことだった。",
+            "rationale": "`account_id`や`DevContainer`のような識別子まで根拠に数えられ、confidenceが過大になるため。",
+            "reuse_rule": "Evidenceを抽出する場合は、commandを終了コード0の実行結果があるものだけに限定する。",
+            "evidence": [
+              { "type": "file", "ref": "packages/shared/src/memory-capture-v2-runtime.mjs" },
+              { "type": "file", "ref": "packages/shared/test/memory-capture-v2.test.ts" }
+            ],
+            "ttl_days": 180
+          }
+        ]
+      }
+    },
+    {
+      "id": "accepted-preference-compact-view",
+      "work_type": "operations",
+      "input": {
+        "event_id": "gold-preference-compact-view",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\n大量のmemory一覧ではcompact viewを優先する。\n\n## Rationale\n本文と全メタデータを一度に返すと、管理画面とMCP応答のサイズが急増するため。\n\n## Reuse\n一覧件数が100件を超える場合は、最初の取得をcompact viewにする。\n\n## Evidence\napps/api-gateway/src/memory-service.ts"
+      },
+      "expected": {
+        "accept": true,
+        "candidates": [
+          {
+            "kind": "preference",
+            "content": "大量のmemory一覧ではcompact viewを優先する。",
+            "rationale": "本文と全メタデータを一度に返すと、管理画面とMCP応答のサイズが急増するため。",
+            "reuse_rule": "一覧件数が100件を超える場合は、最初の取得をcompact viewにする。",
+            "evidence": [
+              { "type": "file", "ref": "apps/api-gateway/src/memory-service.ts" }
+            ],
+            "ttl_days": 180
+          }
+        ]
+      }
+    },
+    {
+      "id": "accepted-fact-hook-location",
+      "work_type": "operations",
+      "input": {
+        "event_id": "gold-fact-hook-location",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nStop hookの正規実装はpackages/orgbrain-cli/src/hook-memory-bridge.mjsに配置されている。\n\n## Rationale\nconnector setupとsession replayが同じ実装を参照するため、変更箇所の特定に使える。\n\n## Reuse\nStop hookの挙動を変更する場合は、このファイルと対応testを最初に確認する。\n\n## Evidence\npackages/orgbrain-cli/src/hook-memory-bridge.mjs"
+      },
+      "expected": {
+        "accept": true,
+        "candidates": [
+          {
+            "kind": "fact",
+            "content": "Stop hookの正規実装はpackages/orgbrain-cli/src/hook-memory-bridge.mjsに配置されている。",
+            "rationale": "connector setupとsession replayが同じ実装を参照するため、変更箇所の特定に使える。",
+            "reuse_rule": "Stop hookの挙動を変更する場合は、このファイルと対応testを最初に確認する。",
+            "evidence": [
+              { "type": "file", "ref": "packages/orgbrain-cli/src/hook-memory-bridge.mjs" }
+            ],
+            "ttl_days": 90
+          }
+        ]
+      }
+    },
+    {
+      "id": "accepted-fact-stateless-mcp",
+      "work_type": "implementation",
+      "input": {
+        "event_id": "gold-fact-stateless-mcp",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nOrg Brain remote MCP uses stateless Streamable HTTP.\n\n## Rationale\nLifecycle hooks can call the known capture tool without creating or retaining an MCP session.\n\n## Reuse\nWhen a new MCP client is configured, send each request independently and do not persist a session ID.\n\n## Evidence\ndocs/REMOTE_MCP.md\nhttps://modelcontextprotocol.io/specification/2025-11-25/basic/transports"
+      },
+      "expected": {
+        "accept": true,
+        "candidates": [
+          {
+            "kind": "fact",
+            "content": "Org Brain remote MCP uses stateless Streamable HTTP.",
+            "rationale": "Lifecycle hooks can call the known capture tool without creating or retaining an MCP session.",
+            "reuse_rule": "When a new MCP client is configured, send each request independently and do not persist a session ID.",
+            "evidence": [
+              { "type": "file", "ref": "docs/REMOTE_MCP.md" },
+              { "type": "doc", "ref": "https://modelcontextprotocol.io/specification/2025-11-25/basic/transports" }
+            ],
+            "ttl_days": 90
+          }
+        ]
+      }
+    },
+    {
+      "id": "rejected-missing-rationale",
+      "input": {
+        "event_id": "gold-reject-rationale",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\n新規hookは既知のcapture toolだけを必ず使う。\n\n## Reuse\nhookを追加する場合は同じtool名を使う。\n\n## Evidence\npackages/orgbrain-cli/src/hook-memory-bridge.mjs"
+      },
+      "expected": { "accept": false, "reason": "quality_missing_rationale" }
+    },
+    {
+      "id": "rejected-missing-reuse-rule",
+      "input": {
+        "event_id": "gold-reject-reuse",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\n新規hookは既知のcapture toolだけを必ず使う。\n\n## Rationale\ntool discoveryによる遅延を防ぐため。\n\n## Evidence\npackages/orgbrain-cli/src/hook-memory-bridge.mjs"
+      },
+      "expected": { "accept": false, "reason": "quality_missing_reuse_rule" }
+    },
+    {
+      "id": "rejected-identifier-as-evidence",
+      "input": {
+        "event_id": "gold-reject-identifier-evidence",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\n投稿前には対象アカウントを必ず表示する。\n\n## Rationale\n複数アカウント間の誤投稿を防ぐため。\n\n## Reuse\nXへの投稿を実行する場合は、確認画面にhandleを表示する。\n\n## Evidence\n`account_id` `@org_brain` `DevContainer`"
+      },
+      "expected": { "accept": false, "reason": "quality_missing_evidence" }
+    },
+    {
+      "id": "rejected-unresolved-gaps",
+      "input": {
+        "event_id": "gold-reject-gaps",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\n検索generationをv4へ切り替える方針とする。\n\n## Rationale\natomic unitを検索へ渡すため。\n\n## Reuse\n新しいprojectを展開する場合はv4 generationを割り当てる。\n\n## Evidence\npackages/shared/src/memory-retrieval.ts\n\n## Gaps\n本番Vectorize bindingは未確認。"
+      },
+      "expected": { "accept": false, "reason": "quality_unresolved_gaps" }
+    },
+    {
+      "id": "rejected-non-atomic-conclusion",
+      "input": {
+        "event_id": "gold-reject-non-atomic",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nThe Stop hook must send one batch and must skip tool discovery.\n\n## Rationale\nCombining two independently enforceable rules makes later reuse and contradiction checks ambiguous.\n\n## Reuse\nWhen a response contains two durable obligations, split them into separate memory candidates.\n\n## Evidence\npackages/orgbrain-cli/src/hook-memory-bridge.mjs\n`pnpm test` passed with 0 failures."
+      },
+      "expected": { "accept": false, "reason": "quality_non_atomic_conclusion" }
+    },
+    {
+      "id": "rejected-duplicate-rationale",
+      "input": {
+        "event_id": "gold-reject-duplicate-rationale",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nEvery Stop hook must persist only fully verified durable memory candidates.\n\n## Rationale\nEvery Stop hook must persist only fully verified durable memory candidates.\n\n## Reuse\nWhen a new lifecycle hook is added, apply the same verified-candidate quality gate.\n\n## Evidence\npackages/orgbrain-cli/src/hook-memory-bridge.mjs\n`pnpm test` passed with 0 failures."
+      },
+      "expected": { "accept": false, "reason": "quality_rationale_duplicates_content" }
+    },
+    {
+      "id": "rejected-insufficient-evidence",
+      "input": {
+        "event_id": "gold-reject-insufficient-evidence",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "## Conclusion\nWe decided to use ORGBRAIN_API_URL as the only canonical API endpoint variable.\n\n## Rationale\nA single endpoint variable prevents connector and hook configuration from drifting independently.\n\n## Reuse\nWhen a connector or hook is added, resolve its API endpoint from ORGBRAIN_API_URL.\n\n## Evidence\ndocs/SPEC.md"
+      },
+      "expected": { "accept": false, "reason": "quality_insufficient_evidence" }
+    },
+    {
+      "id": "rejected-transient-completion",
+      "input": {
+        "event_id": "gold-reject-transient",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "実装完了しました。commit、push、CIはすべて成功しました。"
+      },
+      "expected": { "accept": false, "reason": "transient" }
+    },
+    {
+      "id": "rejected-credential",
+      "input": {
+        "event_id": "gold-reject-credential",
+        "tenant_id": "default",
+        "project_id": "org-brain",
+        "source": "codex",
+        "occurred_at": 1786464000000,
+        "text": "API credentialはapi_key=super-secret-value-12345を必ず使用する。"
+      },
+      "expected": { "accept": false, "reason": "credential_detected" }
+    }
+  ]
+}

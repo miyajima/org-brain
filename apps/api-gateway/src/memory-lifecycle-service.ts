@@ -8,6 +8,7 @@ import {
   MEMORY_WORK_TYPES,
   assessMemoryUsefulness,
   buildRetrievalUnits,
+  buildVerifiedLearningRetrievalUnits,
   normalizeLifecycleState,
   normalizeMemoryKind,
   normalizeScopeType,
@@ -45,11 +46,17 @@ type LifecycleWriteItem = {
   valid_from?: number | null;
   valid_until?: number | null;
   rationale?: string | null;
+  reuse_rule?: string | null;
   evidence?: Array<Record<string, unknown>>;
   conflicts?: string[];
   permissions?: Array<Record<string, unknown>>;
   business_category_id?: string | null;
   work_type?: MemoryWorkType | null;
+  capture_origin?: "observed" | "synthetic" | "repair" | "legacy";
+  verification_state?: "verified" | "partial" | "unverified" | "rejected";
+  verified_at?: number | null;
+  learning?: Record<string, unknown> | null;
+  quality_dimensions?: Record<string, number> | null;
 };
 
 type StoredMemoryRow = {
@@ -86,11 +93,17 @@ type StoredMemoryRow = {
   valid_until?: number | null;
   content_hash?: string | null;
   rationale?: string | null;
+  reuse_rule?: string | null;
   evidence_json?: string | null;
   conflicts_json?: string | null;
   permissions_json?: string | null;
   business_category_id?: string | null;
   work_type?: string | null;
+  capture_origin?: string | null;
+  verification_state?: string | null;
+  verified_at?: number | null;
+  learning_json?: string | null;
+  quality_dimensions_json?: string | null;
 };
 
 export type LifecycleMutationResult = {
@@ -101,6 +114,7 @@ export type LifecycleMutationResult = {
   created: boolean;
   kind: MemoryKind;
   lifecycle_state: MemoryLifecycleState;
+  deduplicated?: boolean;
 };
 
 function sanitizeTags(raw: string[] | undefined): string[] {
@@ -181,11 +195,17 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
   valid_from: number | null;
   valid_until: number | null;
   rationale: string | null;
+  reuse_rule: string | null;
   evidence: Array<Record<string, unknown>>;
   conflicts: string[];
   permissions: Array<Record<string, unknown>>;
   business_category_id: string | null;
   work_type: MemoryWorkType | null;
+  capture_origin: "observed" | "synthetic" | "repair" | "legacy";
+  verification_state: "verified" | "partial" | "unverified" | "rejected";
+  verified_at: number | null;
+  learning: Record<string, unknown> | null;
+  quality_dimensions: Record<string, number> | null;
 } {
   const projectId = typeof item.project_id === "string" && item.project_id.trim() ? item.project_id.trim().slice(0, 128) : null;
   const { scopeType, scopeKey } = deriveScope(tenantId, projectId, item);
@@ -203,15 +223,38 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     confidence_score: item.confidence_score,
     expires_at: item.expires_at
   });
+  const captureV2Summary = tags.includes("capture-v2") && typeof item.summary === "string" && item.summary.trim()
+    ? item.summary.trim().slice(0, 1_000)
+    : null;
   const confidenceScore = coerceNullableNumber(item.confidence_score, "confidence_score");
   const utilityScore = coerceNullableNumber(item.utility_score, "utility_score");
   const expiresAt = coerceNullableNumber(item.expires_at, "expires_at");
   const validFrom = coerceNullableNumber(item.valid_from, "valid_from");
   const validUntil = coerceNullableNumber(item.valid_until, "valid_until");
+  const captureOrigin = ensureMemoryEnum(item.capture_origin, "legacy", ["observed", "synthetic", "repair", "legacy"] as const, "capture_origin");
+  const verificationState = ensureMemoryEnum(item.verification_state, "unverified", ["verified", "partial", "unverified", "rejected"] as const, "verification_state");
+  if (verificationState === "verified" && captureOrigin !== "observed") {
+    throw new HttpError(400, "invalid_verification_origin", "only observed learning may be verified");
+  }
+  const verifiedAt = coerceNullableNumber(item.verified_at, "verified_at");
+  if (verificationState === "verified" && (!verifiedAt || !item.learning)) {
+    throw new HttpError(400, "verified_learning_required", "verified_at and learning are required for verified memory");
+  }
+  const qualityDimensions = item.quality_dimensions && typeof item.quality_dimensions === "object"
+    ? Object.fromEntries(Object.entries(item.quality_dimensions).map(([key, value]) => {
+      if (!Number.isFinite(value) || value < 0 || value > 100) {
+        throw new HttpError(400, "invalid_quality_dimension", `quality dimension ${key} must be between 0 and 100`);
+      }
+      return [key.slice(0, 80), Number(value)];
+    }))
+    : null;
   return {
     external_key: typeof item.external_key === "string" && item.external_key.trim() ? item.external_key.trim().slice(0, 256) : null,
     content,
-    summary: assessment.summary,
+    // v2 already supplies the atomic conclusion as its summary. The legacy
+    // quality prefix (for example "project | workaround | …") is useful for
+    // old hook transcripts but obscures v2 kind/category metadata in the UI.
+    summary: captureV2Summary ?? assessment.summary,
     tags,
     created_at: createdAt,
     project_id: projectId,
@@ -235,6 +278,7 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     valid_from: validFrom ?? null,
     valid_until: validUntil ?? expiresAt ?? assessment.expires_at,
     rationale: item.rationale?.trim().slice(0, 4000) || null,
+    reuse_rule: item.reuse_rule?.trim().slice(0, 1000) || null,
     evidence: sanitizeObjects(item.evidence),
     conflicts: sanitizeTags(item.conflicts).slice(0, 64),
     permissions: sanitizeObjects(item.permissions)
@@ -242,6 +286,11 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     , work_type: item.work_type
       ? ensureMemoryEnum(item.work_type, "other", MEMORY_WORK_TYPES, "work_type")
       : null
+    , capture_origin: captureOrigin
+    , verification_state: verificationState
+    , verified_at: verificationState === "verified" ? verifiedAt ?? null : null
+    , learning: item.learning && typeof item.learning === "object" ? item.learning : null
+    , quality_dimensions: qualityDimensions
   };
 }
 
@@ -253,7 +302,8 @@ async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Pro
             suppressed_at, consolidated_at, promoted_at, expires_at, revised_at,
             entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash,
             rationale, evidence_json, conflicts_json, permissions_json,
-            business_category_id, work_type
+            business_category_id, work_type, reuse_rule,
+            capture_origin, verification_state, verified_at, learning_json, quality_dimensions_json
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
@@ -273,9 +323,15 @@ function v2FieldsFromStored(row: StoredMemoryRow): Pick<
   | "valid_from"
   | "valid_until"
   | "rationale"
+  | "reuse_rule"
   | "evidence"
   | "conflicts"
   | "permissions"
+  | "capture_origin"
+  | "verification_state"
+  | "verified_at"
+  | "learning"
+  | "quality_dimensions"
 > {
   return {
     entities: parseStoredTags(row.entities_json),
@@ -283,9 +339,19 @@ function v2FieldsFromStored(row: StoredMemoryRow): Pick<
     valid_from: row.valid_from ?? null,
     valid_until: row.valid_until ?? row.expires_at ?? null,
     rationale: row.rationale ?? null,
+    reuse_rule: row.reuse_rule ?? null,
     evidence: parseStoredObjects(row.evidence_json),
     conflicts: parseStoredTags(row.conflicts_json),
-    permissions: parseStoredObjects(row.permissions_json)
+    permissions: parseStoredObjects(row.permissions_json),
+    capture_origin: row.capture_origin === "observed" || row.capture_origin === "synthetic" || row.capture_origin === "repair"
+      ? row.capture_origin
+      : "legacy",
+    verification_state: row.verification_state === "verified" || row.verification_state === "partial" || row.verification_state === "rejected"
+      ? row.verification_state
+      : "unverified",
+    verified_at: row.verified_at ?? null,
+    learning: row.learning_json ? JSON.parse(row.learning_json) as Record<string, unknown> : null,
+    quality_dimensions: row.quality_dimensions_json ? JSON.parse(row.quality_dimensions_json) as Record<string, number> : null
   };
 }
 
@@ -317,11 +383,68 @@ export async function loadExistingMemoryIdsByExternalKeys(
   return results;
 }
 
+export async function loadExistingMemoryIdsByCanonicalKeys(
+  db: D1Database,
+  tenantId: string,
+  canonicalKeys: string[]
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+  if (canonicalKeys.length === 0) return results;
+  for (let index = 0; index < canonicalKeys.length; index += 100) {
+    const chunk = canonicalKeys.slice(index, index + 100);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const response = await db.prepare(
+      `SELECT id, canonical_key
+       FROM memories
+       WHERE tenant_id = ?
+         AND canonical_key IN (${placeholders})
+         AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
+       ORDER BY confidence_score DESC, utility_score DESC, updated_at DESC, id`
+    ).bind(tenantId, ...chunk).all<{ id: string; canonical_key: string | null }>();
+    for (const row of response.results) {
+      if (row.canonical_key && !results.has(row.canonical_key)) results.set(row.canonical_key, row.id);
+    }
+  }
+  return results;
+}
+
 export async function runBatchChunks(db: D1Database, statements: D1PreparedStatement[]): Promise<void> {
   if (statements.length === 0) return;
   for (let index = 0; index < statements.length; index += 100) {
     await db.batch(statements.slice(index, index + 100));
   }
+}
+
+function isDuplicateCanonicalWrite(error: unknown): boolean {
+  return error instanceof HttpError
+    ? error.code === "duplicate_canonical_key"
+    : String(error instanceof Error ? error.message : error).includes("duplicate_canonical_key");
+}
+
+async function canonicalDuplicateResult(
+  env: Env,
+  tenantId: string,
+  canonicalKey: string,
+  operation: MemoryOperation
+): Promise<LifecycleMutationResult | null> {
+  const matches = await loadExistingMemoryIdsByCanonicalKeys(
+    env.OPEN_BRAIN_DB,
+    tenantId,
+    [canonicalKey]
+  );
+  const memoryId = matches.get(canonicalKey);
+  if (!memoryId) return null;
+  const existing = await loadMemoryById(env, tenantId, memoryId);
+  return {
+    tenant_id: tenantId,
+    memory_id: existing.id,
+    version: existing.current_version ?? 1,
+    operation,
+    created: false,
+    kind: normalizeMemoryKind(existing.kind),
+    lifecycle_state: normalizeLifecycleState(existing.lifecycle_state),
+    deduplicated: true
+  };
 }
 
 function buildVersionInsert(
@@ -340,8 +463,8 @@ function buildVersionInsert(
     `INSERT INTO memory_versions(
       id, memory_id, tenant_id, version, operation, content, summary, tags_json, kind, lifecycle_state,
       scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score, canonical_key, created_at,
-      snapshot_json, content_hash, business_category_id, work_type
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      snapshot_json, content_hash, business_category_id, work_type, reuse_rule
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     ulid(),
     args.memoryId,
@@ -370,7 +493,8 @@ function buildVersionInsert(
     }),
     args.contentHash,
     snapshot.business_category_id,
-    snapshot.work_type
+    snapshot.work_type,
+    snapshot.reuse_rule
   );
 }
 
@@ -438,6 +562,25 @@ async function saveCurrentSnapshot(
           valid_until: snapshot.valid_until,
           source_references: snapshot.source_references as MemorySourceReference[]
         });
+  const learningUnits = lifecycleState === "suppressed"
+    ? []
+    : await buildVerifiedLearningRetrievalUnits({
+        id: args.memoryId,
+        tenant_id: args.tenantId,
+        project_id: snapshot.project_id,
+        content: snapshot.content,
+        summary: snapshot.summary,
+        created_at: snapshot.created_at,
+        updated_at: updatedAt,
+        valid_from: snapshot.valid_from,
+        valid_until: snapshot.valid_until,
+        source_references: snapshot.source_references as MemorySourceReference[],
+        kind: snapshot.kind,
+        capture_origin: snapshot.capture_origin,
+        verification_state: snapshot.verification_state,
+        verified_at: snapshot.verified_at,
+        learning_json: snapshot.learning ? JSON.stringify(snapshot.learning) : null
+      });
   const dynamicGenerations = (await env.OPEN_BRAIN_DB.prepare(
     `SELECT DISTINCT g.id, g.unit_schema_version, g.extractor_name, g.extractor_version
      FROM retrieval_generation_assignments a
@@ -452,7 +595,7 @@ async function saveCurrentSnapshot(
     extractor_name: string;
     extractor_version: string;
   }>()).results;
-  if (dynamicGenerations.some((generation) => ![1, 2].includes(generation.unit_schema_version))) {
+  if (dynamicGenerations.some((generation) => ![1, 2, 3].includes(generation.unit_schema_version))) {
     throw new Error("unsupported_assigned_retrieval_unit_schema");
   }
   const statements: D1PreparedStatement[] = [];
@@ -467,7 +610,8 @@ async function saveCurrentSnapshot(
              suppressed_at = ?, expires_at = ?, revised_at = ?, entities_json = ?, source_refs_json = ?,
              updated_at = ?, valid_from = ?, valid_until = ?, content_hash = ?, rationale = ?,
              evidence_json = ?, conflicts_json = ?, permissions_json = ?,
-             business_category_id = ?, work_type = ?
+             business_category_id = ?, work_type = ?, reuse_rule = ?,
+             capture_origin = ?, verification_state = ?, verified_at = ?, learning_json = ?, quality_dimensions_json = ?
          WHERE tenant_id = ? AND id = ?`
       ).bind(
         snapshot.project_id,
@@ -502,6 +646,12 @@ async function saveCurrentSnapshot(
         JSON.stringify(snapshot.permissions),
         snapshot.business_category_id,
         snapshot.work_type,
+        snapshot.reuse_rule,
+        snapshot.capture_origin,
+        snapshot.verification_state,
+        snapshot.verified_at,
+        snapshot.learning ? JSON.stringify(snapshot.learning) : null,
+        snapshot.quality_dimensions ? JSON.stringify(snapshot.quality_dimensions) : null,
         args.tenantId,
         args.memoryId
       )
@@ -514,8 +664,9 @@ async function saveCurrentSnapshot(
           lifecycle_state, scope_type, scope_key, actor_type, actor_id, confidence_score, utility_score,
           canonical_key, root_memory_id, current_version, suppressed_at, expires_at, revised_at,
           entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash, rationale,
-          evidence_json, conflicts_json, permissions_json, business_category_id, work_type
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          evidence_json, conflicts_json, permissions_json, business_category_id, work_type, reuse_rule,
+          capture_origin, verification_state, verified_at, learning_json, quality_dimensions_json
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         args.memoryId,
         args.tenantId,
@@ -551,7 +702,13 @@ async function saveCurrentSnapshot(
         JSON.stringify(snapshot.conflicts),
         JSON.stringify(snapshot.permissions),
         snapshot.business_category_id,
-        snapshot.work_type
+        snapshot.work_type,
+        snapshot.reuse_rule,
+        snapshot.capture_origin,
+        snapshot.verification_state,
+        snapshot.verified_at,
+        snapshot.learning ? JSON.stringify(snapshot.learning) : null,
+        snapshot.quality_dimensions ? JSON.stringify(snapshot.quality_dimensions) : null
       )
     );
   }
@@ -731,7 +888,11 @@ async function saveCurrentSnapshot(
     );
   }
   for (const generation of dynamicGenerations) {
-    const units = generation.unit_schema_version === 1 ? retrievalUnits : retrievalUnitsV4;
+    const units = generation.unit_schema_version === 1
+      ? retrievalUnits
+      : generation.unit_schema_version === 3
+        ? learningUnits
+        : retrievalUnitsV4;
     for (const unit of units) {
       const stableId = `stable_${generation.id}_${unit.id}`;
       const metadataJson = "metadata_json" in unit ? unit.metadata_json : "{}";
@@ -761,7 +922,18 @@ async function saveCurrentSnapshot(
     }
   }
 
-  await runBatchChunks(env.OPEN_BRAIN_DB, statements);
+  try {
+    await runBatchChunks(env.OPEN_BRAIN_DB, statements);
+  } catch (error) {
+    if (isDuplicateCanonicalWrite(error)) {
+      throw new HttpError(
+        409,
+        "duplicate_canonical_key",
+        "An active memory already owns this canonical_key"
+      );
+    }
+    throw error;
+  }
   if (
     lifecycleState !== "suppressed" &&
     env.RETRIEVAL_PROJECTION_QUEUE &&
@@ -803,6 +975,14 @@ export async function captureMemoryItems(
   }
 
   const existingByKey = await loadExistingMemoryIdsByExternalKeys(env.OPEN_BRAIN_DB, args.tenantId, [...dedupedByKey.keys()]);
+  const canonicalKeys = [...new Set(args.items
+    .map((item) => typeof item.canonical_key === "string" ? item.canonical_key.trim() : "")
+    .filter(Boolean))];
+  const existingByCanonicalKey = await loadExistingMemoryIdsByCanonicalKeys(
+    env.OPEN_BRAIN_DB,
+    args.tenantId,
+    canonicalKeys
+  );
   const results: LifecycleMutationResult[] = [];
   let inserted = 0;
   let updated = 0;
@@ -810,21 +990,55 @@ export async function captureMemoryItems(
   for (const [externalKey, rawItem] of dedupedByKey.entries()) {
     const item = normalizeWriteItem(args.tenantId, args.source, { ...rawItem, external_key: externalKey });
     const existingId = existingByKey.get(externalKey);
+    const canonicalExistingId = item.canonical_key ? existingByCanonicalKey.get(item.canonical_key) : null;
+    if (!existingId && canonicalExistingId && item.lifecycle_state !== "suppressed") {
+      const canonicalExisting = await loadMemoryById(env, args.tenantId, canonicalExistingId);
+      results.push({
+        tenant_id: args.tenantId,
+        memory_id: canonicalExisting.id,
+        version: canonicalExisting.current_version ?? 1,
+        operation: args.operation ?? "capture",
+        created: false,
+        kind: normalizeMemoryKind(canonicalExisting.kind),
+        lifecycle_state: normalizeLifecycleState(canonicalExisting.lifecycle_state),
+        deduplicated: true
+      });
+      continue;
+    }
     const existing = existingId ? await loadMemoryById(env, args.tenantId, existingId) : null;
     const memoryId = existing?.id ?? ulid();
     const version = (existing?.current_version ?? 0) + 1;
-    await saveCurrentSnapshot(env, {
-      tenantId: args.tenantId,
-      source: args.source,
-      memoryId,
-      rowExists: Boolean(existing),
-      rootMemoryId: existing?.root_memory_id || memoryId,
-      version,
-      snapshot: item
-    });
+    try {
+      await saveCurrentSnapshot(env, {
+        tenantId: args.tenantId,
+        source: args.source,
+        memoryId,
+        rowExists: Boolean(existing),
+        rootMemoryId: existing?.root_memory_id || memoryId,
+        version,
+        snapshot: item
+      });
+    } catch (error) {
+      if (item.canonical_key && isDuplicateCanonicalWrite(error)) {
+        const duplicate = await canonicalDuplicateResult(
+          env,
+          args.tenantId,
+          item.canonical_key,
+          args.operation ?? "capture"
+        );
+        if (duplicate) {
+          results.push(duplicate);
+          continue;
+        }
+      }
+      throw error;
+    }
 
     if (existing) updated += 1;
     else inserted += 1;
+    if (item.canonical_key && item.lifecycle_state !== "suppressed") {
+      existingByCanonicalKey.set(item.canonical_key, memoryId);
+    }
     results.push({
       tenant_id: args.tenantId,
       memory_id: memoryId,
@@ -838,17 +1052,51 @@ export async function captureMemoryItems(
 
   for (const rawItem of anonymousItems) {
     const item = normalizeWriteItem(args.tenantId, args.source, rawItem);
+    const canonicalExistingId = item.canonical_key ? existingByCanonicalKey.get(item.canonical_key) : null;
+    if (canonicalExistingId && item.lifecycle_state !== "suppressed") {
+      const canonicalExisting = await loadMemoryById(env, args.tenantId, canonicalExistingId);
+      results.push({
+        tenant_id: args.tenantId,
+        memory_id: canonicalExisting.id,
+        version: canonicalExisting.current_version ?? 1,
+        operation: args.operation ?? "capture",
+        created: false,
+        kind: normalizeMemoryKind(canonicalExisting.kind),
+        lifecycle_state: normalizeLifecycleState(canonicalExisting.lifecycle_state),
+        deduplicated: true
+      });
+      continue;
+    }
     const memoryId = ulid();
-    await saveCurrentSnapshot(env, {
-      tenantId: args.tenantId,
-      source: args.source,
-      memoryId,
-      rowExists: false,
-      rootMemoryId: memoryId,
-      version: 1,
-      snapshot: item
-    });
+    try {
+      await saveCurrentSnapshot(env, {
+        tenantId: args.tenantId,
+        source: args.source,
+        memoryId,
+        rowExists: false,
+        rootMemoryId: memoryId,
+        version: 1,
+        snapshot: item
+      });
+    } catch (error) {
+      if (item.canonical_key && isDuplicateCanonicalWrite(error)) {
+        const duplicate = await canonicalDuplicateResult(
+          env,
+          args.tenantId,
+          item.canonical_key,
+          args.operation ?? "capture"
+        );
+        if (duplicate) {
+          results.push(duplicate);
+          continue;
+        }
+      }
+      throw error;
+    }
     inserted += 1;
+    if (item.canonical_key && item.lifecycle_state !== "suppressed") {
+      existingByCanonicalKey.set(item.canonical_key, memoryId);
+    }
     results.push({
       tenant_id: args.tenantId,
       memory_id: memoryId,
@@ -887,11 +1135,15 @@ export async function reviseMemory(
     validFrom?: number | null;
     validUntil?: number | null;
     rationale?: string | null;
+    reuseRule?: string | null;
     evidence?: Array<Record<string, unknown>>;
     conflicts?: string[];
     permissions?: Array<Record<string, unknown>>;
     businessCategoryId?: string | null;
     workType?: MemoryWorkType | null;
+    kind?: MemoryKind;
+    canonicalKey?: string | null;
+    expiresAt?: number | null;
   }
 ): Promise<LifecycleMutationResult> {
   const existing = await loadMemoryById(env, args.tenantId, args.memoryId);
@@ -902,6 +1154,7 @@ export async function reviseMemory(
     valid_from: args.validFrom ?? existing.valid_from,
     valid_until: args.validUntil ?? existing.valid_until,
     rationale: args.rationale ?? existing.rationale,
+    reuse_rule: args.reuseRule === undefined ? existing.reuse_rule : args.reuseRule,
     evidence: args.evidence ?? parseStoredObjects(existing.evidence_json),
     conflicts: args.conflicts ?? parseStoredTags(existing.conflicts_json),
     permissions: args.permissions ?? parseStoredObjects(existing.permissions_json),
@@ -921,14 +1174,14 @@ export async function reviseMemory(
     project_id: args.projectId === undefined ? existing.project_id : args.projectId,
     actor_type: args.actorType ?? existing.actor_type,
     actor_id: args.actorId ?? existing.actor_id,
-    kind: normalizeMemoryKind(existing.kind),
+    kind: args.kind ?? normalizeMemoryKind(existing.kind),
     lifecycle_state: normalizeLifecycleState(existing.lifecycle_state),
     scope_type: normalizeScopeType(existing.scope_type),
     scope_key: existing.scope_key,
     confidence_score: args.confidenceScore ?? existing.confidence_score ?? null,
     utility_score: args.utilityScore ?? existing.utility_score ?? null,
-    canonical_key: existing.canonical_key,
-    expires_at: existing.expires_at
+    canonical_key: args.canonicalKey === undefined ? existing.canonical_key : args.canonicalKey,
+    expires_at: args.expiresAt === undefined ? existing.expires_at : args.expiresAt
   });
 
   const version = (existing.current_version ?? 0) + 1;

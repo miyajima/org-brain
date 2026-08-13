@@ -1,4 +1,11 @@
-import { HttpError, MEMORY_WORK_TYPES, ulid, type MemoryWorkType } from "@org-brain/shared";
+import {
+  HttpError,
+  MEMORY_WORK_TYPES,
+  buildProjectCategoryIdentity,
+  sha256,
+  ulid,
+  type MemoryWorkType
+} from "@org-brain/shared";
 import type { Env } from "./types";
 
 type CategoryRow = {
@@ -114,6 +121,39 @@ export async function updateBusinessCategory(
      WHERE tenant_id = ? AND id = ?`
   ).bind(updated.slug, updated.label, updated.description, updated.is_active, updated.updated_at, tenantId, categoryId).run();
   return categoryResponse(updated);
+}
+
+export async function deterministicProjectBusinessCategory(tenantId: string, projectId: string | null) {
+  const sourceKey = `${tenantId}\0${projectId || "global"}`;
+  return buildProjectCategoryIdentity(tenantId, projectId, await sha256(sourceKey));
+}
+
+export async function ensureProjectBusinessCategory(env: Env, tenantId: string, projectId: string | null) {
+  const category = await deterministicProjectBusinessCategory(tenantId, projectId);
+  const now = Date.now();
+  await env.OPEN_BRAIN_DB.prepare(
+    `INSERT OR IGNORE INTO business_categories(
+       id, tenant_id, slug, label, description, is_active, created_at, updated_at
+     ) VALUES(?,?,?,?,?,?,?,?)`
+  ).bind(
+    category.id,
+    tenantId,
+    category.slug,
+    category.label,
+    category.description,
+    1,
+    now,
+    now
+  ).run();
+  const stored = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, tenant_id, slug, label, description, is_active, created_at, updated_at
+     FROM business_categories
+     WHERE tenant_id = ? AND id = ? AND is_active = 1`
+  ).bind(tenantId, category.id).first<CategoryRow>();
+  if (!stored) {
+    throw new HttpError(409, "project_business_category_conflict", "deterministic project category could not be ensured");
+  }
+  return categoryResponse(stored);
 }
 
 export async function validateBusinessClassification(

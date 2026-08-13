@@ -141,6 +141,7 @@ export type MemorySearchMeta = {
     lexical_candidate_count?: number;
     semantic_candidate_count?: number;
     parent_candidate_count?: number;
+    channel_candidate_counts?: Record<string, number>;
     projection_lag_ms?: number | null;
     degraded_reasons?: string[];
     generation_id?: string | null;
@@ -1186,9 +1187,7 @@ export async function searchTenantRetrievalUnitsV4(
   const limit = Math.max(1, Math.min(50, options.limit ?? 5));
   const base = await searchTenantRetrievalUnitsV3(db, {
     ...options,
-    limit: 50,
-    semanticHits: undefined,
-    semanticProvider: null
+    limit: 50
   });
   const referenceAt = options.at ?? Date.now();
   const includeSuppressed = options.includeSuppressed ?? false;
@@ -1278,12 +1277,13 @@ export async function searchTenantRetrievalUnitsV4(
     )
     .slice(0, limit)
     .map((result) => ({ ...result, score: Number((scores.get(result.id) ?? 0).toFixed(6)) }));
-  const degradedReasons = [
-    ...(base.meta.retrieval?.degraded_reasons ?? []),
-    ...(rows.results.some((row) => row.unit_type === "segment")
-      ? []
-      : ["segment_candidates_unavailable"])
-  ];
+  const degradedReasons = base.meta.retrieval?.degraded_reasons ?? [];
+  const channelCandidateCounts = Object.fromEntries(
+    ["atomic", "profile", "ledger", "timeline", "segment"].map((unitType) => [
+      unitType,
+      new Set(rows.results.filter((row) => row.unit_type === unitType).map((row) => row.memory_id)).size
+    ])
+  );
   return {
     ...base,
     search_mode: "hybrid_v4",
@@ -1301,7 +1301,8 @@ export async function searchTenantRetrievalUnitsV4(
         degraded_reasons: [...new Set(degradedReasons)],
         parent_candidate_count: base.results.length,
         semantic_candidate_count: semanticHits.length,
-        embedding_version: options.semanticProvider ?? null
+        embedding_version: options.semanticProvider ?? null,
+        channel_candidate_counts: channelCandidateCounts
       }
     }
   };

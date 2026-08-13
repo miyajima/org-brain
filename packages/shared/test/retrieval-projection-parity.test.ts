@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeRetrievalIntent as analyzeCloudIntent,
+  buildVerifiedLearningRetrievalUnits as buildCloudLearning,
   buildRetrievalUnits as buildCloudV3,
   buildRetrievalUnitsV4 as buildCloudV4,
   retrievalUnitLexicalSpecificity as cloudSpecificity
@@ -9,6 +10,7 @@ import {
 // @ts-expect-error JavaScript adapter has no declaration file.
 import {
   analyzeRetrievalIntent as analyzeLocalIntent,
+  buildVerifiedLearningRetrievalUnits as buildLocalLearning,
   buildRetrievalUnits as buildLocalV3,
   buildRetrievalUnitsV4 as buildLocalV4,
   retrievalUnitLexicalSpecificity as localSpecificity
@@ -99,6 +101,45 @@ describe("SQLite and D1 retrieval projection parity", () => {
       .toEqual(analyzeLocalIntent("What credential policy did you recommend most recently?"));
     expect(topFive(cloudV4, "credential redaction policy", cloudSpecificity))
       .toEqual(topFive(localV4, "credential redaction policy", localSpecificity));
+  });
+
+  it("produces identical verified-learning projections in Local SQLite and Cloud D1 adapters", async () => {
+    const record = {
+      id: "learning-a",
+      tenant_id: "default",
+      project_id: "orgbrain",
+      kind: "pitfall",
+      content: "Verify command results from the current turn.",
+      summary: "Current-turn command verification",
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_000,
+      valid_from: null,
+      valid_until: 1_900_000_000_000,
+      verified_at: 1_700_000_000_500,
+      capture_origin: "observed",
+      verification_state: "verified",
+      source_references: [{ type: "event", ref: "learning-a", captured_at: 1_700_000_000_000 }],
+      learning_json: JSON.stringify({
+        schema_version: 1,
+        lesson_type: "failure",
+        kind: "pitfall",
+        trigger: "A final response claims a command succeeded",
+        conclusion: "Only a same-turn command result can attest command success",
+        rationale: "Final-answer prose is not an execution result",
+        reuse_rule: "Require an observed exit code or a valid signed command attestation",
+        outcome: "False command evidence was rejected",
+        applicability: { target_files: ["packages/orgbrain-cli/src/lib/memory-learning-transcript.mjs"], components: ["memory-learning"] },
+        evidence_selectors: [{ type: "command", ref: "vitest memory-evidence-verifier" }],
+        gaps: []
+      })
+    };
+    const now = 1_800_000_000_000;
+    const cloud = await buildCloudLearning(record, now);
+    const local = buildLocalLearning(record, now);
+
+    expect(cloud).toHaveLength(5);
+    expect(cloud.map(normalizedUnit)).toEqual(local.map(normalizedUnit));
+    expect(cloud.map((unit) => unit.unit_type)).toEqual(["atomic", "profile", "ledger", "timeline", "segment"]);
   });
 
 });

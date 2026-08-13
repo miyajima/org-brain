@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stripProxyHeaders } from "../pages/api/[...path]";
+import { normalizeFallbackResponse, stripProxyHeaders } from "../pages/api/[...path]";
 
 describe("Console API proxy headers", () => {
   it("keeps Access identity at the Console boundary and replaces caller API credentials", () => {
@@ -16,5 +16,20 @@ describe("Console API proxy headers", () => {
       accept: "application/json",
       "x-request-id": "request-1"
     });
+  });
+
+  it("removes stale compression metadata from decoded fallback responses", async () => {
+    const response = normalizeFallbackResponse(new Response('{"ok":true}', {
+      headers: {
+        "content-encoding": "gzip",
+        "content-length": "999",
+        "content-type": "application/json"
+      }
+    }));
+
+    expect(response.headers.get("content-encoding")).toBeNull();
+    expect(response.headers.get("content-length")).toBeNull();
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(await response.json()).toEqual({ ok: true });
   });
 });

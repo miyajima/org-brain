@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { planMemoryMaintenance, runScheduledMemoryMaintenance, runTenantMemoryMaintenance } from "../src/memory-maintenance";
+import {
+  canonicalTenantMemoryCandidate,
+  planMemoryMaintenance,
+  planTenantDecisionClassificationRepair,
+  planTenantMemoryRepair,
+  runScheduledMemoryMaintenance,
+  runTenantMemoryMaintenance
+} from "../src/memory-maintenance";
+import { sha256 } from "@org-brain/shared";
+// The Node hook adapter is JavaScript by design and shares the runtime-neutral candidate builder.
+import { captureCandidateJson as hookCaptureCandidateJson } from "../../../packages/orgbrain-cli/src/hook-memory-bridge.mjs";
 
 type MemoryRecord = {
   id: string;
@@ -21,6 +31,35 @@ type MemoryRecord = {
   utility_score?: number | null;
   expires_at?: number | null;
 };
+
+it("produces the same canonical candidate JSON hash as the hook adapter", async () => {
+  const fixture = {
+    externalKey: "evt-parity:v2:canonical",
+    canonicalKey: "a".repeat(64),
+    content: "Use ORGBRAIN_API_URL as the canonical variable.",
+    summary: "Canonical API variable",
+    tags: ["capture-v2", "decision"],
+    createdAt: 1_786_464_000_000,
+    projectId: "org-brain",
+    businessCategoryId: "bc_prj_123456789012345678901234",
+    workType: "implementation",
+    kind: "decision",
+    rationale: "One configuration name prevents drift.",
+    reuseRule: "Apply when adding an API client.",
+    evidence: [{ type: "file", ref: "docs/SPEC.md", weight: 0.9 }],
+    sourceReferences: [{ type: "event", ref: "evt-parity" }],
+    validUntil: 1_802_016_000_000,
+    confidenceScore: 0.9,
+    utilityScore: 0.82,
+    visibility: "project",
+    allowedPrincipals: []
+  };
+  const capCandidate = canonicalTenantMemoryCandidate(fixture);
+  const hookCandidate = hookCaptureCandidateJson(fixture);
+
+  expect(capCandidate).toEqual(hookCandidate);
+  expect(await sha256(JSON.stringify(capCandidate))).toBe(await sha256(JSON.stringify(hookCandidate)));
+});
 
 type MemoryFtsRecord = {
   memory_id: string;
@@ -296,6 +335,44 @@ function baseRows(): MemoryRecord[] {
 }
 
 describe("memory maintenance", () => {
+  it("uses the shared deterministic repair planner", async () => {
+    const plan = await planTenantMemoryRepair([{
+      id: "repair-source",
+      project_id: "proj-a",
+      source: "codex",
+      tags_json: JSON.stringify(["hook"]),
+      content: "We decided to use the shared extractor because every adapter must produce identical candidates.\n\nEvidence: `pnpm test` passed.",
+      created_at: Date.parse("2026-03-20T00:00:00.000Z")
+    }], {
+      tenant_id: "default",
+      now: Date.parse("2026-03-30T00:00:00.000Z")
+    });
+
+    expect(plan.actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "derive", candidate_hash: expect.stringMatching(/^[a-f0-9]{64}$/u) }),
+      expect.objectContaining({ type: "suppress", memory_id: "repair-source", reason_code: "derived_atomic" })
+    ]));
+  });
+
+  it("uses the shared project-only decision classification planner", async () => {
+    const plan = await planTenantDecisionClassificationRepair([{
+      id: "decision-a",
+      project_id: "proj-a",
+      business_category_id: null,
+      work_type: null,
+      status: "active"
+    }], "default");
+
+    expect(plan.actions).toEqual([
+      expect.objectContaining({
+        type: "decision_update",
+        decision_memory_id: "decision-a",
+        business_category_id: expect.stringMatching(/^bc_prj_/),
+        work_type: "other"
+      })
+    ]);
+  });
+
   it("builds digests for old raw hook memories and collapses older duplicates", () => {
     const now = Date.parse("2026-03-30T00:00:00.000Z");
     const rows = baseRows();

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { createServer } from "node:http";
+import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
@@ -16,7 +18,7 @@ Usage:
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>]
   orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--tag <tag>]
-  orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--limit <n>]
+  orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>
   orgbrain memory delete <memory-id>
@@ -48,6 +50,8 @@ Usage:
   orgbrain telemetry sync [--limit <n>]
   orgbrain metrics memory-impact [--tenant-id <id>] [--group-by memory|business_category|work_type|project|day] [--day YYYY-MM-DD]
   orgbrain index rebuild
+  orgbrain index rebuild-dense [--tenant-id <id>] [--project-id <id>]
+  orgbrain evidence run -- <command> [args...]
   orgbrain backup create [--output <path>]
   orgbrain backup verify --from <path>
   orgbrain backup restore --from <path>
@@ -72,6 +76,8 @@ Environment:
   ORGBRAIN_LOCAL_DB  SQLite path (default: ~/.org-brain/memory.sqlite)
   ORGBRAIN_ENABLE_CLOUD_MEMORY=true enables telemetry outbox and sync
   ORGBRAIN_API_URL and ORGBRAIN_API_KEY are required by telemetry sync
+  ORGBRAIN_LOCAL_EMBEDDING_PROVIDER=qwen-ollama enables local dense embeddings
+  ORGBRAIN_LOCAL_EMBEDDING_URL=http://127.0.0.1:11434 selects the loopback Ollama endpoint
 `);
 }
 
@@ -166,6 +172,37 @@ function emit(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+async function runEvidenceCommand(argv) {
+  if (argv.length === 0) throw new Error("evidence run requires a command after --");
+  const attestationKey = process.env.ORGBRAIN_EVIDENCE_ATTESTATION_KEY;
+  if (!attestationKey || attestationKey.length < 32) {
+    throw new Error("ORGBRAIN_EVIDENCE_ATTESTATION_KEY must contain at least 32 characters");
+  }
+  const startedAt = Date.now();
+  const child = spawn(argv[0], argv.slice(1), {
+    cwd: process.cwd(),
+    shell: false,
+    stdio: "ignore"
+  });
+  const exitCode = await new Promise((resolveExit, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => resolveExit(code ?? (signal ? 128 : 1)));
+  });
+  const completedAt = Date.now();
+  const commandHash = crypto.createHash("sha256").update(JSON.stringify(argv)).digest("hex");
+  const payload = {
+    schema_version: 1,
+    command_hash: commandHash,
+    exit_code: exitCode,
+    started_at: startedAt,
+    completed_at: completedAt,
+    cwd_hash: crypto.createHash("sha256").update(process.cwd()).digest("hex")
+  };
+  const signature = crypto.createHmac("sha256", attestationKey).update(JSON.stringify(payload)).digest("hex");
+  emit({ ok: exitCode === 0, ...payload, attestation_ref: `hmac-sha256:${signature}` });
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
 async function collect(iterable, limit = Infinity) {
   const rows = [];
   for await (const item of iterable) {
@@ -242,7 +279,8 @@ async function handleMemory(store, action, rest, args) {
       business_category_id: args.get("--business-category-id", null),
       work_type: args.get("--work-type", null),
       query,
-      limit: Number(args.get("--limit", 10))
+      limit: Number(args.get("--limit", 10)),
+      search_mode: args.get("--search-mode", "memories")
     });
     const usage = await store.recordUsage({
       tenant_id: tenantId,
@@ -570,6 +608,11 @@ async function serve(store, args) {
 
 async function main() {
   const raw = process.argv.slice(2);
+  if (raw[0] === "evidence" && raw[1] === "run") {
+    const delimiter = raw.indexOf("--", 2);
+    await runEvidenceCommand(raw.slice(delimiter >= 0 ? delimiter + 1 : 2));
+    return;
+  }
   const args = parseArgs(raw);
   if (args.flags.has("--help") || raw.length === 0) {
     printHelp();
@@ -656,6 +699,11 @@ async function main() {
   } else if (command === "index" && action === "rebuild") {
     await store.rebuildIndex();
     emit({ ok: true, ...(await store.verify()) });
+  } else if (command === "index" && action === "rebuild-dense") {
+    emit(await store.rebuildDenseEmbeddings({
+      tenant_id: args.get("--tenant-id", "default"),
+      project_id: args.get("--project-id", null)
+    }));
   } else if (command === "backup" && action === "create") {
     const defaultPath = join(dirname(store.dbPath), "backups", `memory-${new Date().toISOString().replaceAll(":", "-")}.sqlite`);
     emit(await store.createBackup(args.get("--output", defaultPath)));
