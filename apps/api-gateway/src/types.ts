@@ -43,6 +43,8 @@ export type Env = {
   HYBRID_V4_SHADOW_SAMPLE_RATE?: string;
   HYBRID_V3_CANARY_SAMPLE_RATE?: string;
   HYBRID_V4_CANARY_SAMPLE_RATE?: string;
+  ORGBRAIN_MEMORY_CAPTURE_V2_MODE?: "off" | "shadow" | "on";
+  ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING?: "off" | "on";
   MEMORY_CLASSIFICATION_MODE?: "observe" | "require";
   RETRIEVAL_GENERATION_ROUTING?: "legacy" | "observe" | "enforce";
   RETRIEVAL_OPERATOR_PRINCIPALS_JSON?: string;

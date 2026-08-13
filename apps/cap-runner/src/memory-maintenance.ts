@@ -1,4 +1,17 @@
-import { assessMemoryUsefulness } from "@org-brain/shared";
+import {
+  assessMemoryUsefulness,
+  buildMemoryCaptureCandidateJson,
+  planDecisionClassificationRepairRows as planSharedDecisionClassificationRepairRows,
+  planMemoryRepairRows as planSharedMemoryRepairRows,
+  type DecisionClassificationRepairPlan,
+  type MemoryRepairOptions,
+  type MemoryRepairPlan,
+  type MemoryRepairRow
+} from "@org-brain/shared";
+
+export function canonicalTenantMemoryCandidate(record: Record<string, unknown>): Record<string, unknown> {
+  return buildMemoryCaptureCandidateJson(record);
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DIGEST_SUMMARY_LIMIT = 6;
@@ -131,6 +144,31 @@ export type TenantMaintenanceResult = {
   applied: boolean;
   stats: MaintenancePlan["stats"];
 };
+
+/**
+ * Repair planning deliberately delegates to the same deterministic policy used
+ * by local SQLite and the API capture path. The cap runner only supplies D1
+ * rows; it does not maintain a second classifier.
+ */
+export async function planTenantMemoryRepair(
+  rows: MemoryRepairRow[],
+  options: MemoryRepairOptions = {}
+): Promise<MemoryRepairPlan> {
+  return planSharedMemoryRepairRows(rows, options);
+}
+
+export async function planTenantDecisionClassificationRepair(
+  rows: Array<{
+    id: string;
+    project_id?: string | null;
+    business_category_id?: string | null;
+    work_type?: string | null;
+    status?: string | null;
+  }>,
+  tenantId = "default"
+): Promise<DecisionClassificationRepairPlan> {
+  return planSharedDecisionClassificationRepairRows(rows, { tenant_id: tenantId });
+}
 
 function collapseWhitespace(value: unknown): string {
   return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();

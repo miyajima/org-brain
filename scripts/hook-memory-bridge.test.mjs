@@ -4,9 +4,13 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildMcpCaptureRequest,
+  captureCandidateJson,
+  captureItemPayload,
   classifyMemoryRecord,
+  hookCaptureLogFields,
   normalizeRecord,
   postMemoryViaMcp,
+  prepareMemoryRecordsV2,
   prepareMemoryRecordForUpsert,
   redactHookMemoryText,
   resolveApiBase,
@@ -17,6 +21,31 @@ import {
 import { resolveMemoryMode } from "../packages/orgbrain-cli/src/lib/memory-mode.mjs";
 
 describe("hook-memory-bridge promotion", () => {
+  it("accepts the shared harness compatibility fixture without a special envelope", async () => {
+    const fixtures = JSON.parse(await readFile(
+      new URL("../packages/shared/test/fixtures/memory-capture-v2.json", import.meta.url),
+      "utf8"
+    ));
+    for (const fixture of fixtures) {
+      const record = normalizeRecord("codex-stop", JSON.stringify({
+        hook_event_name: "Stop",
+        cwd: "/tmp/workspaces/org-brain",
+        turn_id: fixture.event.event_id,
+        last_assistant_message: fixture.event.text,
+        timestamp: fixture.event.occurred_at
+      }));
+      const result = await prepareMemoryRecordsV2(record, {
+        tenantId: "default",
+        projectId: "org-brain",
+        businessCategoryId: null,
+        workType: "other",
+        workspaceRoot: "/tmp/workspaces/org-brain",
+        sensitiveMemory: { mode: "deny", allowed_principals: [] }
+      }, "default");
+      expect(result.records.map((item) => item.kind)).toEqual(fixture.expected_kinds);
+    }
+  });
+
   it("redacts credentials and personal contact data before persistence", () => {
     const value = redactHookMemoryText(
       "api_key=supersecretvalue123 contact user@example.com or +81 90 1234 5678"
@@ -319,13 +348,15 @@ describe("hook-memory-bridge promotion", () => {
     expect(selected).toBe("client-workspace");
     const saved = JSON.parse(await readFile(file, "utf8"));
     expect(saved).toEqual({
-      version: 2,
+      version: 3,
       workspaces: {
         "/tmp/workspaces/org-brain": {
           tenant_id: "tenant-a",
           project_id: "client-workspace",
           business_category_id: null,
-          default_work_type: null
+          default_work_type: null,
+          sensitive_memory: { mode: "deny", allowed_principals: [] },
+          memory_learning_mode: "off"
         }
       }
     });
@@ -364,7 +395,9 @@ describe("hook-memory-bridge promotion", () => {
       tenant_id: "tenant-a",
       project_id: "demo-app",
       business_category_id: null,
-      default_work_type: null
+      default_work_type: null,
+      sensitive_memory: { mode: "deny", allowed_principals: [] },
+      memory_learning_mode: "off"
     });
   });
 
@@ -541,5 +574,150 @@ describe("hook-memory-bridge promotion", () => {
     expect(prepared.record.content).toContain("## Result");
     expect(prepared.record.content).toContain("## Validity");
     expect(prepared.record.actorId).toContain("openclaw:");
+  });
+
+  it("prepares a bounded atomic v2 batch with deterministic metadata", async () => {
+    const record = normalizeRecord("codex-stop", JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      turn_id: "turn-v2",
+      last_assistant_message: [
+        "## Conclusion",
+        "ORGBRAIN_API_URLを唯一の正規API環境変数として採用する。",
+        "",
+        "## Rationale",
+        "API接続先を二つの環境変数で管理すると、connectorとhookの設定が分岐するため。",
+        "",
+        "## Reuse",
+        "新しいconnectorまたはhookを追加する場合は、接続先をORGBRAIN_API_URLから取得する。",
+        "",
+        "## Evidence",
+        "docs/SPEC.md",
+        "packages/orgbrain-cli/src/hook-memory-bridge.mjs"
+      ].join("\n")
+    }));
+    const prepared = await prepareMemoryRecordsV2(record, {
+      tenantId: "default",
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation",
+      workspaceRoot: "/tmp/workspaces/org-brain",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] }
+    }, "default");
+    expect(prepared.records).toHaveLength(1);
+    expect(prepared.records[0]).toMatchObject({
+      kind: "decision",
+      workType: "implementation",
+      businessCategoryId: expect.stringMatching(/^bc_prj_/),
+      validUntil: expect.any(Number)
+    });
+    expect(prepared.records[0].canonicalKey).toMatch(/^[a-f0-9]{64}$/);
+    expect(prepared.records[0].externalKey).toMatch(/^v2:[a-f0-9]{64}$/);
+    expect(prepared.report.candidate_hashes).toEqual([expect.stringMatching(/^[a-f0-9]{64}$/)]);
+
+    const canonical = captureCandidateJson(prepared.records[0]);
+    const cloudPayload = captureItemPayload(prepared.records[0]);
+    const normalizedCloudPayload = {
+      ...cloudPayload,
+      evidence: cloudPayload.evidence.map((item) => ({
+        type: item.evidence_type,
+        ref: item.evidence_ref,
+        ...(item.note ? { note: item.note } : {}),
+        ...(item.weight_score == null ? {} : { weight: item.weight_score })
+      }))
+    };
+    expect(normalizedCloudPayload).toEqual(canonical);
+  });
+
+  it("builds one batch MCP call for v2 candidates", () => {
+    const request = buildMcpCaptureRequest("default", "codex", [{
+      externalKey: "codex:turn-v2:v2:a",
+      canonicalKey: "a".repeat(64),
+      kind: "constraint",
+      content: "legacy API base must not be used",
+      summary: "Use the canonical API URL",
+      tags: ["capture-v2", "constraint"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain",
+      businessCategoryId: "bc_prj_123",
+      workType: "implementation",
+      validUntil: 1_800_000_000_000,
+      confidenceScore: 0.9,
+      utilityScore: 0.8,
+      evidence: [],
+      captureOrigin: "observed",
+      learning: {
+        schema_version: 1,
+        lesson_type: "decision",
+        kind: "constraint",
+        trigger: "A hook sends a verified lesson",
+        conclusion: "Use exactly one batch capture call",
+        rationale: "One bounded call avoids discovery and duplicate writes",
+        reuse_rule: "Batch one to three observed lessons",
+        outcome: null,
+        applicability: { target_files: [], components: ["hook"] },
+        evidence_selectors: [],
+        gaps: []
+      },
+      verification: {
+        state: "verified",
+        verified_at: 1_786_000_000_100,
+        attestation_ref: `sha256:${"b".repeat(64)}`
+      }
+    }]);
+    expect(request.params.arguments).toMatchObject({
+      tenant_id: "default",
+      source: "codex",
+      items: [{
+        external_key: "codex:turn-v2:v2:a",
+        canonical_key: "a".repeat(64),
+        kind: "constraint",
+        capture_origin: "observed",
+        verification: { state: "verified" }
+      }]
+    });
+    expect(request.params.arguments.item).toBeUndefined();
+  });
+
+  it("keeps v2 external keys distinct even when the hook event id is very long", async () => {
+    const record = normalizeRecord("codex-stop", JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      turn_id: `turn-${"x".repeat(400)}`,
+      last_assistant_message: [
+        "We decided to use ORGBRAIN_API_URL because duplicate endpoint variables cause configuration drift.",
+        "Evidence: docs/SPEC.md and packages/orgbrain-cli/src/hook-memory-bridge.mjs.",
+        "When a connector or hook is added, read its endpoint from ORGBRAIN_API_URL.",
+        "The Stop hook must send exactly one batch because discovery and retries otherwise add duplicate writes and latency.",
+        "Evidence: packages/orgbrain-cli/src/hook-memory-bridge.mjs and scripts/hook-memory-bridge.test.mjs.",
+        "When another lifecycle hook is added, send all of its candidates in one batch request."
+      ].join("\n")
+    }));
+    const prepared = await prepareMemoryRecordsV2(record, {
+      tenantId: "default",
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation",
+      workspaceRoot: "/tmp/workspaces/org-brain",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] }
+    }, "default");
+
+    expect(prepared.records).toHaveLength(2);
+    expect(new Set(prepared.records.map((item) => item.externalKey)).size).toBe(2);
+    expect(prepared.records.every((item) => /^v2:[a-f0-9]{64}$/u.test(item.externalKey))).toBe(true);
+  });
+
+  it("logs only candidate hashes and counts for v2 persistence", () => {
+    const records = [{ externalKey: "codex:turn-private-event-id" }];
+    const report = { candidate_hashes: ["a".repeat(64)] };
+    const fields = hookCaptureLogFields("on", records, report, ["memory-private-id"]);
+
+    expect(fields).toEqual({ candidate_count: 1, candidate_hashes: ["a".repeat(64)] });
+    expect(JSON.stringify(fields)).not.toContain("turn-private-event-id");
+    expect(JSON.stringify(fields)).not.toContain("memory-private-id");
+    expect(hookCaptureLogFields("off", records, null, ["memory-id"])).toEqual({
+      external_keys: ["codex:turn-private-event-id"],
+      memory_ids: ["memory-id"]
+    });
   });
 });

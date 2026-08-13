@@ -1,19 +1,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  backfillDecisionRetrievalUnits,
   confirmDecisionMemory,
+  capAutoDecisionConfidence,
   createDecisionMemory,
   enrichContext,
   getDecisionMemoryContext,
   getDecisionReviewQueue,
   preActionDecisionGate,
   reviseDecisionMemory,
-  searchDecisionMemories
+  searchDecisionMemories,
+  upsertAutoDecisionMemory
 } from "../src/context-engine-service";
 
 type DecisionMemoryRecord = {
   id: string;
   tenant_id: string;
   project_id: string | null;
+  business_category_id: string | null;
+  work_type: string | null;
   domain: string;
   title: string;
   decision: string;
@@ -36,6 +41,10 @@ type DecisionMemoryRecord = {
   confirmed_at: number | null;
   created_at: number;
   updated_at: number;
+  origin_memory_id?: string | null;
+  origin_source?: string | null;
+  origin_external_key?: string | null;
+  auto_generated?: number;
 };
 
 type DecisionMemoryVersionRecord = {
@@ -75,6 +84,10 @@ class FakeStatement {
   ) {}
 
   bind(...args: unknown[]) {
+    if (this.sql.includes("INSERT INTO decision_memories(")) {
+      const placeholders = this.sql.match(/\?/gu)?.length ?? 0;
+      if (placeholders !== args.length) throw new Error(`decision insert bind mismatch: ${placeholders} != ${args.length}`);
+    }
     this.args = args;
     return this;
   }
@@ -136,12 +149,30 @@ class FakeStatement {
       const limit = Number(this.args[this.args.length - 1]);
       const rows = this.db.decisionMemories
         .filter((row) => row.tenant_id === tenantId)
+        .filter((row) => !this.sql.includes("status = 'active'") || row.status === "active")
         .filter((row) => !projectId || row.project_id === projectId || row.project_id === null)
         .sort((left, right) => right.updated_at - left.updated_at)
         .slice(0, limit);
       return { results: rows as T[] };
     }
     return { results: [] as T[] };
+  }
+
+  async first<T>() {
+    if (this.sql.includes("FROM business_categories")) {
+      return { id: String(this.args[1]) } as T;
+    }
+    if (this.sql.includes("FROM decision_memories") && this.sql.includes("origin_source = ?")) {
+      const row = this.db.decisionMemories.find((item) =>
+        item.tenant_id === this.args[0] &&
+        item.origin_source === this.args[1] &&
+        item.origin_external_key === this.args[2] &&
+        item.auto_generated === 1
+      );
+      return (row ? { id: row.id } : null) as T;
+    }
+    const result = await this.all<T>();
+    return result.results[0] ?? null;
   }
 
   async run() {
@@ -162,6 +193,8 @@ class FakeStatement {
         id: String(this.args[0]),
         tenant_id: String(this.args[1]),
         project_id: this.args[2] === null ? null : String(this.args[2]),
+        business_category_id: this.args[25] === null ? null : String(this.args[25]),
+        work_type: this.args[26] === null ? null : String(this.args[26]),
         domain: String(this.args[3]),
         title: String(this.args[4]),
         decision: String(this.args[5]),
@@ -183,11 +216,15 @@ class FakeStatement {
         confirmation_note: this.args[21] === null ? null : String(this.args[21]),
         confirmed_at: this.args[22] === null ? null : Number(this.args[22]),
         created_at: Number(this.args[23]),
-        updated_at: Number(this.args[24])
+        updated_at: Number(this.args[24]),
+        origin_memory_id: this.args[27] === null ? null : String(this.args[27]),
+        origin_source: this.args[28] === null ? null : String(this.args[28]),
+        origin_external_key: this.args[29] === null ? null : String(this.args[29]),
+        auto_generated: Number(this.args[30] ?? 0)
       });
     } else if (this.sql.includes("UPDATE decision_memories")) {
-      const tenantId = String(this.args[22]);
-      const id = String(this.args[23]);
+      const tenantId = String(this.args[24]);
+      const id = String(this.args[25]);
       const row = this.db.decisionMemories.find((item) => item.tenant_id === tenantId && item.id === id);
       if (row) {
         row.project_id = this.args[0] === null ? null : String(this.args[0]);
@@ -212,6 +249,8 @@ class FakeStatement {
         row.confirmation_note = this.args[19] === null ? null : String(this.args[19]);
         row.confirmed_at = this.args[20] === null ? null : Number(this.args[20]);
         row.updated_at = Number(this.args[21]);
+        row.business_category_id = this.args[22] === null ? null : String(this.args[22]);
+        row.work_type = this.args[23] === null ? null : String(this.args[23]);
       }
     } else if (this.sql.includes("INSERT INTO memory_usage_events")) {
       this.db.usageEventBindings.push(this.args);
@@ -262,6 +301,8 @@ function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryR
     id: "dm-base",
     tenant_id: "org_123",
     project_id: "proj_abc",
+    business_category_id: "bc_auth",
+    work_type: "implementation",
     domain: "engineering",
     title: "新規認証処理はnew_auth_providerへ統一",
     decision: "legacy_authは新規実装で使わない",
@@ -293,7 +334,7 @@ describe("context-engine-service", () => {
     vi.restoreAllMocks();
   });
 
-  it("blocks a pre-action gate when active decisions conflict", async () => {
+  it("routes active decision conflicts to review instead of blocking", async () => {
     const db = new FakeD1();
     db.decisionMemories = [
       baseDecision({ id: "dm-active-a", decision: "legacy_authを使わない" }),
@@ -311,8 +352,204 @@ describe("context-engine-service", () => {
       { principal: "user:reviewer" }
     );
 
-    expect(result.outcome).toBe("block");
+    expect(result.outcome).toBe("review");
     expect(result.allowed).toBe(false);
+  });
+
+  it("caps inferred decisions below 0.90 without durable evidence", () => {
+    expect(capAutoDecisionConfidence({
+      requested: 0.99,
+      decision: "New code must use ORGBRAIN_API_URL.",
+      rationale: "Avoid configuration drift.",
+      projectId: "proj_abc",
+      sources: []
+    })).toBe(0.89);
+    expect(capAutoDecisionConfidence({
+      requested: 0.99,
+      decision: "New code must use ORGBRAIN_API_URL.",
+      rationale: "Avoid configuration drift.",
+      projectId: "proj_abc",
+      sources: [{ type: "command", id: "pnpm test", title: "exit_code=0" }]
+    })).toBe(0.9);
+    expect(capAutoDecisionConfidence({
+      requested: 0.99,
+      decision: "New code must use ORGBRAIN_API_URL.",
+      rationale: "Avoid configuration drift.",
+      projectId: "proj_abc",
+      sources: [{ type: "commit", id: "abcdef1234567890" }]
+    })).toBe(0.9);
+    expect(capAutoDecisionConfidence({
+      requested: 0.99,
+      decision: "New code must use ORGBRAIN_API_URL.",
+      rationale: "Avoid configuration drift.",
+      projectId: "proj_abc",
+      sources: [
+        { type: "current_code", id: "apps/api-gateway/src/index.ts", title: "hash=abcdef1234567890" },
+        { type: "commit", id: "abcdef1234567890" }
+      ]
+    })).toBe(0.9);
+    expect(capAutoDecisionConfidence({
+      requested: 0.99,
+      decision: "New code must use ORGBRAIN_API_URL.",
+      rationale: "Avoid configuration drift.",
+      projectId: "proj_abc",
+      sources: [
+        { type: "command", id: "pnpm test", title: "exit_code=0" },
+        { type: "adr", id: "ADR-014" }
+      ]
+    })).toBe(0.95);
+  });
+
+  it("atomically upserts one automatic decision for a source external key", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as any;
+    const input = {
+      tenantId: "org_123",
+      memoryId: "memory-origin",
+      source: "hook",
+      externalKey: "evt-1:constraint",
+      projectId: "proj_abc",
+      businessCategoryId: "bc_auth",
+      workType: "implementation" as const,
+      kind: "constraint" as const,
+      title: "Legacy auth prohibition",
+      decision: "New code must not use legacy_auth.",
+      rationale: "It creates duplicate authentication state.",
+      evidence: [{
+        evidence_type: "command",
+        evidence_ref: "pnpm test",
+        note: "exit_code=0"
+      }],
+      sourceReferences: [],
+      validFrom: Date.now(),
+      validUntil: null,
+      confidence: 0.99,
+      visibility: "project" as const,
+      allowedPrincipals: [],
+      principal: "user:reviewer"
+    };
+
+    const first = await upsertAutoDecisionMemory(env, input);
+    const second = await upsertAutoDecisionMemory(env, input);
+    expect(second.decisionMemory.id).toBe(first.decisionMemory.id);
+    expect(db.decisionMemories).toHaveLength(1);
+    expect(db.decisionMemories[0]).toMatchObject({
+      origin_memory_id: "memory-origin",
+      origin_source: "hook",
+      origin_external_key: "evt-1:constraint",
+      auto_generated: 1,
+      confidence: 0.9
+    });
+  });
+
+  it("allows an evidence-backed 0.90 inferred constraint to block only when enabled", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [baseDecision({
+      id: "dm-auto-block",
+      title: "Legacy auth prohibition",
+      decision: "New code must not use legacy_auth.",
+      rationale: "It creates duplicate authentication state.",
+      confidence: 0.9,
+      confirmation_state: "inferred_unconfirmed",
+      source_refs_json: JSON.stringify([{
+        type: "current_code",
+        id: "apps/api-gateway/src/auth.ts",
+        title: "hash=abcdef1234567890"
+      }])
+    })];
+
+    const blocked = await preActionDecisionGate(
+      {
+        OPEN_BRAIN_DB: db,
+        ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING: "on"
+      } as any,
+      {
+        tenant_id: "org_123",
+        project_id: "proj_abc",
+        business_category_id: "bc_auth",
+        minimum_confidence: 0.1,
+        task: { title: "legacy_auth", description: "Add new authentication code" }
+      },
+      { principal: "user:reviewer" }
+    );
+    expect(blocked.outcome).toBe("block");
+    expect(blocked.policy.inferred_unconfirmed_block_threshold).toBe(0.9);
+
+    const disabled = await preActionDecisionGate(
+      { OPEN_BRAIN_DB: db, ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING: "off" } as any,
+      {
+        tenant_id: "org_123",
+        project_id: "proj_abc",
+        business_category_id: "bc_auth",
+        task: { title: "legacy_auth", description: "Add new authentication code" }
+      },
+      { principal: "user:reviewer" }
+    );
+    expect(disabled.outcome).not.toBe("block");
+  });
+
+  it("routes a 0.90 inferred constraint without an exact category scope to review", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [baseDecision({
+      id: "dm-missing-request-scope",
+      decision: "New code must not use legacy_auth.",
+      confidence: 0.9,
+      source_refs_json: JSON.stringify([{
+        type: "current_code",
+        id: "apps/api-gateway/src/auth.ts",
+        title: "hash=abcdef1234567890"
+      }])
+    })];
+
+    const result = await preActionDecisionGate(
+      { OPEN_BRAIN_DB: db, ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING: "on" } as any,
+      {
+        tenant_id: "org_123",
+        project_id: "proj_abc",
+        task: { title: "legacy_auth", description: "Add new authentication code" }
+      },
+      { principal: "user:reviewer" }
+    );
+
+    expect(result.outcome).toBe("review");
+    expect(result.context.review_decision_memory_ids).toContain("dm-missing-request-scope");
+  });
+
+  it("never blocks 0.89 or an evidence-free 0.90 inferred constraint", async () => {
+    for (const fixture of [
+      {
+        id: "dm-089",
+        confidence: 0.89,
+        source_refs_json: JSON.stringify([{
+          type: "current_code",
+          id: "apps/api-gateway/src/auth.ts",
+          title: "hash=abcdef1234567890"
+        }])
+      },
+      {
+        id: "dm-090-no-evidence",
+        confidence: 0.9,
+        source_refs_json: "[]"
+      }
+    ]) {
+      const db = new FakeD1();
+      db.decisionMemories = [baseDecision({
+        ...fixture,
+        decision: "New code must not use legacy_auth."
+      })];
+      const result = await preActionDecisionGate(
+        { OPEN_BRAIN_DB: db, ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING: "on" } as any,
+        {
+          tenant_id: "org_123",
+          project_id: "proj_abc",
+          business_category_id: "bc_auth",
+          task: { title: "legacy_auth", description: "Add new authentication code" }
+        },
+        { principal: "user:reviewer" }
+      );
+      expect(result.outcome).toBe("review");
+      expect(result.context.blocking_decision_memory_ids).toEqual([]);
+    }
   });
 
   it("builds a decision debt review queue", async () => {
@@ -364,9 +601,47 @@ describe("context-engine-service", () => {
     });
 
     expect(created.decisionMemory.title).toBe("API access policy");
+    expect(Number(created.decisionMemory.validUntil) - created.decisionMemory.createdAt).toBe(180 * 24 * 60 * 60 * 1000);
+    const confirmed = await createDecisionMemory(env, {
+      orgId: "org_123",
+      projectId: "proj_abc",
+      title: "Confirmed API policy",
+      decision: "Use service APIs.",
+      rationale: "The owner confirmed this policy.",
+      confirmationState: "reviewed",
+      validUntil: null
+    });
+    expect(confirmed.decisionMemory.validUntil).toBeNull();
     const search = await searchDecisionMemories(env, { orgId: "org_123", projectId: "proj_abc", q: "direct DB", userId: "user_001" });
-    expect(search.results).toHaveLength(1);
-    expect(search.results[0]).toMatchObject({ title: "API access policy", status: "active" });
+    expect(search.results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "API access policy", status: "active" })
+    ]));
+    const unfiltered = await searchDecisionMemories(env, {
+      orgId: "org_123",
+      projectId: "proj_abc",
+      q: "",
+      userId: "user_001"
+    });
+    expect(unfiltered.results).toHaveLength(2);
+  });
+
+  it("reprojects every active decision through a resumable cursor", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({ id: "dm-a" }),
+      baseDecision({ id: "dm-b" }),
+      baseDecision({ id: "dm-old", status: "deprecated" })
+    ];
+    const result = await backfillDecisionRetrievalUnits(
+      { OPEN_BRAIN_DB: db } as any,
+      { tenantId: "org_123", projectId: "proj_abc", cursor: "", limit: 10 }
+    );
+
+    expect(result).toMatchObject({
+      processed_decisions: 2,
+      total_processed_decisions: 2,
+      done: true
+    });
   });
 
   it("prioritizes a recent active ADR decision over an old README memory", async () => {

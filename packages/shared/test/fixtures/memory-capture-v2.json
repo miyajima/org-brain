@@ -1,0 +1,41 @@
+[
+  {
+    "name": "harness-status-conclusion-evidence-gaps",
+    "event": {
+      "event_id": "fixture-harness",
+      "tenant_id": "default",
+      "project_id": "org-brain",
+      "source": "codex",
+      "occurred_at": 1786464000000,
+      "text": "## Status\nImplementation is complete.\n\n## Conclusion\nWe decided to use ORGBRAIN_API_URL as the canonical variable.\n\n## Reason\nThis prevents two configuration names from diverging across adapters.\n\n## Reuse\nWhen a connector or hook is added, read the endpoint from ORGBRAIN_API_URL.\n\n## Evidence\npackages/shared/src/index.ts and packages/orgbrain-cli/src/hook-memory-bridge.mjs."
+    },
+    "expected_kinds": ["decision"],
+    "maximum_confidence": 0.95
+  },
+  {
+    "name": "ordinary-response-without-headings",
+    "event": {
+      "event_id": "fixture-ordinary",
+      "tenant_id": "default",
+      "project_id": "org-brain",
+      "source": "codex",
+      "occurred_at": 1786464000000,
+      "text": "The Stop hook must send exactly one batch request because tool discovery adds unnecessary latency. Evidence: scripts/hook-memory-bridge.test.mjs and packages/orgbrain-cli/src/hook-memory-bridge.mjs. When another lifecycle hook is added, send its candidates in one batch request."
+    },
+    "expected_kinds": ["constraint"],
+    "maximum_confidence": 0.95
+  },
+  {
+    "name": "transient-completion",
+    "event": {
+      "event_id": "fixture-transient",
+      "tenant_id": "default",
+      "project_id": "org-brain",
+      "source": "codex",
+      "occurred_at": 1786464000000,
+      "text": "Implementation completed; commit, push, CI, and build all succeeded."
+    },
+    "expected_kinds": [],
+    "maximum_confidence": 0
+  }
+]

@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "fixture_id": "local-qwen-session-regression-v1",
+  "description": "Synthetic, credential-free Codex sessions whose next-task queries deliberately use different wording from the durable learning event.",
+  "sessions": [
+    {
+      "session_id": "session-hook-latency",
+      "lesson_type": "success",
+      "kind": "pitfall",
+      "trigger": "A lifecycle callback delayed agent shutdown while it performed several network requests.",
+      "conclusion": "Send one bounded batch to the known capture endpoint during the stop callback.",
+      "rationale": "Discovery and per-item requests multiply tail latency after useful work has already completed.",
+      "reuse_rule": "For termination callbacks, skip capability discovery, cap the payload at three items, and enforce a five-second deadline.",
+      "outcome": "The callback completed within its latency budget without duplicate submissions.",
+      "queries": [
+        "How should an agent avoid hanging after it has already finished its work?",
+        "What pattern reduces end-of-run network chatter in a lifecycle integration?"
+      ]
+    },
+    {
+      "session_id": "session-package-signature",
+      "lesson_type": "failure",
+      "kind": "pitfall",
+      "trigger": "Dependency installation failed because the package-manager launcher could not validate its signed release metadata.",
+      "conclusion": "Restore a trusted Corepack and package-manager installation instead of bypassing signature verification.",
+      "rationale": "Disabling integrity checks makes a transient toolchain problem indistinguishable from a compromised artifact.",
+      "reuse_rule": "When package bootstrap reports key or signature errors, repair the trusted launcher and keep verification enabled.",
+      "outcome": "The pinned package manager executed the test suite with integrity validation intact.",
+      "queries": [
+        "The JavaScript dependency bootstrap says its signing key is invalid; what is the safe recovery?",
+        "Should supply-chain verification be switched off just to get the build running?"
+      ]
+    },
+    {
+      "session_id": "session-phone-redaction",
+      "lesson_type": "failure",
+      "kind": "pitfall",
+      "trigger": "A privacy filter classified dates, timestamps, and long platform identifiers as telephone numbers.",
+      "conclusion": "Recognize structured numeric identifiers before applying phone-number detection.",
+      "rationale": "Digit count alone cannot distinguish personal contact data from ISO dates or service-generated IDs.",
+      "reuse_rule": "Exclude known date, timestamp, and status-ID formats, then apply the contact-number detector to the remainder.",
+      "outcome": "Regression fixtures retained identifiers while still rejecting actual contact numbers.",
+      "queries": [
+        "Why is the privacy scrubber deleting harmless calendar values and social post references?",
+        "How can numeric false positives be reduced without weakening protection for contact details?"
+      ]
+    },
+    {
+      "session_id": "session-repair-backup",
+      "lesson_type": "decision",
+      "kind": "constraint",
+      "trigger": "A maintenance job needed to suppress and reclassify every stored memory.",
+      "conclusion": "Require a restorable snapshot and checksum manifest before applying bulk repair.",
+      "rationale": "A dry run describes intended mutations but cannot recover data after an interrupted or incorrect apply.",
+      "reuse_rule": "Before mass maintenance, create a permission-restricted database copy or export and verify its digest.",
+      "outcome": "The repair completed with every original identifier recoverable.",
+      "queries": [
+        "What safety gate is mandatory before rewriting the entire knowledge store?",
+        "A cleanup preview looks correct; what additional protection is needed before committing it?"
+      ]
+    },
+    {
+      "session_id": "session-vector-shape",
+      "lesson_type": "failure",
+      "kind": "pitfall",
+      "trigger": "Semantic indexing failed because the inference output width did not match the configured vector index.",
+      "conclusion": "Validate every embedding dimension before persisting or querying it.",
+      "rationale": "Model variants and truncation settings can silently change vector shape while storage expects a fixed width.",
+      "reuse_rule": "Pin model and dimensions together, reject non-finite values, and fail before writing mismatched vectors.",
+      "outcome": "Both document and query vectors were consistently stored at 1024 dimensions.",
+      "queries": [
+        "Why does similarity lookup reject arrays produced by a newly selected language model?",
+        "Which invariant prevents an inference backend from corrupting the nearest-neighbor index?"
+      ]
+    },
+    {
+      "session_id": "session-compact-pagination",
+      "lesson_type": "success",
+      "kind": "decision",
+      "trigger": "A serverless API exhausted memory while serializing a very large memory-list response.",
+      "conclusion": "Use cursor pagination and a compact projection for high-cardinality lists.",
+      "rationale": "Bounding rows and omitting large evidence bodies prevents response assembly from exceeding runtime memory limits.",
+      "reuse_rule": "Offer full pages up to one hundred rows and compact pages up to five hundred rows with an opaque continuation cursor.",
+      "outcome": "Repeated list requests completed without platform resource errors.",
+      "queries": [
+        "How should a serverless endpoint return thousands of records without running out of memory?",
+        "What response design avoids oversized administrative table payloads?"
+      ]
+    },
+    {
+      "session_id": "session-source-drift",
+      "lesson_type": "decision",
+      "kind": "constraint",
+      "trigger": "A previously verified lesson referred to source code that had changed since capture.",
+      "conclusion": "Do not inject a file-backed memory when its recorded content hash no longer matches the workspace.",
+      "rationale": "A correct historical conclusion may become unsafe after the implementation it describes is revised.",
+      "reuse_rule": "Recompute referenced file hashes at retrieval time and route mismatches to stale review.",
+      "outcome": "Outdated guidance was withheld until it was reverified against current code.",
+      "queries": [
+        "When should previously trusted engineering guidance be withheld after a refactor?",
+        "How can retrieval detect that remembered advice no longer describes the checked-out implementation?"
+      ]
+    },
+    {
+      "session_id": "session-credential-rejection",
+      "lesson_type": "decision",
+      "kind": "constraint",
+      "trigger": "An otherwise useful learning event contained an authentication secret in command output.",
+      "conclusion": "Reject credentials unconditionally before memory persistence.",
+      "rationale": "Access controls and short retention reduce exposure but do not make reusable secret storage safe.",
+      "reuse_rule": "Detect keys, tokens, passwords, and private-key material before logging or capture, and record only a reason code.",
+      "outcome": "No secret value entered memory, logs, or diagnostic reports.",
+      "queries": [
+        "Can a short-lived restricted note retain an API password for future agents?",
+        "What should the capture pipeline do when useful output is mixed with authentication material?"
+      ]
+    },
+    {
+      "session_id": "session-decision-attestation",
+      "lesson_type": "decision",
+      "kind": "decision",
+      "trigger": "An automatically inferred architectural rule was considered for pre-action blocking.",
+      "conclusion": "Allow an unconfirmed inferred decision to block only with high confidence and independently verified evidence.",
+      "rationale": "A confident statement without corroboration can still be fabricated or based on stale context.",
+      "reuse_rule": "Require explicit decision language, rationale, matching scope, no unresolved conflict, and at least one admissible execution or source attestation.",
+      "outcome": "Unsupported guidance went to review while strongly evidenced constraints were enforced.",
+      "queries": [
+        "When may machine-inferred policy stop an engineer before an action is taken?",
+        "Why should a very confident recommendation still be advisory when nothing corroborates it?"
+      ]
+    },
+    {
+      "session_id": "session-idempotent-capture",
+      "lesson_type": "success",
+      "kind": "decision",
+      "trigger": "A hook retried delivery after timing out and created multiple copies of the same lesson.",
+      "conclusion": "Derive stable canonical and event keys so repeated capture is idempotent.",
+      "rationale": "Network retry is normal and must not inflate retrieval results with semantically identical rows.",
+      "reuse_rule": "Hash tenant, project, kind, and normalized conclusion for canonical identity, then combine it with the event identifier.",
+      "outcome": "Retries updated or skipped the existing memory instead of creating active duplicates.",
+      "queries": [
+        "How can retrying a timed-out knowledge submission avoid producing twins?",
+        "What identity scheme makes repeated lifecycle delivery safe?"
+      ]
+    },
+    {
+      "session_id": "session-project-classification",
+      "lesson_type": "decision",
+      "kind": "decision",
+      "trigger": "Captured memories were assigned inconsistent categories by guessing from their prose.",
+      "conclusion": "Derive category deterministically from explicit project metadata, never from memory text.",
+      "rationale": "The same technical statement can occur in many projects, so content inference makes routing unstable.",
+      "reuse_rule": "Prefer explicit classification, then workspace configuration, then a hashed project category; reject invalid explicit values.",
+      "outcome": "Local and cloud captures received identical stable classifications.",
+      "queries": [
+        "How should a knowledge item be classified when its wording could belong to several teams?",
+        "What prevents categorization from changing when the same lesson is paraphrased?"
+      ]
+    },
+    {
+      "session_id": "session-test-daemon",
+      "lesson_type": "success",
+      "kind": "pitfall",
+      "trigger": "Integration tests depended on a developer's globally running inference service.",
+      "conclusion": "Own the local model process inside the test runner and terminate it in a finally block.",
+      "rationale": "Global daemons make tests order-dependent and leave machine state behind after failures.",
+      "reuse_rule": "Allocate a loopback port, start the service, wait for health, run the suite, and send termination even when tests fail.",
+      "outcome": "The embedding regression ran from a clean machine state and left no service listening afterward.",
+      "queries": [
+        "How can integration checks avoid relying on a manually launched model server?",
+        "What teardown pattern prevents a failed test from leaving an inference process behind?"
+      ]
+    }
+  ]
+}

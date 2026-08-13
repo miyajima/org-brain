@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "memories": [
+    { "id": "gold-api-url", "content": "ORGBRAIN_API_URL is the canonical API endpoint variable; ORGBRAIN_API_BASE is only a compatibility alias." },
+    { "id": "gold-hook-batch", "content": "The Stop hook sends one batch capture request and does not perform tool discovery." },
+    { "id": "gold-sensitive", "content": "Credentials are never stored. Personal sensitive memory is denied unless restricted_7d has allowed principals." },
+    { "id": "gold-ttl", "content": "Facts expire after 90 days; preferences and pitfalls expire after 180 days; restricted data expires within seven days." },
+    { "id": "gold-category", "content": "Business categories are derived only from explicit project metadata and work type defaults to other." },
+    { "id": "gold-block", "content": "An inferred decision blocks only at confidence 0.90 or higher with a reason, exact scope, current validity, no conflict, and durable evidence." },
+    { "id": "gold-repair", "content": "Memory repair is dry-run by default, requires a private backup or D1 export for apply, and suppresses rather than physically deletes." },
+    { "id": "gold-v4", "content": "Hybrid v4 retrieval passes semantic hits, atomic/profile/timeline/segment candidates, and BGE reranker scores into fusion." },
+    { "id": "gold-list", "content": "The memory list API uses a stable cursor; full pages allow 100 items and compact pages allow 500 items." },
+    { "id": "gold-harness", "content": "The harness needs no memory JSON envelope. Conclusion becomes candidates, Evidence becomes references, and Gaps lowers confidence." }
+  ],
+  "questions": [
+    { "id": "q01", "query": "Org Brainの正規API URL環境変数は何ですか？", "expected_ids": ["gold-api-url"] },
+    { "id": "q02", "query": "Which environment variable should adapters use for the API endpoint?", "expected_ids": ["gold-api-url"] },
+    { "id": "q03", "query": "Stop hookはcapture前にtool一覧を取得しますか？", "expected_ids": ["gold-hook-batch"] },
+    { "id": "q04", "query": "How many capture calls should one Stop event make?", "expected_ids": ["gold-hook-batch"] },
+    { "id": "q05", "query": "credentialや個人情報をmemoryへ保存できる条件は？", "expected_ids": ["gold-sensitive"] },
+    { "id": "q06", "query": "What happens when a candidate contains an API token?", "expected_ids": ["gold-sensitive"] },
+    { "id": "q07", "query": "factとpreferenceの既定有効期限を教えて", "expected_ids": ["gold-ttl"] },
+    { "id": "q08", "query": "How long may restricted personal memory live?", "expected_ids": ["gold-ttl"] },
+    { "id": "q09", "query": "business categoryは本文から推測しますか？", "expected_ids": ["gold-category"] },
+    { "id": "q10", "query": "What is the fallback work type?", "expected_ids": ["gold-category"] },
+    { "id": "q11", "query": "未確認decisionが自動blockできる閾値と条件は？", "expected_ids": ["gold-block"] },
+    { "id": "q12", "query": "Can minimum_confidence lower the inferred-decision block threshold?", "expected_ids": ["gold-block"] },
+    { "id": "q13", "query": "既存memory修復は物理削除しますか？", "expected_ids": ["gold-repair"] },
+    { "id": "q14", "query": "Which artifacts are mandatory before repair apply?", "expected_ids": ["gold-repair"] },
+    { "id": "q15", "query": "hybrid v4 fusionへ渡す候補チャネルは何ですか？", "expected_ids": ["gold-v4"] },
+    { "id": "q16", "query": "Which embedding and reranking paths feed structured retrieval?", "expected_ids": ["gold-v4"] },
+    { "id": "q17", "query": "memory一覧のfullとcompactの最大件数は？", "expected_ids": ["gold-list"] },
+    { "id": "q18", "query": "How does list pagination avoid oversized Worker responses?", "expected_ids": ["gold-list"] },
+    { "id": "q19", "query": "ハーネスは専用memory JSONを出力する必要がありますか？", "expected_ids": ["gold-harness"] },
+    { "id": "q20", "query": "How are Evidence and Gaps interpreted by the hook extractor?", "expected_ids": ["gold-harness"] }
+  ]
+}

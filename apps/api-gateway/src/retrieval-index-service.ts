@@ -153,6 +153,80 @@ export function getV4SemanticRetrievalIndex(env: Env): RetrievalIndex | null {
   );
 }
 
+function generationNamespace(generationId: string) {
+  return `:generation:${generationId.replace(/[^A-Za-z0-9_.-]/gu, "_").slice(0, 96)}`;
+}
+
+export function getGenerationSemanticRetrievalIndex(env: Env, generationId: string): RetrievalIndex | null {
+  if (!env.AI || !env.MEMORY_VECTOR_INDEX_V3) return null;
+  return new CloudflareVectorRetrievalIndexV3(
+    env.AI,
+    env.MEMORY_VECTOR_INDEX_V3,
+    generationNamespace(generationId)
+  );
+}
+
+export async function syncRetrievalGenerationUnitsToSemanticIndex(
+  env: Env,
+  tenantId: string,
+  generationId: string,
+  unitIds: string[]
+): Promise<RetrievalProjectionStatus> {
+  const index = getGenerationSemanticRetrievalIndex(env, generationId);
+  if (!index) return { available: false, provider: null, indexed: 0 };
+  try {
+    const uniqueIds = [...new Set(unitIds)].slice(0, 5_000);
+    if (uniqueIds.length === 0) return { available: true, provider: index.provider, indexed: 0 };
+    const documents: RetrievalIndexDocument[] = [];
+    for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+      const chunk = uniqueIds.slice(offset, offset + 100);
+      const rows = (await env.OPEN_BRAIN_DB.prepare(
+        `SELECT id, source_id, tenant_id, project_id, unit_type, text, created_at
+         FROM retrieval_units
+         WHERE generation_id = ? AND tenant_id = ? AND id IN (${chunk.map(() => "?").join(",")})`
+      ).bind(generationId, tenantId, ...chunk).all<{
+        id: string;
+        source_id: string;
+        tenant_id: string;
+        project_id: string | null;
+        unit_type: string;
+        text: string;
+        created_at: number;
+      }>()).results;
+      documents.push(...rows.map((row) => ({
+        id: row.id,
+        memory_id: row.source_id,
+        tenant_id: row.tenant_id,
+        project_id: row.project_id,
+        unit_type: row.unit_type,
+        speaker: null,
+        text: row.text,
+        entities: [],
+        updated_at: row.created_at
+      })));
+    }
+    await index.upsert(documents);
+    return { available: true, provider: index.provider, indexed: documents.length };
+  } catch (error) {
+    return {
+      available: true,
+      provider: index.provider,
+      indexed: 0,
+      error: error instanceof Error ? error.message : "generation semantic index update failed"
+    };
+  }
+}
+
+export async function searchRetrievalGenerationSemanticIndex(
+  env: Env,
+  generationId: string,
+  input: RetrievalIndexQuery
+): Promise<{ hits: RetrievalIndexHit[]; provider: string } | null> {
+  const index = getGenerationSemanticRetrievalIndex(env, generationId);
+  if (!index || !(await index.available())) return null;
+  return { hits: await index.query({ ...input, limit: Math.min(50, input.limit) }), provider: index.provider };
+}
+
 class CloudflareVectorRetrievalIndexV3 extends CloudflareVectorRetrievalIndex {
   readonly provider = `cloudflare-workers-ai:${EMBEDDING_MODEL_V3}+vectorize`;
 
@@ -516,7 +590,13 @@ export async function rerankV3MemoryCandidates(
   query: string,
   candidates: Array<{ id: string; text: string }>
 ): Promise<{ scores: Map<string, number>; provider: string } | null> {
-  if (!env.AI || candidates.length === 0) return null;
+  if (!env.AI) return null;
+  if (candidates.length === 0) {
+    return {
+      scores: new Map<string, number>(),
+      provider: `cloudflare-workers-ai:${RERANKER_MODEL_V3}`
+    };
+  }
   const selected = candidates.slice(0, 20);
   const output = await env.AI.run(RERANKER_MODEL_V3, {
     query,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { validateBusinessClassification } from "../src/business-category-service";
+import { sha256 } from "@org-brain/shared";
+import {
+  deterministicProjectBusinessCategory,
+  validateBusinessClassification
+} from "../src/business-category-service";
 import type { Env } from "../src/types";
 
 class CategoryStatement {
@@ -20,6 +24,23 @@ function env(categories: Array<Record<string, unknown>>) {
 }
 
 describe("business classification validation", () => {
+  it("uses the specified tenant/project hash identity without reading body text", async () => {
+    const digest = await sha256("tenant-a\0org-brain");
+    await expect(deterministicProjectBusinessCategory("tenant-a", "org-brain")).resolves.toMatchObject({
+      id: `bc_prj_${digest.slice(0, 24)}`,
+      slug: `project-org-brain-${digest.slice(0, 8)}`,
+      label: "org-brain"
+    });
+    await expect(deterministicProjectBusinessCategory("tenant-a", null)).resolves.toMatchObject({
+      label: "Global",
+      slug: expect.stringMatching(/^project-global-[a-f0-9]{8}$/u)
+    });
+    await expect(deterministicProjectBusinessCategory("tenant-a", "組織脳")).resolves.toMatchObject({
+      label: "組織脳",
+      slug: expect.stringMatching(/^project-project-[a-f0-9]{8}$/u)
+    });
+  });
+
   it("accepts only active categories owned by the tenant", async () => {
     const runtime = env([
       { id: "active-a", tenant_id: "tenant-a", is_active: 1 },

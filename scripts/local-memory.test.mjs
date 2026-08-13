@@ -45,6 +45,7 @@ function captureInput(overrides = {}) {
     confidence_score: 0.95,
     utility_score: 0.9,
     rationale: "Avoid split product contracts.",
+    reuse_rule: "When adding a memory adapter, use the shared contract.",
     evidence: [{ type: "file", ref: "scripts/local-memory.mjs" }],
     conflicts: [],
     permissions: [],
@@ -63,6 +64,8 @@ test("capture, revise, search, suppress, verify and delete share one record cont
     const record = await store.get("personal", capture.memory_id);
     assert.equal(record.kind, "decision");
     assert.equal(record.entities[0], "MemoryStore");
+    assert.equal(record.rationale, "Avoid split product contracts.");
+    assert.equal(record.reuse_rule, "When adding a memory adapter, use the shared contract.");
     assert.match(record.content_hash, /^[a-f0-9]{64}$/);
 
     const results = await store.search({
@@ -76,10 +79,14 @@ test("capture, revise, search, suppress, verify and delete share one record cont
 
     const revised = await store.revise("personal", capture.memory_id, {
       content: "Use the MemoryStore v2 contract everywhere.",
-      tags: ["decision", "v2"]
+      tags: ["decision", "v2"],
+      reuse_rule: "Apply to every local or cloud adapter."
     });
     assert.equal(revised.version, 2);
-    assert.equal((await store.versions("personal", capture.memory_id)).length, 2);
+    const versions = await store.versions("personal", capture.memory_id);
+    assert.equal(versions.length, 2);
+    assert.equal(versions[0].reuse_rule, "When adding a memory adapter, use the shared contract.");
+    assert.equal(versions[1].reuse_rule, "Apply to every local or cloud adapter.");
 
     await store.suppress("personal", capture.memory_id, "superseded");
     assert.equal((await store.search({ tenant_id: "personal", query: "MemoryStore" })).length, 0);
@@ -93,6 +100,30 @@ test("capture, revise, search, suppress, verify and delete share one record cont
     assert.equal(verification.ok, true);
     assert.equal(verification.record_count, 0);
     assert.equal(verification.version_count, 0);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("capture skips a second active memory with the same canonical key", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const canonicalKey = "a".repeat(64);
+    const first = await store.capture(captureInput({
+      external_key: "canonical:first",
+      canonical_key: canonicalKey
+    }));
+    const duplicate = await store.capture(captureInput({
+      external_key: "canonical:second",
+      canonical_key: canonicalKey
+    }));
+
+    assert.equal(first.created, true);
+    assert.equal(duplicate.created, false);
+    assert.equal(duplicate.deduplicated, true);
+    assert.equal(duplicate.memory_id, first.memory_id);
+    assert.equal((await store.versions("personal", first.memory_id)).length, 1);
   } finally {
     await ctx.cleanup();
   }

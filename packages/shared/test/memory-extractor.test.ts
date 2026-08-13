@@ -29,10 +29,10 @@ describe("DurableRuleMemoryExtractor", () => {
     expect(result.candidates[0].confirmation_state).toBe("proposed");
     expect(result.candidates[0].source_references).toEqual([{ type: "task", ref: "task-1" }]);
     expect(result.candidates[0].content_hash).toMatch(/^[a-f0-9]{64}$/);
-    expect(result.excluded).toContainEqual(expect.objectContaining({ reason: "low_signal" }));
+    expect(result.excluded).toContainEqual(expect.objectContaining({ reason: "transient" }));
   });
 
-  it("redacts credentials and PII and excludes prompt-injection instructions", async () => {
+  it("hard-rejects an event containing credentials without persisting redacted fragments", async () => {
     const extractor = new DurableRuleMemoryExtractor();
     const result = await extractor.extract({
       event_id: "event-2",
@@ -50,8 +50,8 @@ describe("DurableRuleMemoryExtractor", () => {
     expect(JSON.stringify(result)).not.toContain("alice@example.com");
     expect(result.redactions.secrets).toBe(1);
     expect(result.redactions.email_addresses).toBe(1);
-    expect(result.excluded).toContainEqual(expect.objectContaining({ reason: "unsafe_instruction" }));
-    expect(result.candidates).toHaveLength(2);
+    expect(result.excluded).toContainEqual(expect.objectContaining({ reason: "credential_detected" }));
+    expect(result.candidates).toHaveLength(0);
   });
 
   it("marks tenant-wide decisions as proposed and deduplicates identical statements", async () => {

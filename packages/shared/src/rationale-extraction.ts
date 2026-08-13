@@ -30,6 +30,9 @@ export type ProposedEvidence = {
   relation: EvidenceRelation;
   note?: string | null;
   weight_score: number | null;
+  content_hash?: string | null;
+  observed_at?: number | null;
+  attestation_ref?: string | null;
 };
 
 export type ProposedRationale = {

@@ -1,6 +1,37 @@
 import { createInterface } from "node:readline";
+import { observeMemoryLearningEvent } from "../../shared/src/memory-learning-runtime.mjs";
 
 const TOOL_DEFINITIONS = [
+  {
+    name: "orgbrain_memory_observe",
+    description: "Validate one current-turn durable learning event without persisting it. Use at most three times per turn.",
+    inputSchema: {
+      type: "object",
+      required: ["schema_version", "lesson_type", "kind", "trigger", "conclusion", "rationale", "reuse_rule", "outcome", "applicability", "evidence_selectors", "gaps"],
+      properties: {
+        schema_version: { type: "integer", const: 1 },
+        lesson_type: { type: "string", enum: ["success", "decision", "failure"] },
+        kind: { type: "string", enum: ["decision", "constraint", "pitfall", "preference", "fact"] },
+        trigger: { type: "string" }, conclusion: { type: "string" }, rationale: { type: "string" },
+        reuse_rule: { type: "string" }, outcome: { type: ["string", "null"] },
+        applicability: {
+          type: "object", required: ["target_files", "components"],
+          properties: {
+            target_files: { type: "array", maxItems: 16, items: { type: "string" } },
+            components: { type: "array", maxItems: 16, items: { type: "string" } }
+          }
+        },
+        evidence_selectors: {
+          type: "array", minItems: 1, maxItems: 16,
+          items: {
+            type: "object", required: ["type", "ref"],
+            properties: { type: { type: "string", enum: ["command", "file", "doc", "user_statement"] }, ref: { type: "string" } }
+          }
+        },
+        gaps: { type: "array", maxItems: 16, items: { type: "string" } }
+      }
+    }
+  },
   {
     name: "orgbrain_memory_capture",
     description: "Capture one durable memory in the local OrgBrain SQLite store.",
@@ -334,6 +365,12 @@ function captureDefaults(input) {
 
 async function callTool(store, name, input) {
   const tenantId = input.tenant_id || "default";
+  if (name === "orgbrain_memory_observe") {
+    return observeMemoryLearningEvent(input, {
+      workspaceRoot: process.cwd(),
+      sensitivePolicy: { mode: "deny", allowed_principals: [] }
+    });
+  }
   if (name === "orgbrain_memory_capture") return store.capture(captureDefaults(input));
   if (name === "orgbrain_memory_search") {
     const results = await store.search({
