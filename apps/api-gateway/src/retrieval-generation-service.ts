@@ -1,4 +1,5 @@
-import { HttpError, sha256, ulid } from "@org-brain/shared";
+import { HttpError, buildVerifiedLearningRetrievalUnits, sha256, ulid } from "@org-brain/shared";
+import { syncRetrievalGenerationUnitsToSemanticIndex } from "./retrieval-index-service";
 import type { Env } from "./types";
 
 export type RetrievalGenerationAssignment = {
@@ -29,7 +30,8 @@ export async function createRetrievalRankingProfile(env: Env, raw: unknown) {
   const config = body.config && typeof body.config === "object" && !Array.isArray(body.config) ? body.config : {};
   const supportedConfigKeys = new Set([
     "rrf_constant", "atomic_weight", "profile_weight",
-    "timeline_weight", "ledger_weight", "decision_weight"
+    "timeline_weight", "ledger_weight", "segment_weight", "semantic_weight",
+    "reranker_weight", "decision_weight"
   ]);
   const unsupportedConfigKey = Object.keys(config as Record<string, unknown>).find((key) => !supportedConfigKeys.has(key));
   if (unsupportedConfigKey) {
@@ -66,15 +68,17 @@ export async function createRetrievalGeneration(env: Env, raw: unknown) {
   const unitSchemaVersion = Number(body.unit_schema_version);
   if (!label) throw new HttpError(400, "generation_label_required", "label is required");
   if (!extractorName || !extractorVersion) throw new HttpError(400, "extractor_required", "extractor_name and extractor_version are required");
-  if (![1, 2].includes(unitSchemaVersion)) {
-    throw new HttpError(400, "unsupported_unit_schema_version", "this deployment supports unit schema versions 1 and 2");
+  if (![1, 2, 3].includes(unitSchemaVersion)) {
+    throw new HttpError(400, "unsupported_unit_schema_version", "this deployment supports unit schema versions 1, 2, and 3");
   }
-  const supportedExtractorVersion = unitSchemaVersion === 1 ? "1" : "4";
-  if (extractorName !== "retrieval-units" || extractorVersion !== supportedExtractorVersion) {
+  const expectedExtractor = unitSchemaVersion === 3
+    ? { name: "verified-learning", version: "1" }
+    : { name: "retrieval-units", version: unitSchemaVersion === 1 ? "1" : "4" };
+  if (extractorName !== expectedExtractor.name || extractorVersion !== expectedExtractor.version) {
     throw new HttpError(
       400,
       "unsupported_retrieval_extractor",
-      `unit schema ${unitSchemaVersion} requires retrieval-units extractor version ${supportedExtractorVersion} in this deployment`
+      `unit schema ${unitSchemaVersion} requires ${expectedExtractor.name} extractor version ${expectedExtractor.version} in this deployment`
     );
   }
   if (!rankingProfileId) throw new HttpError(400, "ranking_profile_id_required", "ranking_profile_id is required");
@@ -125,6 +129,116 @@ type StableUnitRow = Record<string, unknown> & {
   text: string;
 };
 
+async function backfillVerifiedLearningGeneration(
+  env: Env,
+  tenantId: string,
+  generationId: string,
+  body: Record<string, unknown>
+) {
+  const projectId = typeof body.project_id === "string" && body.project_id.trim() ? body.project_id.trim().slice(0, 128) : null;
+  const limit = Math.min(500, Math.max(1, Math.floor(Number(body.limit ?? 100))));
+  const reset = body.reset === true;
+  let job = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, cursor, processed_sources, projected_units, state
+     FROM retrieval_projection_jobs WHERE generation_id = ? AND tenant_id = ? AND project_id IS ?`
+  ).bind(generationId, tenantId, projectId).first<{
+    id: string; cursor: string; processed_sources: number; projected_units: number; state: string;
+  }>();
+  if (reset && job) {
+    const ids = (await env.OPEN_BRAIN_DB.prepare(
+      "SELECT id FROM retrieval_units WHERE generation_id = ? AND tenant_id = ? AND (? IS NULL OR project_id = ?)"
+    ).bind(generationId, tenantId, projectId, projectId).all<{ id: string }>()).results;
+    for (let offset = 0; offset < ids.length; offset += 50) {
+      const chunk = ids.slice(offset, offset + 50);
+      await env.OPEN_BRAIN_DB.prepare(`DELETE FROM retrieval_units_fts WHERE unit_id IN (${chunk.map(() => "?").join(",")})`)
+        .bind(...chunk.map((item) => item.id)).run();
+    }
+    await env.OPEN_BRAIN_DB.batch([
+      env.OPEN_BRAIN_DB.prepare("DELETE FROM retrieval_units WHERE generation_id = ? AND tenant_id = ? AND (? IS NULL OR project_id = ?)").bind(generationId, tenantId, projectId, projectId),
+      env.OPEN_BRAIN_DB.prepare("DELETE FROM retrieval_projection_jobs WHERE id = ?").bind(job.id)
+    ]);
+    job = null;
+  }
+  if (job?.state === "failed") throw new HttpError(409, "retrieval_projection_reset_required", "failed projection jobs must be restarted with reset=true");
+  const jobId = job?.id ?? ulid();
+  if (!job) await env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO retrieval_projection_jobs(
+       id, generation_id, tenant_id, project_id, cursor, processed_sources, projected_units, state, started_at, updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?)`
+  ).bind(jobId, generationId, tenantId, projectId, "", 0, 0, "running", Date.now(), Date.now()).run();
+  const rows = (await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, tenant_id, project_id, kind, content, summary, created_at, updated_at,
+            valid_from, valid_until, source_refs_json, capture_origin, verification_state,
+            verified_at, learning_json, business_category_id, work_type
+     FROM memories
+     WHERE tenant_id = ? AND id > ?
+       AND capture_origin = 'observed' AND verification_state = 'verified'
+       AND lifecycle_state = 'active' AND (valid_until IS NULL OR valid_until > ?)
+       AND (? IS NULL OR project_id = ?)
+     ORDER BY id LIMIT ?`
+  ).bind(tenantId, job?.cursor ?? "", Date.now(), projectId, projectId, limit).all<Record<string, unknown>>()).results;
+  let projected = 0;
+  const projectedUnitIds: string[] = [];
+  for (const row of rows) {
+    const sourceReferences = (() => { try { return JSON.parse(String(row.source_refs_json ?? "[]")); } catch { return []; } })();
+    const units = await buildVerifiedLearningRetrievalUnits({
+      ...row,
+      source_references: Array.isArray(sourceReferences) ? sourceReferences : []
+    } as Parameters<typeof buildVerifiedLearningRetrievalUnits>[0]);
+    const existing = (await env.OPEN_BRAIN_DB.prepare(
+      "SELECT id FROM retrieval_units WHERE generation_id = ? AND tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+    ).bind(generationId, tenantId, row.id).all<{ id: string }>()).results;
+    for (const item of existing) await env.OPEN_BRAIN_DB.prepare("DELETE FROM retrieval_units_fts WHERE unit_id = ?").bind(item.id).run();
+    await env.OPEN_BRAIN_DB.prepare(
+      "DELETE FROM retrieval_units WHERE generation_id = ? AND tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+    ).bind(generationId, tenantId, row.id).run();
+    for (const unit of units) {
+      const unitId = `stable_${(await sha256(`${generationId}\0${unit.id}`)).slice(0, 40)}`;
+      await env.OPEN_BRAIN_DB.batch([
+        env.OPEN_BRAIN_DB.prepare(
+          `INSERT INTO retrieval_units(
+             id, generation_id, tenant_id, project_id, source_type, source_id, business_category_id, work_type,
+             unit_type, text, speaker, event_at, valid_from, valid_until, source_ref_json, source_span_start,
+             source_span_end, metadata_json, segment_id, content_hash, extractor_name, extractor_version,
+             extraction_state, degraded_reason, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          unitId, generationId, unit.tenant_id, unit.project_id, "memory", unit.memory_id,
+          row.business_category_id ?? null, row.work_type ?? null, unit.unit_type, unit.text, unit.speaker,
+          unit.event_at, unit.valid_from, unit.valid_until, unit.source_ref_json, unit.source_span_start,
+          unit.source_span_end, unit.metadata_json, unit.segment_id, unit.content_hash, unit.extractor,
+          unit.extractor_version, unit.extraction_state, unit.degraded_reason, unit.created_at
+        ),
+        env.OPEN_BRAIN_DB.prepare("INSERT INTO retrieval_units_fts(unit_id, generation_id, tenant_id, text) VALUES(?,?,?,?)")
+          .bind(unitId, generationId, tenantId, unit.text)
+      ]);
+      projectedUnitIds.push(unitId);
+      projected += 1;
+    }
+  }
+  const semanticProjection = await syncRetrievalGenerationUnitsToSemanticIndex(
+    env,
+    tenantId,
+    generationId,
+    projectedUnitIds
+  );
+  const nextCursor = rows.at(-1)?.id as string | undefined ?? job?.cursor ?? "";
+  const done = rows.length < limit;
+  const processedSources = Number(job?.processed_sources ?? 0) + rows.length;
+  const projectedUnits = Number(job?.projected_units ?? 0) + projected;
+  await env.OPEN_BRAIN_DB.prepare(
+    `UPDATE retrieval_projection_jobs SET cursor = ?, processed_sources = ?, projected_units = ?, state = ?,
+       updated_at = ?, completed_at = ? WHERE id = ?`
+  ).bind(nextCursor, processedSources, projectedUnits, done ? "completed" : "running", Date.now(), done ? Date.now() : null, jobId).run();
+  return {
+    job_id: jobId, generation_id: generationId, source_generation_id: null,
+    tenant_id: tenantId, project_id: projectId, processed_sources: rows.length,
+    projected_units: projected, total_processed_sources: processedSources,
+    total_projected_units: projectedUnits, next_cursor: nextCursor || null, done,
+    semantic_projection: semanticProjection
+  };
+}
+
 export async function backfillRetrievalGeneration(env: Env, tenantId: string, generationId: string, raw: unknown) {
   const body = objectBody(raw);
   const generation = await env.OPEN_BRAIN_DB.prepare(
@@ -138,6 +252,9 @@ export async function backfillRetrievalGeneration(env: Env, tenantId: string, ge
   if (!generation) throw new HttpError(404, "retrieval_generation_not_found", "retrieval generation not found");
   if (!["building", "shadow"].includes(generation.status)) {
     throw new HttpError(409, "retrieval_generation_not_buildable", "only building or shadow generations can be backfilled");
+  }
+  if (generation.unit_schema_version === 3) {
+    return backfillVerifiedLearningGeneration(env, tenantId, generationId, body);
   }
   const sourceGenerationId = generation.baseline_generation_id ||
     (generation.unit_schema_version === 1 ? "gen_baseline_units" : "gen_structured_context");

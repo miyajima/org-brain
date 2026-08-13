@@ -9,6 +9,7 @@ import {
   analyzeRetrievalIntent as analyzeCoreRetrievalIntent,
   buildRetrievalUnits as buildCoreRetrievalUnits,
   buildRetrievalUnitsV4 as buildCoreRetrievalUnitsV4,
+  buildVerifiedLearningRetrievalUnits as buildCoreVerifiedLearningRetrievalUnits,
   retrievalQueryTokens,
   retrievalSubjectQueryTokens,
   retrievalUnitIntentBoost,
@@ -97,6 +98,13 @@ type RetrievalUnitRecord = Pick<
   | "source_references"
 > & Partial<Pick<MemoryRecordV2, "kind">>;
 
+export type VerifiedLearningRetrievalRecord = RetrievalUnitRecord & {
+  capture_origin?: string | null;
+  verification_state?: string | null;
+  verified_at?: number | null;
+  learning_json?: string | null;
+};
+
 export type RetrievalIntent = {
   temporal_direction: "earliest" | "latest" | null;
   relative_age_ms: number | null;
@@ -165,7 +173,7 @@ export async function buildRetrievalUnits(
 
 export async function buildRetrievalUnitsV4(
   record: RetrievalUnitRecord,
-  options: { structuredUnits?: StructuredUnit[] } = {}
+  options: { structuredUnits?: StructuredUnit[]; includeRecordSegments?: boolean } = {}
 ): Promise<RetrievalUnitV4[]> {
   if (!options.structuredUnits) {
     return buildCoreRetrievalUnitsV4(record) as RetrievalUnitV4[];
@@ -202,7 +210,9 @@ export async function buildRetrievalUnitsV4(
     });
   }
 
-  for (const [segmentIndex, text] of segmentText(`${record.summary ?? ""}\n${record.content}`).entries()) {
+  for (const [segmentIndex, text] of (options.includeRecordSegments === false
+    ? []
+    : segmentText(`${record.summary ?? ""}\n${record.content}`)).entries()) {
     const idHash = await sha256(`${record.id}\0segment\0${output.length}\0${text}`);
     const segmentHash = await sha256(`${record.id}\0${segmentIndex}\0${text}`);
     output.push({
@@ -237,6 +247,13 @@ export async function buildRetrievalUnitsV4(
   }
 
   return output;
+}
+
+export async function buildVerifiedLearningRetrievalUnits(
+  record: VerifiedLearningRetrievalRecord,
+  now = Date.now()
+): Promise<RetrievalUnitV4[]> {
+  return buildCoreVerifiedLearningRetrievalUnits(record, now) as RetrievalUnitV4[];
 }
 
 export function analyzeRetrievalIntent(query: string): RetrievalIntent {

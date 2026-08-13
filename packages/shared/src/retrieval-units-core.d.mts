@@ -15,6 +15,7 @@ export function splitRetrievalTurns(
 ): Array<{ speaker: "user" | "assistant" | "system" | "tool" | "unknown"; text: string }>;
 export function buildRetrievalUnits(record: unknown): unknown[];
 export function buildRetrievalUnitsV4(record: unknown): unknown[];
+export function buildVerifiedLearningRetrievalUnits(record: unknown, now?: number): unknown[];
 export function analyzeRetrievalIntent(query: string): unknown;
 export function retrievalUnitIntentBoost(
   unit: { speaker?: string | null; unit_type: string },

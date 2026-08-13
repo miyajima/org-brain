@@ -28,6 +28,7 @@ async function fixture() {
   });
   return {
     workspace,
+    workspacesFile,
     store,
     env: {
       ORGBRAIN_WORKSPACES_FILE: workspacesFile,
@@ -52,6 +53,35 @@ test("Codex prompt hook injects only a bounded local summary for a relevant prom
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /user@example\.com/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /Use the Codex notify and prompt hooks/u);
     assert.ok(result.hookSpecificOutput.additionalContext.length < 1_000);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("Codex prompt hook injects the hidden observe contract for continuation turns in learning mode", async () => {
+  const ctx = await fixture();
+  try {
+    await writeFile(ctx.workspacesFile, JSON.stringify({
+      version: 3,
+      workspaces: {
+        [ctx.workspace]: {
+          tenant_id: "default",
+          project_id: "org-brain",
+          memory_learning_mode: "shadow"
+        }
+      }
+    }));
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit",
+      cwd: ctx.workspace,
+      prompt: "continue"
+    }, {
+      ...ctx,
+      env: { ...ctx.env, ORGBRAIN_ENABLE_CLOUD_MEMORY: "true" }
+    });
+    assert.match(result.hookSpecificOutput.additionalContext, /orgbrain_memory_observe/u);
+    assert.match(result.hookSpecificOutput.additionalContext, /at most three times/u);
+    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /memory_id=/u);
   } finally {
     await ctx.cleanup();
   }

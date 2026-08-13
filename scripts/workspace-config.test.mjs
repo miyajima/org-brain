@@ -18,13 +18,15 @@ describe("workspace-config", () => {
     const file = path.join(configDir, "workspaces.json");
 
     await saveWorkspaceConfig(file, {
-      version: 2,
+      version: 3,
       workspaces: {
         "/tmp/workspaces/org-brain": {
           tenant_id: "tenant-a",
           project_id: "org-brain",
           business_category_id: null,
-          default_work_type: null
+          default_work_type: null,
+          memory_learning_mode: "off",
+          sensitive_memory: { mode: "deny", allowed_principals: [] }
         }
       }
     });
@@ -32,13 +34,15 @@ describe("workspace-config", () => {
     expect((await stat(configDir)).mode & 0o777).toBe(0o700);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
     expect(await loadWorkspaceConfig(file)).toEqual({
-      version: 2,
+      version: 3,
       workspaces: {
         "/tmp/workspaces/org-brain": {
           tenant_id: "tenant-a",
           project_id: "org-brain",
           business_category_id: null,
-          default_work_type: null
+          default_work_type: null,
+          memory_learning_mode: "off",
+          sensitive_memory: { mode: "deny", allowed_principals: [] }
         }
       }
     });
@@ -80,8 +84,70 @@ describe("workspace-config", () => {
       tenant_id: "tenant-a",
       project_id: "demo-project",
       business_category_id: null,
-      default_work_type: null
+      default_work_type: null,
+      memory_learning_mode: "off",
+      sensitive_memory: { mode: "deny", allowed_principals: [] }
     });
+  });
+
+  it("requires principals for restricted sensitive memory and preserves explicit policy", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "org-brain-workspaces-"));
+    const file = path.join(root, "workspaces.json");
+    await saveWorkspaceConfig(file, {
+      version: 3,
+      workspaces: {
+        "/tmp/workspaces/private": {
+          tenant_id: "tenant-a",
+          project_id: "private",
+          sensitive_memory: { mode: "restricted_7d", allowed_principals: ["principal-a"] }
+        }
+      }
+    });
+    expect((await loadWorkspaceConfig(file)).workspaces["/tmp/workspaces/private"].sensitive_memory).toEqual({
+      mode: "restricted_7d",
+      allowed_principals: ["principal-a"]
+    });
+    await expect(saveWorkspaceConfig(file, {
+      version: 3,
+      workspaces: {
+        "/tmp/workspaces/private": {
+          tenant_id: "tenant-a",
+          project_id: "private",
+          sensitive_memory: { mode: "restricted_7d", allowed_principals: [] }
+        }
+      }
+    })).rejects.toThrow("allowed_principals");
+  });
+
+  it("supports project-scoped capture v2 canaries and rejects invalid modes", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "org-brain-workspaces-canary-"));
+    const file = path.join(root, "workspaces.json");
+    await saveWorkspaceConfig(file, {
+      version: 3,
+      workspaces: {
+        "/tmp/workspaces/canary": {
+          tenant_id: "default",
+          project_id: "canary",
+          sensitive_memory: { mode: "deny", allowed_principals: [] },
+          memory_capture_v2_mode: "shadow",
+          memory_learning_mode: "shadow"
+        }
+      }
+    });
+    expect((await loadWorkspaceConfig(file)).workspaces["/tmp/workspaces/canary"].memory_capture_v2_mode).toBe("shadow");
+    expect((await loadWorkspaceConfig(file)).workspaces["/tmp/workspaces/canary"].memory_learning_mode).toBe("shadow");
+
+    await expect(saveWorkspaceConfig(file, {
+      version: 3,
+      workspaces: {
+        "/tmp/workspaces/canary": {
+          tenant_id: "default",
+          project_id: "canary",
+          sensitive_memory: { mode: "deny", allowed_principals: [] },
+          memory_capture_v2_mode: "maybe"
+        }
+      }
+    })).rejects.toThrow(/memory_capture_v2_mode is invalid/u);
   });
 
   it("filters roots by tenant and omits ambiguous project ids", () => {

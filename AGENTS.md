@@ -1,8 +1,10 @@
 # Graph Engineering Harness Bridge
 
 Use the graph engineering harness installed on this machine:
-- `/Users/miyajimakazuhiro/.agents/graph-engineering-harness/AGENTS.md`
-- `/Users/miyajimakazuhiro/.agents/graph-engineering-harness/README.md`
+- `/Users/miyajimakazuhiro/.agents/graph-engineering-harness/SKILL.md`
+
+Project-specific compatibility contract:
+- `docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md`
 
 Also read:
 - `/Users/miyajimakazuhiro/.codex/RTK.md`
@@ -34,7 +36,7 @@ discovery instructions into the `Skills` section instead.
 - Do not use `claude -p`.
 - Use the current agent for ordinary implementation work.
 - Use the graph engineering harness for harness-backed task DAGs, artifacts,
-  quality gates, provenance, and budget tracking, following its README.
+  quality gates, provenance, and budget tracking, following its `SKILL.md`.
 - Do not start Docker services or mutate harness state unless the user request
   requires a harness run.
 - Use Codex App sub-agents only for explicitly delegable parallel or supporting

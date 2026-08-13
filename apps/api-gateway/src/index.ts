@@ -63,6 +63,7 @@ import {
 } from "./retention-queue-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, getApiPrincipal, jsonOk, tenantFromBody, type ApiContextEnv } from "./auth";
 import {
+  backfillDecisionRetrievalUnits,
   confirmDecisionMemory,
   createDecisionMemory,
   enrichContext,
@@ -99,6 +100,7 @@ import {
   getMemoryDetails,
   getMemoryProfile,
   listMemories,
+  listMemoriesCursorPage,
   listMemoriesPage,
   refreshMemoryByRequest,
   restoreMemoryByRequest,
@@ -124,7 +126,12 @@ import {
   reportMemoryImpact,
   startMemoryImpact
 } from "./memory-impact-service";
-import { captureMemoryWithInferredRationale, confirmProposedMemory, proposeMemoryWithRationale } from "./rationale-service";
+import {
+  captureMemoryWithInferredRationale,
+  captureRequestClaimsVerified,
+  confirmProposedMemory,
+  proposeMemoryWithRationale
+} from "./rationale-service";
 import {
   assertPermission,
   authorizePermission,
@@ -813,6 +820,22 @@ app.post("/v1/retrieval-index/v4/backfill", async (c) => {
   }));
 });
 
+app.post("/v1/retrieval-index/v4/decisions/backfill", async (c) => {
+  const body = await c.req.json<{
+    tenant_id?: string;
+    project_id?: string | null;
+    cursor?: string | null;
+    limit?: number;
+  }>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await backfillDecisionRetrievalUnits(c.env, {
+    tenantId,
+    projectId: body.project_id,
+    cursor: body.cursor,
+    limit: body.limit
+  }));
+});
+
 app.get("/v1/ops/status", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
   return jsonOk(c, await getOperationsStatus(c.env, tenantId));
@@ -1067,6 +1090,20 @@ app.get("/v1/memories", async (c) => {
   const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
   const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
   const paginated = c.req.query("paginated") === "1";
+  const cursor = c.req.query("cursor");
+  const view = c.req.query("view");
+  if (cursor || view) {
+    const page = await listMemoriesCursorPage(c.env, tenantId, {
+      limit: Number.isNaN(limit) ? (view === "compact" ? 500 : 100) : limit,
+      source,
+      projectId,
+      businessCategoryId,
+      workType,
+      cursor,
+      view: view as "full" | "compact" | undefined
+    });
+    return jsonOk(c, page);
+  }
   if (paginated) {
     const page = await listMemoriesPage(c.env, tenantId, {
       limit: Number.isNaN(limit) ? 24 : limit,
@@ -1280,8 +1317,33 @@ app.post("/v1/memories/propose", async (c) => {
 
 app.post("/v1/memories/capture-rationale", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
-  const result = await captureMemoryWithInferredRationale(c.env, withPrincipalActor(body, getApiPrincipal(c)));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const claimsVerified = captureRequestClaimsVerified(body);
+  if (claimsVerified) {
+    const auth = getApiAuthContext(c);
+    if (auth.scopes && !auth.scopes.includes("memory:attest")) {
+      throw new HttpError(403, "memory_attestation_required", "Scoped token lacks memory:attest permission");
+    }
+    const record = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+    const rows = Array.isArray(record.items) ? record.items : record.item ? [record.item] : [];
+    const projectIds = new Set(rows.map((item) => item && typeof item === "object" && !Array.isArray(item)
+      ? ((item as Record<string, unknown>).project_id as string | null | undefined) ?? null
+      : null));
+    for (const projectId of projectIds) {
+      await assertPermission(c.env, {
+        tenantId,
+        projectId,
+        principal: auth.principal,
+        permission: "memory:attest",
+        fallbackRole: auth.defaultRole
+      });
+    }
+  }
+  const result = await captureMemoryWithInferredRationale(
+    c.env,
+    withPrincipalActor(body, getApiPrincipal(c)),
+    { canAttest: claimsVerified }
+  );
   return jsonOk(c, result, 201);
 });
 

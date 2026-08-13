@@ -33,6 +33,7 @@ import {
   removeMemoryIdsFromV4SemanticIndex,
   removeMemoryIdsFromSemanticIndex,
   rerankV3MemoryCandidates,
+  searchRetrievalGenerationSemanticIndex,
   searchSemanticIndex,
   searchV3SemanticIndex,
   searchV4SemanticIndex,
@@ -41,7 +42,10 @@ import {
   syncMemoryIdsToV4SemanticIndex
 } from "./retrieval-index-service";
 import { assertMemoryNotOnLegalHold } from "./retention-service";
-import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
+import {
+  screenMemoryCaptureText,
+  screenMemoryWriteText
+} from "./memory-screening-service";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
@@ -69,6 +73,7 @@ type UpsertMemoryItem = {
   valid_from?: number | null;
   valid_until?: number | null;
   rationale?: string | null;
+  reuse_rule?: string | null;
   evidence?: Array<Record<string, unknown>>;
   conflicts?: string[];
   permissions?: Array<Record<string, unknown>>;
@@ -170,6 +175,12 @@ type MemoryRow = {
   consumer_count?: number | null;
   net_saved_tokens?: number | null;
   injected_tokens?: number | null;
+  reuse_rule?: string | null;
+  capture_origin?: string | null;
+  verification_state?: string | null;
+  verified_at?: number | null;
+  learning_json?: string | null;
+  quality_dimensions_json?: string | null;
 };
 
 type RetrievalGenerationRow = {
@@ -240,11 +251,15 @@ type ReviseMemoryRequest = {
   valid_from?: number | null;
   valid_until?: number | null;
   rationale?: string | null;
+  reuse_rule?: string | null;
   evidence?: Array<Record<string, unknown>>;
   conflicts?: string[];
   permissions?: Array<Record<string, unknown>>;
   business_category_id?: string | null;
   work_type?: MemoryWorkType | null;
+  kind?: MemoryKind;
+  canonical_key?: string | null;
+  expires_at?: number | null;
 };
 
 type RefreshMemoryRequest = {
@@ -288,6 +303,13 @@ type ListMemoriesOptions = {
   from?: number | null;
   to?: number | null;
   sort?: "created" | "updated" | "usage";
+};
+
+type MemoryListView = "full" | "compact";
+
+type MemoryListCursor = {
+  createdAt: number;
+  id: string;
 };
 
 type PrincipalActorOptions = {
@@ -341,6 +363,13 @@ export type MemoryListPage = {
   };
 };
 
+export type MemoryCursorPage = {
+  tenant_id: string;
+  view: MemoryListView;
+  items: Array<Record<string, unknown>>;
+  next_cursor: string | null;
+};
+
 export type MemoryDetail = {
   tenant_id: string;
   memory_id: string;
@@ -372,6 +401,12 @@ export type MemoryDetail = {
     consumer_count: number;
     net_saved_tokens: number;
     injected_tokens: number;
+    reuse_rule: string | null;
+    capture_origin: string;
+    verification_state: string;
+    verified_at: number | null;
+    learning: Record<string, unknown> | null;
+    quality_dimensions: Record<string, number> | null;
   } | null;
   versions: Array<{
     version: number;
@@ -400,6 +435,9 @@ export type MemoryDetail = {
       relation: string;
       note: string | null;
       weight_score: number | null;
+      content_hash: string | null;
+      observed_at: number | null;
+      attestation_ref: string | null;
     }>;
   }>;
   meta?: { usage_id: string; verification_sampled: boolean };
@@ -594,6 +632,32 @@ function withPrincipalActor(rawBody: unknown, principal: string | null | undefin
   };
 }
 
+function screenPersistedValue(
+  value: unknown,
+  field: string,
+  screen: (text: string, field: string) => string
+): unknown {
+  if (typeof value === "string") return screen(value, field);
+  if (Array.isArray(value)) {
+    return value.map((item, index) => screenPersistedValue(item, `${field}[${index}]`, screen));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        screenPersistedValue(item, `${field}.${key}`, screen)
+      ])
+    );
+  }
+  return value;
+}
+
+function memoryWriteScreener(env: Env) {
+  return env.ORGBRAIN_MEMORY_CAPTURE_V2_MODE === "on"
+    ? (value: string, field: string) => screenMemoryCaptureText(value, field)
+    : screenMemoryWriteText;
+}
+
 function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; actorType: string | null; actorId: string | null; items: UpsertMemoryItem[] } {
   if (!raw || typeof raw !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
@@ -655,6 +719,7 @@ function parseUpsertRequest(raw: unknown): { tenantId: string; source: string; a
       valid_from: parseOptionalFiniteNumber((item as UpsertMemoryItem).valid_from, `items[${i}].valid_from`),
       valid_until: parseOptionalFiniteNumber((item as UpsertMemoryItem).valid_until, `items[${i}].valid_until`),
       rationale: parseOptionalString((item as UpsertMemoryItem).rationale, `items[${i}].rationale`, 4000),
+      reuse_rule: parseOptionalString((item as UpsertMemoryItem).reuse_rule, `items[${i}].reuse_rule`, 1000),
       evidence: parseObjectArray((item as UpsertMemoryItem).evidence, `items[${i}].evidence`),
       conflicts: parseTags((item as UpsertMemoryItem).conflicts),
       permissions: parseObjectArray((item as UpsertMemoryItem).permissions, `items[${i}].permissions`),
@@ -767,6 +832,18 @@ function parseJsonStringArray(raw: string | null | undefined): string[] {
   }
 }
 
+function parseJsonObject(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseSourceReferences(raw: string | null | undefined): MemorySourceReference[] {
   try {
     const parsed = raw ? JSON.parse(raw) : [];
@@ -807,7 +884,14 @@ async function searchStableRetrievalUnits(
   const workSql = request.workType ? " AND u.work_type = ?" : "";
   const projectSql = request.projectId ? " AND (u.project_id = ? OR u.project_id IS NULL)" : "";
   const bindings: unknown[] = [generation.id, request.tenantId];
-  let unitRows: Array<{ source_id: string; unit_type: string; raw_rank: number | null }>;
+  type StableUnitCandidate = {
+    id: string;
+    source_id: string;
+    unit_type: string;
+    text: string;
+    raw_rank: number | null;
+  };
+  let unitRows: StableUnitCandidate[];
   if (tokens.length) {
     const ftsQuery = tokens.map((token) => `"${token}"*`).join(" AND ");
     bindings.push(ftsQuery);
@@ -815,7 +899,7 @@ async function searchStableRetrievalUnits(
     if (request.businessCategoryId) bindings.push(request.businessCategoryId);
     if (request.workType) bindings.push(request.workType);
     unitRows = (await env.OPEN_BRAIN_DB.prepare(
-      `SELECT u.source_id, u.unit_type, bm25(retrieval_units_fts) AS raw_rank
+      `SELECT u.id, u.source_id, u.unit_type, u.text, bm25(retrieval_units_fts) AS raw_rank
        FROM retrieval_units_fts
        JOIN retrieval_units u
          ON u.id = retrieval_units_fts.unit_id
@@ -826,18 +910,18 @@ async function searchStableRetrievalUnits(
          ${projectSql}${categorySql}${workSql}
        ORDER BY bm25(retrieval_units_fts), u.created_at DESC
        LIMIT 200`
-    ).bind(...bindings).all<{ source_id: string; unit_type: string; raw_rank: number | null }>()).results;
+    ).bind(...bindings).all<StableUnitCandidate>()).results;
   } else {
     if (request.projectId) bindings.push(request.projectId);
     if (request.businessCategoryId) bindings.push(request.businessCategoryId);
     if (request.workType) bindings.push(request.workType);
     unitRows = (await env.OPEN_BRAIN_DB.prepare(
-      `SELECT u.source_id, u.unit_type, NULL AS raw_rank
+      `SELECT u.id, u.source_id, u.unit_type, u.text, NULL AS raw_rank
        FROM retrieval_units u
        WHERE u.generation_id = ? AND u.tenant_id = ? AND u.source_type = 'memory'
          ${projectSql}${categorySql}${workSql}
        ORDER BY u.created_at DESC LIMIT 200`
-    ).bind(...bindings).all<{ source_id: string; unit_type: string; raw_rank: number | null }>()).results;
+    ).bind(...bindings).all<StableUnitCandidate>()).results;
   }
   let rankingConfig: Record<string, unknown> = {};
   try {
@@ -848,6 +932,42 @@ async function searchStableRetrievalUnits(
   const rrfConstant = Number.isFinite(Number(rankingConfig.rrf_constant))
     ? Math.max(1, Number(rankingConfig.rrf_constant))
     : 60;
+  const semanticWeight = Number.isFinite(Number(rankingConfig.semantic_weight))
+    ? Math.max(0, Number(rankingConfig.semantic_weight))
+    : 0.9;
+  const rerankerWeight = Number.isFinite(Number(rankingConfig.reranker_weight))
+    ? Math.max(0, Number(rankingConfig.reranker_weight))
+    : 1;
+  const degradedReasons: string[] = [];
+  let semantic: Awaited<ReturnType<typeof searchRetrievalGenerationSemanticIndex>> = null;
+  if (generation.embedding_profile_id) {
+    try {
+      semantic = await searchRetrievalGenerationSemanticIndex(env, generation.id, {
+        tenant_id: request.tenantId,
+        project_id: request.projectId,
+        query: request.q,
+        limit: 50
+      });
+      if (!semantic) degradedReasons.push("semantic_provider_unavailable");
+    } catch {
+      degradedReasons.push("semantic_provider_unavailable");
+    }
+  }
+  const semanticHits = semantic?.hits ?? [];
+  const semanticRows: StableUnitCandidate[] = [];
+  for (let offset = 0; offset < semanticHits.length; offset += 100) {
+    const chunk = semanticHits.slice(offset, offset + 100);
+    if (chunk.length === 0) continue;
+    const rows = (await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, source_id, unit_type, text, NULL AS raw_rank
+       FROM retrieval_units
+       WHERE generation_id = ? AND tenant_id = ? AND id IN (${chunk.map(() => "?").join(",")})
+         AND source_type = 'memory'`
+    ).bind(generation.id, request.tenantId, ...chunk.map((item) => item.id)).all<StableUnitCandidate>()).results;
+    semanticRows.push(...rows);
+  }
+  const allUnits = new Map<string, StableUnitCandidate>();
+  for (const unit of [...unitRows, ...semanticRows]) allUnits.set(unit.id, unit);
   const scoreById = new Map<string, number>();
   unitRows.forEach((unit, index) => {
     const configuredWeight = Number(rankingConfig[`${unit.unit_type}_weight`]);
@@ -855,8 +975,37 @@ async function searchStableRetrievalUnits(
     const score = generation.ranking_algorithm === "reciprocal_rank_fusion"
       ? weight / (rrfConstant + index + 1)
       : weight / (1 + Math.abs(unit.raw_rank ?? index));
-    scoreById.set(unit.source_id, Math.max(scoreById.get(unit.source_id) ?? 0, score));
+    scoreById.set(unit.source_id, (scoreById.get(unit.source_id) ?? 0) + score);
   });
+  semanticHits.forEach((hit, index) => {
+    const unit = allUnits.get(hit.id);
+    if (!unit) return;
+    const configuredWeight = Number(rankingConfig[`${unit.unit_type}_weight`]);
+    const channelWeight = Number.isFinite(configuredWeight) ? Math.max(0, configuredWeight) : 1;
+    const score = semanticWeight * channelWeight / (rrfConstant + index + 1);
+    scoreById.set(unit.source_id, (scoreById.get(unit.source_id) ?? 0) + score);
+  });
+  const candidateTextByMemory = new Map<string, string[]>();
+  for (const unit of allUnits.values()) {
+    const values = candidateTextByMemory.get(unit.source_id) ?? [];
+    if (!values.includes(unit.text)) values.push(unit.text);
+    candidateTextByMemory.set(unit.source_id, values.slice(0, 5));
+  }
+  let reranker: Awaited<ReturnType<typeof rerankV3MemoryCandidates>> = null;
+  try {
+    reranker = await rerankV3MemoryCandidates(env, request.q, [...candidateTextByMemory.entries()].map(([id, texts]) => ({
+      id,
+      text: texts.join("\n")
+    })));
+    if (!reranker) degradedReasons.push("reranker_unavailable");
+  } catch {
+    degradedReasons.push("reranker_unavailable");
+  }
+  [...(reranker?.scores.entries() ?? [])]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .forEach(([memoryId], index) => {
+      scoreById.set(memoryId, (scoreById.get(memoryId) ?? 0) + rerankerWeight / (rrfConstant + index + 1));
+    });
   const ids = [...scoreById.keys()].sort((left, right) =>
     (scoreById.get(right) ?? 0) - (scoreById.get(left) ?? 0) || left.localeCompare(right)
   );
@@ -916,10 +1065,20 @@ async function searchStableRetrievalUnits(
       top_result_ids: results.map((item) => item.id),
       top_result_ranks: results.map((item) => item.score),
       retrieval: {
-        semantic: { available: false, provider: null },
+        semantic: { available: Boolean(semantic), provider: semantic?.provider ?? null },
         graph: { available: false, provider: "none" },
-        degraded: generation.embedding_profile_id !== null,
-        degraded_reasons: generation.embedding_profile_id ? ["generation_embedding_query_not_configured"] : [],
+        degraded: degradedReasons.length > 0,
+        degraded_reasons: [...new Set(degradedReasons)],
+        lexical_candidate_count: unitRows.length,
+        semantic_candidate_count: semanticHits.length,
+        parent_candidate_count: scoreById.size,
+        channel_candidate_counts: Object.fromEntries(
+          ["atomic", "profile", "ledger", "timeline", "segment"].map((channel) => [
+            channel,
+            [...allUnits.values()].filter((unit) => unit.unit_type === channel).length
+          ])
+        ),
+        reranker_version: reranker?.provider ?? null,
         generation_id: generation.id,
         unit_schema_version: String(generation.unit_schema_version),
         extractor_name: generation.extractor_name,
@@ -1029,10 +1188,24 @@ function buildMemoryListFilterSql(options: {
 
 export async function upsertMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   const { tenantId, source, items: parsedItems } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
+  const screen = memoryWriteScreener(env);
   const screenedItems = parsedItems.map((item, index) => ({
     ...item,
-    content: screenMemoryWriteText(item.content, `items[${index}].content`),
-    summary: screenOptionalMemoryWriteText(item.summary, `items[${index}].summary`) ?? undefined
+    content: screen(item.content, `items[${index}].content`),
+    summary: item.summary == null ? undefined : screen(item.summary, `items[${index}].summary`),
+    tags: item.tags?.map((tag, tagIndex) => screen(tag, `items[${index}].tags[${tagIndex}]`)),
+    entities: item.entities?.map((entity, entityIndex) => screen(entity, `items[${index}].entities[${entityIndex}]`)),
+    rationale: item.rationale == null ? item.rationale : screen(item.rationale, `items[${index}].rationale`),
+    reuse_rule: item.reuse_rule == null ? item.reuse_rule : screen(item.reuse_rule, `items[${index}].reuse_rule`),
+    source_references: item.source_references?.map((entry, entryIndex) =>
+      screenPersistedValue(entry, `items[${index}].source_references[${entryIndex}]`, screen) as Record<string, unknown>
+    ),
+    evidence: item.evidence?.map((entry, entryIndex) =>
+      screenPersistedValue(entry, `items[${index}].evidence[${entryIndex}]`, screen) as Record<string, unknown>
+    ),
+    conflicts: item.conflicts?.map((conflict, conflictIndex) =>
+      screen(conflict, `items[${index}].conflicts[${conflictIndex}]`)
+    )
   }));
   const classification = await validateWriteClassifications(env, tenantId, screenedItems);
   const items = classification.items;
@@ -1127,7 +1300,8 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS net_saved_tokens,
             (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
              JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
-             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens
+             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
+            reuse_rule
      FROM memories
      WHERE tenant_id = ?${filter.sql}
      ORDER BY ${orderBy}
@@ -1166,6 +1340,99 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
       net_saved_tokens: Number(row.net_saved_tokens ?? 0),
       injected_tokens: Number(row.injected_tokens ?? 0)
   }));
+}
+
+function encodeMemoryListCursor(cursor: MemoryListCursor): string {
+  return btoa(JSON.stringify([cursor.createdAt, cursor.id]))
+    .replace(/\+/gu, "-")
+    .replace(/\//gu, "_")
+    .replace(/=+$/gu, "");
+}
+
+function decodeMemoryListCursor(raw: string | null | undefined): MemoryListCursor | null {
+  if (!raw) return null;
+  try {
+    const normalized = raw.replace(/-/gu, "+").replace(/_/gu, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const parsed = JSON.parse(atob(padded)) as unknown;
+    if (!Array.isArray(parsed) || parsed.length !== 2 ||
+        typeof parsed[0] !== "number" || !Number.isFinite(parsed[0]) ||
+        typeof parsed[1] !== "string" || !parsed[1]) {
+      throw new Error("invalid cursor payload");
+    }
+    return { createdAt: Math.floor(parsed[0]), id: parsed[1].slice(0, 128) };
+  } catch {
+    throw new HttpError(400, "invalid_cursor", "cursor is invalid");
+  }
+}
+
+export async function listMemoriesCursorPage(
+  env: Env,
+  tenantId: string,
+  options: ListMemoriesOptions & { cursor?: string | null; view?: MemoryListView } = {}
+): Promise<MemoryCursorPage> {
+  await validateBusinessClassification(
+    env,
+    tenantId,
+    options.businessCategoryId,
+    options.workType,
+    { required: false }
+  );
+  const view = options.view ?? "full";
+  if (view !== "full" && view !== "compact") {
+    throw new HttpError(400, "invalid_view", "view must be full or compact");
+  }
+  const maximum = view === "compact" ? 500 : 100;
+  const safeLimit = Math.max(1, Math.min(maximum, options.limit ?? (view === "compact" ? 500 : 100)));
+  const cursor = decodeMemoryListCursor(options.cursor);
+  const filter = buildMemoryListFilterSql(options);
+  const cursorSql = cursor ? " AND (created_at < ? OR (created_at = ? AND id < ?))" : "";
+  const cursorBindings = cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : [];
+  const result = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, project_id, content, summary, tags_json, source, external_key, created_at,
+            kind, lifecycle_state, current_version, last_accessed_at,
+            confidence_score, utility_score, business_category_id, work_type
+     FROM memories
+     WHERE tenant_id = ?${filter.sql}${cursorSql}
+     ORDER BY created_at DESC, id DESC
+     LIMIT ?`
+  ).bind(tenantId, ...filter.bindings, ...cursorBindings, safeLimit + 1).all<MemoryRow>();
+  const hasNext = result.results.length > safeLimit;
+  const rows = result.results.slice(0, safeLimit);
+  const items = rows.map((row) => {
+    const common = {
+      id: row.id,
+      project_id: row.project_id,
+      summary: row.summary,
+      source: row.source,
+      created_at: row.created_at,
+      kind: (row.kind as MemoryKind | null) ?? "episodic",
+      lifecycle_state: (row.lifecycle_state as MemoryLifecycleState | null) ?? "active",
+      confidence_score: row.confidence_score ?? null,
+      utility_score: row.utility_score ?? null,
+      business_category_id: row.business_category_id ?? null,
+      work_type: row.work_type ?? null
+    };
+    if (view === "compact") return common;
+    return {
+      ...common,
+      content: row.content,
+      tags: parseTagsJson(row.tags_json),
+      external_key: row.external_key,
+      current_version: Number(row.current_version ?? 1),
+      last_accessed_at: row.last_accessed_at ?? null,
+      reuse_rule: row.reuse_rule ?? null
+    };
+  });
+  const last = rows.at(-1);
+  return {
+    tenant_id: tenantId,
+    view,
+    items,
+    next_cursor: hasNext && last
+      ? encodeMemoryListCursor({ createdAt: last.created_at, id: last.id })
+      : null
+  };
 }
 
 export async function listMemoriesPage(env: Env, tenantId: string, options: ListMemoriesOptions = {}): Promise<MemoryListPage> {
@@ -1514,11 +1781,10 @@ export async function searchMemories(
         // Shadow telemetry is best-effort and never breaks active retrieval.
       });
     }
-    await bestEffortRefreshMemoryResults(
+    await bestEffortMarkMemoryResultsAccessed(
       env,
       request.tenantId,
-      response.results.map((item) => item.id),
-      "api-stable-memory-search"
+      response.results.map((item) => item.id)
     );
     return attachUsage(response);
   }
@@ -1551,7 +1817,7 @@ export async function searchMemories(
       semanticHits: semantic?.hits,
       semanticProvider: semantic?.provider
     });
-    let reranker: Awaited<ReturnType<typeof rerankV3MemoryCandidates>> = null;
+    let rerankerCandidates: Array<{ id: string; text: string }> = [];
     if (preliminary.results.length > 0) {
       const ids = preliminary.results.map((result) => result.id);
       const placeholders = ids.map(() => "?").join(",");
@@ -1560,18 +1826,16 @@ export async function searchMemories(
          WHERE tenant_id = ? AND id IN (${placeholders})`
       ).bind(request.tenantId, ...ids).all<{ id: string; content: string; summary: string | null }>();
       const rowById = new Map(rows.results.map((row) => [row.id, row]));
-      try {
-        reranker = await rerankV3MemoryCandidates(
-          env,
-          request.q,
-          ids.flatMap((id) => {
-            const row = rowById.get(id);
-            return row ? [{ id, text: `${row.summary ?? ""}\n${row.content}`.trim() }] : [];
-          })
-        );
-      } catch {
-        reranker = null;
-      }
+      rerankerCandidates = ids.flatMap((id) => {
+        const row = rowById.get(id);
+        return row ? [{ id, text: `${row.summary ?? ""}\n${row.content}`.trim() }] : [];
+      });
+    }
+    let reranker: Awaited<ReturnType<typeof rerankV3MemoryCandidates>> = null;
+    try {
+      reranker = await rerankV3MemoryCandidates(env, request.q, rerankerCandidates);
+    } catch {
+      reranker = null;
     }
     const searchUnits =
       request.searchMode === "hybrid_v4"
@@ -1751,7 +2015,7 @@ export async function searchMemories(
         top_result_ranks: results.map((item) => item.score)
       }
     };
-    await bestEffortRefreshMemoryResults(env, request.tenantId, response.results.map((item) => item.id), "api-memory-search");
+    await bestEffortMarkMemoryResultsAccessed(env, request.tenantId, response.results.map((item) => item.id));
     return attachUsage(response);
   }
 
@@ -1767,7 +2031,7 @@ export async function searchMemories(
       top_result_ranks: filteredResults.map((item) => item.score)
     }
   };
-  await bestEffortRefreshMemoryResults(env, request.tenantId, filteredResults.map((item) => item.id), "api-memory-search");
+  await bestEffortMarkMemoryResultsAccessed(env, request.tenantId, filteredResults.map((item) => item.id));
   return attachUsage(response);
 }
 
@@ -2068,15 +2332,14 @@ export async function getMemoryProfile(
       search_results: profile.search_results.filter((item) => item.kind === "memory" && allowed.has(item.id))
     };
   }
-  await bestEffortRefreshMemoryResults(
+  await bestEffortMarkMemoryResultsAccessed(
     env,
     request.tenantId,
     [
       ...profile.durable.map((item) => item.id),
       ...profile.recent.map((item) => item.id),
       ...profile.search_results.filter((item) => item.kind === "memory").map((item) => item.id)
-    ],
-    "api-memory-profile"
+    ]
   );
   const ids = [...new Set([
     ...profile.durable.map((item) => item.id),
@@ -2136,7 +2399,8 @@ export async function getMemoryDetails(
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS net_saved_tokens,
             (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
              JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
-             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens
+             WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
+            reuse_rule, capture_origin, verification_state, verified_at, learning_json, quality_dimensions_json
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
@@ -2187,7 +2451,8 @@ export async function getMemoryDetails(
   if (rationaleIds.length > 0) {
     const placeholders = rationaleIds.map(() => "?").join(", ");
     const evidenceRows = await env.OPEN_BRAIN_DB.prepare(
-      `SELECT id, rationale_id, evidence_type, evidence_ref, relation, note, weight_score
+      `SELECT id, rationale_id, evidence_type, evidence_ref, relation, note, weight_score,
+              content_hash, observed_at, attestation_ref
        FROM decision_evidence
        WHERE tenant_id = ? AND rationale_id IN (${placeholders})
        ORDER BY created_at DESC
@@ -2202,6 +2467,9 @@ export async function getMemoryDetails(
         relation: string;
         note: string | null;
         weight_score: number | null;
+        content_hash: string | null;
+        observed_at: number | null;
+        attestation_ref: string | null;
       }>();
     for (const row of evidenceRows.results) {
       const list = evidenceByRationale.get(row.rationale_id) ?? [];
@@ -2211,7 +2479,10 @@ export async function getMemoryDetails(
         evidence_ref: row.evidence_ref,
         relation: row.relation,
         note: row.note,
-        weight_score: row.weight_score
+        weight_score: row.weight_score,
+        content_hash: row.content_hash,
+        observed_at: row.observed_at,
+        attestation_ref: row.attestation_ref
       });
       evidenceByRationale.set(row.rationale_id, list);
     }
@@ -2263,7 +2534,13 @@ export async function getMemoryDetails(
           used_count: Number(memory.used_count ?? 0),
           consumer_count: Number(memory.consumer_count ?? 0),
           net_saved_tokens: Number(memory.net_saved_tokens ?? 0),
-          injected_tokens: Number(memory.injected_tokens ?? 0)
+          injected_tokens: Number(memory.injected_tokens ?? 0),
+          reuse_rule: memory.reuse_rule ?? null,
+          capture_origin: memory.capture_origin ?? "legacy",
+          verification_state: memory.verification_state ?? "unverified",
+          verified_at: memory.verified_at ?? null,
+          learning: parseJsonObject(memory.learning_json),
+          quality_dimensions: parseJsonObject(memory.quality_dimensions_json) as Record<string, number> | null
         }
       : null,
     versions: versions.results,
@@ -2275,18 +2552,18 @@ export async function getMemoryDetails(
   };
 }
 
-async function bestEffortRefreshMemoryResults(env: Env, tenantId: string, ids: string[], actorId: string): Promise<void> {
+async function bestEffortMarkMemoryResultsAccessed(env: Env, tenantId: string, ids: string[]): Promise<void> {
   const uniqueMemoryIds = [...new Set(ids.filter(Boolean))].slice(0, 8);
+  const accessedAt = Date.now();
   for (const memoryId of uniqueMemoryIds) {
     try {
-      await refreshMemory(env, {
-        tenantId,
-        memoryId,
-        actorType: "system",
-        actorId
-      });
+      await env.OPEN_BRAIN_DB.prepare(
+        `UPDATE memories
+         SET last_accessed_at = ?
+         WHERE tenant_id = ? AND id = ?`
+      ).bind(accessedAt, tenantId, memoryId).run();
     } catch {
-      // Retrieval must remain best-effort; failed refreshes should not break reads.
+      // Retrieval access telemetry is best-effort and must not break reads.
     }
   }
 }
@@ -2390,6 +2667,32 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
     throw new HttpError(403, "owner_change_requires_admin", "Only a tenant admin can change memory ownership");
   }
   await assertMemoryManageAccess(env, tenantId, memoryId, options);
+  const screen = memoryWriteScreener(env);
+  const rawSummary = parseOptionalString(body.summary, "summary", 1000);
+  const rawRationale = parseOptionalString(body.rationale, "rationale", 4000);
+  const rawReuseRule = parseOptionalString(body.reuse_rule, "reuse_rule", 1000);
+  const rawTags = body.tags ? parseTags(body.tags) : undefined;
+  const rawEntities = body.entities ? parseTags(body.entities) : undefined;
+  const rawSourceReferences = body.source_references
+    ? parseObjectArray(body.source_references, "source_references")
+    : undefined;
+  const rawEvidence = body.evidence ? parseObjectArray(body.evidence, "evidence") : undefined;
+  const rawConflicts = body.conflicts ? parseTags(body.conflicts) : undefined;
+  const screenedContent = typeof body.content === "string"
+    ? screen(body.content.slice(0, 20_000), "content")
+    : undefined;
+  const screenedSummary = rawSummary == null ? rawSummary : screen(rawSummary, "summary");
+  const screenedRationale = rawRationale == null ? rawRationale : screen(rawRationale, "rationale");
+  const screenedReuseRule = rawReuseRule == null ? rawReuseRule : screen(rawReuseRule, "reuse_rule");
+  const screenedTags = rawTags?.map((tag, index) => screen(tag, `tags[${index}]`));
+  const screenedEntities = rawEntities?.map((entity, index) => screen(entity, `entities[${index}]`));
+  const screenedSourceReferences = rawSourceReferences?.map((entry, index) =>
+    screenPersistedValue(entry, `source_references[${index}]`, screen) as Record<string, unknown>
+  );
+  const screenedEvidence = rawEvidence?.map((entry, index) =>
+    screenPersistedValue(entry, `evidence[${index}]`, screen) as Record<string, unknown>
+  );
+  const screenedConflicts = rawConflicts?.map((conflict, index) => screen(conflict, `conflicts[${index}]`));
   const previousV3Projection = await removeMemoryIdsFromV3SemanticIndex(env, tenantId, [memoryId]);
   const previousV4Projection = await removeMemoryIdsFromV4SemanticIndex(env, tenantId, [memoryId]);
   if (previousV3Projection.error || previousV4Projection.error) {
@@ -2407,25 +2710,31 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
       : parseOptionalString(body.project_id, "project_id", 128),
     actorType: actorPrincipal ? "principal" : parseOptionalActorField(body.actor_type, "actor_type", 64),
     actorId: actorPrincipal ?? parseOptionalActorField(body.actor_id, "actor_id", 128),
-    content: typeof body.content === "string" ? body.content.slice(0, 20_000) : undefined,
-    summary: parseOptionalString(body.summary, "summary", 1000),
-    tags: body.tags ? parseTags(body.tags) : undefined,
+    content: screenedContent,
+    summary: screenedSummary,
+    tags: screenedTags,
     confidenceScore: parseOptionalFiniteNumber(body.confidence_score, "confidence_score"),
     utilityScore: parseOptionalFiniteNumber(body.utility_score, "utility_score"),
-    entities: body.entities ? parseTags(body.entities) : undefined,
-    sourceReferences: body.source_references
-      ? parseObjectArray(body.source_references, "source_references")
-      : undefined,
+    entities: screenedEntities,
+    sourceReferences: screenedSourceReferences,
     validFrom: parseOptionalFiniteNumber(body.valid_from, "valid_from"),
     validUntil: parseOptionalFiniteNumber(body.valid_until, "valid_until"),
-    rationale: parseOptionalString(body.rationale, "rationale", 4000),
-    evidence: body.evidence ? parseObjectArray(body.evidence, "evidence") : undefined,
-    conflicts: body.conflicts ? parseTags(body.conflicts) : undefined,
-    permissions: body.permissions ? parseObjectArray(body.permissions, "permissions") : undefined
-    , businessCategoryId: body.business_category_id === undefined
+    rationale: screenedRationale,
+    reuseRule: screenedReuseRule,
+    evidence: screenedEvidence,
+    conflicts: screenedConflicts,
+    permissions: body.permissions ? parseObjectArray(body.permissions, "permissions") : undefined,
+    businessCategoryId: body.business_category_id === undefined
       ? undefined
-      : classification.business_category_id
-    , workType: body.work_type === undefined ? undefined : classification.work_type
+      : classification.business_category_id,
+    workType: body.work_type === undefined ? undefined : classification.work_type,
+    kind: body.kind === undefined ? undefined : parseOptionalEnum(body.kind, "kind", MEMORY_KINDS) ?? undefined,
+    canonicalKey: body.canonical_key === undefined
+      ? undefined
+      : parseOptionalString(body.canonical_key, "canonical_key", 256),
+    expiresAt: body.expires_at === undefined
+      ? undefined
+      : parseOptionalFiniteNumber(body.expires_at, "expires_at")
   });
   if (requestedOwner !== undefined) {
     await env.OPEN_BRAIN_DB.prepare(

@@ -21,7 +21,8 @@ const LOCAL_CLI_PATH = path.basename(MODULE_PATH) === "orgbrain.mjs"
 const LOCAL_ONLY_ENV = {
   ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
   ORGBRAIN_ENABLE_ORG_SHARING: "false",
-  ORGBRAIN_LOCAL_HOOK_CAPTURE: "true"
+  ORGBRAIN_LOCAL_HOOK_CAPTURE: "true",
+  ORGBRAIN_MEMORY_CAPTURE_V2_MODE: "off"
 };
 
 function shellQuote(value) {
@@ -168,7 +169,7 @@ export function codexMinimalHooksPlan(options = {}) {
     Stop: {
       type: "command",
       command: hookCommand(baseCommand, envFile, "codex-stop", errorLog),
-      timeout: 3,
+      timeout: 5,
       statusMessage: "Saving durable local OrgBrain memory"
     }
   };

@@ -3,6 +3,7 @@ import {
   deleteMemoryById,
   getMemoryProfile,
   listMemories,
+  listMemoriesCursorPage,
   listMemoriesPage,
   searchMemories,
   upsertMemories
@@ -31,6 +32,12 @@ type MemoryRecord = {
   utility_score?: number | null;
   expires_at?: number | null;
   revised_at?: number | null;
+  source_refs_json?: string | null;
+  rationale?: string | null;
+  reuse_rule?: string | null;
+  evidence_json?: string | null;
+  conflicts_json?: string | null;
+  permissions_json?: string | null;
 };
 
 type MemoryVersionRecord = {
@@ -218,22 +225,27 @@ class FakeStatement {
       const hasProjectPriority = this.sql.includes("CASE WHEN memories.project_id = ?");
       const hasProjectFilter = this.sql.includes("AND project_id = ?");
       const hasOffset = this.sql.includes("OFFSET ?");
+      const hasCursor = this.sql.includes("created_at < ?");
       let cursor = 1;
       const source = hasSource ? (this.args[cursor++] as string) : null;
       const projectFilter = hasProjectFilter ? (this.args[cursor++] as string) : null;
       const projectId = hasProjectPriority ? (this.args[cursor++] as string) : null;
       const limit = this.args[this.args.length - (hasOffset ? 2 : 1)] as number;
       const offset = hasOffset ? (this.args[this.args.length - 1] as number) : 0;
+      const cursorAt = hasCursor ? Number(this.args[this.args.length - 4]) : null;
+      const cursorId = hasCursor ? String(this.args[this.args.length - 2]) : null;
       const rows = this.db.memories
         .filter((memory) => memory.tenant_id === tenantId)
         .filter((memory) => !source || memory.source === source)
         .filter((memory) => !projectFilter || memory.project_id === projectFilter)
         .filter((memory) => memory.lifecycle_state !== "suppressed")
+        .filter((memory) => cursorAt === null || memory.created_at < cursorAt ||
+          (memory.created_at === cursorAt && memory.id < String(cursorId)))
         .sort((left, right) => {
           const projectSort =
             (projectId && left.project_id === projectId ? 0 : 1) - (projectId && right.project_id === projectId ? 0 : 1);
           if (projectSort !== 0) return projectSort;
-          return right.created_at - left.created_at;
+          return right.created_at - left.created_at || right.id.localeCompare(left.id);
         })
         .slice(offset, offset + limit);
       return { results: rows as T[] };
@@ -290,7 +302,13 @@ class FakeStatement {
         utility_score: this.args[16] as number | null,
         current_version: this.args[19] as number | null,
         expires_at: this.args[21] as number | null,
-        revised_at: this.args[22] as number | null
+        revised_at: this.args[22] as number | null,
+        source_refs_json: this.args[24] as string | null,
+        rationale: this.args[29] as string | null,
+        evidence_json: this.args[30] as string | null,
+        conflicts_json: this.args[31] as string | null,
+        permissions_json: this.args[32] as string | null,
+        reuse_rule: this.args[35] as string | null
       });
       return { success: true };
     }
@@ -300,7 +318,9 @@ class FakeStatement {
       const id = this.args[this.args.length - 1] as string;
       const row = this.db.memories.find((memory) => memory.tenant_id === tenantId && memory.id === id);
       if (row) {
-        if (this.args.length >= 22) {
+        if (this.sql.includes("SET last_accessed_at = ?")) {
+          row.last_accessed_at = this.args[0] as number;
+        } else if (this.args.length >= 22) {
           row.project_id = this.args[0] as string | null;
           row.content = this.args[1] as string;
           row.summary = this.args[2] as string | null;
@@ -531,6 +551,29 @@ describe("memory-service", () => {
     });
   });
 
+  it("redacts credentials and personal data from every persisted free-text field", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as any;
+    await upsertMemories(env, {
+      tenant_id: "default",
+      source: "codex",
+      items: [{
+        external_key: "screen-all-fields",
+        content: "ORGBRAIN_API_URL is the canonical variable.",
+        rationale: "api_key=secret-value-in-rationale",
+        reuse_rule: "Contact alice@example.com before reuse.",
+        source_references: [{ type: "command", ref: "token=secret-value-in-source-ref" }],
+        evidence: [{ type: "command", ref: "password=secret-value-in-evidence" }]
+      }]
+    });
+
+    const persisted = JSON.stringify(db.memories[0]);
+    expect(persisted).not.toContain("secret-value");
+    expect(persisted).not.toContain("alice@example.com");
+    expect(persisted).toContain("[REDACTED_SECRET]");
+    expect(persisted).toContain("[REDACTED_EMAIL]");
+  });
+
   it("returns deduped hybrid search results with doc fallback", async () => {
     const db = new FakeD1();
     const now = Date.now();
@@ -665,6 +708,11 @@ describe("memory-service", () => {
       id: "recent-1"
     });
     expect(profile.meta.search?.search_strategy).toBe("bm25_v1");
+    expect(db.memoryVersions).toEqual([]);
+    expect(db.memories.every((memory) => memory.current_version == null)).toBe(true);
+    expect(db.memories.filter((memory) => ["dur-1", "dur-2", "recent-1"].includes(memory.id)).every((memory) =>
+      typeof memory.last_accessed_at === "number"
+    )).toBe(true);
   });
 
   it("prefers canonical and curated memories in primary lexical search while leaving raw items to recent history", async () => {
@@ -833,5 +881,32 @@ describe("memory-service", () => {
       digest_count: 1,
       compacted_count: 1
     });
+  });
+
+  it("uses a stable cursor and bounds compact/full views", async () => {
+    const db = new FakeD1();
+    db.memories = ["m4", "m3", "m2", "m1"].map((id, index) => ({
+      id,
+      tenant_id: "default",
+      project_id: "proj1",
+      content: `content ${id}`,
+      summary: `summary ${id}`,
+      tags_json: "[]",
+      source: "codex",
+      external_key: id,
+      created_at: 4_000 - index * 1_000
+    }));
+    const env = { OPEN_BRAIN_DB: db } as any;
+    const first = await listMemoriesCursorPage(env, "default", { limit: 2, view: "compact" });
+    const second = await listMemoriesCursorPage(env, "default", {
+      limit: 2,
+      view: "compact",
+      cursor: first.next_cursor
+    });
+
+    expect(first.items.map((item) => item.id)).toEqual(["m4", "m3"]);
+    expect(first.items[0]).not.toHaveProperty("content");
+    expect(second.items.map((item) => item.id)).toEqual(["m2", "m1"]);
+    expect(second.next_cursor).toBeNull();
   });
 });
