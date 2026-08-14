@@ -1,6 +1,7 @@
 import { HttpError, isOrgRole, ulid, type OrgRole } from "@org-brain/shared";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Env } from "./types";
+import { verifyAccessJwt, type AccessClaims } from "./access-jwt";
 import { authenticateScopedToken } from "./token-service";
 import { authenticateSession, SESSION_COOKIE } from "./email-auth-service";
 
@@ -80,25 +81,12 @@ function parseApiTenantPolicy(raw: string | undefined): ApiTenantPolicy | null {
   }
 }
 
-type AccessClaims = {
-  sub?: string;
-  email?: string;
-  name?: string;
-  aud?: string | string[];
-  iss?: string;
-  exp?: number;
-  nbf?: number;
-  email_verified?: boolean;
-};
-
 type AccessTenantPolicy = {
   principals?: Record<string, string[]>;
   email_domains?: Record<string, string[]>;
   default_tenants?: string[];
   default_role?: OrgRole;
 };
-
-type AccessJwk = JsonWebKey & { kid?: string };
 
 function parseAccessTenantPolicy(raw: string | undefined): AccessTenantPolicy | null {
   if (!raw || raw.trim().length === 0) return null;
@@ -164,101 +152,17 @@ function resolveApiKeyGrant(env: Env, provided: string): ApiKeyGrant | null {
   return null;
 }
 
-function base64UrlDecode(input: string): Uint8Array {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
-function parseJwtPart<T>(part: string, field: string): T {
-  try {
-    return JSON.parse(new TextDecoder().decode(base64UrlDecode(part))) as T;
-  } catch {
-    throw new HttpError(401, "unauthorized", `Invalid Access JWT ${field}`);
-  }
-}
-
-async function loadAccessJwks(env: Env): Promise<{ keys?: AccessJwk[] }> {
-  const configuredJwks = env.OIDC_JWKS_JSON?.trim() || env.ACCESS_JWKS_JSON?.trim();
-  if (configuredJwks) {
-    try {
-      return JSON.parse(configuredJwks) as { keys?: AccessJwk[] };
-    } catch {
-      throw new HttpError(500, "misconfigured", "configured JWKS JSON is not valid JSON");
-    }
-  }
-  const oidcIssuer = env.OIDC_ISSUER?.trim().replace(/\/+$/u, "");
-  if (oidcIssuer) {
-    if (!oidcIssuer.startsWith("https://")) {
-      throw new HttpError(500, "misconfigured", "OIDC_ISSUER must use https");
-    }
-    const discovery = await fetch(`${oidcIssuer}/.well-known/openid-configuration`);
-    if (!discovery.ok) throw new HttpError(500, "misconfigured", "Could not load OIDC discovery document");
-    const metadata = await discovery.json<{ jwks_uri?: string }>();
-    if (!metadata.jwks_uri?.startsWith("https://")) {
-      throw new HttpError(500, "misconfigured", "OIDC discovery returned an invalid jwks_uri");
-    }
-    const response = await fetch(metadata.jwks_uri);
-    if (!response.ok) throw new HttpError(500, "misconfigured", "Could not load OIDC JWKS");
-    return response.json();
-  }
-  const teamDomain = env.ACCESS_TEAM_DOMAIN?.trim();
-  if (!teamDomain) throw new HttpError(500, "misconfigured", "ACCESS_TEAM_DOMAIN is required for login auth");
-  const response = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`);
-  if (!response.ok) throw new HttpError(500, "misconfigured", "Could not load Cloudflare Access certificates");
-  return response.json();
-}
-
-async function verifyAccessJwt(env: Env, token: string): Promise<AccessClaims> {
-  const parts = token.split(".");
-  if (parts.length !== 3) throw new HttpError(401, "unauthorized", "Invalid Access JWT");
-  const header = parseJwtPart<{ alg?: string; kid?: string }>(parts[0], "header");
-  if (header.alg !== "RS256" || !header.kid) throw new HttpError(401, "unauthorized", "Unsupported Access JWT");
-  const jwks = await loadAccessJwks(env);
-  const key = jwks.keys?.find((item) => item.kid === header.kid);
-  if (!key) throw new HttpError(401, "unauthorized", "Access JWT key not found");
-  const cryptoKey = await crypto.subtle.importKey(
-    "jwk",
-    key,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["verify"]
+export function resolveAccessTenantGrant(
+  env: Env,
+  principal: string,
+  email: string | null,
+  source?: "access-jwt" | "oidc-jwt"
+): string[] {
+  const policy = parseAccessTenantPolicy(
+    source === "access-jwt"
+      ? env.ACCESS_TENANT_POLICY_JSON
+      : env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON
   );
-  const verified = await crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
-    cryptoKey,
-    toArrayBuffer(base64UrlDecode(parts[2])),
-    toArrayBuffer(new TextEncoder().encode(`${parts[0]}.${parts[1]}`))
-  );
-  if (!verified) throw new HttpError(401, "unauthorized", "Invalid Access JWT signature");
-  const claims = parseJwtPart<AccessClaims>(parts[1], "payload");
-  const now = Math.floor(Date.now() / 1000);
-  if (claims.exp && claims.exp < now) throw new HttpError(401, "unauthorized", "Access JWT expired");
-  if (claims.nbf && claims.nbf > now) throw new HttpError(401, "unauthorized", "Access JWT not yet valid");
-  const expectedAud = env.OIDC_AUD?.trim() || env.ACCESS_AUD?.trim();
-  if (expectedAud) {
-    const aud = Array.isArray(claims.aud) ? claims.aud : claims.aud ? [claims.aud] : [];
-    if (!aud.includes(expectedAud)) throw new HttpError(401, "unauthorized", "Access JWT audience is not allowed");
-  }
-  const expectedIssuer =
-    env.OIDC_ISSUER?.trim().replace(/\/+$/u, "") ||
-    (env.ACCESS_TEAM_DOMAIN?.trim() ? `https://${env.ACCESS_TEAM_DOMAIN.trim()}` : "");
-  if (expectedIssuer && claims.iss !== expectedIssuer) {
-    throw new HttpError(401, "unauthorized", "Access JWT issuer is not allowed");
-  }
-  if (!claims.sub) throw new HttpError(401, "unauthorized", "Access JWT subject is missing");
-  return claims;
-}
-
-function resolveAccessTenantGrant(env: Env, principal: string, email: string | null): string[] {
-  const policy = parseAccessTenantPolicy(env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON);
   if (!policy) return ["default"];
   const direct = normalizeTenantList(policy.principals?.[principal]);
   if (direct.length > 0) return direct;
@@ -274,25 +178,55 @@ function resolveAccessTenantGrant(env: Env, principal: string, email: string | n
 
 async function resolveAccessGrant(env: Env, token: string): Promise<ApiKeyGrant> {
   const claims = await verifyAccessJwt(env, token);
-  const tenantPolicy = parseAccessTenantPolicy(env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON);
+  return resolveVerifiedAccessUser(env, claims);
+}
+
+export async function resolveVerifiedAccessUser(
+  env: Env,
+  claims: AccessClaims,
+  verifiedSource?: "access-jwt" | "oidc-jwt",
+  options: { requireExistingIdentity?: boolean } = {}
+): Promise<ApiAuthContext> {
+  if (!claims.sub?.trim()) throw new HttpError(401, "unauthorized", "Access JWT subject is missing");
+  const source = verifiedSource ?? (env.OIDC_ISSUER ? "oidc-jwt" : "access-jwt");
+  const tenantPolicy = parseAccessTenantPolicy(
+    source === "access-jwt"
+      ? env.ACCESS_TENANT_POLICY_JSON
+      : env.OIDC_TENANT_POLICY_JSON || env.ACCESS_TENANT_POLICY_JSON
+  );
   const email = claims.email?.trim().toLowerCase() || null;
   const legacyPrincipal = `user:${claims.sub}`;
-  const allowedTenants = resolveAccessTenantGrant(env, legacyPrincipal, email);
-  const source = env.OIDC_ISSUER ? "oidc-jwt" : "access-jwt";
+  const allowedTenants = resolveAccessTenantGrant(env, legacyPrincipal, email, source);
   const issuer = claims.iss?.replace(/\/+$/u, "") || (source === "access-jwt" ? "cloudflare-access" : "");
-  const principal = await ensureFederatedIdentity(env, {
-    legacyPrincipal,
-    issuer,
-    subject: claims.sub!,
-    email,
-    emailVerified: source === "access-jwt" || claims.email_verified === true,
-    displayName: claims.name?.trim() || email,
-    tenantIds: allowedTenants,
-    source
-  });
+  let principal: string;
+  let resolvedTenants = allowedTenants;
+  if (options.requireExistingIdentity) {
+    if (!env.OPEN_BRAIN_DB) {
+      throw new HttpError(500, "misconfigured", "OPEN_BRAIN_DB is required for existing identity resolution");
+    }
+    const resolved = await resolveExistingFederatedIdentity(
+      env,
+      allowedTenants,
+      issuer,
+      claims.sub
+    );
+    principal = resolved.principal;
+    resolvedTenants = resolved.tenantIds;
+  } else {
+    principal = await ensureFederatedIdentity(env, {
+      legacyPrincipal,
+      issuer,
+      subject: claims.sub,
+      email,
+      emailVerified: source === "access-jwt" || claims.email_verified === true,
+      displayName: claims.name?.trim() || email,
+      tenantIds: allowedTenants,
+      source
+    });
+  }
   return {
     principal,
-    allowedTenants,
+    allowedTenants: resolvedTenants,
     source,
     email,
     displayName: claims.name?.trim() || email,
@@ -305,7 +239,39 @@ async function resolveAccessGrant(env: Env, token: string): Promise<ApiKeyGrant>
   };
 }
 
-async function ensureFederatedIdentity(env: Env, input: {
+async function resolveExistingFederatedIdentity(
+  env: Env,
+  tenantIds: string[],
+  issuer: string,
+  subject: string
+): Promise<{ principal: string; tenantIds: string[] }> {
+  let principal: string | null = null;
+  const resolvedTenants: string[] = [];
+  for (const tenantId of tenantIds) {
+    const identity = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT principal FROM user_identities
+       WHERE tenant_id=? AND provider_type='oidc' AND issuer=? AND subject=?`
+    ).bind(tenantId, issuer, subject).first<{ principal: string }>();
+    if (!identity) continue;
+    if (principal && principal !== identity.principal) {
+      throw new HttpError(409, "identity_conflict", "Federated identity maps to different principals across tenants");
+    }
+    const profile = await env.OPEN_BRAIN_DB.prepare(
+      "SELECT status FROM user_profiles WHERE tenant_id=? AND principal=?"
+    ).bind(tenantId, identity.principal).first<{ status: string }>();
+    if (!profile || profile.status !== "active") {
+      throw new HttpError(403, "user_inactive", "Federated user is not active");
+    }
+    principal = identity.principal;
+    resolvedTenants.push(tenantId);
+  }
+  if (!principal || resolvedTenants.length === 0) {
+    throw new HttpError(403, "identity_not_registered", "Cloudflare Access identity is not registered in Org Brain");
+  }
+  return { principal, tenantIds: resolvedTenants };
+}
+
+export async function ensureFederatedIdentity(env: Env, input: {
   legacyPrincipal: string;
   issuer: string;
   subject: string;

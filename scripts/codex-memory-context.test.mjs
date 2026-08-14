@@ -79,7 +79,11 @@ test("Codex prompt hook injects the hidden observe contract for continuation tur
       prompt: "continue"
     }, {
       ...ctx,
-      env: { ...ctx.env, ORGBRAIN_ENABLE_CLOUD_MEMORY: "true" }
+      env: {
+        ...ctx.env,
+        ORGBRAIN_ENABLE_CLOUD_MEMORY: "true",
+        ORGBRAIN_LOCAL_CONTEXT_ENABLED: "true"
+      }
     });
     assert.match(result.hookSpecificOutput.additionalContext, /orgbrain_memory_observe/u);
     assert.match(result.hookSpecificOutput.additionalContext, /at most three times/u);
