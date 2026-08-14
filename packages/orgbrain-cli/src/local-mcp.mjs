@@ -1,5 +1,16 @@
 import { createInterface } from "node:readline";
 import { observeMemoryLearningEvent } from "../../shared/src/memory-learning-runtime.mjs";
+import {
+  MEMORY_CONTRACT_V2_PROMPT_ID,
+  MEMORY_CONTRACT_V2_VERIFIER_VERSION,
+  observeMemoryContractV2Event
+} from "../../shared/src/memory-contract-v2-runtime.mjs";
+import {
+  MEMORY_CONTRACT_V2_CONTRACT_HASH,
+  MEMORY_CONTRACT_V2_PROMPT_HASH
+} from "../../shared/src/memory-contract-v2-contract.mjs";
+import { isAiConsensusCertified } from "../../shared/src/memory-contract-judge.mjs";
+import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
 
 const TOOL_DEFINITIONS = [
   {
@@ -7,13 +18,25 @@ const TOOL_DEFINITIONS = [
     description: "Validate one current-turn durable learning event without persisting it. Use at most three times per turn.",
     inputSchema: {
       type: "object",
-      required: ["schema_version", "lesson_type", "kind", "trigger", "conclusion", "rationale", "reuse_rule", "outcome", "applicability", "evidence_selectors", "gaps"],
+      required: ["schema_version", "lesson_type"],
       properties: {
-        schema_version: { type: "integer", const: 1 },
+        schema_version: { type: "integer", enum: [1, 2] },
         lesson_type: { type: "string", enum: ["success", "decision", "failure"] },
         kind: { type: "string", enum: ["decision", "constraint", "pitfall", "preference", "fact"] },
-        trigger: { type: "string" }, conclusion: { type: "string" }, rationale: { type: "string" },
-        reuse_rule: { type: "string" }, outcome: { type: ["string", "null"] },
+        record_type: { type: "string", const: "learning_observation" },
+        capture_intent: { type: "string", enum: ["verify", "review"] },
+        trigger: { type: ["string", "null"] }, conclusion: { type: ["string", "null"] }, rationale: { type: ["string", "null"] },
+        reuse_rule: { type: ["string", "null"] }, outcome: { type: ["string", "null"] },
+        procedure: { type: ["string", "null"] }, why_it_worked: { type: ["string", "null"] },
+        observed_outcome: { type: ["string", "null"] }, reuse_when: { type: ["string", "null"] },
+        decision_type: { type: "string", enum: ["user_choice", "preference", "implementation", "governance"] },
+        decision_key: { type: ["string", "null"] }, question: { type: ["string", "null"] },
+        selected_value: { type: ["string", "null"] }, decision: { type: ["string", "null"] },
+        constraints: { type: "array", items: { type: "string" } },
+        alternatives: { type: "array", items: { type: "object" } },
+        symptom: { type: ["string", "null"] }, failed_approach: { type: ["string", "null"] },
+        root_cause: { type: ["string", "null"] }, correction: { type: ["string", "null"] },
+        verified_outcome: { type: ["string", "null"] }, avoidance_rule: { type: ["string", "null"] },
         applicability: {
           type: "object", required: ["target_files", "components"],
           properties: {
@@ -24,11 +47,50 @@ const TOOL_DEFINITIONS = [
         evidence_selectors: {
           type: "array", minItems: 1, maxItems: 16,
           items: {
-            type: "object", required: ["type", "ref"],
-            properties: { type: { type: "string", enum: ["command", "file", "doc", "user_statement"] }, ref: { type: "string" } }
+            type: "object", required: ["type"],
+            properties: {
+              type: { type: "string", enum: ["command", "file", "doc", "user_statement", "tool_result"] },
+              ref: { type: "string" }, digest: { type: "string" }, supports: { type: "array", items: { type: "string" } }
+            }
           }
         },
         gaps: { type: "array", maxItems: 16, items: { type: "string" } }
+      }
+    }
+  },
+  {
+    name: "orgbrain_task_context_get",
+    description: "Retrieve confirmed task commitments for continuity without exposing unverified learning candidates.",
+    inputSchema: {
+      type: "object",
+      required: ["task_key"],
+      properties: {
+        tenant_id: { type: "string" },
+        project_id: { type: ["string", "null"] },
+        task_key: { type: "string", minLength: 1, maxLength: 256 },
+        query: { type: "string", maxLength: 1000 }
+      }
+    }
+  },
+  {
+    name: "orgbrain_learning_batch_ingest",
+    description: "Persist explicit task commitments, verified memories, and review-only learning candidates as one idempotent local batch.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tenant_id: { type: "string" },
+        project_id: { type: ["string", "null"] },
+        task_key: { type: ["string", "null"] },
+        source: { type: "string", maxLength: 64 },
+        prompt_contract_id: { type: "string", maxLength: 128 },
+        prompt_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+        verifier_version: { type: "string", maxLength: 128 },
+        contract_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+        commitments: { type: "array", maxItems: 16, items: { type: "object" } },
+        verified_items: { type: "array", maxItems: 3, items: { type: "object" } },
+        deterministically_verified_items: { type: "array", maxItems: 3, items: { type: "object" } },
+        review_candidates: { type: "array", maxItems: 3, items: { type: "object" } },
+        semantic_aliases: { type: "array", maxItems: 16, items: { type: "object" } }
       }
     }
   },
@@ -366,10 +428,143 @@ function captureDefaults(input) {
 async function callTool(store, name, input) {
   const tenantId = input.tenant_id || "default";
   if (name === "orgbrain_memory_observe") {
-    return observeMemoryLearningEvent(input, {
+    const observe = input.schema_version === 2
+      ? observeMemoryContractV2Event
+      : observeMemoryLearningEvent;
+    return observe(input, {
       workspaceRoot: process.cwd(),
       sensitivePolicy: { mode: "deny", allowed_principals: [] }
     });
+  }
+  if (name === "orgbrain_task_context_get") {
+    const commitmentStore = new TaskCommitmentStore(store.dbPath);
+    const commitments = await commitmentStore.list({
+      tenantId,
+      projectId: input.project_id ?? null,
+      taskKey: input.task_key
+    });
+    return {
+      task_key: input.task_key,
+      project_id: input.project_id ?? null,
+      commitments,
+      generated_at: Date.now()
+    };
+  }
+  if (name === "orgbrain_learning_batch_ingest") {
+    const expectedPromptHash = MEMORY_CONTRACT_V2_PROMPT_HASH;
+    const expectedContractHash = MEMORY_CONTRACT_V2_CONTRACT_HASH;
+    if (
+      (input.prompt_contract_id && input.prompt_contract_id !== MEMORY_CONTRACT_V2_PROMPT_ID) ||
+      (input.prompt_hash && input.prompt_hash !== expectedPromptHash) ||
+      (input.contract_hash && input.contract_hash !== MEMORY_CONTRACT_V2_CONTRACT_HASH) ||
+      (input.verifier_version && input.verifier_version !== MEMORY_CONTRACT_V2_VERIFIER_VERSION)
+    ) throw new Error("memory contract prompt or verifier hash does not match the deployed contract");
+    const commitmentStore = new TaskCommitmentStore(store.dbPath);
+    const commitments = [];
+    for (const commitment of (input.commitments ?? []).slice(0, 16)) {
+      commitments.push(await commitmentStore.upsert({
+        ...commitment,
+        tenant_id: tenantId,
+        project_id: input.project_id ?? commitment.project_id ?? null
+      }));
+    }
+    const semanticAliases = [];
+    for (const alias of (input.semantic_aliases ?? []).slice(0, 16)) {
+      const saved = await commitmentStore.saveSemanticAlias({
+        tenantId,
+        projectId: input.project_id ?? alias.project_id ?? null,
+        taskKey: alias.task_key,
+        decisionKey: alias.decision_key,
+        question: alias.question,
+        judgeConsensus: alias.judge_consensus,
+        certification: alias.ai_certification
+      });
+      if (!saved.saved) throw new Error(saved.reason ?? "semantic_alias_not_saved");
+      semanticAliases.push(saved);
+    }
+    const reviewCandidates = await commitmentStore.saveLearningCandidates({
+      tenantId,
+      projectId: input.project_id ?? null,
+      taskKey: input.task_key ?? null,
+      candidates: [
+        ...(input.review_candidates ?? []),
+        ...(input.deterministically_verified_items ?? []).slice(0, 3).map((item, index) => ({
+          external_key: item.external_key ?? `learning-deterministic-review:${index}`,
+          item,
+          observation: item.learning ?? null,
+          verification: item.verification ?? null,
+          evidence: item.evidence ?? [],
+          reason_codes: ["ai_consensus_pending"],
+          capture_intent: "verify",
+          created_at: item.created_at ?? Date.now(),
+          expires_at: item.expires_at ?? item.valid_until ?? Date.now() + 180 * 24 * 60 * 60 * 1000
+        }))
+      ].slice(0, 3).map((candidate) => ({
+        ...candidate,
+        prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+        prompt_hash: expectedPromptHash,
+        contract_hash: expectedContractHash,
+        verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION
+      }))
+    });
+    const verifiedResults = [];
+    for (const originalItem of (input.verified_items ?? []).slice(0, 3)) {
+      const item = originalItem?.learning && typeof originalItem.learning === "object"
+        ? {
+          ...originalItem,
+          learning: {
+            ...originalItem.learning,
+            contract_metadata: {
+              ...(originalItem.learning.contract_metadata && typeof originalItem.learning.contract_metadata === "object"
+                ? originalItem.learning.contract_metadata
+                : {}),
+              prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+              prompt_hash: expectedPromptHash,
+              contract_hash: expectedContractHash,
+              verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
+              producer_agent: input.source ?? "local",
+              producer_model: null
+            }
+          }
+        }
+        : originalItem;
+      if (!isAiConsensusCertified(item)) throw new Error("verified_items require unanimous ai_consensus_certified judges");
+      if (item?.verification?.state !== "verified" || !Array.isArray(item?.evidence) || item.evidence.length === 0) {
+        throw new Error("verified_items must contain deterministic verification state and evidence");
+      }
+      const backing = await commitmentStore.assertCandidateBacked({
+        tenantId,
+        projectId: input.project_id ?? item.project_id ?? null,
+        item
+      });
+      if (!backing.ok) throw new Error(backing.reason);
+      if (item?.learning?.schema_version !== 2) {
+        throw new Error("verified_items must use LearningObservationV2; legacy observations remain review-only");
+      }
+      if (item.learning.capture_intent !== "verify") {
+        throw new Error("verified_items must contain only verify observations");
+      }
+      if (item.learning.lesson_type === "decision" && ["user_choice", "preference"].includes(item.learning.decision_type)) {
+        throw new Error("verified_items user choices and preferences must be stored as task commitments");
+      }
+      verifiedResults.push(await store.capture(captureDefaults({
+        ...item,
+        tenant_id: tenantId,
+        project_id: input.project_id ?? item.project_id ?? null,
+        source: item.source ?? input.source ?? "local-learning-contract",
+        capture_origin: item.capture_origin ?? "observed",
+        verification_state: item.verification_state ?? "verified",
+        verified_at: item.verified_at ?? item.verification?.verified_at ?? Date.now()
+      })));
+    }
+    return {
+      ok: true,
+      verified_inserted: verifiedResults.filter((result) => result?.created).length,
+      review_inserted: reviewCandidates.length,
+      commitments: commitments.map((result) => result.commitment),
+      semantic_aliases: semanticAliases,
+      review_candidates: reviewCandidates
+    };
   }
   if (name === "orgbrain_memory_capture") return store.capture(captureDefaults(input));
   if (name === "orgbrain_memory_search") {

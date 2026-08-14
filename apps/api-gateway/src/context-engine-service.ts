@@ -299,7 +299,7 @@ type PrincipalIdentityOptions = {
   recordUsage?: boolean;
   bestEffortUsage?: boolean;
   autoOrigin?: {
-    memoryId: string;
+    memoryId: string | null;
     source: string;
     externalKey: string;
   };
@@ -1624,6 +1624,7 @@ export function capAutoDecisionConfidence(args: {
   rationale: string;
   projectId: string | null;
   sources: SourceRef[];
+  certified?: boolean;
 }): number {
   const explicitDecision = /\b(?:decided|decision|must|must not|required|prohibited|forbidden|never|always|will use)\b|(?:決定|採用|方針|必須|禁止|不可|制約|必ず)/iu.test(args.decision);
   const durableEvidenceCount = new Set(
@@ -1631,14 +1632,14 @@ export function capAutoDecisionConfidence(args: {
       .map(durableAutoDecisionSourceIdentity)
       .filter((identity): identity is string => Boolean(identity))
   ).size;
-  const eligible = explicitDecision && args.rationale.trim().length > 0 && Boolean(args.projectId);
+  const eligible = args.certified === true || (explicitDecision && args.rationale.trim().length > 0 && Boolean(args.projectId));
   const cap = !eligible || durableEvidenceCount === 0 ? 0.89 : durableEvidenceCount >= 2 ? 0.95 : 0.9;
   return Number(Math.min(Math.max(args.requested, 0), cap).toFixed(2));
 }
 
 export async function upsertAutoDecisionMemory(env: Env, args: {
   tenantId: string;
-  memoryId: string;
+  memoryId: string | null;
   source: string;
   externalKey: string | null;
   projectId: string | null;
@@ -1656,6 +1657,7 @@ export async function upsertAutoDecisionMemory(env: Env, args: {
   visibility: DecisionVisibility;
   allowedPrincipals: string[];
   principal: string | null;
+  certified?: boolean;
 }) {
   if (!args.externalKey) {
     throw new HttpError(400, "external_key_required", "external_key is required for automatic decision promotion");
@@ -1666,7 +1668,8 @@ export async function upsertAutoDecisionMemory(env: Env, args: {
     decision: args.decision,
     rationale: args.rationale,
     projectId: args.projectId,
-    sources: sourceRefs
+    sources: sourceRefs,
+    certified: args.certified === true
   });
   const existing = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id FROM decision_memories

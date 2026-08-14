@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, rename, stat, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import {
   embedLocalText,
   LOCAL_EMBEDDING_PROVIDER,
@@ -15,6 +15,7 @@ import {
   encodeFloat32Vector,
   localDenseEmbeddingProviderFromEnvironment
 } from "./local-dense-embedding.mjs";
+
 import {
   analyzeRetrievalIntent,
   buildRetrievalUnits,
@@ -25,6 +26,8 @@ import {
   retrievalUnitLexicalSpecificity,
   retrievalUnitIntentBoost
 } from "./retrieval-units.mjs";
+
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
 export const MEMORY_SCHEMA_VERSION = 23;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");

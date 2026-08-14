@@ -25,6 +25,26 @@ import {
 const execFileAsync = promisify(execFile);
 const PAGE_SIZE = 250;
 const API_BATCH_SIZE = 25;
+const BACKUP_DATA_TABLES = [
+  "agent_messages", "audit_events", "auth_sessions", "business_categories", "capabilities",
+  "decision_evidence", "decision_memories", "decision_memory_versions", "decision_rationales",
+  "email_auth_challenges", "entities", "group_members", "groups",
+  "knowledge_assertion_evidence", "knowledge_assertions", "knowledge_docs", "knowledge_links",
+  "knowledge_resource_locations", "knowledge_resource_versions", "knowledge_resources",
+  "measurement_comparisons", "measurement_runs", "measurement_variants",
+  "memories", "memory_confirmations", "memory_deletions", "memory_edges",
+  "memory_effect_attributions", "memory_effect_daily_metrics", "memory_effect_events",
+  "memory_entities", "memory_failure_patterns", "memory_impact_daily_metrics",
+  "memory_impact_events", "memory_retrieval_units", "memory_retrieval_units_v4",
+  "memory_usage_events", "memory_usage_items", "memory_versions", "ops_alert_state",
+  "organizations", "principal_owner_mappings", "principal_role_assignments", "resource_acl",
+  "retention_deletion_queue", "retention_policies", "retrieval_daily_metrics",
+  "retrieval_evaluation_events", "retrieval_events", "retrieval_generation_assignments",
+  "retrieval_generations", "retrieval_projection_backfills", "retrieval_projection_jobs",
+  "retrieval_projection_v4_backfills", "retrieval_ranking_profiles", "retrieval_units",
+  "retrieval_v3_shadow_events", "retrieval_v4_shadow_events", "scheduled_job_runs",
+  "scoped_tokens", "task_events", "tasks", "threads", "user_identities", "user_profiles"
+];
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiGatewayDir = resolve(repoRoot, "apps/api-gateway");
 
@@ -39,9 +59,13 @@ Options:
   --local | --remote | --preview  Target adapter (default: local)
   --db-path <path>                Local SQLite path (default: ~/.org-brain/memory.sqlite)
   --tenant <id>                   Tenant ID (default: default)
+  --project <id>                  Limit scan/apply to one project ID
+  --project-null                  Limit scan/apply to rows without a project ID
   --database <name>               D1 database name (default: open-brain)
   --workspace-root <path>         Convert workspace paths to repository-relative paths
   --page-size <n>                 Cursor page size, 1-500 (default: ${PAGE_SIZE})
+  --dry-run                       Explicit no-op alias for the default plan-only mode
+  --report <path>                 Write the sanitized dry-run/apply report to this private path
   --output-dir <path>             Required for apply; receives backup/export, manifest, reports, checkpoint
   --api-url <url>                 Cloud API URL (or ORGBRAIN_API_URL)
   --api-key <key>                 Cloud API key (or ORGBRAIN_API_KEY)
@@ -60,6 +84,9 @@ function parseArgs(argv) {
     resume: false,
     dbPath: DEFAULT_LOCAL_DB,
     outputDir: null,
+    reportPath: null,
+    project: null,
+    projectNull: false,
     workspaceRoot: null,
     pageSize: PAGE_SIZE,
     apiUrl: process.env.ORGBRAIN_API_URL ?? process.env.ORGBRAIN_API_BASE ?? null,
@@ -67,19 +94,22 @@ function parseArgs(argv) {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (["--", "--json", "--help", "-h", "--local", "--remote", "--preview"].includes(arg)) continue;
+    if (["--", "--json", "--dry-run", "--help", "-h", "--local", "--remote", "--preview"].includes(arg)) continue;
+    if (arg === "--project-null") { options.projectNull = true; continue; }
     if (["--tenant", "--database", "--env"].includes(arg) || /^(?:--tenant|--database|--env)=/u.test(arg)) {
       if (!arg.includes("=")) index += 1;
       continue;
     }
     if (arg === "--apply") { options.apply = true; continue; }
     if (arg === "--resume") { options.resume = true; continue; }
-    const match = /^(--db-path|--output-dir|--workspace-root|--page-size|--api-url|--api-key)(?:=(.*))?$/u.exec(arg);
+    const match = /^(--db-path|--output-dir|--report|--project|--workspace-root|--page-size|--api-url|--api-key)(?:=(.*))?$/u.exec(arg);
     if (!match) throw new Error(`unknown argument: ${arg}`);
     const value = match[2] ?? argv[++index];
     if (!value) throw new Error(`${match[1]} requires a value`);
     if (match[1] === "--db-path") options.dbPath = resolve(value);
     if (match[1] === "--output-dir") options.outputDir = resolve(value);
+    if (match[1] === "--report") options.reportPath = resolve(value);
+    if (match[1] === "--project") options.project = value.trim() || null;
     if (match[1] === "--workspace-root") options.workspaceRoot = resolve(value);
     if (match[1] === "--api-url") options.apiUrl = value.replace(/\/$/u, "");
     if (match[1] === "--api-key") options.apiKey = value;
@@ -91,6 +121,10 @@ function parseArgs(argv) {
     }
   }
   if (options.apply && !options.outputDir) throw new Error("--output-dir is required with --apply");
+  if (options.project && options.projectNull) throw new Error("use either --project or --project-null");
+  if (options.reportPath && options.apply && options.outputDir) {
+    throw new Error("use either --report or --output-dir with --apply, not both");
+  }
   if (options.resume && !options.apply) throw new Error("--resume requires --apply");
   if (options.apply && options.location !== "local" && (!options.apiUrl || !options.apiKey)) {
     throw new Error("--api-url and --api-key are required for cloud apply");
@@ -117,7 +151,12 @@ async function ensureOutputDirectory(path) {
   await chmod(path, 0o700);
 }
 
-function memorySelectSql(tenantId, cursor, limit) {
+function projectPredicate(projectId, projectNull) {
+  if (projectNull) return "AND project_id IS NULL";
+  return projectId ? `AND project_id = ${sqlString(projectId)}` : "";
+}
+
+function memorySelectSql(tenantId, projectId, projectNull, cursor, limit) {
   return `SELECT id, tenant_id, project_id, business_category_id, work_type, source,
                  external_key, content, summary, tags_json, kind, lifecycle_state,
                  created_at, valid_until, expires_at, confidence_score, utility_score,
@@ -125,6 +164,7 @@ function memorySelectSql(tenantId, cursor, limit) {
                  conflicts_json, current_version
           FROM memories
           WHERE tenant_id = ${sqlString(tenantId)}
+            ${projectPredicate(projectId, projectNull)}
             AND id > ${sqlString(cursor)}
           ORDER BY id
           LIMIT ${limit};`;
@@ -140,10 +180,11 @@ function categorySelectSql(tenantId, cursor, limit) {
           LIMIT ${limit};`;
 }
 
-function decisionSelectSql(tenantId, cursor, limit) {
+function decisionSelectSql(tenantId, projectId, projectNull, cursor, limit) {
   return `SELECT id, project_id, business_category_id, work_type, status
           FROM decision_memories
           WHERE tenant_id = ${sqlString(tenantId)}
+            ${projectPredicate(projectId, projectNull)}
             AND status = 'active'
             AND id > ${sqlString(cursor)}
           ORDER BY id
@@ -163,15 +204,17 @@ async function scanLocal(options) {
   let cursor = "";
   try {
     while (true) {
+      const projectSql = options.projectNull ? "AND project_id IS NULL" : options.project ? "AND project_id = ?" : "";
+      const projectParams = options.projectNull ? [options.tenant] : options.project ? [options.tenant, options.project] : [options.tenant];
       const page = db.prepare(
         `SELECT id, tenant_id, project_id, business_category_id, work_type, source,
                 external_key, content, summary, tags_json, kind, lifecycle_state,
                 created_at, valid_until, expires_at, confidence_score, utility_score,
                 entities_json, rationale, reuse_rule, evidence_json, source_refs_json,
                 conflicts_json, current_version
-         FROM memories WHERE tenant_id = ? AND id > ?
+         FROM memories WHERE tenant_id = ? ${projectSql} AND id > ?
          ORDER BY id LIMIT ?`
-      ).all(options.tenant, cursor, options.pageSize);
+      ).all(...projectParams, cursor, options.pageSize);
       rows.push(...page);
       if (page.length < options.pageSize) break;
       cursor = page.at(-1).id;
@@ -187,12 +230,14 @@ async function scanLocal(options) {
     if (hasDecisionMemories) {
       let decisionCursor = "";
       while (true) {
+        const decisionSql = options.projectNull ? "AND project_id IS NULL" : options.project ? "AND project_id = ?" : "";
+        const decisionParams = options.projectNull ? [options.tenant] : options.project ? [options.tenant, options.project] : [options.tenant];
         const page = db.prepare(
           `SELECT id, project_id, business_category_id, work_type, status
            FROM decision_memories
-           WHERE tenant_id = ? AND status = 'active' AND id > ?
+           WHERE tenant_id = ? ${decisionSql} AND status = 'active' AND id > ?
            ORDER BY id LIMIT ?`
-        ).all(options.tenant, decisionCursor, options.pageSize);
+        ).all(...decisionParams, decisionCursor, options.pageSize);
         decisionRows.push(...page);
         if (page.length < options.pageSize) break;
         decisionCursor = String(page.at(-1).id);
@@ -208,7 +253,7 @@ async function scanD1(options) {
   const rows = [];
   let cursor = "";
   while (true) {
-    const page = await runD1Query(options, memorySelectSql(options.tenant, cursor, options.pageSize));
+    const page = await runD1Query(options, memorySelectSql(options.tenant, options.project, options.projectNull, cursor, options.pageSize));
     rows.push(...page);
     if (page.length < options.pageSize) break;
     cursor = String(page.at(-1).id);
@@ -224,7 +269,7 @@ async function scanD1(options) {
   const decisionRows = [];
   cursor = "";
   while (true) {
-    const page = await runD1Query(options, decisionSelectSql(options.tenant, cursor, options.pageSize));
+    const page = await runD1Query(options, decisionSelectSql(options.tenant, options.project, options.projectNull, cursor, options.pageSize));
     decisionRows.push(...page);
     if (page.length < options.pageSize) break;
     cursor = String(page.at(-1).id);
@@ -248,9 +293,12 @@ async function createBackup(options) {
   if (options.location !== "remote") throw new Error("cloud apply supports --remote only");
   const exportPath = resolve(options.outputDir, `${options.database}.${stamp}.export.sql`);
   await execFileAsync("pnpm", [
-    "wrangler", "d1", "export", options.database, "--remote", "--output", exportPath,
+    "--dir", apiGatewayDir, "exec", "wrangler", "d1", "export", options.database,
+    "--remote", "--config", "wrangler.remote-d1.toml", "--no-schema",
+    ...BACKUP_DATA_TABLES.flatMap((table) => ["--table", table]),
+    "--output", exportPath,
     ...(options.env ? ["--env", options.env] : [])
-  ], { cwd: apiGatewayDir, maxBuffer: 64 * 1024 * 1024 });
+  ], { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024 });
   await chmod(exportPath, 0o600);
   return exportPath;
 }
@@ -258,6 +306,8 @@ async function createBackup(options) {
 function sanitizedPlan(plan) {
   return {
     tenant_id: plan.tenant_id,
+    project_id: plan.project_id ?? null,
+    project_null: plan.project_null ?? false,
     scanned_count: plan.scanned_count,
     decision_scanned_count: plan.decision_scanned_count ?? 0,
     stats: plan.stats,
@@ -319,6 +369,9 @@ function derivedCaptureInput(action) {
     rationale: action.rationale,
     reuse_rule: action.reuse_rule,
     evidence: action.evidence,
+    capture_origin: "repair",
+    verification_state: "partial",
+    verified_at: null,
     source_references: action.source_references,
     permissions: action.visibility === "restricted"
       ? action.allowed_principals.map((principal) => ({ principal_type: "principal", principal_id: principal, permissions: ["read"] }))
@@ -326,6 +379,17 @@ function derivedCaptureInput(action) {
     actor_type: "system",
     actor_id: "memory-repair"
   };
+}
+
+async function markRepairDerivedRowsRemote(options, ids) {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (uniqueIds.length === 0) return;
+  await runD1Query(options, `
+    UPDATE memories
+    SET capture_origin = 'repair', verification_state = 'partial', verified_at = NULL
+    WHERE tenant_id = ${sqlString(options.tenant)}
+      AND id IN (${uniqueIds.map((id) => sqlString(id)).join(",")});
+  `);
 }
 
 async function applyLocal(options, plan, checkpointPath, checkpoint) {
@@ -360,6 +424,14 @@ async function applyLocal(options, plan, checkpointPath, checkpoint) {
         ).get(options.tenant, action.external_key);
       } finally { existingDb.close(); }
       if (!existing) await store.capture(derivedCaptureInput(action));
+      const provenanceDb = store.open();
+      try {
+        provenanceDb.prepare(
+          `UPDATE memories
+           SET capture_origin = 'repair', verification_state = 'partial', verified_at = NULL
+           WHERE tenant_id = ? AND id = ?`
+        ).run(options.tenant, action.memory_id);
+      } finally { provenanceDb.close(); }
       const db = store.open();
       try {
         db.prepare(
@@ -513,6 +585,7 @@ async function applyCloud(options, plan, checkpointPath, checkpoint) {
     });
     checkpoint.derived_ids = derivedIds;
     await writePrivateJson(checkpointPath, checkpoint);
+    await markRepairDerivedRowsRemote(options, window.map((action) => derivedIds[action.external_key]));
   }
   const mutations = [
     ...plan.actions.filter((action) => action.type === "update"),
@@ -625,6 +698,8 @@ async function buildRepairPlan(options) {
   );
   return {
     ...memoryPlan,
+    project_id: options.project,
+    project_null: options.projectNull,
     decision_scanned_count: decisionPlan.scanned_count,
     decision_actions: decisionPlan.actions,
     categories: [...categoryMap.values()],
@@ -660,7 +735,8 @@ async function main() {
     if (checkpoint.plan_hash !== resumedHash || manifest.plan_sha256 !== resumedHash) {
       throw new Error("checkpoint_plan_mismatch");
     }
-    if (manifest.target !== options.location || manifest.tenant_id !== options.tenant) {
+    if (manifest.target !== options.location || manifest.tenant_id !== options.tenant ||
+        manifest.project_id !== options.project || Boolean(manifest.project_null) !== options.projectNull) {
       throw new Error("checkpoint_target_mismatch");
     }
     backup = manifest.backup_path;
@@ -691,8 +767,10 @@ async function main() {
       const manifest = {
         version: 1,
         created_at: Date.now(),
-        target: options.location,
-        tenant_id: options.tenant,
+      target: options.location,
+      tenant_id: options.tenant,
+      project_id: options.project,
+      project_null: options.projectNull,
         backup_path: backup,
         backup_sha256: await sha256File(backup),
         plan_sha256: planHash
@@ -711,6 +789,8 @@ async function main() {
     mode: options.apply ? "apply" : "dry-run",
     target: options.location,
     tenant_id: options.tenant,
+    project_id: options.project,
+    project_null: options.projectNull,
     plan_sha256: planHash,
     backup_path: backup,
     applied_action_count: appliedCount,
@@ -723,6 +803,10 @@ async function main() {
       tenant_id: options.tenant,
       items: report.credential_rotation_required
     });
+  }
+  if (options.reportPath) {
+    await mkdir(dirname(options.reportPath), { recursive: true, mode: 0o700 });
+    await writePrivateJson(options.reportPath, finalReport);
   }
   if (options.json) console.log(JSON.stringify(finalReport, null, 2));
   else console.log(`mode=${finalReport.mode} target=${finalReport.target} scanned=${report.scanned_count} decisions=${report.decision_scanned_count} derive=${report.stats.derive_count} suppress=${report.stats.suppress_count} delete=0`);

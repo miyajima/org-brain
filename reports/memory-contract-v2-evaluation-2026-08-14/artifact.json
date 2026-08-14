@@ -1,0 +1,377 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "OrgBrain Memory Contract v2 データ品質評価",
+    "description": "2026-08-14時点の本番メモリ、org-brainプロジェクト、学習コーパス、意思決定継続性回帰テストをv2品質ゲートで評価した技術レポート。",
+    "generatedAt": "2026-08-14T05:00:00+09:00",
+    "cards": [
+      {
+        "id": "verified_card",
+        "description": "activeレコードのうちverification_state=verifiedの割合。",
+        "dataset": "tenant_summary",
+        "sourceId": "tenant_audit",
+        "metrics": [
+          { "label": "検証済みactive率", "field": "verified_rate", "format": "percent" }
+        ]
+      },
+      {
+        "id": "evidence_card",
+        "description": "activeレコードのうち構造化された証拠が1件以上ある割合。",
+        "dataset": "tenant_summary",
+        "sourceId": "tenant_audit",
+        "metrics": [
+          { "label": "証拠充足率", "field": "evidence_rate", "format": "percent" }
+        ]
+      },
+      {
+        "id": "continuity_card",
+        "description": "固定回帰シナリオで回答済みの同一decision keyを拒否できた割合。",
+        "dataset": "continuity_fixture",
+        "sourceId": "evaluation_sql",
+        "metrics": [
+          { "label": "継続性 fixture 成功率", "field": "point_estimate", "format": "percent" },
+          { "label": "95% Wilson下限", "field": "wilson_lower", "format": "percent" }
+        ]
+      },
+      {
+        "id": "corpus_card",
+        "description": "v2 locked corpusの9区分で最小件数を満たした区分の割合。",
+        "dataset": "corpus_summary",
+        "sourceId": "evaluation_sql",
+        "metrics": [
+          { "label": "v2 corpus区分充足率", "field": "minimum_coverage", "format": "percent" }
+        ]
+      },
+      {
+        "id": "project_card",
+        "description": "org-brainプロジェクトのactiveレコードのうち検証済みの割合。",
+        "dataset": "project_summary",
+        "sourceId": "project_aggregate",
+        "metrics": [
+          { "label": "org-brain検証済み率", "field": "verified_rate", "format": "percent" },
+          { "label": "active件数", "field": "active_records", "format": "number" }
+        ]
+      }
+    ],
+    "charts": [
+      {
+        "id": "active_quality_chart",
+        "title": "本番activeデータの品質項目別充足率",
+        "subtitle": "default tenant、active 46件。認証gateは各項目95%以上かつ95% Wilson下限95%以上。",
+        "type": "bar",
+        "dataset": "active_quality",
+        "sourceId": "tenant_audit",
+        "valueFormat": "percent",
+        "layout": "full",
+        "encodings": {
+          "x": { "field": "measure", "type": "nominal", "label": "品質項目" },
+          "y": { "field": "rate", "type": "quantitative", "label": "充足率", "format": "percent" },
+          "tooltip": [
+            { "field": "successes", "type": "quantitative", "label": "充足件数", "format": "number" },
+            { "field": "total", "type": "quantitative", "label": "対象件数", "format": "number" },
+            { "field": "gate", "type": "text", "label": "判定" }
+          ]
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "quality_gate_table",
+        "title": "品質ゲート判定",
+        "subtitle": "点推定95%以上かつ95% Wilson下限95%以上を要求。未測定は合格に数えない。",
+        "dataset": "quality_gates",
+        "sourceId": "evaluation_sql",
+        "defaultSort": { "field": "metric", "direction": "asc" },
+        "density": "spacious",
+        "columns": [
+          { "field": "metric", "label": "指標", "type": "text" },
+          { "field": "observed", "label": "観測値", "type": "text" },
+          { "field": "status", "label": "判定", "type": "text" },
+          { "field": "basis", "label": "判定根拠", "type": "text" }
+        ]
+      },
+      {
+        "id": "corpus_table",
+        "title": "locked corpus 最小件数",
+        "subtitle": "現行manifestはv1のhash-only候補で、v2区分のラベル件数はすべて0件。",
+        "dataset": "corpus_minimums",
+        "sourceId": "evaluation_sql",
+        "defaultSort": { "field": "minimum", "direction": "desc" },
+        "density": "dense",
+        "columns": [
+          { "field": "category", "label": "区分", "type": "text" },
+          { "field": "actual", "label": "実績", "format": "number" },
+          { "field": "minimum", "label": "最小件数", "format": "number" },
+          { "field": "status", "label": "判定", "type": "text" }
+        ]
+      },
+      {
+        "id": "active_quality_table",
+        "title": "本番activeデータの構造品質",
+        "subtitle": "default tenantの745件を全件ページングし、active 46件を対象に算出。",
+        "dataset": "active_quality",
+        "sourceId": "tenant_audit",
+        "defaultSort": { "field": "rate", "direction": "asc" },
+        "density": "dense",
+        "columns": [
+          { "field": "measure", "label": "項目", "type": "text" },
+          { "field": "successes", "label": "充足件数", "format": "number" },
+          { "field": "total", "label": "対象件数", "format": "number" },
+          { "field": "rate", "label": "充足率", "format": "percent" },
+          { "field": "gate", "label": "95% gate", "type": "text" }
+        ]
+      },
+      {
+        "id": "guardrail_table",
+        "title": "hard guardrailの現時点判定",
+        "subtitle": "0件を要求。未評価のguardrailはpassにせず保留とする。",
+        "dataset": "hard_guardrails",
+        "sourceId": "evaluation_sql",
+        "defaultSort": { "field": "guardrail", "direction": "asc" },
+        "density": "spacious",
+        "columns": [
+          { "field": "guardrail", "label": "guardrail", "type": "text" },
+          { "field": "observed", "label": "観測", "type": "text" },
+          { "field": "status", "label": "判定", "type": "text" }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "tenant_audit",
+        "label": "Cloudflare D1 default tenant全件監査",
+        "path": "scripts/memory-quality-audit.mjs",
+        "query": {
+          "engine": "cloudflare-d1",
+          "language": "sql+javascript",
+          "sql": "SELECT id, tenant_id, project_id, business_category_id, work_type, source, external_key, content, summary, tags_json, kind, lifecycle_state, created_at, valid_from, valid_until, expires_at, confidence_score, utility_score, entities_json, rationale, reuse_rule, evidence_json, source_refs_json, conflicts_json, current_version, deleted_at, content_hash, canonical_key, capture_origin, verification_state, verified_at FROM memories WHERE tenant_id='default' AND id>:cursor ORDER BY id LIMIT 250;",
+          "description": "memoriesをID順に250件ずつ全件取得し、memory-quality-audit.mjsでactive、証拠、分類、検証、重複、機密候補を決定的に集計。",
+          "executed_at": "2026-08-13T20:00:02.513Z",
+          "filters": ["tenant_id = default", "全745件", "active = lifecycle_state != suppressed AND deleted_at = 0"],
+          "metric_definitions": ["充足率 = (active件数 - 欠損件数) / active件数"]
+        }
+      },
+      {
+        "id": "project_aggregate",
+        "label": "Cloudflare D1 org-brain集計",
+        "query": {
+          "engine": "cloudflare-d1",
+          "language": "sql",
+          "sql": "SELECT COUNT(*) AS total, SUM(CASE WHEN COALESCE(m.lifecycle_state,'active') != 'suppressed' AND COALESCE(m.deleted_at,0)=0 THEN 1 ELSE 0 END) AS active FROM memories m WHERE m.tenant_id='default' AND m.project_id='org-brain';",
+          "description": "org-brainプロジェクトの総件数とactive件数を集計し、同じ母集団に対して検証・証拠・再利用規則の欠損を算出。",
+          "executed_at": "2026-08-14T04:55:00+09:00",
+          "tables_used": ["memories", "business_categories"],
+          "filters": ["tenant_id = default", "project_id = org-brain"]
+        }
+      },
+      {
+        "id": "corpus_manifest",
+        "label": "private hash-only learning corpus manifest",
+        "path": "reports/memory-contract-v2-evaluation-2026-08-14/source-notes.md"
+      },
+      {
+        "id": "continuity_test",
+        "label": "意思決定継続性の固定回帰テスト",
+        "path": "scripts/codex-memory-context.test.mjs"
+      },
+      {
+        "id": "certifier_contract",
+        "label": "Memory Contract v2 quality certifier",
+        "path": "packages/shared/src/memory-quality-certifier.mjs"
+      },
+      {
+        "id": "evaluation_sql",
+        "label": "評価レポートの決定的集計SQL",
+        "path": "reports/memory-contract-v2-evaluation-2026-08-14/evaluation_snapshot.sql"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# OrgBrain Memory Contract v2 データ品質評価\n\n評価日: 2026-08-14 / 対象: default tenant本番D1、org-brain project、private corpus、Codex継続性fixture"
+      },
+      {
+        "id": "executive_summary",
+        "type": "markdown",
+        "body": "## 結論\n\n**評価指標は実装済みですが、現データは `not_certified / insufficient_evidence` です。** 契約・hook・固定回帰は動作しています。一方、本番active 46件は検証済み0件、v2 corpusは全9区分で最小件数未達、独立AI judge結果も未投入です。したがってactive化やcanary昇格の品質gateは通せません。"
+      },
+      {
+        "id": "headline_metrics",
+        "type": "metric-strip",
+        "cardIds": ["verified_card", "evidence_card", "continuity_card", "corpus_card", "project_card"]
+      },
+      {
+        "id": "gate_heading",
+        "type": "markdown",
+        "body": "## 指標別評価\n\n機能テストのpassと品質認証を分離しました。fixtureが100%でも、標本が3件ならWilson下限は43.85%であり、95%認証にはなりません。"
+      },
+      { "id": "quality_gates", "type": "table", "tableId": "quality_gate_table" },
+      {
+        "id": "production_heading",
+        "type": "markdown",
+        "body": "## 本番データの状態\n\n期限・content hash・capture origin・canonical duplicateは良好です。主要な不足はverification、evidence、reuse ruleです。org-brain projectは33件中active 1件で、その1件は未検証・証拠なし・reuse ruleなしでした。"
+      },
+      { "id": "active_quality_visual", "type": "chart", "chartId": "active_quality_chart" },
+      { "id": "active_quality", "type": "table", "tableId": "active_quality_table" },
+      {
+        "id": "corpus_heading",
+        "type": "markdown",
+        "body": "## corpusの状態\n\nprivacy制約は守られていますが、39件すべてannotation pendingです。27 unique session hashに対して3 hashがsplitを跨いでおり、同一sessionをtrain/dev/testへ分けない契約にも違反しています。"
+      },
+      { "id": "corpus_minimums", "type": "table", "tableId": "corpus_table" },
+      {
+        "id": "guardrail_heading",
+        "type": "markdown",
+        "body": "## hard guardrail\n\n決定的に観測できた0件と、まだ母集団評価できていない項目を区別しています。空の測定値を0件として扱う自己認証は行っていません。"
+      },
+      { "id": "hard_guardrails", "type": "table", "tableId": "guardrail_table" },
+      {
+        "id": "actions",
+        "type": "markdown",
+        "body": "## 次の優先順位\n\n1. 本番active 46件をv2 verifierへ通し、unsupportedはsuppress、支持されたものだけverifiedへ遷移する。\n2. schema v2 corpusをsession単位で再分割し、9区分の最小件数を満たす。\n3. 3独立judgeの全会一致結果と10軸measurementをquality runへ投入する。\n4. 75/75成功でWilson下限95.13%、0/75再質問でWilson上限4.87%となる継続性locked corpusを実行する。\n5. v2 migration未導入の本番には、全flag offのままadditive migrationを適用してからshadow計測を開始する。"
+      },
+      {
+        "id": "caveats",
+        "type": "markdown",
+        "body": "## 制約と再現性\n\n本評価は本番内容をレポートへコピーせず、集計値・hash・テスト結果だけを使用しました。v2テーブルは本番に未導入で、AI consensus、coverage、retrieval、運用p95/200-turn smokeは未測定です。チャートは品質項目間の差を読む用途に限定し、正確な監査値と合否は表に保持しました。tenant監査JSONのSHA-256は `cce1e0203ac2ef22a971499e13ec844b3fad853b8689606d8a3eeb32eea136dd` です。"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-14T05:00:00+09:00",
+    "status": "partial",
+    "datasets": {
+      "tenant_summary": [
+        { "active_records": 46, "verified_rate": 0, "evidence_rate": 0.1957, "not_expired_rate": 1 }
+      ],
+      "continuity_fixture": [
+        { "successes": 3, "total": 3, "point_estimate": 1, "wilson_lower": 0.4385029682449545, "reask_count": 0, "reask_wilson_upper": 0.5614970317550455 }
+      ],
+      "corpus_summary": [
+        { "required_categories_met": 0, "required_categories": 9, "minimum_coverage": 0, "pending_annotations": 39, "split_violations": 3 }
+      ],
+      "project_summary": [
+        { "total_records": 33, "active_records": 1, "verified_rate": 0, "evidence_rate": 0, "reuse_rule_rate": 0 }
+      ],
+      "quality_gates": [
+        { "order": 1, "metric": "Verified Knowledge Correctness", "observed": "verified active 0/46", "status": "FAIL / insufficient", "basis": "正しさを証明できるactiveレコードが0件" },
+        { "order": 2, "metric": "Durable Knowledge Coverage", "observed": "v2 labeled corpus 0件", "status": "FAIL / insufficient", "basis": "保存対象機会の分母・候補化結果が未ラベル" },
+        { "order": 3, "metric": "Decision Continuity", "observed": "3/3、Wilson下限43.85%、再質問上限56.15%", "status": "FAIL (fixtureはPASS)", "basis": "機能回帰は成功したが95%統計gate未達" },
+        { "order": 4, "metric": "Decision Utility", "observed": "next-task 0/300", "status": "FAIL / insufficient", "basis": "次タスクでの利用可否を未測定" },
+        { "order": 5, "metric": "Evidence & Rationale", "observed": "evidence 19.57%、rationale 2.17%、reuse 0%", "status": "FAIL", "basis": "各軸95%未満" },
+        { "order": 6, "metric": "Retrieval Reproducibility", "observed": "v2 locked retrieval 0/300", "status": "FAIL / insufficient", "basis": "固定queryの再現計測なし" },
+        { "order": 7, "metric": "Freshness & Validity", "observed": "期限内100%、verified 0%", "status": "FAIL", "basis": "期限は合格、検証状態が不合格" },
+        { "order": 8, "metric": "Duplicate & Conflict Control", "observed": "canonical duplicate 0 group", "status": "PARTIAL / insufficient", "basis": "決定的重複は合格、semantic conflict corpusなし" },
+        { "order": 9, "metric": "Coverage Utility", "observed": "v2 labeled opportunity 0件", "status": "FAIL / insufficient", "basis": "保存すべき対象の欠落率を算出不能" },
+        { "order": 10, "metric": "Structure & Metadata", "observed": "category/work type 97.83%、hash 100%、verified 0%", "status": "FAIL", "basis": "一部構造は95%以上だが契約全体は未充足" }
+      ],
+      "active_quality": [
+        { "measure": "期限内", "successes": 46, "total": 46, "rate": 1, "gate": "点推定PASS / Wilson下限92.29% FAIL" },
+        { "measure": "business category", "successes": 45, "total": 46, "rate": 0.9783, "gate": "点推定PASS / Wilson下限88.66% FAIL" },
+        { "measure": "work type", "successes": 45, "total": 46, "rate": 0.9783, "gate": "点推定PASS / Wilson下限88.66% FAIL" },
+        { "measure": "rationale", "successes": 1, "total": 46, "rate": 0.0217, "gate": "FAIL" },
+        { "measure": "reuse rule", "successes": 0, "total": 46, "rate": 0, "gate": "FAIL" },
+        { "measure": "evidence", "successes": 9, "total": 46, "rate": 0.1957, "gate": "FAIL" },
+        { "measure": "source references", "successes": 45, "total": 46, "rate": 0.9783, "gate": "点推定PASS / Wilson下限88.66% FAIL" },
+        { "measure": "content hash", "successes": 46, "total": 46, "rate": 1, "gate": "点推定PASS / Wilson下限92.29%" },
+        { "measure": "canonical key", "successes": 45, "total": 46, "rate": 0.9783, "gate": "点推定PASS / Wilson下限88.66% FAIL" },
+        { "measure": "capture origin", "successes": 46, "total": 46, "rate": 1, "gate": "点推定PASS / Wilson下限92.29%" },
+        { "measure": "verified", "successes": 0, "total": 46, "rate": 0, "gate": "FAIL" }
+      ],
+      "corpus_minimums": [
+        { "category": "success", "actual": 0, "minimum": 75, "status": "FAIL" },
+        { "category": "decision", "actual": 0, "minimum": 75, "status": "FAIL" },
+        { "category": "failure", "actual": 0, "minimum": 75, "status": "FAIL" },
+        { "category": "non-durable turn", "actual": 0, "minimum": 200, "status": "FAIL" },
+        { "category": "next-task retrieval", "actual": 0, "minimum": 300, "status": "FAIL" },
+        { "category": "continuity: same key", "actual": 0, "minimum": 75, "status": "FAIL" },
+        { "category": "continuity: paraphrase", "actual": 0, "minimum": 75, "status": "FAIL" },
+        { "category": "continuity: compaction/resume", "actual": 0, "minimum": 75, "status": "FAIL" },
+        { "category": "continuity: change/conflict/scope", "actual": 0, "minimum": 75, "status": "FAIL" }
+      ],
+      "hard_guardrails": [
+        { "order": 1, "guardrail": "unsupported active record", "observed": "46 activeがunverified", "status": "NOT EVALUATED / BLOCK" },
+        { "order": 2, "guardrail": "credential / PII leak", "observed": "active候補0件、rotation-required 2件", "status": "ACTIVE PASS / remediation required" },
+        { "order": 3, "guardrail": "cross-tenant / cross-scope injection", "observed": "fixtureでscope分離PASS", "status": "CORPUS INSUFFICIENT" },
+        { "order": 4, "guardrail": "stale / superseded application", "observed": "supersede fixture PASS", "status": "CORPUS INSUFFICIENT" },
+        { "order": 5, "guardrail": "final answer self-attestation", "observed": "母集団測定なし", "status": "NOT EVALUATED" },
+        { "order": 6, "guardrail": "canonical duplicate", "observed": "active duplicate group 0", "status": "PASS" },
+        { "order": 7, "guardrail": "contract hash mismatch", "observed": "contract tests 6/6 PASS", "status": "PASS" },
+        { "order": 8, "guardrail": "same decision key reask", "observed": "fixture 0/3、Wilson上限56.15%", "status": "FUNCTIONAL PASS / STATISTICAL FAIL" }
+      ]
+    },
+    "accessIssues": [
+      {
+        "id": "v2_tables_not_deployed",
+        "scope": "production",
+        "message": "本番D1にmemory_learning_candidates、task_commitments、judge、quality run/measurementテーブルが未導入のため、v2 lifecycleの本番評価はできません。"
+      },
+      {
+        "id": "ai_consensus_missing",
+        "scope": "semantic quality",
+        "message": "3独立AI judgeの全会一致結果が未投入です。"
+      },
+      {
+        "id": "locked_corpus_insufficient",
+        "scope": "certification corpus",
+        "message": "v2 locked corpusの全9区分が最小件数未達で、3 session hashがsplitを跨いでいます。"
+      },
+      {
+        "id": "performance_measurements_missing",
+        "scope": "operations",
+        "message": "hook p95と200-turn smokeの運用性能測定が未実施です。"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "id": "tenant_audit",
+      "label": "Cloudflare D1 default tenant全件監査",
+      "path": "scripts/memory-quality-audit.mjs",
+      "query": {
+        "engine": "cloudflare-d1",
+        "language": "sql+javascript",
+        "sql": "SELECT id, tenant_id, project_id, business_category_id, work_type, source, external_key, content, summary, tags_json, kind, lifecycle_state, created_at, valid_from, valid_until, expires_at, confidence_score, utility_score, entities_json, rationale, reuse_rule, evidence_json, source_refs_json, conflicts_json, current_version, deleted_at, content_hash, canonical_key, capture_origin, verification_state, verified_at FROM memories WHERE tenant_id='default' AND id>:cursor ORDER BY id LIMIT 250;",
+        "description": "memoriesをID順に250件ずつ全件取得し、決定的ルールで品質集計。",
+        "executed_at": "2026-08-13T20:00:02.513Z",
+        "tables_used": ["memories", "decision_memories", "business_categories"]
+      }
+    },
+    {
+      "id": "project_aggregate",
+      "label": "Cloudflare D1 org-brain集計",
+      "query": {
+        "engine": "cloudflare-d1",
+        "language": "sql",
+        "sql": "SELECT COUNT(*) AS total, SUM(CASE WHEN COALESCE(m.lifecycle_state,'active') != 'suppressed' AND COALESCE(m.deleted_at,0)=0 THEN 1 ELSE 0 END) AS active FROM memories m WHERE m.tenant_id='default' AND m.project_id='org-brain';",
+        "description": "org-brainプロジェクトの品質集計。",
+        "executed_at": "2026-08-14T04:55:00+09:00",
+        "tables_used": ["memories", "business_categories"]
+      }
+    },
+    {
+      "id": "corpus_manifest",
+      "label": "private hash-only learning corpus manifest",
+      "path": "reports/memory-contract-v2-evaluation-2026-08-14/source-notes.md"
+    },
+    {
+      "id": "continuity_test",
+      "label": "意思決定継続性の固定回帰テスト",
+      "path": "scripts/codex-memory-context.test.mjs"
+    },
+    {
+      "id": "certifier_contract",
+      "label": "Memory Contract v2 quality certifier",
+      "path": "packages/shared/src/memory-quality-certifier.mjs"
+    },
+    {
+      "id": "evaluation_sql",
+      "label": "評価レポートの決定的集計SQL",
+      "path": "reports/memory-contract-v2-evaluation-2026-08-14/evaluation_snapshot.sql"
+    }
+  ]
+}

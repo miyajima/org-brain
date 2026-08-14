@@ -3,7 +3,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { certifyMemoryQuality } from "../packages/shared/src/memory-quality-certifier.mjs";
+import {
+  certifyMemoryContractQuality,
+  certifyMemoryQuality
+} from "../packages/shared/src/memory-quality-certifier.mjs";
 
 export function main(argv = process.argv.slice(2)) {
   const manifestArg = argv.indexOf("--manifest");
@@ -14,7 +17,9 @@ export function main(argv = process.argv.slice(2)) {
   if (manifest.raw_transcript || manifest.transcripts || manifest.prompt_text || manifest.response_text) {
     throw new Error("quality manifest must not embed raw transcript text");
   }
-  const result = certifyMemoryQuality(manifest, { threshold: 95 });
+  const result = manifest.schema_version === 2 || Array.isArray(manifest.measurements)
+    ? certifyMemoryContractQuality(manifest, { threshold: 0.95, reaskUpperThreshold: 0.05 })
+    : certifyMemoryQuality(manifest, { threshold: 95 });
   const output = outputArg >= 0 && argv[outputArg + 1] ? path.resolve(argv[outputArg + 1]) : null;
   if (output) {
     fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
@@ -30,4 +35,3 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exitCode = 1;
   }
 }
-

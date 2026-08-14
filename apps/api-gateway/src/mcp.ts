@@ -1,4 +1,11 @@
-import { HttpError, observeMemoryLearningEvent, type OrgPermission, type OrgRole } from "@org-brain/shared";
+import {
+  HttpError,
+  validateMemoryContractV2Event,
+  observeMemoryContractV2Event,
+  observeMemoryLearningEvent,
+  type OrgPermission,
+  type OrgRole
+} from "@org-brain/shared";
 import type { Hono } from "hono";
 import {
   hostHeaderValidationResponse,
@@ -65,6 +72,10 @@ import {
   getResourceDecisions,
   searchKnowledgeResources
 } from "./resource-decision-service";
+import {
+  getTaskCommitmentContext,
+  ingestLearningContractBatch
+} from "./memory-contract-service";
 
 type AgentProps = {
   tenantId: string;
@@ -247,6 +258,7 @@ class OrgBrainMcpTools {
       note: z.string().max(500).nullable().optional(),
       weight_score: z.number().min(0).max(1).optional(),
       content_hash: z.string().max(128).nullable().optional(),
+      diff_hash: z.string().max(128).nullable().optional(),
       observed_at: z.number().int().nullable().optional(),
       attestation_ref: z.string().max(512).nullable().optional()
     });
@@ -291,30 +303,145 @@ class OrgBrainMcpTools {
       , quality_dimensions: z.record(z.string(), z.number().min(0).max(100)).nullable().optional()
     });
     const learningEventShape = {
-      schema_version: z.literal(1),
+      schema_version: z.union([z.literal(1), z.literal(2)]),
       lesson_type: z.enum(["success", "decision", "failure"]),
-      kind: z.enum(["decision", "constraint", "pitfall", "preference", "fact"]),
-      trigger: z.string().min(1).max(1000),
-      conclusion: z.string().min(1).max(1000),
-      rationale: z.string().min(1).max(2000),
-      reuse_rule: z.string().min(1).max(1000),
-      outcome: z.string().min(1).max(1000).nullable(),
+      kind: z.enum(["decision", "constraint", "pitfall", "preference", "fact"]).optional(),
+      trigger: z.string().max(1000).nullable().optional(),
+      conclusion: z.string().max(1000).nullable().optional(),
+      rationale: z.string().max(2000).nullable().optional(),
+      reuse_rule: z.string().max(1000).nullable().optional(),
+      outcome: z.string().max(1000).nullable().optional(),
       applicability: z.object({
         target_files: z.array(z.string().min(1).max(512)).max(16),
         components: z.array(z.string().min(1).max(128)).max(16)
-      }),
+      }).optional(),
       evidence_selectors: z.array(z.object({
-        type: z.enum(["command", "file", "doc", "user_statement"]),
-        ref: z.string().min(1).max(1000)
-      })).min(1).max(16),
-      gaps: z.array(z.string().min(1).max(500)).max(16)
+        type: z.enum(["command", "file", "doc", "user_statement", "tool_result"]),
+        ref: z.string().max(1000).optional(),
+        digest: z.string().max(128).optional(),
+        supports: z.array(z.string().max(128)).max(12).optional()
+      })).max(16).optional(),
+      gaps: z.array(z.string().min(1).max(500)).max(16).optional(),
+      record_type: z.literal("learning_observation").optional(),
+      capture_intent: z.enum(["verify", "review"]).optional(),
+      procedure: z.string().max(2000).nullable().optional(),
+      why_it_worked: z.string().max(2000).nullable().optional(),
+      observed_outcome: z.string().max(1000).nullable().optional(),
+      reuse_when: z.string().max(1000).nullable().optional(),
+      decision_type: z.enum(["user_choice", "preference", "implementation", "governance"]).optional(),
+      decision_key: z.string().max(160).nullable().optional(),
+      question: z.string().max(1000).nullable().optional(),
+      selected_value: z.string().max(1000).nullable().optional(),
+      decision: z.string().max(1000).nullable().optional(),
+      constraints: z.array(z.string().max(500)).max(16).optional(),
+      alternatives: z.array(z.union([
+        z.string().min(1).max(1000),
+        z.object({
+          alternative: z.string().max(1000),
+          reason_rejected: z.string().max(1000).nullable().optional()
+        })
+      ])).max(16).optional(),
+      symptom: z.string().max(1000).nullable().optional(),
+      failed_approach: z.string().max(1500).nullable().optional(),
+      root_cause: z.string().max(2000).nullable().optional(),
+      correction: z.string().max(2000).nullable().optional(),
+      verified_outcome: z.string().max(1000).nullable().optional(),
+      avoidance_rule: z.string().max(1000).nullable().optional()
     };
     registerTool(this.server,
       "orgbrain_memory_observe",
       learningEventShape,
-      async (event) => toContent(await observeMemoryLearningEvent(event, {
-        sensitivePolicy: { mode: "deny", allowed_principals: [] }
-      }))
+      async (event) => {
+        if (event.schema_version === 2 && !validateMemoryContractV2Event(event)) {
+          throw new HttpError(400, "memory_contract_schema_invalid", "memory contract v2 observation does not match the shared schema");
+        }
+        return toContent(await (event.schema_version === 2
+          ? observeMemoryContractV2Event(event, { sensitivePolicy: { mode: "deny", allowed_principals: [] } })
+          : observeMemoryLearningEvent(event, { sensitivePolicy: { mode: "deny", allowed_principals: [] } })));
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_task_context_get",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(128).nullable().optional(),
+        task_key: z.string().min(1).max(256),
+        query: z.string().max(1000).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", payload.project_id);
+        return toContent(await getTaskCommitmentContext(this.env, { tenant_id: tenantId, ...payload }));
+      }
+    );
+
+    const taskCommitmentInput = z.object({
+      record_type: z.literal("task_commitment").optional(),
+      schema_version: z.literal(1).optional(),
+      project_id: z.string().max(128).nullable().optional(),
+      task_key: z.string().min(1).max(256),
+      decision_key: z.string().min(1).max(160),
+      question_fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/iu),
+      question: z.string().min(1).max(1000),
+      answer: z.object({
+        option_id: z.string().max(160).nullable().optional(),
+        label: z.string().min(1).max(500),
+        raw: z.string().max(500).nullable().optional()
+      }),
+      authority: z.literal("explicit_user").optional(),
+      confirmation_state: z.enum(["user_confirmed", "user_corrected"]).optional(),
+      ask_policy: z.literal("reuse_until_superseded").optional(),
+      evidence: z.object({
+        type: z.literal("request_user_input_result"),
+        digest: z.string().regex(/^sha256:[a-f0-9]{64}$/iu)
+      }),
+      created_at: z.number().int().optional(),
+      expires_at: z.number().int().nullable().optional()
+    });
+    registerTool(this.server,
+      "orgbrain_learning_batch_ingest",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(128).nullable().optional(),
+        task_key: z.string().max(256).nullable().optional(),
+        source: z.string().max(64).optional(),
+        prompt_contract_id: z.string().max(128).optional(),
+        prompt_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/iu).optional(),
+        contract_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/iu).optional(),
+        verifier_version: z.string().max(128).optional(),
+        commitments: z.array(taskCommitmentInput).max(16).optional(),
+        verified_items: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
+        deterministically_verified_items: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
+        review_candidates: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
+        semantic_aliases: z.array(z.object({
+          project_id: z.string().max(128).nullable().optional(),
+          task_key: z.string().min(1).max(256),
+          decision_key: z.string().min(1).max(160),
+          question: z.string().min(1).max(1000),
+          ai_certification: z.literal("ai_consensus_certified"),
+          judge_consensus: z.record(z.string(), z.unknown())
+        })).max(16).optional()
+      },
+      async ({ tenant_id, commitments, verified_items, deterministically_verified_items, review_candidates, semantic_aliases, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", payload.project_id);
+        if ((verified_items ?? []).length > 0) await this.requirePermission(tenantId, "memory:attest", payload.project_id);
+        return toContent(await this.auditedMutation(
+          tenantId,
+          "mcp.orgbrain_learning_batch_ingest",
+          "memory_learning_contract",
+          () => ingestLearningContractBatch(this.env, {
+            tenant_id: tenantId,
+            commitments,
+            verified_items,
+            deterministically_verified_items,
+            review_candidates,
+            semantic_aliases,
+            ...payload
+          }, { tenantId, principal: this.props.principal })
+        ));
+      }
     );
     registerTool(this.server, 
       "orgbrain_business_categories_list",

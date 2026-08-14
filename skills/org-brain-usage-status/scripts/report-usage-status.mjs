@@ -193,7 +193,12 @@ async function inspectProjectRepo(projectId, projectRoots) {
 }
 
 async function runQuery(options, sql) {
-  const args = ["wrangler", "d1", "execute", options.database];
+  const config = options.location === "remote"
+    ? "wrangler.remote-d1.toml"
+    : options.location === "local"
+      ? "wrangler.local.toml"
+      : "wrangler.toml";
+  const args = ["--dir", apiGatewayDir, "exec", "wrangler", "d1", "execute", options.database, "--config", config];
   args.push(`--${options.location}`);
   if (options.env) args.push("--env", options.env);
   args.push("--json", "--command", sql);
@@ -203,7 +208,7 @@ async function runQuery(options, sql) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const { stdout, stderr } = await execFileAsync("pnpm", args, {
-        cwd: apiGatewayDir,
+        cwd: repoRoot,
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024
       });

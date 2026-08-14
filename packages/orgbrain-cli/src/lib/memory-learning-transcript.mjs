@@ -4,6 +4,8 @@ import { open, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { normalizeMemoryLearningEvent } from "../../../shared/src/memory-learning-runtime.mjs";
+import { normalizeMemoryContractV2Event } from "../../../shared/src/memory-contract-v2-runtime.mjs";
+import { requestUserInputEvidenceDigest } from "./task-commitment-store.mjs";
 
 const execFileAsync = promisify(execFile);
 export const MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024;
@@ -155,6 +157,8 @@ function commandExecutions(rows, attestationKey) {
         exit_code: requiresAttestation && !attestation ? null : attestation?.exit_code ?? exitCode,
         observed_at: attestation?.completed_at ?? Date.now(),
         content_hash: attestation?.command_hash ?? hash(commandInput),
+        normalized_command_hash: hash(normalizeCommand(commandInput)),
+        attested_command_hash: attestation?.command_hash ?? null,
         attestation_ref: attestation?.attestation_ref ?? (requiresAttestation ? null : `transcript:${exitCode}`),
         attestation_required: requiresAttestation,
         attestation_verified: Boolean(attestation)
@@ -162,6 +166,10 @@ function commandExecutions(rows, attestationKey) {
     }
   }
   return executions;
+}
+
+function normalizeCommand(value) {
+  return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
 }
 
 function successfulFetches(rows) {
@@ -178,7 +186,26 @@ function successfulFetches(rows) {
   return results;
 }
 
-async function fileEvidence(workspaceRoot, ref, conclusion) {
+function requestUserInputResults(rows) {
+  const results = [];
+  for (const row of rows) {
+    const item = payload(row);
+    if (item?.type !== "mcp_tool_call_end" || item?.result?.Err) continue;
+    const invocation = item.invocation ?? {};
+    const tool = invocation.tool ?? invocation.name;
+    if (!/(?:^|[.:/])request_user_input$/u.test(String(tool ?? ""))) continue;
+    const input = invocation.arguments ?? invocation.args ?? invocation.input ?? {};
+    const result = item.result?.Ok ?? item.result;
+    results.push({
+      digest: requestUserInputEvidenceDigest(input, result),
+      observed_at: Date.now(),
+      result
+    });
+  }
+  return results;
+}
+
+async function fileEvidence(workspaceRoot, ref, conclusion, expectedDigest = null) {
   if (!workspaceRoot || path.isAbsolute(ref) || ref.includes("..")) return { ok: false, reason: "file_scope_invalid" };
   const absolute = path.resolve(workspaceRoot, ref);
   if (!absolute.startsWith(`${path.resolve(workspaceRoot)}${path.sep}`)) return { ok: false, reason: "file_scope_invalid" };
@@ -190,15 +217,21 @@ async function fileEvidence(workspaceRoot, ref, conclusion) {
     return { ok: false, reason: "file_not_found" };
   }
   const fileHash = hash(content);
+  if (expectedDigest && expectedDigest !== `sha256:${fileHash}`) {
+    return { ok: false, reason: "file_content_hash_mismatch" };
+  }
   let head = null;
   let dirty = false;
+  let diffHash = null;
   try {
-    const [{ stdout: headOut }, { stdout: statusOut }] = await Promise.all([
+    const [{ stdout: headOut }, { stdout: statusOut }, { stdout: diffOut }] = await Promise.all([
       execFileAsync("git", ["rev-parse", "HEAD"], { cwd: workspaceRoot, encoding: "utf8" }),
-      execFileAsync("git", ["status", "--short", "--", ref], { cwd: workspaceRoot, encoding: "utf8" })
+      execFileAsync("git", ["status", "--short", "--", ref], { cwd: workspaceRoot, encoding: "utf8" }),
+      execFileAsync("git", ["diff", "--no-ext-diff", "HEAD", "--", ref], { cwd: workspaceRoot, encoding: "utf8" })
     ]);
     head = headOut.trim() || null;
     dirty = Boolean(statusOut.trim());
+    diffHash = hash(diffOut);
   } catch {
     return { ok: false, reason: "git_evidence_unavailable" };
   }
@@ -209,6 +242,7 @@ async function fileEvidence(workspaceRoot, ref, conclusion) {
     ok: true,
     evidence: {
       type: "file", ref, content_hash: fileHash, observed_at: Date.now(),
+      diff_hash: diffHash,
       attestation_ref: `git:${head ?? "unknown"}:${dirty ? "dirty" : "clean"}`
     },
     changed: dirty
@@ -217,12 +251,13 @@ async function fileEvidence(workspaceRoot, ref, conclusion) {
 
 function qualityDimensions(event, evidence) {
   const scope = event.applicability.target_files.length + event.applicability.components.length > 0 ? 100 : 0;
+  const isV2 = event.schema_version === 2;
   return {
     atomicity: 100,
-    conclusion: 100,
-    rationale: 100,
-    reuse_or_avoidance: 100,
-    outcome: event.outcome || event.lesson_type === "decision" ? 100 : 0,
+    conclusion: event.conclusion ? 100 : 0,
+    rationale: (event.rationale || (isV2 && event.lesson_type === "decision" && event.decision_type === "user_choice")) ? 100 : 0,
+    reuse_or_avoidance: event.reuse_rule ? 100 : 0,
+    outcome: (event.outcome || event.lesson_type === "decision") ? 100 : 0,
     evidence_support: evidence.length > 0 ? 100 : 0,
     scope
   };
@@ -236,9 +271,20 @@ export async function verifyLearningEvent(event, context) {
   let failedCommand = false;
   const executions = commandExecutions(context.rows, context.attestationKey);
   const fetches = successfulFetches(context.rows);
+  const requestResults = requestUserInputResults(context.rows);
+  const v2 = event.schema_version === 2;
   for (const selector of event.evidence_selectors) {
     if (selector.type === "command") {
-      const matches = executions.filter((execution) => execution.input.includes(selector.ref));
+      const expectedDigest = typeof selector.digest === "string"
+        ? (selector.digest.startsWith("sha256:") ? selector.digest.slice("sha256:".length) : selector.digest)
+        : v2 ? hash(normalizeCommand(selector.ref)) : null;
+      const matches = executions.filter((execution) => {
+        if (expectedDigest && (v2
+          ? execution.normalized_command_hash === expectedDigest
+          : execution.content_hash === expectedDigest)) return true;
+        if (v2) return false;
+        return execution.input.includes(selector.ref);
+      });
       const execution = matches.at(-1);
       if (!execution || execution.exit_code === null) {
         reasons.push(execution?.attestation_required ? "command_attestation_invalid" : "command_not_observed");
@@ -247,14 +293,18 @@ export async function verifyLearningEvent(event, context) {
       successfulCommand ||= execution.exit_code === 0;
       failedCommand ||= execution.exit_code !== 0;
       evidence.push({
-        type: "command", ref: selector.ref, observed_at: execution.observed_at,
-        content_hash: execution.content_hash, attestation_ref: execution.attestation_ref,
+        type: "command", ref: selector.ref ?? `sha256:${expectedDigest}`, observed_at: execution.observed_at,
+        content_hash: v2 ? `sha256:${execution.normalized_command_hash}` : execution.content_hash,
+        attestation_ref: execution.attestation_ref,
         exit_code: execution.exit_code
       });
       continue;
     }
     if (selector.type === "file" || (selector.type === "doc" && !/^https?:\/\//iu.test(selector.ref))) {
-      const verified = await fileEvidence(context.workspaceRoot, selector.ref, event.conclusion);
+      const expectedDigest = v2 && typeof selector.digest === "string"
+        ? (selector.digest.startsWith("sha256:") ? selector.digest : `sha256:${selector.digest}`)
+        : null;
+      const verified = await fileEvidence(context.workspaceRoot, selector.ref, event.conclusion, expectedDigest);
       if (!verified.ok) reasons.push(verified.reason);
       else {
         evidence.push(verified.evidence);
@@ -271,16 +321,28 @@ export async function verifyLearningEvent(event, context) {
     if (selector.type === "user_statement") {
       if (!context.userText.includes(selector.ref)) reasons.push("user_statement_not_observed");
       else evidence.push({ type: "user_statement", ref: `sha256:${hash(selector.ref)}`, content_hash: hash(context.userText), observed_at: Date.now(), attestation_ref: "transcript:user" });
+      continue;
+    }
+    if (selector.type === "tool_result") {
+      const expectedDigest = typeof selector.digest === "string"
+        ? (selector.digest.startsWith("sha256:") ? selector.digest : `sha256:${selector.digest}`)
+        : null;
+      const match = expectedDigest ? requestResults.find((item) => item.digest === expectedDigest) : null;
+      if (!match) reasons.push(expectedDigest ? "tool_result_digest_not_observed" : "tool_result_digest_required");
+      else evidence.push({ type: "tool_result", ref: expectedDigest, content_hash: expectedDigest.slice("sha256:".length), observed_at: match.observed_at, attestation_ref: "transcript:request_user_input" });
     }
   }
   if (event.gaps.length > 0) reasons.push("gaps_present");
   if (event.applicability.target_files.length + event.applicability.components.length === 0) reasons.push("scope_missing");
   const independentTypes = new Set(evidence.map((item) => item.type));
-  if (event.lesson_type === "success" && (!changedFile || !successfulCommand)) reasons.push("success_requires_change_and_verification");
-  if (event.lesson_type === "failure" && (!failedCommand || !successfulCommand || !event.rationale || !event.reuse_rule)) {
+  if (event.lesson_type === "success" && (!changedFile || !successfulCommand || (v2 && (!event.procedure || !event.why_it_worked || !event.observed_outcome || !event.reuse_when)))) reasons.push("success_requires_change_and_verification");
+  if (event.lesson_type === "failure" && (!failedCommand || !successfulCommand || !event.rationale || !event.reuse_rule || (v2 && (!event.symptom || !event.root_cause || !event.correction || !event.verified_outcome || !event.avoidance_rule)))) {
     reasons.push("failure_chain_incomplete");
   }
-  if (["decision", "constraint"].includes(event.kind) && independentTypes.size < 2) reasons.push("decision_requires_two_evidence_types");
+  if (v2 && event.lesson_type === "decision" && !["user_choice", "preference"].includes(event.decision_type) && independentTypes.size < 2) reasons.push("decision_requires_two_evidence_types");
+  if (!v2 && ["decision", "constraint"].includes(event.kind) && independentTypes.size < 2) reasons.push("decision_requires_two_evidence_types");
+  if (v2 && event.lesson_type === "decision" && !evidence.some((item) => ["user_statement", "tool_result"].includes(item.type))) reasons.push("decision_confirmation_evidence_required");
+  if (v2 && event.capture_intent === "review") reasons.push("review_intent");
   const verified = reasons.length === 0;
   const dimensions = qualityDimensions(event, evidence);
   return {
@@ -302,6 +364,7 @@ export async function collectVerifiedLearningEvents(options) {
   });
   const turnRows = currentTurnRows(rows, options.turnId);
   const userText = collectUserText(turnRows);
+  const toolResults = turnRows.map((row) => stringify(payload(row))).join("\n");
   const observations = [];
   const pending = new Map();
   for (const row of turnRows) {
@@ -318,10 +381,15 @@ export async function collectVerifiedLearningEvents(options) {
   const events = [];
   const reviews = [];
   for (const observation of observations.slice(-3)) {
-    const normalized = await normalizeMemoryLearningEvent(observation.input, {
+    const normalized = observation.input?.schema_version === 2
+      ? await normalizeMemoryContractV2Event(observation.input, {
+        workspaceRoot: options.workspaceRoot,
+        sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
+      })
+      : await normalizeMemoryLearningEvent(observation.input, {
       workspaceRoot: options.workspaceRoot,
       sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
-    });
+      });
     if (!normalized.accepted || normalized.event_hash !== observation.output.event_hash) {
       reviews.push({ event_hash: observation.output?.event_hash ?? null, reason_codes: ["observe_attestation_mismatch", ...normalized.reason_codes] });
       continue;
@@ -329,11 +397,12 @@ export async function collectVerifiedLearningEvents(options) {
     const verification = await verifyLearningEvent(normalized.event, {
       rows: turnRows,
       userText,
+      toolResults,
       workspaceRoot: options.workspaceRoot,
       attestationKey: options.attestationKey
     });
     if (verification.verification_state !== "verified") {
-      reviews.push({ event_hash: normalized.event_hash, reason_codes: verification.reason_codes, verification });
+      reviews.push({ event_hash: normalized.event_hash, learning: normalized.event, reason_codes: verification.reason_codes, verification });
       continue;
     }
     events.push({ event_hash: normalized.event_hash, learning: normalized.event, verification });

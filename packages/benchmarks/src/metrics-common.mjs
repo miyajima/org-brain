@@ -5,8 +5,16 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, "../..");
+const repoRoot = resolve(__dirname, "../../..");
 const apiGatewayDir = resolve(repoRoot, "apps/api-gateway");
+
+function wranglerConfig(location) {
+  return location === "remote"
+    ? "wrangler.remote-d1.toml"
+    : location === "local"
+      ? "wrangler.local.toml"
+      : "wrangler.toml";
+}
 
 export function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -61,13 +69,15 @@ export function buildFtsQuery(raw) {
 }
 
 export async function runD1Query(options, sql) {
-  const args = ["wrangler", "d1", "execute", options.database];
-  args.push(`--${options.location}`);
+  const args = [
+    "--dir", apiGatewayDir, "exec", "wrangler", "d1", "execute", options.database,
+    "--config", wranglerConfig(options.location), `--${options.location}`
+  ];
   if (options.env) args.push("--env", options.env);
   args.push("--json", "--command", sql);
 
   const { stdout, stderr } = await execFileAsync("pnpm", args, {
-    cwd: apiGatewayDir,
+    cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024
   });
@@ -95,12 +105,15 @@ export async function runD1Queries(options, queryMap) {
 }
 
 export async function fetchR2ObjectText(options, bucket, key) {
-  const args = ["wrangler", "r2", "object", "get", `${bucket}/${key}`, "--pipe"];
-  args.push(`--${options.location === "preview" ? "remote" : options.location}`);
+  const location = options.location === "preview" ? "remote" : options.location;
+  const args = [
+    "--dir", apiGatewayDir, "exec", "wrangler", "r2", "object", "get", `${bucket}/${key}`, "--pipe",
+    "--config", wranglerConfig(location), `--${location}`
+  ];
   if (options.env) args.push("--env", options.env);
 
   const { stdout } = await execFileAsync("pnpm", args, {
-    cwd: apiGatewayDir,
+    cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024
   });
