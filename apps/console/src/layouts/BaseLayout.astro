@@ -26,6 +26,7 @@ const navCopy = {
     resources: "Resources",
     groups: "Groups",
     users: "Users",
+    clients: "Client installations",
     organization: "Organization",
     categories: "Business Categories",
     profile: "Profile",
@@ -50,6 +51,7 @@ const navCopy = {
     resources: "資料・成果物",
     groups: "グループ",
     users: "ユーザー",
+    clients: "クライアント接続",
     organization: "組織",
     categories: "業務カテゴリ",
     profile: "プロフィール",
@@ -74,6 +76,7 @@ const navCopy = {
     resources: "资料与成果",
     groups: "群组",
     users: "用户",
+    clients: "客户端连接",
     organization: "组织",
     categories: "业务类别",
     profile: "个人资料",
@@ -114,6 +117,7 @@ const isActive = (href: string) => {
   if (href === "/resources") return currentPath === "/resources";
   if (href === "/groups") return currentPath === "/groups";
   if (href === "/users") return currentPath === "/users";
+  if (href === "/client-installations") return currentPath === "/client-installations";
   if (href === "/organization") return currentPath === "/organization";
   if (href === "/business-categories") return currentPath === "/business-categories";
   if (href === "/profile") return currentPath === "/profile";
@@ -156,6 +160,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/resources")} aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
                 <a href={withScope("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
                 <a href={withScope("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
+                <a href={withScope("/client-installations")} aria-current={isActive("/client-installations") ? "page" : undefined}>{navCopy.clients}</a>
                 <a href={withScope("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
                 <a href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
                 <a href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
@@ -175,6 +180,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/memory-impact")}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/decisions")}>{navCopy.decisionEditor}</a>
                 <a href={withScope("/resources")}>{navCopy.resources}</a>
+                <a href={withScope("/client-installations")}>{navCopy.clients}</a>
                 <a href={withScope("/operations")}>{navCopy.operations}</a>
                 <a href={withScope("/tasks/new")}>{navCopy.newTask}</a>
               </div>
@@ -198,6 +204,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
                 <a href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
                 <a href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
+                <a href={withScope("/client-installations")} aria-current={isActive("/client-installations") ? "page" : undefined}>{navCopy.clients}</a>
                 <a href={withScope("/operations")} aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
                 <a href={withScope("/memory-impact")} aria-current={isActive("/memory-impact") ? "page" : undefined}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/tasks/new")} aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
@@ -217,6 +224,7 @@ const isActive = (href: string) => {
                 <a href={withScope("/organization")}>{navCopy.organization}</a>
                 <a href={withScope("/business-categories")}>{navCopy.categories}</a>
                 <a href={withScope("/profile")}>{navCopy.profile}</a>
+                <a href={withScope("/client-installations")}>{navCopy.clients}</a>
                 <a href={withScope("/operations")}>{navCopy.operations}</a>
                 <a href={withScope("/memory-impact")}>{navCopy.memoryImpact}</a>
                 <a href={withScope("/tasks/new")}>{navCopy.newTask}</a>

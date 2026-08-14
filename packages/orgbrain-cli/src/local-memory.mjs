@@ -59,11 +59,11 @@ Usage:
   orgbrain serve [--host 127.0.0.1] [--port 8788]
   orgbrain mcp
   orgbrain event ingest <codex|claude|opencode|openclaw> [json-payload]
-  orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact>
+  orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact|claude-context|claude-stop|cursor-context|cursor-stop|flush>
   orgbrain maintenance <run|status|install|uninstall> [--schedule daily] [--apply] [--execute]
   orgbrain cloud doctor [--root <checkout>] [--live]
   orgbrain cloud provision [--root <checkout>] [--with-vectorize] [--execute]
-  orgbrain connector setup <codex|claude|opencode|openclaw> [--mode mcp|minimal-hooks] [--maintenance daily] [--scope user|project] [--execute]
+  orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--url <https-url>] [--maintenance daily] [--scope user|project] [--execute]
 
 Compatibility aliases:
   orgbrain upsert | search | list | export-markdown
@@ -730,15 +730,28 @@ async function main() {
     const payload = rest.slice(1).join(" ") || await readStdin();
     const { ingestHookEvent } = await import("./hook-memory-bridge.mjs");
     await ingestHookEvent(source, payload);
-  } else if (command === "hook" && action === "codex-context") {
+  } else if (command === "hook" && (action === "codex-context" || action === "claude-context")) {
     const { buildCodexMemoryContext } = await import("./codex-memory-context.mjs");
     const { loadEnvFallbacks } = await import("./hook-memory-bridge.mjs");
     await loadEnvFallbacks();
     const result = await buildCodexMemoryContext(await readStdin());
     if (result) process.stdout.write(`${JSON.stringify(result)}\n`);
-  } else if (command === "hook" && action === "codex-stop") {
+  } else if (command === "hook" && action === "cursor-context") {
+    const { flushHookCaptureOutbox, loadEnvFallbacks, resolveMcpConfig } = await import("./hook-memory-bridge.mjs");
+    await loadEnvFallbacks();
+    const config = resolveMcpConfig();
+    if (config.complete) await flushHookCaptureOutbox(config, 100).catch(() => undefined);
+    process.stdout.write("{}\n");
+  } else if (command === "hook" && ["codex-stop", "claude-stop", "cursor-stop"].includes(action)) {
     const { ingestHookEvent } = await import("./hook-memory-bridge.mjs");
-    await ingestHookEvent("codex-stop", await readStdin(), { emit: false });
+    const source = action === "codex-stop" ? "codex-stop" : action.replace(/-stop$/u, "");
+    await ingestHookEvent(source, await readStdin(), { emit: false });
+    process.stdout.write("{}\n");
+  } else if (command === "hook" && action === "flush") {
+    const { flushHookCaptureOutbox, loadEnvFallbacks, resolveMcpConfig } = await import("./hook-memory-bridge.mjs");
+    await loadEnvFallbacks();
+    const config = resolveMcpConfig();
+    if (config.complete) await flushHookCaptureOutbox(config, 100).catch(() => undefined);
     process.stdout.write("{}\n");
   } else if (command === "hook" && ["codex-pre-tool", "codex-post-tool", "codex-pre-compact"].includes(action)) {
     const { loadEnvFallbacks } = await import("./hook-memory-bridge.mjs");

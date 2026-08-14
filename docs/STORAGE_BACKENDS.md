@@ -16,6 +16,12 @@ to improve retrieval quality: LongMemEval and LoCoMo scores are primarily
 controlled by retrieval-unit quality, embeddings, candidate fusion, and
 reranking.
 
+MCP client enrollment is stored in one additive D1 control-plane table,
+`mcp_client_installations`. It contains hashes and structural installation
+metadata only. It does not add parent/child columns to memory, decision,
+rationale, FTS, vector, or graph tables, so memory retrieval plans and indexes
+are unchanged.
+
 ## Future PostgreSQL option
 
 PostgreSQL with pgvector is a planned opt-in backend, not a replacement for the

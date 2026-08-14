@@ -239,6 +239,40 @@ surface. References: [Codex MCP](https://developers.openai.com/codex/mcp/),
 [OpenCode MCP](https://opencode.ai/v2/docs/mcp-servers), and
 [OpenClaw MCP](https://docs.openclaw.ai/cli/mcp).
 
+For shared Remote MCP, interactive Codex, Claude Code, and Cursor connections
+use Cloudflare Access Managed OAuth through the Access-protected MCP URL:
+
+```bash
+orgbrain connector setup codex --mode remote-mcp --url https://mcp.example.com/mcp
+orgbrain connector setup claude --mode remote-mcp --url https://mcp.example.com/mcp --scope user
+orgbrain connector setup cursor --mode remote-mcp --url https://mcp.example.com/mcp --scope user
+
+# Repeat the reviewed command with --execute to modify client settings.
+```
+
+Automatic realtime hooks use a different credential per machine and client.
+Create a pending installation in Console, create a dedicated Access Service
+Token, review the dry run below, then add `--execute`. Secrets are read from a
+masked TTY prompt or setup-only environment variables and stored at
+`~/.config/org-brain/clients/<installation-id>/credentials.env` with mode
+`0600`:
+
+```bash
+orgbrain connector setup codex --mode cloud-hooks \
+  --url https://mcp.example.com/mcp --workspace "$PWD"
+```
+
+The cloud hook calls no LLM and reads no full transcript. It sends only memory
+and rationale that passed the existing deterministic promote/skip classifier.
+Failures are non-blocking and retry from an installation-specific private
+outbox in batches of at most 100. Flushes atomically claim rows so concurrent
+hook events cannot overwrite them. Authentication-failed rows are not sent to
+the capture tool until a metadata-only status check revalidates the same
+installation ID. When a hook explicitly names its installation credential file,
+those URL, service-token, installation, tenant, and outbox values override any
+stale inherited Org Brain authentication variables; every hook process verifies
+the installation ID through the status endpoint before its first capture.
+
 For the smallest Codex installation, use local lifecycle hooks instead of MCP.
 The command is a reviewable dry run unless `--execute` is supplied:
 
@@ -552,7 +586,8 @@ The CLI uses `ORGBRAIN_API_URL`, `ORGBRAIN_API_KEY`, and `ORGBRAIN_TENANT_ID`.
 
 Identity is explicit. API-key requests are owned by the `principal` configured for that key, such as
 `user:alice@example.com`, `team:platform`, or `service:openclaw-orgbrain`. Cloudflare Access login requests
-are owned by `user:<access-sub>`. Optional profile fields such as display name, email, company name,
+resolve through `user_identities` to the existing Org Brain user principal; hook runtime identity remains
+separate as `client:<installation-id>`. Optional profile fields such as display name, email, company name,
 and organization name are for display only; sharing uses tenant-scoped groups and resource ACLs, so groups
 can span companies, departments, projects, or any other collaboration unit.
 
@@ -570,6 +605,8 @@ The self-hosted API gateway exposes:
 - `POST /v1/retention-queue/cancel` (up to 100 queued items)
 - `GET /v1/audit-events`
 - `GET /v1/audit-events/verify`
+- `GET|POST /v1/mcp-client-installations`
+- `DELETE /v1/mcp-client-installations/:id`
 - `GET /v1/groups`
 - `POST /v1/groups`
 - `PUT /v1/resource-shares`
@@ -647,6 +684,12 @@ JWTs. Generic OIDC uses `OIDC_ISSUER`, `OIDC_AUD`, optional
 `obp_` scoped tokens; only a SHA-256 token hash is stored and the clear token is
 returned once. Retention enforcement is dry-run by default, and matching legal
 holds block hard deletion.
+
+Remote MCP uses a separate Access audience (`MCP_ACCESS_AUD`). Interactive
+clients resolve to the user's existing principal; service-token hooks resolve
+through `mcp_client_installations` and can call only
+`orgbrain_memories_capture_rationale`. `MCP_AUTH_MODE` defaults to fail-closed
+`access`; use explicit `dual` only during migration from legacy JSON secrets.
 
 Cloud deployments may additionally bind `API_RATE_LIMITER` using a Workers
 Rate Limiting binding. Requests are keyed by authenticated tenant, principal,

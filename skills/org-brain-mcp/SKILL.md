@@ -28,7 +28,7 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
    - `memory_basis: <memory_id or brief memory summary>`
    - `confidence: low|medium|high`
 9. If memory was consulted but did not replace another lookup, report `memory_used: yes` and `avoided_lookup: none` only when the detail is relevant to the user-visible outcome.
-10. Auth must go through the configured `CF-Access-*` service token headers, not static bearer tokens.
+10. Interactive Codex, Claude Code, and Cursor access must use the client's Cloudflare Access Managed OAuth flow. Automatic hooks use one Access Service Token per client installation; never reuse it across clients or machines.
 11. Treat hook, MCP, and skill as separate layers: hook selects when to run, MCP is the only preferred cloud transport, and this skill defines usage policy.
 12. For automatic hook capture, call the known capture tool directly without `server/discover` or `tools/list`; this path must not invoke an LLM.
 
@@ -49,23 +49,27 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 
 ## Initial setup
 
-1. Confirm the endpoint is the deployed API Gateway `/mcp` URL, not the Console page URL.
-2. Configure the MCP client with `CF-Access-Client-Id`, `CF-Access-Client-Secret`, and optional `x-orgbrain-tenant` headers.
-3. For lifecycle hooks, store these private values in `~/.config/org-brain/hooks.env`:
+1. Confirm the endpoint is the Access-protected `open-brain-mcp` `/mcp` URL, not the Console or direct API Gateway URL.
+2. For an interactive client, run `orgbrain connector setup <codex|claude|cursor> --mode remote-mcp --url <url>` as a dry run, then repeat with `--execute`. Codex additionally runs `codex mcp login orgbrain`; Claude Code and Cursor start OAuth on first connection. Leave OAuth credentials in the client credential store.
+3. For an automatic hook, create a pending installation in the Console and copy its one-time, ten-minute enrollment code. Create a dedicated Cloudflare Access Service Token for this installation.
+4. Review `orgbrain connector setup <client> --mode cloud-hooks --url <url> --workspace <path>` first. On `--execute`, enter the service-token Client ID, secret, and enrollment code through the masked TTY prompt or setup-only environment variables.
+5. The installer writes a private installation-specific file, never a shared hook credential file:
 
 ```dotenv
 ORGBRAIN_ENABLE_CLOUD_MEMORY=true
 ORGBRAIN_ENABLE_ORG_SHARING=true
-ORGBRAIN_MCP_URL=https://<api-gateway-domain>/mcp
+ORGBRAIN_MCP_URL=https://<access-protected-mcp-domain>/mcp
 ORGBRAIN_MCP_CLIENT_ID=<service-token-client-id>
 ORGBRAIN_MCP_CLIENT_SECRET=<service-token-client-secret>
+ORGBRAIN_CLIENT_INSTALLATION_ID=<installation-id>
+ORGBRAIN_HOOK_OUTBOX=~/.config/org-brain/clients/<installation-id>/outbox.jsonl
 ORGBRAIN_TENANT_ID=default
 ```
 
-4. Keep workspace-to-project routing in `~/.config/org-brain/workspaces.json`; do not put repository paths in `hooks.env`.
-5. Verify `server/discover`, then `tools/list`, then a read-only `orgbrain_memories_list` call. Modern responses must not contain `Mcp-Session-Id`.
-6. Install the agent lifecycle hook only after the read-only MCP smoke succeeds. The hook calls `orgbrain_memories_capture_rationale` directly and must fail closed when any MCP credential field is missing.
-7. Never print the client secret. Report only whether each required setting is present and the MCP hostname.
+   The actual path is `~/.config/org-brain/clients/<installation-id>/credentials.env` with mode `0600`.
+6. Keep workspace-to-project routing in `~/.config/org-brain/workspaces.json`; never add repository paths to credential or audit metadata.
+7. Verify interactive OAuth with discovery and a read-only call. Verify automatic hooks by calling only the known `orgbrain_memories_capture_rationale` tool; the hook identity must be rejected from every other tool.
+8. Never print the client secret or enrollment code. Report only presence, installation ID, client type, and MCP hostname.
 
 ## Operational Notes
 - OrgBrain master memory is Cloudflare D1.
@@ -76,5 +80,6 @@ ORGBRAIN_TENANT_ID=default
 - `orgbrain_memories_upsert` remains for compatibility and non-interactive flows, but interactive assistant flows should use propose/confirm.
 - For agent preflight, call `orgbrain_context_enrich` with `task.title`, `task.description`, `project_id`, and `task_type`; use returned `decisionContext`, `constraints`, and `knownPitfalls` as guidance, not as a replacement for source verification.
 - If MCP returns auth errors, ask for:
-  - service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`)
-  - optional `x-orgbrain-tenant` header
+  - interactive client: whether its OAuth login is active
+  - hook: installation state and whether its private credential fields are present, never their values
+  - optional tenant selection
