@@ -59,7 +59,7 @@ Usage:
   orgbrain serve [--host 127.0.0.1] [--port 8788]
   orgbrain mcp
   orgbrain event ingest <codex|claude|opencode|openclaw> [json-payload]
-  orgbrain hook <codex-context|codex-stop>
+  orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact>
   orgbrain maintenance <run|status|install|uninstall> [--schedule daily] [--apply] [--execute]
   orgbrain cloud doctor [--root <checkout>] [--live]
   orgbrain cloud provision [--root <checkout>] [--with-vectorize] [--execute]
@@ -740,6 +740,72 @@ async function main() {
     const { ingestHookEvent } = await import("./hook-memory-bridge.mjs");
     await ingestHookEvent("codex-stop", await readStdin(), { emit: false });
     process.stdout.write("{}\n");
+  } else if (command === "hook" && ["codex-pre-tool", "codex-post-tool", "codex-pre-compact"].includes(action)) {
+    const { loadEnvFallbacks } = await import("./hook-memory-bridge.mjs");
+    const {
+      TaskCommitmentStore,
+      guardCodexQuestion,
+      hasTaskIdentity,
+      taskKeyFromHookPayload
+    } = await import("./lib/task-commitment-store.mjs");
+    await loadEnvFallbacks();
+    const payloadText = await readStdin();
+    let payload = {};
+    try {
+      payload = payloadText ? JSON.parse(payloadText) : {};
+    } catch {
+      process.stdout.write("{}\n");
+      return;
+    }
+    const commitmentStore = new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+    const tenantId = process.env.ORGBRAIN_TENANT_ID || "default";
+    if (action === "codex-pre-tool") {
+      const decision = await guardCodexQuestion(payload, commitmentStore, tenantId);
+      const configuredMode = String(process.env.ORGBRAIN_MEMORY_COMMITMENTS_MODE || "on").trim().toLowerCase();
+      const mode = ["off", "shadow", "on"].includes(configuredMode) ? configuredMode : "on";
+      if (!decision.allow && mode === "on") {
+        process.stdout.write(`${JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: "This request_user_input question is already answered by a confirmed task commitment.",
+            additionalContext: `Reuse decision_key=${decision.commitment?.decision_key}; answer=${decision.commitment?.answer?.label ?? "(stored answer)"}. Ask again only if the user explicitly requests a change.`
+          }
+        })}\n`);
+      } else if ((!decision.allow && mode === "shadow") || decision.warning) {
+        process.stdout.write(`${JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            additionalContext: decision.warning
+              ? `A confirmed task commitment is semantically similar to this question. Check it before asking: decision_key=${decision.warning.decision_key}; answer=${decision.warning.answer?.label ?? "(stored answer)"}.`
+              : `A confirmed task commitment matches this question, but the commitment guard is in shadow mode: decision_key=${decision.commitment?.decision_key}; answer=${decision.commitment?.answer?.label ?? "(stored answer)"}.`
+          }
+        })}\n`);
+      } else {
+        process.stdout.write("{}\n");
+      }
+    } else if (action === "codex-post-tool") {
+      const result = await commitmentStore.ingestToolResult(payload, tenantId);
+      process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+    } else {
+      if (!hasTaskIdentity(payload)) {
+        process.stdout.write('{"ok":true,"skipped":"task_identity_missing"}\n');
+        return;
+      }
+      const taskKey = taskKeyFromHookPayload(payload);
+      const projectId = payload.project_id ?? (typeof payload.cwd === "string" ? payload.cwd.split(/[\\/]/u).filter(Boolean).at(-1) : null);
+      const commitments = await commitmentStore.list({ tenantId, projectId, taskKey });
+      const result = await commitmentStore.checkpoint({
+        tenantId,
+        projectId,
+        taskKey,
+        payload: {
+          commitments,
+          commitment_keys: commitments.map((item) => item.decision_key)
+        }
+      });
+      process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+    }
   } else if (command === "maintenance") {
     const { runPersonalMaintenanceCommand } = await import("./personal-maintenance.mjs");
     emit(await runPersonalMaintenanceCommand(action, args));

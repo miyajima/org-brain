@@ -15,6 +15,14 @@ import {
   extractDurableMemoryDrafts
 } from "../../shared/src/memory-capture-v2-runtime.mjs";
 import { MEMORY_CAPTURE_HOOK_PROFILE } from "../../shared/src/memory-capture-profile.generated.mjs";
+import {
+  MEMORY_CONTRACT_V2_PROMPT_ID,
+  MEMORY_CONTRACT_V2_VERIFIER_VERSION
+} from "../../shared/src/memory-contract-v2-runtime.mjs";
+import {
+  MEMORY_CONTRACT_V2_CONTRACT_HASH,
+  MEMORY_CONTRACT_V2_PROMPT_HASH
+} from "../../shared/src/memory-contract-v2-contract.mjs";
 import { collectVerifiedLearningEvents } from "./lib/memory-learning-transcript.mjs";
 import {
   configuredTenantFromEnv,
@@ -40,6 +48,7 @@ const DEFAULT_ENV_FILES = [
 ];
 const MCP_PROTOCOL_VERSION = "2026-07-28";
 const MCP_CAPTURE_TOOL = "orgbrain_memories_capture_rationale";
+const MCP_LEARNING_BATCH_TOOL = "orgbrain_learning_batch_ingest";
 const CAPTURE_TIMEOUT_MS = 5_000;
 
 const CAUSE_KEYWORDS = ["原因", "理由", "root cause", "because", "why"];
@@ -965,6 +974,30 @@ export function captureCandidateJson(record) {
 
 export function captureItemPayload(record) {
   const candidate = captureCandidateJson(record);
+  const candidateId = firstString(
+    record.candidate_id,
+    record.candidateId,
+    record.learning?.contract_metadata?.candidate_id
+  );
+  const aiCertification = firstString(
+    record.ai_certification,
+    record.certification,
+    record.learning?.contract_metadata?.ai_certification
+  );
+  const judgeConsensus = record.judge_consensus ?? record.learning?.contract_metadata?.judge_consensus;
+  const learning = record.learning && typeof record.learning === "object"
+    ? {
+      ...record.learning,
+      contract_metadata: {
+        ...(record.learning.contract_metadata && typeof record.learning.contract_metadata === "object"
+          ? record.learning.contract_metadata
+          : {}),
+        ...(candidateId ? { candidate_id: candidateId } : {}),
+        ...(aiCertification ? { ai_certification: aiCertification } : {}),
+        ...(judgeConsensus ? { judge_consensus: judgeConsensus } : {})
+      }
+    }
+    : null;
   return {
     ...candidate,
     evidence: (candidate.evidence ?? []).map((item, index) => ({
@@ -974,10 +1007,14 @@ export function captureItemPayload(record) {
       note: item.note ?? null,
       weight_score: item.weight ?? null,
       ...(record.evidence?.[index]?.contentHash ? { content_hash: record.evidence[index].contentHash } : {}),
+      ...(record.evidence?.[index]?.diffHash ? { diff_hash: record.evidence[index].diffHash } : {}),
       ...(record.evidence?.[index]?.observedAt ? { observed_at: record.evidence[index].observedAt } : {}),
       ...(record.evidence?.[index]?.attestationRef ? { attestation_ref: record.evidence[index].attestationRef } : {})
     })),
-    ...(record.learning ? { learning: record.learning } : {}),
+    ...(learning ? { learning } : {}),
+    ...(candidateId ? { candidate_id: candidateId } : {}),
+    ...(aiCertification ? { ai_certification: aiCertification } : {}),
+    ...(judgeConsensus ? { judge_consensus: judgeConsensus } : {}),
     ...(record.captureOrigin ? { capture_origin: record.captureOrigin } : {}),
     ...(record.verification ? { verification: record.verification } : {}),
     ...(record.qualityDimensions ? { quality_dimensions: record.qualityDimensions } : {})
@@ -1070,10 +1107,26 @@ export async function prepareObservedLearningRecords(record, workspace, tenantId
   const businessCategoryId = record.businessCategoryId ?? workspace.businessCategoryId ?? category.id;
   const workType = record.workType ?? workspace.workType ?? "other";
   const ttl = { fact: 90, decision: 180, constraint: 180, pitfall: 180, preference: 180 };
-  const records = transcript.events.map(({ event_hash: eventHash, learning, verification }) => {
-    const canonicalText = normalizeWhitespace(learning.conclusion).toLocaleLowerCase();
+  const commitmentOnlyCount = transcript.events.filter(({ learning }) =>
+    learning.schema_version === 2 && learning.lesson_type === "decision" &&
+    ["user_choice", "preference"].includes(learning.decision_type)
+  ).length;
+  const formalEvents = transcript.events.filter(({ learning }) => !(
+    learning.schema_version === 2 && learning.lesson_type === "decision" &&
+    ["user_choice", "preference"].includes(learning.decision_type)
+  ));
+  const records = formalEvents.map(({ event_hash: eventHash, learning: observedLearning, verification }) => {
+    const learning = {
+      ...observedLearning,
+      contract_metadata: {
+        session_id_hash: record.metadata?.sessionId ? `sha256:${sha256(record.metadata.sessionId)}` : null,
+        turn_id_hash: record.metadata?.turnId ? `sha256:${sha256(record.metadata.turnId)}` : null,
+        contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH
+      }
+    };
+    const canonicalText = normalizeWhitespace(learning.conclusion || learning.selected_value || learning.decision || learning.correction || "learning").toLocaleLowerCase();
     const canonicalKey = sha256(`${tenantId}\0${workspace.projectId || "global"}\0${learning.kind}\0${canonicalText}`);
-    const validUntil = record.createdAt + ttl[learning.kind] * 24 * 60 * 60 * 1000;
+    const validUntil = record.createdAt + (ttl[learning.kind] ?? 180) * 24 * 60 * 60 * 1000;
     return {
       externalKey: `learning:${sha256(`${record.externalKey}\0${eventHash}\0${canonicalKey}`)}`,
       canonicalKey,
@@ -1084,9 +1137,9 @@ export async function prepareObservedLearningRecords(record, workspace, tenantId
       businessCategoryId,
       businessCategory: category,
       workType,
-      summary: learning.conclusion,
+      summary: learning.conclusion || learning.selected_value || learning.decision || learning.correction || "Verified learning",
       tags: dedupeTags(["verified-learning", learning.lesson_type, learning.kind, record.eventType]),
-      content: learning.conclusion,
+      content: learning.conclusion || learning.selected_value || learning.decision || learning.correction || "Verified learning",
       kind: learning.kind,
       rationale: learning.rationale,
       reuseRule: learning.reuse_rule,
@@ -1095,12 +1148,14 @@ export async function prepareObservedLearningRecords(record, workspace, tenantId
         ref: item.ref,
         note: [
           `content_hash=${item.content_hash}`,
+          item.diff_hash ? `diff_hash=${item.diff_hash}` : null,
           `observed_at=${item.observed_at}`,
           `attestation_ref=${item.attestation_ref}`,
           Number.isInteger(item.exit_code) ? `exit_code=${item.exit_code}` : null
         ].filter(Boolean).join("; "),
         weight: 1,
         contentHash: item.content_hash,
+        diffHash: item.diff_hash,
         observedAt: item.observed_at,
         attestationRef: item.attestation_ref
       })),
@@ -1123,13 +1178,51 @@ export async function prepareObservedLearningRecords(record, workspace, tenantId
       actorId: "hook:codex-stop"
     };
   });
+  const reviewCandidates = transcript.reviews
+    .filter((item) => item?.learning)
+    .slice(0, 3)
+    .map((item) => ({
+      external_key: `learning-review:${sha256(`${record.externalKey}\0${item.event_hash ?? sha256(JSON.stringify(item.learning))}`)}`,
+      prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+      prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
+      contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
+      verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
+      capture_intent: "review",
+      project_id: workspace.projectId,
+      task_key: firstString(record.metadata?.sessionId, record.metadata?.turnId) ? `codex:${firstString(record.metadata?.sessionId, record.metadata?.turnId)}` : null,
+      observation: item.learning,
+      reason_codes: item.reason_codes ?? item.verification?.reason_codes ?? [],
+      verification: item.verification ?? null,
+      created_at: record.createdAt,
+      expires_at: record.createdAt + 180 * 24 * 60 * 60 * 1000
+    }));
+  const deterministicReviewCandidates = records.map((item) => ({
+    external_key: `learning-review:${sha256(`${record.externalKey}\0${item.externalKey}`)}`,
+    prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+    prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
+    contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
+    verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
+    capture_intent: "verify",
+    project_id: workspace.projectId,
+    task_key: firstString(record.metadata?.sessionId, record.metadata?.turnId) ? `codex:${firstString(record.metadata?.sessionId, record.metadata?.turnId)}` : null,
+    item: captureItemPayload(item),
+    observation: item.learning,
+    verification: item.verification,
+    evidence: item.evidence,
+    reason_codes: ["ai_consensus_pending"],
+    created_at: record.createdAt,
+    expires_at: record.createdAt + 180 * 24 * 60 * 60 * 1000
+  }));
+  const allReviewCandidates = [...deterministicReviewCandidates, ...reviewCandidates].slice(0, 3);
   return {
     records,
+    reviewCandidates: allReviewCandidates,
     category,
     report: {
       mode: workspace.memoryLearningMode,
-      observed_count: records.length,
-      review_count: transcript.reviews.length,
+      observed_count: transcript.events.length,
+      commitment_only_count: commitmentOnlyCount,
+      review_count: allReviewCandidates.length,
       candidate_hashes: records.map((candidate) => sha256(JSON.stringify(captureItemPayload(candidate)))),
       review_reason_codes: [...new Set(transcript.reviews.flatMap((item) => item.reason_codes ?? []))],
       scanned_bytes: transcript.scanned_bytes ?? 0,
@@ -1153,6 +1246,58 @@ export function buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords) {
         tenant_id: tenantId,
         source: sourceName,
         ...argumentsPayload
+      },
+      _meta: {
+        "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {
+          name: "orgbrain-hook-memory-bridge",
+          version: "0.1.0"
+        }
+      }
+    }
+  };
+}
+
+export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
+  const verifiedItems = Array.isArray(input.aiCertifiedRecords)
+    ? input.aiCertifiedRecords.map(captureItemPayload)
+    : [];
+  const deterministicItems = Array.isArray(input.deterministicallyVerifiedItems)
+    ? input.deterministicallyVerifiedItems.map(captureItemPayload)
+    : Array.isArray(input.records)
+      ? input.records.map(captureItemPayload)
+      : [];
+  const reviewCandidates = Array.isArray(input.reviewCandidates)
+    ? input.reviewCandidates.slice(0, 3).map((candidate) => ({
+      ...candidate,
+      prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+      prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
+      contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
+      verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION
+    }))
+    : [];
+  const semanticAliases = Array.isArray(input.semanticAliases) ? input.semanticAliases.slice(0, 16) : [];
+  return {
+    jsonrpc: "2.0",
+    id: `learning:${sha256(JSON.stringify({ tenantId, sourceName, verifiedItems, reviewCandidates, semanticAliases })).slice(0, 40)}`,
+    method: "tools/call",
+    params: {
+      name: MCP_LEARNING_BATCH_TOOL,
+      arguments: {
+        tenant_id: tenantId,
+        source: sourceName,
+        project_id: input.projectId ?? null,
+        task_key: input.taskKey ?? null,
+        commitments: Array.isArray(input.commitments) ? input.commitments.slice(0, 16) : [],
+        prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+        prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
+        contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
+        verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
+        verified_items: verifiedItems,
+        deterministically_verified_items: deterministicItems,
+        review_candidates: reviewCandidates,
+        semantic_aliases: semanticAliases
       },
       _meta: {
         "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
@@ -1208,6 +1353,31 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, recordOrRec
   } catch {
     throw new Error("org-brain MCP hook capture returned invalid JSON");
   }
+}
+
+export async function postLearningBatchViaMcp(config, tenantId, sourceName, input) {
+  const response = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "CF-Access-Client-Id": config.clientId,
+      "CF-Access-Client-Secret": config.clientSecret,
+      "x-orgbrain-tenant": tenantId,
+      "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
+      "Mcp-Method": "tools/call",
+      "Mcp-Name": MCP_LEARNING_BATCH_TOOL
+    },
+    body: JSON.stringify(buildMcpLearningBatchRequest(tenantId, sourceName, input)),
+    signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || body.error || body.result?.isError) {
+    throw new Error(`org-brain MCP learning batch failed (${response.status})`);
+  }
+  const resultText = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
+  if (typeof resultText !== "string") throw new Error("org-brain MCP learning batch returned no text result");
+  return JSON.parse(resultText);
 }
 
 async function postMemory(apiBase, apiKey, tenantId, sourceName, recordOrRecords) {
@@ -1342,10 +1512,102 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let records;
   let shadowReport = null;
   let learningReport = null;
+  let learningReviewCandidates = [];
   if (inputSourceName === "codex-stop" && ["shadow", "on"].includes(workspace.memoryLearningMode)) {
     const observed = await prepareObservedLearningRecords(normalizedRecord, workspace, tenantId);
     learningReport = observed.report;
+    learningReviewCandidates = observed.reviewCandidates ?? [];
     if (workspace.memoryLearningMode === "on") records = observed.records;
+  }
+  if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "on") {
+    const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+    const { TaskCommitmentStore, taskKeyFromHookPayload } = await import("./lib/task-commitment-store.mjs");
+    const commitmentStore = new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+    const taskKey = taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord);
+    const taskCommitments = await commitmentStore.list({
+      tenantId,
+      projectId: workspace.projectId,
+      taskKey
+    }).catch(() => []);
+    if (!memoryMode.cloudWritesAllowed) {
+      const savedReviews = await commitmentStore.saveLearningCandidates({
+        tenantId,
+        projectId: workspace.projectId,
+        taskKey,
+        candidates: learningReviewCandidates
+      });
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        mode: "local",
+        inserted: 0,
+        review_count: savedReviews.length,
+        ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    const mcp = resolveMcpConfig();
+    if (!mcp.complete) {
+      const outbox = await commitmentStore.saveLearningOutbox({
+        tenantId,
+        payload: buildMcpLearningBatchRequest(tenantId, sourceName, {
+          projectId: workspace.projectId,
+          taskKey,
+          commitments: taskCommitments,
+          records: [],
+          reviewCandidates: learningReviewCandidates
+        })
+      });
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        queued: "learning-outbox",
+        outbox,
+        skipped: "missing-orgbrain-mcp-env-for-learning-contract",
+        review_count: learningReviewCandidates.length,
+        ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    const batchInput = {
+      projectId: workspace.projectId,
+      taskKey,
+      commitments: taskCommitments,
+      records: [],
+      reviewCandidates: learningReviewCandidates
+    };
+    let result;
+    try {
+      result = await postLearningBatchViaMcp(mcp, tenantId, sourceName, batchInput);
+    } catch (error) {
+      const outbox = await commitmentStore.saveLearningOutbox({
+        tenantId,
+        payload: buildMcpLearningBatchRequest(tenantId, sourceName, batchInput)
+      });
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        queued: "learning-outbox",
+        outbox,
+        error_code: error?.name === "TimeoutError" ? "mcp_timeout" : "mcp_learning_batch_failed",
+        review_count: learningReviewCandidates.length,
+        ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    return finish({
+      ok: true,
+      source: sourceName,
+      tenant_id: tenantId,
+      inserted: Number(result?.verified_inserted ?? 0),
+      review_count: Number(result?.review_inserted ?? learningReviewCandidates.length),
+      transport: "mcp-2026-07-28",
+      ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
+      ...memoryModeFields(memoryMode)
+    });
   }
   if (!records && workspace.memoryLearningMode !== "on" && (captureV2Mode === "on" || captureV2Mode === "shadow")) {
     const v2 = await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId);

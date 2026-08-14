@@ -909,6 +909,8 @@ test("v18 stable rebuild preserves synchronized decision-memory units", async ()
 
 test("v18 usage and effect telemetry deduplicates references and attributes token and failure savings", async () => {
   const ctx = await fixture();
+  const previousCloudSetting = process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY;
+  delete process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY;
   try {
     const store = new LocalMemoryStore(ctx.dbPath);
     const category = await store.createBusinessCategory("personal", {
@@ -1090,7 +1092,6 @@ test("v18 usage and effect telemetry deduplicates references and attributes toke
       db.close();
     }
     assert.equal(report.groups[0].failure_saved_tokens, 75);
-    const previousCloudSetting = process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY;
     process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY = "true";
     const deliveries = [];
     try {
@@ -1134,6 +1135,8 @@ test("v18 usage and effect telemetry deduplicates references and attributes toke
       calibrationDb.close();
     }
   } finally {
+    if (previousCloudSetting === undefined) delete process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY;
+    else process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY = previousCloudSetting;
     await ctx.cleanup();
   }
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const baseUrl = process.env.ORGBRAIN_SMOKE_URL || "http://127.0.0.1:8797";
-const apiKey = process.env.ORGBRAIN_SMOKE_API_KEY;
+const baseUrl = (process.env.ORGBRAIN_SMOKE_URL || process.env.ORGBRAIN_API_URL || process.env.ORGBRAIN_API_BASE || "http://127.0.0.1:8797").replace(/\/+$/u, "");
+const apiKey = process.env.ORGBRAIN_SMOKE_API_KEY || process.env.ORGBRAIN_API_KEY;
 if (!apiKey) throw new Error("ORGBRAIN_SMOKE_API_KEY is required");
 const tenantId = "default";
 const projectId = `smoke-${Date.now()}`;

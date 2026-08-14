@@ -1,0 +1,112 @@
+{
+  "$id": "https://org-brain.local/schemas/memory_contract_v2.schema.json",
+  "title": "OrgBrain LearningObservationV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "lesson_type", "capture_intent", "trigger", "applicability", "evidence_selectors", "gaps"],
+  "properties": {
+    "record_type": { "const": "learning_observation" },
+    "schema_version": { "const": 2 },
+    "lesson_type": { "enum": ["success", "decision", "failure"] },
+    "capture_intent": { "enum": ["verify", "review"] },
+    "trigger": { "type": ["string", "null"], "maxLength": 1000 },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_files", "components"],
+      "properties": {
+        "target_files": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 512 } },
+        "components": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 128 } }
+      }
+    },
+    "evidence_selectors": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "supports"],
+        "properties": {
+          "type": { "enum": ["command", "file", "doc", "user_statement", "tool_result"] },
+          "ref": { "type": "string", "maxLength": 1000 },
+          "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$", "maxLength": 71 },
+          "supports": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 128 } }
+        },
+        "anyOf": [{ "required": ["ref"] }, { "required": ["digest"] }]
+      }
+    },
+    "gaps": { "type": "array", "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 500 } },
+    "procedure": { "type": ["string", "null"], "maxLength": 2000 },
+    "why_it_worked": { "type": ["string", "null"], "maxLength": 2000 },
+    "observed_outcome": { "type": ["string", "null"], "maxLength": 1000 },
+    "reuse_when": { "type": ["string", "null"], "maxLength": 1000 },
+    "decision_type": { "enum": ["user_choice", "preference", "implementation", "governance", null] },
+    "decision_key": { "type": ["string", "null"], "maxLength": 160 },
+    "question": { "type": ["string", "null"], "maxLength": 1000 },
+    "selected_value": { "type": ["string", "null"], "maxLength": 1000 },
+    "decision": { "type": ["string", "null"], "maxLength": 1000 },
+    "constraints": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 500 } },
+    "rationale": { "type": ["string", "null"], "maxLength": 2000 },
+    "alternatives": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1, "maxLength": 1000 },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["alternative"],
+            "properties": {
+              "alternative": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "reason_rejected": { "type": ["string", "null"], "maxLength": 1000 }
+            }
+          }
+        ]
+      }
+    },
+    "symptom": { "type": ["string", "null"], "maxLength": 1000 },
+    "failed_approach": { "type": ["string", "null"], "maxLength": 1500 },
+    "root_cause": { "type": ["string", "null"], "maxLength": 2000 },
+    "correction": { "type": ["string", "null"], "maxLength": 2000 },
+    "verified_outcome": { "type": ["string", "null"], "maxLength": 1000 },
+    "avoidance_rule": { "type": ["string", "null"], "maxLength": 1000 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "lesson_type": { "const": "success" }, "capture_intent": { "const": "verify" } },
+        "required": ["lesson_type", "capture_intent"]
+      },
+      "then": { "required": ["procedure", "why_it_worked", "observed_outcome", "reuse_when"] }
+    },
+    {
+      "if": {
+        "properties": { "lesson_type": { "const": "decision" }, "capture_intent": { "const": "verify" } },
+        "required": ["lesson_type", "capture_intent"]
+      },
+      "then": {
+        "required": ["decision_type", "decision_key", "question"],
+        "anyOf": [{ "required": ["selected_value"] }, { "required": ["decision"] }]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "lesson_type": { "const": "decision" },
+          "capture_intent": { "const": "verify" },
+          "decision_type": { "enum": ["implementation", "governance"] }
+        },
+        "required": ["lesson_type", "capture_intent", "decision_type"]
+      },
+      "then": { "required": ["rationale", "alternatives"] }
+    },
+    {
+      "if": {
+        "properties": { "lesson_type": { "const": "failure" }, "capture_intent": { "const": "verify" } },
+        "required": ["lesson_type", "capture_intent"]
+      },
+      "then": { "required": ["symptom", "failed_approach", "root_cause", "correction", "verified_outcome", "avoidance_rule"] }
+    }
+  ]
+}

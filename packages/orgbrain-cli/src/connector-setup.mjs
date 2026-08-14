@@ -22,7 +22,8 @@ const LOCAL_ONLY_ENV = {
   ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
   ORGBRAIN_ENABLE_ORG_SHARING: "false",
   ORGBRAIN_LOCAL_HOOK_CAPTURE: "true",
-  ORGBRAIN_MEMORY_CAPTURE_V2_MODE: "off"
+  ORGBRAIN_MEMORY_CAPTURE_V2_MODE: "off",
+  ORGBRAIN_MEMORY_COMMITMENTS_MODE: "on"
 };
 
 function shellQuote(value) {
@@ -106,7 +107,7 @@ async function writePrivateFile(file, content) {
 }
 
 function isOrgBrainHook(handler) {
-  return typeof handler?.command === "string" && /\bhook codex-(?:context|stop)\b/u.test(handler.command);
+  return typeof handler?.command === "string" && /\bhook codex-(?:context|stop|pre-tool|post-tool|pre-compact)\b/u.test(handler.command);
 }
 
 function mergeCodexHooks(raw, handlers) {
@@ -122,14 +123,15 @@ function mergeCodexHooks(raw, handlers) {
   if (!config.hooks || typeof config.hooks !== "object" || Array.isArray(config.hooks)) {
     throw new Error("Codex hooks.json hooks must be an object");
   }
-  for (const [event, handler] of Object.entries(handlers)) {
+  for (const [event, specification] of Object.entries(handlers)) {
+    const { matcher, ...handler } = specification;
     const groups = Array.isArray(config.hooks[event]) ? config.hooks[event] : [];
     const preserved = groups.flatMap((group) => {
       if (!group || typeof group !== "object" || !Array.isArray(group.hooks)) return [group];
       const hooks = group.hooks.filter((candidate) => !isOrgBrainHook(candidate));
       return hooks.length > 0 ? [{ ...group, hooks }] : [];
     });
-    config.hooks[event] = [...preserved, { hooks: [handler] }];
+    config.hooks[event] = [...preserved, { ...(matcher ? { matcher } : {}), hooks: [handler] }];
   }
   return `${JSON.stringify(config, null, 2)}\n`;
 }
@@ -159,12 +161,46 @@ export function codexMinimalHooksPlan(options = {}) {
     ? [options.command.trim()]
     : [process.execPath, "--no-warnings", LOCAL_CLI_PATH];
   const handlers = {
+    SessionStart: {
+      type: "command",
+      command: hookCommand(baseCommand, envFile, "codex-context", errorLog),
+      timeout: 2,
+      statusMessage: "Restoring OrgBrain task commitments",
+      additionalContextLimit: 8_192
+    },
     UserPromptSubmit: {
       type: "command",
       command: hookCommand(baseCommand, envFile, "codex-context", errorLog),
       timeout: 3,
-      statusMessage: "Checking local OrgBrain memory",
-      additionalContextLimit: 400
+      statusMessage: "Checking OrgBrain task commitments",
+      additionalContextLimit: 8_192
+    },
+    PreToolUse: {
+      matcher: "request_user_input",
+      type: "command",
+      command: hookCommand(baseCommand, envFile, "codex-pre-tool", errorLog),
+      timeout: 1,
+      statusMessage: "Checking prior OrgBrain decisions"
+    },
+    PostToolUse: {
+      matcher: "request_user_input",
+      type: "command",
+      command: hookCommand(baseCommand, envFile, "codex-post-tool", errorLog),
+      timeout: 2,
+      statusMessage: "Saving OrgBrain task commitment"
+    },
+    PreCompact: {
+      type: "command",
+      command: hookCommand(baseCommand, envFile, "codex-pre-compact", errorLog),
+      timeout: 3,
+      statusMessage: "Checkpointing OrgBrain task commitments"
+    },
+    PostCompact: {
+      type: "command",
+      command: hookCommand(baseCommand, envFile, "codex-context", errorLog),
+      timeout: 2,
+      statusMessage: "Restoring OrgBrain task commitments after compaction",
+      additionalContextLimit: 8_192
     },
     Stop: {
       type: "command",

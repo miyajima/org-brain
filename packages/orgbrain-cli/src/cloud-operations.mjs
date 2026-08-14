@@ -195,9 +195,13 @@ async function inspectLocalConfig(root) {
     ? (await readdir(migrationsPath)).filter((name) => /^\d{4}_.+\.sql$/u.test(name)).sort()
     : [];
   const migrationNumbers = migrationFiles.map((name) => Number(name.slice(0, 4)));
+  // Wrangler assigns its own ledger IDs when multiple additive files share a
+  // filename prefix. Validate the ordered number set rather than rejecting
+  // intentional same-prefix migrations.
+  const uniqueMigrationNumbers = [...new Set(migrationNumbers)];
   const migrationsContiguous =
-    migrationNumbers.length > 0 &&
-    migrationNumbers.every((number, index) => number === index + 1);
+    uniqueMigrationNumbers.length > 0 &&
+    uniqueMigrationNumbers.every((number, index) => number === index + 1);
   checks.push({
     id: "migrations",
     ok:

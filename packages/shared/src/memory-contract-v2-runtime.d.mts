@@ -1,0 +1,11 @@
+export const MEMORY_CONTRACT_V2_SCHEMA_VERSION: 2;
+export const MEMORY_CONTRACT_V2_PROMPT_ID: string;
+export const MEMORY_CONTRACT_V2_VERIFIER_VERSION: string;
+export const MEMORY_CONTRACT_V2_MAX_EVENTS: 3;
+export const MEMORY_CONTRACT_V2_LESSON_TYPES: string[];
+export const MEMORY_CONTRACT_V2_INTENTS: string[];
+export const MEMORY_CONTRACT_V2_EVIDENCE_TYPES: string[];
+export const MEMORY_CONTRACT_V2_DECISION_TYPES: string[];
+export const MEMORY_CONTRACT_V2_PROMPT: string;
+export function normalizeMemoryContractV2Event(input: unknown, options?: Record<string, unknown>): Promise<unknown>;
+export function observeMemoryContractV2Event(input: unknown, options?: Record<string, unknown>): Promise<unknown>;
