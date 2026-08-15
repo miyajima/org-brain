@@ -46,6 +46,10 @@ an actor or principal supplied in the request body.
 | --- | --- |
 | Cross-tenant access | Tenant grant check on every API and MCP operation; tenant included in all storage keys and queries |
 | Body impersonation | Replace body actor fields with the authenticated principal; reject ungranted tenant IDs |
+| MCP credential confusion | Put Managed OAuth users and service-token hooks behind Access, validate exact MCP audience/issuer/signature/expiry, and never forward bearer or raw service-token secrets from the thin proxy |
+| Inherited hook credential confusion | Treat the explicitly selected installation credential file as authoritative for MCP identity fields and verify its installation ID through the metadata-only status endpoint before first capture |
+| Hook over-privilege | Resolve the service subject hash to one active client installation and allow only `orgbrain_memories_capture_rationale`; revocation is per installation |
+| Enrollment replay | Store only a SHA-256 enrollment hash, expire it after ten minutes, clear it atomically on activation, and reject reuse or rebinding of an active Access subject |
 | Memory poisoning | Proposed state for inferred decisions, provenance, evidence, confidence, conflict review, and input quality filters |
 | Prompt injection in memory | Treat content and source text as data, preserve source labels, and never execute retrieved instructions without a policy gate |
 | Secret or personal-data capture | Pre-capture redaction and durable-only extraction; raw transcripts are opt-in |
@@ -55,6 +59,7 @@ an actor or principal supplied in the request body.
 | Backup disclosure | Private file modes, encrypted storage guidance, scoped restore access, and restore verification |
 | Audit tampering | Append-only, hash-chained audit records with protected retention |
 | Telemetry leakage | Store query hashes and normalized identifiers only; never store raw prompts, queries, or commands in impact telemetry |
+| Agent-session leakage | Hooks never read full transcripts or invoke an LLM; prompt, answer, reasoning, tool I/O, transcript path, and absolute paths are excluded from observation and audit metadata |
 | Cross-tenant polymorphic reference | Validate source existence and tenant ownership in the service before writing retrieval or usage items |
 | Inflated effectiveness claims | Keep evidence levels separate, require attribution weights to total 1.0, retain negative net savings, and sample verification deterministically |
 | Availability loss | Verified backups, restore drills, bounded queues, DLQ replay, and documented RPO/RTO |
@@ -77,6 +82,15 @@ an actor or principal supplied in the request body.
 
 - generic RS256 OIDC and Cloudflare Access verification with exact issuer and
   audience checks
+- MCP-specific Access audience validation separated from API/OIDC configuration,
+  installation-scoped service identities, one-time enrollment, and per-client revocation
+- offline hook capture uses private installation-specific outboxes and never
+  blocks the host AI client; unresolved identity is retained locally and is not uploaded
+- outbox flushes claim rows atomically under an installation-scoped lock, and
+  unresolved rows require a metadata-only same-installation status check before
+  their memory payload can be retried
+- a suspended or deprovisioned owner cannot continue using an otherwise-active
+  service-token installation
 - active scoped-token issuance, project/permission restriction, rotation,
   revocation, expiration, and hash-only storage
 - retention dry-runs, explicit execution, and tenant/project legal holds that

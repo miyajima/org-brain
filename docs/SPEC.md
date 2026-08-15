@@ -37,8 +37,8 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - API Gateway: Hono Worker
 - Event Bus: Cloudflare Queues (`org-bus`, `cap-plan`)
 - Coordination: Durable Objects (`LeaseDO`, `MailboxDO`)
-- MCP: Remote MCP endpoint on API Gateway (`/mcp`, service-token auth)
-- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `business_categories`, `memory_impact_events`, `memory_impact_daily_metrics`, `memory_usage_events`, `memory_usage_items`, `memory_effect_events`, `memory_effect_attributions`, `memory_failure_patterns`, `memory_effect_daily_metrics`, `retrieval_generations`, `retrieval_generation_assignments`, `retrieval_ranking_profiles`, `retrieval_units`, `retrieval_units_fts`, `retrieval_projection_jobs`, `retrieval_evaluation_events`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `audit_events`, `retention_policies`) + R2 artifacts
+- MCP: Cloudflare Access保護の`open-brain-mcp` thin proxyからservice bindingでAPI Gatewayのstateless `/mcp`へ接続
+- Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `business_categories`, `memory_impact_events`, `memory_impact_daily_metrics`, `memory_usage_events`, `memory_usage_items`, `memory_effect_events`, `memory_effect_attributions`, `memory_failure_patterns`, `memory_effect_daily_metrics`, `retrieval_generations`, `retrieval_generation_assignments`, `retrieval_ranking_profiles`, `retrieval_units`, `retrieval_units_fts`, `retrieval_projection_jobs`, `retrieval_evaluation_events`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `mcp_client_installations`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
 
 ## API
@@ -92,13 +92,18 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 
 ## MCP
 - Endpoint: `POST/GET /mcp` (streamable HTTP)
-- Auth: `CF-Access-Client-Id` + `CF-Access-Client-Secret`
+- 対話型Codex／Claude Code／Cursor: Cloudflare Access Managed OAuth。Access JWTの`sub`を既存`user_identities`へ解決し、既存RBACとmemoryの`propose -> confirm`規約を適用する
+- 無人hook: `(マシン, クライアント)`単位のAccess Service Token。Access JWTのservice subject hashをactiveな`mcp_client_installations`へ解決し、owner principalと`client:<installation-id>` runtime actorを分離する
+- `MCP_ACCESS_AUD`は必須でAPI用`ACCESS_AUD`と分離する。`MCP_AUTH_MODE`は`legacy|dual|access`、未設定はfail-closedな`access`
+- thin proxyは`Cf-Access-Jwt-Assertion`とMCP protocol allowlist headerだけをservice bindingへ転送し、OAuth bearerと生のservice-token headerを転送しない
+- service-token hookが呼べるtoolは`orgbrain_memories_capture_rationale`だけで、task、message、管理toolを拒否する
+- 導入管理API: `POST|GET /v1/mcp-client-installations`、`DELETE /v1/mcp-client-installations/:id`、service-token activation用`POST /mcp/client-installations/activate`。activationは登録時の`client_type`と導入対象を原子的に照合し、不一致の登録コードを消費しない
 - Tool surface:
   - memory list/upsert/search/profile
   - memory refresh/suppress/delete
   - task create/get/events
   - agent message send/inbox/get/read/ack
-- Tenant isolation: per-token tenant grants with optional principal -> tenant mapping (`MCP_TENANT_POLICY_JSON`) enforced server-side
+- Tenant isolation: Access userはAccess tenant policy、導入済みhookはinstallationの単一tenant、legacy/dual移行時だけ`MCP_TENANT_POLICY_JSON`をserver-sideで適用する
 
 ## Agent Messages
 - `agent_messages` is the durable source of truth for agmsg-style agent-to-agent messages.
@@ -251,6 +256,9 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `pnpm -s usage:status` queries the D1 source of truth and reports a tenant usage snapshot for memory/thread counts. It intentionally does not query task rows.
 - `pnpm agmsg` sends, lists, reads, and acks agent messages through the API Gateway.
 - `pnpm hook:bridge <source>` normalizes hook payloads from coding agents and upserts them into `memories`.
+- `orgbrain connector setup <codex|claude|cursor> --mode remote-mcp --url <Access-protected-MCP-URL>`は各クライアントのuser-level remote MCP/OAuth設定を登録する。`--mode cloud-hooks`は一度きりの登録コードでservice tokenを導入へ結び付け、`~/.config/org-brain/clients/<installation-id>/credentials.env`へ`0600`で保存する。両方ともdry-runが既定で変更には`--execute`を要求する。
+- cloud hookは既存の決定的promote/skip判定だけを使い、LLMやtranscript readerを起動しない。送信対象は重要なmemory/rationaleだけで、prompt、回答全文、reasoning、tool I/O、transcript path、絶対pathをaudit/observation metadataへ含めない。
+- 認証失敗・offline時はクライアントを停止せず導入別`0600` JSONL outboxへ保持し、`SessionStart`／`Stop`／`SessionEnd`で最大100件を再送する。principalを確定できないデータは`identity_unresolved`としてserverへ送らない。
 - `pnpm hook:bridge` emits JSON with `memory_scope`, `cloud_memory_enabled`, `org_sharing_enabled`, and `shared_write`; `pnpm sync:agents-memory` prints the same mode before API import/export.
 - hook/bridge 由来の自動保存は非対話 path として扱い、propose/confirm を要求しない。MCP `2026-07-28` の既知tool `orgbrain_memories_capture_rationale` をdiscoveryなしで直接呼び、`decision_rationales` / `decision_evidence` を `inferred_unconfirmed` として保存する。旧REST endpointは移行互換のみとする。
 - `pnpm docs:seed` upserts the minimal stable knowledge-doc set via the Pages/API proxy.

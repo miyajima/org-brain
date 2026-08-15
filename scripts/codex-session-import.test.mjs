@@ -509,7 +509,8 @@ test("verified success, decision, and failure become active and local replay is 
     ORGBRAIN_ENABLE_CLOUD_MEMORY: "true",
     ORGBRAIN_MCP_URL: "https://mcp.example.invalid",
     ORGBRAIN_MCP_CLIENT_ID: "fixture-client",
-    ORGBRAIN_MCP_CLIENT_SECRET: "fixture-secret"
+    ORGBRAIN_MCP_CLIENT_SECRET: "fixture-secret",
+    ORGBRAIN_CLIENT_INSTALLATION_ID: "installation-1"
   };
   const cloudReport = await createCodexSessionImportReport({ workspaceRoot: workspace, sessionsRoot: sessions, env: cloudEnv });
   assert.deepEqual(
@@ -519,6 +520,12 @@ test("verified success, decision, and failure become active and local replay is 
   const originalFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (_url, init) => {
+    if (init?.method === "GET") {
+      return new Response(JSON.stringify({ ok: true, data: { id: "installation-1" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
     requests.push(JSON.parse(init.body));
     return new Response(JSON.stringify({
       jsonrpc: "2.0",
