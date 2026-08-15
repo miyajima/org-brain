@@ -18,12 +18,30 @@ vi.mock("agents/mcp/server", () => {
 });
 
 let mountMcp: typeof import("../src/mcp").mountMcp;
+let assertMcpToolAllowed: typeof import("../src/mcp").assertMcpToolAllowed;
 
 beforeAll(async () => {
-  ({ mountMcp } = await import("../src/mcp"));
+  ({ mountMcp, assertMcpToolAllowed } = await import("../src/mcp"));
 });
 
 describe("MCP routing under Hono mount path stripping", () => {
+  it("allows hook installations to call only capture-rationale", async () => {
+    const props = {
+      tenantId: "default",
+      principal: "user:alice",
+      allowedTenants: ["default"],
+      defaultRole: "reader" as const,
+      allowedTools: ["orgbrain_memories_capture_rationale"]
+    };
+    const request = (name: string) => new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name } })
+    });
+    await expect(assertMcpToolAllowed(request("orgbrain_memories_capture_rationale"), props)).resolves.toBeUndefined();
+    await expect(assertMcpToolAllowed(request("orgbrain_task_create"), props)).rejects.toMatchObject({ status: 403 });
+  });
+
   it("returns 401 (not 404) for unauthenticated MCP request", async () => {
     const app = new Hono<{ Bindings: Env }>();
     mountMcp(app);
@@ -53,6 +71,7 @@ describe("MCP routing under Hono mount path stripping", () => {
     });
 
     const env = {
+      MCP_AUTH_MODE: "dual",
       MCP_SERVICE_TOKENS_JSON: JSON.stringify({
         tokens: [
           {
@@ -101,6 +120,7 @@ describe("MCP routing under Hono mount path stripping", () => {
       }
     });
     const env = {
+      MCP_AUTH_MODE: "dual",
       MCP_SERVICE_TOKENS_JSON: JSON.stringify({
         tokens: [{
           client_id: "token-1",

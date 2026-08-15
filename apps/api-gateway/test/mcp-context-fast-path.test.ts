@@ -23,6 +23,7 @@ import { mountMcp } from "../src/mcp";
 
 function testEnv(): Env {
   return {
+    MCP_AUTH_MODE: "dual",
     MCP_SERVICE_TOKENS_JSON: JSON.stringify({
       tokens: [{
         client_id: "token-1",

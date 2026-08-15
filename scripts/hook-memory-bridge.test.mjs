@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -6,8 +6,12 @@ import {
   buildMcpCaptureRequest,
   captureCandidateJson,
   captureItemPayload,
+  claimHookCaptureRows,
   classifyMemoryRecord,
+  enqueueHookCapture,
+  flushHookCaptureOutbox,
   hookCaptureLogFields,
+  loadEnvFallbacks,
   normalizeRecord,
   postMemoryViaMcp,
   prepareMemoryRecordsV2,
@@ -116,12 +120,17 @@ describe("hook-memory-bridge promotion", () => {
     expect(resolveMcpConfig({ ORGBRAIN_MCP_URL: "https://mcp.example.test/mcp" })).toMatchObject({
       configured: true,
       complete: false,
-      missing: ["ORGBRAIN_MCP_CLIENT_ID", "ORGBRAIN_MCP_CLIENT_SECRET"]
+      missing: [
+        "ORGBRAIN_MCP_CLIENT_ID",
+        "ORGBRAIN_MCP_CLIENT_SECRET",
+        "ORGBRAIN_CLIENT_INSTALLATION_ID"
+      ]
     });
     expect(resolveMcpConfig({
       ORGBRAIN_MCP_URL: "https://mcp.example.test/mcp",
       ORGBRAIN_MCP_CLIENT_ID: "client-id",
-      ORGBRAIN_MCP_CLIENT_SECRET: "client-secret"
+      ORGBRAIN_MCP_CLIENT_SECRET: "client-secret",
+      ORGBRAIN_CLIENT_INSTALLATION_ID: "install-1"
     })).toMatchObject({
       configured: true,
       complete: true,
@@ -164,7 +173,12 @@ describe("hook-memory-bridge promotion", () => {
   });
 
   it("calls the known capture tool once with modern MCP headers", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async (_url, init) => init.method === "GET"
+      ? new Response(JSON.stringify({ ok: true, data: { id: "install-direct" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      : new Response(JSON.stringify({
       jsonrpc: "2.0",
       id: "hook:codex:turn-1",
       result: {
@@ -180,7 +194,8 @@ describe("hook-memory-bridge promotion", () => {
       const result = await postMemoryViaMcp({
         url: "https://mcp.example.test/mcp",
         clientId: "client-id",
-        clientSecret: "client-secret"
+        clientSecret: "client-secret",
+        installationId: "install-direct"
       }, "default", "codex", {
         externalKey: "codex:turn-1",
         content: "Reusable diagnosis and fix.",
@@ -193,8 +208,8 @@ describe("hook-memory-bridge promotion", () => {
       });
 
       expect(result).toEqual({ inserted: 1, updated: 0 });
-      expect(fetchMock).toHaveBeenCalledOnce();
-      const [url, init] = fetchMock.mock.calls[0];
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [url, init] = fetchMock.mock.calls[1];
       expect(url).toBe("https://mcp.example.test/mcp");
       expect(init.headers).toMatchObject({
         "CF-Access-Client-Id": "client-id",
@@ -209,6 +224,373 @@ describe("hook-memory-bridge promotion", () => {
       });
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not capture when service credentials resolve to another installation", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: { id: "different-installation" }
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(postMemoryViaMcp({
+        url: "https://mcp.example.test/mcp",
+        clientId: "wrong-client",
+        clientSecret: "wrong-secret",
+        installationId: "expected-installation"
+      }, "default", "codex", {
+        externalKey: "codex:mismatch",
+        content: "Selected durable reason only.",
+        summary: "Durable reason",
+        tags: ["policy"],
+        createdAt: 1_786_000_000_000,
+        projectId: "org-brain"
+      })).rejects.toThrow("identity validation failed (403)");
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "GET" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps failed selected memories in a private per-installation outbox and retries them", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-outbox-"));
+    const config = {
+      url: "https://mcp.example.test/mcp",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      installationId: "install-1",
+      outboxFile: path.join(directory, "outbox.jsonl")
+    };
+    await enqueueHookCapture(config, "default", "codex", {
+      externalKey: "codex:turn-queued",
+      content: "Selected durable reason only.",
+      summary: "Durable reason",
+      tags: ["policy"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation"
+    });
+    const queued = await readFile(config.outboxFile, "utf8");
+    expect(queued).toContain("install-1");
+    expect(queued).toContain("Selected durable reason only.");
+    expect(queued).not.toContain("transcript_path");
+
+    const fetchMock = vi.fn(async (_url, init) => init.method === "GET"
+      ? new Response(JSON.stringify({ ok: true, data: { id: "install-1" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      : new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: "hook:codex:turn-queued",
+      result: { content: [{ type: "text", text: JSON.stringify({ inserted: 1 }) }] }
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(flushHookCaptureOutbox(config, 100)).resolves.toMatchObject({
+        attempted: 1,
+        sent: 1,
+        pending: 0
+      });
+      expect(await readFile(config.outboxFile, "utf8")).toBe("");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("never uploads identity-unresolved or cross-installation outbox rows without successful revalidation", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-unresolved-"));
+    const config = {
+      url: "https://mcp.example.test/mcp",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      installationId: "install-1",
+      outboxFile: path.join(directory, "outbox.jsonl")
+    };
+    const record = {
+      externalKey: "codex:unresolved",
+      content: "Selected durable reason only.",
+      summary: "Durable reason",
+      tags: ["policy"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain"
+    };
+    await enqueueHookCapture({ ...config, installationId: null }, "default", "codex", record);
+    await enqueueHookCapture({ ...config, installationId: "install-2" }, "default", "codex", record);
+    await enqueueHookCapture(config, "default", "codex", record, "identity_unresolved");
+    const fetchMock = vi.fn(async () => new Response("unresolved", { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(flushHookCaptureOutbox(config, 100)).resolves.toMatchObject({
+        attempted: 3,
+        sent: 0,
+        pending: 3
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "GET" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("freezes an already queued row when authentication becomes unresolved", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-revoked-"));
+    const config = {
+      url: "https://mcp.example.test/mcp",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      installationId: "install-1",
+      outboxFile: path.join(directory, "outbox.jsonl")
+    };
+    await enqueueHookCapture(config, "default", "codex", {
+      externalKey: "codex:revoked",
+      content: "Selected durable reason only.",
+      summary: "Durable reason",
+      tags: ["policy"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain"
+    });
+    const fetchMock = vi.fn(async () => new Response("revoked", { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(flushHookCaptureOutbox(config, 100)).resolves.toMatchObject({
+        attempted: 1,
+        sent: 0,
+        pending: 1
+      });
+      const row = JSON.parse((await readFile(config.outboxFile, "utf8")).trim());
+      expect(row).toMatchObject({
+        identity_state: "identity_unresolved",
+        error_code: "identity_unresolved"
+      });
+
+      await flushHookCaptureOutbox(config, 100);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "GET" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("revalidates the same installation before retrying identity-unresolved data", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-revalidated-"));
+    const config = {
+      url: "https://mcp.example.test/mcp",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      installationId: "install-1",
+      outboxFile: path.join(directory, "outbox.jsonl")
+    };
+    await enqueueHookCapture(config, "default", "codex", {
+      externalKey: "codex:revalidated",
+      content: "Selected durable reason only.",
+      summary: "Durable reason",
+      tags: ["policy"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain"
+    }, "identity_unresolved");
+    const fetchMock = vi.fn(async (_url, init) => init.method === "GET"
+      ? new Response(JSON.stringify({ ok: true, data: { id: "install-1" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      : new Response(JSON.stringify({
+          jsonrpc: "2.0",
+          result: { content: [{ type: "text", text: JSON.stringify({ inserted: 1 }) }] }
+        }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(flushHookCaptureOutbox(config, 100)).resolves.toMatchObject({
+        attempted: 1,
+        sent: 1,
+        pending: 0
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "GET" });
+      expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "POST" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not lose rows appended while a claimed batch is being sent", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-concurrent-"));
+    const config = {
+      url: "https://mcp.example.test/mcp",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      installationId: "install-1",
+      outboxFile: path.join(directory, "outbox.jsonl")
+    };
+    const record = (key) => ({
+      externalKey: key,
+      content: "Selected durable reason only.",
+      summary: "Durable reason",
+      tags: ["policy"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain"
+    });
+    await enqueueHookCapture(config, "default", "codex", record("codex:first"));
+    const fetchMock = vi.fn(async (_url, init) => {
+      if (init.method === "GET") {
+        return new Response(JSON.stringify({ ok: true, data: { id: "install-1" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      await enqueueHookCapture(config, "default", "codex", record("codex:appended"));
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0",
+        result: { content: [{ type: "text", text: JSON.stringify({ inserted: 1 }) }] }
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(flushHookCaptureOutbox(config, 100)).resolves.toMatchObject({
+        attempted: 1,
+        sent: 1,
+        pending: 1
+      });
+      expect(await readFile(config.outboxFile, "utf8")).toContain("codex:appended");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("prefers the explicitly configured installation credential file over inherited auth variables", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-env-priority-"));
+    const envFile = path.join(directory, "credentials.env");
+    await writeFile(envFile, [
+      "ORGBRAIN_MCP_URL=https://new.example.test/mcp",
+      "ORGBRAIN_MCP_CLIENT_ID=new-client",
+      "ORGBRAIN_MCP_CLIENT_SECRET=new-secret",
+      "ORGBRAIN_CLIENT_INSTALLATION_ID=new-installation",
+      `ORGBRAIN_HOOK_OUTBOX=${path.join(directory, "outbox.jsonl")}`,
+      "ORGBRAIN_TENANT_ID=new-tenant"
+    ].join("\n"), { mode: 0o600 });
+    const keys = [
+      "ORGBRAIN_HOOK_ENV_FILES",
+      "ORGBRAIN_MCP_URL",
+      "ORGBRAIN_MCP_CLIENT_ID",
+      "ORGBRAIN_MCP_CLIENT_SECRET",
+      "ORGBRAIN_CLIENT_INSTALLATION_ID",
+      "ORGBRAIN_HOOK_OUTBOX",
+      "ORGBRAIN_TENANT_ID",
+      "ORGBRAIN_API_URL",
+      "ORGBRAIN_API_BASE",
+      "ORGBRAIN_API_KEY"
+    ];
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      ORGBRAIN_HOOK_ENV_FILES: envFile,
+      ORGBRAIN_MCP_URL: "https://old.example.test/mcp",
+      ORGBRAIN_MCP_CLIENT_ID: "old-client",
+      ORGBRAIN_MCP_CLIENT_SECRET: "old-secret",
+      ORGBRAIN_CLIENT_INSTALLATION_ID: "old-installation",
+      ORGBRAIN_TENANT_ID: "old-tenant"
+    });
+    try {
+      await loadEnvFallbacks();
+      expect(process.env.ORGBRAIN_MCP_URL).toBe("https://new.example.test/mcp");
+      expect(process.env.ORGBRAIN_MCP_CLIENT_ID).toBe("new-client");
+      expect(process.env.ORGBRAIN_MCP_CLIENT_SECRET).toBe("new-secret");
+      expect(process.env.ORGBRAIN_CLIENT_INSTALLATION_ID).toBe("new-installation");
+      expect(process.env.ORGBRAIN_TENANT_ID).toBe("new-tenant");
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+    }
+  });
+
+  it("fails closed when an explicitly configured installation credential file is unreadable", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-env-missing-"));
+    const keys = [
+      "ORGBRAIN_HOOK_ENV_FILES",
+      "ORGBRAIN_MCP_URL",
+      "ORGBRAIN_MCP_CLIENT_ID",
+      "ORGBRAIN_MCP_CLIENT_SECRET",
+      "ORGBRAIN_CLIENT_INSTALLATION_ID",
+      "ORGBRAIN_HOOK_OUTBOX",
+      "ORGBRAIN_TENANT_ID",
+      "ORGBRAIN_API_URL",
+      "ORGBRAIN_API_BASE",
+      "ORGBRAIN_API_KEY"
+    ];
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      ORGBRAIN_HOOK_ENV_FILES: path.join(directory, "missing.env"),
+      ORGBRAIN_MCP_URL: "https://inherited.example.test/mcp",
+      ORGBRAIN_MCP_CLIENT_ID: "inherited-client",
+      ORGBRAIN_MCP_CLIENT_SECRET: "inherited-secret",
+      ORGBRAIN_CLIENT_INSTALLATION_ID: "inherited-installation",
+      ORGBRAIN_TENANT_ID: "inherited-tenant",
+      ORGBRAIN_API_URL: "https://legacy.example.test",
+      ORGBRAIN_API_BASE: "https://legacy-alias.example.test",
+      ORGBRAIN_API_KEY: "inherited-api-key"
+    });
+    try {
+      await loadEnvFallbacks();
+      expect(resolveMcpConfig(process.env)).toMatchObject({ configured: false, complete: false });
+      expect(process.env.ORGBRAIN_MCP_CLIENT_ID).toBeUndefined();
+      expect(process.env.ORGBRAIN_CLIENT_INSTALLATION_ID).toBeUndefined();
+      expect(resolveApiBase(process.env)).toBe("");
+      expect(process.env.ORGBRAIN_API_KEY).toBeUndefined();
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+    }
+  });
+
+  it("persists a claim before rewriting the primary outbox", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-claim-order-"));
+    const config = {
+      url: "https://mcp.example.test/mcp",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      installationId: "install-1",
+      outboxFile: path.join(directory, "outbox.jsonl")
+    };
+    await enqueueHookCapture(config, "default", "codex", {
+      externalKey: "codex:claim-order",
+      content: "Selected durable reason only.",
+      summary: "Durable reason",
+      tags: ["policy"],
+      createdAt: 1_786_000_000_000,
+      projectId: "org-brain"
+    });
+
+    let persistedClaim;
+    await expect(claimHookCaptureRows(config, 100, {
+      onClaimPersisted: ({ claimFile }) => {
+        persistedClaim = claimFile;
+        throw new Error("injected failure after claim persistence");
+      }
+    })).rejects.toThrow("injected failure after claim persistence");
+
+    expect(await readFile(config.outboxFile, "utf8")).toContain("codex:claim-order");
+    expect(await readFile(persistedClaim, "utf8")).toContain("codex:claim-order");
+  });
+
+  it("uses Stop summaries without reading or sending transcript paths", () => {
+    for (const source of ["codex-stop", "claude"]) {
+      const prepared = prepareMemoryRecordForUpsert(source, JSON.stringify({
+        hook_event_name: "Stop",
+        session_id: `${source}-session`,
+        cwd: "/private/work/org-brain",
+        transcript_path: "/private/transcripts/full-session.jsonl",
+        last_assistant_message: "原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。"
+      }));
+      expect(prepared.action).toBe("promote");
+      expect(JSON.stringify(prepared.record)).not.toContain("transcript_path");
+      expect(JSON.stringify(buildMcpCaptureRequest("default", source, prepared.record)))
+        .not.toContain("/private/transcripts");
     }
   });
 

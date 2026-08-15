@@ -28,7 +28,8 @@ authorize the Decision and every returned Resource. Filtering happens before
 grouping and coverage calculation so hidden counts are not observable.
 
 ## Topology
-- `open-brain-api-gateway`: Hono HTTP API, task creation, and Remote MCP on `/mcp`.
+- `open-brain-mcp`: Cloudflare Accessで保護されたthin proxy。signed Access assertionとMCP allowlist headerだけをservice bindingへ渡す。
+- `open-brain-api-gateway`: Hono HTTP API、task creation、stateless Remote MCP `/mcp`、client installation管理。
 - `open-brain-org-router`: org-bus consumer, capability queue routing, and task result materialization.
 - `open-brain-cap-runner`: capability consumers, DO lease/messaging, artifact writes, and memory maintenance cron work.
 - `open-brain-console`: Astro Pages app with same-origin API proxying to the gateway via service binding.
@@ -56,6 +57,7 @@ grouping and coverage calculation so hidden counts are not observable.
 - `measurement_runs` / `measurement_variants` / `measurement_comparisons`: opt-in memory savings AB measurements.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
 - `threads`: review-oriented conversation capture.
+- `mcp_client_installations`: 無人hookの導入単位をowner principalへ結び付ける独立control-plane table。memory、rationale、decisionの親子構造や検索indexには参加しない。
 
 ## Control Plane
 - `LeaseDO`: tenant and capability concurrency gate.
@@ -133,7 +135,9 @@ grouping and coverage calculation so hidden counts are not observable.
   hash-only stored scoped bearer tokens.
 - Browser preflight requests for `/v1/*` and `/api/*` are handled before API-key auth, while non-OPTIONS requests still require `x-api-key`.
 - Browser traffic uses the Pages proxy; the service API key never reaches the client.
-- Remote MCP uses worker-validated service token headers with per-token tenant grants.
+- Remote MCPの対話クライアントはAccess Managed OAuth、無人hookは導入単位のAccess Service Tokenを使う。Gatewayはsigned assertionだけを検証し、本文や任意headerのprincipalを信用しない。
+- MCP JWTは必須の`MCP_ACCESS_AUD`と`ACCESS_TEAM_DOMAIN`由来issuer/JWKSでAPI用OIDCから独立して検証する。`MCP_AUTH_MODE`未設定は`access`、明示した移行期間だけ`dual`を許可する。
+- Service-token assertionはactive installationへhash lookupし、owner principalが現在もactiveであることを各認証時に確認する。owner principalと`client:<installation-id>` runtime actorを監査上分離し、hook capabilityは`orgbrain_memories_capture_rationale`だけに限定する。
 - HTTP and mutating MCP calls append hash-chained outcome audit events.
 - Fixed-role RBAC, record ACLs, scoped tokens, retention, and legal holds are
   enforced server-side; identity fields in request bodies never override the
@@ -141,7 +145,8 @@ grouping and coverage calculation so hidden counts are not observable.
 - An optional Workers `API_RATE_LIMITER` binding applies tenant + principal +
   route limits after authentication and before authorization; 429 outcomes enter
   the same denied audit chain.
-- MCP lifecycle mutations store the authenticated service-token `principal` as the memory actor for audit visibility.
+- MCP監査はowner principal、runtime actor、installation ID、client type、auth sourceだけを構造metadataとして記録し、会話内容やpathを記録しない。`last_used_at`は同じ導入につき最大15分に一度だけbest-effort更新する。
+- hook outboxはinstallation単位のlockとclaim fileでappend/flushを安全に分離する。明示されたinstallation credential fileは継承された旧認証環境変数より優先し、各hook processは初回capture前にmetadata-only status endpointでinstallation ID一致を検証する。401/403後のrowはcaptureへ送らず、同じinstallation IDが再検証できた場合だけ再送可能に戻す。
 - Context shaping also applies per-row and per-source allowed-principal
   filtering after the common fixed-role RBAC and tenant/project gate.
 - API Gateway can resolve principals from API keys or verified Cloudflare Access JWTs. Login profile fields such as company and organization names are display-only metadata.
@@ -169,6 +174,7 @@ grouping and coverage calculation so hidden counts are not observable.
 - `/decisions`: decision knowledge search, editor, confirmation, and trust/provenance review.
 - `/operations`: memory/decision debt, queue, audit, retrieval quality, token,
   retention, and SLO status.
+- `/client-installations`: 本人のCodex／Claude Code／Cursor hook導入一覧、one-time enrollment表示、導入単位の失効。
 
 ## Current State
 - The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.

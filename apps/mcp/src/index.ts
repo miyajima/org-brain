@@ -90,6 +90,74 @@ function isAuthorized(req: Request, expectedToken: string): boolean {
   return auth === `Bearer ${expectedToken}`;
 }
 
+const PROXY_REQUEST_HEADERS = [
+  "accept",
+  "content-type",
+  "mcp-protocol-version",
+  "mcp-session-id",
+  "mcp-method",
+  "mcp-name",
+  "last-event-id",
+  "x-orgbrain-tenant",
+  "cf-access-jwt-assertion"
+] as const;
+
+const PROXY_RESPONSE_HEADERS = [
+  "content-type",
+  "cache-control",
+  "mcp-session-id",
+  "www-authenticate"
+] as const;
+
+export function buildMcpProxyRequest(request: Request): Request {
+  const sourceUrl = new URL(request.url);
+  const suffix = sourceUrl.pathname.startsWith("/mcp")
+    ? sourceUrl.pathname.slice("/mcp".length)
+    : sourceUrl.pathname;
+  const target = new URL(`https://internal/mcp${suffix || ""}`);
+  target.search = sourceUrl.search;
+  const headers = new Headers();
+  for (const name of PROXY_REQUEST_HEADERS) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > 1_048_576) {
+    throw new Error("MCP request body exceeds 1 MiB");
+  }
+  const init: RequestInit & { duplex?: "half" } = {
+    method: request.method,
+    headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    redirect: "manual",
+    duplex: "half"
+  };
+  return new Request(target, init);
+}
+
+async function proxyMcpRequest(request: Request, env: Env): Promise<Response> {
+  if (!request.headers.get("cf-access-jwt-assertion")?.trim()) {
+    return new Response("missing Cloudflare Access assertion", { status: 401 });
+  }
+  let upstreamRequest: Request;
+  try {
+    upstreamRequest = buildMcpProxyRequest(request);
+  } catch (error) {
+    return new Response(error instanceof Error ? error.message : String(error), { status: 413 });
+  }
+  const upstream = await env.API.fetch(upstreamRequest);
+  const headers = new Headers();
+  for (const name of PROXY_RESPONSE_HEADERS) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers
+  });
+}
+
 const agentMessageTargetTypeSchema = z.enum(["principal", "agent", "project", "channel"]);
 const agentMessageStatusSchema = z.enum(["unread", "read", "acked", "archived", "active"]);
 
@@ -579,11 +647,11 @@ app.get("/", (c) =>
     ok: true,
     name: "open-brain-mcp",
     mcp_path: "/mcp",
-    auth: "Authorization: Bearer <MCP_BEARER_TOKEN>"
+    auth: "Cloudflare Access Managed OAuth or per-installation service token"
   })
 );
 
-app.mount("/mcp", (request, env, ctx) => {
+export function legacyMcpFetch(request: Request, env: Env, ctx: ExecutionContext) {
   if (!env.MCP_BEARER_TOKEN || !env.ORG_BRAIN_API_KEY) {
     return new Response("misconfigured: missing MCP_BEARER_TOKEN or ORG_BRAIN_API_KEY", { status: 500 });
   }
@@ -602,6 +670,8 @@ app.mount("/mcp", (request, env, ctx) => {
 
   // Hono strips the mount prefix before delegating to the mounted handler.
   return OrgBrainMCP.serve("/").fetch(request, env, nextCtx);
-});
+}
+
+app.mount("/mcp", (request, env) => proxyMcpRequest(request, env));
 
 export default app;
