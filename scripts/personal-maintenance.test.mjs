@@ -5,12 +5,29 @@ import path from "node:path";
 import test from "node:test";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import {
+  autonomousMaintenancePlan,
   installPersonalMaintenance,
   personalMaintenancePlan,
   personalMaintenanceStatus,
   runLocalMaintenance,
   uninstallPersonalMaintenance
 } from "../packages/orgbrain-cli/src/personal-maintenance.mjs";
+
+test("new installation uses the autonomous controller while starting in fail-closed shadow mode", () => {
+  const plan = autonomousMaintenancePlan({
+    home: "/tmp/orgbrain-autonomous-home",
+    workspace: "/tmp/example-repo",
+    command: "/opt/orgbrain",
+    dbPath: "/tmp/orgbrain.sqlite"
+  });
+  assert.equal(plan.autonomous, true);
+  assert.equal(plan.schedule, "daily");
+  assert.deepEqual(plan.program_arguments.slice(0, 4), ["/opt/orgbrain", "autonomy", "run", "--workspace"]);
+  assert.ok(plan.program_arguments.includes("--execute"));
+  assert.ok(plan.program_arguments.includes("--scan-sessions"));
+  assert.ok(plan.program_arguments.includes("--state-dir"));
+  assert.match(plan.plist, /com\.orgbrain\.autonomy-maintenance/u);
+});
 
 test("daily personal maintenance plan is local-only and contains no LLM or MCP command", () => {
   const plan = personalMaintenancePlan({

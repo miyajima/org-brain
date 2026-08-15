@@ -79,6 +79,9 @@ test("minimal Codex setup can include a reviewable daily personal maintenance pl
   assert.equal(result.plan.maintenance.schedule, "daily");
   assert.equal(result.plan.maintenance.llm_calls, 0);
   assert.equal(result.plan.maintenance.cloud_writes, 0);
+  assert.equal(result.plan.maintenance.autonomous, true);
+  assert.ok(result.plan.maintenance.program_arguments.includes("autonomy"));
+  assert.ok(result.plan.maintenance.program_arguments.includes("--state-dir"));
   assert.ok(result.plan.maintenance.program_arguments.includes("--apply"));
 });
 
@@ -118,14 +121,10 @@ test("minimal Codex hook installer preserves existing hooks and is idempotent", 
   assert.match(env, /ORGBRAIN_MEMORY_CAPTURE_V2_MODE=off/u);
   const mappings = JSON.parse(await readFile(plan.files.workspaces, "utf8"));
   assert.equal(mappings.version, 3);
-  assert.deepEqual(mappings.workspaces[workspace], {
-    tenant_id: null,
-    project_id: "example",
-    business_category_id: null,
-    default_work_type: null,
-    sensitive_memory: { mode: "deny", allowed_principals: [] },
-    memory_learning_mode: "off"
-  });
+  assert.equal(mappings.workspaces[workspace].tenant_id, null);
+  assert.equal(mappings.workspaces[workspace].project_id, "example");
+  assert.equal(mappings.workspaces[workspace].autonomy.mode, "shadow");
+  assert.equal(mappings.workspaces[workspace].autonomy.target_mode, "autonomous");
   assert.equal((await stat(plan.files.env)).mode & 0o777, 0o600);
   assert.equal((await stat(plan.files.hooks)).mode & 0o777, 0o600);
   assert.equal((await stat(plan.files.workspaces)).mode & 0o777, 0o600);

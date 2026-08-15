@@ -47,6 +47,252 @@ export const MEMORY_CONTRACT_OPERATION_GATES = Object.freeze({
   smoke_turns: 200
 });
 
+export const MEMORY_INGESTION_ORACLE_MINIMUMS = Object.freeze({
+  total_cases: 40,
+  contract_cases: 14,
+  verification_cases: 11,
+  routing_cases: 15,
+  active_routes: 3,
+  review_routes: 2,
+  excluded_routes: 10,
+  metamorphic_pairs: 8
+});
+
+export const MEMORY_INGESTION_CALIBRATION_MINIMUMS = Object.freeze({
+  selected_case_count: 900,
+  active_routes: 300,
+  review_routes: 300,
+  excluded_routes: 300,
+  metamorphic_pairs: 90
+});
+
+export const MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM = 200;
+
+export const MEMORY_INGESTION_AUTONOMOUS_MINIMUMS = Object.freeze({
+  selected_case_count: 900,
+  active_routes: 300,
+  quarantine_routes: 300,
+  excluded_routes: 300
+});
+
+export const MEMORY_INGESTION_AUTONOMOUS_HARD_GUARDRAILS = Object.freeze([
+  "unsupported_active",
+  "credential_or_pii_active",
+  "scope_violation_active",
+  "self_attestation_active",
+  "unsafe_active",
+  "lesson_type_misclassification"
+]);
+
+export const MEMORY_INGESTION_AUTONOMOUS_JUDGE_PROFILES = Object.freeze([
+  "evidence_entailment",
+  "durability_atomicity",
+  "future_reuse_overgeneralization",
+  "adversarial_critic",
+  "policy_consistency"
+]);
+
+function metricWilsonGate(metric, threshold = 0.95) {
+  return metric?.passed === true &&
+    Number(metric.precision) >= threshold &&
+    Number(metric.recall) >= threshold &&
+    Number(metric.precision_wilson_lower ?? metric.precision_wilson_95_lower) >= threshold &&
+    Number(metric.recall_wilson_lower ?? metric.recall_wilson_95_lower) >= threshold;
+}
+
+function accuracyWilsonGate(metric, threshold = 0.95) {
+  return metric?.passed === true &&
+    Number(metric.point_estimate) >= threshold &&
+    Number(metric.wilson_lower ?? metric.wilson_95_lower) >= threshold;
+}
+
+export function evaluateMemoryIngestionOracleQualification(input = {}) {
+  const layerCounts = input?.layer_counts && typeof input.layer_counts === "object" ? input.layer_counts : {};
+  const routeCounts = input?.route_counts && typeof input.route_counts === "object" ? input.route_counts : {};
+  const values = {
+    total_cases: Number(input.total_cases),
+    contract_cases: Number(layerCounts.contract),
+    verification_cases: Number(layerCounts.verification),
+    routing_cases: Number(layerCounts.routing),
+    active_routes: Number(routeCounts.active),
+    review_routes: Number(routeCounts.review),
+    excluded_routes: Number(routeCounts.excluded),
+    metamorphic_pairs: Number(input.metamorphic_pair_count)
+  };
+  const minimumChecks = Object.fromEntries(Object.entries(MEMORY_INGESTION_ORACLE_MINIMUMS).map(([key, minimum]) => [
+    key,
+    Number.isInteger(values[key]) && values[key] >= minimum
+  ]));
+  const checks = {
+    schema_version: input.schema_version === 1,
+    dataset_id: typeof input.dataset_id === "string" && input.dataset_id.length > 0,
+    dataset_sha256: /^sha256:[a-f0-9]{64}$/u.test(String(input.dataset_sha256 ?? "")),
+    locked: input.locked === true,
+    runner_passed: input.passed === true && input.status === "qualified",
+    labels_static: input.labels_static === true,
+    labels_not_runtime_derived: input.labels_derived_from_runtime === false,
+    label_mismatches: input.label_mismatch_count === 0,
+    metamorphic_violations: input.metamorphic_violation_count === 0,
+    duplicate_ids: input.duplicate_ids === 0,
+    leakage_violations: input.leakage_violations === 0,
+    structural_errors: Array.isArray(input.structural_errors) && input.structural_errors.length === 0,
+    ...minimumChecks
+  };
+  const hasInput = input && typeof input === "object" && Object.keys(input).length > 0;
+  const passed = hasInput && Object.values(checks).every(Boolean);
+  return {
+    certification: passed ? "oracle_qualified" : "not_qualified",
+    status: !hasInput ? "insufficient_evidence" : passed ? "qualified" : "not_qualified",
+    pass: passed,
+    checks,
+    values,
+    minimums: MEMORY_INGESTION_ORACLE_MINIMUMS,
+    dataset_id: typeof input.dataset_id === "string" ? input.dataset_id : null,
+    dataset_sha256: typeof input.dataset_sha256 === "string" ? input.dataset_sha256 : null
+  };
+}
+
+export function evaluateMemoryIngestionCalibrationQualification(input = {}) {
+  const routeCounts = input?.route_counts && typeof input.route_counts === "object" ? input.route_counts : {};
+  const values = {
+    selected_case_count: Number(input.selected_case_count),
+    active_routes: Number(routeCounts.active),
+    review_routes: Number(routeCounts.review),
+    excluded_routes: Number(routeCounts.excluded),
+    metamorphic_pairs: Number(input.metamorphic?.pair_count)
+  };
+  const minimumChecks = Object.fromEntries(Object.entries(MEMORY_INGESTION_CALIBRATION_MINIMUMS).map(([key, minimum]) => [
+    key,
+    Number.isInteger(values[key]) && values[key] >= minimum
+  ]));
+  const checks = {
+    schema_version: input.schema_version === 1,
+    dataset_id: input.dataset_id === "orgbrain-memory-ingestion-calibration-v1",
+    dataset_sha256: /^sha256:[a-f0-9]{64}$/u.test(String(input.dataset_sha256 ?? "")),
+    case_hashes: [input.case_hash, input.selected_case_hash].every((value) => /^sha256:[a-f0-9]{64}$/u.test(String(value ?? ""))),
+    provenance_hashes: [input.seed_hash, input.rubric_hash, input.contract_hash, input.prompt_hash, input.reason_code_hash].every((value) => /^sha256:[a-f0-9]{64}$/u.test(String(value ?? ""))),
+    locked: input.locked === true,
+    runner_passed: input.passed === true && input.status === "qualified",
+    labels_static: input.labels_static === true,
+    labels_not_runtime_derived: input.labels_derived_from_runtime === false,
+    structural_errors: Array.isArray(input.structural_errors) && input.structural_errors.length === 0,
+    reviewer_agreement: Number(input.reviewer_agreement?.route_agreement) >= 0.9 && Number(input.reviewer_agreement?.route_cohen_kappa) >= 0.8 && Number(input.reviewer_agreement?.reason_code_micro_f1) >= 0.85,
+    route_metrics: input.route_metrics && ["active", "review", "excluded"].every((route) => metricWilsonGate(input.route_metrics[route])),
+    route_accuracy: accuracyWilsonGate(input.route_accuracy),
+    reason_codes: input.reason_code_required?.passed === true && input.reason_code_forbidden?.passed === true,
+    lesson_type_errors: Number(input.lesson_type_errors) === 0,
+    judge_metrics: input.judge_metrics && ["evidence_entailment", "durability_atomicity", "future_reuse_overgeneralization"].every((profile) => input.judge_metrics[profile]?.passed === true),
+    judge_class_counts: input.judge_class_counts && ["evidence_entailment", "durability_atomicity", "future_reuse_overgeneralization"].every((profile) => Number(input.judge_class_counts[profile]?.pass) >= MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM && Number(input.judge_class_counts[profile]?.fail) >= MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM),
+    ai_judge_results_present: input.ai_judge_results_present === true,
+    metamorphic: Number(input.metamorphic?.violation_count) === 0,
+    hard_guardrails: input.hard_guardrails && Object.keys(input.hard_guardrails).length > 0 && Object.values(input.hard_guardrails).every((count) => Number(count) === 0),
+    privacy: input.privacy && input.privacy.raw_transcript_copied === false && input.privacy.runtime_predictions_in_gold === false && input.privacy.real_credentials_or_pii === false,
+    ...minimumChecks
+  };
+  const hasInput = input && typeof input === "object" && Object.keys(input).length > 0;
+  const passed = hasInput && Object.values(checks).every(Boolean);
+  return {
+    certification: passed ? "calibration_qualified" : "not_qualified",
+    status: !hasInput ? "insufficient_evidence" : passed ? "qualified" : "not_qualified",
+    pass: passed,
+    checks,
+    values,
+    minimums: MEMORY_INGESTION_CALIBRATION_MINIMUMS,
+    dataset_id: typeof input.dataset_id === "string" ? input.dataset_id : null,
+    dataset_sha256: typeof input.dataset_sha256 === "string" ? input.dataset_sha256 : null
+  };
+}
+
+export function evaluateMemoryIngestionAutonomousQualification(input = {}) {
+  const routeCounts = input?.route_counts && typeof input.route_counts === "object" ? input.route_counts : {};
+  const values = {
+    selected_case_count: Number(input.selected_case_count),
+    active_routes: Number(routeCounts.active),
+    quarantine_routes: Number(routeCounts.quarantine ?? routeCounts.review),
+    excluded_routes: Number(routeCounts.excluded),
+    council_stability: Number(input.council_stability?.point_estimate ?? input.council_stability),
+    metamorphic_pairs: Number(input.metamorphic?.pair_count)
+  };
+  const minimumChecks = Object.fromEntries(Object.entries(MEMORY_INGESTION_AUTONOMOUS_MINIMUMS).map(([key, minimum]) => [
+    key,
+    Number.isInteger(values[key]) && values[key] >= minimum
+  ]));
+  const hasInput = input && typeof input === "object" && Object.keys(input).length > 0;
+  const checks = {
+    schema_version: input.schema_version === 1,
+    dataset_id: typeof input.dataset_id === "string" && input.dataset_id.includes("machine-reference"),
+    dataset_sha256: /^sha256:[a-f0-9]{64}$/u.test(String(input.dataset_sha256 ?? "")),
+    case_hashes: [input.case_hash, input.selected_case_hash].every((value) => /^sha256:[a-f0-9]{64}$/u.test(String(value ?? ""))),
+    provenance_hashes: [input.seed_hash, input.rubric_hash, input.contract_hash, input.prompt_hash, input.reason_code_hash].every((value) => /^sha256:[a-f0-9]{64}$/u.test(String(value ?? ""))),
+    locked: input.locked === true,
+    runner_passed: input.passed === true && input.status === "qualified",
+    ground_truth_basis: input.ground_truth_basis === "machine_reference",
+    human_grounded: input.human_grounded === false,
+    labels_not_runtime_derived: input.labels_derived_from_runtime === false,
+    structural_errors: Array.isArray(input.structural_errors) && input.structural_errors.length === 0,
+    route_metrics: input.route_metrics && ["active", "quarantine", "excluded"].every((route) => metricWilsonGate(input.route_metrics[route]) || (route === "quarantine" && metricWilsonGate(input.route_metrics.review))),
+    route_accuracy: accuracyWilsonGate(input.route_accuracy),
+    judge_metrics: input.judge_metrics && MEMORY_INGESTION_AUTONOMOUS_JUDGE_PROFILES.every((profile) => metricWilsonGate(input.judge_metrics[profile])),
+    consensus_metrics: metricWilsonGate(input.consensus_metrics),
+    council_stability: Number.isFinite(values.council_stability) && values.council_stability >= 0.99,
+    hard_guardrails: input.hard_guardrails && MEMORY_INGESTION_AUTONOMOUS_HARD_GUARDRAILS.every((name) => Object.hasOwn(input.hard_guardrails, name) && Number(input.hard_guardrails[name]) === 0),
+    metamorphic: Number(input.metamorphic?.violation_count) === 0,
+    metamorphic_pairs: Number.isInteger(values.metamorphic_pairs) && values.metamorphic_pairs >= 90,
+    observed_outcomes: input.observed_outcomes?.passed === true,
+    privacy: input.privacy && input.privacy.raw_transcript_copied === false && input.privacy.reasoning_persisted === false && input.privacy.real_credentials_or_pii === false,
+    council_results_present: input.council_results_present === true,
+    council_signature: typeof input.council_signature === "string" && input.council_signature.length > 0,
+    council_key_fingerprints: Array.isArray(input.council_key_fingerprints) && new Set(input.council_key_fingerprints.map(String).filter(Boolean)).size >= 3
+  };
+  const passed = hasInput && Object.values(checks).every(Boolean);
+  return {
+    // Keep only the signed, non-content provenance needed to re-verify this
+    // result when the report is handed to the quality certifier.  This makes
+    // the evaluator output itself a safe manifest fragment rather than a
+    // self-attested boolean that cannot be checked again.
+    schema_version: input.schema_version,
+    dataset_id: input.dataset_id,
+    dataset_sha256: input.dataset_sha256,
+    case_hash: input.case_hash,
+    selected_case_hash: input.selected_case_hash,
+    seed_hash: input.seed_hash,
+    rubric_hash: input.rubric_hash,
+    contract_hash: input.contract_hash,
+    prompt_hash: input.prompt_hash,
+    reason_code_hash: input.reason_code_hash,
+    locked: input.locked,
+    passed: input.passed,
+    status: input.status,
+    selected_case_count: input.selected_case_count,
+    route_counts: input.route_counts,
+    route_metrics: input.route_metrics,
+    route_accuracy: input.route_accuracy,
+    judge_metrics: input.judge_metrics,
+    consensus_metrics: input.consensus_metrics,
+    council_stability: input.council_stability,
+    hard_guardrails: input.hard_guardrails,
+    metamorphic: input.metamorphic,
+    observed_outcomes: input.observed_outcomes,
+    council_signature: input.council_signature,
+    council_public_key_fingerprint: input.council_public_key_fingerprint,
+    council_key_fingerprints: input.council_key_fingerprints,
+    ground_truth_basis: input.ground_truth_basis,
+    human_grounded: input.human_grounded,
+    labels_derived_from_runtime: input.labels_derived_from_runtime,
+    privacy: input.privacy,
+    council_results_present: input.council_results_present,
+    structural_errors: input.structural_errors,
+    certification: passed ? "autonomous_qualified" : "not_qualified",
+    status: !hasInput ? "insufficient_evidence" : passed ? "qualified" : "not_qualified",
+    pass: passed,
+    checks,
+    values,
+    minimums: MEMORY_INGESTION_AUTONOMOUS_MINIMUMS,
+    dataset_id: typeof input.dataset_id === "string" ? input.dataset_id : null,
+    dataset_sha256: typeof input.dataset_sha256 === "string" ? input.dataset_sha256 : null
+  };
+}
+
 export function evaluateMemoryContractPerformance(input = {}) {
   const values = Object.fromEntries(Object.keys(MEMORY_CONTRACT_OPERATION_GATES).map((key) => [key, Number(input[key])]));
   const checks = {
@@ -188,21 +434,40 @@ export function certifyMemoryContractQuality(manifest = {}, options = {}) {
       ? evaluateAiJudgeConsensus(suppliedConsensus.judgments, options)
       : suppliedConsensus
         ? { certification: "not_certified", status: "insufficient_evidence", pass: false, required_judges: 3, judgments: [] }
-        : null;
-  const judgePassed = !judgeConsensus || judgeConsensus.pass === true;
+        : { certification: "not_certified", status: "insufficient_evidence", pass: false, required_judges: 3, judgments: [] };
+  const judgeRequired = options.requireJudgeConsensus !== false;
+  const judgePassed = !judgeRequired || judgeConsensus.pass === true;
+  const oracleQualification = evaluateMemoryIngestionOracleQualification(manifest.oracle_qualification);
+  const oracleRequired = options.requireOracleQualification !== false;
+  const oraclePassed = !oracleRequired || oracleQualification.pass === true;
+  const calibrationQualification = evaluateMemoryIngestionCalibrationQualification(manifest.calibration_qualification);
+  const calibrationRequired = options.requireCalibrationQualification !== false;
+  const autonomousQualification = evaluateMemoryIngestionAutonomousQualification(manifest.autonomous_qualification);
+  const autonomousInput = manifest.autonomous_qualification && typeof manifest.autonomous_qualification === "object" && Object.keys(manifest.autonomous_qualification).length > 0;
+  const autonomousRequired = options.requireAutonomousQualification === true || (autonomousInput && options.requireAutonomousQualification !== false);
+  const selectedQualification = autonomousInput ? autonomousQualification : calibrationQualification;
+  const qualificationPassed = autonomousInput
+    ? (!autonomousRequired || autonomousQualification.pass === true)
+    : (!calibrationRequired || calibrationQualification.pass === true);
   const corpus = validateMemoryContractCorpus(manifest.corpus);
   const corpusRequired = options.requireCorpus !== false;
-  const insufficientEvidence = measurements.length === 0 || missingAxes.length > 0 || measurements.some((measurement) => measurement.point_estimate === null) || (corpusRequired && !corpus.passed);
-  const passed = !insufficientEvidence && measurements.every((measurement) => measurement.passed) && hardGuardrails.every((guardrail) => guardrail.passed) && judgePassed;
+  const qualificationRequired = autonomousInput ? autonomousRequired : calibrationRequired;
+  const autonomousMissing = options.requireAutonomousQualification === true && !autonomousInput;
+  const insufficientEvidence = (requiredAxes.length > 0 && measurements.length === 0) || missingAxes.length > 0 || measurements.some((measurement) => measurement.point_estimate === null) || (corpusRequired && !corpus.passed) || (oracleRequired && oracleQualification.status === "insufficient_evidence") || autonomousMissing || (qualificationRequired && selectedQualification.status === "insufficient_evidence");
+  const passed = !insufficientEvidence && measurements.every((measurement) => measurement.passed) && hardGuardrails.every((guardrail) => guardrail.passed) && judgePassed && oraclePassed && qualificationPassed;
   return {
     schema_version: 2,
-    certification: passed ? "oracle_certified" : "not_certified",
+    certification: passed ? (autonomousInput && autonomousQualification.pass ? "autonomous_qualified" : "oracle_certified") : "not_certified",
     status: insufficientEvidence ? "insufficient_evidence" : (passed ? "certified" : "not_certified"),
     aggregate_score: null,
     measurements,
     required_axes: requiredAxes,
     missing_axes: missingAxes,
     corpus,
+    oracle_qualification: oracleQualification,
+    calibration_qualification: calibrationQualification,
+    autonomous_qualification: autonomousQualification,
+    selected_qualification: selectedQualification,
     judge_consensus: judgeConsensus,
     hard_guardrails: hardGuardrails,
     threshold: Number(options.threshold ?? 0.95),

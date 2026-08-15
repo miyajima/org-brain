@@ -3,6 +3,42 @@ export const MEMORY_CONTRACT_KPIS: string[];
 export const MEMORY_CONTRACT_HARD_GUARDRAILS: string[];
 export const MEMORY_CONTRACT_CORPUS_MINIMUMS: Record<string, number>;
 export const MEMORY_CONTRACT_OPERATION_GATES: Record<string, number>;
+export const MEMORY_INGESTION_ORACLE_MINIMUMS: Record<string, number>;
+export const MEMORY_INGESTION_CALIBRATION_MINIMUMS: Record<string, number>;
+export const MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM: number;
+export const MEMORY_INGESTION_AUTONOMOUS_MINIMUMS: Record<string, number>;
+export const MEMORY_INGESTION_AUTONOMOUS_HARD_GUARDRAILS: readonly string[];
+export const MEMORY_INGESTION_AUTONOMOUS_JUDGE_PROFILES: readonly string[];
+export function evaluateMemoryIngestionOracleQualification(input?: Record<string, unknown>): {
+  certification: "oracle_qualified" | "not_qualified";
+  status: "qualified" | "not_qualified" | "insufficient_evidence";
+  pass: boolean;
+  checks: Record<string, boolean>;
+  values: Record<string, number>;
+  minimums: Record<string, number>;
+  dataset_id: string | null;
+  dataset_sha256: string | null;
+};
+export function evaluateMemoryIngestionCalibrationQualification(input?: Record<string, unknown>): {
+  certification: "calibration_qualified" | "not_qualified";
+  status: "qualified" | "not_qualified" | "insufficient_evidence";
+  pass: boolean;
+  checks: Record<string, boolean>;
+  values: Record<string, number>;
+  minimums: Record<string, number>;
+  dataset_id: string | null;
+  dataset_sha256: string | null;
+};
+export function evaluateMemoryIngestionAutonomousQualification(input?: Record<string, unknown>): {
+  certification: "autonomous_qualified" | "not_qualified";
+  status: "qualified" | "not_qualified" | "insufficient_evidence";
+  pass: boolean;
+  checks: Record<string, boolean>;
+  values: Record<string, number>;
+  minimums: Record<string, number>;
+  dataset_id: string | null;
+  dataset_sha256: string | null;
+};
 export function validateMemoryContractCorpus(corpus?: Record<string, unknown>): {
   passed: boolean;
   actual: Record<string, number>;
@@ -42,17 +78,23 @@ export function evaluateMemoryContractPerformance(input?: Record<string, number>
 export function certifyMemoryContractQuality(manifest?: {
   measurements?: unknown[];
   hard_violations?: unknown[];
+  oracle_qualification?: Record<string, unknown> | null;
+  calibration_qualification?: Record<string, unknown> | null;
+  autonomous_qualification?: Record<string, unknown> | null;
   judgments?: unknown[];
   judge_consensus?: { pass?: boolean; judgments?: unknown[] } | null;
-}, options?: { threshold?: number; reaskUpperThreshold?: number; requiredAxes?: string[]; requireCorpus?: boolean }): {
+}, options?: { threshold?: number; reaskUpperThreshold?: number; requiredAxes?: string[]; requireCorpus?: boolean; requireJudgeConsensus?: boolean; requireOracleQualification?: boolean; requireCalibrationQualification?: boolean; requireAutonomousQualification?: boolean }): {
   schema_version: 2;
-  certification: "oracle_certified" | "not_certified";
+  certification: "oracle_certified" | "autonomous_qualified" | "not_certified";
   status: "certified" | "not_certified" | "insufficient_evidence";
   aggregate_score: null;
   measurements: ReturnType<typeof evaluateMemoryContractMeasurement>[];
   required_axes: string[];
   missing_axes: string[];
   corpus: ReturnType<typeof validateMemoryContractCorpus>;
+  oracle_qualification: ReturnType<typeof evaluateMemoryIngestionOracleQualification>;
+  calibration_qualification: ReturnType<typeof evaluateMemoryIngestionCalibrationQualification>;
+  autonomous_qualification: ReturnType<typeof evaluateMemoryIngestionAutonomousQualification>;
   judge_consensus: unknown;
   hard_guardrails: Array<{ name: string; count: number; passed: boolean }>;
   threshold: number;

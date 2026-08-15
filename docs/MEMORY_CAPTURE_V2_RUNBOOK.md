@@ -1,3 +1,11 @@
+---
+title: Memory Capture v2 rollout and repair runbook
+doc_type: reference
+status: approved
+owner: org-brain-maintainers
+last_updated: 2026-08-15
+---
+
 # Memory Capture v2 rollout and repair runbook
 
 The strict hook profile is generated from the executable gold dataset. See
@@ -22,8 +30,9 @@ memory at seven days.
 
 ## Preconditions
 
-1. Apply additive migrations `0029_memory_capture_v2.sql` and
-   `0030_memory_learning_quality.sql`.
+1. Apply additive migrations `0029_memory_capture_v2.sql`,
+   `0030_memory_learning_quality.sql`, `0031_memory_contract_v2.sql`, and
+   `0032_autonomy_quarantine.sql`.
    It adds independent `reuse_rule` storage, decision-origin provenance, and
    atomic guards that reject new active canonical-key duplicates without
    failing on legacy duplicates awaiting repair.
@@ -72,11 +81,25 @@ memory at seven days.
    `synthetic + unverified`, so none enters the verified learning generation.
 10. Assign the learning generation as shadow for one project, set only that
    workspace's `memory_learning_mode` to `on`, and run a 24-hour canary.
-11. Run `pnpm memories:certify-quality -- --manifest <private-locked-manifest>`.
+11. Qualify the ingestion judge against the static locked oracle before reading
+    corpus scores:
+    `pnpm memories:qualify-ingestion-oracle -- --output <private-oracle-report>`.
+12. Run the independent machine-reference council: generate 1,200 blind cases,
+    execute five profiles from at least three model families twice in shuffled
+    order, quarantine disagreements, and seal 900 cases (300 active, 300
+    quarantine, 300 excluded). The legacy human calibration CLI remains
+    readable for compatibility but is not required for autonomous qualification.
+    The real-session canary must have at least 200 user-origin turns and opaque
+    AI audit samples of 50 quarantine and 50 excluded turns; otherwise it
+    remains `insufficient_evidence`.
+13. Run
+    `pnpm memories:certify-quality -- --manifest <private-locked-manifest> --oracle-report <private-oracle-report> --autonomous-report <private-machine-report>`.
     Every axis is independent; missing samples report `insufficient_evidence`.
-    Do not enable capture until all seven axes and all Wilson lower bounds pass.
-12. Enable verified capture for the remaining workspaces and then the tenant.
-13. Keep inferred-decision blocking off for seven additional days. Enable it only
+    The report must state `ground_truth_basis=machine_reference` and
+    `human_grounded=false`; do not enable autonomous promotion until all Wilson
+    lower bounds, council stability, canary, and observed-outcome gates pass.
+14. Enable verified capture for the remaining workspaces and then the tenant.
+15. Keep inferred-decision blocking off for seven additional days. Enable it only
    if there are zero false blocks and every block has confidence at least 0.90,
    exact scope, a reason, current validity, no conflict, and durable evidence.
 
@@ -109,6 +132,43 @@ memory at seven days.
 - semantic, atomic, segment, and reranker candidate counts and degraded reasons
 - inferred-decision review/block counts and false-block incidents
 
+## Autonomous control loop
+
+Autonomous mode is controlled by the versioned workspace policy. New installs
+start in `shadow`, then advance automatically to `guarded` and `autonomous`
+only after machine-reference qualification, the 200-turn canary, and the
+observed-outcome gates pass. Deterministic checks run before any AI call;
+`managed`, `local`, and `deny` judge execution are explicit policy choices.
+If `ORGBRAIN_AUTONOMY_QUALIFICATION_RUNNER` is configured, the same scheduled
+controller runs the machine-reference/canary adapter automatically when no
+private evidence exists; an unsigned status claim is ignored.
+Unavailable or disagreeing judges route candidates to `quarantine`, never to a
+human queue and never to active memory. The daily cloud worker and macOS
+LaunchAgent use the same risk-tiered policy, mutation budget, post-apply doctor,
+and automatic rollback. Quarantine is re-evaluated when new evidence, models,
+prompts, or policies arrive; after the configured retention window it becomes
+`expired`/suppressed without physical deletion.
+
+Use these controls only for observation or an explicit safety override:
+
+```text
+orgbrain autonomy status
+orgbrain autonomy explain --run <run-id>
+orgbrain autonomy configure --profile balanced --scope workspace
+orgbrain autonomy configure --profile balanced --scope tenant
+orgbrain autonomy freeze --scope workspace
+orgbrain autonomy rollback --run <run-id>
+orgbrain autonomy run --dry-run
+```
+
+The tenant-scoped command requires a tenant mapping or `ORGBRAIN_TENANT_ID`.
+
+All run IDs, policy hashes, judge metadata, mutation decisions, post-apply
+checks, and rollback information are stored as private metadata. Raw
+transcripts, reasoning, command output, credentials, and absolute home paths
+are not persisted. AI quality decisions cannot physically delete data;
+retention policy is the only deletion authority.
+
 The live gate is `pnpm smoke:memory-learning -- --project <canary> --requests 200`
 with no request error/5xx/1102. The locked 300-query evaluation additionally
 requires Recall@5, MRR, known-theme non-empty rate, and unrelated-query
@@ -119,8 +179,9 @@ occurrences of `semantic_provider_unavailable`,
 
 ## Rollback
 
-1. Set both capture and inferred-blocking flags to `off`.
-   Set every workspace `memory_learning_mode` to `off`.
+1. Freeze the autonomy policy for the affected scope (`orgbrain autonomy
+   freeze --execute`) and set both capture and inferred-blocking flags to
+   `off`. Legacy `memory_learning_mode` remains a compatibility input.
 2. Restore the previous retrieval-generation assignment.
 3. Mark auto-generated decisions `deprecated`.
 4. Suppress newly derived repair memories.

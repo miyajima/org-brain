@@ -12,6 +12,7 @@ import { MEMORY_CONTRACT_V2_PROMPT } from "../../shared/src/memory-contract-v2-r
 import {
   loadWorkspaceConfig,
   normalizeWorkspaceRoot,
+  autonomyPolicyFromWorkspaceConfig,
   tenantFallbackFromEnv,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
@@ -79,6 +80,7 @@ async function workspaceScope(cwdInput, env) {
     businessCategoryId: mapped?.business_category_id ?? null,
     workType: mapped?.default_work_type ?? null,
     learningMode: mapped?.memory_learning_mode ?? "off",
+    autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config),
     localMemoryEnabled: !mode.cloudMemoryEnabled
   };
 }

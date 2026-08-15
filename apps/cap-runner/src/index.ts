@@ -4,6 +4,10 @@ import {
   type TaskCreatedPayload,
   type TaskResultPayload,
   ulid,
+  DEFAULT_AUTONOMY_POLICY,
+  autonomyPolicyHash,
+  evaluateAutonomyConsensus,
+  normalizeAutonomyPolicy,
   validateEnvelope,
   runRecordedScheduledJob
 } from "@org-brain/shared";
@@ -28,6 +32,68 @@ export { LeaseDO, MailboxDO };
 
 const METRICS_CRON = "5 0 * * *";
 const MEMORY_MAINTENANCE_CRON = "30 18 * * *";
+
+type ManagedAutonomyPolicy = {
+  mode: string;
+  judge: {
+    execution: string;
+    active_consensus: number;
+    minimum_model_families: number;
+    minimum_confidence: number;
+  };
+};
+
+async function loadManagedAutonomyJudge(
+  env: Env,
+  policy: ManagedAutonomyPolicy,
+  runId: string
+): Promise<{ pass: boolean; status: string; judgments: unknown[]; model_families?: number; error?: string }> {
+  if (policy.mode === "shadow" || policy.judge.execution === "deny") {
+    return { pass: false, status: "insufficient_evidence", judgments: [], error: policy.judge.execution === "deny" ? "judge_execution_denied" : undefined };
+  }
+  if (policy.judge.execution !== "managed" || !env.AUTONOMY_JUDGE_URL?.trim()) {
+    return { pass: false, status: "insufficient_evidence", judgments: [], error: "managed_judge_unavailable" };
+  }
+  try {
+    const response = await fetch(env.AUTONOMY_JUDGE_URL.trim(), {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        ...(env.AUTONOMY_JUDGE_API_KEY?.trim()
+          ? { authorization: `Bearer ${env.AUTONOMY_JUDGE_API_KEY.trim()}` }
+          : {})
+      },
+      body: JSON.stringify({ action: "maintenance", run_id: runId, policy_hash: autonomyPolicyHash(policy) }),
+      signal: AbortSignal.timeout(10_000)
+    });
+    const body = await response.json().catch(() => null) as unknown;
+    if (!response.ok) throw new Error(`judge_http_${response.status}`);
+    const judgments = Array.isArray(body) ? body : body && typeof body === "object" && Array.isArray((body as { judgments?: unknown[] }).judgments)
+      ? (body as { judgments: unknown[] }).judgments
+      : [];
+    const consensus = evaluateAutonomyConsensus(judgments, {
+      requiredJudges: policy.judge.active_consensus,
+      minimumModelFamilies: policy.judge.minimum_model_families,
+      minimumConfidence: policy.judge.minimum_confidence,
+      requireSignatures: true
+    });
+    return {
+      pass: consensus.pass === true,
+      status: String(consensus.status ?? "insufficient_evidence"),
+      judgments,
+      model_families: Number(consensus.model_families ?? 0),
+      error: consensus.pass === true ? undefined : "judge_consensus_not_certified"
+    };
+  } catch (error) {
+    return {
+      pass: false,
+      status: "insufficient_evidence",
+      judgments: [],
+      error: String(error instanceof Error ? error.message : error).slice(0, 160)
+    };
+  }
+}
 
 async function acquireLease(
   env: Env,
@@ -404,7 +470,24 @@ export default {
         jobName: "memory-maintenance",
         scheduledFor: now,
         now
-      }, async () => runScheduledMemoryMaintenance(env.OPEN_BRAIN_DB, now));
+      }, async () => {
+        let autonomyPolicy = normalizeAutonomyPolicy(DEFAULT_AUTONOMY_POLICY);
+        if (env.AUTONOMY_POLICY_JSON?.trim()) {
+          try {
+            autonomyPolicy = normalizeAutonomyPolicy(JSON.parse(env.AUTONOMY_POLICY_JSON));
+          } catch {
+            // Invalid deployment policy is fail-closed: the run remains in
+            // shadow and records no semantic mutations until corrected.
+            autonomyPolicy = normalizeAutonomyPolicy(DEFAULT_AUTONOMY_POLICY);
+          }
+        }
+        const judgeConsensus = await loadManagedAutonomyJudge(env, autonomyPolicy as unknown as ManagedAutonomyPolicy, `scheduled:${now}`);
+        return runScheduledMemoryMaintenance(env.OPEN_BRAIN_DB, now, {
+          autonomyPolicy,
+          judgeConsensus,
+          runId: `scheduled:${now}`
+        });
+      });
     }
   },
 

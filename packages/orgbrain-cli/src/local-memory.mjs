@@ -24,6 +24,8 @@ Usage:
   orgbrain memory delete <memory-id>
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
+  orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
+  orgbrain memory import codex-sessions --plan <path> --expected-plan-hash <sha256> [--apply-report <path>] --execute
   orgbrain category list [--tenant-id <id>] [--include-inactive]
   orgbrain category create --slug <slug> --label <label> [--description <text>]
   orgbrain category update <category-id> [--slug <slug>] [--label <label>] [--active true|false]
@@ -61,6 +63,7 @@ Usage:
   orgbrain event ingest <codex|claude|opencode|openclaw> [json-payload]
   orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact>
   orgbrain maintenance <run|status|install|uninstall> [--schedule daily] [--apply] [--execute]
+  orgbrain autonomy <status|explain|configure|freeze|rollback|run> [--workspace <path>] [--scope workspace|tenant] [--profile <profile>] [--mode <mode>] [--run <run-id>] [--evidence <json>] [--state-dir <path>] [--state-file <path>] [--judge-runner <module>] [--quarantine-runner <module>] [--qualification-runner <module>] [--scan-sessions] [--sessions-root <path>] [--dry-run] [--execute]
   orgbrain cloud doctor [--root <checkout>] [--live]
   orgbrain cloud provision [--root <checkout>] [--with-vectorize] [--execute]
   orgbrain connector setup <codex|claude|opencode|openclaw> [--mode mcp|minimal-hooks] [--maintenance daily] [--scope user|project] [--execute]
@@ -93,7 +96,7 @@ function parseArgs(argv) {
       continue;
     }
     const [name, inline] = arg.split("=", 2);
-    if (["--json", "--help", "--force", "--live", "--execute", "--with-vectorize", "--apply", "--include-inactive"].includes(name)) {
+    if (["--json", "--help", "--force", "--live", "--execute", "--with-vectorize", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
       flags.add(name);
       continue;
     }
@@ -240,6 +243,11 @@ async function writeOutput(path, text) {
 }
 
 async function handleMemory(store, action, rest, args) {
+  if (action === "import") {
+    const { runCodexSessionImportCommand } = await import("./codex-session-import.mjs");
+    emit(await runCodexSessionImportCommand({ store, args, rest }));
+    return;
+  }
   const tenantId = args.get("--tenant-id", "default");
   if (action === "capture" || action === "upsert") {
     const payload = await readPayload(args);
@@ -809,6 +817,9 @@ async function main() {
   } else if (command === "maintenance") {
     const { runPersonalMaintenanceCommand } = await import("./personal-maintenance.mjs");
     emit(await runPersonalMaintenanceCommand(action, args));
+  } else if (command === "autonomy") {
+    const { runAutonomyCommand } = await import("./autonomy.mjs");
+    emit(await runAutonomyCommand(action, args));
   } else if (command === "cloud") {
     const { runCloudCommand } = await import("./cloud-operations.mjs");
     const result = await runCloudCommand(action, args);

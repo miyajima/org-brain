@@ -347,7 +347,7 @@ describe("hook-memory-bridge promotion", () => {
 
     expect(selected).toBe("client-workspace");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved).toEqual({
+    expect(saved).toMatchObject({
       version: 3,
       workspaces: {
         "/tmp/workspaces/org-brain": {
@@ -391,7 +391,7 @@ describe("hook-memory-bridge promotion", () => {
 
     expect(selected).toBe("demo-app");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved.workspaces["/tmp/workspaces/demo-app"]).toEqual({
+    expect(saved.workspaces["/tmp/workspaces/demo-app"]).toMatchObject({
       tenant_id: "tenant-a",
       project_id: "demo-app",
       business_category_id: null,

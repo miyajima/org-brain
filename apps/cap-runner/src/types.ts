@@ -14,6 +14,12 @@ export type Env = {
   ORG_BUS_OUT: Queue<TaskEnvelope>;
   LEASES: DurableObjectNamespace;
   MAILBOX: DurableObjectNamespace;
+  /** Optional versioned autonomy policy injected by the deployment. */
+  AUTONOMY_POLICY_JSON?: string;
+  /** Optional managed AI council endpoint. Fail-closed when absent or unavailable. */
+  AUTONOMY_JUDGE_URL?: string;
+  /** Optional bearer credential for the managed AI council endpoint. */
+  AUTONOMY_JUDGE_API_KEY?: string;
 };
 
 export type CapabilityContext = {

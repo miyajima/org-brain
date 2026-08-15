@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "dataset_id": "orgbrain-memory-ingestion-calibration-v1",
+  "candidate_count": 1200,
+  "locked_count": 900,
+  "source": "blind_synthetic_taxonomy",
+  "provenance": {
+    "rubric_hash": "sha256:1e3dbe78d53f859d71cd884313f63fa23f85c6103d0277324c2d76cafd55ccd2",
+    "contract_hash": "sha256:548e1ae7f79fbfab191bd74b314eec3ed4dc7a10d8b7906e50c40d77fe45edab",
+    "prompt_hash": "sha256:f7760544155aa3290a5a6e1aeaed39d03d608f6934eada0a4c87060e2c090b6d",
+    "reason_code_hash": "sha256:04f70d4ec18fe960928c15a108d292a3f90200ef25701448c5136d402e28b75a"
+  },
+  "label_policy": {
+    "labels_are_not_in_candidate_inputs": true,
+    "labels_derived_from_runtime": false,
+    "reviewer_count": 2,
+    "adjudicator_count": 1,
+    "raw_transcript_copied": false,
+    "real_credentials_or_pii": false
+  },
+  "strata": {
+    "active_success": 100,
+    "active_decision": 100,
+    "active_failure": 100,
+    "review_evidence_gap": 75,
+    "review_observe_incomplete": 75,
+    "review_conflict_scope": 75,
+    "review_durable_final": 75,
+    "excluded_transient": 30,
+    "excluded_self_attested": 30,
+    "excluded_credential": 30,
+    "excluded_pii": 30,
+    "excluded_unsafe": 30,
+    "excluded_automation": 30,
+    "excluded_subagent": 30,
+    "excluded_workspace": 30,
+    "excluded_structural": 30,
+    "excluded_duplicate": 30
+  },
+  "reserve_candidates": 300,
+  "minimum_complete_metamorphic_pairs": 90,
+  "privacy": {
+    "raw_transcript_persisted": false,
+    "reasoning_read": false,
+    "runtime_prediction_embedded": false
+  }
+}

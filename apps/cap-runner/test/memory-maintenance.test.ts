@@ -435,6 +435,26 @@ describe("memory maintenance", () => {
     expect(db.memoriesFts.some((row) => row.memory_id === digest?.id)).toBe(true);
   });
 
+  it("keeps semantic mutations in quarantine while the autonomous policy is shadowed", async () => {
+    const db = new FakeD1(baseRows());
+    const result = await runTenantMemoryMaintenance(
+      db as unknown as D1Database,
+      "default",
+      Date.parse("2026-03-30T00:00:00.000Z"),
+      { autonomyPolicy: { mode: "shadow" }, runId: "run-shadow-1" }
+    );
+
+    expect(result.applied).toBe(false);
+    expect(result.autonomy).toMatchObject({
+      mode: "shadow",
+      run_id: "run-shadow-1",
+      quarantined_mutation_count: expect.any(Number),
+      deferred_mutation_count: expect.any(Number)
+    });
+    expect(db.memories.filter((memory) => memory.external_key?.includes("canonical-memory"))).toHaveLength(0);
+    expect(db.memories.filter((memory) => memory.external_key?.includes("memory-digest"))).toHaveLength(0);
+  });
+
   it("fills quality metadata for maintenance-scanned memories", async () => {
     const rows: MemoryRecord[] = [
       {

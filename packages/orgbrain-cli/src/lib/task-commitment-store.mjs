@@ -445,7 +445,7 @@ export class TaskCommitmentStore {
           task_key TEXT,
           external_key TEXT NOT NULL,
           payload_json TEXT NOT NULL,
-          status TEXT NOT NULL CHECK(status IN ('review', 'verified', 'rejected', 'expired')),
+          status TEXT NOT NULL CHECK(status IN ('review', 'quarantine', 'verified', 'rejected', 'expired')),
           reason_codes_json TEXT NOT NULL DEFAULT '[]',
           created_at INTEGER NOT NULL,
           expires_at INTEGER NOT NULL,
@@ -470,6 +470,35 @@ export class TaskCommitmentStore {
       const checkpointColumns = db.prepare("PRAGMA table_info(task_context_checkpoints)").all();
       if (!checkpointColumns.some((column) => column.name === "payload_json")) {
         db.exec("ALTER TABLE task_context_checkpoints ADD COLUMN payload_json TEXT NOT NULL DEFAULT '{}'");
+      }
+      const candidateTable = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_learning_candidates'").get();
+      if (candidateTable?.sql && !String(candidateTable.sql).includes("'quarantine'")) {
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          db.exec("DROP INDEX IF EXISTS idx_learning_candidates_review");
+          db.exec("ALTER TABLE memory_learning_candidates RENAME TO memory_learning_candidates_legacy");
+          db.exec(`CREATE TABLE memory_learning_candidates (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            project_id TEXT,
+            task_key TEXT,
+            external_key TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('review', 'quarantine', 'verified', 'rejected', 'expired')),
+            reason_codes_json TEXT NOT NULL DEFAULT '[]',
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            reviewed_at INTEGER,
+            UNIQUE(tenant_id, external_key)
+          )`);
+          db.exec("INSERT INTO memory_learning_candidates SELECT * FROM memory_learning_candidates_legacy");
+          db.exec("DROP TABLE memory_learning_candidates_legacy");
+          db.exec("CREATE INDEX idx_learning_candidates_review ON memory_learning_candidates(tenant_id, project_id, status, expires_at)");
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
       }
     } finally {
       db.close();
@@ -709,7 +738,7 @@ export class TaskCommitmentStore {
       const row = db.prepare(
         "SELECT project_id, external_key, payload_json, status FROM memory_learning_candidates WHERE tenant_id = ? AND id = ?"
       ).get(tenantId, candidateId);
-      if (!row || !["review", "verified"].includes(row.status)) {
+      if (!row || !["review", "quarantine", "verified"].includes(row.status)) {
         return { ok: false, reason: "candidate_backing_missing" };
       }
       if ((row.project_id ?? null) !== (projectId ?? item?.project_id ?? null)) {
@@ -734,10 +763,13 @@ export class TaskCommitmentStore {
     }
   }
 
-  async saveLearningCandidates({ tenantId = "default", projectId = null, taskKey = null, candidates = [] }) {
+  async saveLearningCandidates({ tenantId = "default", projectId = null, taskKey = null, candidates = [], expireAfterDays = null }) {
     await this.init();
     const db = this.open();
     const now = Date.now();
+    const ttlMs = Number.isInteger(Number(expireAfterDays)) && Number(expireAfterDays) > 0
+      ? Number(expireAfterDays) * DAY_MS
+      : COMMITMENT_TTL_MS;
     const results = [];
     try {
       db.exec("BEGIN IMMEDIATE");
@@ -755,7 +787,7 @@ export class TaskCommitmentStore {
             reason_codes_json = excluded.reason_codes_json,
             status = CASE
               WHEN memory_learning_candidates.status = 'verified' THEN 'verified'
-              ELSE 'review'
+              ELSE 'quarantine'
             END,
             expires_at = excluded.expires_at`
         ).run(
@@ -765,15 +797,171 @@ export class TaskCommitmentStore {
           taskKey,
           externalKey,
           JSON.stringify(payload),
-          "review",
+          "quarantine",
           JSON.stringify(candidate.reason_codes ?? []),
           now,
-          now + COMMITMENT_TTL_MS
+          now + ttlMs
         );
-        results.push({ id, external_key: externalKey, status: "review" });
+        results.push({ id, external_key: externalKey, status: "quarantine" });
       }
       db.exec("COMMIT");
       return results;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      db.close();
+      await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
+  /**
+   * Move legacy human-review rows into the autonomous quarantine state and
+   * expire candidates whose retention window has elapsed.  No human queue is
+   * left behind; callers can run the AI evaluator again on the remaining
+   * quarantine rows in a later cycle.
+   */
+  async maintainLearningCandidates({ tenantId = "default", now = Date.now(), evaluate = null, promote = null, limit = 100, policyHash = null, expireAfterDays = null, reevaluateIntervalHours = null } = {}) {
+    await this.init();
+    const db = this.open();
+    const ttlMs = Number.isInteger(Number(expireAfterDays)) && Number(expireAfterDays) > 0
+      ? Number(expireAfterDays) * DAY_MS
+      : COMMITMENT_TTL_MS;
+    const reevaluateMs = Number.isInteger(Number(reevaluateIntervalHours)) && Number(reevaluateIntervalHours) > 0
+      ? Number(reevaluateIntervalHours) * 60 * 60 * 1000
+      : DAY_MS;
+    const createdCutoff = now - ttlMs;
+    let rows = [];
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      const normalized = db.prepare(
+        "UPDATE memory_learning_candidates SET status = 'quarantine' WHERE tenant_id = ? AND status = 'review'"
+      ).run(tenantId);
+      const expired = db.prepare(
+        "UPDATE memory_learning_candidates SET status = 'expired', reviewed_at = ? WHERE tenant_id = ? AND status = 'quarantine' AND (expires_at <= ? OR created_at <= ?)"
+      ).run(now, tenantId, now, createdCutoff);
+      const remaining = db.prepare(
+        "SELECT COUNT(*) AS count FROM memory_learning_candidates WHERE tenant_id = ? AND status = 'quarantine'"
+      ).get(tenantId);
+      db.exec("COMMIT");
+      rows = db.prepare(
+        "SELECT id, project_id, task_key, external_key, payload_json, reason_codes_json, created_at, expires_at FROM memory_learning_candidates WHERE tenant_id = ? AND status = 'quarantine' ORDER BY created_at ASC LIMIT ?"
+      ).all(tenantId, Math.max(0, Math.min(1000, Number(limit) || 100)));
+      const base = {
+        normalized_to_quarantine: Number(normalized.changes ?? 0),
+        expired: Number(expired.changes ?? 0),
+        quarantine_count: Number(remaining?.count ?? 0),
+        reevaluated: 0,
+        promoted: 0,
+        rejected: 0,
+        reevaluation_errors: 0,
+        promotion_errors: 0,
+        promoted_memory_count: 0,
+        promoted_candidates: []
+      };
+      if (typeof evaluate !== "function" || rows.length === 0) return base;
+      const due = rows.filter((row) => {
+        const payload = parseObject(row.payload_json) ?? {};
+        const autonomy = parseObject(payload.autonomy) ?? {};
+        return (policyHash && autonomy.policy_hash && autonomy.policy_hash !== policyHash) ||
+          Number(autonomy.next_evaluation_at ?? row.created_at) <= now;
+      });
+      const updates = [];
+      for (const row of due) {
+        let outcome;
+        try {
+          outcome = await evaluate({
+            id: row.id,
+            external_key: row.external_key,
+            project_id: row.project_id,
+            task_key: row.task_key,
+            candidate: parseObject(row.payload_json) ?? {},
+            reason_codes: (() => {
+              try {
+                const parsed = JSON.parse(row.reason_codes_json ?? "[]");
+                return Array.isArray(parsed) ? parsed : [];
+              } catch {
+                return [];
+              }
+            })()
+          });
+        } catch {
+          base.reevaluation_errors += 1;
+          continue;
+        }
+        const route = String(outcome?.route ?? outcome?.action ?? "quarantine");
+        const candidate = parseObject(row.payload_json) ?? {};
+        const autonomy = {
+          ...(parseObject(candidate.autonomy) ?? {}),
+          last_evaluated_at: now,
+          next_evaluation_at: Number(outcome?.next_evaluation_at) > now
+            ? Number(outcome.next_evaluation_at)
+            : now + reevaluateMs,
+          policy_hash: policyHash ?? (parseObject(candidate.autonomy)?.policy_hash ?? null)
+        };
+        candidate.autonomy = autonomy;
+        const reasonCodes = [...new Set((outcome?.reason_codes ?? candidate.reason_codes ?? []).map(String))].slice(0, 32);
+        let status = route === "active" && outcome?.verified === true && outcome?.consensus_pass === true
+          ? "verified"
+          : route === "excluded" ? "rejected" : "quarantine";
+        let promotion = null;
+        if (status === "verified" && typeof promote === "function") {
+          try {
+            promotion = await promote({
+              id: row.id,
+              external_key: row.external_key,
+              project_id: row.project_id,
+              task_key: row.task_key,
+              candidate,
+              outcome
+            });
+            if (!promotion || promotion.ok !== true) {
+              status = "quarantine";
+              base.promotion_errors += 1;
+              reasonCodes.push("promotion_failed");
+            }
+          } catch {
+            status = "quarantine";
+            base.promotion_errors += 1;
+            reasonCodes.push("promotion_failed");
+          }
+        }
+        updates.push({ row, status, payload: candidate, reasonCodes });
+        base.reevaluated += 1;
+        if (status === "verified") base.promoted += 1;
+        if (status === "rejected") base.rejected += 1;
+        if (status === "verified") {
+          base.promoted_memory_count += Number(promotion?.memory_count ?? promotion?.created_count ?? 0);
+          base.promoted_candidates.push({
+            id: row.id,
+            external_key: row.external_key,
+            project_id: row.project_id,
+            task_key: row.task_key,
+            promotion
+          });
+        }
+      }
+      if (updates.length > 0) {
+        db.exec("BEGIN IMMEDIATE");
+        for (const update of updates) {
+          db.prepare(
+            "UPDATE memory_learning_candidates SET payload_json = ?, status = ?, reason_codes_json = ?, reviewed_at = CASE WHEN ? IN ('verified', 'rejected') THEN ? ELSE reviewed_at END, expires_at = CASE WHEN ? = 'quarantine' THEN MAX(expires_at, ?) ELSE expires_at END WHERE tenant_id = ? AND id = ? AND status = 'quarantine'"
+          ).run(
+            redactedJson(update.payload),
+            update.status,
+            JSON.stringify(update.reasonCodes),
+            update.status,
+            now,
+            update.status,
+            now + ttlMs,
+            tenantId,
+            update.row.id
+          );
+        }
+        db.exec("COMMIT");
+      }
+      base.quarantine_count = Math.max(0, base.quarantine_count - base.promoted - base.rejected);
+      return base;
     } catch (error) {
       db.exec("ROLLBACK");
       throw error;

@@ -1,0 +1,16 @@
+export const AUTONOMY_POLICY_SCHEMA_VERSION: 1;
+export const AUTONOMY_MODES: readonly ["shadow", "guarded", "autonomous"];
+export const AUTONOMY_PROFILES: readonly ["conservative", "balanced", "aggressive"];
+export const JUDGE_EXECUTIONS: readonly ["managed", "local", "deny"];
+export const RISK_TIERS: readonly [0, 1, 2];
+export const DEFAULT_AUTONOMY_POLICY: Record<string, unknown>;
+export function normalizeAutonomyPolicy(raw?: unknown, options?: Record<string, unknown>): Record<string, unknown>;
+export function autonomyPolicyHash(policy?: unknown): string;
+export function classifyAutonomyRisk(action?: unknown): 0 | 1 | 2;
+export function evaluateAutonomyConsensus(judgments?: unknown[], options?: Record<string, unknown>): Record<string, unknown>;
+export function decideAutonomyAction(input?: Record<string, unknown>): Record<string, unknown>;
+export function buildQuarantineCandidate(candidate?: Record<string, unknown>, policy?: unknown, now?: number): Record<string, unknown>;
+export function evaluateAutonomyPostApply(observation?: Record<string, unknown>, policy?: unknown): Record<string, unknown>;
+export function evaluateAutonomyCanary(observation?: Record<string, unknown>): Record<string, unknown>;
+export function tuneAutonomyPolicy(policy: unknown, observation?: Record<string, unknown>): Record<string, unknown>;
+export function advanceAutonomyMode(policy: unknown, evidence?: Record<string, unknown>): Record<string, unknown>;
