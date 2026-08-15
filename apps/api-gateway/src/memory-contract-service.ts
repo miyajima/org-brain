@@ -57,6 +57,7 @@ type LearningBatchInput = {
   verified_items?: Array<Record<string, unknown>>;
   deterministically_verified_items?: Array<Record<string, unknown>>;
   review_candidates?: Array<Record<string, unknown>>;
+  quarantine_candidates?: Array<Record<string, unknown>>;
   semantic_aliases?: Array<Record<string, unknown>>;
 };
 
@@ -381,8 +382,8 @@ async function assertCandidateBacked(env: Env, tenantId: string, projectId: stri
   const row = await env.OPEN_BRAIN_DB.prepare(
     "SELECT project_id, status, payload_json FROM memory_learning_candidates WHERE tenant_id = ? AND id = ?"
   ).bind(tenantId, candidateId).first<{ project_id: string | null; status: string; payload_json: string }>();
-  if (!row || !["review", "verified"].includes(row.status)) {
-    throw new HttpError(409, "candidate_backing_missing", `verified_items[${index}] does not reference an active review candidate`);
+  if (!row || !["review", "quarantine", "verified"].includes(row.status)) {
+    throw new HttpError(409, "candidate_backing_missing", `verified_items[${index}] does not reference an active quarantine candidate`);
   }
   const itemProjectId = projectScope({ project_id: typeof item.project_id === "string" ? item.project_id : null });
   const expectedProjectId = projectId ?? itemProjectId;
@@ -486,13 +487,18 @@ async function persistJudgeResults(env: Env, tenantId: string, item: Record<stri
     await env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO memory_learning_judgments(
         id, tenant_id, candidate_id, judge_name, judge_model, prompt_hash,
-        verdict, reason_codes_json, support_json, created_at
-      ) VALUES(?,?,?,?,?,?,?,?,?,?)
+        verdict, reason_codes_json, support_json, model_version, candidate_hash,
+        signature, public_key_fingerprint, created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET
         judge_model = excluded.judge_model,
         verdict = excluded.verdict,
         reason_codes_json = excluded.reason_codes_json,
         support_json = excluded.support_json,
+        model_version = excluded.model_version,
+        candidate_hash = excluded.candidate_hash,
+        signature = excluded.signature,
+        public_key_fingerprint = excluded.public_key_fingerprint,
         created_at = excluded.created_at`
     ).bind(
       id,
@@ -503,7 +509,17 @@ async function persistJudgeResults(env: Env, tenantId: string, item: Record<stri
       promptHash,
       row.verdict === "pass" ? "pass" : row.verdict === "fail" ? "fail" : "error",
       JSON.stringify(Array.isArray(row.reason_codes) ? row.reason_codes.slice(0, 16) : []),
-      JSON.stringify(Array.isArray(row.support) ? row.support.slice(0, 16) : []),
+      JSON.stringify(
+        Array.isArray(row.support_selector)
+          ? row.support_selector.slice(0, 16)
+          : Array.isArray(row.support)
+            ? row.support.slice(0, 16)
+            : []
+      ),
+      text(row.model_version, 128) || null,
+      text(row.candidate_hash, 128) || null,
+      text(row.signature, 512) || null,
+      text(row.public_key_fingerprint, 128) || null,
       now
     ).run();
   }
@@ -609,7 +625,11 @@ export async function ingestLearningContractBatch(env: Env, input: LearningBatch
     for (const item of verifiedItems) await persistJudgeResults(env, tenantId, item);
     verifiedInserted = Number(result.inserted ?? 0) + formalDecisions.length;
   }
-  const reviewCandidates = [...(input.review_candidates ?? [])];
+  const reviewCandidates = [...(input.review_candidates ?? []), ...(input.quarantine_candidates ?? [])]
+    .filter((candidate, index, all) => {
+      const key = text(candidate.external_key ?? `candidate-${index}`, 256);
+      return all.findIndex((other) => text(other.external_key ?? "", 256) === key) === index;
+    });
   for (const [index, item] of (input.deterministically_verified_items ?? []).slice(0, 3).entries()) {
     reviewCandidates.push({
       external_key: text(item.external_key ?? `learning-deterministic-review:${index}`, 256),
@@ -642,7 +662,7 @@ export async function ingestLearningContractBatch(env: Env, input: LearningBatch
       payload_json = excluded.payload_json,
         status = CASE
           WHEN memory_learning_candidates.status = 'verified' THEN 'verified'
-          ELSE 'review'
+          ELSE 'quarantine'
         END,
         reason_codes_json = excluded.reason_codes_json,
         prompt_contract_id = excluded.prompt_contract_id,
@@ -652,7 +672,7 @@ export async function ingestLearningContractBatch(env: Env, input: LearningBatch
         expires_at = excluded.expires_at`
     ).bind(
       id, tenantId, projectId, text(input.task_key, 256) || null, externalKey, payload,
-      "review", JSON.stringify(candidate.reason_codes ?? []),
+      "quarantine", JSON.stringify(candidate.reason_codes ?? []),
       promptContractId, promptHash, verifierVersion,
       now, now, now + COMMITMENT_TTL_MS
     ).run();
@@ -695,13 +715,15 @@ export async function ingestLearningContractBatch(env: Env, input: LearningBatch
     if (candidateJudgeItem.judge_consensus || (candidateJudgeItem.learning && typeof candidateJudgeItem.learning === "object" && (candidateJudgeItem.learning as Record<string, unknown>).contract_metadata)) {
       await persistJudgeResults(env, tenantId, candidateJudgeItem);
     }
-    reviewInserted.push({ id, external_key: externalKey, status: "review" });
+    reviewInserted.push({ id, external_key: externalKey, status: "quarantine" });
   }
   return {
     ok: true,
     verified_inserted: verifiedInserted,
     review_inserted: reviewInserted.length,
+    quarantine_inserted: reviewInserted.length,
     review_candidates: reviewInserted,
+    quarantine_candidates: reviewInserted,
     commitments: commitments.map((item) => item.commitment),
     semantic_aliases: semanticAliases
   };

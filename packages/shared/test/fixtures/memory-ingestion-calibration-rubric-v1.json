@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "rubric_id": "orgbrain-memory-ingestion-calibration-rubric-v1",
+  "authority": "independent_human_review",
+  "route_criteria": {
+    "active": "The candidate is a verified durable success, decision, or failure with admissible evidence and exact scope.",
+    "review": "The candidate may be durable but evidence, observation, conflict, scope, or historical provenance is incomplete.",
+    "excluded": "The candidate is transient, self-attested, sensitive, unsafe, automated, out of scope, duplicated, or structural noise."
+  },
+  "active_lesson_types": ["success", "decision", "failure"],
+  "verification_states": ["verified", "partial", "unverified", "rejected"],
+  "required_annotation_fields": ["route", "stratum", "verification_state", "required_reason_codes", "forbidden_reason_codes", "judge_expectations", "criterion_refs"],
+  "judge_profiles": ["evidence_entailment", "durability_atomicity", "future_reuse_overgeneralization"],
+  "agreement_gates": {
+    "route_agreement": 0.9,
+    "route_cohen_kappa": 0.8,
+    "reason_code_micro_f1": 0.85
+  },
+  "qualification_gates": {
+    "point_estimate": 0.95,
+    "wilson_95_lower": 0.95,
+    "hard_guardrails": 0,
+    "judge_pass_and_fail_minimum": 200,
+    "metamorphic_pairs_minimum": 90
+  },
+  "privacy": {
+    "raw_transcript_allowed": false,
+    "reasoning_allowed": false,
+    "real_credentials_or_pii_allowed": false,
+    "runtime_labels_allowed": false
+  }
+}

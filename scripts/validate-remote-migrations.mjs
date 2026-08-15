@@ -67,9 +67,9 @@ function shouldSkipSchemaObject(row) {
 
 async function readPendingMigrations() {
   const files = (await readdir(MIGRATION_DIR))
-    .filter((file) => /^(?:0029|0030|0031)_.+\.sql$/u.test(file))
+    .filter((file) => /^(?:0029|0030|0031|0032)_.+\.sql$/u.test(file))
     .sort();
-  if (files.length !== 4) throw new Error(`expected four pending migration files, found ${files.length}`);
+  if (files.length !== 5) throw new Error(`expected five pending migration files, found ${files.length}`);
   return Promise.all(files.map(async (file) => {
     const sql = await readFile(resolve(MIGRATION_DIR, file), "utf8");
     return { file, sha256: sha256(sql), bytes: Buffer.byteLength(sql), sql };
@@ -152,6 +152,10 @@ function migrationContract(db) {
     memory_learning_candidates: [
       "tenant_id", "project_id", "task_key", "external_key", "payload_json", "status",
       "reason_codes_json", "prompt_contract_id", "prompt_hash", "verifier_version", "updated_at", "expires_at"
+    ],
+    memory_learning_judgments: [
+      "tenant_id", "candidate_id", "judge_name", "judge_model", "prompt_hash", "verdict",
+      "reason_codes_json", "support_json", "model_version", "candidate_hash", "signature", "public_key_fingerprint", "created_at"
     ],
     memory_learning_candidate_evidence: [
       "tenant_id", "candidate_id", "evidence_type", "evidence_ref", "digest", "diff_hash",

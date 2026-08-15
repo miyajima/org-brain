@@ -1,8 +1,37 @@
+---
+title: Org Brain Spec (MVP)
+doc_type: spec
+status: approved
+owner: org-brain-maintainers
+last_updated: 2026-08-15
+---
+
 # Org Brain Spec (MVP)
 
 ## Goal
 Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタスク/イベント駆動の通信バスを提供する。
 加えて、task / event / artifact / memory を正本のまま維持しつつ、人間とエージェント向けの知識インターフェースとして interlinked markdown docs layer を提供する。
+
+## Requirements
+
+- R-AUTO-001: uncertain ingestion MUST enter quarantine and be retried
+  automatically; it MUST NOT wait for a human approval queue.
+- R-AUTO-002: active promotion MUST pass deterministic verification and the
+  configured independent AI consensus policy.
+- R-AUTO-003: maintenance MUST respect mutation budgets and MUST roll back the
+  scope on a hard violation or failed post-apply verification.
+- R-AUTO-004: quality qualification MUST report independent route metrics,
+  Wilson lower bounds, provenance, and hard-guardrail counts.
+
+## Acceptance criteria
+
+- A fresh workspace can install the autonomous scheduled runner and remain in
+  fail-closed shadow mode until machine-reference and canary evidence qualify.
+- Missing judge evidence, model disagreement, scope mismatch, privacy
+  violation, or retrieval degradation produces quarantine/rollback with no
+  active write.
+- Re-running the same plan or maintenance run is idempotent and records the
+  same candidate/run hashes without physical deletion.
 
 ## Scope
 - API Gateway: Hono Worker
@@ -236,6 +265,11 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Agent-facing memory impact notes are persisted as `memory_impact_events` when the integration reports every eligible run. `avoided_lookup` remains an agent self-report and a qualitative supplement; causal quantitative evaluation remains measurement mode plus business outcome metrics.
 
 ## Out of Scope (MVP)
+
+## Out of scope
+
+The specification does not authorize AI-driven physical deletion, changes to
+tenant boundaries, or bypassing deterministic and hard-guardrail checks.
 - SCIM/SAML provisioning and arbitrary custom role definitions
 - Production evidence for the credential-gated cloud D1 restore drill
 - Capability plugin marketplace

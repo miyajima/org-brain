@@ -1,0 +1,127 @@
+{
+  "schema_version": 2,
+  "dataset_id": "orgbrain-memory-ingestion-regression-v2",
+  "seed": "orgbrain-ingestion-v2-2026-08-14",
+  "counts": {
+    "success": 75,
+    "decision": 75,
+    "failure": 75,
+    "review_candidate": 12,
+    "non_durable_turn": 200,
+    "next_task_retrieval": 300,
+    "continuity": {
+      "same_key_reask": 75,
+      "paraphrase": 75,
+      "compaction_resume": 75,
+      "change_conflict_scope": 75
+    }
+  },
+  "privacy": {
+    "synthetic_only": true,
+    "raw_transcript_copied": false,
+    "reasoning_read": false,
+    "text_persisted": false,
+    "real_credentials_or_pii": false
+  },
+  "cohorts": [
+    {
+      "id": "success",
+      "lesson_type": "success",
+      "expected_route": "active",
+      "template": {
+        "record_type": "learning_observation",
+        "schema_version": 2,
+        "lesson_type": "success",
+        "capture_intent": "verify",
+        "trigger": "Importer regression success {{index}} completed with repository evidence.",
+        "applicability": {
+          "target_files": ["src/importer-regression.mjs"],
+          "components": ["codex-session-import"]
+        },
+        "evidence_selectors": [
+          { "type": "file", "ref": "src/importer-regression.mjs", "supports": ["procedure"] },
+          { "type": "command", "ref": "node --test importer-success-{{index}}", "supports": ["observed_outcome"] }
+        ],
+        "gaps": [],
+        "procedure": "Use VERIFIED_IMPORT_SUCCESS_{{index}} to import the reviewed session plan.",
+        "why_it_worked": "The changed importer file and successful command independently support the reusable procedure.",
+        "observed_outcome": "The synthetic import success {{index}} completed with exit code zero.",
+        "reuse_when": "Apply this procedure when a Codex workspace performs its initial session import."
+      }
+    },
+    {
+      "id": "decision",
+      "lesson_type": "decision",
+      "expected_route": "active",
+      "template": {
+        "record_type": "learning_observation",
+        "schema_version": 2,
+        "lesson_type": "decision",
+        "capture_intent": "verify",
+        "trigger": "The user selected importer policy {{index}}.",
+        "applicability": {
+          "target_files": ["src/importer-regression.mjs"],
+          "components": ["codex-session-import"]
+        },
+        "evidence_selectors": [
+          { "type": "file", "ref": "src/importer-regression.mjs", "supports": ["decision"] },
+          { "type": "user_statement", "ref": "Use importer policy {{index}}", "supports": ["decision"] }
+        ],
+        "gaps": [],
+        "decision_type": "implementation",
+        "decision_key": "importer_policy_{{index}}",
+        "question": "Which importer policy should case {{index}} use?",
+        "decision": "Use importer policy {{index}}.",
+        "constraints": ["Keep raw transcripts out of the plan."],
+        "rationale": "This policy preserves deterministic replay without persisting private session content.",
+        "alternatives": [
+          { "alternative": "Import raw transcripts", "reason_rejected": "It violates the privacy contract." }
+        ],
+        "reuse_when": "Reuse the selected policy for the same workspace import boundary."
+      }
+    },
+    {
+      "id": "failure",
+      "lesson_type": "failure",
+      "expected_route": "active",
+      "template": {
+        "record_type": "learning_observation",
+        "schema_version": 2,
+        "lesson_type": "failure",
+        "capture_intent": "verify",
+        "trigger": "Importer regression failure {{index}} was diagnosed and corrected.",
+        "applicability": {
+          "target_files": ["src/importer-regression.mjs"],
+          "components": ["codex-session-import"]
+        },
+        "evidence_selectors": [
+          { "type": "command", "ref": "node --test importer-failure-before-{{index}}", "supports": ["symptom", "root_cause"] },
+          { "type": "command", "ref": "node --test importer-failure-after-{{index}}", "supports": ["correction", "verified_outcome"] }
+        ],
+        "gaps": [],
+        "symptom": "Import case {{index}} rejected a valid reviewed batch.",
+        "failed_approach": "The importer compared an unstable generated timestamp.",
+        "root_cause": "The plan hash included runtime-only verification timestamps.",
+        "correction": "Normalize evidence timestamps to the source turn time for case {{index}}.",
+        "verified_outcome": "The corrected import case {{index}} passed after the earlier command failed.",
+        "avoidance_rule": "Exclude runtime-only values from future import plan hashes."
+      }
+    }
+  ],
+  "review_families": [
+    "gaps_present",
+    "evidence_missing",
+    "command_not_observed",
+    "file_not_relevant"
+  ],
+  "non_durable_families": [
+    "transient_completion",
+    "self_attested_command",
+    "synthetic_credential",
+    "synthetic_pii",
+    "unsafe_instruction",
+    "automation_session",
+    "workspace_mismatch",
+    "structural_noise"
+  ]
+}

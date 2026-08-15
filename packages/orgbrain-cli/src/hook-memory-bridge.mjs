@@ -23,7 +23,10 @@ import {
   MEMORY_CONTRACT_V2_CONTRACT_HASH,
   MEMORY_CONTRACT_V2_PROMPT_HASH
 } from "../../shared/src/memory-contract-v2-contract.mjs";
-import { collectVerifiedLearningEvents } from "./lib/memory-learning-transcript.mjs";
+import {
+  collectVerifiedLearningEvents,
+  collectVerifiedLearningEventsFromRows
+} from "./lib/memory-learning-transcript.mjs";
 import {
   configuredTenantFromEnv,
   legacyProjectNamesFileFromEnv,
@@ -31,6 +34,7 @@ import {
   loadWorkspaceConfig,
   migrateLegacyProjectNames,
   normalizeWorkspaceRoot,
+  autonomyPolicyFromWorkspaceConfig,
   saveWorkspaceConfig,
   tenantFallbackFromEnv,
   withWorkspaceConfigLock,
@@ -833,6 +837,7 @@ export async function resolveWorkspaceContext(record, options = {}) {
         sensitiveMemory: mapped?.sensitive_memory ?? { mode: "deny", allowed_principals: [] },
         memoryCaptureV2Mode: mapped?.memory_capture_v2_mode ?? null,
         memoryLearningMode: mapped?.memory_learning_mode ?? "off",
+        autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config, tenantId),
         workspaceRoot: cwd || null,
         source: mapped ? "workspace+explicit-project" : "explicit-project"
       };
@@ -848,6 +853,7 @@ export async function resolveWorkspaceContext(record, options = {}) {
         sensitiveMemory: mapped.sensitive_memory ?? { mode: "deny", allowed_principals: [] },
         memoryCaptureV2Mode: mapped.memory_capture_v2_mode ?? null,
         memoryLearningMode: mapped.memory_learning_mode ?? "off",
+        autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config, tenantId),
         workspaceRoot: cwd,
         source: "workspace"
       };
@@ -863,6 +869,7 @@ export async function resolveWorkspaceContext(record, options = {}) {
         sensitiveMemory: { mode: "deny", allowed_principals: [] },
         memoryCaptureV2Mode: null,
         memoryLearningMode: "off",
+        autonomy: autonomyPolicyFromWorkspaceConfig(null, config, tenantId),
         workspaceRoot: cwd || null,
         source: "fallback"
       };
@@ -878,7 +885,8 @@ export async function resolveWorkspaceContext(record, options = {}) {
       business_category_id: null,
       default_work_type: null,
       sensitive_memory: { mode: "deny", allowed_principals: [] },
-      memory_learning_mode: "off"
+      memory_learning_mode: "off",
+      autonomy: autonomyPolicyFromWorkspaceConfig(null, config, tenantId)
     };
     await saveWorkspaceConfig(workspacesFile, config);
     return {
@@ -889,6 +897,7 @@ export async function resolveWorkspaceContext(record, options = {}) {
       sensitiveMemory: { mode: "deny", allowed_principals: [] },
       memoryCaptureV2Mode: null,
       memoryLearningMode: "off",
+      autonomy: autonomyPolicyFromWorkspaceConfig(config.workspaces[cwd], config, tenantId),
       workspaceRoot: cwd,
       source: "created"
     };
@@ -1091,13 +1100,16 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId) {
   };
 }
 
-export async function prepareObservedLearningRecords(record, workspace, tenantId) {
-  const transcript = await collectVerifiedLearningEvents({
+export async function prepareObservedLearningRecords(record, workspace, tenantId, options = {}) {
+  const transcriptOptions = {
     transcriptPath: record.metadata?.transcriptPath,
     turnId: record.metadata?.turnId,
     workspaceRoot: workspace.workspaceRoot,
     sensitivePolicy: workspace.sensitiveMemory
-  }).catch((error) => ({
+  };
+  const transcript = await (Array.isArray(options.rows)
+    ? collectVerifiedLearningEventsFromRows(options.rows, transcriptOptions)
+    : collectVerifiedLearningEvents(transcriptOptions)).catch((error) => ({
     events: [],
     reviews: [{ reason_codes: ["transcript_read_failed"], detail_hash: sha256(String(error)) }],
     raw_transcript_persisted: false
@@ -1275,6 +1287,15 @@ export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
       prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
       contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
       verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION
+      }))
+    : [];
+  const quarantineCandidates = Array.isArray(input.quarantineCandidates)
+    ? input.quarantineCandidates.slice(0, 3).map((candidate) => ({
+      ...candidate,
+      prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+      prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
+      contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
+      verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION
     }))
     : [];
   const semanticAliases = Array.isArray(input.semanticAliases) ? input.semanticAliases.slice(0, 16) : [];
@@ -1297,6 +1318,7 @@ export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
         verified_items: verifiedItems,
         deterministically_verified_items: deterministicItems,
         review_candidates: reviewCandidates,
+        quarantine_candidates: quarantineCandidates,
         semantic_aliases: semanticAliases
       },
       _meta: {
@@ -1380,7 +1402,7 @@ export async function postLearningBatchViaMcp(config, tenantId, sourceName, inpu
   return JSON.parse(resultText);
 }
 
-async function postMemory(apiBase, apiKey, tenantId, sourceName, recordOrRecords) {
+export async function postMemoryViaRest(apiBase, apiKey, tenantId, sourceName, recordOrRecords) {
   const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
   const itemPayload = Array.isArray(recordOrRecords)
     ? { items: records.map(captureItemPayload) }
@@ -1408,13 +1430,13 @@ async function postMemory(apiBase, apiKey, tenantId, sourceName, recordOrRecords
   return body.data;
 }
 
-async function captureLocalMemories(sourceName, tenantId, recordOrRecords) {
+export async function captureLocalMemories(sourceName, tenantId, recordOrRecords, options = {}) {
   const { DEFAULT_LOCAL_DB, LocalMemoryStore } = await import("./lib/local-memory-store.mjs");
-  const store = new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+  const store = options.store ?? new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
   const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
   const categories = await store.listBusinessCategories(tenantId, { includeInactive: true });
   const categoryIds = new Set(categories.map((item) => item.id));
-  const results = [];
+  const inputs = [];
   for (const record of records) {
     const candidate = captureCandidateJson(record);
     if (record.businessCategory && !categoryIds.has(record.businessCategory.id)) {
@@ -1431,7 +1453,7 @@ async function captureLocalMemories(sourceName, tenantId, recordOrRecords) {
           ? "pitfall"
           : "fact"
     );
-    results.push(await store.capture({
+    inputs.push({
       tenant_id: tenantId,
       project_id: candidate.project_id,
       business_category_id: candidate.business_category_id ?? null,
@@ -1481,9 +1503,9 @@ async function captureLocalMemories(sourceName, tenantId, recordOrRecords) {
       verified_at: record.verification?.verified_at ?? null,
       learning: record.learning ?? null,
       quality_dimensions: record.qualityDimensions ?? null
-    }));
+    });
   }
-  return results;
+  return store.captureBatch(inputs);
 }
 
 export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
@@ -1567,6 +1589,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         outbox,
         skipped: "missing-orgbrain-mcp-env-for-learning-contract",
         review_count: learningReviewCandidates.length,
+        quarantine_count: learningReviewCandidates.length,
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
         ...memoryModeFields(memoryMode)
       });
@@ -1604,6 +1627,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       tenant_id: tenantId,
       inserted: Number(result?.verified_inserted ?? 0),
       review_count: Number(result?.review_inserted ?? learningReviewCandidates.length),
+      quarantine_count: Number(result?.quarantine_inserted ?? result?.review_inserted ?? learningReviewCandidates.length),
       transport: "mcp-2026-07-28",
       ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
       ...memoryModeFields(memoryMode)
@@ -1698,7 +1722,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const captureInput = records.length === 1 && !batchRequired ? records[0] : records;
   const result = mcp.complete
     ? await postMemoryViaMcp(mcp, tenantId, sourceName, captureInput)
-    : await postMemory(apiBase, apiKey, tenantId, sourceName, captureInput);
+    : await postMemoryViaRest(apiBase, apiKey, tenantId, sourceName, captureInput);
   return finish({
     ok: true,
     source: sourceName,

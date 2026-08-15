@@ -1,3 +1,11 @@
+---
+title: Memory Reliability 95+ Execution Plan
+doc_type: reference
+status: approved
+owner: org-brain-maintainers
+last_updated: 2026-08-15
+---
+
 # Memory Reliability 95+ Execution Plan
 
 ## Background
@@ -245,8 +253,11 @@ Difficulty: Medium. Preferred route: balanced Codex implementation model.
 2. Publish each axis independently. Do not publish a total or average.
 3. Keep capture and verified retrieval shadowed if any axis is below 95 or has
    insufficient evidence.
-4. Run a 24-hour `org-brain` canary, then a multi-project shadow period.
-5. Enable verified capture and retrieval only after every gate passes.
+4. Run a 200-turn AI-audited `org-brain` canary, then a multi-project shadow
+   period. Active candidates are council-checked; disagreement is quarantine.
+5. Let the autonomy state machine advance to `guarded` and `autonomous` only
+   after route Wilson gates, observed outcomes, rollback readiness, and
+   retrieval coverage pass. No human approval step is required.
 6. Keep unconfirmed-decision blocking off for seven additional days. Enable it
    only after zero false blocks, with 0.90 confidence plus admissible evidence;
    0.89 or unsupported 0.90 decisions remain advisory/review.
@@ -264,7 +275,13 @@ rtk pnpm exec vitest run apps/api-gateway/test/rationale-service.test.ts apps/ap
 rtk pnpm exec vitest run apps/cap-runner/test/memory-maintenance.test.ts packages/shared/test/retrieval-projection-parity.test.ts packages/shared/test/retrieval-learning-fixture.test.ts
 rtk pnpm run test:local-qwen
 rtk pnpm memories:repair -- --remote --tenant default --dry-run --report <private-report>
-rtk pnpm memories:certify-quality -- --manifest <private-locked-manifest>
+rtk pnpm memories:qualify-ingestion-oracle -- --output <private-oracle-report>
+rtk pnpm memories:calibrate-ingestion -- generate --seed-file <private-seed> --output-dir <private-calibration-dir>
+rtk pnpm memories:machine-reference -- generate --seed-file <private-seed> --output-dir <private-machine-reference-dir>
+rtk pnpm memories:machine-reference -- judge --cases <private-machine-reference-dir>/cases.jsonl --runner-module <managed-council-adapter.mjs> --signing-key <council-key> --output <private-machine-reference-dir>/council.json
+rtk pnpm memories:machine-reference -- seal --cases <private-machine-reference-dir>/cases.jsonl --council <private-machine-reference-dir>/council.json --output-dir <private-machine-reference-dir>/sealed
+rtk pnpm memories:calibrate-ingestion -- canary --workspace <workspace> --sessions-root <sessions-root> --judge-runner <managed-council-adapter.mjs> --output <private-canary-report>
+rtk pnpm memories:certify-quality -- --manifest <private-locked-manifest> --oracle-report <private-oracle-report> --autonomous-report <private-machine-report>
 rtk pnpm smoke:memory-learning -- --project org-brain --requests 200
 rtk pnpm run lint
 rtk pnpm run typecheck

@@ -9,6 +9,11 @@ import {
   captureItemPayload,
   prepareMemoryRecordsV2
 } from "../packages/orgbrain-cli/src/hook-memory-bridge.mjs";
+import {
+  codexSessionImportInternals,
+  createCodexSessionImportReport,
+  executeCodexSessionImportPlanFile
+} from "../packages/orgbrain-cli/src/codex-session-import.mjs";
 
 const DEFAULT_SESSIONS_ROOT = path.join(os.homedir(), ".codex", "sessions");
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -26,6 +31,7 @@ Options:
   --limit-sessions <n>       Most recent matching sessions (default: 20)
   --exclude-session <id>     Exclude a session; repeatable
   --output <path>            Mode-0600 private candidate report
+  --apply-report <path>      Mode-0600 apply report (default: <output>.apply-report.json)
   --apply                    Send batches to /v1/memories/capture-rationale
   --expected-plan-hash <sha> Required with --apply
   --allow-remote             Permit an API URL other than loopback
@@ -44,6 +50,7 @@ export function parseArgs(argv) {
     limitSessions: 20,
     excludedSessions: new Set(),
     outputPath: null,
+    applyReportPath: null,
     apply: false,
     expectedPlanHash: null,
     allowRemote: false
@@ -63,6 +70,7 @@ export function parseArgs(argv) {
     else if (arg === "--limit-sessions") options.limitSessions = Number.parseInt(value(), 10);
     else if (arg === "--exclude-session") options.excludedSessions.add(value().trim());
     else if (arg === "--output") options.outputPath = path.resolve(value());
+    else if (arg === "--apply-report") options.applyReportPath = path.resolve(value());
     else if (arg === "--apply") options.apply = true;
     else if (arg === "--expected-plan-hash") options.expectedPlanHash = value().trim();
     else if (arg === "--allow-remote") options.allowRemote = true;
@@ -137,19 +145,6 @@ function isMatchingProject(cwd, projectId) {
 
 function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function writePrivateJson(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  fs.chmodSync(filePath, 0o600);
-}
-
-function safeApiUrl(raw, allowRemote) {
-  if (!raw?.trim()) throw new Error("ORGBRAIN_API_URL_required_for_apply");
-  const url = new URL(raw);
-  if (!allowRemote && !LOOPBACK_HOSTS.has(url.hostname)) throw new Error("remote_api_requires_allow_remote");
-  return url.toString().replace(/\/+$/u, "");
 }
 
 export async function buildPlan(options) {
@@ -230,67 +225,47 @@ export async function buildPlan(options) {
   };
 }
 
-async function applyPlan(plan, options) {
-  if (plan.planHash !== options.expectedPlanHash) throw new Error("plan_hash_mismatch");
-  const apiUrl = safeApiUrl(process.env.ORGBRAIN_API_URL, options.allowRemote);
-  const apiKey = process.env.ORGBRAIN_API_KEY?.trim();
-  if (!apiKey) throw new Error("ORGBRAIN_API_KEY_required_for_apply");
-  const results = [];
-  for (const batch of plan.planCore.batches) {
-    const response = await fetch(`${apiUrl}/v1/memories/capture-rationale`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey
-      },
-      body: JSON.stringify({
-        tenant_id: options.tenantId,
-        source: "codex",
-        items: batch.items
-      })
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) {
-      const code = payload?.error?.code ?? `http_${response.status}`;
-      throw new Error(`capture_failed:${code}`);
-    }
-    results.push({
-      event_key_hash: sha256(batch.event_key),
-      statuses: (payload.data?.results ?? []).map((item) => ({
-        status: item.status,
-        reason_code: item.reason_code ?? null,
-        memory_id: item.memory_id ?? null,
-        rationale_id: item.rationale_id ?? null,
-        decision_id: item.decision_memory_id ?? item.decision_id ?? null
-      }))
-    });
-  }
-  return results;
-}
-
 export async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   if (options.help) {
     usage();
     return;
   }
-  const plan = await buildPlan(options);
-  const report = {
-    generated_at: Date.now(),
-    mode: options.apply ? "apply" : "dry-run",
-    plan_hash: plan.planHash,
-    summary: plan.summary,
-    plan: plan.planCore,
-    results: []
-  };
-  writePrivateJson(options.outputPath, report);
   if (options.apply) {
-    report.results = await applyPlan(plan, options);
-    writePrivateJson(options.outputPath, report);
+    const apiUrl = process.env.ORGBRAIN_API_URL;
+    if (apiUrl && !options.allowRemote && !LOOPBACK_HOSTS.has(new URL(apiUrl).hostname)) {
+      throw new Error("remote_api_requires_allow_remote");
+    }
+    const applied = await executeCodexSessionImportPlanFile({
+      planPath: options.outputPath,
+      expectedPlanHash: options.expectedPlanHash,
+      reportPath: options.applyReportPath,
+      workspaceRoot: process.cwd(),
+      env: { ...process.env, ORGBRAIN_TENANT_ID: options.tenantId }
+    });
+    console.log(JSON.stringify({
+      ok: true,
+      mode: "applied",
+      plan_hash: applied.plan_hash,
+      output: applied.output,
+      plan: applied.plan ?? path.resolve(options.outputPath)
+    }));
+    return;
   }
+  if (path.basename(path.resolve(process.cwd())) !== options.projectId) {
+    throw new Error("legacy_project_must_match_current_workspace");
+  }
+  const report = await createCodexSessionImportReport({
+    workspaceRoot: process.cwd(),
+    sessionsRoot: options.sessionsRoot,
+    limitSessions: options.limitSessions,
+    excludedSessionIds: options.excludedSessions,
+    env: { ...process.env, ORGBRAIN_TENANT_ID: options.tenantId }
+  });
+  await codexSessionImportInternals.writePrivateJson(options.outputPath, report);
   console.log(JSON.stringify({
     ok: true,
-    mode: report.mode,
+    mode: "dry-run",
     plan_hash: report.plan_hash,
     summary: report.summary,
     output: options.outputPath

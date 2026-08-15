@@ -18,8 +18,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { planMemoryMaintenance } from "./lib/memory-maintenance-core.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
+import { normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
 
 export const PERSONAL_MAINTENANCE_LABEL = "com.orgbrain.personal-maintenance";
+export const AUTONOMY_MAINTENANCE_LABEL = "com.orgbrain.autonomy-maintenance";
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const LOCAL_CLI_PATH = path.basename(MODULE_PATH) === "orgbrain.mjs"
   ? MODULE_PATH
@@ -186,6 +188,7 @@ export async function runLocalMaintenance(store, options = {}) {
     digestGroupMin: options.digestGroupMin ?? 4
   });
   const synthesized = [...plan.canonicals, ...plan.digests];
+  const qualityUpdates = Array.isArray(plan.qualityUpdates) ? plan.qualityUpdates : [];
   const existingByKey = new Map(
     memories
       .filter((memory) => memory.source === "org-brain" && memory.external_key)
@@ -194,6 +197,26 @@ export async function runLocalMaintenance(store, options = {}) {
   const changedSynthesized = synthesized.filter(
     (memory) => !sameSynthesizedMemory(existingByKey.get(memory.external_key), memory)
   );
+  const autonomyPolicy = options.autonomyPolicy ? normalizeAutonomyPolicy(options.autonomyPolicy) : null;
+  const judgeConsensusPassed = options.judgeConsensus?.pass === true;
+  const semanticActionsAllowed = autonomyPolicy === null || (
+    autonomyPolicy.mode !== "shadow" &&
+    autonomyPolicy.judge.execution !== "deny" &&
+    judgeConsensusPassed
+  );
+  const requestedMutationCount = changedSynthesized.length + plan.compactions.length + qualityUpdates.length;
+  const mutationLimit = autonomyPolicy
+    ? Math.max(1, Math.min(autonomyPolicy.maintenance.max_mutations_per_run, Math.ceil(Math.max(1, active.length) * autonomyPolicy.maintenance.max_mutation_ratio_per_run)))
+    : Number.POSITIVE_INFINITY;
+  const mutationLimited = requestedMutationCount > mutationLimit;
+  const permittedMutationCount = Math.min(requestedMutationCount, mutationLimit);
+  let remainingMutationSlots = permittedMutationCount;
+  const permittedSynthesized = semanticActionsAllowed ? changedSynthesized.slice(0, remainingMutationSlots) : [];
+  remainingMutationSlots -= permittedSynthesized.length;
+  const permittedCompactions = semanticActionsAllowed ? plan.compactions.slice(0, Math.max(0, remainingMutationSlots)) : [];
+  remainingMutationSlots -= permittedCompactions.length;
+  const permittedQualityUpdates = semanticActionsAllowed ? qualityUpdates.slice(0, Math.max(0, remainingMutationSlots)) : [];
+  const deferredMutationCount = requestedMutationCount - permittedSynthesized.length - permittedCompactions.length - permittedQualityUpdates.length;
 
   const before = await store.doctor();
   let repairedIndexes = false;
@@ -208,8 +231,8 @@ export async function runLocalMaintenance(store, options = {}) {
         throw new Error(`local memory verification failed after index repair: ${repaired.errors.join("; ")}`);
       }
     }
-    if (changedSynthesized.length > 0) {
-      await store.captureBatch(changedSynthesized.map((memory) => ({
+    if (permittedSynthesized.length > 0) {
+      await store.captureBatch(permittedSynthesized.map((memory) => ({
         tenant_id: tenantId,
         project_id: memory.project_id,
         scope_type: memory.project_id ? "project" : "tenant",
@@ -229,9 +252,9 @@ export async function runLocalMaintenance(store, options = {}) {
         rationale: "Deterministic local memory consolidation without an LLM call.",
         evidence: memory.member_ids.map((id) => ({ type: "memory", ref: id }))
       })));
-      synthesizedCount = changedSynthesized.length;
+      synthesizedCount = permittedSynthesized.length;
     }
-    for (const compaction of plan.compactions) {
+    for (const compaction of permittedCompactions) {
       const current = memories.find((memory) => memory.id === compaction.id);
       if (!current || current.lifecycle_state === "suppressed") continue;
       await store.suppress(tenantId, compaction.id, `personal maintenance: ${compaction.reason}`, {
@@ -250,6 +273,19 @@ export async function runLocalMaintenance(store, options = {}) {
     tenant_id: tenantId,
     apply_requested: options.apply === true,
     applied: options.apply === true,
+    autonomy: autonomyPolicy ? {
+      mode: autonomyPolicy.mode,
+      policy_hash: options.autonomyPolicyHash ?? null,
+      semantic_actions_allowed: semanticActionsAllowed,
+      judge_consensus_passed: judgeConsensusPassed,
+      requested_mutation_count: requestedMutationCount,
+      mutation_limit: Number.isFinite(mutationLimit) ? mutationLimit : null,
+      mutation_limited: mutationLimited,
+      deferred_mutation_count: deferredMutationCount,
+      deferred_reason: deferredMutationCount > 0
+        ? (semanticActionsAllowed ? "mutation_budget_exceeded" : "ai_consensus_required")
+        : null
+    } : null,
     repaired_indexes: repairedIndexes,
     planned: {
       ...plan.stats,
@@ -350,6 +386,61 @@ export function personalMaintenancePlan(options = {}) {
       stdout: path.join(configDirectory, "maintenance.log"),
       stderr: path.join(configDirectory, "maintenance-errors.log"),
       backups: path.join(configDirectory, "backups"),
+      db: dbPath
+    }
+  };
+  return { ...plan, plist: renderLaunchAgent(plan) };
+}
+
+/**
+ * New installations use the same daily LaunchAgent boundary as legacy local
+ * maintenance, but invoke the autonomous controller.  The controller starts
+ * in shadow mode, so installation never grants semantic writes by itself; it
+ * only makes scanning, quarantine expiry, re-evaluation, and rollback
+ * continuous without a human queue.
+ */
+export function autonomousMaintenancePlan(options = {}) {
+  if ((options.schedule || "daily") !== "daily") throw new Error("maintenance schedule must be daily");
+  const home = path.resolve(options.home || os.homedir());
+  const configDirectory = path.join(home, ".config", "org-brain");
+  const autonomyDirectory = path.join(configDirectory, "autonomy");
+  const dbPath = path.resolve(options.dbPath || path.join(home, ".org-brain", "memory.sqlite"));
+  const workspace = path.resolve(options.workspace || process.cwd());
+  const baseCommand = options.command?.trim()
+    ? [options.command.trim()]
+    : [process.execPath, "--no-warnings", LOCAL_CLI_PATH];
+  const plan = {
+    label: AUTONOMY_MAINTENANCE_LABEL,
+    schedule: "daily",
+    local_only: true,
+    autonomous: true,
+    llm_calls: 0,
+    cloud_writes: 0,
+    tenant_id: options.tenantId?.trim() || "default",
+    workspace,
+    program_arguments: [
+      ...baseCommand,
+      "autonomy",
+      "run",
+      "--workspace",
+      workspace,
+      "--db",
+      dbPath,
+      "--state-dir",
+      autonomyDirectory,
+      "--state-file",
+      path.join(autonomyDirectory, "controller-state.json"),
+      "--scan-sessions",
+      "--execute",
+      "--apply"
+    ],
+    files: {
+      plist: path.join(home, "Library", "LaunchAgents", `${AUTONOMY_MAINTENANCE_LABEL}.plist`),
+      state: path.join(autonomyDirectory, "controller-state.json"),
+      lock: path.join(autonomyDirectory, "maintenance.lock"),
+      stdout: path.join(autonomyDirectory, "maintenance.log"),
+      stderr: path.join(autonomyDirectory, "maintenance-errors.log"),
+      backups: path.join(autonomyDirectory, "backups"),
       db: dbPath
     }
   };

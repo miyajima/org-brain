@@ -12,6 +12,7 @@ import {
   normalizeWorkspaceRoot,
   saveWorkspaceConfig
 } from "./lib/workspace-config.mjs";
+import { DEFAULT_AUTONOMY_POLICY, normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
 
 const SUPPORTED = new Set(["codex", "claude", "opencode", "openclaw"]);
 const MODULE_PATH = fileURLToPath(import.meta.url);
@@ -232,7 +233,8 @@ export async function installCodexMinimalHooks(plan, options = {}) {
   const workspaces = await loadWorkspaceConfig(plan.files.workspaces);
   workspaces.workspaces[plan.workspace.path] = {
     tenant_id: plan.workspace.tenant_id,
-    project_id: plan.workspace.project_id
+    project_id: plan.workspace.project_id,
+    autonomy: normalizeAutonomyPolicy(DEFAULT_AUTONOMY_POLICY)
   };
   await mkdir(path.dirname(plan.files.env), { recursive: true, mode: 0o700 });
   await mkdir(path.dirname(plan.files.hooks), { recursive: true, mode: 0o700 });
@@ -290,7 +292,10 @@ export async function runConnectorCommand(action, rest, args) {
   const mode = args.get("--mode", "mcp");
   if (mode === "minimal-hooks") {
     if (agent !== "codex") throw new Error("--mode minimal-hooks is currently supported only for codex");
-    const maintenance = args.get("--maintenance", null);
+    // New local installations always start the autonomous shadow controller.
+    // Keep --maintenance daily as a compatibility spelling for existing
+    // scripts, while avoiding a human approval step for the default path.
+    const maintenance = args.get("--maintenance", "daily");
     if (maintenance && maintenance !== "daily") throw new Error("--maintenance must be daily");
     const plan = codexMinimalHooksPlan({
       command: args.get("--command", null),
@@ -300,11 +305,12 @@ export async function runConnectorCommand(action, rest, args) {
       dbPath: args.get("--db", null)
     });
     if (maintenance === "daily") {
-      const { personalMaintenancePlan } = await import("./personal-maintenance.mjs");
-      plan.maintenance = personalMaintenancePlan({
+      const { autonomousMaintenancePlan } = await import("./personal-maintenance.mjs");
+      plan.maintenance = autonomousMaintenancePlan({
         command: args.get("--command", null),
         dbPath: plan.files.db,
-        tenantId: plan.workspace.tenant_id || "default"
+        tenantId: plan.workspace.tenant_id || "default",
+        workspace: plan.workspace.path
       });
     }
     if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };

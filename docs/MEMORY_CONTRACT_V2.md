@@ -1,3 +1,11 @@
+---
+title: OrgBrain Memory Contract v2
+doc_type: reference
+status: approved
+owner: org-brain-maintainers
+last_updated: 2026-08-15
+---
+
 # OrgBrain Memory Contract v2
 
 This document is the executable contract for durable learning and task
@@ -183,6 +191,59 @@ are Gold and may be retained permanently in the locked evaluation corpus.
 measurement and certification helpers. Every measurement retains its `axis`
 and `cohort`; no cohort is hidden by an aggregate score.
 
+Judge qualification precedes measurement. The static decision table at
+`packages/shared/test/fixtures/memory-ingestion-oracle-v1.json` contains 40
+hand-labelled locked-test cases across contract normalization, evidence
+verification, and final routing, plus eight metamorphic pairs. Its adjacent
+`.sha256` file locks the semantic JSON. Labels are declared independently of
+the runtime and the runner checks exact outcomes and reason codes. Run:
+
+```text
+pnpm memories:qualify-ingestion-oracle -- --output <private-oracle-report>
+```
+
+Any hash, label, relation, structure, duplication, or privacy mismatch makes
+the judge `not_qualified`. A v2 quality certification requires this report;
+generated regression measurements cannot replace it or qualify the judge that
+scores them.
+
+Production machine-reference qualification is a separate locked dataset. The
+machine-reference command generates 1,200 blind synthetic candidates, keeps
+expected routes out of the candidate bundle, and uses two shuffled passes of a
+five-profile independent AI council before selecting 900 gold cases:
+active/quarantine/excluded are each 300. Route precision/recall, route
+accuracy, council stability, and at least 90 metamorphic pairs are reported
+independently. Each metric needs a point estimate and Wilson lower bound of at
+least 95%; provenance hashes and three distinct Ed25519 fingerprints are
+sealed. Hard guardrails remain zero tolerance. The machine-reference report is
+the autonomous input to `memories:certify-quality`; the legacy human
+calibration artifact remains readable for compatibility only.
+
+### Autonomous qualification and maintenance
+
+The autonomous path uses a blind, independently generated machine-reference
+set and a five-profile AI council spanning at least three model families. Two
+shuffled passes must agree (active requires 5/5; quarantine/excluded require at
+least 4/5 with zero hard-guardrail dissent). Disagreement is quarantined
+rather than arbitrated into an active label. The sealed set is exactly 300
+active, 300 quarantine, and 300 excluded.
+
+Autonomous certification requires `ground_truth_basis=machine_reference`,
+`human_grounded=false`, route precision/recall and accuracy at least 95% by
+both point estimate and 95% Wilson lower bound, council repeat stability of at
+least 99%, 90 or more metamorphic pairs with zero violations, zero hard
+guardrails, and a passing observed-outcome canary. Missing evidence is
+`insufficient_evidence`, not a failure that can be bypassed.
+
+Workspace policy is versioned under `autonomy` with `shadow`, `guarded`, and
+`autonomous` modes. Deterministic guardrails precede risk-tiered AI consensus;
+judge denial, outage, rate limits, or disagreement route to `quarantine`.
+Quarantine is re-evaluated automatically and expires to suppression after the
+configured retention period. Cloud scheduled maintenance and the local
+LaunchAgent share the same policy hash, mutation budget, post-apply doctor,
+and automatic rollback. Physical deletion is permitted only by an explicit
+retention policy, never by an AI quality verdict.
+
 The primary KPIs are:
 
 - `verified_knowledge_correctness`: active fields supported by admissible
@@ -204,6 +265,11 @@ credential/PII leakage, cross-tenant or cross-scope injection, stale or
 superseded application, final-answer self-attestation, canonical duplicates,
 contract hash mismatch, and same-key re-asking.
 
+Passing deterministic measurements alone does not certify the overall report.
+Until the independent machine-reference council and observed-outcome canary
+reach the required consensus, the overall certification remains
+`not_certified` even when every deterministic record and hard guardrail passes.
+
 Operational certification is separate from data quality: `PreToolUse` p95 must
 be below 100 ms, `PostToolUse` p95 below 250 ms, `Stop` p95 below 2.5 s with a
 5 s hard timeout, and a 200-turn smoke must have zero timeouts, API 5xx, and
@@ -218,6 +284,16 @@ next-task retrieval cases, and 75 cases per continuity class (same key,
 paraphrase, compaction/resume, and change/conflict/scope change). The
 executable minimums are exported as `MEMORY_CONTRACT_CORPUS_MINIMUMS`, and a
 v2 quality manifest without a passing corpus is insufficient evidence.
+
+Only after both the conformance oracle and independent machine-reference
+qualification are qualified, use the credential-free fixed-seed measurement definition at
+`packages/shared/test/fixtures/memory-ingestion-regression-v2.json`, expanded
+by `scripts/memory-ingestion-regression.mjs`. It generates all 1,037
+minimum and review cases deterministically without copying a real Codex
+transcript. Run `pnpm memories:build-ingestion-regression` to inspect its
+counts and privacy flags; `scripts/codex-session-import.test.mjs` validates the
+corpus, active/review/excluded routing, plan privacy, and idempotent local
+application.
 
 The incident regression is:
 

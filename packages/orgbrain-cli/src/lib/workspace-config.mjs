@@ -3,6 +3,7 @@ import { chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from "n
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { normalizeAutonomyPolicy } from "../../../shared/src/autonomy-policy.mjs";
 
 export const WORKSPACE_CONFIG_VERSION = 3;
 export const WORK_TYPES = new Set([
@@ -30,6 +31,25 @@ function normalizeId(value) {
 
 function emptyWorkspaceConfig() {
   return { version: WORKSPACE_CONFIG_VERSION, workspaces: {} };
+}
+
+function normalizeTenantPolicies(raw) {
+  if (raw === undefined) return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("workspace config tenants must be an object");
+  }
+  const tenants = {};
+  for (const [rawTenantId, rawEntry] of Object.entries(raw)) {
+    const tenantId = normalizeId(rawTenantId);
+    if (!tenantId) continue;
+    if (!rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) {
+      throw new Error(`tenant entry must be an object: ${tenantId}`);
+    }
+    tenants[tenantId] = {
+      autonomy: normalizeAutonomyPolicy(rawEntry.autonomy ?? {})
+    };
+  }
+  return tenants;
 }
 
 export function normalizeSensitiveMemoryPolicy(raw) {
@@ -72,6 +92,7 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
   const learningMode = raw.memory_learning_mode === undefined || raw.memory_learning_mode === null
     ? "off"
     : String(raw.memory_learning_mode).trim();
+  const autonomy = raw.autonomy === undefined ? null : normalizeAutonomyPolicy(raw.autonomy);
   if (tenantId === null && raw.tenant_id !== null) {
     throw new Error(`workspace tenant_id is required or must be null: ${workspaceRoot}`);
   }
@@ -97,8 +118,25 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
     default_work_type: defaultWorkType,
     sensitive_memory: sensitiveMemory,
     ...(captureV2Mode ? { memory_capture_v2_mode: captureV2Mode } : {}),
-    memory_learning_mode: learningMode
+    memory_learning_mode: learningMode,
+    ...(autonomy ? { autonomy } : {})
   };
+}
+
+export function autonomyPolicyFromWorkspaceEntry(entry) {
+  if (entry?.autonomy !== undefined) return normalizeAutonomyPolicy(entry.autonomy);
+  // `memory_learning_mode` is retained as a wire-compatible legacy input.
+  // Normalize it at the policy boundary without rewriting old workspace
+  // files: off/shadow remain fail-closed shadow, while the old on mode maps to
+  // guarded (judge-gated) rather than directly granting autonomous writes.
+  const legacyMode = String(entry?.memory_learning_mode ?? "off").trim().toLowerCase();
+  return normalizeAutonomyPolicy({ mode: legacyMode === "on" ? "guarded" : "shadow" });
+}
+
+export function autonomyPolicyFromWorkspaceConfig(entry, config, fallbackTenantId = null) {
+  const tenantId = entry?.tenant_id ?? normalizeId(fallbackTenantId);
+  const tenantPolicy = tenantId && config?.tenants?.[tenantId]?.autonomy;
+  return tenantPolicy ? normalizeAutonomyPolicy(tenantPolicy) : autonomyPolicyFromWorkspaceEntry(entry);
 }
 
 export function normalizeWorkspaceConfig(raw) {
@@ -117,7 +155,10 @@ export function normalizeWorkspaceConfig(raw) {
     if (!workspaceRoot) continue;
     workspaces[workspaceRoot] = normalizeWorkspaceEntry(entry, workspaceRoot);
   }
-  return { version: WORKSPACE_CONFIG_VERSION, workspaces };
+  const tenants = normalizeTenantPolicies(raw.tenants);
+  return tenants === null
+    ? { version: WORKSPACE_CONFIG_VERSION, workspaces }
+    : { version: WORKSPACE_CONFIG_VERSION, workspaces, tenants };
 }
 
 export function workspacesFileFromEnv(env = process.env) {
@@ -162,6 +203,7 @@ export async function saveWorkspaceConfig(file, config) {
   const normalized = normalizeWorkspaceConfig(config);
   const directory = path.dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
+  await chmod(directory, 0o700);
   const staged = path.join(directory, `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
   try {
     await writeFile(staged, `${JSON.stringify(normalized, null, 2)}\n`, {
@@ -186,6 +228,7 @@ async function acquireWorkspaceConfigLock(file, options = {}) {
   const staleMs = options.staleMs ?? 30_000;
   const startedAt = Date.now();
   await mkdir(directory, { recursive: true, mode: 0o700 });
+  await chmod(directory, 0o700);
 
   while (true) {
     try {

@@ -274,12 +274,186 @@ backups, and is idempotent. Existing cloud-enabled settings fail closed unless
 See the official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
 for the lifecycle event and trust model.
 
-On macOS, `--maintenance daily` also installs the user-owned LaunchAgent
-`com.orgbrain.personal-maintenance`. It runs at 03:17 local time and invokes the
-same packaged CLI against local SQLite. The job makes no LLM calls or cloud
-writes. It creates deterministic canonical summaries and digests, suppresses
-old automatic-hook duplicates without deleting them, repairs indexes only when
-verification fails, and never automatically compacts manually captured rows.
+When `--maintenance daily --execute` is used, the installed LaunchAgent is the
+autonomous controller (`com.orgbrain.autonomy-maintenance`). It begins in
+shadow, scans and expires quarantine without a human queue, and only advances
+to guarded/autonomous after private qualification evidence is present.
+
+The autonomous controller scans existing Codex sessions automatically in
+shadow mode. The explicit command below is available when you want to inspect
+or apply the same private plan manually:
+
+```bash
+orgbrain memory import codex-sessions \
+  --workspace "$PWD" \
+  --output ~/.config/org-brain/imports/codex-initial.json
+
+orgbrain memory import codex-sessions \
+  --workspace "$PWD" \
+  --plan ~/.config/org-brain/imports/codex-initial.json \
+  --expected-plan-hash <sha256-from-dry-run> \
+  --execute
+```
+
+The importer scans only user-owned sessions from the same Git repository,
+including its worktrees. Deterministically verified `success`, `decision`, and
+`failure` observations are eligible for active memory in the explicit
+compatibility command; the autonomous controller adds its signed AI-consensus
+proof before allowing the same active write. Incomplete durable observations
+and strict final-answer fallback candidates remain in quarantine. Transient
+completion messages, subagent or automation sessions, unsafe instructions,
+credentials, and unrelated workspaces are excluded. Plans are mode `0600` and
+contain distilled candidates and hashes, never raw transcripts, reasoning,
+absolute source paths, or command output. Reapplying a plan is idempotent.
+The applied report retains the import batch hash and returned memory IDs. A
+rollback suppresses those memories through `orgbrain memory suppress` instead
+of deleting them; quarantine candidates are identified by the same batch hash
+for automatic re-evaluation or expiry. The session files and private plan are
+left intact.
+
+Autonomous operation is the normal path. An explicit `--dry-run` only reads and
+plans; it does not write policy, candidates, memories, or controller state. Each workspace has a versioned
+`autonomy` policy (`shadow`, `guarded`, or `autonomous`) and a conservative,
+balanced, or aggressive profile. Deterministic guardrails run first; uncertain
+changes go to a private, content-free `quarantine` state and are retried by
+the daily loop. Independent judge profiles from at least two model families
+are required for semantic promotion. A judge outage never promotes data and
+does not stop capture. The optional controls are:
+
+```bash
+orgbrain autonomy status --workspace "$PWD" --scope workspace
+orgbrain autonomy explain --workspace "$PWD" --run <run-id>
+orgbrain autonomy configure --workspace "$PWD" --scope workspace --profile balanced --execute
+orgbrain autonomy configure --workspace "$PWD" --scope tenant --profile balanced --execute
+orgbrain autonomy freeze --workspace "$PWD" --execute
+orgbrain autonomy rollback --workspace "$PWD" --run <run-id> --execute
+orgbrain autonomy run --workspace "$PWD" --dry-run
+```
+
+New workspaces start in `shadow`; successful machine-reference qualification,
+the real-session canary, and observed-outcome gates advance them automatically
+to `guarded` and then `autonomous`. No reviewer or approval queue is required.
+When `ORGBRAIN_AUTONOMY_QUALIFICATION_RUNNER` is configured, the daily
+controller invokes the signed machine-reference/canary adapter once and stores
+only its private evidence; status-only claims cannot advance a scope.
+Physical deletion remains an explicit retention-policy operation, never an AI
+quality decision. Existing `review` fields and signed human calibration
+artifacts remain readable only for compatibility.
+
+Before using generated ingestion data as a regression measurement, qualify the
+judge against the static, locked oracle whose labels are not produced by the
+runtime under test:
+
+```bash
+pnpm memories:qualify-ingestion-oracle -- \
+  --output ~/.config/org-brain/imports/ingestion-oracle-v1.json
+
+pnpm memories:certify-quality -- \
+  --manifest <private-quality-manifest.json> \
+  --oracle-report ~/.config/org-brain/imports/ingestion-oracle-v1.json \
+  --autonomous-report <private-machine-reference-report.json>
+```
+
+The first command fails on a lock-hash mismatch, label mismatch, metamorphic
+violation, duplicate case ID, structural error, or fixture leakage. The second
+command remains `not_certified` when the qualification report is absent or
+invalid; without the autonomous report it remains `insufficient_evidence`. A
+perfect generated regression corpus therefore cannot certify its
+own judge. Use `--legacy-human-compatibility` only to inspect the historical
+human-calibration result; it is not an autonomous qualification path.
+
+The legacy human-label calibration CLI remains readable for compatibility, but
+is not a production prerequisite. Autonomous qualification uses an independent
+machine-reference council: generate 1,200 blind candidates without expected
+routes, run five AI judge profiles twice in shuffled order, quarantine every
+disagreement, and seal the exact 900-case quota:
+
+```bash
+pnpm memories:calibrate-ingestion -- generate \
+  --seed-file <private-seed> --output-dir <private-calibration-dir>
+pnpm memories:calibrate-ingestion -- prepare-review \
+  --cases <private-calibration-dir>/cases.jsonl --reviewer-slot A \
+  --output <private-calibration-dir>/review-a.jsonl
+pnpm memories:calibrate-ingestion -- prepare-review \
+  --cases <private-calibration-dir>/cases.jsonl --reviewer-slot B \
+  --output <private-calibration-dir>/review-b.jsonl
+pnpm memories:calibrate-ingestion -- submit-review \
+  --cases <private-calibration-dir>/cases.jsonl --review <completed-review-a.jsonl> \
+  --reviewer-slot A --reviewer-id <opaque-reviewer-a-id> --signing-key <reviewer-a-key> \
+  --output <private-calibration-dir>/review-a.json
+pnpm memories:calibrate-ingestion -- submit-review \
+  --cases <private-calibration-dir>/cases.jsonl --review <completed-review-b.jsonl> \
+  --reviewer-slot B --reviewer-id <opaque-reviewer-b-id> --signing-key <reviewer-b-key> \
+  --output <private-calibration-dir>/review-b.json
+pnpm memories:calibrate-ingestion -- adjudicate \
+  --review-a <private-calibration-dir>/review-a.json \
+  --review-b <private-calibration-dir>/review-b.json \
+  --adjudication <completed-adjudication.jsonl> \
+  --signing-key <adjudicator-key> \
+  --output <private-calibration-dir>/adjudication.json
+pnpm memories:calibrate-ingestion -- seal \
+  --cases <private-calibration-dir>/cases.jsonl \
+  --review-a <private-calibration-dir>/review-a.json \
+  --review-b <private-calibration-dir>/review-b.json \
+  --adjudication <private-calibration-dir>/adjudication.json \
+  --output-dir <private-calibration-dir>/sealed
+```
+
+Run `predict` against `sealed-cases.jsonl` before opening
+`sealed-gold.jsonl`; supply one external AI-judge result for every sealed case
+to `evaluate`. The calibration report is then passed as
+`--calibration-report` to `memories:certify-quality` for compatibility only;
+production certification also requires the machine-reference report via
+`--autonomous-report`. Missing AI results,
+reviewer disagreement, quota mismatch, or a Wilson failure keeps the report
+`not_certified`. A real-session check is separate:
+`pnpm memories:calibrate-ingestion -- canary --workspace <path> --sessions-root <path> --output <private-canary-report>`;
+its active candidates are audited by the independent AI council, and it records opaque hash samples of at least 50
+quarantine and 50 excluded turns. If either sample quota or the 200-turn minimum is unavailable, the
+canary remains `insufficient_evidence`. Active canary items are checked by the
+independent AI council; disagreement is quarantined and never waits for a
+human approval.
+
+The autonomous qualification path does not use human labels. Generate blind
+cases, run the five-profile council twice in a shuffled order, quarantine any
+disagreement, and seal only the machine-reference quotas:
+
+```bash
+pnpm memories:machine-reference -- generate \
+  --seed-file <private-seed> --output-dir <private-machine-reference-dir>
+pnpm memories:machine-reference -- judge \
+  --cases <private-machine-reference-dir>/cases.jsonl \
+  --runner-module <managed-council-adapter.mjs> \
+  --signing-key <council-key> \
+  --producer-model-families <production-family-a,production-family-b> \
+  --producer-model-versions <production-version-a,production-version-b> \
+  --seed-hash <sha256> --output <private-machine-reference-dir>/council.json
+pnpm memories:machine-reference -- seal \
+  --cases <private-machine-reference-dir>/cases.jsonl \
+  --council <private-machine-reference-dir>/council.json \
+  --output-dir <private-machine-reference-dir>/sealed
+pnpm memories:machine-reference -- evaluate \
+  --seal <private-machine-reference-dir>/sealed/seal.json \
+  --cases <private-machine-reference-dir>/sealed/sealed-cases.jsonl \
+  --gold <private-machine-reference-dir>/sealed/sealed-gold.jsonl \
+  --predictions <private-machine-reference-dir>/predictions.jsonl \
+  --observed-outcomes <private-machine-reference-dir>/outcomes.json \
+  --output <private-machine-reference-dir>/report.json
+```
+
+The resulting report records `ground_truth_basis=machine_reference` and
+`human_grounded=false`. Each precision, recall, and route-accuracy gate uses
+both the point estimate and the 95% Wilson lower bound; no report is accepted
+when a hard guardrail, metamorphic relation, privacy check, or observed-outcome
+gate fails.
+
+On macOS, `--maintenance daily` installs the user-owned autonomous LaunchAgent
+`com.orgbrain.autonomy-maintenance`. It runs at 03:17 local time and invokes the
+same packaged controller against local SQLite. It scans sessions, expires and
+re-evaluates quarantine, uses the configured AI council when available, and
+fails closed without a human queue. It creates deterministic canonical
+summaries and digests, suppresses old automatic-hook duplicates without
+deleting them, and repairs indexes when verification fails.
 Plain `npm install` does not register the job; it is installed only by the
 explicit `--maintenance daily --execute` option.
 
@@ -294,7 +468,7 @@ orgbrain maintenance uninstall --execute
 ```
 
 The LaunchAgent lives at
-`~/Library/LaunchAgents/com.orgbrain.personal-maintenance.plist`. Last-run state
+`~/Library/LaunchAgents/com.orgbrain.autonomy-maintenance.plist`. Last-run state
 and bounded stdout/stderr logs live under `~/.config/org-brain/`. Installation
 is idempotent; replacement and uninstall preserve the previous plist under
 `~/.config/org-brain/backups/`. Linux and Windows schedulers are not installed

@@ -1,4 +1,17 @@
+---
+title: Org Brain System Design
+doc_type: system_design
+status: approved
+owner: org-brain-maintainers
+last_updated: 2026-08-15
+---
+
 # Org Brain System Design
+
+## Scope and architecture alignment
+
+This document defines the internal autonomous quality-control, memory capture,
+maintenance, and rollback design described by `SPEC.md` and `ARCHITECTURE.md`.
 
 ## Decision Resource Intelligence
 
@@ -160,3 +173,75 @@ grouping and coverage calculation so hidden counts are not observable.
 ## Current State
 - The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
 - The usage-status wrapper retries transient Wrangler/D1 failures before returning a fatal error, so operator snapshots are less sensitive to one-off remote blips.
+
+## Autonomous quality control
+
+## Internal components
+
+The session importer, deterministic verifier, machine-reference council,
+autonomy policy module, local/cloud maintenance runners, and quality certifier
+are separate boundaries. The CLI and scheduled worker are adapters over the
+same policy functions.
+
+## Interfaces and contracts
+
+`autonomy` policy entries are versioned and hashed. Candidate external keys,
+maintenance run IDs, plan hashes, and machine-reference hashes are idempotency
+boundaries. Legacy `review` fields remain read-compatible but new uncertain
+records serialize as `quarantine`.
+
+## Data and state
+
+Candidates transition `quarantine -> verified|rejected|expired`; memories use
+versioned active/suppressed states. Policy state stores the last run and
+last-known-good policy. Raw transcripts and reasoning are never persisted.
+
+## Algorithms and control logic
+
+Risk tier 0 operations are deterministic; tier 1 and tier 2 operations require
+the configured AI critic or unanimous multi-family consensus. Mutation ratio
+and count budgets are enforced before transactional application. Canary and
+qualification gates use Wilson lower bounds and hard guardrails.
+
+## Error handling and resilience
+
+Judge denial, provider failure, disagreement, index failure, or post-apply
+coverage loss leaves candidates quarantined and moves the scope to shadow.
+Scheduled retries re-evaluate due quarantine candidates; expired candidates
+are suppressed rather than deleted.
+
+## Security and privacy
+
+Private directories are mode 0700 and artifacts mode 0600. Candidate
+projections redact credentials, PII, absolute home paths, command output, and
+reasoning. Tenant, workspace, scope, and retention boundaries are not tunable.
+
+## Test design
+
+Node and Vitest suites cover blind generation, council stability and signatures,
+Wilson gates, quarantine re-evaluation, mutation budgets, idempotency,
+failure-injection rollback, local/cloud parity, privacy, contract checks, and
+scheduled-job smoke paths.
+
+## Rollout and migration
+
+New installations schedule the autonomous controller in shadow mode. Evidence
+advances scopes to guarded and autonomous; any hard violation automatically
+returns the scope to shadow. Migration 0032 adds quarantine while preserving
+legacy review reads.
+
+Autonomous memory control is a versioned policy layer shared by the local
+SQLite adapter and the Cloud D1 scheduled worker. The state machine is
+`shadow → guarded → autonomous`; it advances only from machine-reference,
+canary, observed-outcome, and rollback evidence. Deterministic guardrails are
+authoritative. Risk-tiered AI judges may approve semantic promotion only when
+the configured profiles and model-family minimum agree; outages and
+disagreement write a private `quarantine` candidate for automatic retry.
+
+Every maintenance run carries a run ID, policy hash, candidate hashes, judge
+metadata, mutation budget, post-apply doctor result, and rollback pointer.
+Index repairs and retention calculations are deterministic. AI quality logic
+cannot physically delete a memory; deletion is available only to an explicit,
+versioned retention policy. The public CLI exposes status, explanation,
+configuration, freeze, rollback, and dry-run controls, but normal operation
+requires no human approval or queue processing.

@@ -1,6 +1,9 @@
 import {
   assessMemoryUsefulness,
   buildMemoryCaptureCandidateJson,
+  autonomyPolicyHash,
+  decideAutonomyAction,
+  normalizeAutonomyPolicy,
   planDecisionClassificationRepairRows as planSharedDecisionClassificationRepairRows,
   planMemoryRepairRows as planSharedMemoryRepairRows,
   type DecisionClassificationRepairPlan,
@@ -143,6 +146,35 @@ export type TenantMaintenanceResult = {
   tenant_id: string;
   applied: boolean;
   stats: MaintenancePlan["stats"];
+  autonomy?: {
+    mode: string;
+    policy_hash: string;
+    run_id: string | null;
+    requested_mutation_count: number;
+    applied_mutation_count: number;
+    quarantined_mutation_count: number;
+    deferred_mutation_count: number;
+    judge_consensus_passed: boolean;
+    quarantine_normalized_count: number;
+    quarantine_expired_count: number;
+  };
+};
+
+export type AutonomyMaintenanceOptions = {
+  autonomyPolicy?: Record<string, unknown>;
+  judgeConsensus?: { pass?: boolean; judgments?: unknown[] } | null;
+  runId?: string;
+};
+
+type NormalizedAutonomyPolicy = {
+  mode: string;
+  quarantine: {
+    expire_after_days?: number;
+  };
+  maintenance: {
+    max_mutations_per_run?: number;
+    max_mutation_ratio_per_run?: number;
+  };
 };
 
 /**
@@ -881,13 +913,77 @@ function buildApplyStatements(
 export async function runTenantMemoryMaintenance(
   db: D1Database,
   tenantId: string,
-  now = Date.now()
+  now = Date.now(),
+  options: AutonomyMaintenanceOptions = {}
 ): Promise<TenantMaintenanceResult> {
   const rows = await loadMaintenanceRows(db, tenantId);
   const plan = planMemoryMaintenance(rows, { tenantId, now });
 
+  const autonomyPolicy = options.autonomyPolicy
+    ? normalizeAutonomyPolicy(options.autonomyPolicy) as unknown as NormalizedAutonomyPolicy
+    : null;
+  let quarantineNormalizedCount = 0;
+  let quarantineExpiredCount = 0;
+  if (autonomyPolicy) {
+    const quarantineExpireCutoff = now - Number(autonomyPolicy.quarantine?.expire_after_days ?? 180) * DAY_MS;
+    const normalizedResult = await db.prepare(
+      "UPDATE memory_learning_candidates SET status = 'quarantine' WHERE tenant_id = ? AND status = 'review'"
+    ).bind(tenantId).run();
+    const expiredResult = await db.prepare(
+      "UPDATE memory_learning_candidates SET status = 'expired', reviewed_at = ? WHERE tenant_id = ? AND status = 'quarantine' AND (expires_at <= ? OR created_at <= ?)"
+    ).bind(now, tenantId, now, quarantineExpireCutoff).run();
+    quarantineNormalizedCount = Number(normalizedResult.meta?.changes ?? 0);
+    quarantineExpiredCount = Number(expiredResult.meta?.changes ?? 0);
+  }
+  const judgeConsensusPassed = options.judgeConsensus?.pass === true;
+  const judgments = Array.isArray(options.judgeConsensus?.judgments) ? options.judgeConsensus.judgments : [];
+  const gate = (action: string) => autonomyPolicy
+    ? decideAutonomyAction({
+      action,
+      policy: autonomyPolicy,
+      deterministic: { passed: true },
+      judgments,
+      candidate: { route: "active" }
+    })
+    : { action: "apply" };
+  const plannedSemantic = [...plan.canonicals, ...plan.digests];
+  const semanticDecision = gate("active_promotion");
+  const compactionDecision = gate("suppress");
+  const qualityDecision = gate("summary_revise");
+  const requestedMutationCount = plannedSemantic.length + plan.compactions.length + plan.qualityUpdates.length;
+  const mutationLimit = autonomyPolicy
+    ? Math.max(1, Math.min(
+      Number(autonomyPolicy.maintenance.max_mutations_per_run ?? requestedMutationCount),
+      Math.ceil(Math.max(1, rows.length) * Number(autonomyPolicy.maintenance.max_mutation_ratio_per_run ?? 1))
+    ))
+    : Number.POSITIVE_INFINITY;
+  let remainingMutationSlots = Math.min(requestedMutationCount, mutationLimit);
+  const permittedSemantic = semanticDecision.action === "apply" ? plannedSemantic.slice(0, remainingMutationSlots) : [];
+  remainingMutationSlots -= permittedSemantic.length;
+  const permittedCompactions = compactionDecision.action === "apply" ? plan.compactions.slice(0, Math.max(0, remainingMutationSlots)) : [];
+  remainingMutationSlots -= permittedCompactions.length;
+  const permittedQualityUpdates = qualityDecision.action === "apply" ? plan.qualityUpdates.slice(0, Math.max(0, remainingMutationSlots)) : [];
+  const appliedMutationCount = permittedSemantic.length + permittedCompactions.length + permittedQualityUpdates.length;
+  const quarantinedMutationCount = [semanticDecision, compactionDecision, qualityDecision]
+    .filter((decision) => decision.action === "quarantine").length > 0
+    ? requestedMutationCount - appliedMutationCount
+    : 0;
+  const deferredMutationCount = requestedMutationCount - appliedMutationCount;
+  const autonomy = autonomyPolicy ? {
+    mode: autonomyPolicy.mode,
+    policy_hash: autonomyPolicyHash(autonomyPolicy),
+    run_id: options.runId ?? null,
+    requested_mutation_count: requestedMutationCount,
+    applied_mutation_count: appliedMutationCount,
+    quarantined_mutation_count: quarantinedMutationCount,
+    deferred_mutation_count: deferredMutationCount,
+    judge_consensus_passed: judgeConsensusPassed,
+    quarantine_normalized_count: quarantineNormalizedCount,
+    quarantine_expired_count: quarantineExpiredCount
+  } : undefined;
+
   if (plan.canonicals.length === 0 && plan.digests.length === 0 && plan.compactions.length === 0 && plan.qualityUpdates.length === 0) {
-    return { tenant_id: tenantId, applied: false, stats: plan.stats };
+    return { tenant_id: tenantId, applied: false, stats: plan.stats, ...(autonomy ? { autonomy } : {}) };
   }
 
   const existingDigestIds = await loadExistingDigestIdsByExternalKeys(
@@ -896,7 +992,7 @@ export async function runTenantMemoryMaintenance(
     [...plan.canonicals, ...plan.digests].map((item) => item.external_key)
   );
 
-  for (const synthesized of [...plan.canonicals, ...plan.digests]) {
+  for (const synthesized of permittedSemantic) {
     await runBatchChunks(
       db,
       buildApplyStatements(db, tenantId, { canonicals: [synthesized as PlannedCanonicalMemory], digests: [], compactions: [], qualityUpdates: [] }, existingDigestIds),
@@ -906,24 +1002,28 @@ export async function runTenantMemoryMaintenance(
 
   await runBatchChunks(
     db,
-    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: plan.compactions, qualityUpdates: [] }, existingDigestIds),
+    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: permittedCompactions, qualityUpdates: [] }, existingDigestIds),
     80
   );
 
   await runBatchChunks(
     db,
-    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: [], qualityUpdates: plan.qualityUpdates }, existingDigestIds),
+    buildApplyStatements(db, tenantId, { canonicals: [], digests: [], compactions: [], qualityUpdates: permittedQualityUpdates }, existingDigestIds),
     40
   );
 
-  return { tenant_id: tenantId, applied: true, stats: plan.stats };
+  return { tenant_id: tenantId, applied: appliedMutationCount > 0, stats: plan.stats, ...(autonomy ? { autonomy } : {}) };
 }
 
-export async function runScheduledMemoryMaintenance(db: D1Database, now = Date.now()): Promise<TenantMaintenanceResult[]> {
+export async function runScheduledMemoryMaintenance(
+  db: D1Database,
+  now = Date.now(),
+  options: AutonomyMaintenanceOptions = {}
+): Promise<TenantMaintenanceResult[]> {
   const tenantIds = await loadMaintenanceTenantIds(db);
   const results: TenantMaintenanceResult[] = [];
   for (const tenantId of tenantIds) {
-    results.push(await runTenantMemoryMaintenance(db, tenantId, now));
+    results.push(await runTenantMemoryMaintenance(db, tenantId, now, options));
   }
   return results;
 }

@@ -27,4 +27,5 @@ export * from "./retrieval-index";
 export * from "./retrieval-units";
 export * from "./schemas";
 export * from "./scheduled-jobs";
+export * from "./autonomy-policy";
 export * from "./types";

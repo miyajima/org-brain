@@ -111,11 +111,15 @@ function observeInvocation(item) {
     if (tool !== "orgbrain_memory_observe") return null;
     const input = invocation.arguments ?? invocation.args ?? invocation.input;
     const result = item.result;
-    if (result?.Err || item.error) return null;
-    return { input, output: safeJson(textContent(result)) };
+    return { input, output: result?.Err || item.error ? null : safeJson(textContent(result)) };
   }
   if (["function_call", "custom_tool_call"].includes(item?.type) && item.name === "orgbrain_memory_observe") {
-    return { input: safeJson(item.arguments ?? item.input), callId: item.call_id, output: null };
+    const rawInput = item.arguments ?? item.input;
+    return {
+      input: rawInput && typeof rawInput === "object" ? rawInput : safeJson(rawInput),
+      callId: item.call_id,
+      output: null
+    };
   }
   return null;
 }
@@ -362,22 +366,37 @@ export async function collectVerifiedLearningEvents(options) {
     const parsed = safeJson(line);
     return parsed ? [parsed] : [];
   });
+  const result = await collectVerifiedLearningEventsFromRows(rows, options);
+  return {
+    ...result,
+    scanned_bytes: Buffer.byteLength(raw),
+    raw_transcript_persisted: false
+  };
+}
+
+export async function collectVerifiedLearningEventsFromRows(rowsInput, options = {}) {
+  const rows = Array.isArray(rowsInput) ? rowsInput : [];
   const turnRows = currentTurnRows(rows, options.turnId);
   const userText = collectUserText(turnRows);
   const toolResults = turnRows.map((row) => stringify(payload(row))).join("\n");
   const observations = [];
+  const incompleteObservations = [];
   const pending = new Map();
   for (const row of turnRows) {
     const item = payload(row);
     const invocation = observeInvocation(item);
     if (invocation?.callId) pending.set(invocation.callId, invocation);
-    if (invocation?.input && invocation.output?.accepted) observations.push(invocation);
+    else if (invocation?.input && invocation.output?.accepted) observations.push(invocation);
+    else if (invocation?.input) incompleteObservations.push(invocation);
     if (["custom_tool_call_output", "function_call_output"].includes(item?.type)) {
       const prior = pending.get(item.call_id);
       const output = safeJson(typeof item.output === "string" ? item.output : textContent(item.output));
       if (prior && output?.accepted) observations.push({ ...prior, output });
+      else if (prior) incompleteObservations.push({ ...prior, output });
+      pending.delete(item.call_id);
     }
   }
+  incompleteObservations.push(...pending.values());
   const events = [];
   const reviews = [];
   for (const observation of observations.slice(-3)) {
@@ -407,5 +426,26 @@ export async function collectVerifiedLearningEvents(options) {
     }
     events.push({ event_hash: normalized.event_hash, learning: normalized.event, verification });
   }
-  return { events, reviews, scanned_bytes: Buffer.byteLength(raw), raw_transcript_persisted: false };
+  for (const observation of incompleteObservations.slice(-3)) {
+    const normalized = observation.input?.schema_version === 2
+      ? await normalizeMemoryContractV2Event(observation.input, {
+        workspaceRoot: options.workspaceRoot,
+        sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
+      })
+      : await normalizeMemoryLearningEvent(observation.input, {
+        workspaceRoot: options.workspaceRoot,
+        sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
+      });
+    if (!normalized.accepted) {
+      reviews.push({ event_hash: null, reason_codes: ["observe_not_accepted", ...normalized.reason_codes] });
+      continue;
+    }
+    reviews.push({
+      event_hash: normalized.event_hash,
+      learning: normalized.event,
+      reason_codes: ["observe_not_accepted"],
+      verification: { verification_state: "unverified", verified_at: null, evidence: [], reason_codes: ["observe_not_accepted"] }
+    });
+  }
+  return { events, reviews, raw_transcript_persisted: false };
 }

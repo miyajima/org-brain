@@ -74,7 +74,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "orgbrain_learning_batch_ingest",
-    description: "Persist explicit task commitments, verified memories, and review-only learning candidates as one idempotent local batch.",
+    description: "Persist explicit task commitments, verified memories, and autonomous quarantine candidates as one idempotent local batch.",
     inputSchema: {
       type: "object",
       properties: {
@@ -90,6 +90,7 @@ const TOOL_DEFINITIONS = [
         verified_items: { type: "array", maxItems: 3, items: { type: "object" } },
         deterministically_verified_items: { type: "array", maxItems: 3, items: { type: "object" } },
         review_candidates: { type: "array", maxItems: 3, items: { type: "object" } },
+        quarantine_candidates: { type: "array", maxItems: 3, items: { type: "object" } },
         semantic_aliases: { type: "array", maxItems: 16, items: { type: "object" } }
       }
     }
@@ -482,12 +483,17 @@ async function callTool(store, name, input) {
       if (!saved.saved) throw new Error(saved.reason ?? "semantic_alias_not_saved");
       semanticAliases.push(saved);
     }
+    const candidateInputs = [...(input.review_candidates ?? []), ...(input.quarantine_candidates ?? [])]
+      .filter((candidate, index, all) => {
+        const key = String(candidate.external_key ?? `candidate-${index}`);
+        return all.findIndex((other) => String(other.external_key ?? "") === key) === index;
+      });
     const reviewCandidates = await commitmentStore.saveLearningCandidates({
       tenantId,
       projectId: input.project_id ?? null,
       taskKey: input.task_key ?? null,
       candidates: [
-        ...(input.review_candidates ?? []),
+        ...candidateInputs,
         ...(input.deterministically_verified_items ?? []).slice(0, 3).map((item, index) => ({
           external_key: item.external_key ?? `learning-deterministic-review:${index}`,
           item,
@@ -561,9 +567,11 @@ async function callTool(store, name, input) {
       ok: true,
       verified_inserted: verifiedResults.filter((result) => result?.created).length,
       review_inserted: reviewCandidates.length,
+      quarantine_inserted: reviewCandidates.length,
       commitments: commitments.map((result) => result.commitment),
       semantic_aliases: semanticAliases,
-      review_candidates: reviewCandidates
+      review_candidates: reviewCandidates,
+      quarantine_candidates: reviewCandidates
     };
   }
   if (name === "orgbrain_memory_capture") return store.capture(captureDefaults(input));
