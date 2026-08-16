@@ -16,18 +16,19 @@ The current snapshot is restored into:
 Use the latest downloaded dump by default:
 
 ```bash
-pnpm local:prod-data -- restore
-pnpm local:prod-data -- status
+pnpm local:prod-data restore
+pnpm local:prod-data status
 ```
 
 Refreshing production is deliberately explicit:
 
 ```bash
-pnpm local:prod-data -- refresh --from-production
-pnpm local:prod-data -- sync --from-production
+pnpm local:prod-data refresh --from-production
+pnpm local:prod-data sync --from-production
 ```
 
-`sync` exports the 65 application tables, resets only the dedicated local D1,
+`sync` exports the 69 application tables, including memory quality runs and
+MCP client installations, resets only the dedicated local D1,
 restores the rows, and rebuilds the search projections. Cloudflare D1 internal
 bookkeeping tables and SQLite FTS5 virtual tables are not part of the export.
 
@@ -52,7 +53,7 @@ The rebuild reads the authoritative tables with `INSERT ... SELECT`, so local
 Run only the rebuild when needed:
 
 ```bash
-pnpm local:prod-data -- fts
+pnpm local:prod-data fts
 ```
 
 ## Start the local API and console
@@ -75,13 +76,8 @@ is only for the local worker and is not a production credential.
 
 ## Verification
 
-`local:prod-data status` reports row counts for the 65 authoritative tables and
-the six FTS projections. The current restore was checked against production:
-
-- the 64 tables present in the production dump matched;
-- the new `principal_owner_mappings` table is initialized empty;
-- total authoritative rows: 20,565;
-- memories: 693, of which 681 are active FTS search targets;
-- SQLite `quick_check`: `ok`;
-- foreign-key check: no rows;
-- FTS `MATCH` queries executed successfully.
+`local:prod-data status` reports row counts for the 69 authoritative tables and
+the six FTS projections. Verify the current snapshot after every refresh rather
+than relying on checked-in production counts. The restore applies all local
+migrations, rebuilds the FTS projections, and keeps the dump and Wrangler state
+under the private `.local/production-dump/` directory.

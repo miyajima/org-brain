@@ -3,7 +3,7 @@ title: Org Brain System Design
 doc_type: system_design
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 ---
 
 # Org Brain System Design
@@ -58,6 +58,7 @@ grouping and coverage calculation so hidden counts are not observable.
 - `knowledge_docs` / `knowledge_links` / `knowledge_docs_fts`: the knowledge-doc layer and inter-doc graph.
 - `threads`: review-oriented conversation capture.
 - `mcp_client_installations`: 無人hookの導入単位をowner principalへ結び付ける独立control-plane table。memory、rationale、decisionの親子構造や検索indexには参加しない。
+- `memory_quality_runs` / `memory_quality_measurements` / `memory_quality_cases`: privacy-safe regression metadata. Case rows store only hashes, routes, split, reason codes, parity, and related IDs; they never store session text, reasoning, absolute paths, or command output.
 
 ## Control Plane
 - `LeaseDO`: tenant and capability concurrency gate.
@@ -68,6 +69,7 @@ grouping and coverage calculation so hidden counts are not observable.
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
 - Shared rationale inference heuristics live in `packages/shared/src/rationale-extraction.ts`.
 - Runtime-neutral memory quality assessment lives in `packages/shared/src/memory-quality-runtime.mjs`; the Cloud TypeScript facade and Node compatibility entry point both execute this single classifier.
+- Realtime hook and initial import carry explicit `capture_route` and optional `capture_batch_id`. Candidate payloads stay route-neutral so formal observe hashes remain comparable.
 - Context Engine MVP logic lives in `apps/api-gateway/src/context-engine-service.ts`.
 - Lifecycle-aware write logic lives in `apps/api-gateway/src/memory-lifecycle-service.ts`.
 - Interactive rationale confirmation lives in `apps/api-gateway/src/rationale-service.ts`.
@@ -98,6 +100,8 @@ grouping and coverage calculation so hidden counts are not observable.
   restore tombstone replay, verify, and rebuild cover both FTS and the vector
   projection.
 - Cloud hard delete removes the authoritative memory plus FTS, version, edge, entity, rationale, and evidence rows before returning success; only a content-free `memory_deletions` tombstone remains for audit correlation.
+- `GET /v1/memory-quality/runs` and `GET /v1/memory-quality/runs/:runId` expose read-only run summaries, seven separate axes, and privacy-safe case metadata. Excluded cases never join memory content. The console enables `view=quality` with `MEMORY_QUALITY_UI_MODE=off|beta|on`; remediation links to the authorized Memory detail.
+- Mac validation writes only to `.local/memory-quality/<run-id>/quality.sqlite` and private reports. The evaluator has no network client, ignores Cloud endpoint variables, reads only root user sessions, and reports `insufficient_evidence` instead of lowering thresholds or inventing judge output.
 - Interactive saves use `propose -> user confirmation -> confirm` and create `decision_rationales` as `user_confirmed` or `user_corrected`.
 - Non-interactive hook ingestion writes promoted memory rows plus inferred rationale/evidence rows with `confirmation_state=inferred_unconfirmed`; these rows are explicitly not human-confirmed.
 - Decision memory rows are an additive context shaping layer over the existing memory/rationale model. They are used by `/v1/context/enrich`, `/v1/context/pre-action-gate`, and the decision review queue to score task-relevant organizational context.

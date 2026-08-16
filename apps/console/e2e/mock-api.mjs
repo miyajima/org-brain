@@ -1,10 +1,50 @@
 import http from "node:http";
+import fs from "node:fs";
+import pathModule from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 const args = new Map(
   process.argv.slice(2).flatMap((arg, index, all) => (arg.startsWith("--") ? [[arg.slice(2), all[index + 1]]] : []))
 );
 const port = Number(args.get("port") ?? process.env.CONSOLE_E2E_API_PORT ?? 19087);
+const qualityRunDir = args.get("quality-run-dir") ?? process.env.QUALITY_RUN_DIR ?? "";
 const now = Date.UTC(2026, 5, 12, 9, 0, 0);
+
+function loadPrivateQualityRun(runDir) {
+  if (!runDir) return null;
+  const resolved = pathModule.resolve(runDir);
+  const marker = JSON.parse(fs.readFileSync(pathModule.join(resolved, "bundle-marker.json"), "utf8"));
+  if (marker.kind !== "orgbrain-memory-quality-private-run" || marker.run_id !== pathModule.basename(resolved)) {
+    throw new Error("invalid private quality run marker");
+  }
+  const report = JSON.parse(fs.readFileSync(pathModule.join(resolved, "report.json"), "utf8"));
+  const db = new DatabaseSync(pathModule.join(resolved, "quality.sqlite"), { readOnly: true });
+  const dimensions = db.prepare("SELECT axis, numerator, denominator, point_estimate, wilson_lower, hard_violation_count FROM quality_dimensions ORDER BY axis").all();
+  const cases = db.prepare("SELECT case_hash, session_hash, project_hash, split, capture_route, expected_route, actual_route, reason_codes_json, hard_violation_count, parity_mismatch FROM quality_cases ORDER BY case_hash").all().map((item) => ({
+    ...item,
+    lesson_type: null,
+    reason_codes: JSON.parse(item.reason_codes_json),
+    reason_codes_json: undefined,
+    parity_mismatch: item.parity_mismatch === 1
+  }));
+  db.close();
+  const run = {
+    id: report.run_id,
+    corpus_id: report.ground_truth_basis,
+    status: report.status,
+    input_source: report.input_source,
+    capture_routes: [...new Set(cases.map((item) => item.capture_route))],
+    hard_violation_count: dimensions.reduce((sum, item) => sum + Number(item.hard_violation_count), 0),
+    started_at: fs.statSync(pathModule.join(resolved, "report.json")).mtimeMs,
+    completed_at: fs.statSync(pathModule.join(resolved, "report.json")).mtimeMs,
+    counts: report.counts,
+    privacy: report.privacy,
+    insufficiency_reason: report.insufficiency_reason
+  };
+  return { run, dimensions: dimensions.map((item) => ({ ...item, cohort: "all" })), cases };
+}
+
+const privateQualityRun = loadPrivateQualityRun(qualityRunDir);
 
 const memory = {
   id: "mem_auth_group_acl",
@@ -681,6 +721,61 @@ const server = http.createServer(async (request, response) => {
         digest_count: 0,
         compacted_count: 0
       }
+    }));
+    return;
+  }
+
+  if (path === "/v1/dashboard/memory-analytics" && request.method === "GET") {
+    json(response, 200, ok({
+      summary: { reference_count: 0, used_count: 0, net_saved_tokens: 0, injected_tokens: 0 },
+      rankings: { memories: [], owners: [] }
+    }));
+    return;
+  }
+
+  if (path === "/v1/memory-quality/runs" && request.method === "GET") {
+    if (privateQualityRun) {
+      json(response, 200, ok({ tenant_id: "default", items: [privateQualityRun.run], meta: { returned_count: 1 } }));
+      return;
+    }
+    json(response, 200, ok({ tenant_id: "default", items: [{ id: "quality-e2e", corpus_id: "v3", status: "passed", input_source: "synthetic", capture_routes: ["realtime_hook", "initial_import"], hard_violation_count: 0, started_at: now, completed_at: now }], meta: { returned_count: 1 } }));
+    return;
+  }
+
+  if (privateQualityRun && path === `/v1/memory-quality/runs/${privateQualityRun.run.id}` && request.method === "GET") {
+    const route = url.searchParams.get("route");
+    const actualRoute = url.searchParams.get("actual_route");
+    const issue = url.searchParams.get("issue");
+    const projectHash = url.searchParams.get("project_hash");
+    const parity = url.searchParams.get("parity_mismatch");
+    const cases = privateQualityRun.cases.filter((item) =>
+      (!route || item.capture_route === route) &&
+      (!actualRoute || item.actual_route === actualRoute) &&
+      (!issue || item.reason_codes.includes(issue)) &&
+      (!projectHash || item.project_hash === projectHash) &&
+      (!parity || item.parity_mismatch === (parity === "1"))
+    );
+    json(response, 200, ok({
+      tenant_id: "default",
+      run: privateQualityRun.run,
+      dimensions: privateQualityRun.dimensions,
+      cases,
+      meta: { returned_count: cases.length }
+    }));
+    return;
+  }
+
+  if (path === "/v1/memory-quality/runs/quality-e2e" && request.method === "GET") {
+    const empty = url.searchParams.get("project_hash") === "empty";
+    json(response, 200, ok({
+      tenant_id: "default",
+      run: { id: "quality-e2e", corpus_id: "v3", status: "passed", input_source: "synthetic", capture_routes: ["realtime_hook", "initial_import"], hard_violation_count: 0, started_at: now, completed_at: now },
+      dimensions: ["semantic_completeness", "evidence_support", "rationale_quality", "future_reuse", "scope_specificity", "freshness_validity", "atomicity"].map((axis) => ({ axis, cohort: "all", numerator: 100, denominator: 100, point_estimate: 1, wilson_lower: 0.964, hard_violation_count: 0 })),
+      cases: empty ? [] : [
+        { id: "case-active", case_hash: "active-hash", project_hash: "project-hash", split: "locked_test", lesson_type: "decision", capture_route: "realtime_hook", expected_route: "active", actual_route: "active", reason_codes: [], hard_violation_count: 0, parity_mismatch: false, memory_id: memory.id, summary: "Login principal group ACL design" },
+        { id: "case-excluded", case_hash: "excluded-hash", project_hash: "project-hash", split: "locked_test", lesson_type: null, capture_route: "initial_import", expected_route: "excluded", actual_route: "excluded", reason_codes: ["credential_detected"], hard_violation_count: 1, parity_mismatch: false, memory_id: null, summary: null }
+      ],
+      meta: { returned_count: empty ? 0 : 2 }
     }));
     return;
   }

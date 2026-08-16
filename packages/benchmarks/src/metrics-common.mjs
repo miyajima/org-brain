@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -7,6 +8,22 @@ const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const apiGatewayDir = resolve(repoRoot, "apps/api-gateway");
+const installedWranglerCandidates = [
+  resolve(apiGatewayDir, "node_modules/.bin/wrangler"),
+  resolve(repoRoot, "apps/console/node_modules/.bin/wrangler")
+];
+
+function wranglerInvocation(args) {
+  const installedWrangler = installedWranglerCandidates.find((candidate) => existsSync(candidate));
+  if (installedWrangler) {
+    return { command: installedWrangler, args, cwd: apiGatewayDir };
+  }
+  return {
+    command: "pnpm",
+    args: ["--dir", apiGatewayDir, "exec", "wrangler", ...args],
+    cwd: repoRoot
+  };
+}
 
 function wranglerConfig(location) {
   return location === "remote"
@@ -70,14 +87,16 @@ export function buildFtsQuery(raw) {
 
 export async function runD1Query(options, sql) {
   const args = [
-    "--dir", apiGatewayDir, "exec", "wrangler", "d1", "execute", options.database,
+    "d1", "execute", options.database,
     "--config", wranglerConfig(options.location), `--${options.location}`
   ];
   if (options.env) args.push("--env", options.env);
   args.push("--json", "--command", sql);
 
-  const { stdout, stderr } = await execFileAsync("pnpm", args, {
-    cwd: repoRoot,
+  const invocation = wranglerInvocation(args);
+
+  const { stdout, stderr } = await execFileAsync(invocation.command, invocation.args, {
+    cwd: invocation.cwd,
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024
   });
@@ -107,13 +126,15 @@ export async function runD1Queries(options, queryMap) {
 export async function fetchR2ObjectText(options, bucket, key) {
   const location = options.location === "preview" ? "remote" : options.location;
   const args = [
-    "--dir", apiGatewayDir, "exec", "wrangler", "r2", "object", "get", `${bucket}/${key}`, "--pipe",
+    "r2", "object", "get", `${bucket}/${key}`, "--pipe",
     "--config", wranglerConfig(location), `--${location}`
   ];
   if (options.env) args.push("--env", options.env);
 
-  const { stdout } = await execFileAsync("pnpm", args, {
-    cwd: repoRoot,
+  const invocation = wranglerInvocation(args);
+
+  const { stdout } = await execFileAsync(invocation.command, invocation.args, {
+    cwd: invocation.cwd,
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024
   });

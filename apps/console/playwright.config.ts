@@ -38,7 +38,8 @@ export default defineConfig({
         INTERNAL_API_KEY: "dev-org-brain-api-key",
         ACCESS_JWT_REQUIRED: "false",
         CLOUDFLARE_INCLUDE_PROCESS_ENV: "true",
-        INSIGHTS_UI_MODE: "on"
+        INSIGHTS_UI_MODE: "on",
+        MEMORY_QUALITY_UI_MODE: "on"
       }
     }
   ],

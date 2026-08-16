@@ -401,3 +401,130 @@ export function classifyMemoryQuality(input, options = {}) {
 export function isLowSignalMemory(input, options = {}) {
   return classifyMemoryQuality(input, options).action === "delete";
 }
+
+const CREDENTIAL_PATTERN = /\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*[^\s]+/iu;
+const PII_PATTERN = /(?:\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|\+?\d[\d ()-]{8,}\d)/iu;
+const HOME_PATH_PATTERN = /\/(?:Users|home)\/[^/\s]+\//u;
+const RAW_ENVELOPE_PATTERN = /(?:raw[_ -]?transcript|hook_event_name|last_assistant_message|agent_reasoning)/iu;
+const SELF_ATTEST_PATTERN = /(?:final answer|最終回答).{0,80}(?:passed|成功|exit code|終了コード)/iu;
+const NON_ATOMIC_PATTERN = /(?:\bmust\b.{3,}\band\b.{3,}\bmust\b|必ず.{3,}(?:かつ|また).{3,}必ず)/iu;
+
+function scoreFrom(input, aliases, fallback) {
+  const dimensions = input?.quality_dimensions && typeof input.quality_dimensions === "object"
+    ? input.quality_dimensions
+    : {};
+  for (const alias of aliases) {
+    const value = Number(dimensions[alias]);
+    if (Number.isFinite(value)) return Math.max(0, Math.min(100, value));
+  }
+  return fallback;
+}
+
+function stringValue(value) {
+  return typeof value === "string" ? collapseWhitespace(value) : "";
+}
+
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function learningText(learning, ...keys) {
+  for (const key of keys) {
+    const value = stringValue(learning?.[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function completeLearningScore(learning) {
+  const lesson = stringValue(learning?.lesson_type);
+  if (lesson === "success") {
+    return ["procedure", "why_it_worked", "observed_outcome", "reuse_when"]
+      .every((key) => stringValue(learning?.[key])) ? 100 : 0;
+  }
+  if (lesson === "decision") {
+    const hasDecision = learningText(learning, "selected_value", "decision", "conclusion");
+    const userChoice = ["user_choice", "preference"].includes(stringValue(learning?.decision_type));
+    const rationale = stringValue(learning?.rationale);
+    const alternatives = arrayValue(learning?.alternatives);
+    return hasDecision && stringValue(learning?.question) && (userChoice || (rationale && alternatives.length > 0)) ? 100 : 0;
+  }
+  if (lesson === "failure") {
+    return ["symptom", "failed_approach", "root_cause", "correction", "verified_outcome", "avoidance_rule"]
+      .every((key) => stringValue(learning?.[key])) ? 100 : 0;
+  }
+  return learningText(learning, "conclusion", "decision", "correction") ? 100 : 0;
+}
+
+function consensusCertified(input) {
+  if (input?.ai_certification !== "ai_consensus_certified") return false;
+  const judgments = arrayValue(input?.judge_consensus?.judgments);
+  if (judgments.length < 3) return false;
+  const families = new Set(judgments.map((item) => item?.model_family).filter(Boolean));
+  return families.size >= 2 && judgments.every((item) => item?.verdict === "pass");
+}
+
+export function assessMemoryUsefulnessV1(input = {}) {
+  const learning = input.learning && typeof input.learning === "object" ? input.learning : {};
+  const conclusion = learningText(learning, "conclusion", "selected_value", "decision", "correction") || stringValue(input.summary) || stringValue(input.content);
+  const rationale = stringValue(input.rationale) || learningText(learning, "rationale", "why_it_worked", "root_cause");
+  const reuseRule = stringValue(input.reuse_rule) || learningText(learning, "reuse_rule", "reuse_when", "avoidance_rule");
+  const evidence = arrayValue(input.evidence);
+  const sourceReferences = arrayValue(input.source_references);
+  const selectors = arrayValue(learning?.evidence_selectors);
+  const artifactReferencesValid = sourceReferences.length > 0 && sourceReferences.every((item) => {
+    const reference = stringValue(item?.path) || stringValue(item?.url) || stringValue(item?.ref);
+    const digest = stringValue(item?.content_hash) || stringValue(item?.digest);
+    const summary = stringValue(item?.summary);
+    const scopedReference = /^(?:https:\/\/|[A-Za-z0-9_.-]+\/)/u.test(reference) && !HOME_PATH_PATTERN.test(reference);
+    return scopedReference && /^sha256:[a-f0-9]{64}$/iu.test(digest) && summary.length > 0 && summary.length <= 240;
+  });
+  const applicability = learning?.applicability && typeof learning.applicability === "object" ? learning.applicability : {};
+  const scopeCount = arrayValue(applicability.target_files).length + arrayValue(applicability.components).length;
+  const expiry = Number(input.valid_until ?? input.expires_at);
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const dimensions = {
+    semantic_completeness: scoreFrom(input, ["semantic_completeness", "conclusion", "outcome"], completeLearningScore(learning)),
+    evidence_support: scoreFrom(input, ["evidence_support"], (evidence.length > 0 && selectors.length > 0) || artifactReferencesValid ? 100 : 0),
+    rationale_quality: scoreFrom(input, ["rationale_quality", "rationale"], rationale && normalizeQualityText(rationale) !== normalizeQualityText(conclusion) ? 100 : 0),
+    future_reuse: scoreFrom(input, ["future_reuse", "reuse_or_avoidance"], reuseRule.length >= 12 && normalizeQualityText(reuseRule) !== normalizeQualityText(conclusion) ? 100 : 0),
+    scope_specificity: scoreFrom(input, ["scope_specificity", "scope"], scopeCount > 0 ? 100 : 0),
+    freshness_validity: scoreFrom(input, ["freshness_validity"], !Number.isFinite(expiry) || expiry > now ? 100 : 0),
+    atomicity: scoreFrom(input, ["atomicity"], conclusion && !NON_ATOMIC_PATTERN.test(conclusion) ? 100 : 0)
+  };
+  const reasonCodes = [...new Set(arrayValue(input.reason_codes).filter((value) => typeof value === "string"))];
+  const hardViolations = [];
+  const screenedText = `${conclusion}\n${rationale}\n${reuseRule}\n${stringValue(input.summary)}\n${stringValue(input.content)}`;
+  if (CREDENTIAL_PATTERN.test(screenedText)) hardViolations.push("credential_detected");
+  if (PII_PATTERN.test(screenedText)) hardViolations.push("pii_detected");
+  if (HOME_PATH_PATTERN.test(screenedText)) hardViolations.push("absolute_home_path_detected");
+  if (RAW_ENVELOPE_PATTERN.test(screenedText)) hardViolations.push("raw_transcript_envelope_detected");
+  if (SELF_ATTEST_PATTERN.test(screenedText)) hardViolations.push("final_answer_self_attestation");
+  if (arrayValue(input.conflicts).length > 0) hardViolations.push("unresolved_conflict");
+  if (Number.isFinite(expiry) && expiry <= now) hardViolations.push("expired_memory");
+  if (NON_ATOMIC_PATTERN.test(conclusion)) hardViolations.push("non_atomic_memory");
+  if (reasonCodes.some((code) => /(?:scope|credential|pii|self_attest|source_drift|duplicate|non_atomic)/iu.test(code))) {
+    hardViolations.push(...reasonCodes.filter((code) => /(?:scope|credential|pii|self_attest|source_drift|duplicate|non_atomic)/iu.test(code)));
+  }
+  const allDimensionsPass = Object.values(dimensions).every((score) => score >= 95);
+  const observedVerified = input.capture_origin === "observed" && input.verification_state === "verified" && Number.isFinite(Number(input.verified_at));
+  const certified = consensusCertified(input);
+  const durableSignal = Boolean(conclusion && (rationale || reuseRule || Object.keys(learning).length > 0));
+  const route = hardViolations.length > 0
+    ? "excluded"
+    : allDimensionsPass && observedVerified && certified
+      ? "active"
+      : durableSignal
+        ? "quarantine"
+        : "excluded";
+  if (!allDimensionsPass) reasonCodes.push("quality_dimension_below_95");
+  if (!observedVerified && durableSignal) reasonCodes.push("observed_verified_required");
+  if (!certified && durableSignal) reasonCodes.push("ai_consensus_required");
+  return {
+    schema_version: 1,
+    route,
+    quality_dimensions: dimensions,
+    reason_codes: [...new Set(reasonCodes)].sort(),
+    hard_violations: [...new Set(hardViolations)].sort()
+  };
+}

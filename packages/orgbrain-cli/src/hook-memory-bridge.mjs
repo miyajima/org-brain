@@ -1233,6 +1233,8 @@ export function captureItemPayload(record) {
     ...(aiCertification ? { ai_certification: aiCertification } : {}),
     ...(judgeConsensus ? { judge_consensus: judgeConsensus } : {}),
     ...(record.captureOrigin ? { capture_origin: record.captureOrigin } : {}),
+    ...(record.captureRoute ? { capture_route: record.captureRoute } : {}),
+    ...(record.captureBatchId ? { capture_batch_id: record.captureBatchId } : {}),
     ...(record.verification ? { verification: record.verification } : {}),
     ...(record.qualityDimensions ? { quality_dimensions: record.qualityDimensions } : {})
   };
@@ -1288,6 +1290,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId) {
       allowedPrincipals: draft.allowed_principals,
       qualityScore: draft.quality_score,
       captureProfileId: draft.capture_profile_id,
+      captureRoute: "realtime_hook",
       actorType: "system",
       actorId: buildActorId(record)
     };
@@ -1387,6 +1390,7 @@ export async function prepareObservedLearningRecords(record, workspace, tenantId
       allowedPrincipals: [],
       qualityScore: verification.quality_score,
       captureOrigin: "observed",
+      captureRoute: "realtime_hook",
       learning,
       verification: {
         state: verification.verification_state,
@@ -1723,6 +1727,8 @@ export async function captureLocalMemories(sourceName, tenantId, recordOrRecords
         permissions: ["read"]
       })),
       capture_origin: record.captureOrigin ?? "legacy",
+      capture_route: record.captureRoute ?? "legacy",
+      capture_batch_id: record.captureBatchId ?? null,
       verification_state: record.verification?.state ?? "unverified",
       verified_at: record.verification?.verified_at ?? null,
       learning: record.learning ?? null,

@@ -5,11 +5,16 @@ Astro.response.headers.set("Cache-Control", "no-store");
 
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
 const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = async (path: string, init: RequestInit = {}) =>
-  fetch(new URL(path, Astro.url), {
+const accessJwt = Astro.request.headers.get("cf-access-jwt-assertion")?.trim() || "";
+const api = async (path: string, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  if (accessJwt) headers.set("cf-access-jwt-assertion", accessJwt);
+  headers.set("cookie", cookie);
+  return fetch(new URL(path, Astro.url), {
     ...init,
-    headers: { cookie, ...(init.headers ?? {}) }
+    headers
   });
+};
 
 let message = "";
 let error = "";
@@ -45,7 +50,10 @@ if (Astro.request.method === "POST") {
       };
       message = "Pending client installation created.";
     } else {
-      error = payload?.error?.message ?? "Client installation could not be created.";
+      const errorCode = typeof payload?.error?.code === "string" ? payload.error.code : null;
+      const errorMessage = typeof payload?.error?.message === "string" ? payload.error.message : null;
+      error = errorMessage ??
+        `Client installation could not be created (HTTP ${response.status}${errorCode ? `, ${errorCode}` : ""}).`;
     }
   }
 }

@@ -999,8 +999,10 @@ describe("hook-memory-bridge promotion", () => {
 
     const canonical = captureCandidateJson(prepared.records[0]);
     const cloudPayload = captureItemPayload(prepared.records[0]);
+    expect(cloudPayload.capture_route).toBe("realtime_hook");
+    const { capture_route: _captureRoute, ...routeNeutralCloudPayload } = cloudPayload;
     const normalizedCloudPayload = {
-      ...cloudPayload,
+      ...routeNeutralCloudPayload,
       evidence: cloudPayload.evidence.map((item) => ({
         type: item.evidence_type,
         ref: item.evidence_ref,

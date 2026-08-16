@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeFallbackResponse, stripProxyHeaders } from "../pages/api/[...path]";
+import {
+  applyProxyAuthentication,
+  normalizeFallbackResponse,
+  stripProxyHeaders
+} from "../pages/api/[...path]";
 
 describe("Console API proxy headers", () => {
   it("keeps Access identity at the Console boundary and replaces caller API credentials", () => {
@@ -31,5 +35,25 @@ describe("Console API proxy headers", () => {
     expect(response.headers.get("content-length")).toBeNull();
     expect(response.headers.get("content-type")).toBe("application/json");
     expect(await response.json()).toEqual({ ok: true });
+  });
+
+  it("forwards the verified Access identity only for client installation ownership", () => {
+    const installationHeaders = applyProxyAuthentication(
+      new Headers({ accept: "application/json" }),
+      "v1/mcp-client-installations",
+      "verified-access-jwt",
+      "internal-key"
+    );
+    expect(installationHeaders.get("cf-access-jwt-assertion")).toBe("verified-access-jwt");
+    expect(installationHeaders.has("x-api-key")).toBe(false);
+
+    const regularHeaders = applyProxyAuthentication(
+      new Headers({ accept: "application/json" }),
+      "v1/memories",
+      "verified-access-jwt",
+      "internal-key"
+    );
+    expect(regularHeaders.has("cf-access-jwt-assertion")).toBe(false);
+    expect(regularHeaders.get("x-api-key")).toBe("internal-key");
   });
 });

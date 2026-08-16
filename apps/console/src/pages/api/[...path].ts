@@ -19,8 +19,14 @@ type ProcessLike = {
 
 async function getRuntimeEnv(): Promise<ConsoleWorkerEnv> {
   const processEnv = (globalThis as typeof globalThis & { process?: ProcessLike }).process?.env ?? {};
+  // Astro/Vite exposes shell variables through import.meta.env in dev even
+  // when its SSR sandbox provides an empty process.env object.
+  const localEnv = {
+    ...(import.meta.env as Record<string, string | undefined>),
+    ...processEnv
+  };
   let runtimeEnv: ConsoleWorkerEnv = {};
-  if (!processEnv.API_BASE_URL && !processEnv.INTERNAL_API_KEY && processEnv.SESSION_ONLY_API !== "true") {
+  if (!localEnv.API_BASE_URL && !localEnv.INTERNAL_API_KEY && localEnv.SESSION_ONLY_API !== "true") {
     try {
       runtimeEnv = (await import("cloudflare:workers")).env as unknown as ConsoleWorkerEnv;
     } catch {
@@ -29,13 +35,13 @@ async function getRuntimeEnv(): Promise<ConsoleWorkerEnv> {
   }
   return {
     API: runtimeEnv.API,
-    INTERNAL_API_KEY: runtimeEnv.INTERNAL_API_KEY ?? processEnv.INTERNAL_API_KEY,
-    API_BASE_URL: runtimeEnv.API_BASE_URL ?? processEnv.API_BASE_URL,
-    SESSION_ONLY_API: runtimeEnv.SESSION_ONLY_API ?? processEnv.SESSION_ONLY_API,
-    ACCESS_TEAM_DOMAIN: runtimeEnv.ACCESS_TEAM_DOMAIN ?? processEnv.ACCESS_TEAM_DOMAIN,
-    ACCESS_AUD: runtimeEnv.ACCESS_AUD ?? processEnv.ACCESS_AUD,
-    ACCESS_JWKS_JSON: runtimeEnv.ACCESS_JWKS_JSON ?? processEnv.ACCESS_JWKS_JSON,
-    ACCESS_JWT_REQUIRED: runtimeEnv.ACCESS_JWT_REQUIRED ?? processEnv.ACCESS_JWT_REQUIRED
+    INTERNAL_API_KEY: runtimeEnv.INTERNAL_API_KEY ?? localEnv.INTERNAL_API_KEY,
+    API_BASE_URL: runtimeEnv.API_BASE_URL ?? localEnv.API_BASE_URL,
+    SESSION_ONLY_API: runtimeEnv.SESSION_ONLY_API ?? localEnv.SESSION_ONLY_API,
+    ACCESS_TEAM_DOMAIN: runtimeEnv.ACCESS_TEAM_DOMAIN ?? localEnv.ACCESS_TEAM_DOMAIN,
+    ACCESS_AUD: runtimeEnv.ACCESS_AUD ?? localEnv.ACCESS_AUD,
+    ACCESS_JWKS_JSON: runtimeEnv.ACCESS_JWKS_JSON ?? localEnv.ACCESS_JWKS_JSON,
+    ACCESS_JWT_REQUIRED: runtimeEnv.ACCESS_JWT_REQUIRED ?? localEnv.ACCESS_JWT_REQUIRED
   };
 }
 
@@ -82,6 +88,24 @@ export function stripProxyHeaders(headers: Headers): Headers {
   return next;
 }
 
+export function applyProxyAuthentication(
+  headers: Headers,
+  path: string,
+  accessJwt: string | null,
+  internalApiKey: string | undefined
+): Headers {
+  const next = new Headers(headers);
+  if (path.startsWith("v1/mcp-client-installations") && accessJwt) {
+    // Client installations belong to the signed-in human, not the Console
+    // service principal. The JWT has already been verified at this boundary;
+    // the API verifies it again before resolving the Org Brain user identity.
+    next.set("cf-access-jwt-assertion", accessJwt);
+    return next;
+  }
+  if (internalApiKey) next.set("x-api-key", internalApiKey);
+  return next;
+}
+
 export function normalizeFallbackResponse(response: Response): Response {
   const headers = new Headers(response.headers);
   // Fetch runtimes transparently decode gzip/br payloads but retain the
@@ -105,8 +129,8 @@ function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string):
 
 export const ALL: APIRoute = async ({ params, request }) => {
   const runtimeEnv = await getRuntimeEnv();
+  const accessJwt = request.headers.get("cf-access-jwt-assertion")?.trim() || null;
   if (accessJwtRequired(runtimeEnv)) {
-    const accessJwt = request.headers.get("cf-access-jwt-assertion")?.trim();
     if (!accessJwt) return jsonError(401, "unauthorized", "Missing Cloudflare Access JWT");
     try {
       await verifyConsoleAccessJwt(runtimeEnv, accessJwt);
@@ -126,8 +150,12 @@ export const ALL: APIRoute = async ({ params, request }) => {
   const targetUrl = new URL(`https://internal/${path}`);
   targetUrl.search = new URL(request.url).search;
 
-  const headers = stripProxyHeaders(request.headers);
-  if (runtimeEnv.INTERNAL_API_KEY) headers.set("x-api-key", runtimeEnv.INTERNAL_API_KEY);
+  const headers = applyProxyAuthentication(
+    stripProxyHeaders(request.headers),
+    path,
+    accessJwt,
+    runtimeEnv.INTERNAL_API_KEY
+  );
 
   const init = {
     method: request.method,
@@ -135,7 +163,10 @@ export const ALL: APIRoute = async ({ params, request }) => {
     body: ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer()
   };
 
-  if (runtimeEnv?.API) {
+  // API_BASE_URL is an explicit operator override (used by the private local
+  // snapshot). When it is present, do not let an auto-discovered dev service
+  // binding silently route the request to a different worker.
+  if (runtimeEnv?.API && !apiBaseUrl) {
     try {
       const serviceResponse = await runtimeEnv.API.fetch(targetUrl.toString(), init);
       await logUpstreamFailure(serviceResponse);

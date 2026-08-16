@@ -2,7 +2,9 @@ import type {
   MemoryQualityAssessment,
   MemoryQualityDecision,
   MemoryQualityInput,
-  MemoryQualityOptions
+  MemoryQualityOptions,
+  MemoryUsefulnessAssessmentV1,
+  MemoryUsefulnessInputV1
 } from "./memory-quality";
 
 export function collapseWhitespace(value: unknown): string;
@@ -18,3 +20,4 @@ export function classifyMemoryQuality(
   options?: MemoryQualityOptions
 ): MemoryQualityDecision;
 export function isLowSignalMemory(input: MemoryQualityInput, options?: MemoryQualityOptions): boolean;
+export function assessMemoryUsefulnessV1(input: MemoryUsefulnessInputV1): MemoryUsefulnessAssessmentV1;

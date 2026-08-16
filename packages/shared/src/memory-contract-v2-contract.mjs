@@ -12,6 +12,10 @@ import { MEMORY_CONTRACT_V2_REASON_CODE_DESCRIPTIONS } from "./memory-contract-v
 // being regenerated, so adapters cannot silently drift from the shared schema.
 export const MEMORY_CONTRACT_V2_SCHEMA_SOURCE_HASH =
   "sha256:453779956bdab2bace666f49dba63db0e077a822af5363ae3bc8ed5749e5d691";
+export const MEMORY_CONTRACT_V2_REASON_CODES_SOURCE_HASH =
+  "sha256:431a804af352bb2202724c04b3c65231ff805fac4a285fbab397c1744ef79de8";
+export const MEMORY_INGESTION_REGRESSION_V3_FIXTURE_HASH =
+  "sha256:87f594176036af10937df0b709c27663b067bf6124693213aa821b1e22da5d15";
 
 export const MEMORY_CONTRACT_V2_JUDGE_PROFILES = Object.freeze([
   Object.freeze({
@@ -55,6 +59,7 @@ export const MEMORY_CONTRACT_V2_CONTRACT_MANIFEST = Object.freeze({
   prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
   schema_source_hash: MEMORY_CONTRACT_V2_SCHEMA_SOURCE_HASH,
   reason_codes_hash: MEMORY_CONTRACT_V2_REASON_CODES_HASH,
+  ingestion_regression_fixture_hash: MEMORY_INGESTION_REGRESSION_V3_FIXTURE_HASH,
   verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
   judge_profiles: MEMORY_CONTRACT_V2_JUDGE_PROFILES.map(({ id, model_family, instruction }) => ({
     id,
@@ -63,6 +68,5 @@ export const MEMORY_CONTRACT_V2_CONTRACT_MANIFEST = Object.freeze({
   }))
 });
 
-export const MEMORY_CONTRACT_V2_CONTRACT_HASH = `sha256:${createHash("sha256")
-  .update(stableJson(MEMORY_CONTRACT_V2_CONTRACT_MANIFEST), "utf8")
-  .digest("hex")}`;
+export const MEMORY_CONTRACT_V2_CONTRACT_HASH =
+  "sha256:2197ecf3ce9812f9691568545279a18b51a29432f3ab7d72897f1e318cf11e6d";

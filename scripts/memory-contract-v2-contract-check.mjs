@@ -10,6 +10,8 @@ import {
   MEMORY_CONTRACT_V2_JUDGE_PROFILES,
   MEMORY_CONTRACT_V2_PROMPT_HASH,
   MEMORY_CONTRACT_V2_REASON_CODES_HASH,
+  MEMORY_CONTRACT_V2_REASON_CODES_SOURCE_HASH,
+  MEMORY_INGESTION_REGRESSION_V3_FIXTURE_HASH,
   MEMORY_CONTRACT_V2_SCHEMA_SOURCE_HASH
 } from "../packages/shared/src/memory-contract-v2-contract.mjs";
 import { MEMORY_CONTRACT_V2_REASON_CODE_DESCRIPTIONS } from "../packages/shared/src/memory-contract-v2-reason-codes.mjs";
@@ -31,9 +33,11 @@ function stableJson(value) {
 export async function checkMemoryContractV2() {
   const schemaUrl = new URL("../packages/shared/schemas/memory_contract_v2.schema.json", import.meta.url);
   const schemaText = await readFile(schemaUrl, "utf8");
+  const fixtureText = await readFile(new URL("../packages/shared/test/fixtures/memory-ingestion-regression-v3.json", import.meta.url), "utf8");
   const schemaHash = hash(schemaText);
   const promptHash = hash(MEMORY_CONTRACT_V2_PROMPT);
   const reasonCodesHash = hash(stableJson(MEMORY_CONTRACT_V2_REASON_CODE_DESCRIPTIONS));
+  const fixtureHash = hash(fixtureText);
   const contractHash = hash(stableJson(MEMORY_CONTRACT_V2_CONTRACT_MANIFEST));
   const profileIds = MEMORY_CONTRACT_V2_JUDGE_PROFILES.map((profile) => profile.id);
   const uniqueProfileIds = new Set(profileIds);
@@ -42,7 +46,10 @@ export async function checkMemoryContractV2() {
     schema_source_hash: schemaHash === MEMORY_CONTRACT_V2_SCHEMA_SOURCE_HASH,
     prompt_hash: promptHash === MEMORY_CONTRACT_V2_PROMPT_HASH,
     reason_codes_hash: reasonCodesHash === MEMORY_CONTRACT_V2_REASON_CODES_HASH &&
+      reasonCodesHash === MEMORY_CONTRACT_V2_REASON_CODES_SOURCE_HASH &&
       MEMORY_CONTRACT_V2_CONTRACT_MANIFEST.reason_codes_hash === reasonCodesHash,
+    ingestion_regression_fixture_hash: fixtureHash === MEMORY_INGESTION_REGRESSION_V3_FIXTURE_HASH &&
+      MEMORY_CONTRACT_V2_CONTRACT_MANIFEST.ingestion_regression_fixture_hash === fixtureHash,
     contract_hash: contractHash === MEMORY_CONTRACT_V2_CONTRACT_HASH,
     judge_profiles_unique: uniqueProfileIds.size === profileIds.length,
     judge_profiles_independent_families: familyCount >= 2,
@@ -52,7 +59,8 @@ export async function checkMemoryContractV2() {
     schema_source_hash: schemaHash,
     prompt_hash: promptHash,
     reason_codes_hash: reasonCodesHash,
-    contract_hash: contractHash
+    contract_hash: contractHash,
+    ingestion_regression_fixture_hash: fixtureHash
   } };
 }
 

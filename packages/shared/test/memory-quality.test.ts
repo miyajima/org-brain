@@ -1,11 +1,62 @@
 import { describe, expect, it } from "vitest";
-import { assessMemoryUsefulness, classifyMemoryQuality } from "../src/memory-quality";
+import { assessMemoryUsefulness, assessMemoryUsefulnessV1, classifyMemoryQuality } from "../src/memory-quality";
 import {
   assessMemoryUsefulness as assessMemoryUsefulnessRuntime,
   classifyMemoryQuality as classifyMemoryQualityRuntime
 } from "../src/memory-quality-runtime.mjs";
 
 describe("memory quality assessment", () => {
+  it("requires every usefulness dimension plus observed verified AI consensus for active routing", () => {
+    const assessed = assessMemoryUsefulnessV1({
+      summary: "Use the reviewed importer plan.",
+      rationale: "A content-addressed plan makes replays deterministic.",
+      reuse_rule: "Reuse the reviewed plan for the same workspace import boundary.",
+      capture_origin: "observed",
+      verification_state: "verified",
+      verified_at: 1_786_464_000_000,
+      valid_until: 1_800_000_000_000,
+      now: 1_786_464_000_000,
+      ai_certification: "ai_consensus_certified",
+      judge_consensus: { judgments: [
+        { model_family: "family-a", verdict: "pass" },
+        { model_family: "family-b", verdict: "pass" },
+        { model_family: "family-a", verdict: "pass" }
+      ] },
+      evidence: [{ type: "file", ref: "src/importer.mjs" }],
+      learning: {
+        lesson_type: "decision",
+        decision_type: "implementation",
+        question: "Which importer plan should be used?",
+        decision: "Use the reviewed importer plan.",
+        rationale: "A content-addressed plan makes replays deterministic.",
+        alternatives: [{ alternative: "Raw import" }],
+        reuse_rule: "Reuse the reviewed plan for the same workspace import boundary.",
+        applicability: { target_files: ["src/importer.mjs"], components: ["codex-session-import"] },
+        evidence_selectors: [{ type: "file", ref: "src/importer.mjs" }]
+      }
+    });
+
+    expect(assessed.route).toBe("active");
+    expect(Object.values(assessed.quality_dimensions).every((score) => score >= 95)).toBe(true);
+    expect(assessed.hard_violations).toEqual([]);
+  });
+
+  it("excludes sensitive or expired learning and quarantines uncertified durable learning", () => {
+    const base = {
+      summary: "Use the reviewed importer plan.",
+      rationale: "A content-addressed plan makes replays deterministic.",
+      reuse_rule: "Reuse the reviewed plan for the same workspace import boundary.",
+      learning: { conclusion: "Use the reviewed importer plan." }
+    };
+    expect(assessMemoryUsefulnessV1(base).route).toBe("quarantine");
+    const excluded = assessMemoryUsefulnessV1({
+      ...base,
+      summary: "Use api_key=fixture-secret-value for imports."
+    });
+    expect(excluded.route).toBe("excluded");
+    expect(excluded.hard_violations).toContain("credential_detected");
+  });
+
   it("rewrites low-signal completion summaries into project/category/action titles", () => {
     const assessed = assessMemoryUsefulness({
       project_id: "org-brain",

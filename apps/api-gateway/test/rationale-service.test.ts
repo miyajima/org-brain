@@ -35,6 +35,8 @@ type MemoryRecord = {
   rationale?: string | null;
   reuse_rule?: string | null;
   capture_origin?: string | null;
+  capture_route?: string | null;
+  capture_batch_id?: string | null;
   verification_state?: string | null;
   verified_at?: number | null;
   learning_json?: string | null;
@@ -214,10 +216,12 @@ class FakeStatement {
         work_type: (this.args[34] as string | null) ?? null,
         reuse_rule: (this.args[35] as string | null) ?? null,
         capture_origin: (this.args[36] as string | null) ?? null,
-        verification_state: (this.args[37] as string | null) ?? null,
-        verified_at: (this.args[38] as number | null) ?? null,
-        learning_json: (this.args[39] as string | null) ?? null,
-        quality_dimensions_json: (this.args[40] as string | null) ?? null
+        capture_route: (this.args[37] as string | null) ?? null,
+        capture_batch_id: (this.args[38] as string | null) ?? null,
+        verification_state: (this.args[39] as string | null) ?? null,
+        verified_at: (this.args[40] as number | null) ?? null,
+        learning_json: (this.args[41] as string | null) ?? null,
+        quality_dimensions_json: (this.args[42] as string | null) ?? null
       });
       return;
     }
@@ -471,20 +475,26 @@ describe("rationale service", () => {
         reuse_rule: "Require an observed exit code or signed attestation.",
         project_id: "org-brain",
         capture_origin: "observed",
+        ai_certification: "ai_consensus_certified",
+        judge_consensus: { judgments: [
+          { model_family: "family-a", verdict: "pass" },
+          { model_family: "family-b", verdict: "pass" },
+          { model_family: "family-a", verdict: "pass" }
+        ] },
         verification: {
           state: "verified",
           verified_at: 1_700_000_000_500,
           attestation_ref: `sha256:${"f".repeat(64)}`
         },
         learning: {
-          schema_version: 1,
+          schema_version: 2,
           lesson_type: "success",
           kind: "fact",
           trigger: "A task reports command success",
-          conclusion: "Only same-turn command results attest success",
-          rationale: "Final-answer prose is not an execution result",
-          reuse_rule: "Require an observed exit code or signed attestation",
-          outcome: "The verification passed",
+          procedure: "Require a same-turn command result before accepting success.",
+          why_it_worked: "The command result comes from the observed tool event rather than final-answer prose.",
+          observed_outcome: "The verification passed with an observed exit code.",
+          reuse_when: "Apply this rule whenever an agent claims that a command succeeded.",
           applicability: { target_files: [], components: ["memory-learning"] },
           evidence_selectors: [{ type: "command", ref: "vitest evidence" }],
           gaps: []
@@ -496,6 +506,15 @@ describe("rationale service", () => {
     const denied = await captureMemoryWithInferredRationale(env, request);
     expect(denied.results).toEqual([
       expect.objectContaining({ status: "skipped", reason_code: "memory_attestation_required" })
+    ]);
+    expect(db.memories).toHaveLength(0);
+
+    const uncertified = structuredClone(request);
+    delete (uncertified.items[0] as Partial<typeof request.items[0]>).ai_certification;
+    delete (uncertified.items[0] as Partial<typeof request.items[0]>).judge_consensus;
+    const quarantined = await captureMemoryWithInferredRationale(env, uncertified, { canAttest: true });
+    expect(quarantined.results).toEqual([
+      expect.objectContaining({ status: "skipped", reason_code: "memory_usefulness_quarantined" })
     ]);
     expect(db.memories).toHaveLength(0);
 

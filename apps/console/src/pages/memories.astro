@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
+import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
 
 type MemoryKind = "episodic" | "semantic" | "org_knowledge" | "fact" | "decision" | "constraint" | "pitfall" | "preference";
 
@@ -31,6 +32,30 @@ type MemoryRow = {
   consumer_count: number;
   net_saved_tokens: number;
   injected_tokens: number;
+  capture_origin: "observed" | "synthetic" | "repair" | "legacy";
+  capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
+  capture_batch_id: string | null;
+  verification_state: "verified" | "partial" | "unverified" | "rejected";
+};
+
+type QualityRun = {
+  id: string;
+  corpus_id: string;
+  status: string;
+  input_source: "synthetic" | "real";
+  capture_routes: string[];
+  hard_violation_count: number;
+  started_at: number;
+  completed_at: number | null;
+  counts?: { sessions?: number; projects?: number; cases?: number };
+  privacy?: { raw_transcript_persisted?: boolean; reasoning_persisted?: boolean; absolute_path_persisted?: boolean; credential_value_persisted?: boolean };
+  insufficiency_reason?: string;
+};
+type QualityRunList = { items: QualityRun[]; meta: { returned_count: number } };
+type QualityRunDetail = {
+  run: QualityRun;
+  dimensions: Array<{ axis: string; cohort: string; numerator: number; denominator: number; point_estimate: number | null; wilson_lower: number | null; hard_violation_count: number }>;
+  cases: Array<{ id?: string; case_hash: string; project_hash?: string | null; split?: string; lesson_type?: string | null; capture_route?: string; expected_route?: string; actual_route: string; reason_codes: string[]; hard_violation_count: number; parity_mismatch: boolean; memory_id?: string | null; summary?: string | null }>;
 };
 
 type MemorySearchResult = {
@@ -141,6 +166,8 @@ type MemoryDetailResponse = {
     injected_tokens: number;
     reuse_rule: string | null;
     capture_origin: "observed" | "synthetic" | "repair" | "legacy";
+    capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
+    capture_batch_id: string | null;
     verification_state: "verified" | "partial" | "unverified" | "rejected";
     verified_at: number | null;
     learning: Record<string, unknown> | null;
@@ -230,6 +257,8 @@ const url = Astro.url;
 const params = url.searchParams;
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
+const qualityUiMode = await resolveMemoryQualityUiMode(Astro.locals);
+const qualityViewEnabled = qualityUiMode !== "off";
 
 const tenantId = params.get("tenant_id")?.trim() || "default";
 const projectId = params.get("project_id")?.trim() || "";
@@ -254,8 +283,8 @@ const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.g
 const query = params.get("q")?.trim() || "";
 const selectedId = params.get("selected")?.trim() || "";
 const mapFallback = params.get("map_fallback") === "1";
-const view = ["search", "profile", "maintenance"].includes(params.get("view") ?? "")
-  ? (params.get("view") as "search" | "profile" | "maintenance")
+const view = ["search", "profile", "maintenance", ...(qualityViewEnabled ? ["quality"] : [])].includes(params.get("view") ?? "")
+  ? (params.get("view") as "search" | "profile" | "maintenance" | "quality")
   : "search";
 const rewriteQuery = params.get("rewrite_query") !== "0";
 const searchMode = params.get("search_mode") === "memories" ? "memories" : "hybrid";
@@ -269,6 +298,13 @@ const reasonText = params.get("reason_text")?.trim() || "";
 const pageSize = Math.min(50, Math.max(10, Number.parseInt(params.get("page_size") ?? "20", 10) || 20));
 const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
 const offset = (page - 1) * pageSize;
+const qualityRunId = params.get("run_id")?.trim() || "";
+const qualityRoute = params.get("route")?.trim() || "";
+const qualityLessonType = params.get("lesson_type")?.trim() || "";
+const qualityActualRoute = params.get("actual_route")?.trim() || "";
+const qualityIssue = params.get("issue")?.trim() || "";
+const qualityProjectHash = params.get("project_hash")?.trim() || "";
+const qualityParityMismatch = params.get("parity_mismatch")?.trim() || "";
 
 function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -545,6 +581,16 @@ const profilePayload = await fetchApi<ProfileResponse>("/api/v1/memories/profile
   })
 });
 
+const qualityRunsPayload = qualityViewEnabled
+  ? await fetchApi<QualityRunList>(`/api/v1/memory-quality/runs?tenant_id=${encodeURIComponent(tenantId)}&limit=20`)
+  : null;
+const selectedQualityRunId = qualityRunId || (qualityRunsPayload?.ok ? qualityRunsPayload.data.items[0]?.id ?? "" : "");
+const qualityRunPayload = qualityViewEnabled && selectedQualityRunId
+  ? await fetchApi<QualityRunDetail>(`/api/v1/memory-quality/runs/${encodeURIComponent(selectedQualityRunId)}?tenant_id=${encodeURIComponent(tenantId)}&route=${encodeURIComponent(qualityRoute)}&lesson_type=${encodeURIComponent(qualityLessonType)}&actual_route=${encodeURIComponent(qualityActualRoute)}&issue=${encodeURIComponent(qualityIssue)}&project_hash=${encodeURIComponent(qualityProjectHash)}&parity_mismatch=${encodeURIComponent(qualityParityMismatch)}`)
+  : null;
+const qualityRuns = qualityRunsPayload?.ok ? qualityRunsPayload.data.items : [];
+const qualityDetail = qualityRunPayload?.ok ? qualityRunPayload.data : null;
+
 const listPage = listPayload?.ok ? listPayload.data : null;
 const corpusItems = listPage?.items ?? [];
 const searchResults = searchPayload?.ok ? searchPayload.data.results : [];
@@ -622,6 +668,8 @@ const loadErrors = [...new Set([
   profilePayload?.ok === false ? profilePayload.error?.message ?? "Memory profile could not be loaded" : null,
   detailPayload?.ok === false ? detailPayload.error?.message ?? "Memory detail could not be loaded" : null
   , analyticsPayload?.ok === false ? analyticsPayload.error?.message ?? "Memory analytics could not be loaded" : null
+  , qualityRunsPayload?.ok === false ? qualityRunsPayload.error?.message ?? "Quality runs could not be loaded" : null
+  , qualityRunPayload?.ok === false ? qualityRunPayload.error?.message ?? "Quality run could not be loaded" : null
 ].filter(Boolean) as string[])];
 
 const prevPageHref = listPage?.meta.has_prev ? makeHref({ page: String(page - 1), selected: "" }) : null;
@@ -629,6 +677,7 @@ const nextPageHref = listPage?.meta.has_next ? makeHref({ page: String(page + 1)
 const searchTabHref = makeHref({ view: "search", page: String(page) });
 const profileTabHref = makeHref({ view: "profile", selected: "" });
 const maintenanceTabHref = makeHref({ view: "maintenance", page: String(page), selected: "" });
+const qualityTabHref = makeHref({ view: "quality", page: "1", selected: "" });
 const activeTabHref = makeHref({ lifecycle: "active", page: "1", selected: "" });
 const reviewTabHref = makeHref({ lifecycle: "review", page: "1", selected: "" });
 const trashTabHref = makeHref({ lifecycle: "trash", page: "1", selected: "" });
@@ -665,6 +714,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
           <a class={tabClass(view === "search")} href={searchTabHref}>Search</a>
           <a class={tabClass(view === "profile")} href={profileTabHref}>Profile</a>
           <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>Maintenance</a>
+          {qualityViewEnabled && <a class={tabClass(view === "quality")} href={qualityTabHref}>Quality {qualityUiMode === "beta" ? "β" : ""}</a>}
         </div>
         <div class="flex flex-wrap gap-2" aria-label="Memory scope">
           <a class={tabClass(scope === "mine")} href={makeHref({ scope: "mine", owner_principal: "", lifecycle: lifecycle === "trash" ? "active" : lifecycle, page: "1", selected: "" })}>自分のメモリ</a>
@@ -869,7 +919,49 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_22rem]">
       <section class="space-y-5">
         <div class="card memory-results-card">
-          {view === "search" ? (
+          {view === "quality" ? (
+            <div class="space-y-5" data-quality-view data-readonly="true">
+              <div class="flex flex-wrap items-end justify-between gap-4">
+                <div><p class="surface-label">Read-only quality gate</p><h2 class="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Ingestion quality runs</h2></div>
+                <span class="surface-chip">{qualityDetail?.run.status ?? "no run"}</span>
+              </div>
+              <form method="get" action="/memories" class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <input type="hidden" name="view" value="quality" /><input type="hidden" name="tenant_id" value={tenantId} />
+                <label><span class="surface-label">Run</span><select name="run_id">{qualityRuns.map((run) => <option value={run.id} selected={run.id === selectedQualityRunId}>{run.id} · {run.input_source}</option>)}</select></label>
+                <label><span class="surface-label">Capture route</span><select name="route"><option value="">all</option>{["realtime_hook", "initial_import", "manual", "repair", "legacy"].map((value) => <option value={value} selected={qualityRoute === value}>{value}</option>)}</select></label>
+                <label><span class="surface-label">Lesson type</span><select name="lesson_type"><option value="">all</option>{["success", "decision", "failure"].map((value) => <option value={value} selected={qualityLessonType === value}>{value}</option>)}</select></label>
+                <label><span class="surface-label">Actual route</span><select name="actual_route"><option value="">all</option>{["active", "quarantine", "excluded"].map((value) => <option value={value} selected={qualityActualRoute === value}>{value}</option>)}</select></label>
+                <label><span class="surface-label">Issue</span><input name="issue" value={qualityIssue} placeholder="reason code" /></label>
+                <label><span class="surface-label">Project hash</span><input name="project_hash" value={qualityProjectHash} placeholder="hashed project id" /></label>
+                <label><span class="surface-label">Parity</span><select name="parity_mismatch"><option value="">all</option><option value="1" selected={qualityParityMismatch === "1"}>mismatch only</option><option value="0" selected={qualityParityMismatch === "0"}>matching only</option></select></label>
+                <button type="submit">Apply read-only filters</button>
+              </form>
+              {qualityDetail ? (
+                <>
+                  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-quality-run-summary>
+                    <div class="surface-soft-card"><span class="surface-label">Sessions</span><strong class="mt-3 block text-3xl text-white">{qualityDetail.run.counts?.sessions ?? "—"}</strong></div>
+                    <div class="surface-soft-card"><span class="surface-label">Projects</span><strong class="mt-3 block text-3xl text-white">{qualityDetail.run.counts?.projects ?? "—"}</strong></div>
+                    <div class="surface-soft-card"><span class="surface-label">Cases</span><strong class="mt-3 block text-3xl text-white">{qualityDetail.run.counts?.cases ?? qualityDetail.cases.length}</strong></div>
+                    <div class="surface-soft-card"><span class="surface-label">Gate reason</span><strong class="mt-3 block text-base text-white">{qualityDetail.run.insufficiency_reason || "thresholds evaluated"}</strong></div>
+                  </div>
+                  {qualityDetail.run.privacy && <div class="surface-soft-card text-sm text-zinc-300" data-quality-privacy>
+                    Private bundle: transcript {qualityDetail.run.privacy.raw_transcript_persisted ? "persisted" : "not persisted"} · reasoning {qualityDetail.run.privacy.reasoning_persisted ? "persisted" : "not persisted"} · absolute path {qualityDetail.run.privacy.absolute_path_persisted ? "persisted" : "not persisted"} · credential value {qualityDetail.run.privacy.credential_value_persisted ? "persisted" : "not persisted"}
+                  </div>}
+                  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {qualityDetail.dimensions.map((item) => <div class="surface-soft-card" data-quality-axis={item.axis}><span class="surface-label">{item.axis}</span><strong class="mt-3 block text-3xl text-white">{item.point_estimate == null ? "—" : `${(item.point_estimate * 100).toFixed(1)}%`}</strong><p class="mt-2 text-xs text-zinc-400">Wilson lower {item.wilson_lower == null ? "—" : `${(item.wilson_lower * 100).toFixed(1)}%`} · hard {item.hard_violation_count}</p></div>)}
+                  </div>
+                  <div class="space-y-3">
+                    {qualityDetail.cases.length > 0 ? qualityDetail.cases.map((item) => <article class={rowCardClass(false)} data-quality-case data-route={item.actual_route} data-parity-mismatch={String(item.parity_mismatch)}>
+                      <div class="memory-row-meta"><span>{item.capture_route || "redacted"}</span><span>{item.lesson_type || "untyped"}</span><span>{item.split || "redacted"}</span><span>{item.project_hash || "no-project"}</span></div>
+                      <h3 class="mt-2 text-lg font-semibold text-white">{item.summary || item.case_hash}</h3>
+                      <div class="mt-3 flex flex-wrap gap-2"><span class="surface-chip">expected {item.expected_route}</span><span class="surface-chip">actual {item.actual_route}</span>{item.parity_mismatch && <span class="surface-chip">parity mismatch</span>}{item.hard_violation_count > 0 && <span class="surface-chip">hard {item.hard_violation_count}</span>}{item.reason_codes.map((reason) => <span class="surface-chip">{reason}</span>)}</div>
+                      {item.memory_id && <a class="mt-4 inline-flex text-sm text-sky-200" href={makeHref({ view: "search", selected: item.memory_id })}>Open authorized memory detail →</a>}
+                    </article>) : <div class="surface-soft-card"><strong class="text-white">No quality cases.</strong><p class="mt-2 text-sm text-zinc-400">条件を変えるか、quality runを実行してください。</p></div>}
+                  </div>
+                </>
+              ) : <div class="surface-soft-card"><strong class="text-white">No quality runs.</strong><p class="mt-2 text-sm text-zinc-400">privateまたはsynthetic runを作成すると、ここに7軸とroute差分が表示されます。</p></div>}
+            </div>
+          ) : view === "search" ? (
             <div class="space-y-6">
               {!query && searchLandingRows.length > 0 && (
                 <section class="space-y-4">
@@ -977,6 +1069,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                                 <span>{item.source}</span>
                                 <span>{item.project_id || "no-project"}</span>
                                 <span>{item.owner_principal || "owner-unassigned"}</span>
+                                <span>{item.capture_origin}</span>
+                                <span>{item.capture_route}</span>
+                                <span>{item.verification_state}</span>
                                 <span>{formatDate(item.created_at)}</span>
                               </div>
                               <h3 class="memory-row-title text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
@@ -1283,7 +1378,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                       <p class="surface-label">Learning provenance</p>
                       <div class="mt-3 flex flex-wrap gap-2">
                         <span class="surface-chip">{memoryDetail.memory.capture_origin}</span>
-                        <span class="surface-chip">{memoryDetail.memory.verification_state === "verified" ? "Verified" : "Review"}</span>
+                        <span class="surface-chip">{memoryDetail.memory.capture_route}</span>
+                        {memoryDetail.memory.capture_batch_id && <span class="surface-chip">batch {memoryDetail.memory.capture_batch_id}</span>}
+                        <span class="surface-chip">{memoryDetail.memory.verification_state === "verified" ? "Verified" : memoryDetail.memory.verification_state === "rejected" ? "Excluded" : memoryDetail.memory.verification_state === "partial" ? "Insufficient evidence" : "Quarantine"}</span>
                         {memoryDetail.memory.verified_at && <span class="surface-chip">{formatDate(memoryDetail.memory.verified_at)}</span>}
                       </div>
                       {memoryDetail.memory.learning && (

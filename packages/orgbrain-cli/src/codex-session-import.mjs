@@ -250,6 +250,7 @@ function normalizeObservedRecord(record, occurredAt, externalKey) {
     createdAt: occurredAt,
     evidence,
     verification: record.verification ? { ...record.verification, verified_at: occurredAt } : record.verification,
+    captureRoute: "initial_import",
     tags: [...new Set([...(record.tags ?? []), "codex-initial-import-v2"])]
   };
 }
@@ -394,6 +395,7 @@ async function routeTurn({ meta, rows, index, context }) {
     for (const record of fallback.records.slice(0, 3)) {
       const item = captureItemPayload({
         ...record,
+        captureRoute: "initial_import",
         tags: [...new Set([...(record.tags ?? []), "codex-initial-import-v2"])]
       });
       const semanticHash = semanticCandidateHash(item);
@@ -573,7 +575,11 @@ export async function buildCodexSessionImportPlan(options = {}) {
   batches.sort((left, right) => left.occurred_at - right.occurred_at || left.turn_hash.localeCompare(right.turn_hash));
   const importBatchId = hash(stableJson({ target: context.target_fingerprint, sources }));
   for (const batch of batches) {
-    for (const item of batch.active) item.tags = [...new Set([...(item.tags ?? []), `import-batch:${importBatchId.slice(0, 24)}`])];
+    for (const item of batch.active) {
+      item.tags = [...new Set([...(item.tags ?? []), `import-batch:${importBatchId.slice(0, 24)}`])];
+      item.capture_route = "initial_import";
+      item.capture_batch_id = importBatchId;
+    }
     for (const candidate of (batch.quarantine ?? batch.review ?? [])) candidate.import_batch_hash = importBatchId;
   }
   const planCore = {
@@ -619,6 +625,8 @@ function planRecordForLocal(item, category) {
     ...item,
     businessCategory: category,
     captureOrigin: item.capture_origin ?? "observed",
+    captureRoute: item.capture_route ?? "initial_import",
+    captureBatchId: item.capture_batch_id ?? null,
     verification: item.verification ?? {
       state: item.verification_state ?? "verified",
       verified_at: item.verified_at ?? null

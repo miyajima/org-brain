@@ -175,6 +175,8 @@ const MEMORY_COLUMNS = {
   deleted_by_principal: "TEXT",
   delete_reason: "TEXT",
   capture_origin: "TEXT NOT NULL DEFAULT 'legacy'",
+  capture_route: "TEXT NOT NULL DEFAULT 'legacy'",
+  capture_batch_id: "TEXT",
   verification_state: "TEXT NOT NULL DEFAULT 'unverified'",
   verified_at: "INTEGER",
   learning_json: "TEXT",
@@ -277,6 +279,8 @@ function memoryFromRow(row) {
     deleted_by_principal: row.deleted_by_principal ?? null,
     delete_reason: row.delete_reason ?? null,
     capture_origin: row.capture_origin || "legacy",
+    capture_route: row.capture_route || "legacy",
+    capture_batch_id: row.capture_batch_id ?? null,
     verification_state: row.verification_state || "unverified",
     verified_at: row.verified_at,
     learning: parseJsonObject(row.learning_json),
@@ -405,6 +409,8 @@ function createCanonicalTables(db) {
       deleted_by_principal TEXT,
       delete_reason TEXT,
       capture_origin TEXT NOT NULL DEFAULT 'legacy',
+      capture_route TEXT NOT NULL DEFAULT 'legacy',
+      capture_batch_id TEXT,
       verification_state TEXT NOT NULL DEFAULT 'unverified',
       verified_at INTEGER,
       learning_json TEXT,
@@ -1108,6 +1114,7 @@ function upgradeLegacyMemories(db) {
          conflicts_json = COALESCE(NULLIF(conflicts_json, ''), '[]'),
          permissions_json = COALESCE(NULLIF(permissions_json, ''), '[]'),
          capture_origin = COALESCE(NULLIF(capture_origin, ''), 'legacy'),
+         capture_route = COALESCE(NULLIF(capture_route, ''), 'legacy'),
          verification_state = COALESCE(NULLIF(verification_state, ''), 'unverified'),
          created_at = CASE WHEN created_at = 0 THEN ? ELSE created_at END,
          updated_at = CASE WHEN updated_at = 0 THEN created_at ELSE updated_at END,
@@ -1698,6 +1705,8 @@ function addIndexes(db) {
       ON memories(tenant_id, capture_origin, verification_state, lifecycle_state, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memories_learning_scope
       ON memories(tenant_id, project_id, business_category_id, work_type, verification_state, valid_until);
+    CREATE INDEX IF NOT EXISTS idx_memories_quality_route
+      ON memories(tenant_id, project_id, capture_route, verification_state, lifecycle_state, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_versions_created_v2
       ON memory_versions(tenant_id, memory_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_edges_from_v2
@@ -4530,6 +4539,9 @@ export class LocalMemoryStore {
     const captureOrigin = ["observed", "synthetic", "repair", "legacy"].includes(input.capture_origin)
       ? input.capture_origin
       : fallback?.capture_origin ?? "legacy";
+    const captureRoute = ["realtime_hook", "initial_import", "manual", "repair", "legacy"].includes(input.capture_route)
+      ? input.capture_route
+      : fallback?.capture_route ?? "legacy";
     const verificationState = ["verified", "partial", "unverified", "rejected"].includes(input.verification_state)
       ? input.verification_state
       : fallback?.verification_state ?? "unverified";
@@ -4589,6 +4601,8 @@ export class LocalMemoryStore {
       expires_at: finiteNumber(input.expires_at) ?? finiteNumber(input.valid_until),
       revised_at: finiteNumber(input.revised_at) || now
       , capture_origin: captureOrigin
+      , capture_route: captureRoute
+      , capture_batch_id: nullableString(input.capture_batch_id, 128) ?? fallback?.capture_batch_id ?? null
       , verification_state: verificationState
       , verified_at: verificationState === "verified" ? verifiedAt : null
       , learning
@@ -4604,7 +4618,7 @@ export class LocalMemoryStore {
       "content_hash", "current_version", "rationale", "evidence_json", "conflicts_json", "permissions_json",
       "canonical_key", "root_memory_id", "last_accessed_at", "suppressed_at", "consolidated_at", "promoted_at",
       "expires_at", "revised_at", "reuse_rule", "capture_origin", "verification_state", "verified_at",
-      "learning_json", "quality_dimensions_json"
+      "capture_route", "capture_batch_id", "learning_json", "quality_dimensions_json"
     ];
     const values = {
       ...record,

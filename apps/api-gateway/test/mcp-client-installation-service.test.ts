@@ -22,7 +22,7 @@ const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as {
   DatabaseSync: new (path: string) => SqliteDatabase;
 };
 const { readFileSync } = runtime.getBuiltinModule("node:fs") as {
-  readFileSync: (path: string, encoding: string) => string;
+  readFileSync: (path: string | URL, encoding: string) => string;
 };
 
 class D1StatementAdapter {
@@ -40,7 +40,7 @@ class D1StatementAdapter {
 function testEnv(): Env {
   const database = new DatabaseSync(":memory:");
   database.exec(readFileSync(
-    `${runtime.cwd()}/../../migrations/0029_mcp_client_installations.sql`,
+    new URL("../../../migrations/0029_mcp_client_installations.sql", import.meta.url),
     "utf8"
   ));
   database.exec(`

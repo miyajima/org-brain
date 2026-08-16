@@ -65,9 +65,9 @@ describe("MCP routing under Hono mount path stripping", () => {
         "cf-access-client-secret": "secret-1",
         "content-type": "application/json",
         "mcp-protocol-version": "2026-07-28",
-        "mcp-method": "server/discover"
+        "mcp-method": "test/handler"
       },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "server/discover", params: {} })
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "test/handler", params: {} })
     });
 
     const env = {

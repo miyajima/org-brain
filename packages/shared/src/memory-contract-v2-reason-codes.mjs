@@ -35,7 +35,19 @@ export const MEMORY_CONTRACT_V2_REASON_CODE_DESCRIPTIONS = Object.freeze({
   same_decision_key_reask: "The same task decision key was asked again.",
   cross_tenant_or_scope_injection: "Context was requested outside the tenant or project scope.",
   credential_detected: "A credential or secret was detected.",
-  sensitive_default_deny: "PII or sensitive-domain content was denied by policy."
+  sensitive_default_deny: "PII or sensitive-domain content was denied by policy.",
+  pii_detected: "Personally identifiable information was detected.",
+  absolute_home_path_detected: "An absolute home-directory path was detected.",
+  raw_transcript_envelope_detected: "A raw transcript or reasoning envelope was detected.",
+  final_answer_self_attestation: "A final answer attempted to attest its own command result.",
+  expired_memory: "The candidate is already outside its validity window.",
+  unresolved_conflict: "The candidate conflicts with unresolved current evidence.",
+  source_drift: "A referenced artifact no longer matches its recorded content hash.",
+  duplicate_memory: "An equivalent active memory already exists in the same scope.",
+  non_atomic_memory: "The candidate contains more than one independently reusable conclusion.",
+  quality_dimension_below_95: "At least one independent usefulness dimension is below 95.",
+  observed_verified_required: "Active routing requires observed and verified evidence.",
+  ai_consensus_required: "Active routing requires unanimous certified AI judgment."
 });
 
 export const MEMORY_CONTRACT_V2_REASON_CODES = Object.freeze(Object.keys(MEMORY_CONTRACT_V2_REASON_CODE_DESCRIPTIONS));

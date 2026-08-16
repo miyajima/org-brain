@@ -66,7 +66,7 @@ Usage:
   orgbrain autonomy <status|explain|configure|freeze|rollback|run> [--workspace <path>] [--scope workspace|tenant] [--profile <profile>] [--mode <mode>] [--run <run-id>] [--evidence <json>] [--state-dir <path>] [--state-file <path>] [--judge-runner <module>] [--quarantine-runner <module>] [--qualification-runner <module>] [--scan-sessions] [--sessions-root <path>] [--dry-run] [--execute]
   orgbrain cloud doctor [--root <checkout>] [--live]
   orgbrain cloud provision [--root <checkout>] [--with-vectorize] [--execute]
-  orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--url <https-url>] [--maintenance daily] [--scope user|project] [--execute]
+  orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--url <https-url>] [--maintenance daily|off] [--cli-path <local-memory.mjs>] [--scope user|project] [--execute] [--approve-hooks]
 
 Compatibility aliases:
   orgbrain upsert | search | list | export-markdown
@@ -96,7 +96,7 @@ function parseArgs(argv) {
       continue;
     }
     const [name, inline] = arg.split("=", 2);
-    if (["--json", "--help", "--force", "--live", "--execute", "--with-vectorize", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
+    if (["--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
       flags.add(name);
       continue;
     }

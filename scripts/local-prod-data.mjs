@@ -26,10 +26,12 @@ const DATA_TABLES = [
   "knowledge_assertion_evidence", "knowledge_assertions", "knowledge_docs", "knowledge_links",
   "knowledge_resource_locations", "knowledge_resource_versions", "knowledge_resources",
   "measurement_comparisons", "measurement_runs", "measurement_variants",
+  "mcp_client_installations",
   "memories", "memory_confirmations", "memory_deletions", "memory_edges",
   "memory_effect_attributions", "memory_effect_daily_metrics", "memory_effect_events",
   "memory_entities", "memory_failure_patterns", "memory_impact_daily_metrics",
   "memory_impact_events", "memory_retrieval_units", "memory_retrieval_units_v4",
+  "memory_quality_cases", "memory_quality_measurements", "memory_quality_runs",
   "memory_usage_events", "memory_usage_items", "memory_versions", "ops_alert_state",
   "organizations", "principal_owner_mappings", "principal_role_assignments", "resource_acl", "retention_deletion_queue",
   "retention_policies", "retrieval_daily_metrics", "retrieval_evaluation_events",
@@ -148,7 +150,9 @@ async function backfillLocalOwnership() {
     `UPDATE memories
      SET owner_principal = COALESCE(owner_principal, '${escapedOwner}'),
          created_by_principal = COALESCE(created_by_principal, '${escapedOwner}')
-     WHERE owner_principal IS NULL OR created_by_principal IS NULL`
+     WHERE owner_principal IS NULL OR created_by_principal IS NULL;
+     UPDATE mcp_client_installations
+     SET owner_principal = '${escapedOwner}'`
   ), { capture: true });
 }
 
@@ -190,7 +194,9 @@ async function exportProductionDump() {
   const args = ["d1", "export", "open-brain", "--remote", "--config", REMOTE_CONFIG, "--no-schema"];
   for (const table of DATA_TABLES) args.push("--table", table);
   args.push("--output", output);
-  await runWrangler(args);
+  // Wrangler prints a one-hour signed D1 download URL during export. Capture
+  // it instead of forwarding it to terminal or CI logs.
+  await runWrangler(args, { capture: true });
   await chmod(output, 0o600);
   const file = await stat(output);
   const digest = await new Promise((resolvePromise, reject) => {

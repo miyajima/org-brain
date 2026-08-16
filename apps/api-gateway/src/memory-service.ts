@@ -177,6 +177,8 @@ type MemoryRow = {
   injected_tokens?: number | null;
   reuse_rule?: string | null;
   capture_origin?: string | null;
+  capture_route?: string | null;
+  capture_batch_id?: string | null;
   verification_state?: string | null;
   verified_at?: number | null;
   learning_json?: string | null;
@@ -403,6 +405,8 @@ export type MemoryDetail = {
     injected_tokens: number;
     reuse_rule: string | null;
     capture_origin: string;
+    capture_route: string;
+    capture_batch_id: string | null;
     verification_state: string;
     verified_at: number | null;
     learning: Record<string, unknown> | null;
@@ -1018,7 +1022,9 @@ async function searchStableRetrievalUnits(
        FROM memories WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})
          AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
          AND (valid_from IS NULL OR valid_from <= ?)
-         AND (valid_until IS NULL OR valid_until > ?)`
+         AND (valid_until IS NULL OR valid_until > ?)
+         AND (tags_json IS NULL OR tags_json NOT LIKE '%"source-drift"%')
+         AND (conflicts_json IS NULL OR conflicts_json NOT LIKE '%source_drift%')`
     ).bind(request.tenantId, ...ids, request.at, request.at).all<MemoryRow>()).results
     : [];
   const byId = new Map(memoryRows.map((row) => [row.id, row]));
@@ -1301,7 +1307,7 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
             (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
              JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
-            reuse_rule
+            reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state
      FROM memories
      WHERE tenant_id = ?${filter.sql}
      ORDER BY ${orderBy}
@@ -1339,6 +1345,10 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
       consumer_count: Number(row.consumer_count ?? 0),
       net_saved_tokens: Number(row.net_saved_tokens ?? 0),
       injected_tokens: Number(row.injected_tokens ?? 0)
+      , capture_origin: row.capture_origin ?? "legacy"
+      , capture_route: row.capture_route ?? "legacy"
+      , capture_batch_id: row.capture_batch_id ?? null
+      , verification_state: row.verification_state ?? "unverified"
   }));
 }
 
@@ -2400,7 +2410,7 @@ export async function getMemoryDetails(
             (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
              JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
-            reuse_rule, capture_origin, verification_state, verified_at, learning_json, quality_dimensions_json
+            reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
@@ -2537,6 +2547,8 @@ export async function getMemoryDetails(
           injected_tokens: Number(memory.injected_tokens ?? 0),
           reuse_rule: memory.reuse_rule ?? null,
           capture_origin: memory.capture_origin ?? "legacy",
+          capture_route: memory.capture_route ?? "legacy",
+          capture_batch_id: memory.capture_batch_id ?? null,
           verification_state: memory.verification_state ?? "unverified",
           verified_at: memory.verified_at ?? null,
           learning: parseJsonObject(memory.learning_json),
