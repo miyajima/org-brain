@@ -53,6 +53,8 @@ type LifecycleWriteItem = {
   business_category_id?: string | null;
   work_type?: MemoryWorkType | null;
   capture_origin?: "observed" | "synthetic" | "repair" | "legacy";
+  capture_route?: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
+  capture_batch_id?: string | null;
   verification_state?: "verified" | "partial" | "unverified" | "rejected";
   verified_at?: number | null;
   learning?: Record<string, unknown> | null;
@@ -100,6 +102,8 @@ type StoredMemoryRow = {
   business_category_id?: string | null;
   work_type?: string | null;
   capture_origin?: string | null;
+  capture_route?: string | null;
+  capture_batch_id?: string | null;
   verification_state?: string | null;
   verified_at?: number | null;
   learning_json?: string | null;
@@ -202,6 +206,8 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
   business_category_id: string | null;
   work_type: MemoryWorkType | null;
   capture_origin: "observed" | "synthetic" | "repair" | "legacy";
+  capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
+  capture_batch_id: string | null;
   verification_state: "verified" | "partial" | "unverified" | "rejected";
   verified_at: number | null;
   learning: Record<string, unknown> | null;
@@ -232,6 +238,7 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
   const validFrom = coerceNullableNumber(item.valid_from, "valid_from");
   const validUntil = coerceNullableNumber(item.valid_until, "valid_until");
   const captureOrigin = ensureMemoryEnum(item.capture_origin, "legacy", ["observed", "synthetic", "repair", "legacy"] as const, "capture_origin");
+  const captureRoute = ensureMemoryEnum(item.capture_route, captureOrigin === "repair" ? "repair" : "legacy", ["realtime_hook", "initial_import", "manual", "repair", "legacy"] as const, "capture_route");
   const verificationState = ensureMemoryEnum(item.verification_state, "unverified", ["verified", "partial", "unverified", "rejected"] as const, "verification_state");
   if (verificationState === "verified" && captureOrigin !== "observed") {
     throw new HttpError(400, "invalid_verification_origin", "only observed learning may be verified");
@@ -287,6 +294,8 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
       ? ensureMemoryEnum(item.work_type, "other", MEMORY_WORK_TYPES, "work_type")
       : null
     , capture_origin: captureOrigin
+    , capture_route: captureRoute
+    , capture_batch_id: item.capture_batch_id?.trim().slice(0, 128) || null
     , verification_state: verificationState
     , verified_at: verificationState === "verified" ? verifiedAt ?? null : null
     , learning: item.learning && typeof item.learning === "object" ? item.learning : null
@@ -303,7 +312,7 @@ async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Pro
             entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash,
             rationale, evidence_json, conflicts_json, permissions_json,
             business_category_id, work_type, reuse_rule,
-            capture_origin, verification_state, verified_at, learning_json, quality_dimensions_json
+            capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json
      FROM memories
      WHERE tenant_id = ? AND id = ?`
   )
@@ -328,6 +337,8 @@ function v2FieldsFromStored(row: StoredMemoryRow): Pick<
   | "conflicts"
   | "permissions"
   | "capture_origin"
+  | "capture_route"
+  | "capture_batch_id"
   | "verification_state"
   | "verified_at"
   | "learning"
@@ -346,6 +357,10 @@ function v2FieldsFromStored(row: StoredMemoryRow): Pick<
     capture_origin: row.capture_origin === "observed" || row.capture_origin === "synthetic" || row.capture_origin === "repair"
       ? row.capture_origin
       : "legacy",
+    capture_route: ["realtime_hook", "initial_import", "manual", "repair"].includes(row.capture_route ?? "")
+      ? row.capture_route as "realtime_hook" | "initial_import" | "manual" | "repair"
+      : "legacy",
+    capture_batch_id: row.capture_batch_id ?? null,
     verification_state: row.verification_state === "verified" || row.verification_state === "partial" || row.verification_state === "rejected"
       ? row.verification_state
       : "unverified",
@@ -611,7 +626,7 @@ async function saveCurrentSnapshot(
              updated_at = ?, valid_from = ?, valid_until = ?, content_hash = ?, rationale = ?,
              evidence_json = ?, conflicts_json = ?, permissions_json = ?,
              business_category_id = ?, work_type = ?, reuse_rule = ?,
-             capture_origin = ?, verification_state = ?, verified_at = ?, learning_json = ?, quality_dimensions_json = ?
+             capture_origin = ?, capture_route = ?, capture_batch_id = ?, verification_state = ?, verified_at = ?, learning_json = ?, quality_dimensions_json = ?
          WHERE tenant_id = ? AND id = ?`
       ).bind(
         snapshot.project_id,
@@ -648,6 +663,8 @@ async function saveCurrentSnapshot(
         snapshot.work_type,
         snapshot.reuse_rule,
         snapshot.capture_origin,
+        snapshot.capture_route,
+        snapshot.capture_batch_id,
         snapshot.verification_state,
         snapshot.verified_at,
         snapshot.learning ? JSON.stringify(snapshot.learning) : null,
@@ -665,8 +682,8 @@ async function saveCurrentSnapshot(
           canonical_key, root_memory_id, current_version, suppressed_at, expires_at, revised_at,
           entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash, rationale,
           evidence_json, conflicts_json, permissions_json, business_category_id, work_type, reuse_rule,
-          capture_origin, verification_state, verified_at, learning_json, quality_dimensions_json
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         args.memoryId,
         args.tenantId,
@@ -705,6 +722,8 @@ async function saveCurrentSnapshot(
         snapshot.work_type,
         snapshot.reuse_rule,
         snapshot.capture_origin,
+        snapshot.capture_route,
+        snapshot.capture_batch_id,
         snapshot.verification_state,
         snapshot.verified_at,
         snapshot.learning ? JSON.stringify(snapshot.learning) : null,

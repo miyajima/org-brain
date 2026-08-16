@@ -3,7 +3,7 @@ title: OrgBrain Memory Contract v2
 doc_type: reference
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 ---
 
 # OrgBrain Memory Contract v2
@@ -67,6 +67,31 @@ The type-specific required fields are:
 - `failure`: `symptom`, `failed_approach`, `root_cause`, `correction`,
   `verified_outcome`, and `avoidance_rule`.
 
+### `MemoryUsefulnessAssessmentV1`
+
+Every capture route uses one non-persisted assessment envelope. It returns
+`route=active|quarantine|excluded`, reason codes, hard violations, and seven
+independent 0–100 dimensions: semantic completeness, evidence support,
+rationale quality, future reuse, scope specificity, freshness/validity, and
+atomicity. No average score exists. `active` requires every dimension to be at
+least 95, `capture_origin=observed`, verified evidence with `verified_at`, and
+unanimous certified judges (three passes across at least two model families).
+
+Credential, PII, absolute home path, raw transcript/reasoning envelope,
+self-attested command result, expiry, duplicate, unresolved conflict, source
+drift, scope violation, and non-atomic content are hard violations and can
+never be active. Durable but incomplete or uncertified records are
+`quarantine`; hard-violating or non-durable records are `excluded`.
+
+Artifacts are references, not memory bodies. A source reference contains a
+repository-relative path or HTTPS document URL, a `sha256:` content hash, and
+a summary of at most 240 characters. A changed hash is `source_drift` and is
+excluded from injection until reverified. `capture_origin` describes
+observed/synthetic provenance; the independent `capture_route` records
+`realtime_hook`, `initial_import`, `manual`, `repair`, or `legacy`, with an
+optional route-specific `capture_batch_id`. Existing records backfill to
+`legacy`.
+
 `capture_intent=verify` is accepted only when the type-specific fields and
 evidence are complete. `capture_intent=review` is retained as a redacted,
 180-day candidate with honest `gaps` and cannot become active automatically.
@@ -108,7 +133,7 @@ hash. Its inputs are
 `packages/shared/schemas/memory_contract_v2.schema.json`, and
 `packages/shared/src/memory-contract-v2-reason-codes.mjs`. Run
 `pnpm contract:check` in CI; it fails when the schema, prompt, judge
-families, reason codes, or manifest hash drift. The runtime normalizer is the semantic
+families, reason codes, v3 ingestion fixture, or manifest hash drift. The runtime normalizer is the semantic
 verifier; the JSON Schema is the deterministic AI input boundary; and the
 reason-code dictionary is the stable reporting vocabulary. The shared package
 also exposes the Ajv validator so local MCP, API MCP, and adapters cannot
@@ -287,11 +312,15 @@ v2 quality manifest without a passing corpus is insufficient evidence.
 
 Only after both the conformance oracle and independent machine-reference
 qualification are qualified, use the credential-free fixed-seed measurement definition at
-`packages/shared/test/fixtures/memory-ingestion-regression-v2.json`, expanded
+`packages/shared/test/fixtures/memory-ingestion-regression-v3.json`, expanded
 by `scripts/memory-ingestion-regression.mjs`. It generates all 1,037
 minimum and review cases deterministically without copying a real Codex
-transcript. Run `pnpm memories:build-ingestion-regression` to inspect its
-counts and privacy flags; `scripts/codex-session-import.test.mjs` validates the
+transcript. It compiles every scenario to realtime-hook and initial-import
+JSONL while writing expected routes only to a blind `oracle.json` sidecar.
+Formal observe candidate hashes must match after route-only identity is
+removed. Generated JSONL is disposable and never committed. Run
+`pnpm memories:build-ingestion-regression -- --emit-sessions <private-dir> --check`
+to inspect counts and privacy flags; `scripts/codex-session-import.test.mjs` validates the
 corpus, active/review/excluded routing, plan privacy, and idempotent local
 application.
 

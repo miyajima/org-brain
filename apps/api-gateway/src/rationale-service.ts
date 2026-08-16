@@ -6,6 +6,7 @@ import {
   EVIDENCE_RELATIONS,
   EVIDENCE_TYPES,
   HttpError,
+  assessMemoryUsefulnessV1,
   MEMORY_KINDS,
   RATIONALE_STATUSES,
   extractRationaleProposal,
@@ -73,6 +74,8 @@ type ProposedMemoryInput = {
   visibility?: "tenant" | "project" | "restricted";
   allowed_principals?: string[];
   capture_origin?: "observed" | "synthetic" | "repair" | "legacy";
+  capture_route?: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
+  capture_batch_id?: string | null;
   verification?: {
     state?: "verified" | "partial" | "unverified" | "rejected";
     verified_at?: number | null;
@@ -80,6 +83,9 @@ type ProposedMemoryInput = {
   };
   learning?: Record<string, unknown> | null;
   quality_dimensions?: Record<string, number> | null;
+  reason_codes?: string[];
+  ai_certification?: string | null;
+  judge_consensus?: Record<string, unknown> | null;
 };
 
 type ProposeMemoryRequest = {
@@ -287,6 +293,9 @@ function parseSourceReferences(raw: unknown, field: string): Array<Record<string
       type: parseString(row.type, `${field}[${index}].type`, 80),
       ref: parseString(row.ref, `${field}[${index}].ref`, 512),
       ...(row.title === undefined ? {} : { title: parseOptionalString(row.title, `${field}[${index}].title`, 240) }),
+      ...(row.summary === undefined ? {} : { summary: parseOptionalString(row.summary, `${field}[${index}].summary`, 240) }),
+      ...(row.content_hash === undefined ? {} : { content_hash: parseOptionalString(row.content_hash, `${field}[${index}].content_hash`, 80) }),
+      ...(row.digest === undefined ? {} : { digest: parseOptionalString(row.digest, `${field}[${index}].digest`, 80) }),
       ...(row.captured_at === undefined ? {} : { captured_at: parseOptionalNumber(row.captured_at, `${field}[${index}].captured_at`) })
     };
   });
@@ -305,6 +314,8 @@ type ParsedCaptureItem = ConfirmationPayload["proposed_memory"] & {
   visibility: "tenant" | "project" | "restricted";
   allowed_principals: string[];
   capture_origin: "observed" | "synthetic" | "repair" | "legacy";
+  capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
+  capture_batch_id: string | null;
   verification: {
     state: "verified" | "partial" | "unverified" | "rejected";
     verified_at: number | null;
@@ -312,6 +323,9 @@ type ParsedCaptureItem = ConfirmationPayload["proposed_memory"] & {
   };
   learning: Record<string, unknown> | null;
   quality_dimensions: Record<string, number> | null;
+  reason_codes: string[];
+  ai_certification: string | null;
+  judge_consensus: Record<string, unknown> | null;
 };
 
 function parseRecordObject(value: unknown, field: string): Record<string, unknown> | null {
@@ -381,6 +395,12 @@ function parseCaptureItem(item: ProposedMemoryInput, field: string, options: { r
     ["observed", "synthetic", "repair", "legacy"] as const,
     "legacy"
   );
+  const captureRoute = parseEnum(
+    item.capture_route,
+    `${field}.capture_route`,
+    ["realtime_hook", "initial_import", "manual", "repair", "legacy"] as const,
+    "legacy"
+  );
   const learning = parseRecordObject(item.learning, `${field}.learning`);
   const verifiedAt = parseOptionalNumber(verificationRaw?.verified_at, `${field}.verification.verified_at`);
   const attestationRef = parseOptionalString(verificationRaw?.attestation_ref, `${field}.verification.attestation_ref`, 512);
@@ -411,9 +431,14 @@ function parseCaptureItem(item: ProposedMemoryInput, field: string, options: { r
     visibility,
     allowed_principals: allowedPrincipals
     , capture_origin: captureOrigin
+    , capture_route: captureRoute
+    , capture_batch_id: parseOptionalString(item.capture_batch_id, `${field}.capture_batch_id`, 128)
     , verification: { state: verificationState, verified_at: verifiedAt, attestation_ref: attestationRef }
     , learning
     , quality_dimensions: parseQualityDimensions(item.quality_dimensions, `${field}.quality_dimensions`)
+    , reason_codes: parseStringList(item.reason_codes, `${field}.reason_codes`, 32, 128)
+    , ai_certification: parseOptionalString(item.ai_certification, `${field}.ai_certification`, 128)
+    , judge_consensus: parseRecordObject(item.judge_consensus, `${field}.judge_consensus`)
   };
 }
 
@@ -807,6 +832,9 @@ export async function captureMemoryWithInferredRationale(
         ref: screen(String(entry.ref), `${field}.source_refs[${referenceIndex}].ref`),
         ...(typeof entry.title === "string"
           ? { title: screen(entry.title, `${field}.source_refs[${referenceIndex}].title`) }
+          : {}),
+        ...(typeof entry.summary === "string"
+          ? { summary: screen(entry.summary, `${field}.source_refs[${referenceIndex}].summary`) }
           : {})
       }));
       const entities = request.entities.map((entity, entityIndex) => ({
@@ -831,6 +859,32 @@ export async function captureMemoryWithInferredRationale(
           Date.now() + 7 * DAY_MS
         )
         : requestedValidUntil;
+      if (learning || parsedItem.capture_origin === "observed") {
+        const usefulness = assessMemoryUsefulnessV1({
+          content,
+          summary,
+          rationale,
+          reuse_rule: reuseRule,
+          learning,
+          evidence: itemEvidence as unknown as Array<Record<string, unknown>>,
+          source_references: sourceReferences,
+          quality_dimensions: parsedItem.quality_dimensions,
+          capture_origin: parsedItem.capture_origin,
+          verification_state: parsedItem.verification.state,
+          verified_at: parsedItem.verification.verified_at,
+          valid_until: typeof validUntil === "number" && Number.isFinite(validUntil) ? validUntil : null,
+          reason_codes: parsedItem.reason_codes,
+          ai_certification: parsedItem.ai_certification,
+          judge_consensus: parsedItem.judge_consensus
+        });
+        if (usefulness.route !== "active") {
+          throw new HttpError(
+            422,
+            usefulness.route === "quarantine" ? "memory_usefulness_quarantined" : "memory_usefulness_excluded",
+            [...usefulness.hard_violations, ...usefulness.reason_codes].join(",") || "memory usefulness gate rejected the candidate"
+          );
+        }
+      }
       const extracted = extractRationaleProposal({
         content,
         summary,
@@ -916,6 +970,8 @@ export async function captureMemoryWithInferredRationale(
           }))
           : [],
         capture_origin: item.capture_origin,
+        capture_route: item.capture_route,
+        capture_batch_id: item.capture_batch_id,
         verification_state: item.verification.state,
         verified_at: item.verification.verified_at,
         learning: item.learning,

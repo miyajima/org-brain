@@ -11,9 +11,11 @@ import {
   cursorSupportsUserHooks,
   installCloudHooks,
   installCodexMinimalHooks,
+  hookSetupApprovalSummary,
   mergeClaudeHooks,
   mergeCursorHooks,
   preflightCloudHooks,
+  requireHookSetupApproval,
   remoteMcpPlan,
   runConnectorCommand
 } from "../packages/orgbrain-cli/src/connector-setup.mjs";
@@ -102,6 +104,9 @@ test("cloud hook dry-run never reads or displays setup secrets", async () => {
   });
   assert.equal(result.dry_run, true);
   assert.equal(result.plan.llm_calls, 0);
+  assert.equal(result.plan.hook_approval_required, true);
+  assert.equal(result.plan.approval_flag, "--approve-hooks");
+  assert.deepEqual(result.plan.hook_events, ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]);
   assert.deepEqual(result.plan.credentials_required, [
     "ORGBRAIN_SETUP_ACCESS_CLIENT_ID",
     "ORGBRAIN_SETUP_ACCESS_CLIENT_SECRET",
@@ -146,7 +151,19 @@ test("Claude cloud hooks use one private installation credential and preserve ex
   assert.equal((await stat(plan.files.outbox)).mode & 0o777, 0o600);
 });
 
-test("Cursor cloud hook plan targets only the supported user hook file", () => {
+test("cloud hook plans target supported lifecycle events", () => {
+  const codex = cloudHooksPlan("codex", {
+    home: "/tmp/orgbrain-codex-home",
+    workspace: "/tmp/example",
+    installationId: "install-codex",
+    url: "https://mcp.example.test/mcp"
+  });
+  assert.deepEqual(Object.keys(codex.handlers), [
+    "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact", "PostCompact", "Stop"
+  ]);
+  assert.equal(codex.handlers.PreToolUse.matcher, "request_user_input");
+  assert.equal(codex.handlers.UserPromptSubmit.additionalContextLimit, 8_192);
+
   const plan = cloudHooksPlan("cursor", {
     home: "/tmp/orgbrain-cursor-home",
     workspace: "/tmp/example",
@@ -161,6 +178,28 @@ test("Cursor cloud hook plan targets only the supported user hook file", () => {
   assert.equal(cursorSupportsUserHooks("1.7.0\narm64\n"), true);
   assert.equal(cursorSupportsUserHooks("1.6.99\narm64\n"), false);
   assert.equal(cursorSupportsUserHooks("unknown"), false);
+});
+
+test("hook setup requires explicit approval and reports the exact mutation scope", async () => {
+  const plan = codexMinimalHooksPlan({
+    home: "/tmp/orgbrain-approval-home",
+    workspace: "/tmp/example-repo",
+    projectId: "example"
+  });
+  const summary = hookSetupApprovalSummary(plan);
+  assert.equal(summary.hooks_file, "/tmp/orgbrain-approval-home/.codex/hooks.json");
+  assert.ok(summary.events.includes("UserPromptSubmit"));
+  assert.equal(summary.preserves_existing_hooks, true);
+
+  const output = { write() {} };
+  await assert.rejects(
+    requireHookSetupApproval(plan, { answer: "no", output }),
+    /explicit user approval was not granted/u
+  );
+  const interactive = await requireHookSetupApproval(plan, { answer: "yes", output });
+  assert.equal(interactive.method, "interactive");
+  const flagged = await requireHookSetupApproval(plan, { approved: true, output });
+  assert.equal(flagged.method, "approve-hooks-flag");
 });
 
 test("Claude and Cursor cloud hook merges preserve settings and stay idempotent", () => {
@@ -228,6 +267,18 @@ test("connector setup is non-mutating unless execute is explicit", async () => {
   assert.equal(result.plan.transport, "stdio");
 });
 
+test("hook-writing execute is blocked when the user has not approved it", async () => {
+  await assert.rejects(
+    runConnectorCommand("setup", ["codex"], {
+      flags: new Set(["--execute"]),
+      get: (name, fallback) => name === "--mode" ? "minimal-hooks" : fallback
+    }, {
+      hookApproval: { input: { isTTY: false }, output: { write() {} } }
+    }),
+    /requires user approval/u
+  );
+});
+
 test("minimal Codex hook plan uses local commands without MCP, a daemon, or LLM calls", () => {
   const plan = codexMinimalHooksPlan({
     home: "/tmp/orgbrain-home",
@@ -245,6 +296,15 @@ test("minimal Codex hook plan uses local commands without MCP, a daemon, or LLM 
   assert.doesNotMatch(plan.handlers.UserPromptSubmit.command, /\bmcp\b/u);
 });
 
+test("minimal hook plan can pin a stable hook runtime path", () => {
+  const plan = codexMinimalHooksPlan({
+    home: "/tmp/orgbrain-home",
+    workspace: "/tmp/example-repo",
+    cliPath: "/opt/orgbrain/local-memory.mjs"
+  });
+  assert.match(plan.handlers.UserPromptSubmit.command, /\/opt\/orgbrain\/local-memory\.mjs/u);
+});
+
 test("minimal Codex setup can include a reviewable daily personal maintenance plan", async () => {
   const result = await runConnectorCommand("setup", ["codex"], {
     flags: new Set(),
@@ -256,6 +316,8 @@ test("minimal Codex setup can include a reviewable daily personal maintenance pl
   });
 
   assert.equal(result.dry_run, true);
+  assert.equal(result.plan.hook_approval_required, true);
+  assert.equal(result.plan.approval_flag, "--approve-hooks");
   assert.equal(result.plan.maintenance.schedule, "daily");
   assert.equal(result.plan.maintenance.llm_calls, 0);
   assert.equal(result.plan.maintenance.cloud_writes, 0);
@@ -263,6 +325,19 @@ test("minimal Codex setup can include a reviewable daily personal maintenance pl
   assert.ok(result.plan.maintenance.program_arguments.includes("autonomy"));
   assert.ok(result.plan.maintenance.program_arguments.includes("--state-dir"));
   assert.ok(result.plan.maintenance.program_arguments.includes("--apply"));
+});
+
+test("minimal Codex setup can omit background maintenance", async () => {
+  const result = await runConnectorCommand("setup", ["codex"], {
+    flags: new Set(),
+    get: (name, fallback) => name === "--mode"
+      ? "minimal-hooks"
+      : name === "--maintenance"
+        ? "off"
+        : fallback
+  });
+  assert.equal(result.dry_run, true);
+  assert.equal(result.plan.maintenance, undefined);
 });
 
 test("minimal Codex hook installer preserves existing hooks and is idempotent", async () => {
@@ -324,4 +399,24 @@ test("minimal Codex hook installer refuses to overwrite cloud mode without force
     installCodexMinimalHooks(plan),
     /ORGBRAIN_ENABLE_CLOUD_MEMORY is already true/u
   );
+});
+
+test("forced local-only setup removes active cloud credentials while keeping a backup", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "orgbrain-minimal-hooks-sanitize-"));
+  const envFile = path.join(home, ".config", "org-brain", "hooks.env");
+  await mkdir(path.dirname(envFile), { recursive: true });
+  await writeFile(envFile, [
+    "ORGBRAIN_ENABLE_CLOUD_MEMORY=true",
+    "ORGBRAIN_MCP_URL=https://mcp.example.test/mcp",
+    "ORGBRAIN_MCP_CLIENT_ID=client-id",
+    "ORGBRAIN_MCP_CLIENT_SECRET=client-secret"
+  ].join("\n") + "\n", { mode: 0o600 });
+  const plan = codexMinimalHooksPlan({ home, workspace: path.join(home, "workspace") });
+  const installed = await installCodexMinimalHooks(plan, { force: true });
+  const active = await readFile(plan.files.env, "utf8");
+  assert.doesNotMatch(active, /ORGBRAIN_MCP_|client-secret/u);
+  assert.match(active, /ORGBRAIN_ENABLE_CLOUD_MEMORY=false/u);
+  const backup = installed.backups.find((item) => item.startsWith(plan.files.env));
+  assert.ok(backup);
+  assert.match(await readFile(backup, "utf8"), /ORGBRAIN_MCP_CLIENT_SECRET=client-secret/u);
 });

@@ -12,6 +12,8 @@ ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING = "off"
 MEMORY_CLASSIFICATION_MODE = "observe"
 RETRIEVAL_GENERATION_ROUTING = "legacy"
 RETENTION_SWEEP_MODE = "observe"
+API_KEY = "dev-org-brain-api-key"
+API_TENANT_POLICY_JSON = '''{"keys":[{"api_key":"dev-org-brain-api-key","principal":"user:local-dev","tenants":["default"],"role":"tenant_admin"}]}'''
 
 # AI and Vectorize are intentionally omitted here. Wrangler cannot emulate
 # those bindings locally; declaring them makes the CI smoke require remote

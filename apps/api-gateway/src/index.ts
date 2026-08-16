@@ -119,6 +119,7 @@ import {
 } from "./memory-ownership-service";
 import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
 import { getMemoryAnalytics, getMemoryMap } from "./memory-dashboard-service";
+import { getMemoryQualityRun, listMemoryQualityRuns } from "./memory-quality-service";
 import { mountMcp } from "./mcp";
 import {
   createMcpClientInstallation,
@@ -1119,6 +1120,27 @@ app.get("/v1/memory-impact-summary", async (c) => {
     from: Number.isNaN(from) ? undefined : from,
     to: Number.isNaN(to) ? undefined : to,
     projectId: c.req.query("project_id")
+  }));
+});
+
+app.get("/v1/memory-quality/runs", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const limit = Number.parseInt(c.req.query("limit") ?? "20", 10);
+  return jsonOk(c, await listMemoryQualityRuns(c.env, tenantId, { limit: Number.isNaN(limit) ? undefined : limit }));
+});
+
+app.get("/v1/memory-quality/runs/:runId", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
+  const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const mismatch = c.req.query("parity_mismatch")?.trim() || undefined;
+  return jsonOk(c, await getMemoryQualityRun(c.env, tenantId, c.req.param("runId"), {
+    route: c.req.query("route"), lessonType: c.req.query("lesson_type"),
+    actualRoute: c.req.query("actual_route"), issue: c.req.query("issue"),
+    projectHash: c.req.query("project_hash"),
+    parityMismatch: mismatch === undefined ? undefined : mismatch === "1" || mismatch === "true",
+    limit: Number.isNaN(limit) ? undefined : limit,
+    offset: Number.isNaN(offset) ? undefined : offset
   }));
 });
 

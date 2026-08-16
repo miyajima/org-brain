@@ -96,7 +96,8 @@ function isPrimaryLexicalMemory(memory: MemoryRecord): boolean {
     tags.includes("curated-memory") ||
     tags.includes("canonical-memory") ||
     tags.includes("promoted") ||
-    tags.includes("memory-digest")
+    tags.includes("memory-digest") ||
+    tags.includes("capture-v2")
   );
 }
 
@@ -744,6 +745,18 @@ describe("memory-service", () => {
         lexical_score: -1.5
       },
       {
+        id: "capture-v2-1",
+        tenant_id: "default",
+        project_id: "proj1",
+        content: "deploy cron maintenance uses a verified machine-specific client label",
+        summary: "machine-specific client label decision",
+        tags_json: JSON.stringify(["capture-v2", "decision", "source:codex"]),
+        source: "codex",
+        external_key: "capture-v2-1",
+        created_at: now - 2 * 60 * 60 * 1000,
+        lexical_score: -1.3
+      },
+      {
         id: "curated-1",
         tenant_id: "default",
         project_id: "proj2",
@@ -775,7 +788,7 @@ describe("memory-service", () => {
       project_id: "proj1",
       q: "deploy cron maintenance"
     });
-    expect(search.results.map((item) => item.id)).toEqual(["canonical-1", "curated-1"]);
+    expect(search.results.map((item) => item.id)).toEqual(["canonical-1", "capture-v2-1", "curated-1"]);
     expect(search.results.map((item) => item.id)).not.toContain("raw-openclaw-hook");
 
     const profile = await getMemoryProfile(env, {

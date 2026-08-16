@@ -182,13 +182,29 @@ async function requireMcpPermission(
 ) {
   const principal = props.principal;
   if (!principal) throw new HttpError(500, "misconfigured", "missing MCP principal");
-  return assertPermission(env, {
-    tenantId,
-    projectId,
-    principal,
-    permission,
-    fallbackRole: props.defaultRole
-  });
+  try {
+    return await assertPermission(env, {
+      tenantId,
+      projectId,
+      principal,
+      permission,
+      fallbackRole: props.defaultRole
+    });
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    console.error(JSON.stringify({
+      event: "mcp_permission_failed",
+      auth_source: props.authSource ?? "unknown",
+      permission,
+      has_project_scope: Boolean(projectId),
+      error_code: error instanceof HttpError ? error.code : null,
+      error_status: error instanceof HttpError ? error.status : null,
+      error_message: failure.message
+        .replace(/[A-Za-z0-9_-]{24,}/gu, "[REDACTED]")
+        .slice(0, 300)
+    }));
+    throw error;
+  }
 }
 
 class OrgBrainMcpTools {
@@ -248,6 +264,17 @@ class OrgBrainMcpTools {
       });
       return result;
     } catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error));
+      console.error(JSON.stringify({
+        event: "mcp_audited_mutation_failed",
+        action,
+        error_name: failure.name,
+        error_code: error instanceof HttpError ? error.code : null,
+        error_status: error instanceof HttpError ? error.status : null,
+        error_message: failure.message
+          .replace(/[A-Za-z0-9_-]{24,}/gu, "[REDACTED]")
+          .slice(0, 300)
+      }));
       await appendAuditEvent(this.env, {
         tenantId,
         projectId: null,
@@ -317,6 +344,8 @@ class OrgBrainMcpTools {
       visibility: z.enum(["tenant", "project", "restricted"]).optional(),
       allowed_principals: z.array(z.string().min(1).max(128)).max(64).optional()
       , capture_origin: z.enum(["observed", "synthetic", "repair", "legacy"]).optional()
+      , capture_route: z.enum(["realtime_hook", "initial_import", "manual", "repair", "legacy"]).optional()
+      , capture_batch_id: z.string().max(128).nullable().optional()
       , verification: z.object({
         state: z.enum(["verified", "partial", "unverified", "rejected"]).optional(),
         verified_at: z.number().int().nullable().optional(),
@@ -1628,6 +1657,51 @@ function isContextEnrichJsonRpcRequest(value: unknown): value is ContextEnrichJs
     body.params?.name === "orgbrain_context_enrich";
 }
 
+async function tryHandleModernCatalogFastPath(
+  request: Request,
+  env: Env,
+  props: AgentProps
+): Promise<Response | null> {
+  if (request.method !== "POST" || request.headers.get("mcp-protocol-version") !== "2026-07-28") return null;
+  const body = await request.clone().json<ContextEnrichJsonRpcRequest>().catch(() => null);
+  if (!body || body.jsonrpc !== "2.0" || !Object.prototype.hasOwnProperty.call(body, "id")) return null;
+  if (body.method === "server/discover") {
+    return jsonRpcResult(body.id, {
+      supportedVersions: ["2026-07-28"],
+      ttlMs: 300_000,
+      cacheScope: "private"
+    });
+  }
+  if (body.method !== "tools/list") return null;
+
+  const server = await createOrgBrainMcpServer(env, props);
+  const registry = server as unknown as {
+    _registeredTools: Record<string, {
+      title?: string;
+      description?: string;
+      outputSchemaJson?: unknown;
+      annotations?: unknown;
+      icons?: unknown;
+      _meta?: unknown;
+      enabled?: boolean;
+    }>;
+    _toolInputSchemaJson: Record<string, unknown>;
+  };
+  const tools = Object.entries(registry._registeredTools)
+    .filter(([name, tool]) => tool.enabled !== false && (!props.allowedTools || props.allowedTools.includes(name)))
+    .map(([name, tool]) => ({
+      name,
+      ...(tool.title ? { title: tool.title } : {}),
+      ...(tool.description ? { description: tool.description } : {}),
+      inputSchema: registry._toolInputSchemaJson[name] ?? { type: "object", properties: {} },
+      ...(tool.outputSchemaJson ? { outputSchema: tool.outputSchemaJson } : {}),
+      ...(tool.annotations ? { annotations: tool.annotations } : {}),
+      ...(tool.icons ? { icons: tool.icons } : {}),
+      ...(tool._meta ? { _meta: tool._meta } : {})
+    }));
+  return jsonRpcResult(body.id, { tools, ttlMs: 300_000, cacheScope: "private" });
+}
+
 function jsonRpcResult(id: unknown, result: unknown) {
   return new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
     status: 200,
@@ -1740,6 +1814,116 @@ async function tryHandleContextEnrichFastPath(
   }
 }
 
+async function tryHandleHookCaptureFastPath(
+  request: Request,
+  env: Env,
+  props: AgentProps
+): Promise<Response | null> {
+  if (props.authSource !== "access-service" || request.method !== "POST") return null;
+
+  let body: ContextEnrichJsonRpcRequest;
+  try {
+    body = await request.clone().json<ContextEnrichJsonRpcRequest>();
+  } catch {
+    return null;
+  }
+  if (
+    body.jsonrpc !== "2.0" ||
+    !Object.prototype.hasOwnProperty.call(body, "id") ||
+    body.method !== "tools/call" ||
+    body.params?.name !== "orgbrain_memories_capture_rationale" ||
+    request.headers.get("mcp-name") !== "orgbrain_memories_capture_rationale"
+  ) return null;
+
+  const args = body.params.arguments;
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw new HttpError(400, "invalid_payload", "capture arguments must be an object");
+  }
+  const payload = args as Record<string, unknown>;
+  const tenantId = normalizeTenant(
+    typeof payload.tenant_id === "string" ? payload.tenant_id : undefined,
+    props
+  );
+  const item = payload.item && typeof payload.item === "object" && !Array.isArray(payload.item)
+    ? payload.item as Record<string, unknown>
+    : null;
+  const items = Array.isArray(payload.items)
+    ? payload.items.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    : [];
+  if (Boolean(item) === Boolean(items.length)) {
+    throw new HttpError(400, "invalid_payload", "exactly one of item or items is required");
+  }
+  const captureItems = item ? [item] : items;
+  for (const projectId of new Set(captureItems.map((entry) =>
+    typeof entry.project_id === "string" ? entry.project_id : null
+  ))) {
+    await requireMcpPermission(env, props, tenantId, "write", projectId);
+    if (captureItems.some((entry) =>
+      (typeof entry.project_id === "string" ? entry.project_id : null) === projectId &&
+      entry.verification && typeof entry.verification === "object" &&
+      !Array.isArray(entry.verification) &&
+      (entry.verification as Record<string, unknown>).state === "verified"
+    )) {
+      await requireMcpPermission(env, props, tenantId, "memory:attest", projectId);
+    }
+  }
+
+  const principal = props.principal || props.runtimeActor || "mcp-hook";
+  try {
+    const result = await captureMemoryWithInferredRationale(env, {
+      ...payload,
+      tenant_id: tenantId,
+      source: typeof payload.source === "string" && payload.source.trim() ? payload.source.trim() : "hook",
+      actor_type: "principal",
+      actor_id: principal
+    }, {
+      canAttest: captureItems.some((entry) =>
+        entry.verification && typeof entry.verification === "object" &&
+        !Array.isArray(entry.verification) &&
+        (entry.verification as Record<string, unknown>).state === "verified"
+      )
+    });
+    await appendAuditEvent(env, {
+      tenantId,
+      projectId: null,
+      principal,
+      action: "mcp.orgbrain_memories_capture_rationale",
+      resourceType: "memory",
+      resourceId: null,
+      requestId: null,
+      outcome: "succeeded",
+      metadata: {
+        transport: "mcp-fast-path",
+        auth_source: props.authSource,
+        runtime_actor: props.runtimeActor ?? principal,
+        client_installation_id: props.clientInstallationId ?? null,
+        client_type: props.clientType ?? null
+      }
+    }).catch(() => undefined);
+    return jsonRpcResult(body.id, toContent(result));
+  } catch (error) {
+    await appendAuditEvent(env, {
+      tenantId,
+      projectId: null,
+      principal,
+      action: "mcp.orgbrain_memories_capture_rationale",
+      resourceType: "memory",
+      resourceId: null,
+      requestId: null,
+      outcome: "failed",
+      metadata: {
+        transport: "mcp-fast-path",
+        auth_source: props.authSource,
+        runtime_actor: props.runtimeActor ?? principal,
+        client_installation_id: props.clientInstallationId ?? null,
+        client_type: props.clientType ?? null,
+        error_code: error instanceof HttpError ? error.code : "capture_failed"
+      }
+    }).catch(() => undefined);
+    throw error;
+  }
+}
+
 export async function assertMcpToolAllowed(request: Request, props: AgentProps): Promise<void> {
   if (!props.allowedTools) return;
   if (request.method !== "POST") {
@@ -1847,8 +2031,12 @@ export function mountMcp(app: Hono<any>) {
       const transportValidationResponse = mcpTransportValidationResponse(request);
       if (transportValidationResponse) return transportValidationResponse;
       await assertMcpToolAllowed(request, props);
+      const catalogResponse = await tryHandleModernCatalogFastPath(request, env, props);
+      if (catalogResponse) return catalogResponse;
       const fastPathResponse = await tryHandleContextEnrichFastPath(request, env, props);
       if (fastPathResponse) return fastPathResponse;
+      const hookCaptureResponse = await tryHandleHookCaptureFastPath(request, env, props);
+      if (hookCaptureResponse) return hookCaptureResponse;
       const handler = createMcpHandler(
         () => createOrgBrainMcpServer(env, props),
         {
@@ -1860,6 +2048,16 @@ export function mountMcp(app: Hono<any>) {
       );
       return handler(request, env, ctx);
     } catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error));
+      console.error(JSON.stringify({
+        event: "mcp_request_failed",
+        error_name: failure.name,
+        error_code: error instanceof HttpError ? error.code : null,
+        error_status: error instanceof HttpError ? error.status : null,
+        error_message: failure.message
+          .replace(/[A-Za-z0-9_-]{24,}/gu, "[REDACTED]")
+          .slice(0, 300)
+      }));
       if (error instanceof HttpError) {
         return new Response(error.message, { status: error.status });
       }

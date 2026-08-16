@@ -8,8 +8,11 @@ connector setup, and Cloudflare provisioning checks. The executable is
 Access-Managed-OAuth remote URL with `--mode remote-mcp`, and enrolls
 installation-scoped Codex, Claude Code, or Cursor realtime hooks with
 `--mode cloud-hooks`. Every setup mode is a dry run until `--execute` is
-provided; cloud hook secrets are accepted only through masked TTY input or the
-documented setup-only environment variables.
+provided. A hook-writing execute additionally displays the target file and
+events and requires an interactive `yes`; reviewed non-interactive provisioning
+must pass `--approve-hooks`. Cloud hook secrets are accepted only after that
+approval, through masked TTY input or the documented setup-only environment
+variables.
 
 Evaluation runners and competitor adapters are intentionally excluded; they
 live in the private `@org-brain/benchmarks` workspace package.

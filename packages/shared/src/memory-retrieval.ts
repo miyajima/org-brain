@@ -20,7 +20,7 @@ const SEARCH_FETCH_LIMIT_FLOOR = 12;
 const HISTORY_FETCH_LIMIT_FLOOR = 24;
 const DOC_FETCH_LIMIT = 4;
 const TAG_PRIORITY_ORDER = ["policy", "diagnosis", "command-result", "workaround"] as const;
-const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest"] as const;
+const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest", "capture-v2"] as const;
 const LOW_SIGNAL_TITLES = new Set(["起動", "修正", "削除", "空け", "実装完了", "修正完了", "実行結果です", "変更しました", "1"]);
 
 export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3" | "hybrid_v4";
@@ -467,7 +467,9 @@ function retrievalSearchableFilterSql(alias: string, at: number, includeSuppress
   return `${includeSuppressed ? "1 = 1" : `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`}
     AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > ${timestamp})
     AND (${alias}.valid_from IS NULL OR ${alias}.valid_from <= ${timestamp})
-    AND (${alias}.valid_until IS NULL OR ${alias}.valid_until > ${timestamp})`;
+    AND (${alias}.valid_until IS NULL OR ${alias}.valid_until > ${timestamp})
+    AND (${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"source-drift"%')
+    AND (${alias}.conflicts_json IS NULL OR ${alias}.conflicts_json NOT LIKE '%source_drift%')`;
 }
 
 function primaryLexicalFilterSql(alias: string): string {

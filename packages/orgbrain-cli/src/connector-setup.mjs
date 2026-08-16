@@ -7,6 +7,7 @@ import { chmod, copyFile, mkdir, readFile, rename, unlink, writeFile } from "nod
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import {
   loadWorkspaceConfig,
@@ -27,6 +28,16 @@ const LOCAL_ONLY_ENV = {
   ORGBRAIN_MEMORY_CAPTURE_V2_MODE: "off",
   ORGBRAIN_MEMORY_COMMITMENTS_MODE: "on"
 };
+const LOCAL_ONLY_REMOVED_ENV = new Set([
+  "ORGBRAIN_MCP_URL",
+  "ORGBRAIN_MCP_CLIENT_ID",
+  "ORGBRAIN_MCP_CLIENT_SECRET",
+  "ORGBRAIN_CLIENT_INSTALLATION_ID",
+  "ORGBRAIN_HOOK_OUTBOX",
+  "ORGBRAIN_API_URL",
+  "ORGBRAIN_API_BASE",
+  "ORGBRAIN_API_KEY"
+]);
 
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", `'"'"'`)}'`;
@@ -64,7 +75,7 @@ function mergeLocalOnlyEnv(raw, dbPath, force = false) {
     .split(/\r?\n/u)
     .filter((line) => {
       const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/u);
-      return !match || !Object.hasOwn(desired, match[1]);
+      return !match || (!Object.hasOwn(desired, match[1]) && !LOCAL_ONLY_REMOVED_ENV.has(match[1]));
     })
     .join("\n")
     .trimEnd();
@@ -146,6 +157,45 @@ function hookCommand(baseCommand, envFile, action, errorLog) {
     action,
     `2>>${shellQuote(errorLog)}`
   ].join(" ");
+}
+
+export function hookSetupApprovalSummary(plan) {
+  return {
+    agent: plan.agent,
+    mode: plan.mode,
+    hooks_file: plan.files.hooks,
+    events: Object.keys(plan.handlers),
+    preserves_existing_hooks: true,
+    creates_backup: true
+  };
+}
+
+export async function requireHookSetupApproval(plan, options = {}) {
+  const summary = hookSetupApprovalSummary(plan);
+  if (options.approved === true) return { granted: true, method: "approve-hooks-flag", summary };
+  const input = options.input ?? process.stdin;
+  const output = options.output ?? process.stderr;
+  if (!input.isTTY && options.answer === undefined) {
+    throw new Error("hook setup requires user approval; rerun interactively or add --approve-hooks after reviewing the dry-run plan");
+  }
+  output.write([
+    "OrgBrain will update lifecycle hooks.",
+    `  Agent: ${summary.agent}`,
+    `  File: ${summary.hooks_file}`,
+    `  Events: ${summary.events.join(", ")}`,
+    "  Existing non-OrgBrain hooks will be preserved and the current file will be backed up.",
+    ""
+  ].join("\n"));
+  let answer = options.answer;
+  if (answer === undefined) {
+    const rl = createInterface({ input, output });
+    try { answer = await rl.question('Type "yes" to allow this hook change: '); }
+    finally { rl.close(); }
+  }
+  if (String(answer).trim().toLowerCase() !== "yes") {
+    throw new Error("hook setup cancelled; explicit user approval was not granted");
+  }
+  return { granted: true, method: "interactive", summary };
 }
 
 function remoteUrl(rawUrl, tenantId) {
@@ -278,9 +328,10 @@ export function codexMinimalHooksPlan(options = {}) {
   const errorLog = path.join(orgBrainConfig, "hook-errors.log");
   const hooksFile = path.join(home, ".codex", "hooks.json");
   const dbPath = expandHome(options.dbPath || path.join(home, ".org-brain", "memory.sqlite"), home);
+  const cliPath = options.cliPath ? path.resolve(options.cliPath) : LOCAL_CLI_PATH;
   const baseCommand = options.command?.trim()
     ? [options.command.trim()]
-    : [process.execPath, "--no-warnings", LOCAL_CLI_PATH];
+    : [process.execPath, "--no-warnings", cliPath];
   const handlers = {
     SessionStart: {
       type: "command",
@@ -339,6 +390,8 @@ export function codexMinimalHooksPlan(options = {}) {
     workspace: { path: workspace, tenant_id: tenantId, project_id: projectId },
     files: { env: envFile, workspaces: workspacesFile, hooks: hooksFile, errors: errorLog, db: dbPath },
     handlers,
+    hook_approval_required: true,
+    approval_flag: "--approve-hooks",
     trust_required: true,
     verify: ["codex", "doctor"]
   };
@@ -443,17 +496,23 @@ export function cloudHooksPlan(agent, options = {}) {
   const workspacesFile = path.join(orgBrainConfig, "workspaces.json");
   const errorLog = path.join(clientDirectory, "hook-errors.log");
   const dbPath = expandHome(options.dbPath || path.join(home, ".org-brain", "memory.sqlite"), home);
+  const cliPath = options.cliPath ? path.resolve(options.cliPath) : LOCAL_CLI_PATH;
   const baseCommand = options.command?.trim()
     ? [options.command.trim()]
-    : [process.execPath, "--no-warnings", LOCAL_CLI_PATH];
+    : [process.execPath, "--no-warnings", cliPath];
   const command = (action) => hookCommand(baseCommand, envFile, action, errorLog);
   let hooksFile;
   let handlers;
   if (agent === "codex") {
     hooksFile = path.join(home, ".codex", "hooks.json");
     handlers = {
-      UserPromptSubmit: { type: "command", command: command("codex-context"), timeout: 3, additionalContextLimit: 400 },
-      Stop: { type: "command", command: command("codex-stop"), timeout: 3 }
+      SessionStart: { type: "command", command: command("codex-context"), timeout: 2, statusMessage: "Restoring OrgBrain context", additionalContextLimit: 8_192 },
+      UserPromptSubmit: { type: "command", command: command("codex-context"), timeout: 3, statusMessage: "Checking OrgBrain context", additionalContextLimit: 8_192 },
+      PreToolUse: { matcher: "request_user_input", type: "command", command: command("codex-pre-tool"), timeout: 1, statusMessage: "Checking prior OrgBrain decisions" },
+      PostToolUse: { matcher: "request_user_input", type: "command", command: command("codex-post-tool"), timeout: 2, statusMessage: "Saving OrgBrain task commitment" },
+      PreCompact: { type: "command", command: command("codex-pre-compact"), timeout: 3, statusMessage: "Checkpointing OrgBrain task commitments" },
+      PostCompact: { type: "command", command: command("codex-context"), timeout: 2, statusMessage: "Restoring OrgBrain context after compaction", additionalContextLimit: 8_192 },
+      Stop: { type: "command", command: command("codex-stop"), timeout: 5, statusMessage: "Saving reusable OrgBrain memory" }
     };
   } else if (agent === "claude") {
     hooksFile = path.join(home, ".claude", "settings.json");
@@ -482,6 +541,8 @@ export function cloudHooksPlan(agent, options = {}) {
     workspace: { path: workspace, tenant_id: tenantId, project_id: projectId },
     files: { env: envFile, outbox: outboxFile, workspaces: workspacesFile, hooks: hooksFile, errors: errorLog, db: dbPath },
     handlers,
+    hook_approval_required: true,
+    approval_flag: "--approve-hooks",
     credentials_required: [
       "ORGBRAIN_SETUP_ACCESS_CLIENT_ID",
       "ORGBRAIN_SETUP_ACCESS_CLIENT_SECRET",
@@ -541,7 +602,9 @@ export async function installCloudHooks(plan, credentials) {
   const { mergedHooks, workspaces } = await prepareCloudHookTargets(plan);
   workspaces.workspaces[plan.workspace.path] = {
     tenant_id: plan.workspace.tenant_id,
-    project_id: plan.workspace.project_id
+    project_id: plan.workspace.project_id,
+    memory_capture_v2_mode: "on",
+    memory_learning_mode: "off"
   };
   await mkdir(path.dirname(plan.files.env), { recursive: true, mode: 0o700 });
   await mkdir(path.dirname(plan.files.hooks), { recursive: true, mode: 0o700 });
@@ -646,7 +709,7 @@ export async function assertCursorUserHooksSupported(versionOutput) {
   }
 }
 
-export async function runConnectorCommand(action, rest, args) {
+export async function runConnectorCommand(action, rest, args, runtime = {}) {
   if (action !== "setup") throw new Error(`unknown connector command: ${action || "(missing)"}`);
   const agent = rest[0]?.toLowerCase();
   const mode = args.get("--mode", "mcp");
@@ -668,6 +731,15 @@ export async function runConnectorCommand(action, rest, args) {
       throw new Error("--mode cloud-hooks is supported only for codex, claude, or cursor");
     }
     if (!args.flags.has("--execute")) {
+      const preview = cloudHooksPlan(agent, {
+        installationId: "pending-installation",
+        tenantId: args.get("--tenant-id", "default"),
+        workspace: args.get("--workspace", process.cwd()),
+        projectId: args.get("--project-id", null),
+        dbPath: args.get("--db", null),
+        command: args.get("--command", null),
+        cliPath: args.get("--cli-path", null)
+      });
       return {
         ok: true,
         dry_run: true,
@@ -690,7 +762,10 @@ export async function runConnectorCommand(action, rest, args) {
             "ORGBRAIN_SETUP_ACCESS_CLIENT_ID",
             "ORGBRAIN_SETUP_ACCESS_CLIENT_SECRET",
             "ORGBRAIN_SETUP_ENROLLMENT_CODE"
-          ]
+          ],
+          hook_approval_required: true,
+          approval_flag: "--approve-hooks",
+          hook_events: Object.keys(preview.handlers)
         }
       };
     }
@@ -700,9 +775,14 @@ export async function runConnectorCommand(action, rest, args) {
       workspace: args.get("--workspace", process.cwd()),
       projectId: args.get("--project-id", null),
       dbPath: args.get("--db", null),
-      command: args.get("--command", null)
+      command: args.get("--command", null),
+      cliPath: args.get("--cli-path", null)
     });
     await preflightCloudHooks(preflightPlan);
+    const approval = await requireHookSetupApproval(preflightPlan, {
+      ...runtime.hookApproval,
+      approved: args.flags.has("--approve-hooks") || runtime.hookApproval?.approved === true
+    });
     const clientId = await setupSecret("ORGBRAIN_SETUP_ACCESS_CLIENT_ID", "Cloudflare Access Client ID: ");
     const clientSecret = await setupSecret("ORGBRAIN_SETUP_ACCESS_CLIENT_SECRET", "Cloudflare Access Client Secret: ");
     const enrollmentCode = await setupSecret("ORGBRAIN_SETUP_ENROLLMENT_CODE", "OrgBrain enrollment code: ");
@@ -721,10 +801,12 @@ export async function runConnectorCommand(action, rest, args) {
       workspace: args.get("--workspace", process.cwd()),
       projectId: args.get("--project-id", null),
       dbPath: args.get("--db", null),
-      command: args.get("--command", null)
+      command: args.get("--command", null),
+      cliPath: args.get("--cli-path", null)
     });
     try {
-      return await installCloudHooks(plan, { url: mcpUrl, clientId, clientSecret });
+      const installed = await installCloudHooks(plan, { url: mcpUrl, clientId, clientSecret });
+      return { ...installed, hook_approval: approval };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(
@@ -735,13 +817,11 @@ export async function runConnectorCommand(action, rest, args) {
   }
   if (mode === "minimal-hooks") {
     if (agent !== "codex") throw new Error("--mode minimal-hooks is currently supported only for codex");
-    // New local installations always start the autonomous shadow controller.
-    // Keep --maintenance daily as a compatibility spelling for existing
-    // scripts, while avoiding a human approval step for the default path.
     const maintenance = args.get("--maintenance", "daily");
-    if (maintenance && maintenance !== "daily") throw new Error("--maintenance must be daily");
+    if (!["daily", "off"].includes(maintenance)) throw new Error("--maintenance must be daily or off");
     const plan = codexMinimalHooksPlan({
       command: args.get("--command", null),
+      cliPath: args.get("--cli-path", null),
       workspace: args.get("--workspace", process.cwd()),
       projectId: args.get("--project-id", null),
       tenantId: args.get("--tenant-id", null),
@@ -756,13 +836,19 @@ export async function runConnectorCommand(action, rest, args) {
         workspace: plan.workspace.path
       });
     }
+    plan.hook_approval_required = true;
+    plan.approval_flag = "--approve-hooks";
     if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
+    const approval = await requireHookSetupApproval(plan, {
+      ...runtime.hookApproval,
+      approved: args.flags.has("--approve-hooks") || runtime.hookApproval?.approved === true
+    });
     const installed = await installCodexMinimalHooks(plan, { force: args.flags.has("--force") });
     if (plan.maintenance) {
       const { installPersonalMaintenance } = await import("./personal-maintenance.mjs");
       installed.maintenance = await installPersonalMaintenance(plan.maintenance);
     }
-    return installed;
+    return { ...installed, hook_approval: approval };
   }
   if (mode !== "mcp") throw new Error("--mode must be mcp, remote-mcp, cloud-hooks, or minimal-hooks");
   const plan = connectorPlan(agent, { command: args.get("--command", "orgbrain"), scope: args.get("--scope", "user") });

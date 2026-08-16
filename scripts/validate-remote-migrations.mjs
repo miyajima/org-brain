@@ -67,9 +67,9 @@ function shouldSkipSchemaObject(row) {
 
 async function readPendingMigrations() {
   const files = (await readdir(MIGRATION_DIR))
-    .filter((file) => /^(?:0029|0030|0031|0032)_.+\.sql$/u.test(file))
+    .filter((file) => /^(?:0029|0030|0031|0032|0033)_.+\.sql$/u.test(file))
     .sort();
-  if (files.length !== 5) throw new Error(`expected five pending migration files, found ${files.length}`);
+  if (files.length !== 7) throw new Error(`expected seven governed migration files, found ${files.length}`);
   return Promise.all(files.map(async (file) => {
     const sql = await readFile(resolve(MIGRATION_DIR, file), "utf8");
     return { file, sha256: sha256(sql), bytes: Buffer.byteLength(sql), sql };
@@ -83,6 +83,25 @@ async function fetchSchema(options) {
     WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'
     ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 WHEN 'view' THEN 4 ELSE 5 END, name;
   `);
+}
+
+async function fetchAppliedMigrationNames(options) {
+  const rows = await runD1Query(options, `
+    SELECT name
+    FROM d1_migrations
+    ORDER BY id;
+  `);
+  return new Set(rows.map((row) => String(row.name)));
+}
+
+async function fetchVerifiedLearningGeneration(options) {
+  const rows = await runD1Query(options, `
+    SELECT id, status
+    FROM retrieval_generations
+    WHERE id = 'gen_verified_learning'
+    LIMIT 1;
+  `);
+  return rows[0] ?? null;
 }
 
 function applySchemaCopy(db, rows) {
@@ -134,12 +153,12 @@ function runCanonicalGuardContract(db) {
   return { duplicate_active_canonical_rejected: duplicateRejected };
 }
 
-function migrationContract(db) {
+function migrationContract(db, verifiedLearningGeneration) {
   const requiredColumns = {
     memories: [
       "reuse_rule", "owner_principal", "created_by_principal", "deleted_at",
       "deleted_by_principal", "delete_reason", "capture_origin", "verification_state",
-      "verified_at", "learning_json", "quality_dimensions_json"
+      "verified_at", "learning_json", "quality_dimensions_json", "capture_route", "capture_batch_id"
     ],
     memory_versions: ["reuse_rule"],
     decision_memories: ["origin_memory_id", "origin_source", "origin_external_key", "auto_generated"],
@@ -165,6 +184,19 @@ function migrationContract(db) {
       "tenant_id", "project_id", "task_key", "decision_key", "commitment_id",
       "alias_fingerprint", "alias_question", "certification", "prompt_hash",
       "verifier_version", "created_at", "expires_at"
+    ],
+    memory_quality_runs: [
+      "input_source", "ground_truth_basis", "capture_routes_json", "privacy_json", "hard_violation_count"
+    ],
+    memory_quality_cases: [
+      "id", "case_hash", "run_id", "tenant_id", "project_hash", "session_hash", "split", "capture_route",
+      "lesson_type", "expected_route", "actual_route", "candidate_hash", "memory_id",
+      "candidate_id", "reason_codes_json", "hard_violation_count", "parity_mismatch"
+    ],
+    mcp_client_installations: [
+      "id", "tenant_id", "owner_principal", "client_type", "device_label", "purpose", "status",
+      "access_subject_hash", "enrollment_token_hash", "enrollment_expires_at", "created_at",
+      "activated_at", "last_used_at", "revoked_at"
     ]
   };
   const columnChecks = Object.fromEntries(Object.entries(requiredColumns).map(([table, columns]) => {
@@ -194,13 +226,19 @@ function migrationContract(db) {
     "idx_memory_learning_judgments_candidate",
     "memory_learning_candidate_verified_requires_consensus",
     "idx_memory_quality_measurements_run",
+    "idx_memory_quality_cases_filters",
     "task_commitments",
     "task_commitment_semantic_aliases",
     "memory_learning_candidates",
     "memory_learning_candidate_evidence",
     "memory_learning_judgments",
     "memory_quality_runs",
-    "memory_quality_measurements"
+    "memory_quality_measurements",
+    "memory_quality_cases",
+    "mcp_client_installations",
+    "idx_mcp_client_installations_access_subject",
+    "idx_mcp_client_installations_enrollment",
+    "idx_mcp_client_installations_owner"
   ];
   const objects = new Set([
     ...objectNames(db, "table"),
@@ -208,16 +246,17 @@ function migrationContract(db) {
     ...objectNames(db, "trigger")
   ]);
   const objectChecks = Object.fromEntries(requiredObjects.map((name) => [name, objects.has(name)]));
-  const generation = db.prepare("SELECT id, status FROM retrieval_generations WHERE id = 'gen_verified_learning'").get() ?? null;
   const guard = runCanonicalGuardContract(db);
   const columnsPass = Object.values(columnChecks).every((checks) => Object.values(checks).every(Boolean));
   const objectsPass = Object.values(objectChecks).every(Boolean);
-  const passed = columnsPass && objectsPass && Boolean(generation) && guard.duplicate_active_canonical_rejected;
+  const passed = columnsPass && objectsPass && Boolean(verifiedLearningGeneration) && guard.duplicate_active_canonical_rejected;
   return {
     passed,
     required_columns: columnChecks,
     required_objects: objectChecks,
-    verified_learning_generation: generation ? { present: true, status: generation.status } : { present: false },
+    verified_learning_generation: verifiedLearningGeneration
+      ? { present: true, status: verifiedLearningGeneration.status }
+      : { present: false },
     canonical_guard: guard
   };
 }
@@ -228,10 +267,14 @@ async function main() {
     console.log(usage());
     return;
   }
-  const [schemaRows, migrations] = await Promise.all([
+  const [schemaRows, governedMigrations, appliedMigrationNames, verifiedLearningGeneration] = await Promise.all([
     fetchSchema(options),
-    readPendingMigrations()
+    readPendingMigrations(),
+    fetchAppliedMigrationNames(options),
+    fetchVerifiedLearningGeneration(options)
   ]);
+  const migrations = governedMigrations.filter((migration) => !appliedMigrationNames.has(migration.file));
+  if (migrations.length === 0) throw new Error("no_pending_governed_migrations");
   const db = new DatabaseSync(":memory:");
   let schemaCopy;
   let migrationResults;
@@ -262,7 +305,7 @@ async function main() {
       if (!passed) break;
     }
     const contract = migrationResults.every((migration) => migration.passed)
-      ? migrationContract(db)
+      ? migrationContract(db, verifiedLearningGeneration)
       : { passed: false, reason_code: "migration_apply_failed" };
     const report = {
       schema_version: 1,
@@ -278,6 +321,8 @@ async function main() {
           ])
         )
       },
+      governed_migration_count: governedMigrations.length,
+      already_applied_migration_count: governedMigrations.length - migrations.length,
       migrations: migrationResults,
       contract,
       physical_delete_count: 0,

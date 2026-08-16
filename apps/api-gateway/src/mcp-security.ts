@@ -187,15 +187,23 @@ async function authorizeAccessRequest(request: Request, env: Env): Promise<McpAu
     }
     const tenantId = pickTenant(requestedTenant(request), [installation.tenant_id]);
     await touchMcpClientInstallation(env, installation.id).catch(() => undefined);
+    const runtimeActor = `client:${installation.id}`;
     return {
-      principal: installation.owner_principal,
+      // Automated hooks are a separate machine identity. Reusing the human
+      // owner's principal would also reuse their explicit RBAC assignments
+      // (for example, reader), which can either block capture or broaden the
+      // machine's authority unexpectedly.
+      principal: runtimeActor,
       tenantId,
       allowedTenants: [installation.tenant_id],
       source: "access-service",
-      defaultRole: "reader",
+      // Installation identities are restricted to the single capture tool
+      // below. They still need the contributor fallback so that the allowed
+      // tool can persist a memory when the owning principal is read-only.
+      defaultRole: "contributor",
       clientInstallationId: installation.id,
       clientType: installation.client_type,
-      runtimeActor: `client:${installation.id}`,
+      runtimeActor,
       allowedTools: ["orgbrain_memories_capture_rationale"]
     };
   }

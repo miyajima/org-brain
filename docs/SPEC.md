@@ -256,7 +256,7 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - `pnpm -s usage:status` queries the D1 source of truth and reports a tenant usage snapshot for memory/thread counts. It intentionally does not query task rows.
 - `pnpm agmsg` sends, lists, reads, and acks agent messages through the API Gateway.
 - `pnpm hook:bridge <source>` normalizes hook payloads from coding agents and upserts them into `memories`.
-- `orgbrain connector setup <codex|claude|cursor> --mode remote-mcp --url <Access-protected-MCP-URL>`は各クライアントのuser-level remote MCP/OAuth設定を登録する。`--mode cloud-hooks`は一度きりの登録コードでservice tokenを導入へ結び付け、`~/.config/org-brain/clients/<installation-id>/credentials.env`へ`0600`で保存する。両方ともdry-runが既定で変更には`--execute`を要求する。
+- `orgbrain connector setup <codex|claude|cursor> --mode remote-mcp --url <Access-protected-MCP-URL>`は各クライアントのuser-level remote MCP/OAuth設定を登録する。`--mode cloud-hooks`は一度きりの登録コードでservice tokenを導入へ結び付け、`~/.config/org-brain/clients/<installation-id>/credentials.env`へ`0600`で保存する。両方ともdry-runが既定で変更には`--execute`を要求する。hookファイルを書き換えるexecuteは対象file・eventを表示して対話的な`yes`を要求し、非対話実行は事前review済みの`--approve-hooks`がなければ失敗する。
 - cloud hookは既存の決定的promote/skip判定だけを使い、LLMやtranscript readerを起動しない。送信対象は重要なmemory/rationaleだけで、prompt、回答全文、reasoning、tool I/O、transcript path、絶対pathをaudit/observation metadataへ含めない。
 - 認証失敗・offline時はクライアントを停止せず導入別`0600` JSONL outboxへ保持し、`SessionStart`／`Stop`／`SessionEnd`で最大100件を再送する。principalを確定できないデータは`identity_unresolved`としてserverへ送らない。
 - `pnpm hook:bridge` emits JSON with `memory_scope`, `cloud_memory_enabled`, `org_sharing_enabled`, and `shared_write`; `pnpm sync:agents-memory` prints the same mode before API import/export.

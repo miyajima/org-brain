@@ -138,8 +138,9 @@ describe("authorizeMcpRequest", () => {
     });
     await expect(authorizeMcpRequest(request, accessEnv(jwks, fakeDb({ installation }))))
       .resolves.toMatchObject({
-        principal: "user:alice",
+        principal: "client:install-1",
         source: "access-service",
+        defaultRole: "contributor",
         clientInstallationId: "install-1",
         runtimeActor: "client:install-1",
         allowedTools: ["orgbrain_memories_capture_rationale"]
