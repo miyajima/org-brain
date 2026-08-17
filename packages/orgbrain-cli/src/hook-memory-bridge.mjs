@@ -1184,7 +1184,7 @@ export function captureCandidateJson(record) {
     content: redactHookMemoryText(record.content),
     summary: redactHookMemoryText(record.summary),
     rationale: redactHookMemoryText(record.rationale),
-    reuseRule: redactHookMemoryText(record.reuseRule),
+    reuseRule: redactHookMemoryText(record.reuseRule ?? record.reuse_rule),
     evidence: canonicalEvidence(record)
   });
 }
@@ -1420,7 +1420,9 @@ export async function prepareObservedLearningRecords(record, workspace, tenantId
       created_at: record.createdAt,
       expires_at: record.createdAt + 180 * 24 * 60 * 60 * 1000
     }));
-  const deterministicReviewCandidates = records.map((item) => ({
+  const deterministicReviewCandidates = options.includeDeterministicReviewCandidates === false
+    ? []
+    : records.map((item) => ({
     external_key: `learning-review:${sha256(`${record.externalKey}\0${item.externalKey}`)}`,
     prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
     prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,

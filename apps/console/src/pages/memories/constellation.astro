@@ -1,17 +1,15 @@
 ---
-import KnowledgeConstellation from "../../components/intelligence/KnowledgeConstellation.astro";
 import MemoryMap3D from "../../components/intelligence/MemoryMap3D.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
 import { intelligencePageCopy } from "../../lib/intelligence-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../../lib/insights-ui-mode";
-import { normalizeKnowledgeGraph, type KnowledgeNodeType } from "../../lib/knowledge-graph-ui";
 
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
   return Astro.redirect(`/memories${Astro.url.search}`);
 }
-const { params, apiParams, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const { params, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = intelligencePageCopy(lang);
 const query = params.get("q")?.trim();
 const ownerPrincipal = params.get("owner_principal")?.trim() || "";
@@ -26,25 +24,7 @@ const fromTimestamp = dateValue(params.get("from_date")) ?? dateValue(params.get
 const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.get("to"), true);
 const fromDate = params.get("from_date")?.trim() || (fromTimestamp ? new Date(fromTimestamp).toISOString().slice(0, 10) : "");
 const toDate = params.get("to_date")?.trim() || (toTimestamp ? new Date(toTimestamp).toISOString().slice(0, 10) : "");
-if (query) apiParams.set("q", query);
-apiParams.set("depth", "2");
 const selected = params.get("selected")?.trim();
-const nodeTypes = new Set<KnowledgeNodeType>(["project", "memory", "decision", "resource", "entity", "task"]);
-if (selected) {
-  const separator = selected.indexOf(":");
-  const focusType = separator > 0 ? selected.slice(0, separator) : "";
-  const focusId = separator > 0 ? selected.slice(separator + 1) : "";
-  if (focusId && nodeTypes.has(focusType as KnowledgeNodeType)) {
-    apiParams.set("focus_type", focusType);
-    apiParams.set("focus_id", focusId);
-  }
-}
-const refreshUrl = `/api/v1/dashboard/knowledge-graph?${apiParams.toString()}`;
-const result = await fetchDashboardData(
-  new URL(refreshUrl, Astro.url),
-  normalizeKnowledgeGraph,
-  normalizeKnowledgeGraph({})
-);
 type MemoryMapData = {
   scope: "mine" | "org";
   cluster_mode: boolean;
@@ -108,32 +88,13 @@ const mapResult = await fetchDashboardData<MemoryMapData>(
   (value) => value as MemoryMapData,
   { scope: mapParams.get("scope") as "mine" | "org", cluster_mode: false, total_count: 0, visible_count: 0, truncated: false, nodes: [], links: [], clusters: [] }
 );
-const legacy2d = params.get("legacy_2d") === "1";
-if (selected && !result.error && result.data.nodes.length > 0 && !result.data.nodes.some((node) => node.id === selected || node.source_id === selected)) {
-  const next = new URLSearchParams(params);
-  next.delete("selected");
-  next.set("notice", "selection-fallback");
-  return Astro.redirect(`/memories/constellation?${next.toString()}`);
-}
 ---
 <BaseLayout title={copy.routes.constellationTitle} lang={lang} wide>
-  {result.error && (
-    <div class="intelligence-route-alert" role="alert">
-      <strong>{copy.routes.graphError}</strong>
-      <span>{result.error}</span>
-    </div>
-  )}
   {mapResult.error && (
     <div class="intelligence-route-alert" role="alert">
       <strong>3D memory map unavailable</strong>
       <span>{mapResult.error}</span>
     </div>
   )}
-  {legacy2d ? (
-    <KnowledgeConstellation data={result.data} loadError={result.error} refreshUrl={refreshUrl} params={params} locale={lang} />
-  ) : (
-    <>
-      <MemoryMap3D data={mapResult.data} tenantId={params.get("tenant_id") || "default"} projectId={projectId || ""} query={query || ""} ownerPrincipal={ownerPrincipal} fromDate={fromDate} toDate={toDate} scope={mapParams.get("scope") as "mine" | "org"} selectedId={selected || ""} />
-    </>
-  )}
+  <MemoryMap3D data={mapResult.data} tenantId={params.get("tenant_id") || "default"} projectId={projectId || ""} query={query || ""} ownerPrincipal={ownerPrincipal} fromDate={fromDate} toDate={toDate} scope={mapParams.get("scope") as "mine" | "org"} selectedId={selected || ""} locale={lang} mapCopy={copy.constellation} traceCopy={copy.constellation.trace} />
 </BaseLayout>

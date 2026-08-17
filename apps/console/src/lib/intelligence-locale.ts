@@ -156,8 +156,222 @@ const EN_COPY = {
     accessibleList: "Accessible list",
     visibleKnowledge: "Visible knowledge",
     visibleRelations: "Visible relationships",
-    directed: "Directed",
-    mutual: "Mutual"
+      directed: "Directed",
+      mutual: "Mutual",
+      mapEyebrow: "Memory constellation / WebGL",
+      memoryMapTitle: "3D memory map",
+      mapAriaLabel: "3D memory map",
+      searchFilters: "Search & filters",
+      searchMap: "Search map",
+      mapSearchPlaceholder: "memory ID / summary / owner",
+      presetsAria: "Map color presets",
+      projectPreset: "Project",
+      ownerPreset: "Owner",
+      utilizationPreset: "Utilization",
+      openList: "Open memory list",
+      allProjects: "All projects",
+      allOwners: "All owners",
+      myMemories: "My memories",
+      from: "From",
+      to: "To",
+      anyPeriod: "Any period",
+      applyFilters: "Apply filters",
+      fallbackTitle: "3D view is unavailable; opening the list",
+      fallbackBody: "The memory list uses the same filters. If it does not open automatically, use the link below.",
+      openMemoryList: "Open memory list",
+      selectedNode: "Selected node",
+      nothingSelected: "Nothing selected",
+      selectNodeHint: "Select a node to inspect its owner, references, and net savings.",
+      projectLabel: "Project",
+      ownerLabel: "Owner",
+      referencesLabel: "References",
+      utilizationLabel: "Utilization",
+      netSavedLabel: "Net saved",
+      tagsLabel: "Tags",
+      contentLabel: "Content",
+      historyLabel: "History",
+      tenantRoot: "Tenant root",
+      projectHub: "Project hub",
+      sharedConcept: "Shared concept",
+      memoryKind: "Memory",
+      decisionKind: "Decision",
+      nodeKind: "Node",
+      noAssignment: "Unassigned",
+      notSet: "Not set",
+      unmeasured: "Not measured",
+      openMemory: "Open in memory library",
+      creatorLabel: "Creator",
+      decisionTypeLabel: "Decision type",
+      relatedMemory: "related memory",
+      projectsLabel: "projects",
+      memoriesLabel: "memories",
+      membersLabel: "members",
+      linksLabel: "links",
+      peopleLabel: "people",
+      refsLabel: "refs",
+      tokensLabel: "tokens",
+      sourceNodeLegend: "line color = source node",
+      directedRelationLegend: "directed relation",
+      idLabel: "ID",
+      nodeTypeLabel: "Node type",
+      labelLabel: "Label",
+      summaryLabel: "Summary",
+      tenantLabel: "Tenant",
+      usedLabel: "Used",
+      consumersLabel: "Consumers",
+      injectedTokensLabel: "Injected tokens",
+      updatedLabel: "Updated",
+      clusterLabel: "Cluster",
+      entityTypeLabel: "Entity type",
+      confirmationLabel: "Confirmation",
+      confidenceLabel: "Confidence",
+      sourceLabel: "Source",
+      externalKeyLabel: "External key",
+      kindLabel: "Kind",
+      lifecycleLabel: "Lifecycle",
+      currentVersionLabel: "Current version",
+      actorLabel: "Actor",
+      createdLabel: "Created",
+      lastAccessedLabel: "Last accessed",
+      utilityLabel: "Utility",
+      deletedAtLabel: "Deleted at",
+      deletedByLabel: "Deleted by",
+      deleteReasonLabel: "Delete reason",
+      detailUsageIdLabel: "Detail usage ID",
+      verificationSampledLabel: "Verification sampled",
+      yesLabel: "yes",
+      noLabel: "no",
+      loadingMemoryDetail: "Loading content, history, and evidence…",
+      detailFallback: "Details could not be loaded; showing map metadata.",
+      mapRenderFallback: "The 3D view could not be rendered, so the list is shown.",
+      trace: {
+      eyebrow: "Decision trace",
+      decision: "Decision",
+      decisionKey: "Decision key",
+      decisionValue: "Decision",
+      status: "Status",
+      reason: "Why this was chosen",
+      reasonDetail: "Reason",
+      trigger: "Trigger",
+      question: "Question",
+      alternatives: "Rejected alternatives",
+      evidence: "Evidence",
+      outcome: "Outcome and reuse",
+      outcomeValue: "Outcome",
+      verifiedOutcome: "Verified outcome",
+      artifacts: "Reflected artifacts",
+      sources: "Sources",
+      implementation: "Implementation",
+      verification: "Verification",
+      source: "Source",
+      symptom: "Symptom",
+      rootCause: "Root cause",
+      correction: "Correction",
+      avoidanceRule: "Prevention rule",
+      reuseWhen: "Reuse when",
+      missingDecision: "Decision not recorded",
+      missingReason: "Reason not recorded",
+      missingAlternative: "Rejected alternative not recorded",
+      missingEvidence: "Evidence not recorded",
+      missingArtifact: "Formal artifact link not registered",
+      missingVerification: "Verification is not confirmed",
+      noRationales: "No decision or failure learning is attached.",
+      noArtifacts: "No readable confirmed artifacts are linked.",
+      unverified: "Not verified",
+      loading: "Loading decision trace…",
+      error: "The decision trace could not be loaded.",
+      manageArtifacts: "Manage artifact links",
+      openResource: "Open resource record",
+      previewResource: "Preview here",
+      resourcePreview: "Artifact preview",
+      closePreview: "Close preview",
+      openDetailsNewTab: "Open details in a new tab",
+      localReference: "Local reference",
+      pinnedVersion: "Pinned version",
+      lifecycle: "Lifecycle",
+      locator: "Locator",
+      notAvailable: "Not available",
+      partial: "Some trace fields are missing"
+      ,pathwayEyebrow: "Decision lineage"
+      ,pathwayTitle: "The path of a decision"
+      ,pathwayIntro: "Follow what was decided, why it was chosen, what supports it, and where it was reflected."
+      ,stepDecision: "Decision"
+      ,stepDecisionDescription: "What was decided"
+      ,stepReason: "Reason"
+      ,stepReasonDescription: "Why it was chosen"
+      ,stepEvidence: "Evidence"
+      ,stepEvidenceDescription: "What supports it"
+      ,stepArtifact: "Artifact"
+      ,stepArtifactDescription: "Where it was reflected"
+      ,conceptPrompt: "Select a decision node to inspect a real path."
+      ,instancePrompt: "Use the four steps to inspect this decision's real data."
+      ,currentPath: "This decision path"
+      ,technicalDetails: "Technical details"
+      ,panelControls: "Trace panel controls"
+      ,expandPanel: "Expand"
+      ,collapsePanel: "Collapse"
+      ,keyboardSelection: "Select a node with the keyboard"
+      ,keyboardSearch: "Filter decisions and memories"
+      ,keyboardSearchPlaceholder: "Search nodes"
+      ,availableState: "Available"
+      ,confirmedState: "Confirmed"
+      ,evidenceCount: "Evidence · {count}"
+      ,artifactCount: "Artifacts · {count}"
+      ,missingState: "Missing"
+      ,unverifiedState: "Unverified"
+      ,truncatedState: "Partial"
+      ,conceptDecisionDetail: "Start with the conclusion the organization adopted."
+      ,conceptReasonDetail: "Review the reasoning, constraints, and rejected alternatives."
+      ,conceptEvidenceDetail: "Check the files, commands, statements, and sources that support the claim."
+      ,conceptArtifactDetail: "Confirm the implementation, output, or verification result where the decision landed."
+      ,failureDecision: "Failure and learning"
+      ,failureKind: "Failure learning"
+      ,failureDecisionDescription: "What happened"
+      ,failureReason: "Root cause"
+      ,failureReasonDescription: "Why it happened"
+      ,failureEvidence: "Verification"
+      ,failureEvidenceDescription: "How it was checked"
+      ,failureArtifact: "Correction and prevention"
+      ,failureArtifactDescription: "What changed"
+      ,conceptFailureDecisionDetail: "Start with the observed symptom and the lesson recorded from it."
+      ,conceptFailureReasonDetail: "Separate the root cause from the visible symptom."
+      ,conceptFailureEvidenceDetail: "Compare the failing and successful evidence used to verify the correction."
+      ,conceptFailureArtifactDetail: "Confirm the correction, verified outcome, and rule that prevents recurrence."
+      ,copyReference: "Copy reference"
+      ,copied: "Copied"
+      ,resourceDetails: "Resource details"
+      ,evidenceDetails: "Evidence details"
+      ,previousStep: "Previous"
+      ,nextStep: "Next"
+      ,inspectReason: "Inspect the reason"
+      ,supportsDecision: "Supports the decision"
+      ,supportsReason: "Supports the reason"
+      ,supportsCause: "Supports the cause"
+      ,supportsVerification: "Supports verification"
+      ,supportsOther: "Other evidence"
+      ,decisionSelector: "Decision"
+      ,failedApproach: "Failed approach"
+      ,constraints: "Constraints"
+      ,reasonPreview: "Reason preview"
+      ,traceLoadFailure: "The real data could not be loaded. You can continue selecting nodes on the map."
+      ,outputArtifact: "Output artifact"
+      ,resourceKindDocument: "Document"
+      ,resourceKindTestResult: "Test result"
+      ,resourceKindBuild: "Build"
+      ,resourceKindOutput: "Output"
+      ,resourceKindSourceFile: "Source file"
+      ,stateActive: "Active"
+      ,stateRetired: "Retired"
+      ,stateArchived: "Archived"
+      ,stateCurrent: "Current"
+      ,successfulCommand: "Successful run"
+      ,failedCommand: "Failed run"
+      ,commandEvidence: "Command"
+      ,fileEvidence: "File"
+      ,userStatementEvidence: "User statement"
+      ,toolCallEvidence: "Tool call"
+      ,pickerCount: "Showing {visible} of {total}"
+    }
   },
   strata: {
     eyebrow: "Memory Strata",
@@ -417,7 +631,221 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       visibleKnowledge: "表示中の知識",
       visibleRelations: "表示中の関係",
       directed: "方向あり",
-      mutual: "相互"
+      mutual: "相互",
+      mapEyebrow: "メモリ・コンステレーション · WebGL",
+      memoryMapTitle: "3Dメモリマップ",
+      mapAriaLabel: "3Dメモリマップ",
+      searchFilters: "検索・フィルター",
+      searchMap: "マップを検索",
+      mapSearchPlaceholder: "メモリID・要約・所有者",
+      presetsAria: "マップの色分け",
+      projectPreset: "プロジェクト",
+      ownerPreset: "所有者",
+      utilizationPreset: "利用率",
+      openList: "メモリ一覧を開く",
+      allProjects: "すべてのプロジェクト",
+      allOwners: "すべての所有者",
+      myMemories: "自分のメモリ",
+      from: "開始",
+      to: "終了",
+      anyPeriod: "期間指定なし",
+      applyFilters: "フィルターを適用",
+      fallbackTitle: "3D表示を利用できないため一覧を開きます",
+      fallbackBody: "同じ条件のメモリ一覧を開いています。自動で移動しない場合は、下のリンクを使用してください。",
+      openMemoryList: "メモリ一覧を開く",
+      selectedNode: "選択したノード",
+      nothingSelected: "未選択",
+      selectNodeHint: "ノードを選択すると、所有者・参照数・純削減を確認できます。",
+      projectLabel: "プロジェクト",
+      ownerLabel: "所有者",
+      referencesLabel: "参照数",
+      utilizationLabel: "利用率",
+      netSavedLabel: "純削減",
+      tagsLabel: "タグ",
+      contentLabel: "本文",
+      historyLabel: "変更履歴",
+      tenantRoot: "テナント直下",
+      projectHub: "プロジェクトハブ",
+      sharedConcept: "共有コンセプト",
+      memoryKind: "メモリ",
+      decisionKind: "意思決定",
+      nodeKind: "ノード",
+      noAssignment: "未割り当て",
+      notSet: "未設定",
+      unmeasured: "未計測",
+      openMemory: "メモリライブラリで開く",
+      creatorLabel: "作成者",
+      decisionTypeLabel: "意思決定種別",
+      relatedMemory: "関連メモリ",
+      projectsLabel: "プロジェクト",
+      memoriesLabel: "メモリ",
+      membersLabel: "メンバー",
+      linksLabel: "リンク",
+      peopleLabel: "人",
+      refsLabel: "参照",
+      tokensLabel: "tokens",
+      sourceNodeLegend: "線の色 = 起点ノード",
+      directedRelationLegend: "方向付きの関係",
+      idLabel: "ID",
+      nodeTypeLabel: "ノード種別",
+      labelLabel: "ラベル",
+      summaryLabel: "概要",
+      tenantLabel: "テナント",
+      usedLabel: "使用回数",
+      consumersLabel: "利用者数",
+      injectedTokensLabel: "注入トークン",
+      updatedLabel: "更新日時",
+      clusterLabel: "クラスタ",
+      entityTypeLabel: "エンティティ種別",
+      confirmationLabel: "確認状態",
+      confidenceLabel: "信頼度",
+      sourceLabel: "ソース",
+      externalKeyLabel: "外部キー",
+      kindLabel: "種別",
+      lifecycleLabel: "ライフサイクル",
+      currentVersionLabel: "現行バージョン",
+      actorLabel: "アクター",
+      createdLabel: "作成日時",
+      lastAccessedLabel: "最終アクセス",
+      utilityLabel: "有用度",
+      deletedAtLabel: "削除日時",
+      deletedByLabel: "削除者",
+      deleteReasonLabel: "削除理由",
+      detailUsageIdLabel: "詳細利用ID",
+      verificationSampledLabel: "検証サンプル取得",
+      yesLabel: "はい",
+      noLabel: "いいえ",
+      loadingMemoryDetail: "本文・履歴・根拠を読み込んでいます…",
+      detailFallback: "詳細を取得できないため、マップ上の情報を表示しています。",
+      mapRenderFallback: "3D描画を確認できなかったため一覧表示にします。",
+      trace: {
+        eyebrow: "意思決定トレース",
+        decision: "決定事項",
+        decisionKey: "決定キー",
+        decisionValue: "決定内容",
+        status: "状態",
+        reason: "判断理由・採用理由",
+        reasonDetail: "判断理由",
+        trigger: "きっかけ",
+        question: "問い",
+        alternatives: "却下した代替案",
+        evidence: "根拠",
+        outcome: "結果・再利用条件",
+        outcomeValue: "結果",
+        verifiedOutcome: "検証された結果",
+        artifacts: "反映された成果物",
+        sources: "判断の参照元",
+        implementation: "実装成果物",
+        verification: "検証成果物",
+        source: "ソース",
+        symptom: "発生した症状",
+        rootCause: "根本原因",
+        correction: "修正内容",
+        avoidanceRule: "再発防止ルール",
+        reuseWhen: "再利用条件",
+        missingDecision: "決定事項が未記録です",
+        missingReason: "判断理由が未記録です",
+        missingAlternative: "却下した代替案が未記録です",
+        missingEvidence: "根拠が未記録です",
+        missingArtifact: "正式成果物リンク未登録です",
+        missingVerification: "検証済みとして確認されていません",
+        noRationales: "意思決定または失敗学習が紐付いていません。",
+        noArtifacts: "閲覧可能なConfirmed成果物が紐付いていません。",
+        unverified: "未検証",
+        loading: "意思決定トレースを読み込んでいます…",
+        error: "意思決定トレースを取得できませんでした。",
+        manageArtifacts: "成果物リンクを管理",
+        openResource: "資料レコードを開く",
+        previewResource: "この画面で確認",
+        resourcePreview: "成果物プレビュー",
+        closePreview: "プレビューを閉じる",
+        openDetailsNewTab: "資料詳細を別タブで開く",
+        localReference: "ローカル参照",
+        pinnedVersion: "固定バージョン",
+        lifecycle: "ライフサイクル",
+        locator: "位置",
+        notAvailable: "利用できません",
+        partial: "一部のトレース項目が不足しています"
+        ,pathwayEyebrow: "判断の系譜"
+        ,pathwayTitle: "判断の道筋"
+        ,pathwayIntro: "何を決め、なぜ選び、何が支え、どこへ反映されたかを順に確認します。"
+        ,stepDecision: "決定"
+        ,stepDecisionDescription: "何を決めたか"
+        ,stepReason: "理由"
+        ,stepReasonDescription: "なぜその案を選んだか"
+        ,stepEvidence: "根拠"
+        ,stepEvidenceDescription: "何が判断を支えたか"
+        ,stepArtifact: "成果物"
+        ,stepArtifactDescription: "どこに反映されたか"
+        ,conceptPrompt: "意思決定ノードを選んで実データを見てください。"
+        ,instancePrompt: "4段階を使って、この判断の実データを確認できます。"
+        ,currentPath: "この判断の道筋"
+        ,technicalDetails: "技術情報"
+        ,panelControls: "トレースパネル操作"
+        ,expandPanel: "広げる"
+        ,collapsePanel: "縮める"
+        ,keyboardSelection: "キーボードでノードを選ぶ"
+        ,keyboardSearch: "決定・メモリを絞り込む"
+        ,keyboardSearchPlaceholder: "ノードを検索"
+        ,availableState: "確認可能"
+        ,confirmedState: "確認済み"
+        ,evidenceCount: "根拠 {count}件"
+        ,artifactCount: "成果物 {count}件"
+        ,missingState: "未登録"
+        ,unverifiedState: "未検証"
+        ,truncatedState: "一部のみ"
+        ,conceptDecisionDetail: "組織が採用した結論から確認します。"
+        ,conceptReasonDetail: "判断理由、制約、却下した代替案を確認します。"
+        ,conceptEvidenceDetail: "判断を支えたファイル、コマンド、発話、参照元を確認します。"
+        ,conceptArtifactDetail: "判断が反映された実装、出力、検証結果を確認します。"
+        ,failureDecision: "失敗・学び"
+        ,failureKind: "失敗学習"
+        ,failureDecisionDescription: "何が起きたか"
+        ,failureReason: "根本原因"
+        ,failureReasonDescription: "なぜ起きたか"
+        ,failureEvidence: "検証"
+        ,failureEvidenceDescription: "何で確かめたか"
+        ,failureArtifact: "修正・再発防止"
+        ,failureArtifactDescription: "何に反映したか"
+        ,conceptFailureDecisionDetail: "観測された症状と、そこから得た学びを確認します。"
+        ,conceptFailureReasonDetail: "表面上の症状と根本原因を分けて確認します。"
+        ,conceptFailureEvidenceDetail: "失敗時と成功時の根拠を比較し、修正を検証します。"
+        ,conceptFailureArtifactDetail: "修正内容、検証結果、再発防止ルールを確認します。"
+        ,copyReference: "参照をコピー"
+        ,copied: "コピーしました"
+        ,resourceDetails: "資料の詳細"
+        ,evidenceDetails: "根拠の詳細"
+        ,previousStep: "前へ"
+        ,nextStep: "次へ"
+        ,inspectReason: "理由を確認する"
+        ,supportsDecision: "決定を支持"
+        ,supportsReason: "理由を支持"
+        ,supportsCause: "原因を支持"
+        ,supportsVerification: "検証を支持"
+        ,supportsOther: "その他の根拠"
+        ,decisionSelector: "判断を切り替える"
+        ,failedApproach: "失敗した方法"
+        ,constraints: "制約"
+        ,reasonPreview: "理由の要約"
+        ,traceLoadFailure: "実データを読み込めませんでした。マップの選択は継続できます。"
+        ,outputArtifact: "出力成果物"
+        ,resourceKindDocument: "文書"
+        ,resourceKindTestResult: "テスト結果"
+        ,resourceKindBuild: "ビルド"
+        ,resourceKindOutput: "出力"
+        ,resourceKindSourceFile: "ソースファイル"
+        ,stateActive: "利用中"
+        ,stateRetired: "廃止済み"
+        ,stateArchived: "アーカイブ済み"
+        ,stateCurrent: "現行"
+        ,successfulCommand: "修正後の実行"
+        ,failedCommand: "失敗した実行"
+        ,commandEvidence: "コマンド"
+        ,fileEvidence: "ファイル"
+        ,userStatementEvidence: "ユーザー発話"
+        ,toolCallEvidence: "ツール実行"
+        ,pickerCount: "{total}件中{visible}件を表示"
+      }
     },
     strata: {
       eyebrow: "知識の履歴 · メモリ地層",
@@ -668,7 +1096,221 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       visibleKnowledge: "当前知识",
       visibleRelations: "当前关系",
       directed: "有方向",
-      mutual: "双向"
+      mutual: "双向",
+      mapEyebrow: "Memory 星图 · WebGL",
+      memoryMapTitle: "3D 记忆地图",
+      mapAriaLabel: "3D 记忆地图",
+      searchFilters: "搜索与筛选",
+      searchMap: "搜索地图",
+      mapSearchPlaceholder: "记忆 ID / 摘要 / 所有者",
+      presetsAria: "地图颜色预设",
+      projectPreset: "项目",
+      ownerPreset: "所有者",
+      utilizationPreset: "使用率",
+      openList: "打开记忆列表",
+      allProjects: "所有项目",
+      allOwners: "所有所有者",
+      myMemories: "我的记忆",
+      from: "从",
+      to: "到",
+      anyPeriod: "任意期间",
+      applyFilters: "应用筛选",
+      fallbackTitle: "3D视图不可用，正在打开列表",
+      fallbackBody: "记忆列表使用相同筛选条件。如果没有自动打开，请使用下面的链接。",
+      openMemoryList: "打开记忆列表",
+      selectedNode: "已选节点",
+      nothingSelected: "未选择",
+      selectNodeHint: "选择节点以查看所有者、引用次数和净节省。",
+      projectLabel: "项目",
+      ownerLabel: "所有者",
+      referencesLabel: "引用",
+      utilizationLabel: "使用率",
+      netSavedLabel: "净节省",
+      tagsLabel: "标签",
+      contentLabel: "正文",
+      historyLabel: "变更历史",
+      tenantRoot: "租户根节点",
+      projectHub: "项目中心",
+      sharedConcept: "共享概念",
+      memoryKind: "记忆",
+      decisionKind: "决策",
+      nodeKind: "节点",
+      noAssignment: "未分配",
+      notSet: "未设置",
+      unmeasured: "未测量",
+      openMemory: "在记忆库中打开",
+      creatorLabel: "创建者",
+      decisionTypeLabel: "决策类型",
+      relatedMemory: "相关记忆",
+      projectsLabel: "项目",
+      memoriesLabel: "记忆",
+      membersLabel: "成员",
+      linksLabel: "链接",
+      peopleLabel: "人员",
+      refsLabel: "引用",
+      tokensLabel: "tokens",
+      sourceNodeLegend: "线条颜色 = 起点节点",
+      directedRelationLegend: "有向关系",
+      idLabel: "ID",
+      nodeTypeLabel: "节点类型",
+      labelLabel: "标签",
+      summaryLabel: "摘要",
+      tenantLabel: "租户",
+      usedLabel: "使用次数",
+      consumersLabel: "使用者数",
+      injectedTokensLabel: "注入令牌",
+      updatedLabel: "更新时间",
+      clusterLabel: "集群",
+      entityTypeLabel: "实体类型",
+      confirmationLabel: "确认状态",
+      confidenceLabel: "置信度",
+      sourceLabel: "来源",
+      externalKeyLabel: "外部键",
+      kindLabel: "类型",
+      lifecycleLabel: "生命周期",
+      currentVersionLabel: "当前版本",
+      actorLabel: "操作者",
+      createdLabel: "创建时间",
+      lastAccessedLabel: "最后访问",
+      utilityLabel: "效用",
+      deletedAtLabel: "删除时间",
+      deletedByLabel: "删除者",
+      deleteReasonLabel: "删除原因",
+      detailUsageIdLabel: "详情使用ID",
+      verificationSampledLabel: "已采样验证",
+      yesLabel: "是",
+      noLabel: "否",
+      loadingMemoryDetail: "正在加载正文、历史和证据…",
+      detailFallback: "无法加载详情，显示地图元数据。",
+      mapRenderFallback: "无法渲染3D视图，已显示列表。",
+      trace: {
+        eyebrow: "决策追踪",
+        decision: "决策事项",
+        decisionKey: "决策键",
+        decisionValue: "决策内容",
+        status: "状态",
+        reason: "判断理由",
+        reasonDetail: "判断理由",
+        trigger: "触发条件",
+        question: "问题",
+        alternatives: "被否决的替代方案",
+        evidence: "证据",
+        outcome: "结果与复用条件",
+        outcomeValue: "结果",
+        verifiedOutcome: "已验证结果",
+        artifacts: "已反映的成果",
+        sources: "判断来源",
+        implementation: "实现成果",
+        verification: "验证成果",
+        source: "来源",
+        symptom: "症状",
+        rootCause: "根本原因",
+        correction: "修正",
+        avoidanceRule: "防止复发规则",
+        reuseWhen: "复用条件",
+        missingDecision: "未记录决策事项",
+        missingReason: "未记录判断理由",
+        missingAlternative: "未记录被否决的替代方案",
+        missingEvidence: "未记录证据",
+        missingArtifact: "尚未登记正式成果链接",
+        missingVerification: "尚未确认验证完成",
+        noRationales: "没有关联决策或失败学习。",
+        noArtifacts: "没有可读取的已确认成果。",
+        unverified: "未验证",
+        loading: "正在加载决策追踪…",
+        error: "无法加载决策追踪。",
+        manageArtifacts: "管理成果链接",
+        openResource: "打开资料记录",
+        previewResource: "在此预览",
+        resourcePreview: "成果预览",
+        closePreview: "关闭预览",
+        openDetailsNewTab: "在新标签页打开详情",
+        localReference: "本地引用",
+        pinnedVersion: "固定版本",
+        lifecycle: "生命周期",
+        locator: "定位",
+        notAvailable: "不可用",
+        partial: "部分追踪字段缺失"
+        ,pathwayEyebrow: "决策脉络"
+        ,pathwayTitle: "决策路径"
+        ,pathwayIntro: "依次查看做了什么决定、为何选择、由什么支撑，以及反映到了哪里。"
+        ,stepDecision: "决策"
+        ,stepDecisionDescription: "决定了什么"
+        ,stepReason: "理由"
+        ,stepReasonDescription: "为何选择该方案"
+        ,stepEvidence: "证据"
+        ,stepEvidenceDescription: "什么支撑该判断"
+        ,stepArtifact: "成果"
+        ,stepArtifactDescription: "反映到了哪里"
+        ,conceptPrompt: "请选择决策节点查看真实数据。"
+        ,instancePrompt: "通过四个阶段查看此决策的真实数据。"
+        ,currentPath: "此决策的路径"
+        ,technicalDetails: "技术信息"
+        ,panelControls: "追踪面板控制"
+        ,expandPanel: "展开"
+        ,collapsePanel: "收起"
+        ,keyboardSelection: "使用键盘选择节点"
+        ,keyboardSearch: "筛选决策与记忆"
+        ,keyboardSearchPlaceholder: "搜索节点"
+        ,availableState: "可查看"
+        ,confirmedState: "已确认"
+        ,evidenceCount: "证据 {count} 条"
+        ,artifactCount: "成果 {count} 项"
+        ,missingState: "缺失"
+        ,unverifiedState: "未验证"
+        ,truncatedState: "部分"
+        ,conceptDecisionDetail: "先查看组织采用的结论。"
+        ,conceptReasonDetail: "查看判断理由、约束和被否决的替代方案。"
+        ,conceptEvidenceDetail: "查看支撑主张的文件、命令、陈述和来源。"
+        ,conceptArtifactDetail: "确认决策所落实到的实现、输出或验证结果。"
+        ,failureDecision: "失败与学习"
+        ,failureKind: "失败学习"
+        ,failureDecisionDescription: "发生了什么"
+        ,failureReason: "根本原因"
+        ,failureReasonDescription: "为何发生"
+        ,failureEvidence: "验证"
+        ,failureEvidenceDescription: "如何确认"
+        ,failureArtifact: "修正与防止复发"
+        ,failureArtifactDescription: "改变了什么"
+        ,conceptFailureDecisionDetail: "先查看观察到的症状以及由此记录的学习。"
+        ,conceptFailureReasonDetail: "区分根本原因与表面症状。"
+        ,conceptFailureEvidenceDetail: "比较失败和成功证据，以验证修正。"
+        ,conceptFailureArtifactDetail: "确认修正、验证结果和防止复发规则。"
+        ,copyReference: "复制引用"
+        ,copied: "已复制"
+        ,resourceDetails: "资料详情"
+        ,evidenceDetails: "证据详情"
+        ,previousStep: "上一步"
+        ,nextStep: "下一步"
+        ,inspectReason: "查看理由"
+        ,supportsDecision: "支撑决策"
+        ,supportsReason: "支撑理由"
+        ,supportsCause: "支撑原因"
+        ,supportsVerification: "支撑验证"
+        ,supportsOther: "其他证据"
+        ,decisionSelector: "切换决策"
+        ,failedApproach: "失败的方法"
+        ,constraints: "约束"
+        ,reasonPreview: "理由摘要"
+        ,traceLoadFailure: "无法加载真实数据。仍可继续在地图上选择节点。"
+        ,outputArtifact: "输出成果"
+        ,resourceKindDocument: "文档"
+        ,resourceKindTestResult: "测试结果"
+        ,resourceKindBuild: "构建"
+        ,resourceKindOutput: "输出"
+        ,resourceKindSourceFile: "源文件"
+        ,stateActive: "使用中"
+        ,stateRetired: "已停用"
+        ,stateArchived: "已归档"
+        ,stateCurrent: "当前"
+        ,successfulCommand: "修正后的执行"
+        ,failedCommand: "失败的执行"
+        ,commandEvidence: "命令"
+        ,fileEvidence: "文件"
+        ,userStatementEvidence: "用户陈述"
+        ,toolCallEvidence: "工具调用"
+        ,pickerCount: "显示 {visible} / {total}"
+      }
     },
     strata: {
       eyebrow: "Memory Strata · 记忆地层",

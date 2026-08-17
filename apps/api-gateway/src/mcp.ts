@@ -466,6 +466,7 @@ class OrgBrainMcpTools {
         verified_items: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
         deterministically_verified_items: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
         review_candidates: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
+        quarantine_candidates: z.array(z.record(z.string(), z.unknown())).max(3).optional(),
         semantic_aliases: z.array(z.object({
           project_id: z.string().max(128).nullable().optional(),
           task_key: z.string().min(1).max(256),
@@ -475,7 +476,7 @@ class OrgBrainMcpTools {
           judge_consensus: z.record(z.string(), z.unknown())
         })).max(16).optional()
       },
-      async ({ tenant_id, commitments, verified_items, deterministically_verified_items, review_candidates, semantic_aliases, ...payload }) => {
+      async ({ tenant_id, commitments, verified_items, deterministically_verified_items, review_candidates, quarantine_candidates, semantic_aliases, ...payload }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "write", payload.project_id);
         if ((verified_items ?? []).length > 0) await this.requirePermission(tenantId, "memory:attest", payload.project_id);
@@ -489,6 +490,7 @@ class OrgBrainMcpTools {
             verified_items,
             deterministically_verified_items,
             review_candidates,
+            quarantine_candidates,
             semantic_aliases,
             ...payload
           }, { tenantId, principal: this.props.principal })

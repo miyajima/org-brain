@@ -509,6 +509,47 @@ export function buildRetrievalUnitsV4(record) {
     }
   }
 
+  let learning = record.learning;
+  if ((!learning || typeof learning !== "object") && typeof record.learning_json === "string") {
+    try {
+      const parsed = JSON.parse(record.learning_json);
+      learning = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      learning = null;
+    }
+  }
+  const rationale = collapseWhitespace(learning?.rationale ?? record.rationale);
+  const reuseRule = collapseWhitespace(learning?.reuse_rule ?? learning?.reuse_when ?? record.reuse_rule);
+  if (rationale) {
+    append("profile", `Rationale: ${rationale}`, {
+      metadata: { channel: "rationale", lesson_type: learning?.lesson_type ?? null }
+    });
+  }
+  if (reuseRule) {
+    append("profile", `Reuse or avoid: ${reuseRule}`, {
+      metadata: { channel: "reuse_or_avoidance", lesson_type: learning?.lesson_type ?? null }
+    });
+  }
+  const learningContext = [
+    learning?.trigger ? `Trigger: ${learning.trigger}` : null,
+    learning?.decision_key ? `Decision key: ${learning.decision_key}` : null,
+    learning?.question ? `Question: ${learning.question}` : null,
+    learning?.symptom ? `Symptom: ${learning.symptom}` : null,
+    learning?.failed_approach ? `Failed approach: ${learning.failed_approach}` : null,
+    learning?.root_cause ? `Root cause: ${learning.root_cause}` : null,
+    learning?.correction ? `Correction: ${learning.correction}` : null,
+    learning?.verified_outcome ? `Verified outcome: ${learning.verified_outcome}` : null,
+    learning?.avoidance_rule ? `Avoidance rule: ${learning.avoidance_rule}` : null,
+    ...(Array.isArray(learning?.applicability?.components)
+      ? learning.applicability.components.map((component) => `Component: ${component}`)
+      : [])
+  ].filter(Boolean);
+  if (learningContext.length > 0) {
+    append("profile", learningContext.join(" "), {
+      metadata: { channel: "learning_context", lesson_type: learning?.lesson_type ?? null }
+    });
+  }
+
   segmentText(`${record.summary ?? ""}\n${record.content}`).forEach((text, index) => {
     const segmentId = `seg_${hash(`${record.id}\0${index}\0${text}`).slice(0, 28)}`;
     append("segment", text, {

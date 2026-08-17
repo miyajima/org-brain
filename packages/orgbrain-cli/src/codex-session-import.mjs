@@ -361,7 +361,7 @@ async function routeTurn({ meta, rows, index, context }) {
       workType: context.workspace.workType,
       eventType: "HistoricalImport",
       metadata: { sessionId: sessionHash, turnId: turnHash }
-    }, context.workspace, context.tenant_id, { rows });
+    }, context.workspace, context.tenant_id, { rows, includeDeterministicReviewCandidates: false });
     for (const record of observed.records.slice(0, 3)) {
       const normalized = captureItemPayload(normalizeObservedRecord(record, occurredAt, record.externalKey));
       const semanticHash = semanticCandidateHash(normalized);
@@ -653,6 +653,45 @@ async function validateTarget(planCore, options) {
 async function applyLocal(planCore, context, options) {
   const store = options.store ?? new LocalMemoryStore(options.dbPath ?? process.env.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB);
   const candidateStore = new TaskCommitmentStore(store.dbPath);
+  if (options.batchActiveWrites === true) {
+    try {
+      const activeItems = planCore.batches.flatMap((batch) => batch.active ?? []);
+      const captured = activeItems.length
+        ? await captureLocalMemories("codex", context.tenant_id, activeItems.map((item) => planRecordForLocal(item, planCore.target.business_category)), { store })
+        : [];
+      const capturedByExternalKey = new Map(activeItems.map((item, index) => [item.external_key, captured[index]]));
+      const results = [];
+      for (const batch of planCore.batches) {
+        const quarantineCandidates = batch.quarantine ?? batch.review ?? [];
+        const reviewResults = quarantineCandidates.length
+          ? await candidateStore.saveLearningCandidates({
+            tenantId: context.tenant_id,
+            projectId: context.project_id,
+            taskKey: batch.task_key,
+            candidates: quarantineCandidates,
+            expireAfterDays: options.quarantineExpireAfterDays
+          })
+          : [];
+        results.push({
+          turn_hash: batch.turn_hash,
+          status: "completed",
+          active: (batch.active ?? []).map((item) => {
+            const result = capturedByExternalKey.get(item.external_key);
+            return {
+              memory_id: result?.memory_id,
+              created: result?.created ?? false,
+              deduplicated: result?.deduplicated ?? false
+            };
+          }),
+          review: reviewResults,
+          quarantine: reviewResults
+        });
+      }
+      return results;
+    } catch (error) {
+      return [{ status: "failed", error: sanitizedError(error) }];
+    }
+  }
   const results = [];
   for (const batch of planCore.batches) {
     try {

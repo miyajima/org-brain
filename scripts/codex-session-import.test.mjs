@@ -439,6 +439,10 @@ test("verified success, decision, and failure become active and local replay is 
     path.join(workspace, "src", "importer-regression.mjs"),
     "export const VERIFIED_IMPORT_SUCCESS_1 = true; // Use importer policy 1\n"
   );
+  await writeFile(
+    path.join(workspace, "src", "semantic-regression.mjs"),
+    "export const VERIFIED_SEMANTIC_REGRESSION = true; // semantic evidence fixture\n"
+  );
 
   const corpus = await buildMemoryIngestionRegressionCorpus();
   const events = ["success", "decision", "failure"].map((cohort) =>
@@ -455,7 +459,9 @@ test("verified success, decision, and failure become active and local replay is 
     ["failure-after", events[2].evidence_selectors[1].ref, 0]
   ];
   const rows = [row({ type: "turn_context", turn_id: "turn-observed" }, 1)];
-  rows.push(row({ type: "user_message", message: "Use importer policy 1" }, 2));
+  const decisionStatement = events.find((event) => event.lesson_type === "decision")
+    .evidence_selectors.find((selector) => selector.type === "user_statement")?.ref;
+  rows.push(row({ type: "user_message", message: decisionStatement }, 2));
   for (const [callId, command, exitCode] of commands) {
     rows.push(row({ type: "custom_tool_call", name: "exec", call_id: callId, input: { cmd: command } }, 3));
     rows.push(row({ type: "custom_tool_call_output", call_id: callId, output: `Script completed; exit_code=${exitCode}` }, 4));

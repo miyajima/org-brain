@@ -6,6 +6,7 @@ import {
   confirmDecisionResourceLinkProposal,
   createDecisionResourceLink,
   getDecisionResources,
+  getDecisionResourceTrace,
   getResourceDecisions,
   listDecisionResourceLinkProposals,
   resolveKnowledgeResource,
@@ -253,6 +254,18 @@ describe("resource decision service", () => {
       confirmation_state: "proposal",
       idempotency_key: "proposal-d1"
     }, actor);
+
+    const trace = await getDecisionResourceTrace(env, tenant, {
+      source_type: "decision_rationale",
+      source_id: "d1"
+    }, { principal: actor });
+    expect(trace.sources.map((item) => item.link.role)).toEqual(["conclusion_source", "rationale_source"]);
+    expect(trace.artifacts.map((item) => item.link.role)).toEqual(["output_artifact"]);
+    expect(trace.sources.every((item) => item.link.confirmation_state === "confirmed")).toBe(true);
+    await expect(getDecisionResourceTrace(env, tenant, {
+      source_type: "decision_rationale",
+      source_id: "d4"
+    }, { principal: "user:2" })).rejects.toMatchObject({ status: 404 });
 
     const replacement = await captureKnowledgeResourceVersion(env, tenant, material.resource.id, {
       connector_id: "test-connector",

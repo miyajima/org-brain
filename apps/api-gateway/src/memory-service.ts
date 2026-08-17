@@ -2498,7 +2498,7 @@ export async function getMemoryDetails(
     }
   }
 
-  const usage = memory ? await recordMemoryUsage(env, {
+  const usage = memory && options.recordUsage !== false ? await recordMemoryUsage(env, {
     tenant_id: tenantId,
     capability: "memory_details",
     access_path: "direct",

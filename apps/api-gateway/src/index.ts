@@ -3,6 +3,7 @@ import {
   dashboardActivityQuerySchema,
   dashboardKnowledgeGraphQuerySchema,
   dashboardStrataQuerySchema,
+  memoryMapTraceQuerySchema,
   type DashboardSourceType
 } from "@org-brain/contracts";
 import { HttpError, runRecordedScheduledJob, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
@@ -119,6 +120,7 @@ import {
 } from "./memory-ownership-service";
 import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
 import { getMemoryAnalytics, getMemoryMap } from "./memory-dashboard-service";
+import { getMemoryMapTrace } from "./memory-map-trace-service";
 import { getMemoryQualityRun, listMemoryQualityRuns } from "./memory-quality-service";
 import { mountMcp } from "./mcp";
 import {
@@ -553,6 +555,30 @@ app.get("/v1/dashboard/memory-map", async (c) => {
     from: Number.isFinite(fromValue) ? fromValue : null,
     to: Number.isFinite(toValue) ? toValue : null,
     limit: Number.isFinite(limit) ? limit : 1500
+  }));
+});
+
+app.get("/v1/dashboard/memory-map/trace", async (c) => {
+  const parsed = memoryMapTraceQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id") || undefined,
+    project_id: c.req.query("project_id") || undefined,
+    scope: c.req.query("scope") || "org",
+    memory_id: c.req.query("memory_id") || undefined,
+    decision_rationale_id: c.req.query("decision_rationale_id") || undefined
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "query";
+    throw new HttpError(400, "invalid_query", `Invalid ${field}: ${issue?.message || "invalid value"}`);
+  }
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  return jsonOk(c, await getMemoryMapTrace(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    projectId: parsed.data.project_id ?? null,
+    scope: parsed.data.scope,
+    memoryId: parsed.data.memory_id ?? null,
+    decisionRationaleId: parsed.data.decision_rationale_id ?? null
   }));
 });
 

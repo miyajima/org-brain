@@ -7,10 +7,14 @@ Org Brain's dashboard presents three read-only projections over the existing D1 
 | Console route | View | Source API |
 | --- | --- | --- |
 | `/overview` | Organizational Nervous System | `GET /v1/dashboard/activity` |
-| `/memories/constellation` | Knowledge Constellation | `GET /v1/dashboard/knowledge-graph` |
+| `/memories/constellation` | 3D Memory Map and decision lineage | `GET /v1/dashboard/memory-map` and `GET /v1/dashboard/memory-map/trace` |
 | `/decisions/history` | Memory Strata | `GET /v1/dashboard/strata` and its detail route |
 
 The existing `/memories`, `/decisions`, `/tasks`, and management screens remain authoritative and available. Visualization selections deep-link to those screens.
+
+The 3D map keeps one four-stage lineage rail for both conceptual guidance and selected data: decision, reason, evidence, and artifact. Selecting a trace stage updates the `trace_step` query parameter without adding browser history. The inspector presents one stage at a time in a bounded, independently scrollable reading surface so long rationale or artifact sets do not turn the whole map into an unbounded page. At 900px and below, the map remains full-width and the inspector becomes an explicit bottom sheet; after a node is selected, introductory chrome contracts to keep the graph visible. Keyboard node selection initially exposes at most 20 normalized labels, searches the complete node set, and closes after selection. Command evidence distinguishes failed runs from successful verification, while resource kinds and lifecycle states use localized display labels rather than storage values.
+
+Confirmed readable artifacts can be inspected in an in-page modal without leaving the map. Links to `/resources`, the memory library, and HTTP(S) artifacts open in a new tab. The focused `/resources?decision_ref=...` view shows the selected decision artifacts first and keeps unrelated search and administrator controls collapsed. Local `orgbrain://` identifiers remain copyable references rather than navigable links.
 
 `INSIGHTS_UI_MODE` controls the home, dashboard routes, navigation, and polling:
 
@@ -38,6 +42,8 @@ Strata collection responses are capped at 100 chains. Detail is capped at 100 re
 - Canonical strata require promotion, a canonical key, or an explicit `canonical-memory` tag.
 - Assumption strata require a proposal assertion or an explicit assumption tag. Low confidence alone is not an assumption.
 - Knowledge similarity never creates a graph edge.
+- Decision-lineage availability is explicit: decisions and reasons show confirmed/unverified state, while evidence and artifact stages show readable item counts. Missing, unverified, partial, and truncated states are never rendered as confirmed.
+- User-facing trace headings and narrative omit fixture-only synthetic-case suffixes. Raw IDs, paths, commands, hashes, locators, and lifecycle metadata remain available only in evidence, artifact preview, or technical details.
 
 ## Polling behavior
 
@@ -87,6 +93,6 @@ If any gate fails, set `INSIGHTS_UI_MODE=off` first to stop polling and hide the
 
 ## Verification
 
-Required checks cover tenant/project isolation, scoped tokens, cursor stability at equal timestamps, bounds, partial history, dangling edges, actor spoof rejection, deterministic coordinates, cycle handling, desktop/mobile navigation, keyboard selection, hidden-tab polling, reduced motion, empty/error/truncated states, and regressions in the existing Memory and Decision workflows.
+Required checks cover tenant/project isolation, scoped tokens, cursor stability at equal timestamps, bounds, partial history, dangling edges, actor spoof rejection, deterministic coordinates, cycle handling, desktop/mobile navigation, keyboard selection, decision-lineage step navigation, in-page artifact preview, new-tab resource links, bounded desktop map/inspector height, hidden-tab polling, reduced motion, empty/error/truncated states, and regressions in the existing Memory and Decision workflows.
 
 Performance targets are API p95 at or below 500 ms for the representative 100k-memory fixture, live p95 at or below one second, compressed responses at or below 250 KiB, and selection feedback within 100 ms.

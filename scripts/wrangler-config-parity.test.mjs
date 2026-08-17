@@ -44,6 +44,17 @@ test("API Gateway local and production Wrangler configs keep local-safe runtime 
   assert.match(production, /crons\s*=\s*\["15 19 \* \* \*"\]/u);
 });
 
+test("local Wrangler config enables the seeded resource trace surfaces", async () => {
+  const local = await readFile(new URL("../apps/api-gateway/wrangler.local.toml", import.meta.url), "utf8");
+  for (const variable of [
+    "KNOWLEDGE_RESOURCE_INGESTION_ENABLED",
+    "DECISION_RESOURCE_LINKS_ENABLED",
+    "RESOURCE_RELATION_EXTRACTION_ENABLED"
+  ]) {
+    assert.deepEqual(quotedValues(local, variable), ["true"], `${variable} must be enabled locally`);
+  }
+});
+
 test("CI starts the API integration Worker with remote bindings disabled", async () => {
   const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   const startBlock = workflow.match(/pnpm exec wrangler dev[\s\S]*?worker\.log[^\n]*/u)?.[0];

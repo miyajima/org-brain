@@ -1,0 +1,30 @@
+[
+  {
+    "type": "console",
+    "level": "warning",
+    "timestamp": "2026-08-17T12:15:10.380Z",
+    "message": "[.WebGL-0x10400542c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "timestamp": "2026-08-17T12:15:10.466Z",
+    "message": "[.WebGL-0x1040054d400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "timestamp": "2026-08-17T12:15:10.466Z",
+    "message": "[.WebGL-0x1040054d400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "timestamp": "2026-08-17T12:15:10.466Z",
+    "message": "[.WebGL-0x1040054d400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+  }
+]

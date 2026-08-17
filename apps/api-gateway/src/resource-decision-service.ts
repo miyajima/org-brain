@@ -7,7 +7,9 @@ import {
   type DecisionRef,
   type DecisionResourceLink,
   type KnowledgeResource,
-  type ResourceLocator
+  type KnowledgeResourceExtractionState,
+  type ResourceLocator,
+  type MemoryMapTraceResource
 } from "@org-brain/contracts";
 import { assertConnectorFetchUri, chunkKnowledgeResourceText, normalizeKnowledgeResourceUri } from "@org-brain/core";
 import { buildKnowledgeFtsQuery, HttpError, ulid } from "@org-brain/shared";
@@ -980,6 +982,88 @@ export async function getDecisionResources(env: Env, tenantId: string, rawRef: u
     artifacts,
     artifacts_by_role: artifactsByRole,
     coverage: { proposed_excluded: true, truncated: false, related_included: options.includeRelated === true }
+  };
+}
+
+const MEMORY_MAP_TRACE_RESOURCE_LIMIT = 40;
+
+export async function getDecisionResourceTrace(
+  env: Env,
+  tenantId: string,
+  rawRef: unknown,
+  options: PrincipalOptions = {}
+): Promise<{
+  sources: MemoryMapTraceResource[];
+  artifacts: MemoryMapTraceResource[];
+  truncated: boolean;
+}> {
+  const actor = principal(options);
+  if (!actor) throw new HttpError(401, "unauthorized", "Principal is required");
+  const ref = decisionRefSchema.parse(rawRef);
+  const decision = await readableDecision(env, tenantId, ref, actor, options.projectId ?? null);
+  if (!decision) throw new HttpError(404, "decision_not_found", "Decision not found");
+
+  const links = await listConfirmedLinks(env, tenantId, "decision", ref.source_id, ref.source_type);
+  const visible: MemoryMapTraceResource[] = [];
+  const seenAssertions = new Set<string>();
+  for (const row of links) {
+    if (seenAssertions.has(row.assertion_id)) continue;
+    if (![
+      "conclusion_source",
+      "rationale_source",
+      "contradiction",
+      "input",
+      "implementation_artifact",
+      "output_artifact",
+      "verification_artifact"
+    ].includes(row.role)) continue;
+    seenAssertions.add(row.assertion_id);
+
+    const resource = await getResourceRow(env, tenantId, row.resource_id);
+    const [readableResource] = await filterReadableResources(env, tenantId, [resource], options);
+    if (!readableResource || readableResource.lifecycle_state === "retired") continue;
+    const resourceVersionId = row.resource_version_id ?? readableResource.current_version_id;
+    const version = resourceVersionId
+      ? await env.OPEN_BRAIN_DB.prepare(
+        `SELECT id, source_version, content_hash, captured_at, extraction_state
+         FROM knowledge_resource_versions
+         WHERE tenant_id = ? AND resource_id = ? AND id = ?`
+      ).bind(tenantId, readableResource.id, resourceVersionId).first<{
+        id: string;
+        source_version: string | null;
+        content_hash: string;
+        captured_at: number;
+        extraction_state: KnowledgeResourceExtractionState;
+      }>()
+      : null;
+
+    visible.push({
+      link: toLink(row),
+      resource: toResource(readableResource),
+      version: version ? {
+        id: version.id,
+        source_version: version.source_version,
+        content_hash: version.content_hash,
+        captured_at: version.captured_at,
+        extraction_state: version.extraction_state,
+        pinned: row.resource_version_id !== null
+      } : null,
+      freshness: readableResource.lifecycle_state,
+      availability: "readable"
+    });
+    if (visible.length >= MEMORY_MAP_TRACE_RESOURCE_LIMIT) break;
+  }
+
+  const sources = visible.filter((item) => [
+    "conclusion_source", "rationale_source", "contradiction", "input"
+  ].includes(item.link.role));
+  const artifacts = visible.filter((item) => [
+    "implementation_artifact", "output_artifact", "verification_artifact"
+  ].includes(item.link.role));
+  return {
+    sources,
+    artifacts,
+    truncated: links.length > MEMORY_MAP_TRACE_RESOURCE_LIMIT
   };
 }
 
