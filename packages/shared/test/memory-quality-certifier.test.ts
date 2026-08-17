@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MEMORY_QUALITY_AXES, certifyMemoryQuality } from "../src/memory-quality-certifier";
+import { MEMORY_QUALITY_AXES, certifyMemoryQuality, evaluateMemoryIngestionAutonomousQualification } from "../src/memory-quality-certifier";
 
 describe("memory quality certifier", () => {
   it("reports every axis independently and never emits an aggregate score", () => {
@@ -26,5 +26,22 @@ describe("memory quality certifier", () => {
     const result = certifyMemoryQuality({ axes: {} });
     expect(Object.values(result.axes).every((axis) => axis.status === "insufficient_evidence")).toBe(true);
   });
-});
 
+  it("keeps the autonomous input report separate from its certification result", () => {
+    const result = evaluateMemoryIngestionAutonomousQualification({
+      schema_version: 1,
+      dataset_id: "machine-reference-v1",
+      dataset_sha256: `sha256:${"a".repeat(64)}`,
+      selected_case_count: 0,
+      route_counts: {},
+      metamorphic: { pair_count: 0 },
+      passed: false,
+      status: "insufficient_evidence"
+    });
+
+    expect(result.input_report).toMatchObject({ dataset_id: "machine-reference-v1", passed: false });
+    expect(result.certification_result).toMatchObject({ certification: "not_qualified", pass: false });
+    expect(result.dataset_id).toBe("machine-reference-v1");
+    expect(result.certification).toBe("not_qualified");
+  });
+});

@@ -129,6 +129,32 @@ test("capture skips a second active memory with the same canonical key", async (
   }
 });
 
+test("capture is idempotent for the same external key and payload, but revisions persist changes", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const input = captureInput({ external_key: "idempotent:capture" });
+    const first = await store.capture(input);
+    const replay = await store.capture({ ...input });
+    assert.equal(first.created, true);
+    assert.equal(replay.created, false);
+    assert.equal(replay.deduplicated, true);
+    assert.equal(replay.idempotent, true);
+    assert.equal(replay.version, 1);
+    assert.equal((await store.versions("personal", first.memory_id)).length, 1);
+
+    const changed = await store.capture({
+      ...input,
+      content: "Use the revised MemoryStore contract for every adapter."
+    });
+    assert.equal(changed.created, false);
+    assert.equal(changed.version, 2);
+    assert.equal((await store.versions("personal", first.memory_id)).length, 2);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("captureBatch preserves capture projections and rolls back atomically", async () => {
   const ctx = await fixture();
   try {

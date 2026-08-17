@@ -5,7 +5,7 @@ test.describe("identity administration", () => {
     await page.goto("/organization?tenant_id=default");
     await expect(page.getByRole("heading", { name: "Organization" })).toBeVisible();
     await page.getByLabel("Display name").fill("Updated Organization");
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Saved")).toBeVisible();
 
     await page.goto("/users?tenant_id=default");

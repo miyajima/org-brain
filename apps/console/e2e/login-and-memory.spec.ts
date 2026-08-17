@@ -12,7 +12,7 @@ test.describe("authenticated console flows", () => {
 
     await page.getByLabel("Full name").fill("Updated E2E Full Name");
     await page.getByLabel("Company name").fill("Cross Company Alliance");
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
 
     await expect(page.getByText("Saved")).toBeVisible();
   });

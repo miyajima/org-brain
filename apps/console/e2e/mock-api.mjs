@@ -79,6 +79,275 @@ const profileItem = {
   utility_score: memory.utility_score
 };
 
+const traceFixtureProjects = new Set([
+  "org-brain",
+  "e2e-failure-trace",
+  "e2e-missing-trace",
+  "e2e-trace-error"
+]);
+
+function traceNode(projectId, kind, values = {}) {
+  const isDecision = kind === "decision";
+  const memoryId = values.memory_id ?? `mem-${projectId}-trace`;
+  const decisionId = values.decision_id ?? `rationale-${projectId}`;
+  return {
+    id: isDecision ? `decision:${decisionId}` : `memory:${memoryId}`,
+    node_type: kind,
+    memory_id: isDecision ? memoryId : memoryId,
+    decision_id: isDecision ? decisionId : null,
+    related_memory_id: isDecision ? memoryId : null,
+    label: values.label ?? (isDecision ? "Decision trace" : "Trace memory"),
+    summary: values.summary ?? values.label ?? "Trace memory",
+    project_id: projectId,
+    owner_principal: "user:e2e-login-sub",
+    created_by_principal: "user:e2e-login-sub",
+    reference_count: 3,
+    consumer_count: 1,
+    used_count: 1,
+    utilization_rate: 0.5,
+    net_saved_tokens: 120,
+    injected_tokens: 40,
+    updated_at: now,
+    decision_type: isDecision ? values.decision_type ?? "decision" : null,
+    confirmation_state: isDecision ? "confirmed" : null,
+    confidence_score: 0.95
+  };
+}
+
+function traceMapFor(projectId) {
+  if (!traceFixtureProjects.has(projectId)) projectId = "org-brain";
+  const isFailure = projectId === "e2e-failure-trace";
+  const isMissing = projectId === "e2e-missing-trace";
+  const memoryId = `mem-${projectId}-trace`;
+  const rationaleId = isFailure ? "rationale-failure-e2e" : isMissing ? "rationale-missing-e2e" : "rationale-e2e";
+  const memoryLabel = isFailure ? "Retry import prevention" : isMissing ? "Incomplete trace fixture" : "Canonical API endpoint decision";
+  const projectNode = {
+    id: `project:${projectId}`,
+    node_type: "project",
+    memory_id: null,
+    label: projectId,
+    summary: projectId,
+    project_id: projectId,
+    owner_principal: null,
+    created_by_principal: null,
+    reference_count: 1,
+    consumer_count: 0,
+    used_count: 0,
+    utilization_rate: null,
+    net_saved_tokens: 0,
+    injected_tokens: 0,
+    member_count: 2,
+    updated_at: now
+  };
+  const memoryNode = traceNode(projectId, "memory", { memory_id: memoryId, label: memoryLabel, summary: memoryLabel });
+  const decisionNode = traceNode(projectId, "decision", {
+    memory_id: memoryId,
+    decision_id: rationaleId,
+    label: memoryLabel,
+    summary: memoryLabel,
+    decision_type: isFailure ? "failure_prevention" : "decision"
+  });
+  return {
+    contract_version: "dashboard/v1",
+    scope: "org",
+    cluster_mode: false,
+    total_count: 3,
+    visible_count: 3,
+    memory_visible_count: 1,
+    project_count: 1,
+    decision_count: 1,
+    related_count: 1,
+    relationship_count: 2,
+    cross_project_link_count: 0,
+    truncated: false,
+    nodes: [projectNode, memoryNode, decisionNode],
+    links: [
+      { id: `project-memory:${projectId}`, source: projectNode.id, target: memoryNode.id, relation: "contains", directed: true },
+      { id: `memory-decision:${projectId}`, source: memoryNode.id, target: decisionNode.id, relation: "explains", directed: true }
+    ],
+    clusters: [{ id: `cluster:${projectId}`, kind: "project", label: projectId, node_ids: [projectNode.id, memoryNode.id, decisionNode.id] }]
+  };
+}
+
+function traceResource(projectId, role, language, title, kind, uri, locator) {
+  const resourceId = `resource-${projectId}-${role}`;
+  const versionId = `${resourceId}-v1`;
+  return {
+    link: {
+      role,
+      resource_version_id: versionId,
+      locator: { heading: locator },
+      note: language === "ja" ? `${locator}の確認済み抜粋` : `Confirmed excerpt from ${locator}`,
+      confirmation_state: "confirmed",
+      excerpt_digest: `${resourceId}-digest`
+    },
+    resource: {
+      id: resourceId,
+      tenant_id: "default",
+      project_id: projectId,
+      resource_kind: kind,
+      canonical_uri: uri,
+      title,
+      source_system: "e2e-trace-fixture",
+      media_type: "text/plain",
+      visibility: "project",
+      permissions: [],
+      current_version_id: versionId,
+      lifecycle_state: "active",
+      created_at: now,
+      updated_at: now
+    },
+    version: {
+      id: versionId,
+      source_version: "v1",
+      content_hash: `${resourceId}-content-hash`,
+      captured_at: now,
+      extraction_state: "ready",
+      pinned: true
+    },
+    freshness: "active",
+    availability: "readable"
+  };
+}
+
+function tracePayloadFor(projectId, language) {
+  const isFailure = projectId === "e2e-failure-trace";
+  const isMissing = projectId === "e2e-missing-trace";
+  const japanese = language === "ja";
+  const memoryId = `mem-${projectId}-trace`;
+  const rationaleId = isFailure ? "rationale-failure-e2e" : isMissing ? "rationale-missing-e2e" : "rationale-e2e";
+  const decision = isFailure
+    ? (japanese ? "external_keyをcase_idから安定生成する" : "Generate external_key from the immutable case_id")
+    : (japanese ? "ORGBRAIN_API_URLを正規の接続先として採用する" : "Adopt ORGBRAIN_API_URL as the canonical endpoint");
+  const reason = isFailure
+    ? (japanese ? "リトライ番号をキーに含めると、同じ失敗の再実行で重複メモリが作られるため。" : "Including the retry number in the key creates duplicate memories when the same failure is replayed.")
+    : (japanese ? "接続先を一つに固定すると設定ドリフトを防ぎ、hookとconnectorが同じAPI境界を使えるため。" : "A single endpoint prevents configuration drift and keeps hooks and connectors on the same API boundary.");
+  const alternative = isFailure
+    ? (japanese ? "リトライ番号をexternal_keyに含める" : "Include the retry number in external_key")
+    : (japanese ? "ORGBRAIN_API_BASEを主経路にする" : "Use ORGBRAIN_API_BASE as the primary endpoint");
+  const alternativeReason = isFailure
+    ? (japanese ? "再実行のたびに別キーとなり、同じ失敗を重複保存するため。" : "Each replay gets a different key and stores the same failure twice.")
+    : (japanese ? "互換エイリアスを主経路にすると新旧設定が分岐し、設定ドリフトを防げないため。" : "Making the compatibility alias primary splits old and new configuration and does not prevent drift.");
+  const evidence = isMissing ? [] : isFailure
+    ? [
+        { id: "evidence-failure-command", evidence_type: "command", evidence_ref: "pnpm memories:seed-ingestion-local --retry 2", relation: "supports:symptom", note: japanese ? "exit_code=1: リトライごとに試行キーが変わった" : "exit_code=1: the retry changed the attempt key", weight_score: 1, content_hash: "failure-command", observed_at: now, attestation_ref: "attestation-failure-command" },
+        { id: "evidence-success-command", evidence_type: "command", evidence_ref: "pnpm memories:seed-ingestion-local --stable-key", relation: "supports:verified_outcome", note: japanese ? "exit_code=0: 同じセッションを再実行しても1件だけ保存" : "exit_code=0: replaying the session kept one stored memory", weight_score: 1, content_hash: "success-command", observed_at: now, attestation_ref: "attestation-success-command" },
+        { id: "evidence-failure-file", evidence_type: "file", evidence_ref: "packages/orgbrain-cli/src/codex-session-import.mjs", relation: "supports:root_cause", note: japanese ? "external_keyの生成箇所" : "The external_key generation site", weight_score: 1, content_hash: "failure-file", observed_at: now, attestation_ref: "attestation-failure-file" }
+      ]
+    : [
+        { id: "evidence-api-file", evidence_type: "file", evidence_ref: "apps/api-gateway/src/config.ts", relation: "supports:decision,rationale", note: japanese ? "正規API環境変数の読み取り" : "Reads the canonical API environment variable", weight_score: 1, content_hash: "api-file", observed_at: now, attestation_ref: "attestation-api-file" },
+        { id: "evidence-user-statement", evidence_type: "user_statement", evidence_ref: "ORGBRAIN_API_URLを唯一の正規API環境変数として採用する", relation: "supports:decision", note: japanese ? "ユーザーが明示した採用方針" : "The user explicitly selected the policy", weight_score: 1, content_hash: "api-user", observed_at: now, attestation_ref: "attestation-api-user" }
+      ];
+  const resources = isMissing ? { sources: [], artifacts: [] } : {
+    sources: [traceResource(
+      projectId,
+      "rationale_source",
+      language,
+      isFailure ? (japanese ? "重複メモリ事故のレビュー記録" : "Duplicate-memory incident review") : (japanese ? "API接続方針の判断記録" : "Canonical API endpoint decision record"),
+      "document",
+      `orgbrain://e2e/${projectId}/rationale`,
+      japanese ? "判断理由" : "Rationale"
+    )],
+    artifacts: [
+      traceResource(
+        projectId,
+        "implementation_artifact",
+        language,
+        isFailure ? (japanese ? "安定キー生成の実装" : "Stable key generation implementation") : (japanese ? "正規API URLの実装" : "Canonical API URL implementation"),
+        "build",
+        "https://example.com/orgbrain/implementation",
+        japanese ? "実装" : "Implementation"
+      ),
+      traceResource(
+        projectId,
+        "verification_artifact",
+        language,
+        isFailure ? (japanese ? "重複なし再実行テスト" : "Duplicate-free replay test") : (japanese ? "API URL設定の検証結果" : "API URL configuration verification"),
+        "test_result",
+        `orgbrain://e2e/${projectId}/verification`,
+        japanese ? "検証" : "Verification"
+      )
+    ]
+  };
+  const derived = isFailure ? {
+    lesson_type: "failure",
+    trigger: japanese ? "同じセッションをリトライした" : "The same session was retried",
+    question: japanese ? "なぜ重複メモリが作られたのか" : "Why did the replay create a duplicate memory?",
+    decision_key: "stable_external_key",
+    decision,
+    selected_value: decision,
+    rationale: reason,
+    alternatives: [{ alternative, reason_rejected: alternativeReason }],
+    constraints: [japanese ? "同じ入力の再実行は同じメモリを更新する" : "Replaying the same input must update the same memory"],
+    reuse_when: japanese ? "セッションを再実行するとき" : "When a session is replayed",
+    outcome: japanese ? "同じセッションの再実行で新規メモリは0件になった" : "Replaying the same session created zero new memories",
+    symptom: japanese ? "リトライで試行キーが変わり重複メモリが作られた" : "The retry changed the attempt key and created a duplicate memory",
+    failed_approach: alternative,
+    root_cause: japanese ? "リトライカウンタをexternal_keyに含めていた" : "The retry counter was included in external_key",
+    correction: japanese ? "external_keyをcase_idから安定生成するよう修正した" : "Generate external_key from the immutable case_id",
+    verified_outcome: japanese ? "同じセッションを2回取り込んでも1件だけ保存された" : "Importing the same session twice kept one stored memory",
+    avoidance_rule: japanese ? "再実行可能な取込ではexternal_keyを不変のcase_idから生成し、リトライ番号を含めない" : "For replayable ingestion, derive external_key from the immutable case_id and never include the retry number"
+  } : {
+    lesson_type: "decision",
+    trigger: japanese ? "複数の接続先環境変数が存在した" : "Multiple endpoint environment variables existed",
+    question: japanese ? "どのAPI環境変数を正規とするか" : "Which API environment variable should be canonical?",
+    decision_key: "canonical_api_url",
+    decision,
+    selected_value: "ORGBRAIN_API_URL",
+    rationale: reason,
+    alternatives: [{ alternative, reason_rejected: alternativeReason }],
+    constraints: [japanese ? "ORGBRAIN_API_BASEは互換エイリアスとしてのみ扱う" : "Keep ORGBRAIN_API_BASE only as a compatibility alias"],
+    reuse_when: japanese ? "connectorまたはhookの接続先を追加するとき" : "When adding a connector or hook endpoint",
+    outcome: japanese ? "hookとconnectorが同じ正規API境界を参照する" : "Hooks and connectors reference the same canonical API boundary",
+    symptom: null,
+    failed_approach: null,
+    root_cause: null,
+    correction: null,
+    verified_outcome: null,
+    avoidance_rule: null
+  };
+  return {
+    contract_version: "memory-map-trace/v1",
+    selected: { node_type: "decision", id: rationaleId, memory_id: memoryId, decision_rationale_id: rationaleId },
+    memory: {
+      id: memoryId,
+      project_id: projectId,
+      kind: isFailure ? "pitfall" : "decision",
+      summary: isFailure ? (japanese ? "リトライ時の重複メモリを防ぐ" : "Prevent duplicate memories during replay") : (japanese ? "正規API URLを選ぶ" : "Choose the canonical API URL"),
+      lifecycle_state: "active",
+      verification_state: isMissing ? "partial" : "verified",
+      verified_at: isMissing ? null : now,
+      reuse_rule: derived.reuse_when,
+      learning: derived,
+      versions: [{ version: 1, operation: "capture", summary: "Trace fixture", kind: isFailure ? "pitfall" : "decision", lifecycle_state: "active", actor_type: "system", actor_id: "e2e", created_at: now }]
+    },
+    selected_rationale_id: rationaleId,
+    rationales: [{
+      id: rationaleId,
+      decision_type: isFailure ? "failure_prevention" : "decision",
+      conclusion: decision,
+      reason_summary: isMissing ? "" : reason,
+      status: isFailure ? "resolved" : "adopted",
+      confirmation_state: isMissing ? "unconfirmed" : "confirmed",
+      confidence_score: isMissing ? 0.4 : 0.95,
+      created_at: now,
+      confirmed_at: isMissing ? null : now,
+      derived,
+      evidence,
+      resources
+    }],
+    completeness: {
+      rationale_count: 1,
+      evidence_count: evidence.length,
+      source_count: resources.sources.length,
+      artifact_count: resources.artifacts.length,
+      missing: isMissing ? ["alternative", "evidence", "artifact", "verification"] : [],
+      partial: isMissing,
+      truncated: false
+    }
+  };
+}
+
 const dashboardActivity = {
   contract_version: "dashboard/v1",
   events: [
@@ -124,30 +393,6 @@ const dashboardActivity = {
   newest_cursor: "eyJ2IjoxLCJhdCI6Miwia2V5IjoibmV3In0",
   has_more: false,
   generated_at: now
-};
-
-const dashboardGraph = {
-  contract_version: "dashboard/v1",
-  nodes: [
-    { id: `memory:${memory.id}`, source_id: memory.id, type: "memory", kind: "semantic", label: memory.summary, summary: memory.content, project_id: "org-brain", status: "active", confidence: 0.93, updated_at: now, last_used_at: now - 18 * 60_000, usage_count_30d: 12, degree: 3, cluster_ids: ["cluster:project:org-brain", "cluster:memory_kind:semantic"], deep_link: `/memories?selected=${memory.id}` },
-    { id: "decision:decision-e2e", source_id: "decision-e2e", type: "decision", kind: "architecture", label: "Use authenticated principals for shared memory", summary: "Access decisions are evaluated before projection.", project_id: "org-brain", status: "active", confidence: 0.9, updated_at: now - 2 * 86_400_000, last_used_at: null, usage_count_30d: 3, degree: 2, cluster_ids: ["cluster:project:org-brain", "cluster:domain:architecture"], deep_link: "/decisions?id=decision-e2e" },
-    { id: "entity:group-acl", source_id: "group-acl", type: "entity", kind: "concept", label: "Group ACL", summary: null, project_id: null, status: null, confidence: 0.88, updated_at: now - 3 * 86_400_000, last_used_at: null, usage_count_30d: 0, degree: 2, cluster_ids: [], deep_link: "/memories?entity_id=group-acl" },
-    { id: "project:org-brain", source_id: "org-brain", type: "project", kind: "project", label: "org-brain", summary: "Synthetic project scope", project_id: "org-brain", status: "active", confidence: null, updated_at: now, last_used_at: null, usage_count_30d: 0, degree: 2, cluster_ids: ["cluster:project:org-brain"] }
-  ],
-  edges: [
-    { id: "edge:decision-memory", source: "decision:decision-e2e", target: `memory:${memory.id}`, relation: "derived_from", directed: true, inferred: false, weight: 1, confidence: 0.9 },
-    { id: "edge:memory-entity", source: `memory:${memory.id}`, target: "entity:group-acl", relation: "mentions", directed: true, inferred: false, weight: 1, confidence: 0.88 },
-    { id: "edge:memory-project", source: `memory:${memory.id}`, target: "project:org-brain", relation: "belongs_to", directed: true, inferred: false, weight: 1, confidence: null },
-    { id: "edge:decision-project", source: "decision:decision-e2e", target: "project:org-brain", relation: "belongs_to", directed: true, inferred: false, weight: 1, confidence: null }
-  ],
-  clusters: [
-    { id: "cluster:project:org-brain", kind: "project", label: "org-brain", node_ids: [`memory:${memory.id}`, "decision:decision-e2e", "project:org-brain"] },
-    { id: "cluster:memory_kind:semantic", kind: "memory_kind", label: "semantic", node_ids: [`memory:${memory.id}`] },
-    { id: "cluster:domain:architecture", kind: "domain", label: "architecture", node_ids: ["decision:decision-e2e"] }
-  ],
-  generated_at: now,
-  truncated: false,
-  omitted_node_count: 0
 };
 
 const strataSummary = {
@@ -236,35 +481,6 @@ const denseActivity = {
     last_seen_at: now - index * 1_000
   })),
   has_more: true
-};
-
-const denseGraphNodes = Array.from({ length: 150 }, (_, index) => ({
-  ...dashboardGraph.nodes[index % dashboardGraph.nodes.length],
-  id: `memory:dense-${index}`,
-  source_id: `dense-${index}`,
-  type: index % 11 === 0 ? "decision" : "memory",
-  kind: index % 13 === 0 ? "pitfall" : index % 7 === 0 ? "lesson" : "semantic",
-  label: `Dense knowledge ${index + 1}`,
-  deep_link: `/memories?selected=dense-${index}`,
-  degree: index === 0 ? 149 : 1,
-  cluster_ids: ["cluster:project:org-brain"]
-}));
-const denseGraph = {
-  ...dashboardGraph,
-  nodes: denseGraphNodes,
-  edges: Array.from({ length: 149 }, (_, index) => ({
-    id: `dense-edge-${index}`,
-    source: "memory:dense-0",
-    target: `memory:dense-${index + 1}`,
-    relation: "recorded_link",
-    directed: true,
-    inferred: false,
-    weight: 1,
-    confidence: 0.8
-  })),
-  clusters: [{ id: "cluster:project:org-brain", kind: "project", label: "org-brain", node_ids: denseGraphNodes.map((node) => node.id) }],
-  truncated: true,
-  omitted_node_count: 37
 };
 
 const denseStrata = {
@@ -536,23 +752,20 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  if (path === "/v1/dashboard/knowledge-graph" && request.method === "GET") {
-    const state = url.searchParams.get("project_id");
-    if (state === "e2e-empty") {
-      json(response, 200, ok({ ...dashboardGraph, nodes: [], edges: [], clusters: [] }));
+  if (path === "/v1/dashboard/memory-map" && request.method === "GET") {
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    json(response, 200, ok(traceMapFor(projectId)));
+    return;
+  }
+
+  if (path === "/v1/dashboard/memory-map/trace" && request.method === "GET") {
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    if (projectId === "e2e-trace-error") {
+      json(response, 503, { ok: false, error: { code: "trace_unavailable", message: "Decision trace fixture unavailable" } });
       return;
     }
-    if (state === "e2e-sparse") {
-      json(response, 200, ok({ ...dashboardGraph, nodes: dashboardGraph.nodes.slice(0, 1), edges: [], clusters: [] }));
-      return;
-    }
-    if (state === "e2e-dense") {
-      json(response, 200, ok(denseGraph));
-      return;
-    }
-    json(response, 200, ok(state === "e2e-truncated"
-      ? { ...dashboardGraph, truncated: true, omitted_node_count: 42 }
-      : dashboardGraph));
+    const language = url.searchParams.get("lang") === "en" ? "en" : "ja";
+    json(response, 200, ok(tracePayloadFor(projectId, language)));
     return;
   }
 
@@ -604,6 +817,28 @@ const server = http.createServer(async (request, response) => {
 
   if (path === `/v1/decision-memories/${decisionMemory.id}/context` && request.method === "GET") {
     json(response, 200, ok(decisionContext));
+    return;
+  }
+
+  if (path.startsWith("/v1/decisions/") && path.endsWith("/resources") && request.method === "GET") {
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    const language = url.searchParams.get("lang") === "en" ? "en" : "ja";
+    const trace = tracePayloadFor(projectId, language);
+    const rationale = trace.rationales[0];
+    json(response, 200, ok({
+      decision: {
+        decision_ref: { source_type: "decision_rationale", source_id: rationale.id },
+        conclusion: rationale.conclusion,
+        reason_summary: rationale.reason_summary
+      },
+      artifacts: rationale.resources.artifacts,
+      artifacts_by_role: {
+        implementation_artifact: rationale.resources.artifacts.filter((item) => item.link.role === "implementation_artifact"),
+        output_artifact: [],
+        verification_artifact: rationale.resources.artifacts.filter((item) => item.link.role === "verification_artifact")
+      },
+      coverage: { proposed_excluded: true, truncated: false, related_included: false }
+    }));
     return;
   }
 

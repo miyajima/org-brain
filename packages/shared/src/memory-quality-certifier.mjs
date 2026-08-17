@@ -245,11 +245,7 @@ export function evaluateMemoryIngestionAutonomousQualification(input = {}) {
     council_key_fingerprints: Array.isArray(input.council_key_fingerprints) && new Set(input.council_key_fingerprints.map(String).filter(Boolean)).size >= 3
   };
   const passed = hasInput && Object.values(checks).every(Boolean);
-  return {
-    // Keep only the signed, non-content provenance needed to re-verify this
-    // result when the report is handed to the quality certifier.  This makes
-    // the evaluator output itself a safe manifest fragment rather than a
-    // self-attested boolean that cannot be checked again.
+  const inputReport = {
     schema_version: input.schema_version,
     dataset_id: input.dataset_id,
     dataset_sha256: input.dataset_sha256,
@@ -281,15 +277,21 @@ export function evaluateMemoryIngestionAutonomousQualification(input = {}) {
     labels_derived_from_runtime: input.labels_derived_from_runtime,
     privacy: input.privacy,
     council_results_present: input.council_results_present,
-    structural_errors: input.structural_errors,
+    structural_errors: input.structural_errors
+  };
+  const certificationResult = {
     certification: passed ? "autonomous_qualified" : "not_qualified",
     status: !hasInput ? "insufficient_evidence" : passed ? "qualified" : "not_qualified",
     pass: passed,
     checks,
     values,
-    minimums: MEMORY_INGESTION_AUTONOMOUS_MINIMUMS,
-    dataset_id: typeof input.dataset_id === "string" ? input.dataset_id : null,
-    dataset_sha256: typeof input.dataset_sha256 === "string" ? input.dataset_sha256 : null
+    minimums: MEMORY_INGESTION_AUTONOMOUS_MINIMUMS
+  };
+  return {
+    ...inputReport,
+    ...certificationResult,
+    input_report: inputReport,
+    certification_result: certificationResult
   };
 }
 

@@ -4,6 +4,7 @@ import type { Env } from "../src/types";
 const getKnowledgeGraphMock = vi.hoisted(() => vi.fn());
 const getMemoryStrataMock = vi.hoisted(() => vi.fn());
 const getMemoryStrataDetailMock = vi.hoisted(() => vi.fn());
+const getMemoryMapTraceMock = vi.hoisted(() => vi.fn());
 const authenticateScopedTokenMock = vi.hoisted(() => vi.fn());
 const appendAuditEventMock = vi.hoisted(() => vi.fn(async () => undefined));
 const assertPermissionMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -25,6 +26,10 @@ vi.mock("../src/knowledge-graph-service", () => ({
 vi.mock("../src/memory-strata-service", () => ({
   getMemoryStrata: getMemoryStrataMock,
   getMemoryStrataDetail: getMemoryStrataDetailMock
+}));
+
+vi.mock("../src/memory-map-trace-service", () => ({
+  getMemoryMapTrace: getMemoryMapTraceMock
 }));
 
 vi.mock("../src/token-service", () => ({
@@ -96,6 +101,26 @@ const detailResponse = {
   truncated: { revisions: false, sources: false }
 };
 
+const traceResponse = {
+  contract_version: "memory-map-trace/v1",
+  selected: { node_type: "decision", id: "rationale-one", memory_id: "memory-one", decision_rationale_id: "rationale-one" },
+  memory: {
+    id: "memory-one",
+    project_id: "project-a",
+    kind: "decision",
+    summary: "Memory one",
+    lifecycle_state: "active",
+    verification_state: "verified",
+    verified_at: 1_000,
+    reuse_rule: "Reuse when applicable.",
+    learning: null,
+    versions: []
+  },
+  selected_rationale_id: "rationale-one",
+  rationales: [],
+  completeness: { rationale_count: 0, evidence_count: 0, source_count: 0, artifact_count: 0, missing: ["evidence"], partial: true, truncated: false }
+};
+
 const env = {
   API_TENANT_POLICY_JSON: JSON.stringify({
     keys: [{
@@ -133,6 +158,7 @@ describe("dashboard knowledge HTTP routes", () => {
     getKnowledgeGraphMock.mockResolvedValue(graphResponse);
     getMemoryStrataMock.mockResolvedValue(strataResponse);
     getMemoryStrataDetailMock.mockResolvedValue(detailResponse);
+    getMemoryMapTraceMock.mockResolvedValue(traceResponse);
     authenticateScopedTokenMock.mockResolvedValue(null);
   });
 
@@ -188,13 +214,29 @@ describe("dashboard knowledge HTTP routes", () => {
         principal: "agent:trusted"
       }
     );
+
+    const trace = await fetchDashboard(
+      "/v1/dashboard/memory-map/trace?tenant_id=tenant-a&project_id=project-a&scope=org" +
+      "&decision_rationale_id=rationale-one&memory_id="
+    );
+    expect(trace.status).toBe(200);
+    await expect(trace.json()).resolves.toEqual({ ok: true, data: traceResponse });
+    expect(getMemoryMapTraceMock).toHaveBeenCalledWith(env, {
+      tenantId: "tenant-a",
+      principal: "agent:trusted",
+      projectId: "project-a",
+      scope: "org",
+      memoryId: null,
+      decisionRationaleId: "rationale-one"
+    });
   });
 
   it("enforces API tenant grants before invoking dashboard services", async () => {
     for (const path of [
       "/v1/dashboard/knowledge-graph?tenant_id=tenant-b",
       "/v1/dashboard/strata?tenant_id=tenant-b",
-      "/v1/dashboard/strata/memory/memory-one?tenant_id=tenant-b"
+      "/v1/dashboard/strata/memory/memory-one?tenant_id=tenant-b",
+      "/v1/dashboard/memory-map/trace?tenant_id=tenant-b&memory_id=memory-one"
     ]) {
       const response = await fetchDashboard(path);
       expect(response.status).toBe(403);
@@ -206,6 +248,7 @@ describe("dashboard knowledge HTTP routes", () => {
     expect(getKnowledgeGraphMock).not.toHaveBeenCalled();
     expect(getMemoryStrataMock).not.toHaveBeenCalled();
     expect(getMemoryStrataDetailMock).not.toHaveBeenCalled();
+    expect(getMemoryMapTraceMock).not.toHaveBeenCalled();
   });
 
   it("honors scoped-token read and project restrictions", async () => {
@@ -249,7 +292,9 @@ describe("dashboard knowledge HTTP routes", () => {
       ["/v1/dashboard/knowledge-graph?tenant_id=tenant-a&focus_type=memory", "invalid_query"],
       ["/v1/dashboard/strata?tenant_id=tenant-a&limit=101", "invalid_query"],
       ["/v1/dashboard/strata/unknown/source-one?tenant_id=tenant-a", "invalid_source_type"],
-      ["/v1/dashboard/strata/memory/source-one?tenant_id=tenant-a&project_id=", "invalid_query"]
+      ["/v1/dashboard/strata/memory/source-one?tenant_id=tenant-a&project_id=", "invalid_query"],
+      ["/v1/dashboard/memory-map/trace?tenant_id=tenant-a", "invalid_query"],
+      ["/v1/dashboard/memory-map/trace?tenant_id=tenant-a&memory_id=memory-one&decision_rationale_id=rationale-one", "invalid_query"]
     ] as const;
     for (const [path, code] of cases) {
       const response = await fetchDashboard(path);
@@ -262,5 +307,6 @@ describe("dashboard knowledge HTTP routes", () => {
     expect(getKnowledgeGraphMock).not.toHaveBeenCalled();
     expect(getMemoryStrataMock).not.toHaveBeenCalled();
     expect(getMemoryStrataDetailMock).not.toHaveBeenCalled();
+    expect(getMemoryMapTraceMock).not.toHaveBeenCalled();
   });
 });

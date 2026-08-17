@@ -275,6 +275,9 @@ function memoryFromRow(row) {
     evidence: parseJson(row.evidence_json),
     conflicts: parseJson(row.conflicts_json),
     permissions: parseJson(row.permissions_json),
+    canonical_key: row.canonical_key ?? null,
+    root_memory_id: row.root_memory_id ?? null,
+    expires_at: row.expires_at ?? null,
     deleted_at: row.deleted_at ?? null,
     deleted_by_principal: row.deleted_by_principal ?? null,
     delete_reason: row.delete_reason ?? null,
@@ -286,6 +289,52 @@ function memoryFromRow(row) {
     learning: parseJsonObject(row.learning_json),
     quality_dimensions: parseJsonObject(row.quality_dimensions_json)
   };
+}
+
+function captureComparable(record) {
+  return {
+    tenant_id: record.tenant_id,
+    project_id: record.project_id,
+    business_category_id: record.business_category_id,
+    work_type: record.work_type,
+    kind: record.kind,
+    lifecycle_state: record.lifecycle_state,
+    scope_type: record.scope_type,
+    scope_key: record.scope_key,
+    content: record.content,
+    summary: record.summary,
+    tags: record.tags,
+    entities: record.entities,
+    source: record.source,
+    source_references: record.source_references,
+    external_key: record.external_key,
+    actor_type: record.actor_type,
+    actor_id: record.actor_id,
+    created_at: record.created_at,
+    valid_from: record.valid_from,
+    valid_until: record.valid_until,
+    confidence_score: record.confidence_score,
+    utility_score: record.utility_score,
+    content_hash: record.content_hash,
+    rationale: record.rationale,
+    reuse_rule: record.reuse_rule,
+    evidence: record.evidence,
+    conflicts: record.conflicts,
+    permissions: record.permissions,
+    canonical_key: record.canonical_key,
+    root_memory_id: record.root_memory_id,
+    expires_at: record.expires_at,
+    capture_origin: record.capture_origin,
+    capture_route: record.capture_route,
+    verification_state: record.verification_state,
+    verified_at: record.verified_at,
+    learning: record.learning,
+    quality_dimensions: record.quality_dimensions
+  };
+}
+
+function capturePayloadEquivalent(left, right) {
+  return JSON.stringify(captureComparable(left)) === JSON.stringify(captureComparable(right));
 }
 
 function memoryAuthority(memory) {
@@ -4359,6 +4408,16 @@ export class LocalMemoryStore {
       existing ? memoryFromRow(existing) : null
     );
     validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
+    if (existing && capturePayloadEquivalent(record, memoryFromRow(existing))) {
+      return {
+        memory_id: existing.id,
+        version: Number(existing.current_version || 1),
+        operation: "capture",
+        created: false,
+        deduplicated: true,
+        idempotent: true
+      };
+    }
     if (record.canonical_key && record.lifecycle_state !== "suppressed") {
       const canonicalExisting = db.prepare(
         `SELECT id, current_version

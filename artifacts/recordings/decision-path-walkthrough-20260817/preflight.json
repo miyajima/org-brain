@@ -1,0 +1,41 @@
+{
+  "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision%3Aorgbrain-ingestion-v4%3Atrace%3Arationale%3A4c3ed7732f983e834270d3f3655d4bf6&trace_step=decision",
+  "title": "知識のつながり · Org Brain",
+  "pathway_steps": [
+    " 01 失敗・学び何が起きたか 確認可能 · 1 ",
+    " 02 根本原因なぜ起きたか 確認可能 · 1 ",
+    " 03 検証何で確かめたか 確認可能 · 3 ",
+    " 04 修正・再発防止何に反映したか 確認可能 · 2 "
+  ],
+  "trace_heading": "失敗・学び",
+  "diagnostics": [
+    {
+      "type": "console",
+      "level": "warning",
+      "timestamp": "2026-08-17T12:15:08.012Z",
+      "message": "[.WebGL-0x11c004e2c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+    },
+    {
+      "type": "console",
+      "level": "warning",
+      "timestamp": "2026-08-17T12:15:08.153Z",
+      "message": "[.WebGL-0x11c004e8000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+    },
+    {
+      "type": "console",
+      "level": "warning",
+      "timestamp": "2026-08-17T12:15:08.153Z",
+      "message": "[.WebGL-0x11c004e8000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+    },
+    {
+      "type": "console",
+      "level": "warning",
+      "timestamp": "2026-08-17T12:15:08.153Z",
+      "message": "[.WebGL-0x11c004e8000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+      "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"
+    }
+  ]
+}

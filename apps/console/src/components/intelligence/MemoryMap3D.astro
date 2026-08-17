@@ -50,7 +50,7 @@ type MemoryMapData = {
   clusters: Array<{ id: string; kind: string; label: string; node_ids: string[] }>;
 };
 
-const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal = "", fromDate = "", toDate = "", scope = "org", selectedId: initialSelectedId = "" } = Astro.props as {
+const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal = "", fromDate = "", toDate = "", scope = "org", selectedId: initialSelectedId = "", locale = "en", mapCopy = {}, traceCopy = {} } = Astro.props as {
   data: MemoryMapData;
   tenantId?: string;
   projectId?: string;
@@ -60,7 +60,12 @@ const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal =
   toDate?: string;
   scope?: "mine" | "org";
   selectedId?: string;
+  locale?: "en" | "ja" | "zh";
+  mapCopy?: Record<string, unknown>;
+  traceCopy?: Record<string, unknown>;
 };
+const mapText = (key: string, fallback: string) => typeof mapCopy[key] === "string" ? String(mapCopy[key]) : fallback;
+const traceText = (key: string, fallback: string) => typeof traceCopy[key] === "string" ? String(traceCopy[key]) : fallback;
 const serialized = JSON.stringify(data);
 const listParams = new URLSearchParams({ tenant_id: tenantId, scope });
 if (projectId) listParams.set("project_id", projectId);
@@ -84,51 +89,76 @@ const ownerOptions = [...new Set(
 )].sort((left, right) => left.localeCompare(right));
 const filterSummary = [
   query ? `“${query}”` : null,
-  projectId ? projectOptionMap.get(projectId) || projectId : "All projects",
-  ownerPrincipal || (scope === "mine" ? "My memories" : "All owners"),
-  fromDate || toDate ? `${fromDate || "…"} – ${toDate || "…"}` : "Any period"
+  projectId ? projectOptionMap.get(projectId) || projectId : mapText("allProjects", "All projects"),
+  ownerPrincipal || (scope === "mine" ? mapText("myMemories", "My memories") : mapText("allOwners", "All owners")),
+  fromDate || toDate ? `${fromDate || "…"} – ${toDate || "…"}` : mapText("anyPeriod", "Any period")
 ].filter(Boolean).join(" · ");
 ---
-<section class="memory-map-shell" data-memory-map-root data-map={serialized} data-list-href={fallbackHref} data-tenant-id={tenantId} data-project-id={projectId} data-scope={scope} data-selected-id={initialSelectedId}>
+<section class="memory-map-shell" data-memory-map-root data-map={serialized} data-list-href={fallbackHref} data-tenant-id={tenantId} data-project-id={projectId} data-scope={scope} data-selected-id={initialSelectedId} data-locale={locale} data-map-copy={JSON.stringify(mapCopy)} data-trace-copy={JSON.stringify(traceCopy)}>
   <header class="memory-map-header">
     <div>
-      <p class="intelligence-eyebrow">Memory constellation / WebGL</p>
-      <h1>3D memory map</h1>
+      <p class="intelligence-eyebrow">{mapText("mapEyebrow", "Memory constellation / WebGL")}</p>
+      <h1>{mapText("memoryMapTitle", "3D memory map")}</h1>
     </div>
   </header>
 
   <details class="memory-map-controls" data-map-controls>
     <summary class="memory-map-controls-summary">
       <span class="memory-map-controls-copy">
-        <strong>Search &amp; filters</strong>
+        <strong>{mapText("searchFilters", "Search & filters")}</strong>
         <span>{filterSummary}</span>
       </span>
       <span class="memory-map-controls-chevron" aria-hidden="true"></span>
     </summary>
     <div class="memory-map-controls-body">
       <div class="memory-map-toolbar">
-        <label class="memory-map-search"><span>Search map</span><input type="search" data-map-search value={query} placeholder="memory ID / summary / owner" /></label>
-        <div class="memory-map-presets" aria-label="Map color presets">
-          <button type="button" class="is-active" data-map-preset="project">Project</button>
-          <button type="button" data-map-preset="owner">Owner</button>
-          <button type="button" data-map-preset="utilization">Utilization</button>
+        <label class="memory-map-search"><span>{mapText("searchMap", "Search map")}</span><input type="search" data-map-search value={query} placeholder={mapText("mapSearchPlaceholder", "memory ID / summary / owner")} /></label>
+        <div class="memory-map-presets" aria-label={mapText("presetsAria", "Map color presets")}>
+          <button type="button" class="is-active" data-map-preset="project">{mapText("projectPreset", "Project")}</button>
+          <button type="button" data-map-preset="owner">{mapText("ownerPreset", "Owner")}</button>
+          <button type="button" data-map-preset="utilization">{mapText("utilizationPreset", "Utilization")}</button>
         </div>
-        <a class="memory-map-list-link" href={listHref}>一覧で見る</a>
+        <a class="memory-map-list-link" href={listHref}>{mapText("openList", "Open memory list")}</a>
       </div>
       <form class="memory-map-filters" method="get" action="/memories/constellation">
         <input type="hidden" name="tenant_id" value={tenantId} />
         <input type="hidden" name="scope" value={scope} />
-        <label><span>Project</span><select name="project_id"><option value="" selected={!projectId}>All projects</option>{projectOptions.map(([value, label]) => <option value={value} selected={projectId === value}>{label}</option>)}</select></label>
-        <label><span>Owner</span><select name="owner_principal" disabled={scope === "mine"}><option value="" selected={!ownerPrincipal}>{scope === "mine" ? "自分" : "All owners"}</option>{ownerOptions.map((value) => <option value={value} selected={ownerPrincipal === value}>{value}</option>)}</select></label>
-        <fieldset class="memory-map-date-range" aria-label="Period"><label><span>From</span><input type="date" name="from_date" value={fromDate} /></label><span class="memory-map-range-arrow" aria-hidden="true">→</span><label><span>To</span><input type="date" name="to_date" value={toDate} /></label></fieldset>
-        <button type="submit">Apply filters</button>
+        <label><span>{mapText("projectLabel", "Project")}</span><select name="project_id"><option value="" selected={!projectId}>{mapText("allProjects", "All projects")}</option>{projectOptions.map(([value, label]) => <option value={value} selected={projectId === value}>{label}</option>)}</select></label>
+        <label><span>{mapText("ownerLabel", "Owner")}</span><select name="owner_principal" disabled={scope === "mine"}><option value="" selected={!ownerPrincipal}>{scope === "mine" ? mapText("myMemories", "My memories") : mapText("allOwners", "All owners")}</option>{ownerOptions.map((value) => <option value={value} selected={ownerPrincipal === value}>{value}</option>)}</select></label>
+        <fieldset class="memory-map-date-range" aria-label={`${mapText("from", "From")} / ${mapText("to", "To")}`}><label><span>{mapText("from", "From")}</span><input type="date" name="from_date" value={fromDate} /></label><span class="memory-map-range-arrow" aria-hidden="true">→</span><label><span>{mapText("to", "To")}</span><input type="date" name="to_date" value={toDate} /></label></fieldset>
+        <button type="submit">{mapText("applyFilters", "Apply filters")}</button>
       </form>
     </div>
   </details>
 
+  <section class="memory-map-pathway" data-map-pathway aria-labelledby="memory-map-pathway-title">
+    <header class="memory-map-pathway-header">
+      <p class="intelligence-eyebrow">{traceText("pathwayEyebrow", "Decision lineage")}</p>
+      <h2 id="memory-map-pathway-title">{traceText("pathwayTitle", "The path of a decision")}</h2>
+      <p>{traceText("pathwayIntro", "Follow what was decided, why it was chosen, what supports it, and where it was reflected.")}</p>
+    </header>
+    <ol class="memory-map-pathway-steps" aria-label={traceText("pathwayTitle", "The path of a decision")}>
+      {([
+        ["decision", "01", traceText("stepDecision", "Decision"), traceText("stepDecisionDescription", "What was decided")],
+        ["reason", "02", traceText("stepReason", "Reason"), traceText("stepReasonDescription", "Why it was chosen")],
+        ["evidence", "03", traceText("stepEvidence", "Evidence"), traceText("stepEvidenceDescription", "What supports it")],
+        ["artifact", "04", traceText("stepArtifact", "Artifact"), traceText("stepArtifactDescription", "Where it was reflected")]
+      ] as const).map(([id, index, label, description]) => (
+        <li data-trace-step-item={id} data-state="concept">
+          <button type="button" data-trace-step={id} aria-current={id === "decision" ? "step" : undefined}>
+            <span class="memory-map-pathway-index">{index}</span>
+            <span class="memory-map-pathway-copy"><strong data-trace-step-label>{label}</strong><small data-trace-step-description>{description}</small></span>
+            <span class="memory-map-pathway-state" data-trace-step-state aria-hidden="true"></span>
+          </button>
+        </li>
+      ))}
+    </ol>
+    <p class="memory-map-pathway-prompt" data-trace-pathway-prompt>{traceText("conceptPrompt", "Select a decision node to inspect a real path.")}</p>
+  </section>
+
   <div class="memory-map-layout">
     <div class="memory-map-stage-shell" data-map-stage-shell>
-      <div class="memory-map-stage" data-map-stage role="application" aria-label="3D memory map"></div>
+      <div class="memory-map-stage" data-map-stage role="application" aria-label={mapText("mapAriaLabel", "3D memory map")}></div>
       <svg class="memory-map-glow-overlay" data-map-glow-overlay aria-hidden="true" focusable="false">
         <defs>
           <filter id="memory-map-gaussian-glow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
@@ -139,51 +169,87 @@ const filterSummary = [
       </svg>
     </div>
     <div class="memory-map-fallback" data-map-fallback hidden>
-      <div class="memory-map-fallback-note"><strong>3D表示を利用できないため一覧へ移動します</strong><span>同じ条件のメモリ一覧を開いています。自動で移動しない場合は、下のリンクを使用してください。</span><a data-map-fallback-link href={fallbackHref}>メモリ一覧を開く</a></div>
+      <div class="memory-map-fallback-note"><strong>{mapText("fallbackTitle", "3D view is unavailable; opening the list")}</strong><span>{mapText("fallbackBody", "The memory list uses the same filters. If it does not open automatically, use the link below.")}</span><a data-map-fallback-link href={fallbackHref}>{mapText("openMemoryList", "Open memory list")}</a></div>
       <ul data-map-fallback-list></ul>
     </div>
-    <aside class="memory-map-inspector" data-map-inspector aria-live="polite">
-      <p class="intelligence-eyebrow">Selected node</p>
-      <span class="memory-map-node-kind" data-map-inspector-kind>Nothing selected</span>
-      <h2 data-map-inspector-title>ノードを選択</h2>
-      <p data-map-inspector-summary>星を選択すると、所有者・参照数・純削減を確認できます。</p>
-      <dl class="memory-map-inspector-summary-grid">
-        <div><dt>Project</dt><dd data-map-inspector-project>—</dd></div>
-        <div><dt>Owner</dt><dd data-map-inspector-owner>—</dd></div>
-        <div><dt>References</dt><dd data-map-inspector-refs>—</dd></div>
-        <div><dt>Utilization</dt><dd data-map-inspector-utilization>—</dd></div>
-        <div><dt>Net saved</dt><dd data-map-inspector-saved>—</dd></div>
-      </dl>
-      <p class="memory-map-inspector-status" data-map-inspector-status hidden></p>
-      <div class="memory-map-inspector-detail" data-map-inspector-detail hidden>
-        <dl class="memory-map-inspector-metadata" data-map-inspector-metadata></dl>
-        <section class="memory-map-inspector-section" data-map-inspector-tags-section hidden>
-          <h3>Tags</h3>
-          <div class="memory-map-tag-list" data-map-inspector-tags></div>
-        </section>
-        <section class="memory-map-inspector-section" data-map-inspector-content-section hidden>
-          <h3>本文</h3>
-          <pre class="memory-map-inspector-content" data-map-inspector-content></pre>
-        </section>
-        <section class="memory-map-inspector-section" data-map-inspector-rationales-section hidden>
-          <h3>判断・根拠</h3>
-          <div class="memory-map-inspector-records" data-map-inspector-rationales></div>
-        </section>
-        <section class="memory-map-inspector-section" data-map-inspector-versions-section hidden>
-          <h3>変更履歴</h3>
-          <div class="memory-map-inspector-records" data-map-inspector-versions></div>
-        </section>
+    <aside class="memory-map-inspector" data-map-inspector aria-label={traceText("pathwayTitle", "The path of a decision")} data-sheet-state="peek">
+      <div class="memory-map-sheet-controls" aria-label={traceText("panelControls", "Trace panel controls")}>
+        <button type="button" data-trace-sheet-expand>{traceText("expandPanel", "Expand")}</button>
+        <button type="button" data-trace-sheet-collapse>{traceText("collapsePanel", "Collapse")}</button>
       </div>
-      <a class="memory-map-open" data-map-inspector-link href="/memories">メモリライブラリで開く</a>
+      <p class="intelligence-eyebrow" data-map-trace-workspace-eyebrow>{traceText("currentPath", "This decision path")}</p>
+      <span class="memory-map-node-kind" data-map-inspector-kind>{mapText("nothingSelected", "Nothing selected")}</span>
+      <h2 data-map-inspector-title>{mapText("selectNode", "Select a node.")}</h2>
+      <p data-map-inspector-summary>{mapText("selectNodeHint", "Select a node to inspect its owner, references, and net savings.")}</p>
+      <p class="memory-map-inspector-status" data-map-inspector-status role="status" aria-live="polite" hidden></p>
+      <section class="memory-map-inspector-section memory-map-trace-workspace" data-map-inspector-rationales-section>
+        <h3 class="sr-only" data-map-trace-heading tabindex="-1">{traceText("pathwayTitle", "The path of a decision")}</h3>
+        <p class="memory-map-trace-status" data-map-trace-status role="status" aria-live="polite" hidden></p>
+        <div class="memory-map-inspector-records" data-map-inspector-rationales></div>
+      </section>
+      <details class="memory-map-technical" data-map-technical hidden>
+        <summary>{traceText("technicalDetails", "Technical details")}</summary>
+        <div class="memory-map-technical-body memory-map-inspector-detail" data-map-inspector-detail hidden>
+          <dl class="memory-map-inspector-summary-grid">
+            <div><dt>{mapText("projectLabel", "Project")}</dt><dd data-map-inspector-project>—</dd></div>
+            <div><dt>{mapText("ownerLabel", "Owner")}</dt><dd data-map-inspector-owner>—</dd></div>
+            <div><dt>{mapText("referencesLabel", "References")}</dt><dd data-map-inspector-refs>—</dd></div>
+            <div><dt>{mapText("utilizationLabel", "Utilization")}</dt><dd data-map-inspector-utilization>—</dd></div>
+            <div><dt>{mapText("netSavedLabel", "Net saved")}</dt><dd data-map-inspector-saved>—</dd></div>
+          </dl>
+          <dl class="memory-map-inspector-metadata" data-map-inspector-metadata></dl>
+          <section class="memory-map-inspector-section" data-map-inspector-tags-section hidden>
+            <h3>{mapText("tagsLabel", "Tags")}</h3>
+            <div class="memory-map-tag-list" data-map-inspector-tags></div>
+          </section>
+          <section class="memory-map-inspector-section" data-map-inspector-content-section hidden>
+            <h3>{mapText("contentLabel", "Content")}</h3>
+            <pre class="memory-map-inspector-content" data-map-inspector-content></pre>
+          </section>
+          <section class="memory-map-inspector-section" data-map-inspector-versions-section hidden>
+            <h3>{mapText("historyLabel", "History")}</h3>
+            <div class="memory-map-inspector-records" data-map-inspector-versions></div>
+          </section>
+        </div>
+      </details>
+      <a class="memory-map-open" data-map-inspector-link href="/memories" target="_blank" rel="noreferrer" hidden>{mapText("openMemory", "Open in memory library")}</a>
     </aside>
   </div>
 
+  <dialog class="memory-map-resource-dialog" data-map-resource-dialog aria-labelledby="memory-map-resource-dialog-title">
+    <div class="memory-map-resource-dialog-surface">
+      <header class="memory-map-resource-dialog-header">
+        <div>
+          <p class="intelligence-eyebrow" data-map-resource-dialog-role></p>
+          <h2 id="memory-map-resource-dialog-title" data-map-resource-dialog-title>{traceText("resourcePreview", "Artifact preview")}</h2>
+        </div>
+        <button type="button" class="memory-map-resource-dialog-close" data-map-resource-dialog-close aria-label={traceText("closePreview", "Close preview")}>×</button>
+      </header>
+      <p class="memory-map-resource-dialog-note" data-map-resource-dialog-note hidden></p>
+      <div class="memory-map-resource-dialog-reference" data-map-resource-dialog-reference></div>
+      <dl class="memory-map-resource-dialog-meta" data-map-resource-dialog-meta></dl>
+      <footer class="memory-map-resource-dialog-actions">
+        <button type="button" data-map-resource-dialog-done>{traceText("closePreview", "Close preview")}</button>
+        <a href="/resources" target="_blank" rel="noreferrer" data-map-resource-dialog-link>{traceText("openDetailsNewTab", "Open details in a new tab")}</a>
+      </footer>
+    </div>
+  </dialog>
+
   <footer class="memory-map-footer">
-    <div class="memory-map-legend"><div class="memory-map-project-legend" data-project-legend></div><span class="legend-line legend-line-source"></span><span>line color = source node</span><span class="legend-arrow">→</span><span>directed relation</span></div>
+    <div class="memory-map-legend"><div class="memory-map-project-legend" data-project-legend></div><span class="legend-line legend-line-source"></span><span>{mapText("sourceNodeLegend", "line color = source node")}</span><span class="legend-arrow">→</span><span>{mapText("directedRelationLegend", "directed relation")}</span></div>
+    <details class="memory-map-accessible-picker">
+      <summary>{traceText("keyboardSelection", "Select a node with the keyboard")}</summary>
+      <label class="memory-map-accessible-search"><span>{traceText("keyboardSearch", "Filter decisions and memories")}</span><input type="search" data-map-accessible-search placeholder={traceText("keyboardSearchPlaceholder", "Search nodes")} /></label>
+      <p class="memory-map-accessible-count" data-map-accessible-count></p>
+      <ul data-map-accessible-list></ul>
+    </details>
   </footer>
 </section>
 
 <script>
+  import type { MemoryMapTraceResponse } from "@org-brain/contracts";
+  import { buildMemoryMapTraceView, evidenceClaimKeys, normalizeTraceStep, TRACE_STEP_IDS, type TraceStepId } from "../../lib/memory-map-trace-view";
+
   type MapNode = {
     id: string;
     node_type?: "memory" | "decision" | "project" | "entity" | "tenant";
@@ -284,6 +350,107 @@ const filterSummary = [
     };
   };
 
+  type MemoryMapTracePayload = {
+    ok?: boolean;
+    error?: { message?: string };
+    data?: {
+      selected: {
+        node_type: "memory" | "decision";
+        id: string;
+        memory_id: string;
+        decision_rationale_id: string | null;
+      };
+      memory: {
+        id: string;
+        project_id: string | null;
+        kind: string;
+        summary: string | null;
+        lifecycle_state: string;
+        verification_state: string;
+        verified_at: number | null;
+        reuse_rule: string | null;
+        learning: Record<string, unknown> | null;
+        versions: Array<{
+          version: number;
+          operation: string;
+          summary: string | null;
+          kind: string;
+          lifecycle_state: string;
+          actor_type: string | null;
+          actor_id: string | null;
+          created_at: number;
+        }>;
+      };
+      selected_rationale_id: string | null;
+      rationales: Array<{
+        id: string;
+        decision_type: string;
+        conclusion: string;
+        reason_summary: string;
+        status: string;
+        confirmation_state: string;
+        confidence_score: number | null;
+        created_at: number;
+        confirmed_at: number | null;
+        derived: {
+          lesson_type: string | null;
+          trigger: string | null;
+          question: string | null;
+          decision_key: string | null;
+          decision: string | null;
+          selected_value: string | null;
+          rationale: string | null;
+          alternatives: Array<{ alternative: string; reason_rejected: string | null }>;
+          constraints: string[];
+          reuse_when: string | null;
+          outcome: string | null;
+          symptom: string | null;
+          failed_approach: string | null;
+          root_cause: string | null;
+          correction: string | null;
+          verified_outcome: string | null;
+          avoidance_rule: string | null;
+        };
+        evidence: Array<{
+          id: string;
+          evidence_type: string;
+          evidence_ref: string;
+          relation: string;
+          note: string | null;
+          weight_score: number | null;
+          content_hash: string | null;
+          observed_at: number | null;
+          attestation_ref: string | null;
+        }>;
+        resources: {
+          sources: Array<{
+            link: { role: string; resource_version_id: string | null; locator: Record<string, unknown> | null; note: string | null; confirmation_state: string; excerpt_digest: string | null };
+            resource: { id: string; title: string; resource_kind: string; canonical_uri: string; source_system: string; lifecycle_state: string; current_version_id: string | null };
+            version: { id: string; source_version: string | null; content_hash: string; captured_at: number; extraction_state: string; pinned: boolean } | null;
+            freshness: string;
+            availability: "readable";
+          }>;
+          artifacts: Array<{
+            link: { role: string; resource_version_id: string | null; locator: Record<string, unknown> | null; note: string | null; confirmation_state: string; excerpt_digest: string | null };
+            resource: { id: string; title: string; resource_kind: string; canonical_uri: string; source_system: string; lifecycle_state: string; current_version_id: string | null };
+            version: { id: string; source_version: string | null; content_hash: string; captured_at: number; extraction_state: string; pinned: boolean } | null;
+            freshness: string;
+            availability: "readable";
+          }>;
+        };
+      }>;
+      completeness: {
+        rationale_count: number;
+        evidence_count: number;
+        source_count: number;
+        artifact_count: number;
+        missing: string[];
+        partial: boolean;
+        truncated: boolean;
+      };
+    };
+  };
+
   const root = document.querySelector<HTMLElement>("[data-memory-map-root]");
   if (root) {
     const data = JSON.parse(root.dataset.map || "{}") as { nodes: MapNode[]; links: Array<{ id?: string; source: string; target: string; relation: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean }>; cluster_mode: boolean; total_count?: number; visible_count?: number; memory_visible_count?: number; project_count?: number; entity_count?: number; decision_count?: number; related_count?: number; relationship_count?: number; cross_project_link_count?: number; truncated?: boolean };
@@ -310,13 +477,40 @@ const filterSummary = [
     const inspectorContent = root.querySelector<HTMLElement>("[data-map-inspector-content]");
     const inspectorRationalesSection = root.querySelector<HTMLElement>("[data-map-inspector-rationales-section]");
     const inspectorRationales = root.querySelector<HTMLElement>("[data-map-inspector-rationales]");
+    const inspectorTraceHeading = root.querySelector<HTMLElement>("[data-map-trace-heading]");
+    const inspectorTraceStatus = root.querySelector<HTMLElement>("[data-map-trace-status]");
     const inspectorVersionsSection = root.querySelector<HTMLElement>("[data-map-inspector-versions-section]");
     const inspectorVersions = root.querySelector<HTMLElement>("[data-map-inspector-versions]");
+    const technicalDetails = root.querySelector<HTMLDetailsElement>("[data-map-technical]");
+    const pathwayPrompt = root.querySelector<HTMLElement>("[data-trace-pathway-prompt]");
+    const pathwayButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-trace-step]")];
+    const sheetExpand = root.querySelector<HTMLButtonElement>("[data-trace-sheet-expand]");
+    const sheetCollapse = root.querySelector<HTMLButtonElement>("[data-trace-sheet-collapse]");
+    const accessiblePicker = root.querySelector<HTMLDetailsElement>(".memory-map-accessible-picker");
+    const accessibleList = root.querySelector<HTMLUListElement>("[data-map-accessible-list]");
+    const accessibleSearch = root.querySelector<HTMLInputElement>("[data-map-accessible-search]");
+    const accessibleCount = root.querySelector<HTMLElement>("[data-map-accessible-count]");
+    const resourceDialog = root.querySelector<HTMLDialogElement>("[data-map-resource-dialog]");
+    const resourceDialogTitle = root.querySelector<HTMLElement>("[data-map-resource-dialog-title]");
+    const resourceDialogRole = root.querySelector<HTMLElement>("[data-map-resource-dialog-role]");
+    const resourceDialogNote = root.querySelector<HTMLElement>("[data-map-resource-dialog-note]");
+    const resourceDialogReference = root.querySelector<HTMLElement>("[data-map-resource-dialog-reference]");
+    const resourceDialogMeta = root.querySelector<HTMLElement>("[data-map-resource-dialog-meta]");
+    const resourceDialogLink = root.querySelector<HTMLAnchorElement>("[data-map-resource-dialog-link]");
     const projectLegend = root.querySelector<HTMLElement>("[data-project-legend]");
     const inspectorLink = root.querySelector<HTMLAnchorElement>("[data-map-inspector-link]");
+    const mapCopy = JSON.parse(root.dataset.mapCopy || "{}") as Record<string, unknown>;
+    const mapText = (key: string, fallback: string) => typeof mapCopy[key] === "string" ? String(mapCopy[key]) : fallback;
+    const traceCopy = JSON.parse(root.dataset.traceCopy || "{}") as Record<string, unknown>;
+    const traceText = (key: string, fallback: string) => typeof traceCopy[key] === "string" ? String(traceCopy[key]) : fallback;
     let fallbackScheduled = false;
     let preset = "project";
     let selectedId = root.dataset.selectedId || "";
+    let activeTraceStep = normalizeTraceStep(new URL(window.location.href).searchParams.get("trace_step"));
+    root.dataset.activeTraceStep = activeTraceStep;
+    let activeTracePayload: MemoryMapTraceResponse | null = null;
+    let activeRationaleId: string | null = null;
+    let preserveInitialTraceStep = Boolean(selectedId);
     type GraphLink = { id?: string; source: string | MapNode; target: string | MapNode; relation?: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean };
     type GraphInstance = {
       backgroundColor(value: string): GraphInstance;
@@ -655,13 +849,17 @@ const filterSummary = [
     const sourceNodeFor = (link: GraphLink) => typeof link.source === "string"
       ? data.nodes.find((candidate) => candidate.id === link.source)
       : link.source;
+    const traceAccent = () => ({ decision: "#63bdff", reason: "#ffb84d", evidence: "#43dcad", artifact: "#ecf8ff" })[activeTraceStep];
     const linkColorFor = (link: GraphLink) => {
+      if (selectedId && isSelectedLink(link)) return traceAccent();
       const source = sourceNodeFor(link);
       return source
         ? baseColorFor(source)
         : link.inferred ? "rgba(145,190,220,.48)" : "rgba(120,180,220,.66)";
     };
-    const linkWidthFor = (link: GraphLink) => isCrossProjectLink(link)
+    const linkWidthFor = (link: GraphLink) => selectedId && isSelectedLink(link)
+      ? 1.8
+      : isCrossProjectLink(link)
       ? 1.25
       : isTenantLink(link)
         ? 1.5
@@ -686,7 +884,8 @@ const filterSummary = [
     };
     const formatTimestamp = (value: number | null | undefined) => {
       if (value === null || value === undefined || !Number.isFinite(Number(value)) || Number(value) <= 0) return "—";
-      return new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(Number(value)));
+      const formatLocale = root.dataset.locale === "ja" ? "ja-JP" : root.dataset.locale === "zh" ? "zh-CN" : "en-US";
+      return new Intl.DateTimeFormat(formatLocale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(Number(value)));
     };
     const formatNumber = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(Number(value)) ? "—" : Number(value).toLocaleString();
     const appendText = (parent: HTMLElement, tag: string, text: string, className = "") => {
@@ -707,45 +906,61 @@ const filterSummary = [
         inspectorMetadata.appendChild(wrapper);
       }
       if (inspectorDetail) inspectorDetail.hidden = false;
+      if (technicalDetails) technicalDetails.hidden = false;
     };
     const clearInspectorDetails = () => {
       if (inspectorDetail) inspectorDetail.hidden = true;
+      if (technicalDetails) {
+        technicalDetails.hidden = true;
+        technicalDetails.open = false;
+      }
       if (inspectorStatus) {
         inspectorStatus.hidden = true;
         inspectorStatus.textContent = "";
       }
-      for (const section of [inspectorTagsSection, inspectorContentSection, inspectorRationalesSection, inspectorVersionsSection]) {
+      for (const section of [inspectorTagsSection, inspectorContentSection, inspectorVersionsSection]) {
         if (section) section.hidden = true;
       }
-      for (const element of [inspectorMetadata, inspectorTags, inspectorRationales, inspectorVersions]) {
+      for (const element of [inspectorMetadata, inspectorTags, inspectorVersions]) {
         if (element) element.innerHTML = "";
       }
       if (inspectorContent) inspectorContent.textContent = "";
+      activeTracePayload = null;
+      activeRationaleId = null;
     };
     const renderNodeMetadata = (node: MapNode) => {
       const nodeType = node.node_type || "memory";
+      const nodeTypeLabel = nodeType === "tenant"
+        ? mapText("tenantRoot", "Tenant root")
+        : nodeType === "project"
+          ? mapText("projectHub", "Project hub")
+          : nodeType === "entity"
+            ? mapText("sharedConcept", "Shared concept")
+            : nodeType === "decision"
+              ? mapText("decisionKind", "Decision")
+              : mapText("memoryKind", "Memory");
       renderMetadata([
-        ["ID", node.id],
-        ["Node type", nodeType],
-        ["Label", node.label],
-        ["Summary", node.summary || "—"],
-        ["Tenant", node.tenant_id || root.dataset.tenantId || "default"],
-        ["Project", node.project_id || "プロジェクト未設定"],
-        ["Owner", node.owner_principal || "未割り当て"],
-        ["Creator", node.created_by_principal || "未割り当て"],
-        ["Members", formatNumber(node.member_count)],
-        ["References", formatNumber(node.reference_count)],
-        ["Used", formatNumber(node.used_count)],
-        ["Consumers", formatNumber(node.consumer_count)],
-        ["Utilization", node.utilization_rate === null || node.utilization_rate === undefined ? "未計測" : `${Math.round(node.utilization_rate * 100)}%`],
-        ["Net saved tokens", formatNumber(node.net_saved_tokens)],
-        ["Injected tokens", formatNumber(node.injected_tokens)],
-        ["Updated", formatTimestamp(node.updated_at)],
-        ["Cluster", node.cluster_key || "—"],
-        ["Entity type", node.entity_type || "—"],
-        ["Decision type", node.decision_type || "—"],
-        ["Confirmation", node.confirmation_state || "—"],
-        ["Confidence", node.confidence_score === null || node.confidence_score === undefined ? "—" : String(node.confidence_score)]
+        [mapText("idLabel", "ID"), node.id],
+        [mapText("nodeTypeLabel", "Node type"), nodeTypeLabel],
+        [mapText("labelLabel", "Label"), node.label],
+        [mapText("summaryLabel", "Summary"), node.summary || "—"],
+        [mapText("tenantLabel", "Tenant"), node.tenant_id || root.dataset.tenantId || "default"],
+        [mapText("projectLabel", "Project"), node.project_id || mapText("notSet", "Not set")],
+        [mapText("ownerLabel", "Owner"), node.owner_principal || mapText("noAssignment", "Unassigned")],
+        [mapText("creatorLabel", "Creator"), node.created_by_principal || mapText("noAssignment", "Unassigned")],
+        [mapText("membersLabel", "Members"), formatNumber(node.member_count)],
+        [mapText("referencesLabel", "References"), formatNumber(node.reference_count)],
+        [mapText("usedLabel", "Used"), formatNumber(node.used_count)],
+        [mapText("consumersLabel", "Consumers"), formatNumber(node.consumer_count)],
+        [mapText("utilizationLabel", "Utilization"), node.utilization_rate === null || node.utilization_rate === undefined ? mapText("unmeasured", "Not measured") : `${Math.round(node.utilization_rate * 100)}%`],
+        [mapText("netSavedLabel", "Net saved"), formatNumber(node.net_saved_tokens)],
+        [mapText("injectedTokensLabel", "Injected tokens"), formatNumber(node.injected_tokens)],
+        [mapText("updatedLabel", "Updated"), formatTimestamp(node.updated_at)],
+        [mapText("clusterLabel", "Cluster"), node.cluster_key || "—"],
+        [mapText("entityTypeLabel", "Entity type"), node.entity_type || "—"],
+        [mapText("decisionTypeLabel", "Decision type"), node.decision_type || "—"],
+        [mapText("confirmationLabel", "Confirmation"), node.confirmation_state || "—"],
+        [mapText("confidenceLabel", "Confidence"), node.confidence_score === null || node.confidence_score === undefined ? "—" : String(node.confidence_score)]
       ]);
     };
     const renderMemoryDetail = (payload: NonNullable<MemoryDetailPayload["data"]>, node: MapNode) => {
@@ -754,35 +969,35 @@ const filterSummary = [
       const referenceCount = Number(memory.reference_count ?? node.reference_count ?? 0);
       const usedCount = Number(memory.used_count ?? node.used_count ?? 0);
       renderMetadata([
-        ["ID", memory.id || payload.memory_id || node.memory_id || node.id],
-        ["Node type", "memory"],
-        ["Source", memory.source || "—"],
-        ["External key", memory.external_key || "—"],
-        ["Kind", memory.kind || "—"],
-        ["Lifecycle", memory.lifecycle_state || "—"],
-        ["Current version", formatNumber(memory.current_version)],
-        ["Tenant", root.dataset.tenantId || "default"],
-        ["Summary", memory.summary || "—"],
-        ["Project", memory.project_id || "プロジェクト未設定"],
-        ["Owner", memory.owner_principal || "未割り当て"],
-        ["Creator", memory.created_by_principal || "未割り当て"],
-        ["Actor", [memory.actor_type, memory.actor_id].filter(Boolean).join(" / ") || "—"],
-        ["Created", formatTimestamp(memory.created_at)],
-        ["Updated", formatTimestamp(memory.updated_at)],
-        ["Last accessed", formatTimestamp(memory.last_accessed_at)],
-        ["Confidence", memory.confidence_score === null || memory.confidence_score === undefined ? "—" : String(memory.confidence_score)],
-        ["Utility", memory.utility_score === null || memory.utility_score === undefined ? "—" : String(memory.utility_score)],
-        ["References", formatNumber(referenceCount)],
-        ["Used", formatNumber(usedCount)],
-        ["Consumers", formatNumber(memory.consumer_count)],
-        ["Utilization", referenceCount > 0 ? `${Math.round((usedCount / referenceCount) * 100)}%` : "未計測"],
-        ["Net saved tokens", formatNumber(memory.net_saved_tokens)],
-        ["Injected tokens", formatNumber(memory.injected_tokens)],
-        ["Deleted at", formatTimestamp(memory.deleted_at)],
-        ["Deleted by", memory.deleted_by_principal || "—"],
-        ["Delete reason", memory.delete_reason || "—"],
-        ["Detail usage ID", payload.meta?.usage_id || "—"],
-        ["Verification sampled", payload.meta?.verification_sampled === undefined ? "—" : payload.meta.verification_sampled ? "yes" : "no"]
+        [mapText("idLabel", "ID"), memory.id || payload.memory_id || node.memory_id || node.id],
+        [mapText("nodeTypeLabel", "Node type"), mapText("memoryKind", "Memory")],
+        [mapText("sourceLabel", "Source"), memory.source || "—"],
+        [mapText("externalKeyLabel", "External key"), memory.external_key || "—"],
+        [mapText("kindLabel", "Kind"), memory.kind || "—"],
+        [mapText("lifecycleLabel", "Lifecycle"), memory.lifecycle_state || "—"],
+        [mapText("currentVersionLabel", "Current version"), formatNumber(memory.current_version)],
+        [mapText("tenantLabel", "Tenant"), root.dataset.tenantId || "default"],
+        [mapText("summaryLabel", "Summary"), memory.summary || "—"],
+        [mapText("projectLabel", "Project"), memory.project_id || mapText("notSet", "Not set")],
+        [mapText("ownerLabel", "Owner"), memory.owner_principal || mapText("noAssignment", "Unassigned")],
+        [mapText("creatorLabel", "Creator"), memory.created_by_principal || mapText("noAssignment", "Unassigned")],
+        [mapText("actorLabel", "Actor"), [memory.actor_type, memory.actor_id].filter(Boolean).join(" / ") || "—"],
+        [mapText("createdLabel", "Created"), formatTimestamp(memory.created_at)],
+        [mapText("updatedLabel", "Updated"), formatTimestamp(memory.updated_at)],
+        [mapText("lastAccessedLabel", "Last accessed"), formatTimestamp(memory.last_accessed_at)],
+        [mapText("confidenceLabel", "Confidence"), memory.confidence_score === null || memory.confidence_score === undefined ? "—" : String(memory.confidence_score)],
+        [mapText("utilityLabel", "Utility"), memory.utility_score === null || memory.utility_score === undefined ? "—" : String(memory.utility_score)],
+        [mapText("referencesLabel", "References"), formatNumber(referenceCount)],
+        [mapText("usedLabel", "Used"), formatNumber(usedCount)],
+        [mapText("consumersLabel", "Consumers"), formatNumber(memory.consumer_count)],
+        [mapText("utilizationLabel", "Utilization"), referenceCount > 0 ? `${Math.round((usedCount / referenceCount) * 100)}%` : mapText("unmeasured", "Not measured")],
+        [mapText("netSavedLabel", "Net saved tokens"), formatNumber(memory.net_saved_tokens)],
+        [mapText("injectedTokensLabel", "Injected tokens"), formatNumber(memory.injected_tokens)],
+        [mapText("deletedAtLabel", "Deleted at"), formatTimestamp(memory.deleted_at)],
+        [mapText("deletedByLabel", "Deleted by"), memory.deleted_by_principal || "—"],
+        [mapText("deleteReasonLabel", "Delete reason"), memory.delete_reason || "—"],
+        [mapText("detailUsageIdLabel", "Detail usage ID"), payload.meta?.usage_id || "—"],
+        [mapText("verificationSampledLabel", "Verification sampled"), payload.meta?.verification_sampled === undefined ? "—" : payload.meta.verification_sampled ? mapText("yesLabel", "yes") : mapText("noLabel", "no")]
       ]);
 
       const tags = memory.tags ?? [];
@@ -795,22 +1010,6 @@ const filterSummary = [
       if (inspectorContentSection && inspectorContent) {
         inspectorContentSection.hidden = content.length === 0;
         inspectorContent.textContent = content;
-      }
-      const rationales = payload.rationales ?? [];
-      if (inspectorRationalesSection && inspectorRationales) {
-        inspectorRationalesSection.hidden = rationales.length === 0;
-        inspectorRationales.innerHTML = "";
-        for (const rationale of rationales) {
-          const card = document.createElement("article");
-          card.className = "memory-map-record";
-          appendText(card, "strong", rationale.conclusion || rationale.decision_type);
-          appendText(card, "small", `${rationale.id} · ${rationale.decision_type} · ${rationale.status} · ${rationale.confirmation_state} · confidence ${rationale.confidence_score ?? "—"} · confirmed ${formatTimestamp(rationale.confirmed_at)}`);
-          appendText(card, "p", rationale.reason_summary || "—");
-          for (const evidence of rationale.evidence ?? []) {
-            appendText(card, "code", `${evidence.id} · ${evidence.relation} / ${evidence.evidence_type}: ${evidence.evidence_ref}${evidence.note ? ` · ${evidence.note}` : ""} · weight ${evidence.weight_score ?? "—"}`);
-          }
-          inspectorRationales.appendChild(card);
-        }
       }
       const versions = payload.versions ?? [];
       if (inspectorVersionsSection && inspectorVersions) {
@@ -826,13 +1025,457 @@ const filterSummary = [
         }
       }
     };
+
+    const presentNarrative = (value: string | null | undefined) => String(value || "")
+      .replace(/\s*[（(](?:synthetic case|合成ケース|合成用例)\s*\d+[）)]\s*$/iu, "")
+      .trim();
+    const addTraceField = (parent: HTMLElement, label: string, value: string | null | undefined) => {
+      if (!value) return;
+      const field = document.createElement("div");
+      field.className = "memory-map-trace-field";
+      appendText(field, "dt", label, "memory-map-trace-label");
+      appendText(field, "dd", presentNarrative(value), "memory-map-trace-value");
+      parent.appendChild(field);
+    };
+    const addTraceGroup = (parent: HTMLElement, title = "") => {
+      const group = document.createElement("section");
+      group.className = "memory-map-trace-group";
+      if (title) appendText(group, "h4", title, "memory-map-trace-group-title");
+      parent.appendChild(group);
+      return group;
+    };
+    const formatLocator = (locator: Record<string, unknown> | null) => locator
+      ? Object.entries(locator).map(([key, value]) => `${key}: ${String(value)}`).join(" / ")
+      : "";
+    const resourceRoleLabel = (role: string) => {
+      if (role === "implementation_artifact") return traceText("implementation", "Implementation");
+      if (role === "verification_artifact") return traceText("verification", "Verification");
+      if (role === "output_artifact") return traceText("outputArtifact", "Output");
+      if (role === "rationale_source" || role === "conclusion_source") return traceText("sources", "Sources");
+      return role;
+    };
+    const resourceKindLabel = (kind: string) => ({
+      document: traceText("resourceKindDocument", "Document"),
+      test_result: traceText("resourceKindTestResult", "Test result"),
+      build: traceText("resourceKindBuild", "Build"),
+      output: traceText("resourceKindOutput", "Output"),
+      source_file: traceText("resourceKindSourceFile", "Source file")
+    })[kind] || kind;
+    const stateValueLabel = (value: string) => ({
+      active: traceText("stateActive", "Active"),
+      confirmed: traceText("confirmedState", "Confirmed"),
+      retired: traceText("stateRetired", "Retired"),
+      archived: traceText("stateArchived", "Archived"),
+      current: traceText("stateCurrent", "Current")
+    })[value] || value;
+    const presentResourceTitle = (value: string) => presentNarrative(value)
+      .replace(/\s*[·|]\s*(?:failure|decision|success|case)-\d+\s*$/iu, "")
+      .trim();
+    const traceStateLabel = (state: string, count = 0, step: TraceStepId = "decision") => {
+      if (state === "available") {
+        if (step === "evidence") return traceText("evidenceCount", "Evidence · {count}").replace("{count}", String(count));
+        if (step === "artifact") return traceText("artifactCount", "Artifacts · {count}").replace("{count}", String(count));
+        return traceText("confirmedState", "Confirmed");
+      }
+      const label = state === "available"
+        ? traceText("availableState", "Available")
+        : state === "missing"
+          ? traceText("missingState", "Missing")
+          : state === "unverified"
+            ? traceText("unverifiedState", "Unverified")
+            : traceText("truncatedState", "Partial");
+      return count > 0 && (step === "evidence" || step === "artifact") ? `${label} · ${count}` : label;
+    };
+    const traceStepCopy = (step: TraceStepId, isFailure = false) => {
+      const normal = {
+        decision: [traceText("stepDecision", "Decision"), traceText("stepDecisionDescription", "What was decided"), traceText("conceptDecisionDetail", "Start with the conclusion the organization adopted.")],
+        reason: [traceText("stepReason", "Reason"), traceText("stepReasonDescription", "Why it was chosen"), traceText("conceptReasonDetail", "Review the reasoning, constraints, and rejected alternatives.")],
+        evidence: [traceText("stepEvidence", "Evidence"), traceText("stepEvidenceDescription", "What supports it"), traceText("conceptEvidenceDetail", "Check the files, commands, statements, and sources that support the claim.")],
+        artifact: [traceText("stepArtifact", "Artifact"), traceText("stepArtifactDescription", "Where it was reflected"), traceText("conceptArtifactDetail", "Confirm the implementation, output, or verification result where the decision landed.")]
+      } as const;
+      if (!isFailure) return normal[step];
+      const failure = {
+        decision: [traceText("failureDecision", "Failure and learning"), traceText("failureDecisionDescription", "What happened"), traceText("conceptFailureDecisionDetail", "Start with the observed symptom and the lesson recorded from it.")],
+        reason: [traceText("failureReason", "Root cause"), traceText("failureReasonDescription", "Why it happened"), traceText("conceptFailureReasonDetail", "Separate the root cause from the visible symptom.")],
+        evidence: [traceText("failureEvidence", "Verification"), traceText("failureEvidenceDescription", "How it was checked"), traceText("conceptFailureEvidenceDetail", "Compare the failing and successful evidence used to verify the correction.")],
+        artifact: [traceText("failureArtifact", "Correction and prevention"), traceText("failureArtifactDescription", "What changed"), traceText("conceptFailureArtifactDetail", "Confirm the correction, verified outcome, and rule that prevents recurrence.")]
+      } as const;
+      return failure[step];
+    };
+    const updatePathway = (payload: MemoryMapTraceResponse | null, rationaleId: string | null) => {
+      const view = payload ? buildMemoryMapTraceView(payload, rationaleId) : null;
+      root.classList.toggle("has-trace-selection", Boolean(view?.rationale));
+      if (pathwayPrompt) pathwayPrompt.textContent = view?.rationale
+        ? traceText("instancePrompt", "Use the four steps to inspect this decision's real data.")
+        : traceText("conceptPrompt", "Select a decision node to inspect a real path.");
+      for (const button of pathwayButtons) {
+        const step = normalizeTraceStep(button.dataset.traceStep);
+        const item = button.closest<HTMLElement>("[data-trace-step-item]");
+        const label = button.querySelector<HTMLElement>("[data-trace-step-label]");
+        const description = button.querySelector<HTMLElement>("[data-trace-step-description]");
+        const state = button.querySelector<HTMLElement>("[data-trace-step-state]");
+        const copy = traceStepCopy(step, view?.isFailure);
+        if (label) label.textContent = copy[0];
+        if (description) description.textContent = copy[1];
+        const stage = view?.stages.find((candidate) => candidate.id === step);
+        if (item) item.dataset.state = stage?.state || "concept";
+        if (state) state.textContent = stage ? traceStateLabel(stage.state, stage.count, step) : "";
+        button.setAttribute("aria-label", [copy[0], copy[1], stage ? traceStateLabel(stage.state, stage.count, step) : ""].filter(Boolean).join(" · "));
+        if (step === activeTraceStep) button.setAttribute("aria-current", "step");
+        else button.removeAttribute("aria-current");
+      }
+      return view;
+    };
+    const appendCopyReference = (parent: HTMLElement, value: string) => {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "memory-map-copy-reference";
+      action.dataset.copyValue = value;
+      action.textContent = traceText("copyReference", "Copy reference");
+      parent.appendChild(action);
+    };
+    const resourceDetailsHref = (rationaleId: string) => {
+      const resourceParams = new URLSearchParams({
+        tenant_id: root.dataset.tenantId || "default",
+        project_id: root.dataset.projectId || "",
+        decision_ref: `decision_rationale:${rationaleId}`,
+        lang: root.dataset.locale || "en"
+      });
+      return `/resources?${resourceParams.toString()}`;
+    };
+    const openResourcePreview = (
+      item: NonNullable<MemoryMapTracePayload["data"]>["rationales"][number]["resources"]["artifacts"][number],
+      rationaleId: string
+    ) => {
+      if (!resourceDialog || !resourceDialogTitle || !resourceDialogReference || !resourceDialogMeta || !resourceDialogLink) return;
+      resourceDialogTitle.textContent = presentResourceTitle(item.resource.title || item.resource.id);
+      if (resourceDialogRole) resourceDialogRole.textContent = `${resourceRoleLabel(item.link.role)} · ${resourceKindLabel(item.resource.resource_kind)}`;
+      if (resourceDialogNote) {
+        resourceDialogNote.hidden = !item.link.note;
+        resourceDialogNote.textContent = presentNarrative(item.link.note);
+      }
+      resourceDialogReference.innerHTML = "";
+      const uri = item.resource.canonical_uri;
+      if (/^https?:\/\//iu.test(uri)) {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = uri;
+        resourceDialogReference.appendChild(link);
+      } else {
+        appendText(resourceDialogReference, "code", uri);
+        appendCopyReference(resourceDialogReference, uri);
+      }
+      resourceDialogMeta.innerHTML = "";
+      addTraceField(resourceDialogMeta, traceText("pinnedVersion", "Pinned version"), item.version ? `${item.version.id}${item.version.pinned ? "" : " · current"}` : traceText("notAvailable", "Not available"));
+      addTraceField(resourceDialogMeta, traceText("lifecycle", "Lifecycle"), stateValueLabel(item.resource.lifecycle_state));
+      addTraceField(resourceDialogMeta, traceText("locator", "Locator"), formatLocator(item.link.locator));
+      addTraceField(resourceDialogMeta, traceText("status", "Status"), stateValueLabel(item.link.confirmation_state));
+      resourceDialogLink.href = resourceDetailsHref(rationaleId);
+      resourceDialog.showModal();
+    };
+    const renderTraceResource = (parent: HTMLElement, item: NonNullable<MemoryMapTracePayload["data"]>["rationales"][number]["resources"]["artifacts"][number], rationaleId: string) => {
+      const card = document.createElement("article");
+      card.className = "memory-map-trace-resource";
+      const header = document.createElement("div");
+      header.className = "memory-map-trace-resource-header";
+      appendText(header, "strong", presentResourceTitle(item.resource.title || item.resource.id));
+      appendText(header, "small", `${resourceRoleLabel(item.link.role)} · ${resourceKindLabel(item.resource.resource_kind)} · ${stateValueLabel(item.freshness)}`);
+      card.appendChild(header);
+      const uri = item.resource.canonical_uri;
+      if (/^https?:\/\//iu.test(uri)) {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = uri;
+        link.className = "memory-map-trace-uri";
+        card.appendChild(link);
+      } else {
+        const localReference = document.createElement("div");
+        localReference.className = "memory-map-trace-local-reference";
+        appendText(localReference, "span", traceText("localReference", "Local reference"));
+        appendCopyReference(localReference, uri);
+        card.appendChild(localReference);
+      }
+      const technical = document.createElement("details");
+      technical.className = "memory-map-trace-technical";
+      appendText(technical, "summary", traceText("resourceDetails", "Resource details"));
+      const metadata = document.createElement("dl");
+      metadata.className = "memory-map-trace-resource-meta";
+      addTraceField(metadata, traceText("pinnedVersion", "Pinned version"), item.version ? `${item.version.id}${item.version.pinned ? "" : " · current"}` : traceText("notAvailable", "Not available"));
+      addTraceField(metadata, traceText("lifecycle", "Lifecycle"), item.resource.lifecycle_state);
+      addTraceField(metadata, traceText("locator", "Locator"), formatLocator(item.link.locator));
+      addTraceField(metadata, traceText("status", "Status"), item.link.confirmation_state);
+      technical.appendChild(metadata);
+      card.appendChild(technical);
+      if (item.link.note) appendText(card, "p", presentNarrative(item.link.note), "memory-map-trace-note");
+      const actions = document.createElement("div");
+      actions.className = "memory-map-trace-resource-actions";
+      const preview = document.createElement("button");
+      preview.type = "button";
+      preview.textContent = traceText("previewResource", "Preview here");
+      preview.className = "memory-map-trace-resource-preview";
+      preview.addEventListener("click", () => openResourcePreview(item, rationaleId));
+      actions.appendChild(preview);
+      const resourceLink = document.createElement("a");
+      resourceLink.href = resourceDetailsHref(rationaleId);
+      resourceLink.target = "_blank";
+      resourceLink.rel = "noreferrer";
+      resourceLink.textContent = traceText("openDetailsNewTab", "Open details in a new tab");
+      resourceLink.className = "memory-map-trace-resource-link";
+      actions.appendChild(resourceLink);
+      card.appendChild(actions);
+      parent.appendChild(card);
+    };
+    const appendTraceNavigation = (parent: HTMLElement) => {
+      const navigation = document.createElement("nav");
+      navigation.className = "memory-map-trace-navigation";
+      navigation.setAttribute("aria-label", traceText("pathwayTitle", "The path of a decision"));
+      const index = TRACE_STEP_IDS.indexOf(activeTraceStep);
+      if (index > 0) {
+        const previous = document.createElement("button");
+        previous.type = "button";
+        previous.className = "memory-map-trace-nav-previous";
+        previous.textContent = `← ${traceText("previousStep", "Previous")}`;
+        previous.addEventListener("click", () => setActiveTraceStep(TRACE_STEP_IDS[index - 1], { focus: true }));
+        navigation.appendChild(previous);
+      }
+      if (index < TRACE_STEP_IDS.length - 1) {
+        const next = document.createElement("button");
+        next.type = "button";
+        next.className = "memory-map-trace-nav-next";
+        next.textContent = activeTraceStep === "decision"
+          ? `${traceText("inspectReason", "Inspect the reason")} →`
+          : `${traceText("nextStep", "Next")} →`;
+        next.addEventListener("click", () => setActiveTraceStep(TRACE_STEP_IDS[index + 1], { focus: true }));
+        navigation.appendChild(next);
+      }
+      parent.appendChild(navigation);
+    };
+    const renderConceptTrace = () => {
+      if (!inspectorRationales) return;
+      updatePathway(null, null);
+      inspectorRationales.innerHTML = "";
+      const copy = traceStepCopy(activeTraceStep);
+      const card = document.createElement("article");
+      card.className = "memory-map-trace-card memory-map-trace-concept";
+      card.dataset.traceActiveStep = activeTraceStep;
+      const heading = appendText(card, "h3", copy[0], "memory-map-trace-stage-title");
+      heading.tabIndex = -1;
+      appendText(card, "p", copy[2], "memory-map-trace-stage-intro");
+      appendText(card, "p", traceText("conceptPrompt", "Select a decision node to inspect a real path."), "memory-map-trace-concept-prompt");
+      appendTraceNavigation(card);
+      inspectorRationales.appendChild(card);
+    };
+    const evidenceClaimLabel = (key: ReturnType<typeof evidenceClaimKeys>[number]) => ({
+      decision: traceText("supportsDecision", "Supports the decision"),
+      reason: traceText("supportsReason", "Supports the reason"),
+      cause: traceText("supportsCause", "Supports the cause"),
+      verification: traceText("supportsVerification", "Supports verification"),
+      other: traceText("supportsOther", "Other evidence")
+    })[key];
+    const evidencePresentation = (evidence: NonNullable<MemoryMapTracePayload["data"]>["rationales"][number]["evidence"][number]) => {
+      const relation = evidence.relation.toLowerCase();
+      const note = String(evidence.note || "").toLowerCase();
+      if (evidence.evidence_type === "command") {
+        const succeeded = relation.includes("verified") || relation.includes("outcome") || /exit[_ ]?code\s*[:=]\s*0\b/u.test(note);
+        const failed = relation.includes("symptom") || relation.includes("cause") || /exit[_ ]?code\s*[:=]\s*[1-9]\d*\b/u.test(note);
+        if (succeeded) return { label: traceText("successfulCommand", "Successful run"), className: "is-success" };
+        if (failed) return { label: traceText("failedCommand", "Failed run"), className: "is-failure" };
+        return { label: traceText("commandEvidence", "Command"), className: "" };
+      }
+      return {
+        label: ({
+          file: traceText("fileEvidence", "File"),
+          user_statement: traceText("userStatementEvidence", "User statement"),
+          tool_call: traceText("toolCallEvidence", "Tool call")
+        })[evidence.evidence_type] || evidence.evidence_type,
+        className: ""
+      };
+    };
+    const renderEvidenceItem = (parent: HTMLElement, evidence: NonNullable<MemoryMapTracePayload["data"]>["rationales"][number]["evidence"][number]) => {
+      const item = document.createElement("article");
+      item.className = "memory-map-trace-evidence";
+      const badges = document.createElement("div");
+      badges.className = "memory-map-trace-badges";
+      const presentation = evidencePresentation(evidence);
+      appendText(badges, "span", presentation.label, `memory-map-trace-badge memory-map-trace-badge-outcome ${presentation.className}`.trim());
+      for (const claim of evidenceClaimKeys(evidence.relation)) appendText(badges, "span", evidenceClaimLabel(claim), "memory-map-trace-badge memory-map-trace-badge-support");
+      item.appendChild(badges);
+      if (evidence.note) appendText(item, "p", evidence.note);
+      const technical = document.createElement("details");
+      technical.className = "memory-map-trace-technical";
+      appendText(technical, "summary", traceText("evidenceDetails", "Evidence details"));
+      appendText(technical, "code", evidence.evidence_ref);
+      appendText(technical, "small", evidence.relation);
+      appendCopyReference(technical, evidence.evidence_ref);
+      item.appendChild(technical);
+      parent.appendChild(item);
+    };
+    const renderMemoryTrace = (payload: NonNullable<MemoryMapTracePayload["data"]>) => {
+      if (!inspectorRationalesSection || !inspectorRationales) return;
+      inspectorRationalesSection.hidden = false;
+      if (inspectorTraceHeading) inspectorTraceHeading.textContent = traceText("pathwayTitle", "The path of a decision");
+      if (inspectorTraceStatus) {
+        inspectorTraceStatus.hidden = true;
+        inspectorTraceStatus.textContent = "";
+      }
+      activeTracePayload = payload as MemoryMapTraceResponse;
+      const view = buildMemoryMapTraceView(activeTracePayload, activeRationaleId);
+      updatePathway(activeTracePayload, activeRationaleId);
+      activeRationaleId = view.rationaleId;
+      inspectorRationales.innerHTML = "";
+      if (!view.rationale) {
+        appendText(inspectorRationales, "p", traceText("noRationales", "No decision or failure learning is attached."), "memory-map-trace-empty");
+        return;
+      }
+      const rationale = view.rationale;
+      const derived = rationale.derived;
+      if (inspectorKind && view.isFailure) inspectorKind.textContent = traceText("failureKind", "Failure learning");
+      if (inspectorTitle) inspectorTitle.textContent = view.isFailure
+        ? presentNarrative(derived.symptom || rationale.conclusion)
+        : presentNarrative(rationale.conclusion || derived.decision || derived.selected_value);
+      if (inspectorSummary) inspectorSummary.textContent = view.isFailure
+        ? presentNarrative(derived.root_cause || rationale.reason_summary || traceText("missingReason", "Reason not recorded"))
+        : presentNarrative(rationale.reason_summary || derived.rationale || traceText("missingReason", "Reason not recorded"));
+      if (payload.rationales.length > 1) {
+        const switcher = document.createElement("label");
+        switcher.className = "memory-map-trace-switcher";
+        appendText(switcher, "span", traceText("decisionSelector", "Decision"));
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", traceText("decisionSelector", "Decision"));
+        for (const candidate of payload.rationales) {
+          const option = document.createElement("option");
+          option.value = candidate.id;
+          option.textContent = candidate.conclusion || candidate.decision_type;
+          option.selected = candidate.id === rationale.id;
+          select.appendChild(option);
+        }
+        select.addEventListener("change", () => {
+          activeRationaleId = select.value;
+          activeTraceStep = "decision";
+          renderMemoryTrace(payload);
+          updateRouteState();
+        });
+        switcher.appendChild(select);
+        inspectorRationales.appendChild(switcher);
+      }
+      const stage = view.stages.find((candidate) => candidate.id === activeTraceStep) || view.stages[0];
+      const copy = traceStepCopy(activeTraceStep, view.isFailure);
+      const card = document.createElement("article");
+      card.className = "memory-map-trace-card";
+      card.dataset.traceActiveStep = activeTraceStep;
+      const header = document.createElement("header");
+      header.className = "memory-map-trace-stage-header";
+      appendText(header, "span", `0${TRACE_STEP_IDS.indexOf(activeTraceStep) + 1}`, "memory-map-trace-stage-index");
+      const titleGroup = document.createElement("div");
+      const heading = appendText(titleGroup, "h3", copy[0], "memory-map-trace-stage-title");
+      heading.tabIndex = -1;
+      appendText(titleGroup, "p", copy[1], "memory-map-trace-stage-description");
+      header.appendChild(titleGroup);
+      appendText(header, "span", traceStateLabel(stage.state, stage.count, activeTraceStep), `memory-map-trace-stage-state is-${stage.state}`);
+      card.appendChild(header);
+      if (stage.state !== "available") {
+        appendText(card, "p", stage.state === "missing"
+          ? ({ decision: traceText("missingDecision", "Decision not recorded"), reason: traceText("missingReason", "Reason not recorded"), evidence: traceText("missingEvidence", "Evidence not recorded"), artifact: traceText("missingArtifact", "Formal artifact link not registered") })[activeTraceStep]
+          : stage.state === "unverified"
+            ? traceText("missingVerification", "Verification is not confirmed")
+            : traceText("partial", "Some trace fields are missing"), "memory-map-trace-warning");
+      }
+      const body = document.createElement("div");
+      body.className = "memory-map-trace-card-body";
+      if (activeTraceStep === "decision") {
+        const group = addTraceGroup(body);
+        addTraceField(group, traceText("decisionValue", "Decision"), rationale.conclusion || derived.decision || derived.selected_value);
+        addTraceField(group, traceText("decisionKey", "Decision key"), derived.decision_key);
+        addTraceField(group, traceText("status", "Status"), `${rationale.confirmation_state} · ${rationale.status}${rationale.confidence_score === null ? "" : ` · ${Math.round(rationale.confidence_score * 100)}%`}`);
+        addTraceField(group, view.isFailure ? traceText("symptom", "Symptom") : traceText("reasonPreview", "Reason preview"), view.isFailure ? derived.symptom : rationale.reason_summary || derived.rationale);
+      } else if (activeTraceStep === "reason") {
+        const group = addTraceGroup(body);
+        if (view.isFailure) {
+          addTraceField(group, traceText("symptom", "Symptom"), derived.symptom);
+          addTraceField(group, traceText("rootCause", "Root cause"), derived.root_cause || rationale.reason_summary);
+          addTraceField(group, traceText("failedApproach", "Failed approach"), derived.failed_approach);
+        } else {
+          addTraceField(group, traceText("reasonDetail", "Reason"), rationale.reason_summary || derived.rationale);
+          addTraceField(group, traceText("trigger", "Trigger"), derived.trigger);
+          addTraceField(group, traceText("question", "Question"), derived.question);
+        }
+        if (derived.constraints.length > 0) {
+          const constraints = addTraceGroup(body, traceText("constraints", "Constraints"));
+          const list = document.createElement("ul");
+          for (const constraint of derived.constraints) appendText(list, "li", constraint);
+          constraints.appendChild(list);
+        }
+        if (!view.isFailure && derived.alternatives.length > 0) {
+          const alternatives = addTraceGroup(body, traceText("alternatives", "Rejected alternatives"));
+          for (const alternative of derived.alternatives) {
+            const item = document.createElement("article");
+            item.className = "memory-map-trace-alternative";
+            appendText(item, "strong", alternative.alternative);
+            appendText(item, "p", alternative.reason_rejected || traceText("notAvailable", "Not available"));
+            alternatives.appendChild(item);
+          }
+        }
+      } else if (activeTraceStep === "evidence") {
+        const evidenceGroup = addTraceGroup(body);
+        for (const evidence of rationale.evidence) renderEvidenceItem(evidenceGroup, evidence);
+        if (rationale.resources.sources.length > 0) {
+          appendText(evidenceGroup, "h5", traceText("sources", "Sources"), "memory-map-trace-subtitle");
+          for (const item of rationale.resources.sources) renderTraceResource(evidenceGroup, item, rationale.id);
+        }
+        if (rationale.evidence.length === 0 && rationale.resources.sources.length === 0) appendText(evidenceGroup, "p", traceText("missingEvidence", "Evidence not recorded"), "memory-map-trace-empty");
+      } else {
+        const outcomeGroup = addTraceGroup(body, traceText("outcome", "Outcome and reuse"));
+        if (view.isFailure) {
+          addTraceField(outcomeGroup, traceText("correction", "Correction"), derived.correction);
+          addTraceField(outcomeGroup, traceText("verifiedOutcome", "Verified outcome"), derived.verified_outcome || derived.outcome);
+          addTraceField(outcomeGroup, traceText("avoidanceRule", "Prevention rule"), derived.avoidance_rule || derived.reuse_when);
+        } else {
+          addTraceField(outcomeGroup, traceText("outcomeValue", "Outcome"), derived.outcome);
+          addTraceField(outcomeGroup, traceText("reuseWhen", "Reuse when"), derived.reuse_when || payload.memory.reuse_rule);
+        }
+        const artifactGroup = addTraceGroup(body, traceText("artifacts", "Reflected artifacts"));
+        for (const item of rationale.resources.artifacts) renderTraceResource(artifactGroup, item, rationale.id);
+        if (rationale.resources.artifacts.length === 0) appendText(artifactGroup, "p", traceText("noArtifacts", "No readable confirmed artifacts are linked."), "memory-map-trace-empty");
+      }
+      card.appendChild(body);
+      appendTraceNavigation(card);
+      inspectorRationales.appendChild(card);
+    };
+    const updateRouteState = () => {
+      const url = new URL(window.location.href);
+      if (selectedId) {
+        url.searchParams.set("selected", selectedId);
+        url.searchParams.set("trace_step", activeTraceStep);
+      } else {
+        url.searchParams.delete("selected");
+        url.searchParams.delete("trace_step");
+      }
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    };
+    const setActiveTraceStep = (step: TraceStepId, options: { focus?: boolean; updateUrl?: boolean } = {}) => {
+      activeTraceStep = normalizeTraceStep(step);
+      root.dataset.activeTraceStep = activeTraceStep;
+      root.classList.remove("is-trace-advancing");
+      void root.offsetWidth;
+      root.classList.add("is-trace-advancing");
+      if (activeTracePayload) renderMemoryTrace(activeTracePayload as unknown as NonNullable<MemoryMapTracePayload["data"]>);
+      else renderConceptTrace();
+      if (options.updateUrl !== false) updateRouteState();
+      if (options.focus) root.querySelector<HTMLElement>(".memory-map-trace-stage-title")?.focus();
+      graph?.linkColor?.(linkColorFor);
+      graph?.linkWidth?.(linkWidthFor);
+    };
     let detailRequestId = 0;
     const loadMemoryDetail = async (node: MapNode) => {
       if (!node.memory_id) return;
       const requestId = ++detailRequestId;
       if (inspectorStatus) {
         inspectorStatus.hidden = false;
-        inspectorStatus.textContent = "本文・履歴・根拠を読み込んでいます…";
+        inspectorStatus.textContent = mapText("loadingMemoryDetail", "Loading content, history, and evidence…");
       }
       try {
         const response = await fetch(`/api/v1/memories/${encodeURIComponent(node.memory_id)}/details?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`, { headers: { accept: "application/json" } });
@@ -848,8 +1491,48 @@ const filterSummary = [
         if (requestId !== detailRequestId || selectedId !== node.id) return;
         if (inspectorStatus) {
           inspectorStatus.hidden = false;
-          inspectorStatus.textContent = `詳細を取得できないため、マップ上の情報を表示しています。${error instanceof Error ? ` ${error.message}` : ""}`;
+          inspectorStatus.textContent = `${mapText("detailFallback", "Details could not be loaded; showing map metadata.")}${error instanceof Error ? ` ${error.message}` : ""}`;
         }
+      }
+    };
+    let traceRequestId = 0;
+    const loadMemoryTrace = async (node: MapNode) => {
+      const isDecision = node.node_type === "decision" && Boolean(node.decision_id);
+      const memoryId = node.memory_id || (node.node_type === "memory" ? node.id : null);
+      if (!isDecision && !memoryId) return;
+      const requestId = ++traceRequestId;
+      if (inspectorRationalesSection) inspectorRationalesSection.hidden = false;
+      if (inspectorTraceStatus) {
+        inspectorTraceStatus.hidden = false;
+        inspectorTraceStatus.textContent = traceText("loading", "Loading decision trace…");
+      }
+      if (inspectorRationales) inspectorRationales.innerHTML = "";
+      const params = new URLSearchParams({
+        tenant_id: root.dataset.tenantId || "default",
+        scope: root.dataset.scope || "org",
+        lang: root.dataset.locale || "en"
+      });
+      if (root.dataset.projectId) params.set("project_id", root.dataset.projectId);
+      if (isDecision && node.decision_id) params.set("decision_rationale_id", node.decision_id);
+      else if (memoryId) params.set("memory_id", memoryId);
+      try {
+        const response = await fetch(`/api/v1/dashboard/memory-map/trace?${params.toString()}`, { headers: { accept: "application/json" } });
+        const payload = await response.json() as MemoryMapTracePayload;
+        if (requestId !== traceRequestId || selectedId !== node.id) return;
+        if (!response.ok || !payload.data) throw new Error(payload.error?.message || traceText("error", "The decision trace could not be loaded."));
+        renderMemoryTrace(payload.data);
+      } catch (error) {
+        if (requestId !== traceRequestId || selectedId !== node.id) return;
+        if (inspectorRationalesSection) inspectorRationalesSection.hidden = false;
+        if (inspectorTraceStatus) {
+          inspectorTraceStatus.hidden = false;
+          inspectorTraceStatus.textContent = `${traceText("traceLoadFailure", "The real data could not be loaded. You can continue selecting nodes on the map.")} ${error instanceof Error ? error.message : ""}`.trim();
+        }
+        activeTracePayload = null;
+        activeRationaleId = null;
+        renderConceptTrace();
+        root.classList.add("has-trace-selection");
+        if (pathwayPrompt) pathwayPrompt.textContent = traceText("traceLoadFailure", "The real data could not be loaded. You can continue selecting nodes on the map.");
       }
     };
     const renderLegend = () => {
@@ -876,8 +1559,8 @@ const filterSummary = [
           item.dataset.projectId = value;
           item.dataset.projectLegendItem = "true";
           item.setAttribute("aria-pressed", "false");
-          item.title = `${value} をマップ上でフォーカス`;
-          item.setAttribute("aria-label", `${value} をマップ上でフォーカス`);
+          item.title = `${value} · ${mapText("selectedNode", "Selected node")}`;
+          item.setAttribute("aria-label", `${value} · ${mapText("selectedNode", "Selected node")}`);
           item.addEventListener("click", () => focusProjectNode(projectNode));
         }
         const dot = document.createElement("i");
@@ -905,9 +1588,15 @@ const filterSummary = [
       selectNode(node);
       focusGraphNode(node);
     };
-    const selectNode = (node: MapNode | null) => {
+    const displayNodeLabel = (node: MapNode) => node.node_type === "decision"
+      ? node.label
+        .replace(/^[a-z][a-z0-9_-]*:\s*/iu, "")
+        .replace(/\s*[（(](?:synthetic case|合成ケース|合成用例)\s*\d+[）)]\s*$/iu, "")
+      : node.label;
+    const selectNode = (node: MapNode | null, options: { keyboard?: boolean; preserveStep?: boolean } = {}) => {
       selectedId = node?.id || "";
       detailRequestId += 1;
+      traceRequestId += 1;
       selectedRelatedIds = node ? relatedNodeIdsFor(node.id) : new Set<string>();
       root.querySelectorAll<HTMLElement>("[data-project-legend-item]").forEach((item) => {
         const focused = Boolean(node?.node_type === "project" && node.project_id && item.dataset.projectId === node.project_id);
@@ -920,41 +1609,54 @@ const filterSummary = [
       const isTenant = node?.node_type === "tenant";
       const isMemory = node?.node_type === "memory" || Boolean(node?.memory_id);
       clearInspectorDetails();
+      if (!options.preserveStep) activeTraceStep = "decision";
+      const hasTraceTarget = Boolean(node && (isMemory || isDecision));
+      root.classList.toggle("has-trace-selection", hasTraceTarget);
+      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
+      if (inspector) inspector.dataset.sheetState = hasTraceTarget ? "half" : "peek";
       if (node) {
         renderNodeMetadata(node);
       }
-      if (inspectorKind) inspectorKind.textContent = node ? ({ tenant: "Tenant root", project: "Project hub", entity: "Shared concept", decision: "Decision", memory: "Memory" }[node.node_type || "memory"] || "Node") : "Nothing selected";
-      if (inspectorTitle) inspectorTitle.textContent = node?.label || "ノードを選択";
+      if (inspectorKind) inspectorKind.textContent = node
+        ? ({
+            tenant: mapText("tenantRoot", "Tenant root"),
+            project: mapText("projectHub", "Project hub"),
+            entity: mapText("sharedConcept", "Shared concept"),
+            decision: mapText("decisionKind", "Decision"),
+            memory: mapText("memoryKind", "Memory")
+          }[node.node_type || "memory"] || mapText("nodeKind", "Node"))
+        : mapText("nothingSelected", "Nothing selected");
+      if (inspectorTitle) inspectorTitle.textContent = node ? displayNodeLabel(node) : mapText("selectNode", "Select a node.");
       if (inspectorSummary) inspectorSummary.textContent = node
         ? isDecision
-          ? `Decision / ${node.decision_type || "related rationale"} · ${node.confirmation_state || "unconfirmed"}`
+          ? `${mapText("decisionKind", "Decision")} / ${node.decision_type || mapText("relatedMemory", "related rationale")} · ${node.confirmation_state || mapText("notSet", "unconfirmed")}`
           : isTenant
-            ? `Tenant root · ${node.member_count || 0} projects · ${node.reference_count.toLocaleString()} memories`
+            ? `${mapText("tenantRoot", "Tenant root")} · ${node.member_count || 0} ${mapText("projectsLabel", "projects")} · ${node.reference_count.toLocaleString()} ${mapText("memoriesLabel", "memories")}`
           : isProject
-            ? `Project hub · ${node.member_count || node.reference_count} visible members`
-            : isEntity
-              ? `Shared concept / ${node.entity_type || "entity"} · ${node.reference_count} memories`
+            ? `${mapText("projectHub", "Project hub")} · ${node.member_count || node.reference_count} ${mapText("membersLabel", "visible members")}`
+          : isEntity
+              ? `${mapText("sharedConcept", "Shared concept")} / ${node.entity_type || mapText("nodeKind", "entity")} · ${node.reference_count} ${mapText("memoriesLabel", "memories")}`
               : (node.summary || node.label)
-        : "星を選択すると、所有者・参照数・純削減を確認できます。";
-      if (inspectorProject) inspectorProject.textContent = node?.project_id || (isTenant ? "テナント直下" : "未設定");
-      if (inspectorOwner) inspectorOwner.textContent = node?.owner_principal || "未割り当て";
+        : mapText("selectNodeHint", "Select a node to inspect its owner, references, and net savings.");
+      if (inspectorProject) inspectorProject.textContent = node?.project_id || (isTenant ? mapText("tenantRoot", "Tenant root") : mapText("notSet", "Not set"));
+      if (inspectorOwner) inspectorOwner.textContent = node?.owner_principal || mapText("noAssignment", "Unassigned");
       if (inspectorRefs) inspectorRefs.textContent = node
         ? isDecision
-          ? `related memory · ${node.related_memory_id || "—"}`
+          ? `${mapText("relatedMemory", "related memory")} · ${node.related_memory_id || "—"}`
           : isTenant
-            ? `${node.member_count || 0} projects / ${node.reference_count.toLocaleString()} memories`
+            ? `${node.member_count || 0} ${mapText("projectsLabel", "projects")} / ${node.reference_count.toLocaleString()} ${mapText("memoriesLabel", "memories")}`
           : isProject
-            ? `${node.member_count || node.reference_count} members`
-            : isEntity
-              ? `${node.reference_count} memories / ${node.entity_link_count || node.reference_count} links`
-              : `${node.reference_count} refs / ${node.consumer_count} people`
+            ? `${node.member_count || node.reference_count} ${mapText("membersLabel", "members")}`
+          : isEntity
+              ? `${node.reference_count} ${mapText("memoriesLabel", "memories")} / ${node.entity_link_count || node.reference_count} ${mapText("linksLabel", "links")}`
+              : `${node.reference_count} ${mapText("refsLabel", "refs")} / ${node.consumer_count} ${mapText("peopleLabel", "people")}`
         : "—";
-      if (inspectorUtilization) inspectorUtilization.textContent = node?.utilization_rate === null || !node ? "未計測" : `${Math.round(node.utilization_rate * 100)}%`;
-      if (inspectorSaved) inspectorSaved.textContent = node ? `${node.net_saved_tokens.toLocaleString()} tokens` : "—";
+      if (inspectorUtilization) inspectorUtilization.textContent = node?.utilization_rate === null || !node ? mapText("unmeasured", "Not measured") : `${Math.round(node.utilization_rate * 100)}%`;
+      if (inspectorSaved) inspectorSaved.textContent = node ? `${node.net_saved_tokens.toLocaleString()} ${mapText("tokensLabel", "tokens")}` : "—";
       if (inspectorLink) inspectorLink.href = node?.memory_id
         ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}&view=search&page=1&selected=${encodeURIComponent(node.memory_id)}`
         : node?.decision_id
-          ? `/decisions?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&selected=${encodeURIComponent(node.decision_id)}`
+          ? `/resources?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&project_id=${encodeURIComponent(root.dataset.projectId || "")}&decision_ref=${encodeURIComponent(`decision_rationale:${node.decision_id}`)}&lang=${encodeURIComponent(root.dataset.locale || "en")}`
           : isTenant
             ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}`
           : isProject
@@ -962,7 +1664,21 @@ const filterSummary = [
             : isEntity
               ? `/memories/constellation?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}&q=${encodeURIComponent(node.label)}`
           : "/memories";
+      if (inspectorLink) inspectorLink.textContent = isDecision
+        ? traceText("openDetailsNewTab", "Open details in a new tab")
+        : `${mapText("openMemory", "Open in memory library")} ↗`;
+      if (inspectorLink) inspectorLink.hidden = !node;
+      if (hasTraceTarget && node) {
+        updatePathway(null, null);
+        root.classList.add("has-trace-selection");
+        if (pathwayPrompt) pathwayPrompt.textContent = traceText("instancePrompt", "Use the four steps to inspect this decision's real data.");
+        void loadMemoryTrace(node);
+      } else {
+        renderConceptTrace();
+      }
       if (isMemory && node) void loadMemoryDetail(node);
+      updateRouteState();
+      if (options.keyboard && hasTraceTarget) inspectorTraceHeading?.focus();
       updateGlowAppearance();
       graph?.nodeColor?.(colorFor);
       graph?.linkColor?.(linkColorFor);
@@ -970,8 +1686,12 @@ const filterSummary = [
       graph?.linkWidth?.(linkWidthFor);
     };
     renderLegend();
+    renderConceptTrace();
     const initialNode = data.nodes.find((node) => node.id === selectedId || node.memory_id === selectedId || node.decision_id === selectedId || node.id === selectedId.replace(/^memory:/, ""));
-    if (initialNode) selectNode(initialNode);
+    if (initialNode) {
+      selectNode(initialNode, { preserveStep: preserveInitialTraceStep });
+      preserveInitialTraceStep = false;
+    }
     const renderFallback = (reason: string) => {
       if (stage) stage.hidden = true;
       if (fallback) fallback.hidden = false;
@@ -984,8 +1704,8 @@ const filterSummary = [
           const small = item.querySelector("small");
           const count = item.querySelector("b");
           if (strong) strong.textContent = node.label;
-          if (small) small.textContent = `${node.project_id || "no-project"} · ${node.owner_principal || "unassigned"}`;
-          if (count) count.textContent = `${node.reference_count} refs`;
+          if (small) small.textContent = `${node.project_id || mapText("notSet", "Not set")} · ${node.owner_principal || mapText("noAssignment", "Unassigned")}`;
+          if (count) count.textContent = `${node.reference_count} ${mapText("refsLabel", "refs")}`;
           item.addEventListener("click", () => selectNode(node));
           fallbackList.appendChild(item);
         }
@@ -1001,11 +1721,10 @@ const filterSummary = [
       }, 450);
     };
     const supports3D = () => {
-      const mobile = window.matchMedia("(max-width: 760px)").matches;
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const canvas = document.createElement("canvas");
       const webgl = Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
-      return !mobile && !reduced && webgl;
+      return !reduced && webgl;
     };
     const updateGraph = () => {
       if (!graph) return;
@@ -1053,6 +1772,101 @@ const filterSummary = [
         })
       : null;
     search?.addEventListener("input", updateGraph);
+    for (const [index, button] of pathwayButtons.entries()) {
+      button.addEventListener("click", () => setActiveTraceStep(normalizeTraceStep(button.dataset.traceStep), { focus: Boolean(activeTracePayload) }));
+      button.addEventListener("keydown", (event) => {
+        const nextIndex = event.key === "ArrowRight" || event.key === "ArrowDown"
+          ? Math.min(pathwayButtons.length - 1, index + 1)
+          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+            ? Math.max(0, index - 1)
+            : event.key === "Home" ? 0 : event.key === "End" ? pathwayButtons.length - 1 : -1;
+        if (nextIndex < 0 || nextIndex === index) return;
+        event.preventDefault();
+        pathwayButtons[nextIndex]?.focus();
+        setActiveTraceStep(normalizeTraceStep(pathwayButtons[nextIndex]?.dataset.traceStep), { focus: false });
+      });
+    }
+    root.addEventListener("click", async (event) => {
+      const action = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-copy-value]");
+      if (!action) return;
+      const value = action.dataset.copyValue || "";
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        const original = action.textContent || traceText("copyReference", "Copy reference");
+        action.textContent = traceText("copied", "Copied");
+        window.setTimeout(() => { action.textContent = original; }, 1400);
+      } catch {
+        action.title = value;
+      }
+    });
+    sheetExpand?.addEventListener("click", () => {
+      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
+      if (inspector) inspector.dataset.sheetState = "expanded";
+    });
+    sheetCollapse?.addEventListener("click", () => {
+      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
+      if (inspector) inspector.dataset.sheetState = "peek";
+    });
+    for (const close of root.querySelectorAll<HTMLButtonElement>("[data-map-resource-dialog-close], [data-map-resource-dialog-done]")) {
+      close.addEventListener("click", () => resourceDialog?.close());
+    }
+    resourceDialog?.addEventListener("click", (event) => {
+      if (event.target === resourceDialog) resourceDialog.close();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || window.matchMedia("(min-width: 901px)").matches) return;
+      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
+      if (inspector) inspector.dataset.sheetState = "peek";
+    });
+    const selectableNodes = data.nodes.filter((candidate) => candidate.node_type === "decision" || candidate.node_type === "memory");
+    const pickerNodeLabel = (node: MapNode) => presentNarrative(displayNodeLabel(node))
+      .replace(/^[^|]+\|\s*[^|]+\|\s*/u, "")
+      .replace(/^[a-z][a-z0-9_-]*:\s*/iu, "")
+      .trim();
+    const pickerNodeKind = (node: MapNode) => {
+      const failure = node.decision_type === "failure_prevention"
+        || /(?:^|\|)\s*failure\s*(?:\||$)/iu.test(node.label)
+        || /^failure_prevention\s*:/iu.test(node.label);
+      if (failure) return traceText("failureKind", "Failure learning");
+      return node.node_type === "decision" ? mapText("decisionKind", "Decision") : mapText("memoryKind", "Memory");
+    };
+    const renderAccessibleChoices = (rawQuery = "") => {
+      if (!accessibleList) return;
+      const query = rawQuery.trim().toLocaleLowerCase();
+      const matches = selectableNodes.filter((node) => {
+        if (!query) return true;
+        return [pickerNodeLabel(node), node.id, node.project_id || ""]
+          .some((value) => value.toLocaleLowerCase().includes(query));
+      });
+      const visible = matches.slice(0, query ? 40 : 20);
+      accessibleList.innerHTML = "";
+      for (const node of visible) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = `${pickerNodeKind(node)} · ${pickerNodeLabel(node)}`;
+        button.addEventListener("click", () => {
+          selectNode(node, { keyboard: true });
+          focusGraphNode(node);
+          if (accessiblePicker) accessiblePicker.open = false;
+          if (accessibleSearch) accessibleSearch.value = "";
+          renderAccessibleChoices();
+        });
+        item.appendChild(button);
+        accessibleList.appendChild(item);
+      }
+      if (accessibleCount) {
+        accessibleCount.textContent = traceText("pickerCount", "Showing {visible} of {total}")
+          .replace("{visible}", String(visible.length))
+          .replace("{total}", String(matches.length));
+      }
+    };
+    renderAccessibleChoices();
+    accessibleSearch?.addEventListener("input", () => renderAccessibleChoices(accessibleSearch.value));
+    accessiblePicker?.addEventListener("toggle", () => {
+      if (accessiblePicker.open) window.setTimeout(() => accessibleSearch?.focus(), 0);
+    });
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-map-preset]")) {
       button.addEventListener("click", () => {
         preset = button.dataset.mapPreset || "project";
@@ -1062,7 +1876,7 @@ const filterSummary = [
       });
     }
     if (!supports3D()) {
-      redirectToList(data.cluster_mode ? "クラスタ表示へ切り替えられないため一覧表示にします。" : "モバイル、WebGL非対応、または軽減モーション設定のため一覧表示にします。");
+      redirectToList(mapText("fallbackTitle", "3D view is unavailable; opening the list"));
     } else if (stage) {
       (async () => {
         try {
@@ -1071,7 +1885,7 @@ const filterSummary = [
               import("3d-force-graph"),
               import("three")
             ]),
-            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("3D library load timeout")), 5000))
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("3D library load timeout")), 15000))
           ]);
           const ForceGraph3D = module.default as unknown as new (element: HTMLElement) => GraphInstance;
           threeInstance = THREE;
@@ -1080,11 +1894,11 @@ const filterSummary = [
             .backgroundColor("#050a12")
             .showNavInfo(false)
             .nodeLabel((node: MapNode) => {
-              if (node.node_type === "tenant") return `Tenant root · ${node.label}<br/>${node.member_count || 0} projects · ${node.reference_count || 0} memories`;
-              if (node.node_type === "project") return `Project hub · ${node.label}<br/>${node.member_count || node.reference_count} members`;
-              if (node.node_type === "entity") return `Shared concept · ${node.label}<br/>${node.reference_count} memories`;
-              if (node.node_type === "decision") return `Decision · ${node.label}<br/>${node.confirmation_state || "unconfirmed"}`;
-              return `${node.label}<br/>${node.owner_principal || "unassigned"} · ${node.reference_count} refs`;
+              if (node.node_type === "tenant") return `${mapText("tenantRoot", "Tenant root")} · ${node.label}<br/>${node.member_count || 0} ${mapText("projectsLabel", "projects")} · ${node.reference_count || 0} ${mapText("memoriesLabel", "memories")}`;
+              if (node.node_type === "project") return `${mapText("projectHub", "Project hub")} · ${node.label}<br/>${node.member_count || node.reference_count} ${mapText("membersLabel", "members")}`;
+              if (node.node_type === "entity") return `${mapText("sharedConcept", "Shared concept")} · ${node.label}<br/>${node.reference_count} ${mapText("memoriesLabel", "memories")}`;
+              if (node.node_type === "decision") return `${mapText("decisionKind", "Decision")} · ${node.label}<br/>${node.confirmation_state || mapText("notSet", "unconfirmed")}`;
+              return `${node.label}<br/>${node.owner_principal || mapText("noAssignment", "Unassigned")} · ${node.reference_count} ${mapText("refsLabel", "refs")}`;
             })
             .nodeThreeObject((node: MapNode) => createGlowNodeObject(node, THREE))
             .nodeThreeObjectExtend(false)
@@ -1102,7 +1916,7 @@ const filterSummary = [
             .linkDirectionalParticleSpeed(0.012)
             .linkDirectionalParticleWidth(1.3)
             .linkDirectionalParticleColor(linkColorFor)
-            .onNodeClick(selectNode)
+            .onNodeClick((node: MapNode) => selectNode(node))
             .onBackgroundClick(() => selectNode(null))
             .graphData({ nodes: data.nodes, links: data.links });
           updateGlowAppearance();
@@ -1125,13 +1939,13 @@ const filterSummary = [
           startSvgGlowLoop();
           resizeObserver?.observe(stage);
           stage.querySelector("canvas")?.addEventListener("webglcontextlost", () => {
-            redirectToList("3D描画が停止したため一覧表示にします。");
+            redirectToList(mapText("fallbackTitle", "3D view is unavailable; opening the list"));
           }, { once: true });
           window.setTimeout(() => {
             const canvas = stage.querySelector("canvas");
             const bounds = stage.getBoundingClientRect();
             if (!canvas || canvas.width < 2 || canvas.height < 2 || bounds.width < 10 || bounds.height < 10) {
-              redirectToList("3D描画を確認できなかったため一覧表示にします。");
+              redirectToList(mapText("mapRenderFallback", "The 3D view could not be rendered, so the list is shown."));
             }
           }, 2500);
           if (data.nodes.length > 0 && !budgetedGlow) {
@@ -1144,7 +1958,7 @@ const filterSummary = [
           }
         } catch (error) {
           console.error("MemoryMap3D initialization failed", error);
-          redirectToList("3Dライブラリの読み込みに失敗したため一覧表示にします。");
+          redirectToList(mapText("mapRenderFallback", "The 3D view could not be rendered, so the list is shown."));
         }
       })();
     }
@@ -1154,6 +1968,348 @@ const filterSummary = [
 <style>
   .memory-map-shell { display:grid; gap:1rem; }.memory-map-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:end; padding:1.5rem 0 .5rem; }.memory-map-header h1 { margin-top:.45rem; color:#effaff; font-size:clamp(2.2rem,5vw,4.5rem); letter-spacing:-.075em; line-height:.95; }.memory-map-header p:not(.intelligence-eyebrow) { max-width:50rem; margin-top:1rem; color:rgba(191,216,235,.7); line-height:1.7; }.memory-map-count { display:grid; gap:.2rem; justify-items:end; color:rgba(191,216,235,.52); font: .7rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.12em; }.memory-map-count strong { color:#f2fbff; font:600 3rem Inter,sans-serif; letter-spacing:-.08em; }.memory-map-toolbar { display:flex; flex-wrap:wrap; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(90,172,238,.2); border-radius:22px; background:rgba(7,17,31,.78); }.memory-map-search { flex:1 1 18rem; margin:0; }.memory-map-search span { display:block; margin-bottom:.35rem; }.memory-map-search input { min-height:2.7rem; border-radius:14px; }.memory-map-presets { display:flex; gap:.3rem; }.memory-map-presets button { min-height:2.7rem; border-radius:999px; padding:0 .8rem; border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(224,241,248,.7); box-shadow:none; font-size:.75rem; }.memory-map-presets button.is-active,.memory-map-presets button:hover { border-color:rgba(99,189,255,.5); background:rgba(22,135,255,.17); color:#effaff; }.memory-map-list-link { display:inline-flex; min-height:2.7rem; align-items:center; padding:0 .9rem; border:1px solid rgba(255,184,77,.28); border-radius:999px; color:#ffd989; font-size:.78rem; font-weight:600; }.memory-map-filters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(255,255,255,.08); border-radius:18px; background:rgba(4,11,21,.7); }.memory-map-filters label { display:grid; gap:.35rem; margin:0; }.memory-map-filters span { color:rgba(191,216,235,.48); font: .65rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.08em; }.memory-map-filters input { min-height:2.5rem; border-radius:12px; }.memory-map-filters button { min-height:2.5rem; white-space:nowrap; }.memory-map-layout { display:grid; grid-template-columns:minmax(0,1fr) 20rem; gap:1rem; }.memory-map-stage { min-height:38rem; overflow:hidden; border:1px solid rgba(90,172,238,.2); border-radius:28px; background:#050a12; box-shadow:inset 0 0 80px rgba(22,135,255,.06),0 25px 80px rgba(0,0,0,.28); }.memory-map-inspector { align-self:start; position:sticky; top:5rem; display:grid; gap:.8rem; border:1px solid rgba(90,172,238,.2); border-radius:24px; padding:1.1rem; background:linear-gradient(180deg,rgba(8,20,36,.94),rgba(4,11,21,.92)); }.memory-map-inspector h2 { color:#f1fbff; font-size:1.15rem; letter-spacing:-.035em; }.memory-map-inspector > p:not(.intelligence-eyebrow) { color:rgba(191,216,235,.64); font-size:.78rem; line-height:1.6; }.memory-map-inspector dl { display:grid; gap:.5rem; margin-top:.4rem; }.memory-map-inspector dl div { display:flex; justify-content:space-between; gap:.75rem; padding-top:.5rem; border-top:1px solid rgba(255,255,255,.07); }.memory-map-inspector dt { color:rgba(191,216,235,.46); font-size:.68rem; }.memory-map-inspector dd { max-width:10rem; overflow:hidden; color:#eaf8ff; font: .7rem "Fira Code",monospace; text-align:right; text-overflow:ellipsis; white-space:nowrap; }.memory-map-open { display:inline-flex; min-height:2.6rem; align-items:center; justify-content:center; border:1px solid rgba(99,189,255,.32); border-radius:14px; background:rgba(22,135,255,.12); color:#dff5ff; font-size:.78rem; font-weight:600; }.memory-map-fallback { min-height:38rem; overflow:auto; border:1px solid rgba(90,172,238,.2); border-radius:28px; padding:1rem; background:rgba(5,12,22,.9); }.memory-map-fallback-note { display:grid; gap:.3rem; margin-bottom:1rem; padding:.8rem; border-radius:16px; background:rgba(255,184,77,.08); }.memory-map-fallback-note strong { color:#ffe4ad; font-size:.8rem; }.memory-map-fallback-note span { color:rgba(255,228,173,.65); font-size:.72rem; }.memory-map-fallback-note a { display:inline-flex; width:max-content; margin-top:.3rem; padding:.45rem .65rem; border:1px solid rgba(255,216,137,.32); border-radius:10px; color:#ffe4ad; font-size:.72rem; font-weight:600; }.memory-map-fallback ul { display:grid; gap:.35rem; }.memory-map-fallback li { display:grid; grid-template-columns:.6rem minmax(0,1fr) auto; gap:.65rem; align-items:center; cursor:pointer; padding:.65rem .5rem; border-bottom:1px solid rgba(255,255,255,.06); }.fallback-node-dot { width:.55rem; height:.55rem; border-radius:50%; }.memory-map-fallback li strong,.memory-map-fallback li small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.memory-map-fallback li strong { color:#eefaff; font-size:.78rem; }.memory-map-fallback li small { margin-top:.2rem; color:rgba(191,216,235,.5); font-size:.65rem; }.memory-map-fallback li b { color:#ffd989; font: .68rem "Fira Code",monospace; white-space:nowrap; }.memory-map-footer { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; color:rgba(191,216,235,.48); font-size:.7rem; }.memory-map-legend { display:flex; align-items:center; gap:.4rem; color:rgba(191,216,235,.66); }.legend-sample { width:.55rem; height:.55rem; display:inline-block; border-radius:50%; }.legend-blue { background:#54b7ff; }.legend-amber { background:#ffb84d; }.legend-mint { background:#55dfbb; }.legend-line { width:1.1rem; height:1px; display:inline-block; opacity:.8; }.legend-line-project { background:#91aabe; }.legend-line-entity { background:#d5e7ef; }
   @media (max-width:1100px){.memory-map-filters{grid-template-columns:repeat(2,minmax(0,1fr));}}@media (max-width:900px){.memory-map-layout{grid-template-columns:1fr;}.memory-map-inspector{position:static;}.memory-map-stage{min-height:30rem;}}@media (max-width:760px){.memory-map-header{grid-template-columns:1fr;}.memory-map-count{justify-items:start;}.memory-map-toolbar{align-items:stretch;}.memory-map-presets{width:100%;}.memory-map-presets button{flex:1;}.memory-map-list-link{justify-content:center;}.memory-map-filters{grid-template-columns:1fr;}.memory-map-filters button{width:100%;}.memory-map-stage{min-height:0;}.memory-map-footer{align-items:flex-start;flex-direction:column;}}
+</style>
+
+<style is:global>
+  /* Selected traces trade introductory chrome for reading space. */
+  .memory-map-shell.has-trace-selection .memory-map-header { padding: .05rem 0; }
+  .memory-map-shell.has-trace-selection .memory-map-header .intelligence-eyebrow { display: none; }
+  .memory-map-shell.has-trace-selection .memory-map-header h1 { margin: 0; font-size: clamp(1.35rem, 2.4vw, 1.8rem); }
+  .memory-map-shell.has-trace-selection .memory-map-controls-summary { min-height: 2.7rem; padding-block: .42rem; }
+  .memory-map-shell.has-trace-selection .memory-map-pathway { padding: .5rem .7rem; }
+  .memory-map-shell.has-trace-selection .memory-map-pathway-header > p:last-child,
+  .memory-map-shell.has-trace-selection .memory-map-pathway-prompt { display: none; }
+  .memory-map-shell.has-trace-selection .memory-map-pathway-steps button { min-height: 3.1rem; }
+  .memory-map-trace-badge-outcome.is-success { border-color: rgba(67,220,173,.42); background: rgba(67,220,173,.08); color: #9df1d9; }
+  .memory-map-trace-badge-outcome.is-failure { border-color: rgba(255,122,122,.44); background: rgba(255,90,90,.08); color: #ffb1b1; }
+  .memory-map-accessible-count { margin: .38rem 0 0; color: rgba(216,235,246,.5); font: .6rem/1.4 "Fira Code",monospace; }
+
+  @media (max-width: 900px) {
+    /* Parent-qualified selectors override the scoped legacy two-column rules. */
+    .memory-map-shell .memory-map-layout { display: block; grid-template-columns: none; padding-bottom: 7.5rem; }
+    .memory-map-shell .memory-map-stage-shell,
+    .memory-map-shell .memory-map-fallback { width: 100%; min-height: min(32rem,50vh); max-height: 50vh; }
+    .memory-map-shell .memory-map-inspector {
+      position: fixed;
+      z-index: 50;
+      top: auto;
+      right: .5rem;
+      bottom: .5rem;
+      left: .5rem;
+      width: auto;
+      max-height: 46vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .memory-map-shell .memory-map-inspector[data-sheet-state="peek"] { max-height: 7rem; overflow: hidden; }
+    .memory-map-shell .memory-map-inspector[data-sheet-state="expanded"] { max-height: 88vh; }
+    .memory-map-shell.has-trace-selection .memory-map-pathway { grid-template-columns: 1fr; padding: .35rem .45rem; }
+    .memory-map-shell.has-trace-selection .memory-map-pathway-header { display: none; }
+    .memory-map-shell.has-trace-selection .memory-map-pathway-steps button { min-height: 2.8rem; padding-block: .35rem; }
+    .memory-map-shell.has-trace-selection .memory-map-pathway-copy small { display: none; }
+  }
+</style>
+
+<style is:global>
+  /* The lineage is an audit filament, not a generic progress tracker. */
+  .memory-map-pathway { padding: .7rem .85rem; }
+  .memory-map-pathway-steps { isolation: isolate; }
+  .memory-map-pathway-steps button {
+    min-height: 3.65rem;
+    border-color: transparent;
+    background: transparent;
+  }
+  .memory-map-pathway-steps li::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 1.38rem;
+    left: calc(50% + 1.25rem);
+    width: calc(100% - 2.5rem);
+    height: 2px;
+    background: rgba(99,189,255,.34);
+    box-shadow: 0 0 10px rgba(99,189,255,.16);
+  }
+  .memory-map-pathway-steps li:nth-child(2)::after { background: rgba(255,184,77,.4); box-shadow: 0 0 10px rgba(255,184,77,.15); }
+  .memory-map-pathway-steps li:nth-child(3)::after { background: rgba(67,220,173,.4); box-shadow: 0 0 10px rgba(67,220,173,.15); }
+  .memory-map-pathway-steps li:last-child::after { display: none; }
+  .memory-map-pathway-steps li[data-state="missing"]::after,
+  .memory-map-pathway-steps li[data-state="unverified"]::after,
+  .memory-map-pathway-steps li[data-state="truncated"]::after {
+    height: 0;
+    border-top: 2px dashed rgba(255,184,77,.5);
+    background: transparent;
+    box-shadow: none;
+  }
+  .memory-map-pathway-steps button[aria-current="step"] { background: rgba(99,189,255,.055); }
+  .memory-map-shell[data-active-trace-step="reason"] .memory-map-pathway-steps button[aria-current="step"] { border-color: rgba(255,184,77,.48); box-shadow: inset 0 -2px rgba(255,184,77,.62); }
+  .memory-map-shell[data-active-trace-step="evidence"] .memory-map-pathway-steps button[aria-current="step"] { border-color: rgba(67,220,173,.48); box-shadow: inset 0 -2px rgba(67,220,173,.62); }
+  .memory-map-shell[data-active-trace-step="artifact"] .memory-map-pathway-steps button[aria-current="step"] { border-color: rgba(236,248,255,.42); box-shadow: inset 0 -2px rgba(236,248,255,.58); }
+
+  .memory-map-trace-local-reference { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; color: rgba(216,235,246,.56); font-size: .68rem; }
+  .memory-map-trace-resource-actions { display: flex; flex-wrap: wrap; gap: .45rem; padding-top: .15rem; }
+  .memory-map-trace-resource-preview,
+  .memory-map-trace-resource-link {
+    display: inline-flex;
+    align-items: center;
+    width: max-content;
+    max-width: 100%;
+    min-height: 2.2rem;
+    padding: 0 .62rem;
+    border: 1px solid rgba(99,189,255,.28);
+    border-radius: 9px;
+    background: rgba(99,189,255,.09);
+    color: #dff5ff;
+    box-shadow: none;
+    font: 600 .66rem/1.2 Inter,sans-serif;
+  }
+  .memory-map-trace-resource-link { border-color: rgba(255,255,255,.1); background: transparent; color: rgba(216,235,246,.7); }
+
+  .memory-map-resource-dialog {
+    width: min(42rem, calc(100vw - 2rem));
+    max-height: min(44rem, calc(100vh - 2rem));
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(99,189,255,.28);
+    border-radius: 22px;
+    background: #07111f;
+    color: #ecf8ff;
+    box-shadow: 0 28px 100px rgba(0,0,0,.72), 0 0 55px rgba(99,189,255,.08);
+  }
+  .memory-map-resource-dialog::backdrop { background: rgba(1,5,10,.78); backdrop-filter: blur(8px); }
+  .memory-map-resource-dialog-surface { display: grid; gap: 1rem; max-height: inherit; overflow-y: auto; padding: 1.15rem; }
+  .memory-map-resource-dialog-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: start; }
+  .memory-map-resource-dialog-header h2 { margin: .25rem 0 0; color: #ecf8ff; font: 650 1.35rem/1.28 Inter,sans-serif; letter-spacing: -.025em; }
+  .memory-map-resource-dialog-close { width: 2.25rem; height: 2.25rem; padding: 0; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; background: rgba(255,255,255,.04); color: #ecf8ff; box-shadow: none; font-size: 1.25rem; }
+  .memory-map-resource-dialog-note { margin: 0; padding: .7rem .8rem; border-left: 2px solid #43dcad; background: rgba(67,220,173,.06); color: rgba(236,248,255,.78); font: .82rem/1.6 Inter,sans-serif; }
+  .memory-map-resource-dialog-reference { display: grid; gap: .5rem; padding: .7rem .8rem; border-radius: 12px; background: rgba(0,0,0,.22); }
+  .memory-map-resource-dialog-reference a,
+  .memory-map-resource-dialog-reference code { color: #9bdcff; font: .72rem/1.55 "Fira Code",monospace; overflow-wrap: anywhere; }
+  .memory-map-resource-dialog-meta { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; margin: 0; }
+  .memory-map-resource-dialog-meta .memory-map-trace-field { min-width: 0; padding: .65rem .7rem; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(255,255,255,.03); }
+  .memory-map-resource-dialog-actions { position: sticky; bottom: -1.15rem; display: flex; justify-content: flex-end; gap: .5rem; margin: 0 -1.15rem -1.15rem; padding: .8rem 1.15rem; border-top: 1px solid rgba(255,255,255,.08); background: rgba(7,17,31,.96); }
+  .memory-map-resource-dialog-actions button,
+  .memory-map-resource-dialog-actions a { display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0 .75rem; border: 1px solid rgba(99,189,255,.28); border-radius: 10px; background: rgba(99,189,255,.09); color: #dff5ff; box-shadow: none; font-size: .72rem; font-weight: 600; }
+  .memory-map-resource-dialog-actions button { border-color: rgba(255,255,255,.12); background: transparent; }
+
+  .memory-map-accessible-search { display: grid; gap: .3rem; margin-top: .55rem; color: rgba(216,235,246,.58); font-size: .65rem; }
+  .memory-map-accessible-search input { min-height: 2.35rem; }
+
+  @media (min-width: 901px) {
+    .memory-map-stage-shell,
+    .memory-map-fallback,
+    .memory-map-inspector {
+      height: clamp(25rem, calc(100vh - 20rem), 34rem);
+      min-height: 25rem;
+      max-height: 34rem;
+    }
+    .memory-map-stage,
+    .memory-map-fallback { min-height: 0; height: 100%; }
+    .memory-map-inspector { overflow-y: auto; overscroll-behavior: contain; }
+    .memory-map-inspector > .intelligence-eyebrow { margin: 0; }
+    .memory-map-inspector h2 { margin-block: .1rem 0; }
+    .memory-map-inspector > [data-map-inspector-summary] { margin: 0; }
+  }
+  @media (max-width: 620px) {
+    .memory-map-resource-dialog-meta { grid-template-columns: 1fr; }
+  }
+</style>
+
+<style is:global>
+  /* Decision lineage: the same four-stage rail explains the model and navigates real data. */
+  .memory-map-pathway {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
+    gap: .7rem 1.25rem;
+    align-items: center;
+    padding: .9rem 1rem;
+    overflow: hidden;
+    border: 1px solid rgba(99,189,255,.2);
+    border-radius: 18px;
+    background: linear-gradient(110deg, rgba(7,17,31,.98), rgba(7,17,31,.8));
+  }
+  .memory-map-pathway-header { display: grid; gap: .16rem; min-width: 0; }
+  .memory-map-pathway-header .intelligence-eyebrow { margin: 0; color: rgba(99,189,255,.72); font-size: .56rem; }
+  .memory-map-pathway-header h2 { color: #ecf8ff; font-size: 1rem; letter-spacing: -.025em; }
+  .memory-map-pathway-header > p:last-child { margin: 0; color: rgba(216,235,246,.62); font: .72rem/1.55 Inter,sans-serif; }
+  .memory-map-pathway-steps {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .45rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .memory-map-pathway-steps::before {
+    content: "";
+    position: absolute;
+    top: 1.05rem;
+    left: 8%;
+    right: 8%;
+    height: 1px;
+    background: linear-gradient(90deg, #63bdff, #ffb84d, #43dcad, #ecf8ff);
+    opacity: .48;
+    box-shadow: 0 0 12px rgba(99,189,255,.26);
+  }
+  .memory-map-pathway-steps li { position: relative; min-width: 0; }
+  .memory-map-pathway-steps button {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 2.1rem minmax(0, 1fr);
+    gap: .5rem;
+    width: 100%;
+    min-height: 3.75rem;
+    align-items: start;
+    padding: .48rem .52rem;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: rgba(5,10,18,.82);
+    color: #ecf8ff;
+    box-shadow: none;
+    text-align: left;
+  }
+  .memory-map-pathway-steps button:hover { border-color: rgba(236,248,255,.18); background: rgba(14,31,50,.95); }
+  .memory-map-pathway-steps button:focus-visible { outline: 2px solid #63bdff; outline-offset: 2px; }
+  .memory-map-pathway-steps button[aria-current="step"] { border-color: rgba(99,189,255,.58); background: rgba(18,57,85,.58); box-shadow: inset 0 0 24px rgba(99,189,255,.08), 0 0 20px rgba(99,189,255,.08); }
+  .memory-map-pathway-index {
+    display: grid;
+    width: 2.05rem;
+    height: 2.05rem;
+    place-items: center;
+    border: 1px solid rgba(236,248,255,.22);
+    border-radius: 999px;
+    background: #07111f;
+    color: #63bdff;
+    font: .65rem "Fira Code",monospace;
+  }
+  [data-trace-step-item="reason"] .memory-map-pathway-index { color: #ffb84d; }
+  [data-trace-step-item="evidence"] .memory-map-pathway-index { color: #43dcad; }
+  [data-trace-step-item="artifact"] .memory-map-pathway-index { color: #ecf8ff; }
+  .memory-map-pathway-copy { display: grid; gap: .14rem; min-width: 0; padding-top: .1rem; }
+  .memory-map-pathway-copy strong { color: #ecf8ff; font: 650 .78rem/1.2 Inter,sans-serif; }
+  .memory-map-pathway-copy small { color: rgba(216,235,246,.54); font: .63rem/1.35 Inter,sans-serif; }
+  .memory-map-pathway-state { grid-column: 2; min-height: .8rem; color: rgba(216,235,246,.58); font: .55rem/1.3 "Fira Code",monospace; }
+  .memory-map-pathway-steps li[data-state="missing"] .memory-map-pathway-state,
+  .memory-map-pathway-steps li[data-state="unverified"] .memory-map-pathway-state,
+  .memory-map-pathway-steps li[data-state="truncated"] .memory-map-pathway-state { color: #ffcb7c; }
+  .memory-map-pathway-prompt { grid-column: 2; margin: -.25rem 0 0; color: rgba(216,235,246,.55); font: .65rem/1.4 Inter,sans-serif; }
+  .is-trace-advancing .memory-map-pathway-steps button[aria-current="step"]::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    border: 1px solid rgba(99,189,255,.82);
+    border-radius: inherit;
+    animation: memory-map-path-pulse 420ms ease-out both;
+  }
+  @keyframes memory-map-path-pulse { from { opacity: 0; transform: scale(.97); } 45% { opacity: 1; } to { opacity: 0; transform: scale(1.03); } }
+
+  .memory-map-layout { grid-template-columns: minmax(0, 1fr) 24rem; align-items: start; transition: grid-template-columns 180ms ease; }
+  .memory-map-shell.has-trace-selection .memory-map-layout { grid-template-columns: minmax(0, 3fr) minmax(32rem, 2fr); }
+  .memory-map-sheet-controls { display: none; }
+  .memory-map-inspector { gap: .7rem; }
+  .memory-map-trace-workspace { padding-top: .1rem; border-top: 0; }
+  .memory-map-trace-switcher { display: grid; gap: .35rem; color: rgba(216,235,246,.62); font: .65rem "Fira Code",monospace; }
+  .memory-map-trace-switcher select { width: 100%; min-width: 0; }
+  .memory-map-trace-card {
+    gap: .9rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(13,33,52,.94), rgba(5,12,22,.92));
+  }
+  .memory-map-trace-stage-header { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: .65rem; align-items: start; }
+  .memory-map-trace-stage-index { color: #63bdff; font: .66rem "Fira Code",monospace; letter-spacing: .08em; }
+  .memory-map-trace-stage-title { margin: 0; color: #ecf8ff; font: 650 1.05rem/1.25 Inter,sans-serif; letter-spacing: -.025em; }
+  .memory-map-trace-stage-title:focus { outline: none; }
+  .memory-map-trace-stage-description,
+  .memory-map-trace-stage-intro { margin: .14rem 0 0; color: rgba(216,235,246,.58); font: .72rem/1.5 Inter,sans-serif; }
+  .memory-map-trace-stage-state { padding: .25rem .42rem; border: 1px solid rgba(67,220,173,.25); border-radius: 999px; color: #8ce8cf; font: .55rem "Fira Code",monospace; white-space: nowrap; }
+  .memory-map-trace-stage-state.is-missing,
+  .memory-map-trace-stage-state.is-unverified,
+  .memory-map-trace-stage-state.is-truncated { border-color: rgba(255,184,77,.3); color: #ffd18a; }
+  .memory-map-trace-card-body { gap: .85rem; }
+  .memory-map-trace-group { gap: .55rem; padding-top: .75rem; }
+  .memory-map-trace-group:first-child { padding-top: 0; border-top: 0; }
+  .memory-map-trace-group-title { color: rgba(236,248,255,.78); font: 600 .72rem/1.4 Inter,sans-serif; }
+  .memory-map-trace-label { font-size: .58rem; }
+  .memory-map-trace-value { color: rgba(238,249,255,.86); font: .79rem/1.65 Inter,sans-serif; }
+  .memory-map-trace-alternative,
+  .memory-map-trace-evidence,
+  .memory-map-trace-resource { padding: .7rem; border: 1px solid rgba(255,255,255,.085); border-radius: 12px; background: rgba(0,0,0,.17); }
+  .memory-map-trace-alternative strong,
+  .memory-map-trace-resource-header strong { font: 600 .78rem/1.45 Inter,sans-serif; }
+  .memory-map-trace-alternative p,
+  .memory-map-trace-evidence p,
+  .memory-map-trace-note { font: .73rem/1.6 Inter,sans-serif; }
+  .memory-map-trace-badges { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .memory-map-trace-badge { display: inline-flex; padding: .24rem .4rem; border: 1px solid rgba(99,189,255,.24); border-radius: 999px; color: #b8e4ff; font: .55rem "Fira Code",monospace; }
+  .memory-map-trace-badge-support { border-color: rgba(67,220,173,.28); color: #8ce8cf; }
+  .memory-map-trace-technical,
+  .memory-map-technical { border-top: 1px solid rgba(255,255,255,.08); }
+  .memory-map-trace-technical > summary,
+  .memory-map-technical > summary { cursor: pointer; padding: .55rem 0; color: rgba(216,235,246,.62); font: .65rem "Fira Code",monospace; }
+  .memory-map-technical-body { padding-top: .45rem; }
+  .memory-map-copy-reference { justify-self: start; min-height: 2rem; padding: 0 .55rem; border: 1px solid rgba(99,189,255,.24); border-radius: 8px; background: rgba(99,189,255,.07); color: #cceeff; box-shadow: none; font-size: .65rem; }
+  .memory-map-trace-navigation { display: flex; justify-content: space-between; gap: .5rem; padding-top: .2rem; }
+  .memory-map-trace-navigation button { min-height: 2.45rem; padding: 0 .75rem; border: 1px solid rgba(99,189,255,.28); border-radius: 10px; background: rgba(99,189,255,.09); color: #dff5ff; box-shadow: none; font-size: .72rem; }
+  .memory-map-trace-nav-next { margin-left: auto; }
+  .memory-map-trace-concept { min-height: 12rem; align-content: start; }
+  .memory-map-trace-concept-prompt { margin: 0; padding: .65rem .7rem; border-left: 2px solid #63bdff; background: rgba(99,189,255,.06); color: rgba(236,248,255,.72); font: .74rem/1.55 Inter,sans-serif; }
+  .memory-map-accessible-picker { max-width: min(36rem,100%); }
+  .memory-map-accessible-picker > summary { cursor: pointer; color: rgba(216,235,246,.62); }
+  .memory-map-accessible-picker ul { display: grid; gap: .3rem; max-height: 14rem; overflow: auto; margin-top: .5rem; padding: .5rem; list-style: none; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: #07111f; }
+  .memory-map-accessible-picker button { width: 100%; min-height: 2rem; padding: .35rem .45rem; border: 0; background: transparent; color: #dff5ff; box-shadow: none; text-align: left; font-size: .68rem; }
+
+  @media (min-width: 901px) and (max-width: 1199px) {
+    .memory-map-pathway { grid-template-columns: 14rem minmax(0,1fr); }
+    .memory-map-shell.has-trace-selection .memory-map-layout { grid-template-columns: minmax(0, 55fr) minmax(28rem, 45fr); }
+  }
+  @media (max-width: 900px) {
+    .memory-map-pathway { grid-template-columns: 1fr; }
+    .memory-map-pathway-header > p:last-child { display: none; }
+    .memory-map-pathway-prompt { grid-column: 1; }
+    .memory-map-layout { display: block; padding-bottom: 7.5rem; }
+    .memory-map-stage-shell,
+    .memory-map-fallback { width: 100%; max-height: 50vh; min-height: min(32rem,50vh); }
+    .memory-map-inspector {
+      position: fixed;
+      z-index: 50;
+      right: .5rem;
+      bottom: .5rem;
+      left: .5rem;
+      top: auto;
+      width: auto;
+      max-height: 46vh;
+      overflow-y: auto;
+      border-radius: 22px;
+      box-shadow: 0 -18px 60px rgba(0,0,0,.5);
+      transition: max-height 180ms ease;
+    }
+    .memory-map-inspector[data-sheet-state="peek"] { max-height: 7rem; overflow: hidden; }
+    .memory-map-inspector[data-sheet-state="expanded"] { max-height: 88vh; }
+    .memory-map-sheet-controls { position: sticky; z-index: 2; top: 0; display: flex; justify-content: flex-end; gap: .35rem; margin: -.3rem -.2rem 0; padding: .25rem; background: rgba(7,17,31,.96); }
+    .memory-map-sheet-controls button { min-height: 2rem; padding: 0 .5rem; border: 1px solid rgba(99,189,255,.22); border-radius: 8px; background: rgba(99,189,255,.06); color: #dff5ff; box-shadow: none; font-size: .65rem; }
+    .memory-map-inspector[data-sheet-state="peek"] > :not(.memory-map-sheet-controls):not([data-map-trace-workspace-eyebrow]):not([data-map-inspector-title]) { display: none; }
+  }
+  @media (max-width: 620px) {
+    .memory-map-pathway { padding: .75rem; }
+    .memory-map-pathway-steps { grid-template-columns: repeat(4,minmax(4.15rem,1fr)); gap: .25rem; overflow-x: auto; padding-bottom: .2rem; }
+    .memory-map-pathway-steps::before { left: 2.1rem; right: 2.1rem; }
+    .memory-map-pathway-steps button { grid-template-columns: 1fr; justify-items: center; min-height: 4.8rem; padding: .38rem .28rem; text-align: center; }
+    .memory-map-pathway-copy small { display: none; }
+    .memory-map-pathway-state { grid-column: 1; min-height: .68rem; font-size: .5rem; }
+    .memory-map-trace-stage-header { grid-template-columns: auto minmax(0,1fr); }
+    .memory-map-trace-stage-state { grid-column: 2; justify-self: start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .memory-map-layout,
+    .memory-map-inspector { transition: none; }
+    .is-trace-advancing .memory-map-pathway-steps button[aria-current="step"]::after { display: none; animation: none; }
+  }
 </style>
 
 <style>
@@ -1181,6 +2337,41 @@ const filterSummary = [
   .memory-map-record small { color: rgba(191,216,235,.48); font: .61rem/1.5 "Fira Code", monospace; }
   .memory-map-record p { color: rgba(224,241,248,.7); font-size: .68rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
   .memory-map-record code { padding: .35rem .45rem; border-radius: 8px; background: rgba(0,0,0,.2); color: rgba(191,216,235,.62); font: .61rem/1.45 "Fira Code", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memory-map-trace-status { margin: 0; padding: .55rem .65rem; border: 1px solid rgba(255,184,77,.22); border-radius: 10px; background: rgba(255,184,77,.08); color: #ffe4ad; font-size: .68rem; line-height: 1.45; }
+  .memory-map-trace-card { display: grid; gap: .65rem; padding: .7rem; border: 1px solid rgba(99,189,255,.18); border-radius: 15px; background: linear-gradient(145deg, rgba(99,189,255,.06), rgba(255,255,255,.025)); }
+  .memory-map-trace-card > summary { display: grid; gap: .22rem; cursor: pointer; list-style: none; }
+  .memory-map-trace-card > summary::-webkit-details-marker { display: none; }
+  .memory-map-trace-card > summary::before { content: "＋"; float: right; color: rgba(191,216,235,.52); font: .75rem "Fira Code", monospace; }
+  .memory-map-trace-card[open] > summary::before { content: "−"; }
+  .memory-map-trace-card > summary strong { padding-right: 1.1rem; color: #f2fbff; font-size: .75rem; line-height: 1.45; }
+  .memory-map-trace-card > summary small { color: rgba(191,216,235,.52); font: .6rem/1.45 "Fira Code", monospace; }
+  .memory-map-trace-card-body { display: grid; gap: .7rem; }
+  .memory-map-trace-group { display: grid; gap: .4rem; padding-top: .55rem; border-top: 1px solid rgba(255,255,255,.08); }
+  .memory-map-trace-group-title { color: #dff5ff; font-size: .7rem; letter-spacing: .03em; }
+  .memory-map-trace-label { color: rgba(159,195,219,.52); font: .57rem "Fira Code", monospace; letter-spacing: .05em; text-transform: uppercase; }
+  .memory-map-trace-value { color: rgba(238,249,255,.82); font-size: .68rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memory-map-trace-field { display: grid; gap: .18rem; }
+  .memory-map-trace-alternative, .memory-map-trace-evidence { display: grid; gap: .28rem; padding: .5rem .55rem; border-radius: 10px; background: rgba(0,0,0,.16); }
+  .memory-map-trace-alternative strong { color: #eefaff; font-size: .67rem; line-height: 1.45; }
+  .memory-map-trace-alternative p, .memory-map-trace-evidence p { margin: 0; color: rgba(224,241,248,.68); font-size: .65rem; line-height: 1.5; }
+  .memory-map-trace-evidence small { color: rgba(191,216,235,.5); font: .58rem "Fira Code", monospace; }
+  .memory-map-trace-evidence code { padding: .35rem .4rem; border-radius: 7px; background: rgba(0,0,0,.22); color: rgba(224,241,248,.78); font: .62rem/1.45 "Fira Code", monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .memory-map-trace-subtitle { color: rgba(191,216,235,.58); font: .58rem "Fira Code", monospace; letter-spacing: .06em; text-transform: uppercase; }
+  .memory-map-trace-resource { display: grid; gap: .35rem; padding: .55rem; border: 1px solid rgba(255,255,255,.08); border-radius: 11px; background: rgba(255,255,255,.035); }
+  .memory-map-trace-resource-header { display: grid; gap: .2rem; }
+  .memory-map-trace-resource-header strong { color: #f2fbff; font-size: .68rem; line-height: 1.45; }
+  .memory-map-trace-resource-header small { color: rgba(191,216,235,.52); font: .58rem "Fira Code", monospace; }
+  .memory-map-trace-uri { display: block; overflow-wrap: anywhere; color: #9bdcff; font: .6rem/1.45 "Fira Code", monospace; }
+  .memory-map-trace-resource-meta { display: grid; grid-template-columns: 1fr; gap: .25rem; margin: 0; }
+  .memory-map-trace-resource-meta .memory-map-trace-field { display: grid; grid-template-columns: 6.3rem minmax(0, 1fr); gap: .35rem; align-items: start; }
+  .memory-map-trace-resource-meta .memory-map-trace-label { text-transform: none; }
+  .memory-map-trace-resource-meta .memory-map-trace-value { text-align: left; }
+  .memory-map-trace-note { margin: 0; color: rgba(224,241,248,.68); font-size: .64rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memory-map-trace-resource-link { display: inline-flex; width: max-content; max-width: 100%; padding: .32rem .45rem; border: 1px solid rgba(99,189,255,.22); border-radius: 8px; color: #dff5ff; font-size: .62rem; font-weight: 600; }
+  .memory-map-trace-missing { display: grid; gap: .35rem; padding: .55rem .6rem; border: 1px solid rgba(255,184,77,.22); border-radius: 11px; background: rgba(255,184,77,.07); color: #ffe4ad; font-size: .64rem; line-height: 1.45; }
+  .memory-map-trace-missing ul { display: grid; gap: .18rem; margin: 0; padding-left: 1rem; }
+  .memory-map-trace-empty { color: rgba(191,216,235,.56); font-size: .65rem; line-height: 1.5; }
+  .memory-map-trace-warning { padding: .35rem .45rem; border-radius: 8px; background: rgba(255,184,77,.08); color: #ffe4ad; font-size: .63rem; line-height: 1.45; }
   .memory-map-project-legend { display: flex; flex-wrap: wrap; gap: .28rem .45rem; max-width: min(58rem, 100%); max-height: 4.2rem; overflow: auto; }
   .memory-map-project-legend-item { display: inline-flex; align-items: center; gap: .22rem; color: rgba(191,216,235,.62); font: .6rem "Fira Code", monospace; white-space: nowrap; }
   .memory-map-project-legend-item i { width: .48rem; height: .48rem; display: inline-block; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
@@ -1315,5 +2506,50 @@ const filterSummary = [
   .memory-map-open { font-size: .86rem; }
   @media (max-width: 520px) {
     .memory-map-inspector-metadata { grid-template-columns: 1fr; }
+  }
+</style>
+
+<style is:global>
+  /* Keep responsive trace proportions authoritative after legacy map styles. */
+  .memory-map-layout { grid-template-columns: minmax(0, 1fr) 24rem; }
+  .memory-map-shell.has-trace-selection .memory-map-layout { grid-template-columns: minmax(0, 3fr) minmax(32rem, 2fr); }
+  @media (min-width: 901px) and (max-width: 1199px) {
+    .memory-map-shell.has-trace-selection .memory-map-layout { grid-template-columns: minmax(0, 55fr) minmax(28rem, 45fr); }
+  }
+  @media (max-width: 900px) {
+    .memory-map-layout { display: block; padding-bottom: 7.5rem; }
+    .memory-map-stage-shell,
+    .memory-map-fallback { width: 100%; max-height: 50vh; min-height: min(32rem,50vh); }
+    .memory-map-inspector {
+      position: fixed;
+      z-index: 50;
+      right: .5rem;
+      bottom: .5rem;
+      left: .5rem;
+      top: auto;
+      width: auto;
+      max-height: 46vh;
+      overflow-y: auto;
+    }
+    .memory-map-inspector[data-sheet-state="peek"] { max-height: 7rem; overflow: hidden; }
+    .memory-map-inspector[data-sheet-state="expanded"] { max-height: 88vh; }
+  }
+</style>
+
+<style is:global>
+  /* Final interaction overrides after the legacy map layers. */
+  .memory-map-pathway { padding: .7rem .85rem; }
+  .memory-map-pathway-steps button { min-height: 3.65rem; border-color: transparent; background: transparent; }
+  .memory-map-pathway-steps button[aria-current="step"] { background: rgba(99,189,255,.055); }
+  .memory-map-trace-resource-actions { display: flex; flex-wrap: wrap; gap: .45rem; padding-top: .15rem; }
+  .memory-map-trace-resource-preview,
+  .memory-map-trace-resource-link { display: inline-flex; align-items: center; width: max-content; max-width: 100%; min-height: 2.2rem; padding: 0 .62rem; }
+  @media (min-width: 901px) {
+    .memory-map-stage-shell,
+    .memory-map-fallback,
+    .memory-map-inspector { height: clamp(25rem, calc(100vh - 20rem), 34rem); min-height: 25rem; max-height: 34rem; }
+    .memory-map-stage,
+    .memory-map-fallback { min-height: 0; height: 100%; }
+    .memory-map-inspector { overflow-y: auto; overscroll-behavior: contain; }
   }
 </style>

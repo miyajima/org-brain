@@ -459,7 +459,7 @@ function completeLearningScore(learning) {
 function consensusCertified(input) {
   if (input?.ai_certification !== "ai_consensus_certified") return false;
   const judgments = arrayValue(input?.judge_consensus?.judgments);
-  if (judgments.length < 3) return false;
+  if (judgments.length !== 3) return false;
   const families = new Set(judgments.map((item) => item?.model_family).filter(Boolean));
   return families.size >= 2 && judgments.every((item) => item?.verdict === "pass");
 }
@@ -494,6 +494,11 @@ export function assessMemoryUsefulnessV1(input = {}) {
   };
   const reasonCodes = [...new Set(arrayValue(input.reason_codes).filter((value) => typeof value === "string"))];
   const hardViolations = [];
+  const sourceDrift = sourceReferences.some((item) => {
+    const recorded = stringValue(item?.content_hash) || stringValue(item?.digest);
+    const current = stringValue(item?.current_content_hash) || stringValue(item?.observed_content_hash);
+    return Boolean(recorded && current && recorded !== current);
+  });
   const screenedText = `${conclusion}\n${rationale}\n${reuseRule}\n${stringValue(input.summary)}\n${stringValue(input.content)}`;
   if (CREDENTIAL_PATTERN.test(screenedText)) hardViolations.push("credential_detected");
   if (PII_PATTERN.test(screenedText)) hardViolations.push("pii_detected");
@@ -501,6 +506,7 @@ export function assessMemoryUsefulnessV1(input = {}) {
   if (RAW_ENVELOPE_PATTERN.test(screenedText)) hardViolations.push("raw_transcript_envelope_detected");
   if (SELF_ATTEST_PATTERN.test(screenedText)) hardViolations.push("final_answer_self_attestation");
   if (arrayValue(input.conflicts).length > 0) hardViolations.push("unresolved_conflict");
+  if (sourceDrift) hardViolations.push("source_drift");
   if (Number.isFinite(expiry) && expiry <= now) hardViolations.push("expired_memory");
   if (NON_ATOMIC_PATTERN.test(conclusion)) hardViolations.push("non_atomic_memory");
   if (reasonCodes.some((code) => /(?:scope|credential|pii|self_attest|source_drift|duplicate|non_atomic)/iu.test(code))) {
@@ -510,16 +516,20 @@ export function assessMemoryUsefulnessV1(input = {}) {
   const observedVerified = input.capture_origin === "observed" && input.verification_state === "verified" && Number.isFinite(Number(input.verified_at));
   const certified = consensusCertified(input);
   const durableSignal = Boolean(conclusion && (rationale || reuseRule || Object.keys(learning).length > 0));
+  const legacyReviewCandidate = !Object.keys(learning).length && Boolean(conclusion) && input.capture_origin !== "observed";
   const route = hardViolations.length > 0
     ? "excluded"
     : allDimensionsPass && observedVerified && certified
       ? "active"
       : durableSignal
         ? "quarantine"
-        : "excluded";
+        : legacyReviewCandidate
+          ? "quarantine"
+          : "excluded";
   if (!allDimensionsPass) reasonCodes.push("quality_dimension_below_95");
   if (!observedVerified && durableSignal) reasonCodes.push("observed_verified_required");
   if (!certified && durableSignal) reasonCodes.push("ai_consensus_required");
+  if (legacyReviewCandidate) reasonCodes.push("legacy_learning_missing");
   return {
     schema_version: 1,
     route,

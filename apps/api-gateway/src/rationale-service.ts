@@ -775,6 +775,7 @@ export async function captureMemoryWithInferredRationale(
     evidence: ProposedEvidence[];
     warnings: string[];
     captureV2Enabled: boolean;
+    qualityRoute: "active" | "quarantine";
   }> = [];
   const skipped: CaptureCandidateResult[] = [];
 
@@ -859,31 +860,32 @@ export async function captureMemoryWithInferredRationale(
           Date.now() + 7 * DAY_MS
         )
         : requestedValidUntil;
-      if (learning || parsedItem.capture_origin === "observed") {
-        const usefulness = assessMemoryUsefulnessV1({
-          content,
-          summary,
-          rationale,
-          reuse_rule: reuseRule,
-          learning,
-          evidence: itemEvidence as unknown as Array<Record<string, unknown>>,
-          source_references: sourceReferences,
-          quality_dimensions: parsedItem.quality_dimensions,
-          capture_origin: parsedItem.capture_origin,
-          verification_state: parsedItem.verification.state,
-          verified_at: parsedItem.verification.verified_at,
-          valid_until: typeof validUntil === "number" && Number.isFinite(validUntil) ? validUntil : null,
-          reason_codes: parsedItem.reason_codes,
-          ai_certification: parsedItem.ai_certification,
-          judge_consensus: parsedItem.judge_consensus
-        });
-        if (usefulness.route !== "active") {
-          throw new HttpError(
-            422,
-            usefulness.route === "quarantine" ? "memory_usefulness_quarantined" : "memory_usefulness_excluded",
-            [...usefulness.hard_violations, ...usefulness.reason_codes].join(",") || "memory usefulness gate rejected the candidate"
-          );
-        }
+      // Every persistent capture is assessed, including legacy payloads that
+      // do not carry a learning object.  Missing v2 fields must lower the
+      // route rather than silently bypassing the contract.
+      const usefulness = assessMemoryUsefulnessV1({
+        content,
+        summary,
+        rationale,
+        reuse_rule: reuseRule,
+        learning,
+        evidence: itemEvidence as unknown as Array<Record<string, unknown>>,
+        source_references: sourceReferences,
+        quality_dimensions: parsedItem.quality_dimensions,
+        capture_origin: parsedItem.capture_origin,
+        verification_state: parsedItem.verification.state,
+        verified_at: parsedItem.verification.verified_at,
+        valid_until: typeof validUntil === "number" && Number.isFinite(validUntil) ? validUntil : null,
+        reason_codes: parsedItem.reason_codes,
+        ai_certification: parsedItem.ai_certification,
+        judge_consensus: parsedItem.judge_consensus
+      });
+      if (usefulness.route === "excluded") {
+        throw new HttpError(
+          422,
+          "memory_usefulness_excluded",
+          [...usefulness.hard_violations, ...usefulness.reason_codes].join(",") || "memory usefulness gate rejected the candidate"
+        );
       }
       const extracted = extractRationaleProposal({
         content,
@@ -906,16 +908,19 @@ export async function captureMemoryWithInferredRationale(
           learning,
           evidence: itemEvidence,
           source_references: sourceReferences,
-          valid_until: typeof validUntil === "number" && Number.isFinite(validUntil) ? validUntil : null
+          valid_until: typeof validUntil === "number" && Number.isFinite(validUntil) ? validUntil : null,
+          quality_dimensions: usefulness.quality_dimensions
         },
         extracted,
         entities,
         evidence: itemEvidence,
         warnings: [
           ...(classification.classification_warning ?? []),
-          ...(captureV2Enabled && !rationale ? ["rationale_missing_review_required"] : [])
+          ...(captureV2Enabled && !rationale ? ["rationale_missing_review_required"] : []),
+          ...(usefulness.route === "quarantine" ? usefulness.reason_codes : [])
         ],
-        captureV2Enabled
+        captureV2Enabled,
+        qualityRoute: usefulness.route
       });
     } catch (error) {
       if (request.legacySingle || !(error instanceof HttpError)) throw error;
@@ -931,7 +936,7 @@ export async function captureMemoryWithInferredRationale(
     ? await captureMemoryItems(env, {
       tenantId: request.tenantId,
       source: request.source,
-      items: prepared.map(({ item, extracted, evidence, captureV2Enabled }) => ({
+      items: prepared.map(({ item, extracted, evidence, captureV2Enabled, qualityRoute }) => ({
         external_key: item.external_key,
         content: item.content,
         summary: item.summary,
@@ -941,7 +946,7 @@ export async function captureMemoryWithInferredRationale(
         actor_type: request.actorType,
         actor_id: request.actorId,
         kind: item.kind,
-        lifecycle_state: "active",
+        lifecycle_state: qualityRoute === "quarantine" ? "suppressed" : "active",
         business_category_id: item.business_category_id,
         work_type: item.work_type,
         canonical_key: item.canonical_key,

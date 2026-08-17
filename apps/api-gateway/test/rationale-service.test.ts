@@ -225,6 +225,20 @@ class FakeStatement {
       });
       return;
     }
+    if (this.sql.startsWith("UPDATE memories")) {
+      const row = this.db.memories.find((item) => item.tenant_id === this.args[40] && item.id === this.args[41]);
+      if (row) {
+        row.lifecycle_state = String(this.args[7]);
+        row.capture_origin = String(this.args[33]);
+        row.capture_route = String(this.args[34]);
+        row.verification_state = String(this.args[36]);
+        row.verified_at = (this.args[37] as number | null) ?? null;
+        row.learning_json = (this.args[38] as string | null) ?? null;
+        row.quality_dimensions_json = (this.args[39] as string | null) ?? null;
+        row.utility_score = (this.args[13] as number | null) ?? null;
+      }
+      return;
+    }
     if (this.sql.startsWith("DELETE FROM memories_fts")) {
       this.db.memoriesFts = this.db.memoriesFts.filter((item) => !(item.memory_id === this.args[0] && item.tenant_id === this.args[1]));
       return;
@@ -443,12 +457,14 @@ describe("rationale service", () => {
     });
     expect(duplicate.results).toEqual([
       expect.objectContaining({
-        status: "skipped",
-        reason_code: "duplicate_canonical_key",
-        memory_id: db.memories[0]?.id
+        status: "created",
+        reason_code: "captured",
+        memory_id: expect.any(String),
+        classification_warning: expect.arrayContaining(["legacy_learning_missing"])
       })
     ]);
-    expect(db.memories).toHaveLength(2);
+    expect(db.memories).toHaveLength(3);
+    expect(db.memories.every((memory) => memory.lifecycle_state === "suppressed")).toBe(true);
   });
 
   it("requires external keys for idempotent batch capture", async () => {
@@ -514,19 +530,26 @@ describe("rationale service", () => {
     delete (uncertified.items[0] as Partial<typeof request.items[0]>).judge_consensus;
     const quarantined = await captureMemoryWithInferredRationale(env, uncertified, { canAttest: true });
     expect(quarantined.results).toEqual([
-      expect.objectContaining({ status: "skipped", reason_code: "memory_usefulness_quarantined" })
+      expect.objectContaining({
+        status: "created",
+        reason_code: "captured",
+        classification_warning: expect.arrayContaining(["ai_consensus_required"])
+      })
     ]);
-    expect(db.memories).toHaveLength(0);
+    expect(db.memories).toHaveLength(1);
+    expect(db.memories[0]).toMatchObject({ lifecycle_state: "suppressed" });
 
     const accepted = await captureMemoryWithInferredRationale(env, request, { canAttest: true });
-    expect(accepted.results[0]).toMatchObject({ status: "created" });
-    expect(db.memories[0]).toMatchObject({
+    expect(accepted.results[0]).toMatchObject({ status: "updated" });
+    expect(db.memories).toHaveLength(1);
+    const acceptedMemory = db.memories.find((memory) => memory.lifecycle_state === "active");
+    expect(acceptedMemory).toMatchObject({
       capture_origin: "observed",
       verification_state: "verified",
       verified_at: 1_700_000_000_500,
       utility_score: 1
     });
-    expect(JSON.parse(db.memories[0]?.learning_json ?? "null")).toMatchObject({ lesson_type: "success" });
+    expect(JSON.parse(acceptedMemory?.learning_json ?? "null")).toMatchObject({ lesson_type: "success" });
   });
 
   it("keeps a missing v2 rationale out of memory content and marks it for review", async () => {

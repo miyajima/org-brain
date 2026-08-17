@@ -356,6 +356,140 @@ export type DecisionResourceLink = {
   created_at: number;
 };
 
+export const MEMORY_MAP_TRACE_CONTRACT_VERSION = "memory-map-trace/v1" as const;
+
+export const memoryMapTraceQuerySchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: z.string().trim().min(1).max(256).optional(),
+  scope: z.enum(["mine", "org"]).default("org"),
+  memory_id: z.string().trim().min(1).max(256).optional(),
+  decision_rationale_id: z.string().trim().min(1).max(256).optional()
+}).superRefine((value, context) => {
+  if (Boolean(value.memory_id) === Boolean(value.decision_rationale_id)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["memory_id"],
+      message: "exactly one of memory_id or decision_rationale_id is required"
+    });
+  }
+});
+
+export type MemoryMapTraceQuery = z.infer<typeof memoryMapTraceQuerySchema>;
+
+export type MemoryMapTraceAlternative = {
+  alternative: string;
+  reason_rejected: string | null;
+};
+
+export type MemoryMapTraceDerived = {
+  lesson_type: string | null;
+  trigger: string | null;
+  question: string | null;
+  decision_key: string | null;
+  decision: string | null;
+  selected_value: string | null;
+  rationale: string | null;
+  alternatives: MemoryMapTraceAlternative[];
+  constraints: string[];
+  reuse_when: string | null;
+  outcome: string | null;
+  symptom: string | null;
+  failed_approach: string | null;
+  root_cause: string | null;
+  correction: string | null;
+  verified_outcome: string | null;
+  avoidance_rule: string | null;
+};
+
+export type MemoryMapTraceEvidence = {
+  id: string;
+  evidence_type: string;
+  evidence_ref: string;
+  relation: string;
+  note: string | null;
+  weight_score: number | null;
+  content_hash: string | null;
+  observed_at: number | null;
+  attestation_ref: string | null;
+};
+
+export type MemoryMapTraceResourceVersion = {
+  id: string;
+  source_version: string | null;
+  content_hash: string;
+  captured_at: number;
+  extraction_state: KnowledgeResourceExtractionState;
+  pinned: boolean;
+};
+
+export type MemoryMapTraceResource = {
+  link: DecisionResourceLink;
+  resource: KnowledgeResource;
+  version: MemoryMapTraceResourceVersion | null;
+  freshness: KnowledgeResourceLifecycleState;
+  availability: "readable";
+};
+
+export type MemoryMapTraceRationale = {
+  id: string;
+  decision_type: string;
+  conclusion: string;
+  reason_summary: string;
+  status: string;
+  confirmation_state: string;
+  confidence_score: number | null;
+  created_at: number;
+  confirmed_at: number | null;
+  derived: MemoryMapTraceDerived;
+  evidence: MemoryMapTraceEvidence[];
+  resources: {
+    sources: MemoryMapTraceResource[];
+    artifacts: MemoryMapTraceResource[];
+  };
+};
+
+export type MemoryMapTraceResponse = {
+  contract_version: typeof MEMORY_MAP_TRACE_CONTRACT_VERSION;
+  selected: {
+    node_type: "memory" | "decision";
+    id: string;
+    memory_id: string;
+    decision_rationale_id: string | null;
+  };
+  memory: {
+    id: string;
+    project_id: string | null;
+    kind: string;
+    summary: string | null;
+    lifecycle_state: string;
+    verification_state: string;
+    verified_at: number | null;
+    reuse_rule: string | null;
+    learning: Record<string, unknown> | null;
+    versions: Array<{
+      version: number;
+      operation: string;
+      summary: string | null;
+      kind: string;
+      lifecycle_state: string;
+      actor_type: string | null;
+      actor_id: string | null;
+      created_at: number;
+    }>;
+  };
+  selected_rationale_id: string | null;
+  rationales: MemoryMapTraceRationale[];
+  completeness: {
+    rationale_count: number;
+    evidence_count: number;
+    source_count: number;
+    artifact_count: number;
+    missing: Array<"decision" | "reason" | "alternative" | "evidence" | "artifact" | "verification">;
+    partial: boolean;
+    truncated: boolean;
+  };
+};
+
 export const DASHBOARD_CONTRACT_VERSION = "dashboard/v1" as const;
 
 export const DASHBOARD_NODE_TYPES = ["project", "memory", "decision", "resource", "entity", "task"] as const;
