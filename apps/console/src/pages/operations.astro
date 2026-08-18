@@ -11,38 +11,43 @@ const payload: any = response.ok ? await response.json() : { ok: false, data: nu
 const status = payload.ok ? payload.data : null;
 const scheduledJobs = Array.isArray(status?.scheduled_jobs) ? status.scheduled_jobs : [];
 const retentionQueue = status?.retention_queue ?? {};
-const actions = status ? buildOperationsActions(status) : [];
+const copy = {
+  en: { pageTitle: "Org Brain Operations", chip: "Operations", title: "Operations status", body: "Review permissions, conflicts, stale memories, retrieval quality, and queues by tenant.", target: "Target", updated: "Last updated", loadError: "Operations data could not be loaded. Check the API configuration and admin access.", first: "Start here", attention: "Items needing attention", none: "No issues", cases: "items", critical: "Critical", warning: "Review", reviewTask: "Review Tasks", reviewDetail: "Review details", healthy: "No items currently require priority action.", overview: "Operations overview", memory: "Memories", conflict: "Conflicts", expired: "expired", decisions: "Decision review", unconfirmed: "Unconfirmed", lowConfidence: "low confidence", queue: "Task queue", running: "Running", failedQuarantined: "failed or quarantined", stalled: "stalled", audit: "Audit (24 hours)", denied: "Denied", failed: "failed", failedTasks: "Failed or quarantined Tasks", replayBody: "Create a new Task from the original creation event.", task: "Task", process: "Process", state: "Status", changed: "Updated", action: "Action", noTargets: "No matching Tasks", replay: "Replay", replaying: "Replaying", scheduled: "Scheduled jobs", scheduledBody: "Jobs older than 36 hours since their last success are marked for review.", latest: "Latest status", lastSuccess: "Last success", elapsed: "Elapsed", next: "Next expected", review: "Review", retentionPending: "Retention pending", retentionOverdue: "Retention overdue", retentionFailed: "Retention failed", manualReview: "Manual review", roles: "Permissions and roles", rolesBody: "Shows fixed tenant roles, allowed actions, and current assignments.", role: "Role", permissions: "Allowed actions", assignments: "Assignments", principals: "Principals", retrieval: "Retrieval quality and indexes", searches: "Searches in 24 hours", hitRate: "Hit rate", fallbackRate: "Fallback rate", latency: "Average latency", semantic: "Semantic search index", configured: "Configured", notConfigured: "Not configured", lexicalGraph: "Lexical and graph search", governance: "Governance and recovery objectives", tokens: "Active tokens", legalHolds: "Legal holds", rpo: "RPO target", rto: "RTO target", unmeasured: "Not measured", never: "Never run", hours: "h", minutes: "m" },
+  ja: { pageTitle: "Org Brain 運用", chip: "運用", title: "運用ステータス", body: "権限・競合・古い記憶・検索品質・キュー状態を、テナント単位で確認します。", target: "対象", updated: "最終更新", loadError: "運用データを取得できませんでした。API設定とadmin権限を確認してください。", first: "最初に確認", attention: "対応が必要な項目", none: "問題なし", cases: "項目", critical: "至急対応", warning: "要確認", reviewTask: "Taskを確認", reviewDetail: "詳細を確認", healthy: "現在、優先対応が必要な項目はありません。", overview: "運用概要", memory: "記憶", conflict: "競合", expired: "期限切れ", decisions: "判断確認", unconfirmed: "未確認", lowConfidence: "低信頼", queue: "Taskキュー", running: "実行中", failedQuarantined: "失敗・隔離", stalled: "停滞", audit: "監査（24時間）", denied: "拒否", failed: "失敗", failedTasks: "失敗・隔離Task", replayBody: "元の作成イベントから、新しいTaskとして再実行します。", task: "Task", process: "処理", state: "状態", changed: "更新日時", action: "操作", noTargets: "対象なし", replay: "再実行", replaying: "再実行中", scheduled: "定期処理", scheduledBody: "最終成功から36時間を超えたジョブは古い状態として通知されます。", latest: "最新状態", lastSuccess: "最終成功", elapsed: "経過時間", next: "次回予定", review: "要確認", retentionPending: "保持処理・保留", retentionOverdue: "保持処理・期限超過", retentionFailed: "保持処理・失敗", manualReview: "手動確認", roles: "権限とロール", rolesBody: "テナント内の固定ロール、許可される操作、現在の割り当て数を表示します。", role: "ロール", permissions: "許可される操作", assignments: "割り当て", principals: "主体数", retrieval: "検索品質と索引", searches: "24時間の検索数", hitRate: "ヒット率", fallbackRate: "フォールバック率", latency: "平均応答時間", semantic: "意味検索インデックス", configured: "設定済み", notConfigured: "未設定", lexicalGraph: "文字・グラフ検索", governance: "ガバナンスと復旧目標", tokens: "有効なToken", legalHolds: "法的保持", rpo: "RPO目標", rto: "RTO目標", unmeasured: "未計測", never: "未実行", hours: "時間", minutes: "分" },
+  zh: { pageTitle: "Org Brain 运维", chip: "运维", title: "运维状态", body: "按租户检查权限、冲突、过期记忆、检索质量和队列状态。", target: "对象", updated: "最后更新", loadError: "无法加载运维数据。请检查 API 配置和管理员权限。", first: "请先查看", attention: "需要处理的项目", none: "无问题", cases: "项", critical: "紧急", warning: "需检查", reviewTask: "查看任务", reviewDetail: "查看详情", healthy: "当前没有需要优先处理的项目。", overview: "运维概览", memory: "记忆", conflict: "冲突", expired: "已过期", decisions: "决策审核", unconfirmed: "未确认", lowConfidence: "低可信度", queue: "任务队列", running: "运行中", failedQuarantined: "失败或隔离", stalled: "停滞", audit: "审计（24小时）", denied: "拒绝", failed: "失败", failedTasks: "失败或隔离的任务", replayBody: "从原始创建事件生成一个新任务。", task: "任务", process: "处理", state: "状态", changed: "更新时间", action: "操作", noTargets: "无匹配任务", replay: "重试", replaying: "正在重试", scheduled: "定时任务", scheduledBody: "距上次成功超过36小时的任务将标记为需检查。", latest: "最新状态", lastSuccess: "上次成功", elapsed: "经过时间", next: "下次计划", review: "需检查", retentionPending: "保留待处理", retentionOverdue: "保留已超期", retentionFailed: "保留失败", manualReview: "人工审核", roles: "权限与角色", rolesBody: "显示租户固定角色、允许操作和当前分配数。", role: "角色", permissions: "允许操作", assignments: "分配", principals: "主体数", retrieval: "检索质量与索引", searches: "24小时搜索数", hitRate: "命中率", fallbackRate: "回退率", latency: "平均延迟", semantic: "语义搜索索引", configured: "已配置", notConfigured: "未配置", lexicalGraph: "词法与图搜索", governance: "治理与恢复目标", tokens: "有效 Token", legalHolds: "法律保留", rpo: "RPO 目标", rto: "RTO 目标", unmeasured: "未测量", never: "从未运行", hours: "小时", minutes: "分" }
+}[lang];
+const actions = status ? buildOperationsActions(status, lang) : [];
 const generatedAt = typeof status?.generated_at === "number" && Number.isFinite(status.generated_at) ? status.generated_at : null;
 const display = (value: unknown, suffix = "") =>
-  typeof value === "number" && Number.isFinite(value) ? `${value}${suffix}` : "未計測";
+  typeof value === "number" && Number.isFinite(value) ? `${value}${suffix}` : copy.unmeasured;
 const percent = (value: unknown) =>
-  typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "未計測";
+  typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : copy.unmeasured;
 const timestamp = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value)
-    ? new Date(value).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })
-    : "未実行";
+    ? new Date(value).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")
+    : copy.never;
 const duration = (value: unknown) => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "未計測";
+  if (typeof value !== "number" || !Number.isFinite(value)) return copy.unmeasured;
   const hours = Math.floor(value / 3_600_000);
   const minutes = Math.floor((value % 3_600_000) / 60_000);
-  return `${hours}時間${minutes}分`;
+  return `${hours}${copy.hours}${minutes}${copy.minutes}`;
 };
 const label = (kind: "status" | "capability" | "job" | "role" | "permission", value: string | null | undefined) =>
   dashboardLabel(kind, value, lang);
 const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardStatusTone(value)}`;
 ---
 
-<BaseLayout title="Org Brain 運用" lang={lang}>
+<BaseLayout title={copy.pageTitle} lang={lang}>
   <section class="card operations-hero">
-    <span class="surface-chip">運用</span>
-    <h1 class="mt-4 text-3xl font-semibold">運用ステータス</h1>
+    <span class="surface-chip">{copy.chip}</span>
+    <h1 class="mt-4 text-3xl font-semibold">{copy.title}</h1>
     <p class="surface-muted mt-2">
-      権限・競合・古い記憶・検索品質・キュー状態を、テナント単位で確認します。対象: <strong>{tenantId}</strong>
+      {copy.body} {copy.target}: <strong>{tenantId}</strong>
     </p>
-    {status && generatedAt !== null && <p class="operations-updated">最終更新: <time datetime={new Date(generatedAt).toISOString()}>{timestamp(generatedAt)}</time></p>}
+    {status && generatedAt !== null && <p class="operations-updated">{copy.updated}: <time datetime={new Date(generatedAt).toISOString()}>{timestamp(generatedAt)}</time></p>}
     {!status && (
       <p class="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/8 p-4 text-rose-100" role="alert">
-        運用データを取得できませんでした。API設定とadmin権限を確認してください。
+        {copy.loadError}
       </p>
     )}
   </section>
@@ -52,87 +57,87 @@ const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardSta
       <section class="card ops-attention mt-6" aria-labelledby="operations-attention-title">
         <header>
           <div>
-            <p class="surface-label">最初に確認</p>
-            <h2 id="operations-attention-title">対応が必要な項目</h2>
+            <p class="surface-label">{copy.first}</p>
+            <h2 id="operations-attention-title">{copy.attention}</h2>
           </div>
-          <span class="ops-attention-count">{actions.length > 0 ? `${actions.length}項目` : "問題なし"}</span>
+          <span class="ops-attention-count">{actions.length > 0 ? `${actions.length}${copy.cases}` : copy.none}</span>
         </header>
         {actions.length > 0 ? (
           <div class="ops-action-list">
             {actions.slice(0, 6).map((action) => (
               <article class:list={["ops-action", `ops-action-${action.tone}`]}>
                 <div>
-                  <div class="ops-action-meta"><span class="ops-severity">{action.tone === "critical" ? "至急対応" : "要確認"}</span><span class="ops-action-count">{action.count}件</span></div>
+                  <div class="ops-action-meta"><span class="ops-severity">{action.tone === "critical" ? copy.critical : copy.warning}</span><span class="ops-action-count">{action.count}</span></div>
                   <h3>{action.title}</h3>
                   <p>{action.reason}</p>
                 </div>
-                <a href={action.href}>{action.href === "#failed-tasks" ? "Taskを確認" : "詳細を確認"}</a>
+                <a href={action.href}>{action.href === "#failed-tasks" ? copy.reviewTask : copy.reviewDetail}</a>
               </article>
             ))}
           </div>
         ) : (
-          <p class="ops-healthy" role="status"><span aria-hidden="true">✓</span>現在、優先対応が必要な項目はありません。</p>
+          <p class="ops-healthy" role="status"><span aria-hidden="true">✓</span>{copy.healthy}</p>
         )}
       </section>
 
-      <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label="運用概要">
+      <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label={copy.overview}>
         <article class="surface-soft-card" id="memory-health">
-          <p class="surface-label">記憶</p>
+          <p class="surface-label">{copy.memory}</p>
           <p class="mt-3 text-3xl font-semibold">{display(status.memories.total)}</p>
-          <p class="surface-muted mt-2 text-sm">競合 {display(status.memories.conflicting)} / 期限切れ {display(status.memories.expired)}</p>
+          <p class="surface-muted mt-2 text-sm">{copy.conflict} {display(status.memories.conflicting)} / {copy.expired} {display(status.memories.expired)}</p>
         </article>
         <article class="surface-soft-card" id="decision-review">
-          <p class="surface-label">判断確認</p>
+          <p class="surface-label">{copy.decisions}</p>
           <p class="mt-3 text-3xl font-semibold">{display(status.decision_review.unconfirmed)}</p>
-          <p class="surface-muted mt-2 text-sm">未確認 / 低信頼 {display(status.decision_review.low_confidence)}</p>
+          <p class="surface-muted mt-2 text-sm">{copy.unconfirmed} / {copy.lowConfidence} {display(status.decision_review.low_confidence)}</p>
         </article>
         <article class="surface-soft-card">
-          <p class="surface-label">Taskキュー</p>
+          <p class="surface-label">{copy.queue}</p>
           <p class="mt-3 text-3xl font-semibold">{display(status.tasks.active)}</p>
-          <p class="surface-muted mt-2 text-sm">実行中 / 失敗・隔離 {display(status.tasks.failed)} / 停滞 {display(status.tasks.stuck)}</p>
+          <p class="surface-muted mt-2 text-sm">{copy.running} / {copy.failedQuarantined} {display(status.tasks.failed)} / {copy.stalled} {display(status.tasks.stuck)}</p>
         </article>
         <article class="surface-soft-card" id="audit-quality">
-          <p class="surface-label">監査（24時間）</p>
+          <p class="surface-label">{copy.audit}</p>
           <p class="mt-3 text-3xl font-semibold">{display(status.audit.events_24h)}</p>
-          <p class="surface-muted mt-2 text-sm">拒否 {display(status.audit.denied_24h)} / 失敗 {display(status.audit.failed_24h)}</p>
+          <p class="surface-muted mt-2 text-sm">{copy.denied} {display(status.audit.denied_24h)} / {copy.failed} {display(status.audit.failed_24h)}</p>
         </article>
       </section>
 
       <section class="card mt-6" id="failed-tasks">
-        <h2 class="text-xl font-semibold">失敗・隔離Task</h2>
-        <p class="surface-muted mt-2 text-sm">元の作成イベントから、新しいTaskとして再実行します。</p>
+        <h2 class="text-xl font-semibold">{copy.failedTasks}</h2>
+        <p class="surface-muted mt-2 text-sm">{copy.replayBody}</p>
         <div class="mt-5 overflow-x-auto">
           <table>
-            <thead><tr><th>Task</th><th>処理</th><th>状態</th><th>更新日時</th><th>操作</th></tr></thead>
+            <thead><tr><th>{copy.task}</th><th>{copy.process}</th><th>{copy.state}</th><th>{copy.changed}</th><th>{copy.action}</th></tr></thead>
             <tbody>
               {status.tasks.failed_items.length === 0 ? (
-                <tr><td colspan="5">対象なし</td></tr>
+                <tr><td colspan="5">{copy.noTargets}</td></tr>
               ) : status.tasks.failed_items.map((task: any) => (
                 <tr>
                   <td><code>{task.id}</code></td>
                   <td title={task.capability}>{label("capability", task.capability)}</td>
                   <td><span class={`ops-status ${toneClass(task.status)}`} title={task.status}>{label("status", task.status)}</span></td>
-                  <td>{new Date(task.updated_at).toLocaleString("ja-JP")}</td>
-                  <td><button class="replay-task" data-task-id={task.id} data-tenant-id={tenantId}>再実行</button></td>
+                  <td>{new Date(task.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td>
+                  <td><button class="replay-task" data-task-id={task.id} data-tenant-id={tenantId}>{copy.replay}</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p id="replay-result" class="surface-muted mt-3 text-sm" aria-live="polite"></p>
+        <p id="replay-result" class="surface-muted mt-3 text-sm" aria-live="polite" data-replaying-label={copy.replaying} data-replay-label={copy.replay}></p>
       </section>
 
       <section class="card mt-6" id="scheduled-jobs">
-        <h2 class="text-xl font-semibold">定期処理</h2>
-        <p class="surface-muted mt-2 text-sm">最終成功から36時間を超えたジョブは古い状態として通知されます。</p>
+        <h2 class="text-xl font-semibold">{copy.scheduled}</h2>
+        <p class="surface-muted mt-2 text-sm">{copy.scheduledBody}</p>
         <div class="mt-5 overflow-x-auto">
           <table>
-            <thead><tr><th>処理</th><th>最新状態</th><th>最終成功</th><th>経過時間</th><th>次回予定</th></tr></thead>
+            <thead><tr><th>{copy.process}</th><th>{copy.latest}</th><th>{copy.lastSuccess}</th><th>{copy.elapsed}</th><th>{copy.next}</th></tr></thead>
             <tbody>
               {scheduledJobs.map((job: any) => (
                 <tr>
                   <td><code title={job.job_name}>{label("job", job.job_name)}</code></td>
-                  <td><span class={`ops-status ${toneClass(job.stale ? "stale" : job.latest_status)}`} title={job.latest_status}>{job.stale ? "要確認" : label("status", job.latest_status)}</span></td>
+                  <td><span class={`ops-status ${toneClass(job.stale ? "stale" : job.latest_status)}`} title={job.latest_status}>{job.stale ? copy.review : label("status", job.latest_status)}</span></td>
                   <td>{timestamp(job.last_success_at)}</td>
                   <td>{duration(job.success_age_ms)}</td>
                   <td>{timestamp(job.next_expected_at)}</td>
@@ -142,19 +147,19 @@ const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardSta
           </table>
         </div>
         <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" id="retention-queue">
-          <div class="surface-soft-card"><p class="surface-label">保持処理・保留</p><p class="mt-2 text-2xl">{display(retentionQueue.pending)}</p></div>
-          <div class="surface-soft-card"><p class="surface-label">保持処理・期限超過</p><p class="mt-2 text-2xl">{display(retentionQueue.overdue)}</p></div>
-          <div class="surface-soft-card"><p class="surface-label">保持処理・失敗</p><p class="mt-2 text-2xl">{display(retentionQueue.failed)}</p></div>
-          <div class="surface-soft-card"><p class="surface-label">手動確認</p><p class="mt-2 text-2xl">{display(retentionQueue.manual_review)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.retentionPending}</p><p class="mt-2 text-2xl">{display(retentionQueue.pending)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.retentionOverdue}</p><p class="mt-2 text-2xl">{display(retentionQueue.overdue)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.retentionFailed}</p><p class="mt-2 text-2xl">{display(retentionQueue.failed)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.manualReview}</p><p class="mt-2 text-2xl">{display(retentionQueue.manual_review)}</p></div>
         </div>
       </section>
 
       <section class="card mt-6">
-        <h2 class="text-xl font-semibold">権限とロール</h2>
-        <p class="surface-muted mt-2 text-sm">テナント内の固定ロール、許可される操作、現在の割り当て数を表示します。</p>
+        <h2 class="text-xl font-semibold">{copy.roles}</h2>
+        <p class="surface-muted mt-2 text-sm">{copy.rolesBody}</p>
         <div class="mt-5 overflow-x-auto">
           <table>
-            <thead><tr><th>ロール</th><th>許可される操作</th><th>割り当て</th><th>主体数</th></tr></thead>
+            <thead><tr><th>{copy.role}</th><th>{copy.permissions}</th><th>{copy.assignments}</th><th>{copy.principals}</th></tr></thead>
             <tbody>
               {status.authorization.roles.map((role: any) => (
                 <tr>
@@ -170,28 +175,28 @@ const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardSta
       </section>
 
       <section class="card mt-6">
-        <h2 class="text-xl font-semibold">検索品質と索引</h2>
+        <h2 class="text-xl font-semibold">{copy.retrieval}</h2>
         <div class="mt-5 overflow-x-auto">
           <table>
             <tbody>
-              <tr><th>24時間の検索数</th><td>{display(status.retrieval.searches_24h)}</td></tr>
-              <tr><th>ヒット率</th><td>{percent(status.retrieval.hit_rate_24h)}</td></tr>
-              <tr><th>フォールバック率</th><td>{percent(status.retrieval.fallback_rate_24h)}</td></tr>
-              <tr><th>平均応答時間</th><td>{display(status.retrieval.average_latency_ms_24h, " ms")}</td></tr>
-              <tr><th>意味検索インデックス</th><td>{status.retrieval.semantic_configured ? "設定済み" : "未設定"}</td></tr>
-              <tr><th>文字・グラフ検索</th><td>{label("status", status.retrieval.lexical)} / {label("status", status.retrieval.graph)}</td></tr>
+              <tr><th>{copy.searches}</th><td>{display(status.retrieval.searches_24h)}</td></tr>
+              <tr><th>{copy.hitRate}</th><td>{percent(status.retrieval.hit_rate_24h)}</td></tr>
+              <tr><th>{copy.fallbackRate}</th><td>{percent(status.retrieval.fallback_rate_24h)}</td></tr>
+              <tr><th>{copy.latency}</th><td>{display(status.retrieval.average_latency_ms_24h, " ms")}</td></tr>
+              <tr><th>{copy.semantic}</th><td>{status.retrieval.semantic_configured ? copy.configured : copy.notConfigured}</td></tr>
+              <tr><th>{copy.lexicalGraph}</th><td>{label("status", status.retrieval.lexical)} / {label("status", status.retrieval.graph)}</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
       <section class="card mt-6">
-        <h2 class="text-xl font-semibold">ガバナンスと復旧目標</h2>
+        <h2 class="text-xl font-semibold">{copy.governance}</h2>
         <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="surface-soft-card"><p class="surface-label">有効なToken</p><p class="mt-2 text-2xl">{display(status.scoped_tokens.active)}</p></div>
-          <div class="surface-soft-card"><p class="surface-label">法的保持</p><p class="mt-2 text-2xl">{display(status.retention.legal_holds)}</p></div>
-          <div class="surface-soft-card"><p class="surface-label">RPO目標</p><p class="mt-2 text-2xl">{display(status.slo_targets.rpo_minutes, " 分")}</p></div>
-          <div class="surface-soft-card"><p class="surface-label">RTO目標</p><p class="mt-2 text-2xl">{display(status.slo_targets.rto_minutes, " 分")}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.tokens}</p><p class="mt-2 text-2xl">{display(status.scoped_tokens.active)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.legalHolds}</p><p class="mt-2 text-2xl">{display(status.retention.legal_holds)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.rpo}</p><p class="mt-2 text-2xl">{display(status.slo_targets.rpo_minutes, ` ${copy.minutes}`)}</p></div>
+          <div class="surface-soft-card"><p class="surface-label">{copy.rto}</p><p class="mt-2 text-2xl">{display(status.slo_targets.rto_minutes, ` ${copy.minutes}`)}</p></div>
         </div>
       </section>
     </>
@@ -205,7 +210,7 @@ const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardSta
       const taskId = button.dataset.taskId;
       if (!taskId || !output) return;
       button.disabled = true;
-      output.textContent = `${taskId} を再実行しています…`;
+      output.textContent = `${output.dataset.replayingLabel}: ${taskId}…`;
       try {
         const response = await fetch(`/api/v1/ops/tasks/${encodeURIComponent(taskId)}/replay`, {
           method: "POST",
@@ -218,7 +223,7 @@ const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardSta
           error?: { message?: string };
         };
         if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
-        output.textContent = `再実行Task ${payload.data?.task_id ?? "(不明)"} を作成しました。`;
+        output.textContent = `${output.dataset.replayLabel}: ${payload.data?.task_id ?? "—"}`;
       } catch (error) {
         output.textContent = error instanceof Error ? error.message : String(error);
         button.disabled = false;

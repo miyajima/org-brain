@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 
 type Resource = {
   id: string;
@@ -50,9 +51,9 @@ const reviewEnabled = params.get("review") === "1";
 const requestedLocale = params.get("lang");
 const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale === "zh" ? requestedLocale : "en";
 const copy = {
-  en: { title: "Sources & artifacts", subtitle: "Start from a material to collect decisions and reasons, or start from a decision to inspect its outputs.", search: "Search material", empty: "Enter words from a material, URI, conclusion, or rationale.", decisions: "Related decisions and reasons", artifacts: "Decision artifacts", noResults: "No readable confirmed results.", open: "Open material", role: "Role", version: "Pinned version", back: "Back to the decision path", admin: "Administrator actions", localReference: "Local reference", browseManage: "Search and manage other materials" },
-  ja: { title: "資料・成果物", subtitle: "資料から判断と理由を収集し、判断から実装物・出力物・検証結果を探索します。", search: "資料を検索", empty: "資料、URI、結論、理由に含まれる語を入力してください。", decisions: "関連する判断と理由", artifacts: "判断の成果物", noResults: "閲覧可能なConfirmed結果はありません。", open: "資料を開く", role: "役割", version: "固定版", back: "判断の道筋に戻る", admin: "管理者向け操作", localReference: "ローカル参照", browseManage: "ほかの資料を検索・管理" },
-  zh: { title: "资料与成果", subtitle: "从资料收集决策与理由，或从决策探索实现、输出和验证成果。", search: "搜索资料", empty: "请输入资料、URI、结论或理由中的关键词。", decisions: "相关决策与理由", artifacts: "决策成果", noResults: "没有可读取的已确认结果。", open: "打开资料", role: "角色", version: "固定版本", back: "返回决策路径", admin: "管理员操作", localReference: "本地引用", browseManage: "搜索和管理其他资料" }
+  en: { title: "Sources & artifacts", subtitle: "Start from a material to collect decisions and reasons, or start from a decision to inspect its outputs.", search: "Search material", empty: "Enter words from a material, URI, conclusion, or rationale.", decisions: "Related decisions and reasons", artifacts: "Decision artifacts", noResults: "No readable confirmed results.", open: "Open material", role: "Role", version: "Pinned version", back: "Back to the decision path", admin: "Administrator actions", localReference: "Local reference", browseManage: "Search and manage other materials", errorTitle: "Some resource information is unavailable" },
+  ja: { title: "資料・成果物", subtitle: "資料から判断と理由を収集し、判断から実装物・出力物・検証結果を探索します。", search: "資料を検索", empty: "資料、URI、結論、理由に含まれる語を入力してください。", decisions: "関連する判断と理由", artifacts: "判断の成果物", noResults: "閲覧可能なConfirmed結果はありません。", open: "資料を開く", role: "役割", version: "固定版", back: "判断の道筋に戻る", admin: "管理者向け操作", localReference: "ローカル参照", browseManage: "ほかの資料を検索・管理", errorTitle: "一部の資料情報を取得できません" },
+  zh: { title: "资料与成果", subtitle: "从资料收集决策与理由，或从决策探索实现、输出和验证成果。", search: "搜索资料", empty: "请输入资料、URI、结论或理由中的关键词。", decisions: "相关决策与理由", artifacts: "决策成果", noResults: "没有可读取的已确认结果。", open: "打开资料", role: "角色", version: "固定版本", back: "返回决策路径", admin: "管理员操作", localReference: "本地引用", browseManage: "搜索和管理其他资料", errorTitle: "部分资料信息不可用" }
 }[locale];
 const decisionSourceId = decisionRef.includes(":") ? decisionRef.slice(decisionRef.indexOf(":") + 1) : decisionRef;
 const backToTraceHref = `/memories/constellation?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&scope=org&selected=${encodeURIComponent(decisionSourceId)}&trace_step=artifact&lang=${locale}`;
@@ -117,7 +118,7 @@ function isHttpUri(value: string): boolean {
       </div>
     </header>}
 
-    {errors.map((error) => <div class="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</div>)}
+    {errors.length > 0 && <AdminStatePanel state="partial" title={copy.errorTitle} description={errors.join(" · ")} />}
 
     {decisionRef && (
       <section class="card border-sky-300/20" data-decision-artifacts>
@@ -167,19 +168,19 @@ function isHttpUri(value: string): boolean {
             <form class="surface-soft-card space-y-2" data-resource-action="/api/v1/resources">
               <h2 class="font-semibold text-white">Resource intake</h2>
               <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="project_id" value={projectId} />
-              <input name="canonical_uri" required placeholder="https://…" /><input name="title" required placeholder="Title" />
-              <input name="resource_kind" value="document" required /><input name="source_system" value="manual" required />
-              <input name="media_type" value="text/plain" required /><input name="connector_id" placeholder="Allowlisted connector (optional)" />
-              <button type="submit">Register Resource</button><p class="text-xs text-zinc-500" data-result></p>
+              <input name="canonical_uri" required placeholder="https://…" aria-label="Canonical URI" /><input name="title" required placeholder="Title" aria-label="Title" />
+              <input name="resource_kind" value="document" required aria-label="Resource kind" /><input name="source_system" value="manual" required aria-label="Source system" />
+              <input name="media_type" value="text/plain" required aria-label="Media type" /><input name="connector_id" placeholder="Allowlisted connector (optional)" aria-label="Connector ID" />
+              <button type="submit">Register Resource</button><p class="text-xs text-zinc-500" data-result role="status" aria-live="polite"></p>
             </form>
             <form class="surface-soft-card space-y-2" data-resource-action="/api/v1/decision-resource-links">
               <h2 class="font-semibold text-white">Explicit Decision link</h2>
               <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="project_id" value={projectId} />
-              <input name="decision_ref_text" required placeholder="decision_memory:id" /><input name="resource_id" required placeholder="Resource ID" />
-              <select name="role"><option>conclusion_source</option><option>rationale_source</option><option>input</option><option>contradiction</option><option>implementation_artifact</option><option>output_artifact</option><option>verification_artifact</option></select>
-              <input name="resource_version_id" placeholder="Pinned version (source roles)" /><input name="locator_json" placeholder='{"heading":"Conclusion"}' />
-              <input name="excerpt_digest" placeholder="SHA-256 excerpt digest" />
-              <button type="submit">Add Confirmed link</button><p class="text-xs text-zinc-500" data-result></p>
+              <input name="decision_ref_text" required placeholder="decision_memory:id" aria-label="Decision reference" /><input name="resource_id" required placeholder="Resource ID" aria-label="Resource ID" />
+              <select name="role" aria-label="Resource role"><option>conclusion_source</option><option>rationale_source</option><option>input</option><option>contradiction</option><option>implementation_artifact</option><option>output_artifact</option><option>verification_artifact</option></select>
+              <input name="resource_version_id" placeholder="Pinned version (source roles)" aria-label="Pinned resource version" /><input name="locator_json" placeholder='{"heading":"Conclusion"}' aria-label="Resource locator JSON" />
+              <input name="excerpt_digest" placeholder="SHA-256 excerpt digest" aria-label="Excerpt digest" />
+              <button type="submit">Add Confirmed link</button><p class="text-xs text-zinc-500" data-result role="status" aria-live="polite"></p>
             </form>
           </div>
         </details>

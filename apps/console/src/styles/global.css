@@ -16,6 +16,11 @@
   --console-accent-strong: #63bdff;
   --console-danger: #ff7a86;
   --console-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  --console-font-sans: "Avenir Next", Avenir, "Hiragino Sans", "Yu Gothic UI", "Microsoft YaHei UI", sans-serif;
+  --console-font-mono: "SFMono-Regular", "Cascadia Code", Menlo, monospace;
+  --console-font-body: 0.875rem;
+  --console-font-meta: 0.75rem;
+  --console-line-body: 1.6;
   --intelligence-bg: #050a12;
   --intelligence-surface: #07111f;
   --intelligence-panel: rgba(8, 20, 36, 0.82);
@@ -41,7 +46,9 @@
       radial-gradient(circle at top right, rgba(89, 181, 255, 0.07), transparent 28%),
       linear-gradient(180deg, #0a1422 0%, #050a12 35%, #02050a 100%);
     color: var(--console-text);
-    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--console-font-sans);
+    font-size: var(--console-font-body);
+    line-height: var(--console-line-body);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -70,7 +77,7 @@
   input,
   textarea,
   select {
-    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--console-font-sans);
     @apply w-full rounded-[20px] border px-4 py-3 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition duration-200;
     border-color: var(--console-border);
     background: rgba(255, 255, 255, 0.05);
@@ -97,7 +104,7 @@
   }
 
   button {
-    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--console-font-sans);
     @apply inline-flex min-h-11 items-center justify-center rounded-[18px] border px-4 py-2 text-sm font-semibold tracking-[0.01em] transition duration-200;
     border-color: rgba(67, 161, 255, 0.32);
     background: linear-gradient(180deg, rgba(40, 148, 255, 0.34) 0%, rgba(12, 104, 230, 0.24) 100%);
@@ -118,9 +125,9 @@
   label {
     display: block;
     margin: 0 0 0.4rem;
-    color: var(--console-subtle);
-    font-family: "Fira Code", "SFMono-Regular", Menlo, monospace;
-    font-size: 0.74rem;
+    color: rgba(216, 235, 246, 0.82);
+    font-family: var(--console-font-mono);
+    font-size: var(--console-font-meta);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -138,8 +145,8 @@
 
   th {
     color: var(--console-subtle);
-    font-family: "Fira Code", "SFMono-Regular", Menlo, monospace;
-    font-size: 0.74rem;
+    font-family: var(--console-font-mono);
+    font-size: var(--console-font-meta);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -167,12 +174,34 @@
     @apply relative min-h-screen overflow-x-hidden;
   }
 
+  .console-skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 100;
+    min-height: 44px;
+    transform: translateY(-160%);
+    border: 2px solid var(--console-accent-strong);
+    border-radius: 12px;
+    background: #081524;
+    padding: 0.65rem 1rem;
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .console-skip-link:focus { transform: translateY(0); }
+
   .console-main {
     @apply mx-auto max-w-7xl px-4 pb-16 pt-4 sm:px-6 lg:px-8;
   }
 
   .console-main-wide {
     max-width: 96rem;
+  }
+
+  /* Readability floor: preserve inherited display sizes while lifting helper text to 12px. */
+  .console-main :where(p, span, small, time, dt, dd, code, label, a, button, input, textarea, select, summary) {
+    font-size: max(0.75rem, 1em) !important;
   }
 
   .console-nav {
@@ -233,14 +262,32 @@
     top: calc(100% + 0.65rem);
     right: 0;
     display: grid;
-    width: min(19rem, calc(100vw - 2rem));
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.25rem;
+    width: min(44rem, calc(100vw - 2rem));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
     border: 1px solid var(--console-border);
     border-radius: 18px;
     background: rgba(8, 9, 13, 0.98);
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
-    padding: 0.55rem;
+    padding: 0.7rem;
+  }
+
+  .console-nav-group {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 0.2rem;
+  }
+
+  .console-nav-group h2 {
+    margin: 0;
+    padding: 0.5rem 0.7rem 0.35rem;
+    color: rgba(191, 216, 235, 0.82);
+    font-family: "Fira Code", "SFMono-Regular", Menlo, monospace;
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .console-nav-menu-panel a {
@@ -276,8 +323,10 @@
     right: 0;
     display: grid;
     width: min(20rem, calc(100vw - 2rem));
-    grid-template-columns: 1fr 1fr;
+    max-height: min(38rem, calc(100vh - 6rem));
+    grid-template-columns: 1fr;
     gap: 0.25rem;
+    overflow-y: auto;
     border: 1px solid var(--console-border);
     border-radius: 18px;
     background: rgba(8, 9, 13, 0.98);
@@ -290,7 +339,7 @@
     border-radius: 12px;
     padding: 0.7rem 0.75rem;
     color: #d4d4d8;
-    font-size: 0.8rem;
+    font-size: 0.875rem;
   }
 
   .console-mobile-nav-panel a[aria-current="page"] {
@@ -298,16 +347,21 @@
     color: #e4f5ff;
   }
 
-  .console-mobile-nav-panel span {
-    grid-column: 1 / -1;
+  .console-mobile-nav-panel .console-nav-group {
     border-top: 1px solid var(--console-border);
     margin-top: 0.25rem;
-    padding: 0.65rem 0.75rem 0.25rem;
-    color: var(--console-muted);
-    font-size: 0.65rem;
-    font-weight: 650;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    padding-top: 0.35rem;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .console-mobile-nav-panel .console-nav-group-primary {
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .console-mobile-nav-panel .console-nav-group h2 {
+    grid-column: 1 / -1;
   }
 
   .console-labs-link {
@@ -353,9 +407,10 @@
   }
 
   .surface-label {
-    color: rgba(244, 244, 245, 0.52);
+    color: rgba(216, 235, 246, 0.78);
     font-family: "Fira Code", "SFMono-Regular", Menlo, monospace;
-    @apply text-[0.72rem] font-semibold uppercase tracking-[0.18em];
+    font-size: var(--console-font-meta);
+    @apply font-semibold uppercase tracking-[0.14em];
   }
 
   .surface-muted {
@@ -365,6 +420,210 @@
   .surface-soft-card {
     @apply rounded-[24px] border border-white/8 bg-white/[0.03] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)];
   }
+
+  .admin-page {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .admin-page-header,
+  .admin-section {
+    border: 1px solid var(--console-border);
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(10, 24, 42, 0.82), rgba(5, 13, 24, 0.84));
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+  }
+
+  .admin-page-header {
+    display: flex;
+    gap: 1.25rem;
+    align-items: end;
+    justify-content: space-between;
+    padding: 1.4rem;
+  }
+
+  .admin-page-header h1 {
+    margin-top: 0.45rem;
+    color: var(--console-text);
+    font-size: clamp(1.75rem, 4vw, 2.35rem);
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+
+  .admin-page-header > p:last-child,
+  .admin-page-header > div > p:last-child,
+  .admin-section-header p {
+    max-width: 52rem;
+    margin-top: 0.5rem;
+    color: var(--console-muted);
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .admin-section {
+    padding: 1.25rem;
+  }
+
+  .admin-section-header {
+    display: flex;
+    gap: 1rem;
+    align-items: start;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .admin-section-header h2 {
+    color: var(--console-text);
+    font-size: 1.125rem;
+    font-weight: 650;
+  }
+
+  .admin-section-header > span {
+    display: grid;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    place-items: center;
+    border: 1px solid var(--console-border);
+    border-radius: 999px;
+    color: var(--console-muted);
+    font-size: 0.8rem;
+  }
+
+  .admin-page-header-actions,
+  .admin-section-actions,
+  .admin-state-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  .admin-form-grid,
+  .admin-user-row {
+    display: grid;
+    gap: 0.9rem;
+    align-items: end;
+  }
+
+  .admin-form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .checkbox-label {
+    display: flex !important;
+    min-height: 44px;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 0.6rem !important;
+    color: var(--console-text);
+    font-size: 0.875rem;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 1.15rem;
+    min-height: 1.15rem;
+  }
+
+  .admin-form-grid-four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .admin-form-grid label,
+  .admin-user-row label {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+  }
+
+  .admin-form-actions {
+    grid-column: 1 / -1;
+  }
+
+  .admin-record-list {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .admin-user-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    background: rgba(255,255,255,.025);
+    padding: 1rem;
+  }
+
+  .admin-record-meta {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: rgba(216, 235, 246, 0.7);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-notice,
+  .admin-empty {
+    border: 1px solid var(--console-border);
+    border-radius: 14px;
+    padding: 0.9rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .admin-notice-success { border-color: rgba(67,220,173,.35); background: rgba(67,220,173,.08); color: #baf9e3; }
+  .admin-notice-warning { border-color: rgba(255,184,77,.42); background: rgba(255,184,77,.09); color: #ffe2ab; }
+  .admin-notice-error { border-color: rgba(255,92,103,.35); background: rgba(255,92,103,.08); color: #ffc5ca; }
+  .admin-empty { color: var(--console-muted); }
+
+  .admin-state {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--console-border);
+    border-left-width: 4px;
+    border-radius: 18px;
+    background: rgba(8, 20, 36, 0.78);
+    padding: 1rem 1.1rem;
+  }
+
+  .admin-state-copy { display: flex; min-width: 0; gap: 0.8rem; align-items: flex-start; }
+  .admin-state-copy strong { color: var(--console-text); font-size: 1rem; }
+  .admin-state-copy p { max-width: 62rem; margin-top: 0.25rem; color: var(--console-muted); font-size: 0.875rem; line-height: 1.6; }
+  .admin-state-indicator { width: 0.72rem; height: 0.72rem; margin-top: 0.34rem; flex: 0 0 auto; border-radius: 50%; background: var(--console-accent-strong); box-shadow: 0 0 0 5px rgba(99,189,255,.1); }
+  .admin-state-attention { border-left-color: var(--intelligence-warning); }
+  .admin-state-attention .admin-state-indicator { background: var(--intelligence-warning); box-shadow: 0 0 0 5px rgba(255,184,77,.1); }
+  .admin-state-error { border-left-color: var(--intelligence-danger); }
+  .admin-state-error .admin-state-indicator { background: var(--intelligence-danger); box-shadow: 0 0 0 5px rgba(255,92,103,.1); }
+  .admin-state-healthy, .admin-state-success { border-left-color: var(--intelligence-success); }
+  .admin-state-healthy .admin-state-indicator, .admin-state-success .admin-state-indicator { background: var(--intelligence-success); box-shadow: 0 0 0 5px rgba(67,220,173,.1); }
+  .admin-state-partial { border-left-color: var(--intelligence-warning); }
+  .admin-state-compact { padding: 0.8rem 1rem; }
+
+  .admin-action-list { display: grid; gap: 0.65rem; margin: 0; padding: 0; list-style: none; }
+  .admin-action { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.8rem; align-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: rgba(255,255,255,.025); padding: 0.85rem; }
+  .admin-action-marker { width: 0.3rem; height: 2.5rem; border-radius: 99px; background: var(--console-accent-strong); }
+  .admin-action-warning .admin-action-marker { background: var(--intelligence-warning); }
+  .admin-action-critical .admin-action-marker { background: var(--intelligence-danger); }
+  .admin-action-success .admin-action-marker { background: var(--intelligence-success); }
+  .admin-action-copy strong { color: var(--console-text); font-size: 0.9375rem; }
+  .admin-action-copy p { margin-top: 0.2rem; color: var(--console-muted); font-size: 0.8125rem; line-height: 1.55; }
+  .admin-action-link { display: inline-flex; min-height: 44px; align-items: center; border-radius: 12px; background: rgba(22,135,255,.16); padding: 0.55rem 0.8rem; color: #dff2ff; font-weight: 650; }
+
+  a.secondary-action {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--console-border-strong);
+    border-radius: 11px;
+    background: rgba(255,255,255,.035);
+    padding: 0.55rem 0.8rem;
+    color: var(--console-text);
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  a.secondary-action:hover { border-color: var(--console-accent); background: rgba(22,135,255,.1); }
 }
 
 @media (max-width: 720px) {
@@ -387,6 +646,35 @@
     display: block;
     margin-left: auto;
   }
+
+  .admin-form-grid-four,
+  .admin-form-grid,
+  .admin-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-page-header,
+  .admin-state,
+  .admin-action { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+
+  .admin-action-link,
+  .admin-state-actions > * { width: 100%; justify-content: center; }
+
+  .admin-user-row button {
+    width: 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  summary:focus-visible { outline: 3px solid Highlight; }
+
+  .admin-state-indicator,
+  .admin-action-marker { forced-color-adjust: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

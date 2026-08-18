@@ -1,0 +1,16 @@
+---
+const { eyebrow, title, description, titleId = undefined } = Astro.props as {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  titleId?: string;
+};
+---
+<header class="admin-page-header">
+  <div>
+    {eyebrow && <p class="surface-label">{eyebrow}</p>}
+    <h1 id={titleId}>{title}</h1>
+    {description && <p>{description}</p>}
+  </div>
+  {Astro.slots.has("actions") && <div class="admin-page-header-actions"><slot name="actions" /></div>}
+</header>

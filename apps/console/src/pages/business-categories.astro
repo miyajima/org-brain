@@ -1,6 +1,12 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+import { dashboardPageParams } from "../lib/dashboard-page";
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const copy = {
+  en: { title: "Business Categories", body: "Manage business-facing categories without changing the fixed eight-value measurement taxonomy.", slug: "Slug", label: "Label", description: "Description", active: "Active", create: "Create", save: "Save", saved: "Saved", error: "Category could not be saved", empty: "No business categories yet." },
+  ja: { title: "業務カテゴリ", body: "固定の8種類の計測分類は変えずに、業務向けカテゴリを管理します。", slug: "識別子", label: "表示名", description: "説明", active: "有効", create: "作成", save: "保存", saved: "保存しました", error: "カテゴリを保存できませんでした", empty: "業務カテゴリはまだありません。" },
+  zh: { title: "业务类别", body: "在不更改固定八项测量分类的情况下管理业务类别。", slug: "标识符", label: "显示名称", description: "说明", active: "启用", create: "创建", save: "保存", saved: "已保存", error: "无法保存类别", empty: "尚无业务类别。" }
+}[lang];
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
 let message = ""; let error = "";
@@ -9,23 +15,23 @@ if (Astro.request.method === "POST") {
   const id = String(form.get("id") ?? "");
   const body = { tenant_id: tenantId, slug: String(form.get("slug") ?? ""), label: String(form.get("label") ?? ""), description: String(form.get("description") ?? ""), is_active: form.get("is_active") === "on" };
   const response = await api(id ? `/api/v1/business-categories/${encodeURIComponent(id)}` : "/api/v1/business-categories", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json", "x-csrf-token": String(form.get("csrf_token") ?? "") }, body: JSON.stringify(body) });
-  if (response.ok) message = "Saved"; else error = "Category could not be saved";
+  if (response.ok) message = copy.saved; else error = copy.error;
 }
 const response = await api(`/api/v1/business-categories?tenant_id=${encodeURIComponent(tenantId)}&include_inactive=true`);
 const payload: any = await response.json().catch(() => null);
 const categories = payload?.data ?? [];
 ---
-<BaseLayout title="Business Categories">
-  <section class="space-y-5"><header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5"><p class="surface-label">{tenantId}</p><h1 class="mt-2 text-3xl font-semibold">Business Categories</h1><p class="surface-muted mt-2">Work type remains the fixed eight-value measurement taxonomy.</p></header>
-  {message && <p class="text-emerald-200">{message}</p>}{error && <p class="text-rose-200">{error}</p>}
-  <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3"><input type="hidden" name="csrf_token" id="category-csrf" /><label><span class="field-label">Slug</span><input name="slug" required /></label><label><span class="field-label">Label</span><input name="label" required /></label><label><span class="field-label">Description</span><input name="description" /></label><label><input type="checkbox" name="is_active" checked /> Active</label><div class="md:col-span-3"><button type="submit">Create</button></div></form>
+<BaseLayout title={copy.title} lang={lang}>
+  <section class="admin-page"><header class="admin-page-header"><p class="surface-label">{tenantId}</p><h1>{copy.title}</h1><p>{copy.body}</p></header>
+  {message && <p class="admin-notice admin-notice-success" role="status">{message}</p>}{error && <p class="admin-notice admin-notice-error" role="alert">{error}</p>}
+  <form method="post" class="admin-section admin-form-grid"><input type="hidden" name="csrf_token" id="category-csrf" /><label><span class="field-label">{copy.slug}</span><input name="slug" required /></label><label><span class="field-label">{copy.label}</span><input name="label" required /></label><label><span class="field-label">{copy.description}</span><input name="description" /></label><label class="checkbox-label"><input type="checkbox" name="is_active" checked /> {copy.active}</label><div class="admin-form-actions"><button type="submit">{copy.create}</button></div></form>
   <div class="grid gap-3">{categories.map((category: any) => <form method="post" class="grid gap-3 rounded-[18px] border border-white/8 bg-white/[0.035] p-4 md:grid-cols-[12rem_1fr_2fr_auto_auto] md:items-end">
     <input type="hidden" name="id" value={category.id} /><input type="hidden" name="csrf_token" class="category-csrf" />
-    <label><span class="field-label">Slug</span><input name="slug" value={category.slug} required /></label>
-    <label><span class="field-label">Label</span><input name="label" value={category.label} required /></label>
-    <label><span class="field-label">Description</span><input name="description" value={category.description ?? ""} /></label>
-    <label><input type="checkbox" name="is_active" checked={Boolean(category.is_active)} /> Active</label>
-    <button type="submit">Save</button>
-  </form>)}</div></section>
+    <label><span class="field-label">{copy.slug}</span><input name="slug" value={category.slug} required /></label>
+    <label><span class="field-label">{copy.label}</span><input name="label" value={category.label} required /></label>
+    <label><span class="field-label">{copy.description}</span><input name="description" value={category.description ?? ""} /></label>
+    <label class="checkbox-label"><input type="checkbox" name="is_active" checked={Boolean(category.is_active)} /> {copy.active}</label>
+    <button type="submit">{copy.save}</button>
+  </form>)}{categories.length === 0 && <p class="admin-empty" role="status">{copy.empty}</p>}</div></section>
 </BaseLayout>
 <script>document.querySelectorAll<HTMLInputElement>("#category-csrf, .category-csrf").forEach((input) => { input.value=sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>

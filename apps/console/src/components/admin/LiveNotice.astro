@@ -1,0 +1,4 @@
+---
+const { tone = "success", message } = Astro.props as { tone?: "success" | "warning" | "error"; message: string };
+---
+<p class:list={["admin-notice", `admin-notice-${tone}`]} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>{message}</p>

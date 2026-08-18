@@ -10,8 +10,9 @@ const taskResult = await fetchDashboardData(
   normalizeDashboardTasks,
   []
 );
+const title = { en: "Tasks · Org Brain", ja: "Task一覧 · Org Brain", zh: "任务 · Org Brain" }[taskView.lang];
 ---
-<BaseLayout title="Org Brain Task一覧" lang={taskView.lang}>
+<BaseLayout title={title} lang={taskView.lang}>
   <LegacyTaskDashboard
     tasks={taskResult.data}
     error={taskResult.error}

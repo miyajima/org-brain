@@ -163,3 +163,31 @@ Don't:
 - `apps/console/src/layouts/BaseLayout.astro` should carry the shell tokens and global component defaults.
 - Page-level views should layer on top of the same shell rather than inventing new visual languages.
 - The `memories` surface is the strongest expression of this system and should be used as the reference implementation.
+
+## 12. Administration UX Quality Contract
+
+Administration pages use the shared components in
+`apps/console/src/components/admin` for page headers, sections, state panels,
+action lists, and live notices. New administration surfaces must expose the
+operator's next action before analytical detail and must distinguish healthy,
+attention, empty, partial, error, loading, and success states.
+
+- Static administration copy is locale-keyed for `en`, `ja`, and `zh`.
+- Scope-bearing links preserve `tenant_id`, `project_id`, and `lang`.
+- User-facing labels replace raw roles and lifecycle codes; IDs, API paths, and
+  raw codes belong in a collapsed technical-details disclosure.
+- Body text is at least `14px`; compact metadata is at least `12px`. Body copy
+  uses a line height of at least `1.45` and normal text targets WCAG AA contrast.
+- Controls and actionable links expose a `44px` minimum target, visible focus,
+  an accessible name, and a useful keyboard order.
+- Status changes use `aria-live`; visual order must match heading and keyboard
+  order. Motion respects `prefers-reduced-motion`, and forced-colors mode keeps
+  focus and state boundaries visible.
+- Dense tables become stacked cards when columns cannot reflow. Page-level
+  horizontal scrolling is not an acceptable mobile fallback.
+
+The route contract is defined in `apps/console/e2e/route-audit-cases.ts`. It is
+the source for locale, reflow, Axe, keyboard-flow, typography, and screenshot
+coverage. The 3D knowledge map remains the standard view, while the search,
+selection, and decision-trace workflow must remain equivalent when WebGL is
+unavailable.

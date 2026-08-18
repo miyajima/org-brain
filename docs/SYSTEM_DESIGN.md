@@ -3,7 +3,7 @@ title: Org Brain System Design
 doc_type: system_design
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-16
+last_updated: 2026-08-18
 ---
 
 # Org Brain System Design
@@ -179,6 +179,31 @@ grouping and coverage calculation so hidden counts are not observable.
 - `/operations`: memory/decision debt, queue, audit, retrieval quality, token,
   retention, and SLO status.
 - `/client-installations`: 本人のCodex／Claude Code／Cursor hook導入一覧、one-time enrollment表示、導入単位の失効。
+
+### Administration UX internals
+
+The console keeps the public API, response contracts, and database schema
+unchanged. Presentation state is normalized internally with `AdminPageState`,
+operator actions with `AdminAction`, and route-quality coverage with
+`RouteAuditCase`. Shared page headers, sections, status panels, action lists,
+and live notices live under `apps/console/src/components/admin`; common locale
+copy and scope-preserving URL helpers live under `apps/console/src/lib`.
+
+The route audit matrix covers every administration route in English, Japanese,
+and Chinese. Chromium automation enforces WCAG A/AA Axe results, responsive
+reflow, keyboard completion for the five primary workflows, forced-colors and
+reduced-motion behavior, and the 12px metadata floor. Screenshot evidence is
+generated from the same mock state at desktop and mobile widths. The knowledge
+constellation additionally verifies both an actual WebGL canvas and the
+non-WebGL list/trace fallback.
+
+The constellation uses one combobox for graph filtering and keyboard node
+selection. Its six-result suggestion surface overlays the workspace instead of
+adding document height, closes after selection, and returns focus to the
+combobox. The four-stage decision path is part of the map workspace above the
+WebGL/fallback surface, so changing decision, reason, evidence, or artifact
+keeps the graph and trace inspector in view. Node selection remains synchronized
+with the URL, graph highlighting, active path stage, and localized live status.
 
 ## Current State
 - The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
