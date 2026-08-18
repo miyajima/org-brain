@@ -1,0 +1,219 @@
+---
+import AccessDrawer from "../components/decision/AccessDrawer.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { normalizeAgents, normalizeSkillAssets, scopedHref, type AgentSummary, type SkillAssetSummary } from "../lib/decision-console-ui";
+
+const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const behavior = decisionConsoleBehavior(mode);
+const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+if (!behavior.enabled) return Astro.redirect(scopedHref("/tasks", params), 307);
+const selectedAgentId = Astro.url.searchParams.get("agent_id")?.trim() ?? "";
+const agents = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/agents", apiParams, { limit: 100 }), Astro.url), normalizeAgents, [] as AgentSummary[]);
+const skills = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/skills", apiParams, { limit: 100, status: "published" }), Astro.url), normalizeSkillAssets, [] as SkillAssetSummary[]);
+const selectedSummary = agents.data.find((agent) => agent.id === selectedAgentId) ?? null;
+const details = selectedSummary
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/agents/${encodeURIComponent(selectedSummary.id)}`, apiParams), Astro.url),
+      (value) => value && typeof value === "object" ? value as Record<string, unknown> : {},
+      {} as Record<string, unknown>
+    )
+  : { data: {} as Record<string, unknown>, error: null as string | null };
+const access = selectedSummary
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/access-policies/agent/${encodeURIComponent(selectedSummary.id)}`, apiParams), Astro.url),
+      (value) => value && typeof value === "object" ? value as Record<string, unknown> : {},
+      {} as Record<string, unknown>
+    )
+  : { data: {} as Record<string, unknown>, error: null as string | null };
+const loadout = details.data.loadout && typeof details.data.loadout === "object" ? details.data.loadout as Record<string, unknown> : null;
+const loadoutId = typeof loadout?.id === "string" ? loadout.id : "";
+const loadoutAccess = loadoutId
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/access-policies/agent_loadout/${encodeURIComponent(loadoutId)}`, apiParams), Astro.url),
+      (value) => value && typeof value === "object" ? value as Record<string, unknown> : {},
+      {} as Record<string, unknown>
+    )
+  : { data: {} as Record<string, unknown>, error: null as string | null };
+const bindings = Array.isArray(details.data.bindings) ? details.data.bindings.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
+const bindingBySkill = new Map(bindings.map((binding) => [String(binding.skill_asset_id), binding]));
+const policy = access.data.policy && typeof access.data.policy === "object" ? access.data.policy as Record<string, unknown> : null;
+const loadoutPolicy = loadoutAccess.data.policy && typeof loadoutAccess.data.policy === "object" ? loadoutAccess.data.policy as Record<string, unknown> : null;
+const copy = {
+  en: { eyebrow: "Execution layer", title: "Agents", lead: "See each named Agent’s role, decision lineage, active Loadout, and the exact context it will receive.", inventory: "Agent inventory", create: "Create Agent", name: "Name", key: "Agent key", role: "Role", source: "Source decision", loadout: "Current Loadout", lastUse: "Last use", status: "Status", add: "Create", saving: "Saving…", loadoutEditor: "Loadout editor", loadoutName: "Loadout name", skill: "Skill", mode: "Mode", priority: "Priority", version: "Version", latest: "Latest published", pinned: "Pinned", saveLoadout: "Save Loadout", preview: "Effective context preview", previewTask: "Task to preview", previewRun: "Resolve context", injected: "Injected", onDemand: "On demand handles", omitted: "Omitted", empty: "No named Agents yet.", noSkills: "Publish a Skill before adding it to a Loadout.", error: "Agent operation failed" },
+  ja: { eyebrow: "Execution layer", title: "Agents", lead: "Named Agentごとに、役割、参照元の決定、現在のLoadout、最終的に渡るコンテキストを確認できます。", inventory: "Agent一覧", create: "Agentを作成", name: "名前", key: "Agent key", role: "役割", source: "参照元の決定", loadout: "現在のLoadout", lastUse: "最終利用", status: "状態", add: "作成", saving: "保存中…", loadoutEditor: "Loadout編集", loadoutName: "Loadout名", skill: "Skill", mode: "モード", priority: "優先度", version: "版", latest: "最新公開版", pinned: "固定版", saveLoadout: "Loadoutを保存", preview: "effective contextの事前確認", previewTask: "確認するタスク", previewRun: "コンテキストを解決", injected: "注入されるSkill", onDemand: "on_demand handle", omitted: "除外", empty: "Named Agentはまだありません。", noSkills: "Loadoutへ追加する前にSkillをPublishしてください。", error: "Agent操作に失敗しました" },
+  zh: { eyebrow: "Execution layer", title: "Agents", lead: "查看每个Named Agent的角色、决策来源、当前Loadout以及最终上下文。", inventory: "Agent列表", create: "创建Agent", name: "名称", key: "Agent key", role: "角色", source: "来源决策", loadout: "当前Loadout", lastUse: "最近使用", status: "状态", add: "创建", saving: "保存中…", loadoutEditor: "编辑Loadout", loadoutName: "Loadout名称", skill: "Skill", mode: "模式", priority: "优先级", version: "版本", latest: "最新发布版", pinned: "固定版", saveLoadout: "保存Loadout", preview: "预览effective context", previewTask: "预览任务", previewRun: "解析上下文", injected: "已注入", onDemand: "按需handle", omitted: "已排除", empty: "暂无Named Agent。", noSkills: "请先发布Skill，再添加到Loadout。", error: "Agent操作失败" }
+}[lang];
+const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
+---
+<BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
+  <section class="decision-assets-page" data-agents-page data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-agent-id={selectedSummary?.id ?? ""} data-loadout-id={loadoutId} data-copy={JSON.stringify(copy)}>
+    <header class="decision-page-header">
+      <div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div>
+      {selectedSummary && <AccessDrawer resourceType="agent" resourceId={selectedSummary.id} tenantId={tenantId} projectId={projectId} policy={policy} locale={lang} />}
+    </header>
+    {(agents.error || skills.error || details.error || access.error || loadoutAccess.error) && <div class="decision-alert" role="alert">{agents.error ?? skills.error ?? details.error ?? access.error ?? loadoutAccess.error}</div>}
+
+    <div class="decision-assets-layout">
+      <aside class="decision-asset-inventory">
+        <div class="decision-section-heading"><div><p class="decision-eyebrow">{copy.inventory}</p><h2>{agents.data.length}</h2></div></div>
+        <div class="decision-asset-list">
+          {agents.data.map((agent) => {
+            const next = new URLSearchParams(params); next.set("agent_id", agent.id);
+            return <a class:list={["decision-asset-card", selectedAgentId === agent.id && "is-selected"]} href={`/agents?${next}`}>
+              <div><span class:list={["decision-status-dot", `is-${agent.status}`]}></span><strong>{agent.name}</strong><small>{agent.status}</small></div>
+              <p>{agent.role}</p><footer><span>{agent.loadout_name ?? "—"} · {agent.binding_count}</span><time>{formatDate(agent.last_used_at)}</time></footer>
+            </a>;
+          })}
+          {agents.data.length === 0 && <p class="decision-empty">{copy.empty}</p>}
+        </div>
+        <details class="decision-create-panel" open={agents.data.length === 0}>
+          <summary>{copy.create}</summary>
+          <form data-agent-create-form>
+            <label>{copy.name}<input name="name" required maxlength="120" /></label>
+            <label>{copy.key}<input name="agent_key" required pattern="[a-z0-9][a-z0-9._-]{0,127}" placeholder="support-reviewer" /></label>
+            <label>{copy.role}<textarea name="role" required maxlength="500" rows="4"></textarea></label>
+            <label>{copy.source}<input name="source_decision_id" /></label>
+            <button type="submit">{copy.add}</button><p data-agent-create-status role="alert"></p>
+          </form>
+        </details>
+      </aside>
+
+      <main class="decision-asset-main">
+        {selectedSummary ? (
+          <>
+            <section class="agent-overview-card">
+              <div><span class:list={["decision-status-dot", `is-${selectedSummary.status}`]}></span><p class="decision-eyebrow">{selectedSummary.agent_key}</p><h2>{selectedSummary.name}</h2><p>{selectedSummary.role}</p></div>
+              <dl class="decision-asset-metadata">
+                <div><dt>{copy.loadout}</dt><dd>{String(loadout?.name ?? "—")}</dd></div>
+                <div><dt>{copy.source}</dt><dd>{selectedSummary.source_decision_id ? <a href={scopedHref(`/decisions/${encodeURIComponent(selectedSummary.source_decision_id)}`, params)}>{selectedSummary.source_decision_id}</a> : "—"}</dd></div>
+                <div><dt>{copy.lastUse}</dt><dd>{formatDate(selectedSummary.last_used_at)}</dd></div>
+                <div><dt>{copy.status}</dt><dd>{selectedSummary.status}</dd></div>
+              </dl>
+            </section>
+
+            <section class="agent-loadout-editor">
+              <div class="decision-section-heading">
+                <div><p class="decision-eyebrow">Policy + priority</p><h2>{copy.loadoutEditor}</h2></div>
+                {loadoutId && <AccessDrawer resourceType="agent_loadout" resourceId={loadoutId} tenantId={tenantId} projectId={projectId} policy={loadoutPolicy} locale={lang} />}
+              </div>
+              <form data-loadout-form>
+                <label>{copy.loadoutName}<input name="loadout_name" value={String(loadout?.name ?? "Default")} required /></label>
+                <div class="agent-binding-table" role="table" aria-label={copy.loadoutEditor}>
+                  <div role="row" class="agent-binding-head"><span role="columnheader">{copy.skill}</span><span role="columnheader">{copy.mode}</span><span role="columnheader">{copy.priority}</span><span role="columnheader">{copy.version}</span></div>
+                  {skills.data.map((skill) => {
+                    const binding = bindingBySkill.get(skill.id);
+                    return <div role="row" class="agent-binding-row" data-binding-row data-skill-id={skill.id} data-published-version={skill.published_version_id ?? ""}>
+                      <label role="cell" class="agent-binding-skill"><input type="checkbox" name="enabled" checked={Boolean(binding)} /><span><strong>{skill.name}</strong><small>{skill.description}</small></span></label>
+                      <select role="cell" name="usage_mode" aria-label={`${skill.name} ${copy.mode}`}><option value="always" selected={binding?.usage_mode === "always"}>always</option><option value="auto" selected={!binding || binding.usage_mode === "auto"}>auto</option><option value="on_demand" selected={binding?.usage_mode === "on_demand"}>on_demand</option></select>
+                      <input role="cell" name="priority" type="number" min="0" max="100" value={String(binding?.priority ?? 50)} aria-label={`${skill.name} ${copy.priority}`} />
+                      <select role="cell" name="version_policy" aria-label={`${skill.name} ${copy.version}`}><option value="latest_published" selected={!binding || binding.version_policy === "latest_published"}>{copy.latest}</option><option value="pinned" selected={binding?.version_policy === "pinned"}>{copy.pinned}</option></select>
+                    </div>;
+                  })}
+                </div>
+                {skills.data.length === 0 && <p class="decision-empty">{copy.noSkills}</p>}
+                <footer><p data-loadout-status role="alert"></p><button type="submit" disabled={!loadout}>{copy.saveLoadout}</button></footer>
+              </form>
+            </section>
+
+            <section class="agent-context-preview">
+              <div class="decision-section-heading"><div><p class="decision-eyebrow">ACL-first</p><h2>{copy.preview}</h2></div></div>
+              <form data-context-preview-form>
+                <label>{copy.previewTask}<textarea name="task_text" rows="4" maxlength="4000" required></textarea></label>
+                <label>Token budget<input name="max_tokens" type="number" min="256" max="16000" value="4000" /></label>
+                <footer><p data-preview-status role="alert"></p><button type="submit">{copy.previewRun}</button></footer>
+              </form>
+              <div class="agent-context-result" data-context-result hidden>
+                <section><h3>{copy.injected}</h3><div data-context-injected></div></section>
+                <section><h3>{copy.onDemand}</h3><div data-context-on-demand></div></section>
+                <section><h3>{copy.omitted}</h3><div data-context-omitted></div></section>
+              </div>
+            </section>
+          </>
+        ) : <div class="decision-empty">{copy.empty}</div>}
+      </main>
+    </div>
+  </section>
+  <script>
+    const root = document.querySelector<HTMLElement>("[data-agents-page]");
+    if (root) {
+      const copy = JSON.parse(root.dataset.copy || "{}");
+      root.querySelector<HTMLFormElement>("[data-agent-create-form]")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const values = new FormData(form);
+        const status = root.querySelector<HTMLElement>("[data-agent-create-status]");
+        try {
+          const response = await fetch("/api/v1/agents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, project_id: root.dataset.projectId || null, agent_key: values.get("agent_key"), name: values.get("name"), role: values.get("role"), source_decision_id: values.get("source_decision_id") || null, loadout_name: "Default" }) });
+          const payload = await response.json().catch(() => null) as {
+            data?: { agent?: { id?: string } };
+            error?: { message?: string };
+          } | null;
+          if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+          const agentId = payload?.data?.agent?.id;
+          if (!agentId) throw new Error("Agent response did not include an id");
+          location.assign(`/agents?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&agent_id=${encodeURIComponent(agentId)}`);
+        } catch (error) { if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`; }
+      });
+      root.querySelector<HTMLFormElement>("[data-loadout-form]")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const status = root.querySelector<HTMLElement>("[data-loadout-status]");
+        const bindings = [...form.querySelectorAll<HTMLElement>("[data-binding-row]")].flatMap((row) => {
+          if (!row.querySelector<HTMLInputElement>("[name=enabled]")?.checked) return [];
+          const versionPolicy = row.querySelector<HTMLInputElement>("[name=version_policy]")?.value || "latest_published";
+          return [{ skill_asset_id: row.dataset.skillId, usage_mode: row.querySelector<HTMLInputElement>("[name=usage_mode]")?.value, priority: Number(row.querySelector<HTMLInputElement>("[name=priority]")?.value || 50), version_policy: versionPolicy, pinned_version_id: versionPolicy === "pinned" ? row.dataset.publishedVersion : null }];
+        });
+        try {
+          const response = await fetch(`/api/v1/agents/${encodeURIComponent(root.dataset.agentId || "")}/loadouts/${encodeURIComponent(root.dataset.loadoutId || "")}?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, name: new FormData(form).get("loadout_name"), bindings }) });
+          const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+          if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+          if (status) status.textContent = copy.saveLoadout;
+        } catch (error) { if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`; }
+      });
+      root.querySelector<HTMLFormElement>("[data-context-preview-form]")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const values = new FormData(form);
+        const status = root.querySelector<HTMLElement>("[data-preview-status]");
+        try {
+          const response = await fetch(`/api/v1/agents/${encodeURIComponent(root.dataset.agentId || "")}/context-preview?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}${root.dataset.projectId ? `&project_id=${encodeURIComponent(root.dataset.projectId)}` : ""}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, task_text: values.get("task_text"), max_tokens: Number(values.get("max_tokens") || 4000), record_usage: false }) });
+          const payload = await response.json().catch(() => null) as {
+            data?: {
+              injected_skills?: Array<Record<string, unknown>>;
+              on_demand_skills?: Array<Record<string, unknown>>;
+              omitted?: Array<Record<string, unknown>>;
+              disabled?: boolean;
+              estimated_tokens?: number;
+            };
+            error?: { message?: string };
+          } | null;
+          if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+          const result = payload?.data;
+          if (!result) throw new Error("Context response was empty");
+          const render = (selector: string, entries: Array<Record<string, unknown>>, fields: string[]) => {
+            const target = root.querySelector<HTMLElement>(selector);
+            if (!target) return;
+            target.replaceChildren(...entries.map((entry) => {
+              const card = document.createElement("article");
+              const title = document.createElement("strong");
+              const detail = document.createElement("span");
+              title.textContent = String(entry.name || entry.skill_asset_id || entry.reason || "—");
+              detail.textContent = fields.map((field) => entry[field]).filter(Boolean).join(" · ");
+              card.appendChild(title);
+              card.appendChild(detail);
+              return card;
+            }));
+          };
+          render("[data-context-injected]", result.injected_skills || [], ["usage_mode", "estimated_tokens"]);
+          render("[data-context-on-demand]", result.on_demand_skills || [], ["handle"]);
+          render("[data-context-omitted]", result.omitted || [], ["reason"]);
+          const panel = root.querySelector<HTMLElement>("[data-context-result]");
+          if (panel) panel.hidden = false;
+          if (status) status.textContent = result.disabled ? "Loadout resolution is disabled" : `${result.estimated_tokens || 0} tokens`;
+        } catch (error) { if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`; }
+      });
+    }
+  </script>
+</BaseLayout>

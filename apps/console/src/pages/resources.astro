@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
+import AccessDrawer from "../components/decision/AccessDrawer.astro";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 
 type Resource = {
   id: string;
@@ -50,6 +52,8 @@ const decisionRef = params.get("decision_ref")?.trim() || "";
 const reviewEnabled = params.get("review") === "1";
 const requestedLocale = params.get("lang");
 const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale === "zh" ? requestedLocale : "en";
+const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const decisionConsoleEnabled = decisionConsoleBehavior(decisionConsoleMode).enabled;
 const copy = {
   en: { title: "Sources & artifacts", subtitle: "Start from a material to collect decisions and reasons, or start from a decision to inspect its outputs.", search: "Search material", empty: "Enter words from a material, URI, conclusion, or rationale.", decisions: "Related decisions and reasons", artifacts: "Decision artifacts", noResults: "No readable confirmed results.", open: "Open material", role: "Role", version: "Pinned version", back: "Back to the decision path", admin: "Administrator actions", localReference: "Local reference", browseManage: "Search and manage other materials", errorTitle: "Some resource information is unavailable" },
   ja: { title: "資料・成果物", subtitle: "資料から判断と理由を収集し、判断から実装物・出力物・検証結果を探索します。", search: "資料を検索", empty: "資料、URI、結論、理由に含まれる語を入力してください。", decisions: "関連する判断と理由", artifacts: "判断の成果物", noResults: "閲覧可能なConfirmed結果はありません。", open: "資料を開く", role: "役割", version: "固定版", back: "判断の道筋に戻る", admin: "管理者向け操作", localReference: "ローカル参照", browseManage: "ほかの資料を検索・管理", errorTitle: "一部の資料情報を取得できません" },
@@ -75,13 +79,16 @@ const selectedId = selected || resources[0]?.id || "";
 const decisionsPayload = selectedId
   ? await fetchApi<ResourceDecisions>(`/api/v1/resources/${encodeURIComponent(selectedId)}/decisions?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
   : null;
+const accessPayload = decisionConsoleEnabled && selectedId
+  ? await fetchApi<{ policy: Record<string, unknown>; utilizing_agents: Array<Record<string, unknown>> }>(`/api/v1/access-policies/knowledge_resource/${encodeURIComponent(selectedId)}?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
+  : null;
 const artifactsPayload = decisionRef
   ? await fetchApi<DecisionResources>(`/api/v1/decisions/${encodeURIComponent(decisionRef)}/resources?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
   : null;
 const proposalsPayload = reviewEnabled
   ? await fetchApi<ProposalQueue>(`/api/v1/decision-resource-links/review-queue?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}`)
   : null;
-const errors = [searchPayload, decisionsPayload, artifactsPayload, proposalsPayload]
+const errors = [searchPayload, decisionsPayload, artifactsPayload, proposalsPayload, accessPayload]
   .filter((item): item is { ok: false; error?: { message?: string } } => Boolean(item && !item.ok))
   .map((item) => item.error?.message ?? "Request failed");
 
@@ -214,7 +221,10 @@ function isHttpUri(value: string): boolean {
           <section class="card">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div><p class="surface-label">{copy.decisions}</p><h2 class="mt-2 text-2xl font-semibold text-white">{decisionsPayload.data.resource.title}</h2></div>
-              <a class="button-link" href={decisionsPayload.data.resource.canonical_uri} target="_blank" rel="noreferrer">{copy.open}</a>
+              <div class="flex flex-wrap gap-2">
+                {accessPayload?.ok && <AccessDrawer resourceType="knowledge_resource" resourceId={selectedId} tenantId={tenantId} projectId={projectId || null} policy={accessPayload.data.policy} utilizingAgents={accessPayload.data.utilizing_agents} locale={locale} />}
+                <a class="button-link" href={decisionsPayload.data.resource.canonical_uri} target="_blank" rel="noreferrer">{copy.open}</a>
+              </div>
             </div>
             <div class="mt-5 space-y-4">
               {decisionsPayload.data.decisions.length === 0 ? <p class="text-sm text-zinc-400">{copy.noResults}</p> : decisionsPayload.data.decisions.map((decision) => (

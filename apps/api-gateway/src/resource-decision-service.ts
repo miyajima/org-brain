@@ -14,6 +14,7 @@ import {
 import { assertConnectorFetchUri, chunkKnowledgeResourceText, normalizeKnowledgeResourceUri } from "@org-brain/core";
 import { buildKnowledgeFtsQuery, HttpError, ulid } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
+import { ensureAccessPolicy } from "./access-policy-service";
 import { stableResultReadable } from "./memory-service";
 import type { Env } from "./types";
 
@@ -22,6 +23,7 @@ type PrincipalOptions = {
   projectId?: string | null;
   resourceVersionId?: string | null;
   includeRelated?: boolean;
+  accessMode?: "legacy" | "defer";
 };
 
 function assertConnectorAuthorized(
@@ -100,6 +102,27 @@ type LinkRow = {
   reviewed_by_principal: string | null;
   created_at: number;
   confidence?: number;
+};
+
+type DecisionTraceReadRow = LinkRow & {
+  resource_tenant_id: string;
+  resource_project_id: string | null;
+  resource_kind: KnowledgeResource["resource_kind"];
+  canonical_uri: string;
+  resource_title: string;
+  source_system: string;
+  media_type: string;
+  visibility: KnowledgeResource["visibility"];
+  permissions_json: string | null;
+  current_version_id: string | null;
+  lifecycle_state: KnowledgeResource["lifecycle_state"];
+  resource_created_at: number;
+  resource_updated_at: number;
+  version_id: string | null;
+  version_source_version: string | null;
+  version_content_hash: string | null;
+  version_captured_at: number | null;
+  version_extraction_state: KnowledgeResourceExtractionState | null;
 };
 
 async function createStaleReviewProposals(
@@ -340,6 +363,20 @@ export async function upsertKnowledgeResource(env: Env, rawBody: unknown, actorP
       ).bind(input.connector_id, input.fetch_enabled ? 1 : 0, Date.now(), tenantId, existing.id, normalizedUri, input.connector_id).run();
       if (!update.meta.changes) throw new HttpError(409, "resource_connector_conflict", "URI is already bound to another connector");
     }
+    await ensureAccessPolicy(env, {
+      tenantId,
+      resourceType: "knowledge_resource",
+      resourceId: existing.id,
+      scope: existing.visibility === "tenant" ? "tenant" : existing.visibility === "project" ? "project" : "restricted",
+      ownerPrincipal: actorPrincipal,
+      projectId: existing.project_id,
+      restrictedSubjects: parseArray(existing.permissions_json).map((subjectId) => ({
+        subject_type: "principal" as const,
+        subject_id: subjectId
+      })),
+      storageLocation: "external",
+      actorPrincipal
+    });
     return { created: false, resource: toResource(existing) };
   }
 
@@ -371,6 +408,20 @@ export async function upsertKnowledgeResource(env: Env, rawBody: unknown, actorP
       input.connector_id ?? null, input.fetch_enabled ? 1 : 0, now, now
     )
   ]);
+  await ensureAccessPolicy(env, {
+    tenantId,
+    resourceType: "knowledge_resource",
+    resourceId,
+    scope: input.visibility === "tenant" ? "tenant" : input.visibility === "project" ? "project" : "restricted",
+    ownerPrincipal: actorPrincipal,
+    projectId: input.project_id,
+    restrictedSubjects: permissions.map((subjectId) => ({
+      subject_type: "principal" as const,
+      subject_id: subjectId
+    })),
+    storageLocation: "external",
+    actorPrincipal
+  });
   return {
     created: true,
     resource: {
@@ -1000,10 +1051,105 @@ export async function getDecisionResourceTrace(
   const actor = principal(options);
   if (!actor) throw new HttpError(401, "unauthorized", "Principal is required");
   const ref = decisionRefSchema.parse(rawRef);
-  const decision = await readableDecision(env, tenantId, ref, actor, options.projectId ?? null);
-  if (!decision) throw new HttpError(404, "decision_not_found", "Decision not found");
+  if (options.accessMode === "defer") {
+    const exists = ref.source_type === "decision_memory"
+      ? await env.OPEN_BRAIN_DB.prepare(
+        `SELECT 1 AS found FROM decision_memories WHERE tenant_id = ? AND id = ?`
+      ).bind(tenantId, ref.source_id).first<{ found: number }>()
+      : await env.OPEN_BRAIN_DB.prepare(
+        `SELECT 1 AS found FROM decision_rationales WHERE tenant_id = ? AND id = ?`
+      ).bind(tenantId, ref.source_id).first<{ found: number }>();
+    if (!exists) throw new HttpError(404, "decision_not_found", "Decision not found");
+
+    // The Decision Console applies the unified policy in one bulk pass. Fetch the
+    // bounded resource projection here so remote D1 latency does not grow with
+    // every node in the trace.
+    const rows = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT a.id AS assertion_id, a.subject_type AS source_type, a.subject_ref AS source_id,
+              a.object_ref AS resource_id, a.predicate AS role, e.resource_version_id,
+              e.locator_json, e.excerpt_digest, e.note, a.confirmation_state,
+              a.valid_from, a.valid_until, a.actor_principal, a.reviewed_by_principal,
+              a.created_at, a.confidence,
+              r.tenant_id AS resource_tenant_id, r.project_id AS resource_project_id,
+              r.resource_kind, r.canonical_uri, r.title AS resource_title,
+              r.source_system, r.media_type, r.visibility, r.permissions_json,
+              r.current_version_id, r.lifecycle_state,
+              r.created_at AS resource_created_at, r.updated_at AS resource_updated_at,
+              v.id AS version_id, v.source_version AS version_source_version,
+              v.content_hash AS version_content_hash, v.captured_at AS version_captured_at,
+              v.extraction_state AS version_extraction_state
+       FROM knowledge_assertions a
+       JOIN knowledge_resources r
+         ON r.tenant_id = a.tenant_id AND r.id = a.object_ref
+       LEFT JOIN knowledge_assertion_evidence e
+         ON e.tenant_id = a.tenant_id AND e.assertion_id = a.id
+        AND e.id = (
+          SELECT evidence.id FROM knowledge_assertion_evidence evidence
+          WHERE evidence.tenant_id = a.tenant_id AND evidence.assertion_id = a.id
+          ORDER BY evidence.created_at, evidence.id LIMIT 1
+        )
+       LEFT JOIN knowledge_resource_versions v
+         ON v.tenant_id = r.tenant_id AND v.resource_id = r.id
+        AND v.id = COALESCE(e.resource_version_id, r.current_version_id)
+       WHERE a.tenant_id = ? AND a.assertion_type = 'relation'
+         AND a.subject_type = ? AND a.subject_ref = ?
+         AND a.object_type = 'knowledge_resource' AND a.confirmation_state = 'confirmed'
+         AND a.valid_until IS NULL AND r.lifecycle_state <> 'retired'
+         AND a.predicate IN (
+           'conclusion_source', 'rationale_source', 'contradiction', 'input',
+           'implementation_artifact', 'output_artifact', 'verification_artifact'
+         )
+       ORDER BY a.created_at, a.id LIMIT ?`
+    ).bind(tenantId, ref.source_type, ref.source_id, MEMORY_MAP_TRACE_RESOURCE_LIMIT * 5 + 1)
+      .all<DecisionTraceReadRow>();
+    const visible = rows.results.slice(0, MEMORY_MAP_TRACE_RESOURCE_LIMIT * 5).map((row) => {
+      const resource = toResource({
+        id: row.resource_id,
+        tenant_id: row.resource_tenant_id,
+        project_id: row.resource_project_id,
+        resource_kind: row.resource_kind,
+        canonical_uri: row.canonical_uri,
+        title: row.resource_title,
+        source_system: row.source_system,
+        media_type: row.media_type,
+        visibility: row.visibility,
+        permissions_json: row.permissions_json,
+        current_version_id: row.current_version_id,
+        lifecycle_state: row.lifecycle_state,
+        created_at: row.resource_created_at,
+        updated_at: row.resource_updated_at
+      });
+      return {
+        link: toLink(row),
+        resource,
+        version: row.version_id ? {
+          id: row.version_id,
+          source_version: row.version_source_version,
+          content_hash: row.version_content_hash ?? "",
+          captured_at: row.version_captured_at ?? 0,
+          extraction_state: row.version_extraction_state ?? "pending",
+          pinned: row.resource_version_id !== null
+        } : null,
+        freshness: resource.lifecycle_state,
+        availability: "readable" as const
+      };
+    });
+    return {
+      sources: visible.filter((item) => [
+        "conclusion_source", "rationale_source", "contradiction", "input"
+      ].includes(item.link.role)),
+      artifacts: visible.filter((item) => [
+        "implementation_artifact", "output_artifact", "verification_artifact"
+      ].includes(item.link.role)),
+      truncated: rows.results.length > MEMORY_MAP_TRACE_RESOURCE_LIMIT * 5
+    };
+  } else {
+    const decision = await readableDecision(env, tenantId, ref, actor, options.projectId ?? null);
+    if (!decision) throw new HttpError(404, "decision_not_found", "Decision not found");
+  }
 
   const links = await listConfirmedLinks(env, tenantId, "decision", ref.source_id, ref.source_type);
+  const traceLimit = MEMORY_MAP_TRACE_RESOURCE_LIMIT;
   const visible: MemoryMapTraceResource[] = [];
   const seenAssertions = new Set<string>();
   for (const row of links) {
@@ -1020,7 +1166,7 @@ export async function getDecisionResourceTrace(
     seenAssertions.add(row.assertion_id);
 
     const resource = await getResourceRow(env, tenantId, row.resource_id);
-    const [readableResource] = await filterReadableResources(env, tenantId, [resource], options);
+    const readableResource = (await filterReadableResources(env, tenantId, [resource], options))[0];
     if (!readableResource || readableResource.lifecycle_state === "retired") continue;
     const resourceVersionId = row.resource_version_id ?? readableResource.current_version_id;
     const version = resourceVersionId
@@ -1051,7 +1197,7 @@ export async function getDecisionResourceTrace(
       freshness: readableResource.lifecycle_state,
       availability: "readable"
     });
-    if (visible.length >= MEMORY_MAP_TRACE_RESOURCE_LIMIT) break;
+    if (visible.length >= traceLimit) break;
   }
 
   const sources = visible.filter((item) => [
@@ -1063,7 +1209,7 @@ export async function getDecisionResourceTrace(
   return {
     sources,
     artifacts,
-    truncated: links.length > MEMORY_MAP_TRACE_RESOURCE_LIMIT
+    truncated: links.length > traceLimit
   };
 }
 

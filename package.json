@@ -37,6 +37,7 @@
     "sync:agents-memory": "node ./scripts/sync-agents-memory.mjs",
     "sync:openclaw-memory": "node ./scripts/sync-openclaw-memory.mjs",
     "docs:seed": "node ./scripts/seed-knowledge-docs.mjs",
+    "docs:validate": "node --test ./scripts/decision-console-docs.test.mjs",
     "memories:maintain": "node ./scripts/memory-maintenance.mjs",
     "memories:replay-codex": "node ./scripts/codex-session-hook-replay.mjs",
     "memories:build-learning-corpus": "node ./scripts/memory-learning-corpus.mjs",

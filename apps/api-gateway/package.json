@@ -7,8 +7,8 @@
   "scripts": {
     "build": "wrangler deploy --dry-run",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --exclude test/dashboard-performance.test.ts",
-    "test:performance": "vitest run test/dashboard-performance.test.ts"
+    "test": "vitest run --exclude test/dashboard-performance.test.ts --exclude test/decision-console-performance.test.ts",
+    "test:performance": "vitest run test/dashboard-performance.test.ts test/decision-console-performance.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",

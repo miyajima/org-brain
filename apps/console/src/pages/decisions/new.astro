@@ -1,0 +1,123 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../../lib/decision-console-mode";
+import { emptyDecisionTrace, normalizeDecisionTrace, scopedHref } from "../../lib/decision-console-ui";
+
+const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const behavior = decisionConsoleBehavior(mode);
+const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+if (!behavior.enabled) return Astro.redirect(scopedHref("/decisions?mode=create", params), 307);
+const editId = Astro.url.searchParams.get("edit")?.trim() ?? "";
+const editResult = editId
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/decisions/${encodeURIComponent(editId)}/trace`, apiParams, {
+        node_limit: 20,
+        edge_limit: 40,
+        include_inferred: "false"
+      }), Astro.url),
+      normalizeDecisionTrace,
+      emptyDecisionTrace()
+    )
+  : { data: emptyDecisionTrace(), error: null as string | null };
+const decision = editResult.data.decision;
+const copy = {
+  en: { eyebrow: "Decision record", create: "Record a decision", edit: "Edit decision", lead: "State the decision and its reason first. Evidence and artifacts can be connected without losing this context.", title: "Title", decision: "Decision", reason: "Reason", domain: "Domain", visibility: "Initial visibility", validUntil: "Valid until", sources: "Evidence URLs", sourceHelp: "One URL per line. Only sources you explicitly enter are attached.", save: "Save decision", saving: "Saving…", cancel: "Cancel", flow: ["Decision", "Reason", "Evidence", "Artifact"], error: "The decision could not be saved" },
+  ja: { eyebrow: "Decision record", create: "決定を記録", edit: "決定を編集", lead: "決定と理由を先に明確にします。文脈を失わずに根拠と成果物を後から接続できます。", title: "タイトル", decision: "決定", reason: "理由", domain: "領域", visibility: "初期共有範囲", validUntil: "有効期限", sources: "根拠URL", sourceHelp: "1行に1URL。明示的に入力した根拠だけを接続します。", save: "決定を保存", saving: "保存中…", cancel: "キャンセル", flow: ["決定", "理由", "根拠", "成果物"], error: "決定を保存できませんでした" },
+  zh: { eyebrow: "Decision record", create: "记录决策", edit: "编辑决策", lead: "先明确决策及其理由，再在不丢失上下文的情况下连接依据与成果。", title: "标题", decision: "决策", reason: "理由", domain: "领域", visibility: "初始可见范围", validUntil: "有效期至", sources: "依据URL", sourceHelp: "每行一个URL。仅连接明确输入的来源。", save: "保存决策", saving: "保存中…", cancel: "取消", flow: ["决策", "理由", "依据", "成果"], error: "无法保存决策" }
+}[lang];
+const value = (key: string, fallback = "") => typeof decision[key] === "string" ? String(decision[key]) : fallback;
+const validUntil = typeof decision.valid_until === "number" && decision.valid_until > 0
+  ? new Date(decision.valid_until).toISOString().slice(0, 10)
+  : "";
+const responseParams = new URLSearchParams(params);
+responseParams.delete("edit");
+const redirectQuery = responseParams.toString();
+---
+<BaseLayout title={`${editId ? copy.edit : copy.create} · Org Brain`} lang={lang} wide>
+  <section class="decision-editor-v2" data-decision-editor data-edit-id={editId} data-tenant-id={tenantId} data-redirect-query={redirectQuery}>
+    <header class="decision-page-header">
+      <div>
+        <p class="decision-eyebrow">{copy.eyebrow}</p>
+        <h1>{editId ? copy.edit : copy.create}</h1>
+        <p class="decision-page-lead">{copy.lead}</p>
+      </div>
+      <a class="decision-action decision-action-secondary" href={editId ? scopedHref(`/decisions/${encodeURIComponent(editId)}`, params) : scopedHref("/", params)}>{copy.cancel}</a>
+    </header>
+    {editResult.error && <div class="decision-alert" role="alert">{editResult.error}</div>}
+    <div class="decision-editor-layout">
+      <form class="decision-editor-form" data-decision-editor-form>
+        <div class="decision-form-grid">
+          <label class="decision-field-wide">{copy.title}<input name="title" required maxlength="240" value={value("title")} /></label>
+          <label class="decision-field-wide">{copy.decision}<textarea name="decision" required maxlength="1000" rows="5">{value("decision")}</textarea></label>
+          <label class="decision-field-wide">{copy.reason}<textarea name="rationale" required maxlength="2000" rows="7">{value("rationale")}</textarea></label>
+          <label>{copy.domain}<select name="domain">
+            {["engineering", "sales", "cs", "ops", "finance", "general"].map((domain) => <option value={domain} selected={value("domain", "general") === domain}>{domain}</option>)}
+          </select></label>
+          <label>{copy.visibility}<select name="visibility">
+            {["tenant", "project", "restricted"].map((visibility) => <option value={visibility} selected={value("visibility", projectId ? "project" : "tenant") === visibility}>{visibility}</option>)}
+          </select></label>
+          <label>{copy.validUntil}<input name="valid_until" type="date" value={validUntil} /></label>
+          <label class="decision-field-wide">{copy.sources}<textarea name="sources" rows="4" placeholder="https://…"></textarea><small>{copy.sourceHelp}</small></label>
+        </div>
+        <input type="hidden" name="project_id" value={projectId ?? ""} />
+        <footer>
+          <p data-editor-status role="alert"></p>
+          <button type="submit" data-editor-submit>{copy.save}</button>
+        </footer>
+      </form>
+      <aside class="decision-editor-flow" aria-label={copy.eyebrow}>
+        {copy.flow.map((stage, index) => (
+          <div class="decision-editor-flow-step">
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <strong>{stage}</strong>
+            {index < copy.flow.length - 1 && <i aria-hidden="true"></i>}
+          </div>
+        ))}
+      </aside>
+    </div>
+  </section>
+  <script is:inline define:vars={{ copy }}>
+    const root = document.querySelector<HTMLElement>("[data-decision-editor]");
+    const form = root?.querySelector<HTMLFormElement>("[data-decision-editor-form]");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!root || !form) return;
+      const data = new FormData(form);
+      const editId = root.dataset.editId || "";
+      const sources = String(data.get("sources") || "").split("\n").map((url) => url.trim()).filter(Boolean).map((url) => ({ type: "official_doc", url }));
+      const validUntil = String(data.get("valid_until") || "");
+      const payload = {
+        tenant_id: root.dataset.tenantId,
+        project_id: data.get("project_id") || null,
+        title: data.get("title"),
+        decision: data.get("decision"),
+        rationale: data.get("rationale"),
+        domain: data.get("domain"),
+        visibility: data.get("visibility"),
+        ...(validUntil ? { valid_until: new Date(`${validUntil}T23:59:59+09:00`).getTime() } : {}),
+        ...(sources.length ? { source_refs: sources } : {}),
+        ...(!editId ? { confirmation_state: "draft", status: "active" } : {})
+      };
+      const submit = root.querySelector<HTMLButtonElement>("[data-editor-submit]");
+      const status = root.querySelector<HTMLElement>("[data-editor-status]");
+      if (submit) { submit.disabled = true; submit.textContent = copy.saving; }
+      if (status) status.textContent = "";
+      try {
+        const endpoint = editId
+          ? `/api/v1/decision-memories/${encodeURIComponent(editId)}/revise?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`
+          : "/api/v1/decision-memories";
+        const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error?.message || `HTTP ${response.status}`);
+        const id = editId || result?.data?.decisionMemory?.id;
+        if (!id) throw new Error("Decision id was not returned");
+        location.assign(`/decisions/${encodeURIComponent(id)}${root.dataset.redirectQuery ? `?${root.dataset.redirectQuery}` : ""}`);
+      } catch (error) {
+        if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`;
+      } finally {
+        if (submit) { submit.disabled = false; submit.textContent = copy.save; }
+      }
+    });
+  </script>
+</BaseLayout>

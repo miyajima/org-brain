@@ -32,5 +32,6 @@ export const primaryFlowPaths = [
 ] as const;
 
 export function auditUrl(path: string, locale: "en" | "ja" | "zh" = "ja") {
-  return `${path}?tenant_id=default&project_id=org-brain&lang=${locale}`;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}tenant_id=default&project_id=org-brain&lang=${locale}`;
 }

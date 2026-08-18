@@ -1,8 +1,11 @@
 ---
 import NervousSystem from "../components/intelligence/NervousSystem.astro";
 import LegacyTaskDashboard from "../components/LegacyTaskDashboard.astro";
+import DecisionBriefing from "../components/decision/DecisionBriefing.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, dashboardTaskPageParams, fetchDashboardData, normalizeDashboardTasks, type DashboardTask } from "../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { emptyDecisionBriefing, normalizeDecisionBriefing } from "../lib/decision-console-ui";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { intelligencePageCopy } from "../lib/intelligence-locale";
 import { activityWindowParams, normalizeDashboardActivity, resolveActivityPeriod } from "../lib/nervous-system-ui";
@@ -12,6 +15,11 @@ const insightsUiMode = await resolveRequestInsightsUiMode(
   processInsightsUiModeFallback()
 );
 const insightsBehavior = insightsUiBehavior(insightsUiMode);
+const decisionMode = await resolveRequestDecisionConsoleMode(
+  Astro.locals,
+  processDecisionConsoleModeFallback()
+);
+const decisionBehavior = decisionConsoleBehavior(decisionMode);
 const cookieHeader = Astro.request.headers.get("cookie");
 const { params, apiParams, lang } = dashboardPageParams(Astro.url, cookieHeader);
 const taskView = dashboardTaskPageParams(Astro.url, cookieHeader);
@@ -20,7 +28,14 @@ const intelligenceCopy = intelligencePageCopy(lang);
 let activityResult = { data: normalizeDashboardActivity({}), error: null as string | null };
 let refreshUrl = "";
 let taskResult = { data: [] as DashboardTask[], error: null as string | null };
-if (insightsBehavior.renderInsightsHome) {
+let briefingResult = { data: emptyDecisionBriefing(), error: null as string | null };
+if (decisionBehavior.renderDecisionHome) {
+  briefingResult = await fetchDashboardData(
+    new URL(dashboardApiPath("/api/v1/decision-briefing", apiParams, { limit: 40 }), Astro.url),
+    normalizeDecisionBriefing,
+    emptyDecisionBriefing()
+  );
+} else if (insightsBehavior.renderInsightsHome) {
   const activityApiParams = activityWindowParams(apiParams, activityPeriod);
   const initialUrl = `/api/v1/dashboard/activity?${activityApiParams.toString()}`;
   activityResult = await fetchDashboardData(
@@ -39,8 +54,10 @@ if (insightsBehavior.renderInsightsHome) {
   );
 }
 ---
-<BaseLayout title={insightsBehavior.renderInsightsHome ? intelligenceCopy.routes.nervousTitle : "Org Brain Dashboard"} lang={lang} wide={insightsBehavior.renderInsightsHome}>
-  {insightsBehavior.renderInsightsHome ? (
+<BaseLayout title={decisionBehavior.renderDecisionHome ? "Decision Briefing · Org Brain" : insightsBehavior.renderInsightsHome ? intelligenceCopy.routes.nervousTitle : "Org Brain Dashboard"} lang={lang} wide={decisionBehavior.renderDecisionHome || insightsBehavior.renderInsightsHome}>
+  {decisionBehavior.renderDecisionHome ? (
+    <DecisionBriefing data={briefingResult.data} error={briefingResult.error} params={params} locale={lang} beta={decisionBehavior.showBetaLabel} />
+  ) : insightsBehavior.renderInsightsHome ? (
     <>
       {activityResult.error && (
         <div class="intelligence-route-alert" role="alert">

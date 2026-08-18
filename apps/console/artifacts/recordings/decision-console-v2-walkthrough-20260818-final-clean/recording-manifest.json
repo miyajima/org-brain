@@ -1,0 +1,15 @@
+{
+  "title": "Decision-first Console v2 walkthrough",
+  "step_count": 37,
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "subtitle_mode": "burned-in-overlay",
+  "external_vtt": false,
+  "recordingPath": "artifacts/recordings/decision-console-v2-walkthrough-20260818-final-clean/recording.webm",
+  "mp4Path": "artifacts/recordings/decision-console-v2-walkthrough-20260818-final-clean/decision-console-v2-walkthrough-ja.mp4",
+  "playerPath": "artifacts/recordings/decision-console-v2-walkthrough-20260818-final-clean/player.html",
+  "executionLogPath": "artifacts/recordings/decision-console-v2-walkthrough-20260818-final-clean/execution-logs.json",
+  "diagnosticsPath": "artifacts/recordings/decision-console-v2-walkthrough-20260818-final-clean/browser-diagnostics.json"
+}

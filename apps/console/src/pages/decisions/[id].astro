@@ -1,0 +1,36 @@
+---
+import DecisionTraceWorkspace from "../../components/decision/DecisionTraceWorkspace.astro";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../../lib/decision-console-mode";
+import { emptyDecisionTrace, normalizeDecisionTrace, scopedHref } from "../../lib/decision-console-ui";
+
+const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const behavior = decisionConsoleBehavior(mode);
+const decisionId = Astro.params.id?.trim() ?? "";
+const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+if (!behavior.enabled) {
+  return Astro.redirect(scopedHref(`/decisions?selected=${encodeURIComponent(decisionId)}`, params), 307);
+}
+if (!decisionId) return Astro.redirect(scopedHref("/", params), 307);
+const traceResult = await fetchDashboardData(
+  new URL(dashboardApiPath(`/api/v1/decisions/${encodeURIComponent(decisionId)}/trace`, apiParams, {
+    node_limit: 150,
+    edge_limit: 300,
+    include_inferred: "false"
+  }), Astro.url),
+  normalizeDecisionTrace,
+  emptyDecisionTrace()
+);
+const title = typeof traceResult.data.decision.title === "string" ? traceResult.data.decision.title : "Decision";
+---
+<BaseLayout title={`${title} · Org Brain`} lang={lang} wide>
+  <DecisionTraceWorkspace
+    trace={traceResult.data}
+    error={traceResult.error}
+    params={params}
+    locale={lang}
+    tenantId={tenantId}
+    projectId={projectId}
+  />
+</BaseLayout>

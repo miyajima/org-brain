@@ -1,0 +1,537 @@
+---
+import type { ConsoleLocale, DecisionTrace } from "../../lib/decision-console-ui";
+
+const {
+  trace,
+  decisionId,
+  tenantId,
+  projectId = null,
+  locale = "en"
+} = Astro.props as {
+  trace: DecisionTrace;
+  decisionId: string;
+  tenantId: string;
+  projectId?: string | null;
+  locale?: ConsoleLocale;
+};
+const copy = {
+  en: { title: "Decision Trace Map", inferred: "Show inferred relationships", explicit: "Saved and confirmed relationships are shown by default.", list: "2D relationship list", timeline: "Decision timeline", preview: "Map selection", mapInstructions: "Use the relationship list or timeline to select a node.", fitAll: "Fit all nodes", fitAllAria: "Fit the complete decision trace in view", legend: "Stage and relationship legend", mapLegend: "Stage and relationship legend", selectedNode: "Selected node", empty: "Select a decision to explore its trace.", fallback: "The accessible 2D view is active.", loading: "Updating map…", rendering: "Rendering decision trace…", error: "The map could not be updated.", truncated: "Display limit reached", nodes: "nodes", edges: "edges", details: "Technical details", status: "Status", connections: "Connections", incoming: "Incoming", outgoing: "Outgoing", connectedNodes: "Connected nodes", noConnections: "No connected nodes", savedRelation: "Saved", inferredRelation: "Suggested", openSource: "Open source", stageLabels: { decision: "Decision", reason: "Reason", evidence: "Evidence", artifact: "Artifact", skill: "Skill", agent: "Agent", result: "Result" } },
+  ja: { title: "決定の道筋マップ", inferred: "推論関係を表示", explicit: "既定では保存済み・確認済みの関係だけを表示します。", list: "2D関係リスト", timeline: "決定タイムライン", preview: "マップで選択中", mapInstructions: "関係リストまたはタイムラインからノードを選択できます。", fitAll: "全体を表示", fitAllAria: "決定の道筋全体を表示", legend: "ステージと関係の凡例", mapLegend: "ステージと関係の凡例", selectedNode: "選択中", empty: "決定を選ぶと、その流れを確認できます。", fallback: "アクセシブルな2D表示を利用しています。", loading: "マップを更新中…", rendering: "決定の道筋を描画中…", error: "マップを更新できませんでした。", truncated: "表示上限に達しました", nodes: "ノード", edges: "エッジ", details: "技術的な詳細", status: "状態", connections: "接続", incoming: "入力", outgoing: "出力", connectedNodes: "接続ノード", noConnections: "接続ノードはありません", savedRelation: "保存済み", inferredRelation: "推論", openSource: "元の情報を開く", stageLabels: { decision: "決定", reason: "理由", evidence: "根拠", artifact: "成果物", skill: "Skill", agent: "利用Agent", result: "結果" } },
+  zh: { title: "决策路径地图", inferred: "显示推断关系", explicit: "默认仅显示已保存并确认的关系。", list: "二维关系列表", timeline: "决策时间线", preview: "地图选择", mapInstructions: "请使用关系列表或时间线选择节点。", fitAll: "显示全部", fitAllAria: "显示完整决策路径", legend: "阶段与关系图例", mapLegend: "阶段与关系图例", selectedNode: "当前选择", empty: "选择一个决策以查看其追踪链。", fallback: "正在使用无障碍二维视图。", loading: "正在更新地图…", rendering: "正在绘制决策路径…", error: "无法更新地图。", truncated: "已达到显示上限", nodes: "节点", edges: "边", details: "技术详情", status: "状态", connections: "连接", incoming: "流入", outgoing: "流出", connectedNodes: "连接节点", noConnections: "没有连接节点", savedRelation: "已保存", inferredRelation: "推断", openSource: "打开来源", stageLabels: { decision: "决策", reason: "理由", evidence: "依据", artifact: "成果物", skill: "Skill", agent: "使用Agent", result: "结果" } }
+}[locale];
+const stageOrder = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"] as const;
+const stageLabel = (stage: string) => copy.stageLabels[stage as keyof typeof copy.stageLabels] ?? stage;
+const selected = trace.nodes.find((node) => node.stage === "decision") ?? trace.nodes[0] ?? null;
+const serialized = JSON.stringify({ nodes: trace.nodes, edges: trace.edges }).replace(/</gu, "\\u003c");
+const apiParams = new URLSearchParams({ tenant_id: tenantId, node_limit: "150", edge_limit: "300" });
+if (projectId) apiParams.set("project_id", projectId);
+const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
+---
+<section
+  class="decision-map-workspace"
+  data-decision-map
+  data-api-path={apiPath}
+  data-api-params={apiParams.toString()}
+  data-copy={JSON.stringify(copy)}
+>
+  <div class="decision-map-toolbar">
+    <div>
+      <label class="decision-inferred-toggle">
+        <input type="checkbox" data-inferred-toggle checked={trace.include_inferred} />
+        <span>{copy.inferred}</span>
+      </label>
+      <p>{copy.explicit}</p>
+    </div>
+    <div class="decision-map-toolbar-actions">
+      <button type="button" class="decision-map-fit" data-map-fit aria-controls="decision-map-canvas" aria-label={copy.fitAllAria}>{copy.fitAll}</button>
+      <div class="decision-map-counts" aria-live="polite" aria-atomic="true">
+      <span><strong data-node-count>{trace.nodes.length}</strong> {copy.nodes}</span>
+      <span><strong data-edge-count>{trace.edges.length}</strong> {copy.edges}</span>
+      </div>
+    </div>
+  </div>
+  <p class="decision-map-instructions sr-only" id="decision-map-instructions">{copy.mapInstructions}</p>
+  <div class="decision-map-status" data-map-status role="status" aria-live="polite" aria-atomic="true"></div>
+  <p class="sr-only" data-map-selection-status role="status" aria-live="polite" aria-atomic="true"></p>
+  {trace.truncated && <div class="decision-truncation-note">{copy.truncated}: +{trace.omitted_node_count} / +{trace.omitted_edge_count}</div>}
+
+  {trace.nodes.length > 0 ? (
+    <div class="decision-map-layout">
+      <div class="decision-map-canvas-wrap" data-map-glow="ambient-selection">
+        <div class="decision-map-canvas" id="decision-map-canvas" data-map-canvas role="img" aria-label={copy.title} aria-describedby="decision-map-instructions" aria-busy="true"></div>
+        <div class="decision-map-fallback" data-map-fallback hidden>{copy.fallback}</div>
+      </div>
+      <aside class="decision-map-preview" aria-live="polite">
+        <p class="decision-eyebrow">{copy.preview}</p>
+        <span class:list={["decision-stage-mark", selected && `is-${selected.stage}`]} data-map-preview-mark></span>
+        <span data-map-preview-stage>{selected ? stageLabel(selected.stage) : copy.empty}</span>
+        <h2 data-map-preview-label>{selected?.label}</h2>
+        <p data-map-preview-summary>{selected?.summary ?? "—"}</p>
+        <dl class="decision-map-preview-facts" data-map-preview-facts>
+          <div><dt>{copy.status}</dt><dd data-map-preview-status>{selected?.status ?? "—"}</dd></div>
+          <div><dt>{copy.connections}</dt><dd data-map-preview-connections-count>—</dd></div>
+          <div><dt>{copy.incoming}</dt><dd data-map-preview-incoming>—</dd></div>
+          <div><dt>{copy.outgoing}</dt><dd data-map-preview-outgoing>—</dd></div>
+        </dl>
+        <a class="decision-map-preview-source" data-map-preview-deep-link hidden href="#">{copy.openSource}</a>
+        <section class="decision-map-preview-connections" aria-labelledby="decision-map-preview-connections-title">
+          <h3 id="decision-map-preview-connections-title">{copy.connectedNodes}</h3>
+          <ul data-map-preview-connections-list></ul>
+        </section>
+        <details>
+          <summary>{copy.details}</summary>
+          <pre data-map-preview-details>{JSON.stringify(selected?.metadata ?? {}, null, 2)}</pre>
+        </details>
+      </aside>
+      <section class="decision-map-list" aria-labelledby="decision-map-list-title">
+        <h2 id="decision-map-list-title">{copy.list}</h2>
+        <div data-map-list>
+          {trace.nodes.map((node, index) => (
+            <button type="button" data-map-node={node.id} data-map-index={String(index)} aria-pressed={node.id === selected?.id ? "true" : "false"} aria-current={node.id === selected?.id ? "true" : undefined}>
+              <span class:list={["decision-stage-mark", `is-${node.stage}`]}></span>
+              <span><small>{stageLabel(node.stage)}</small><strong>{node.label}</strong></span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  ) : <div class="decision-empty">{copy.empty}</div>}
+
+  <section class="decision-map-timeline" aria-labelledby="decision-map-timeline-title">
+    <h2 id="decision-map-timeline-title">{copy.timeline}</h2>
+    <div data-map-timeline>
+      {stageOrder.map((stage, index) => (
+        <section>
+          <header><span>{String(index + 1).padStart(2, "0")}</span><strong>{stageLabel(stage)}</strong></header>
+          {trace.nodes.filter((node) => node.stage === stage).map((node) => (
+            <button type="button" data-map-node={node.id} aria-pressed={node.id === selected?.id ? "true" : "false"} aria-current={node.id === selected?.id ? "true" : undefined}>{node.label}</button>
+          ))}
+        </section>
+      ))}
+    </div>
+  </section>
+  <section class="decision-map-legend" aria-label={copy.mapLegend}>
+    <span class="decision-map-legend-title">{copy.mapLegend}</span>
+    {stageOrder.map((stage) => <span class="decision-map-legend-item"><i class:list={["decision-stage-mark", `is-${stage}`]}></i>{stageLabel(stage)}</span>)}
+    <span class="decision-map-legend-item"><i class="decision-map-legend-sample is-selected"></i>{copy.selectedNode}</span>
+    <span class="decision-map-legend-item"><i class="decision-map-legend-sample is-ambient"></i>{copy.savedRelation}</span>
+    <span class="decision-map-legend-item"><i class="decision-map-legend-sample is-inferred"></i>{copy.inferredRelation}</span>
+  </section>
+  <script is:inline type="application/json" data-map-data set:html={serialized}></script>
+</section>
+
+<script>
+  type MapNode = Record<string, unknown> & { id: string; stage: string; label: string; summary?: string | null; metadata?: Record<string, unknown> };
+  type MapEdge = Record<string, unknown> & { source: string | MapNode; target: string | MapNode; inferred?: boolean };
+  type GraphInstance = {
+    backgroundColor(value: string): GraphInstance;
+    nodeId(value: string): GraphInstance;
+    nodeLabel(fn: (node: MapNode) => string): GraphInstance;
+    nodeColor(fn: (node: MapNode) => string): GraphInstance;
+    nodeVal(fn: (node: MapNode) => number): GraphInstance;
+    nodeThreeObject(fn: (node: MapNode) => unknown): GraphInstance;
+    nodeThreeObjectExtend(value: boolean): GraphInstance;
+    linkColor(fn: (link: MapEdge) => string): GraphInstance;
+    linkWidth(fn: (link: MapEdge) => number): GraphInstance;
+    linkOpacity(value: number): GraphInstance;
+    onNodeClick(fn: (node: MapNode) => void): GraphInstance;
+    warmupTicks(value: number): GraphInstance;
+    cooldownTicks(value: number): GraphInstance;
+    graphData(value: { nodes: MapNode[]; links: MapEdge[] }): GraphInstance;
+    width(value: number): GraphInstance;
+    height(value: number): GraphInstance;
+    zoomToFit(durationMs?: number, padding?: number): GraphInstance;
+    cameraPosition(position: { x?: number; y?: number; z?: number }, lookAt?: { x?: number; y?: number; z?: number }, transitionMs?: number): GraphInstance;
+  };
+  const root = document.querySelector<HTMLElement>("[data-decision-map]");
+  if (root) {
+    const copy = JSON.parse(root.dataset.copy || "{}");
+    const stageLabel = (stage: string) => {
+      const labels = (copy.stageLabels || {}) as Record<string, string>;
+      return labels[stage] || stage;
+    };
+    const source = root.querySelector<HTMLScriptElement>("[data-map-data]");
+    let data = JSON.parse(source?.textContent || '{"nodes":[],"edges":[]}') as { nodes: MapNode[]; edges: MapEdge[] };
+    let graph: GraphInstance | null = null;
+    let threeModule: typeof import("three") | null = null;
+    const colors: Record<string, string> = { decision: "#63bdff", reason: "#a8d8ff", evidence: "#43dcad", artifact: "#ffd166", skill: "#c4a7ff", agent: "#ff9f7a", result: "#f6f9ff" };
+    const canvas = root.querySelector<HTMLElement>("[data-map-canvas]");
+    const fallback = root.querySelector<HTMLElement>("[data-map-fallback]");
+    const status = root.querySelector<HTMLElement>("[data-map-status]");
+    const selectionStatus = root.querySelector<HTMLElement>("[data-map-selection-status]");
+    const fitButton = root.querySelector<HTMLButtonElement>("[data-map-fit]");
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+    const glowColors: Record<string, string> = { ...colors };
+    let selectedId = root.querySelector<HTMLButtonElement>('[data-map-node][aria-pressed="true"]')?.dataset.mapNode || data.nodes[0]?.id || "";
+    let glowTexture: any = null;
+    let glowPhase = 0;
+    type GlowLayer = {
+      coreSize: number;
+      core: { scale: { set(x: number, y: number, z: number): void }; material: { color: { set(value: string): void }; opacity: number } };
+      halo: { scale: { set(x: number, y: number, z: number): void }; material: { color: { set(value: string): void }; opacity: number } };
+      outer: { scale: { set(x: number, y: number, z: number): void }; material: { color: { set(value: string): void }; opacity: number } };
+    };
+    const glowLayers = new Map<string, GlowLayer>();
+    const nodeColor = (node: MapNode) => glowColors[node.stage] || "#eef8ff";
+    const nodeValue = (node: MapNode) => node.id === selectedId ? 15 : node.stage === "decision" ? 11 : 5;
+    const endpointId = (value: string | MapNode) => typeof value === "string" ? value : value.id;
+    const relationLabel = (value: unknown) => String(value || "related")
+      .replace(/[_:]+/gu, " ")
+      .trim()
+      .split(/\s+/u)
+      .map((part) => stageLabel(part))
+      .join(" ");
+    const setMapBusy = (busy: boolean, message = "") => {
+      canvas?.setAttribute("aria-busy", String(busy));
+      if (message && status) status.textContent = message;
+    };
+    const fitGraph = (announce = true) => {
+      if (!graph) {
+        if (announce && status) status.textContent = copy.fallback;
+        return;
+      }
+      try {
+        graph.zoomToFit(reducedMotion.matches ? 0 : 450, 48);
+        if (announce && status) status.textContent = copy.fitAll;
+      } catch {
+        if (announce && status) status.textContent = copy.fallback;
+      }
+    };
+    const renderPreviewConnections = (id: string) => {
+      const list = root.querySelector<HTMLUListElement>("[data-map-preview-connections-list]");
+      const connectionsCount = root.querySelector<HTMLElement>("[data-map-preview-connections-count]");
+      const incomingCount = root.querySelector<HTMLElement>("[data-map-preview-incoming]");
+      const outgoingCount = root.querySelector<HTMLElement>("[data-map-preview-outgoing]");
+      if (!list) return;
+      const relatedEdges = data.edges.filter((edge) => endpointId(edge.source) === id || endpointId(edge.target) === id);
+      const incoming = relatedEdges.filter((edge) => endpointId(edge.target) === id).length;
+      const outgoing = relatedEdges.filter((edge) => endpointId(edge.source) === id).length;
+      if (connectionsCount) connectionsCount.textContent = String(relatedEdges.length);
+      if (incomingCount) incomingCount.textContent = String(incoming);
+      if (outgoingCount) outgoingCount.textContent = String(outgoing);
+      list.replaceChildren();
+      for (const edge of relatedEdges) {
+        const sourceId = endpointId(edge.source);
+        const targetId = endpointId(edge.target);
+        const neighborId = sourceId === id ? targetId : sourceId;
+        const neighbor = data.nodes.find((candidate) => candidate.id === neighborId);
+        if (!neighbor) continue;
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.mapNode = neighbor.id;
+        button.setAttribute("aria-label", `${neighbor.label} · ${relationLabel(edge.relation)}`);
+        const label = document.createElement("strong");
+        label.textContent = neighbor.label;
+        const meta = document.createElement("small");
+        meta.textContent = `${sourceId === id ? "→" : "←"} ${relationLabel(edge.relation)} · ${edge.inferred ? copy.inferredRelation : copy.savedRelation}`;
+        button.appendChild(label);
+        button.appendChild(meta);
+        button.setAttribute("aria-pressed", String(neighbor.id === selectedId));
+        button.setAttribute("aria-current", neighbor.id === selectedId ? "true" : "false");
+        button.addEventListener("click", (event) => selectNode(neighbor.id, { keyboard: event.detail === 0 }));
+        button.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            button.blur();
+          }
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      }
+      if (relatedEdges.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "decision-map-preview-connections-empty";
+        empty.textContent = "—";
+        list.appendChild(empty);
+      }
+    };
+
+    const createGlowNodeObject = (node: MapNode, THREE: typeof import("three")) => {
+      const coreSize = node.id === selectedId ? 3.25 : node.stage === "decision" ? 2.7 : 2.15;
+      const coreMaterial = new THREE.MeshBasicMaterial({
+        color: nodeColor(node),
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false
+      });
+      const core = new THREE.Mesh(new THREE.SphereGeometry(coreSize, 16, 16), coreMaterial);
+      core.renderOrder = 2;
+      const group = new THREE.Group();
+      if (!glowTexture) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128;
+        canvas.height = 128;
+        const context = canvas.getContext("2d");
+        if (context) {
+          const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+          gradient.addColorStop(0, "rgba(255,255,255,.95)");
+          gradient.addColorStop(.2, "rgba(255,255,255,.58)");
+          gradient.addColorStop(.52, "rgba(255,255,255,.16)");
+          gradient.addColorStop(1, "rgba(255,255,255,0)");
+          context.fillStyle = gradient;
+          context.fillRect(0, 0, 128, 128);
+          glowTexture = new THREE.CanvasTexture(canvas);
+        }
+      }
+      if (!glowTexture) {
+        group.add(core);
+        return group;
+      }
+      const haloMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: nodeColor(node),
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending
+      });
+      const outerMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: nodeColor(node),
+        transparent: true,
+        opacity: 0.08,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending
+      });
+      const halo = new THREE.Sprite(haloMaterial);
+      const outer = new THREE.Sprite(outerMaterial);
+      halo.scale.set(coreSize * 4.8, coreSize * 4.8, 1);
+      outer.scale.set(coreSize * 7.5, coreSize * 7.5, 1);
+      outer.renderOrder = 0;
+      halo.renderOrder = 1;
+      group.add(outer, halo, core);
+      glowLayers.set(node.id, {
+        core: { scale: core.scale, material: coreMaterial },
+        halo: { scale: halo.scale, material: haloMaterial },
+        outer: { scale: outer.scale, material: outerMaterial },
+        coreSize
+      });
+      return group;
+    };
+
+    const updateGlowAppearance = () => {
+      for (const node of data.nodes) {
+        const layers = glowLayers.get(node.id);
+        if (!layers) continue;
+        const selectedNode = node.id === selectedId;
+        const pulse = selectedNode ? 0.5 + glowPhase * 0.5 : 0.5;
+        const color = selectedNode ? "#ffffff" : nodeColor(node);
+        layers.core.material.color.set(color);
+        layers.halo.material.color.set(color);
+        layers.outer.material.color.set(color);
+        layers.core.material.opacity = selectedNode ? 1 : 0.9;
+        layers.halo.material.opacity = selectedNode ? 0.72 + pulse * 0.12 : 0.22;
+        layers.outer.material.opacity = selectedNode ? 0.25 + pulse * 0.08 : 0.07;
+        const coreScale = selectedNode ? 1.2 + pulse * 0.08 : 1;
+        layers.core.scale.set(coreScale, coreScale, coreScale);
+        layers.halo.scale.set(layers.coreSize * (selectedNode ? 7.2 + pulse * 0.5 : 4.8), layers.coreSize * (selectedNode ? 7.2 + pulse * 0.5 : 4.8), 1);
+        layers.outer.scale.set(layers.coreSize * (selectedNode ? 12 + pulse : 7.5), layers.coreSize * (selectedNode ? 12 + pulse : 7.5), 1);
+      }
+    };
+
+    const selectNode = (id: string, options: { keyboard?: boolean; announce?: boolean } = {}) => {
+      const node = data.nodes.find((item) => String(item.id) === id);
+      if (!node) return;
+      selectedId = id;
+      for (const button of root.querySelectorAll<HTMLButtonElement>("[data-map-node]")) {
+        const isSelected = button.dataset.mapNode === id;
+        button.setAttribute("aria-pressed", String(isSelected));
+        button.setAttribute("aria-current", String(isSelected));
+      }
+      const mark = root.querySelector<HTMLElement>("[data-map-preview-mark]");
+      if (mark) mark.className = `decision-stage-mark is-${node.stage}`;
+      const stage = root.querySelector<HTMLElement>("[data-map-preview-stage]");
+      const label = root.querySelector<HTMLElement>("[data-map-preview-label]");
+      const summary = root.querySelector<HTMLElement>("[data-map-preview-summary]");
+      const previewStatus = root.querySelector<HTMLElement>("[data-map-preview-status]");
+      const deepLink = root.querySelector<HTMLAnchorElement>("[data-map-preview-deep-link]");
+      const details = root.querySelector<HTMLElement>("[data-map-preview-details]");
+      if (stage) stage.textContent = stageLabel(node.stage);
+      if (label) label.textContent = node.label;
+      if (summary) summary.textContent = String(node.summary || "—");
+      if (previewStatus) previewStatus.textContent = String(node.status || "—");
+      if (deepLink) {
+        const href = typeof node.deep_link === "string" ? node.deep_link : "";
+        deepLink.hidden = !href;
+        if (href) deepLink.href = href;
+      }
+      if (details) details.textContent = JSON.stringify(node.metadata || {}, null, 2);
+      if (selectionStatus && options.announce !== false) selectionStatus.textContent = `${copy.selectedNode}: ${stageLabel(node.stage)} — ${node.label}`;
+      renderPreviewConnections(id);
+      const graphNode = data.nodes.find((item) => String(item.id) === id) as MapNode & { x?: number; y?: number; z?: number } | undefined;
+      if (graph && graphNode && Number.isFinite(graphNode.x) && Number.isFinite(graphNode.y) && Number.isFinite(graphNode.z)) {
+        const distance = 90;
+        const length = Math.hypot(graphNode.x || 0, graphNode.y || 0, graphNode.z || 0) || 1;
+        graph.cameraPosition(
+          { x: (graphNode.x || 0) + distance * (graphNode.x || 1) / length, y: (graphNode.y || 0) + distance * (graphNode.y || 1) / length, z: (graphNode.z || 0) + distance * (graphNode.z || 1) / length },
+          graphNode,
+          reducedMotion.matches ? 0 : 500
+        );
+      }
+      updateGlowAppearance();
+      graph?.nodeColor(nodeColor);
+      graph?.nodeVal(nodeValue);
+      if (options.keyboard) {
+        const selectedButton = [...root.querySelectorAll<HTMLButtonElement>("[data-map-node]")].find((button) => button.dataset.mapNode === id);
+        if (selectedButton && document.activeElement !== selectedButton) {
+          selectedButton.focus({ preventScroll: true });
+        }
+        selectedButton?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    };
+
+    const bindList = () => {
+      const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-map-node]")];
+      for (const button of buttons) {
+        button.addEventListener("click", () => selectNode(button.dataset.mapNode || ""));
+        button.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            button.blur();
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            selectNode(button.dataset.mapNode || "", { keyboard: true });
+            return;
+          }
+          if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const index = buttons.indexOf(button);
+          const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : event.key === "ArrowDown" ? Math.min(buttons.length - 1, index + 1) : Math.max(0, index - 1);
+          buttons[next]?.focus();
+        });
+      }
+    };
+
+    const renderLists = () => {
+      const list = root.querySelector<HTMLElement>("[data-map-list]");
+      const timeline = root.querySelector<HTMLElement>("[data-map-timeline]");
+      const makeButton = (node: MapNode, index?: number) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.mapNode = String(node.id);
+        if (index !== undefined) button.dataset.mapIndex = String(index);
+        const mark = document.createElement("span");
+        mark.className = `decision-stage-mark is-${node.stage}`;
+        const text = document.createElement("span");
+        const small = document.createElement("small");
+        const strong = document.createElement("strong");
+        small.textContent = stageLabel(node.stage);
+        strong.textContent = node.label;
+        const isSelected = node.id === selectedId;
+        button.setAttribute("aria-pressed", String(isSelected));
+        button.setAttribute("aria-current", String(isSelected));
+        text.appendChild(small);
+        text.appendChild(strong);
+        button.appendChild(mark);
+        button.appendChild(text);
+        return button;
+      };
+      if (list) list.replaceChildren(...data.nodes.map((node, index) => makeButton(node, index)));
+      if (timeline) {
+        const stages = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"];
+        timeline.replaceChildren(...stages.map((stage, index) => {
+          const section = document.createElement("section");
+          const header = document.createElement("header");
+          const number = document.createElement("span");
+          const label = document.createElement("strong");
+          number.textContent = String(index + 1).padStart(2, "0");
+          label.textContent = stageLabel(stage);
+          header.appendChild(number);
+          header.appendChild(label);
+          section.appendChild(header);
+          for (const node of data.nodes.filter((candidate) => candidate.stage === stage)) {
+            const button = makeButton(node);
+            button.replaceChildren(document.createTextNode(node.label));
+            section.appendChild(button);
+          }
+          return section;
+        }));
+      }
+      bindList();
+    };
+
+    const initializeGraph = async () => {
+      setMapBusy(true, copy.rendering);
+      if (!canvas || reducedMotion.matches || data.nodes.length === 0) {
+        if (fallback) fallback.hidden = false;
+        setMapBusy(false, copy.fallback);
+        return;
+      }
+      try {
+        const [module, THREE] = await Promise.all([import("3d-force-graph"), import("three")]);
+        const ForceGraph3D = module.default as unknown as new (element: HTMLElement) => GraphInstance;
+        threeModule = THREE;
+        graph = new ForceGraph3D(canvas)
+          .backgroundColor("rgba(0,0,0,0)")
+          .nodeId("id")
+          .nodeLabel((node: object) => String((node as MapNode).label || ""))
+          .nodeThreeObject((node: object) => createGlowNodeObject(node as MapNode, THREE))
+          .nodeThreeObjectExtend(false)
+          .nodeColor((node: object) => nodeColor(node as MapNode))
+          .nodeVal((node: object) => nodeValue(node as MapNode))
+          .linkColor((link: object) => (link as MapEdge).inferred ? "rgba(196,167,255,0.45)" : "rgba(99,189,255,0.42)")
+          .linkWidth((link: object) => (link as MapEdge).inferred ? 0.5 : 1.3)
+          .linkOpacity(0.72)
+          .onNodeClick((node: object) => selectNode(String((node as MapNode).id)))
+          .warmupTicks(40)
+          .cooldownTicks(90)
+          .graphData({ nodes: data.nodes, links: data.edges });
+        updateGlowAppearance();
+        graph.width(canvas.clientWidth).height(canvas.clientHeight);
+        new ResizeObserver(() => graph?.width(canvas.clientWidth).height(canvas.clientHeight)).observe(canvas);
+        window.setTimeout(() => fitGraph(false), reducedMotion.matches ? 0 : 80);
+        setMapBusy(false);
+        if (data.nodes.length > 0) {
+          window.setInterval(() => {
+            glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
+            updateGlowAppearance();
+          }, 90);
+        }
+      } catch {
+        if (fallback) fallback.hidden = false;
+        setMapBusy(false, copy.fallback);
+      }
+    };
+
+    const refresh = async (includeInferred: boolean) => {
+      if (status) status.textContent = copy.loading;
+      try {
+        const params = new URLSearchParams(root.dataset.apiParams || "");
+        params.set("include_inferred", String(includeInferred));
+        const response = await fetch(`${root.dataset.apiPath}?${params}`, { headers: { accept: "application/json" } });
+        const payload = await response.json().catch(() => null) as {
+          data?: { nodes?: MapNode[]; edges?: MapEdge[]; truncated?: boolean };
+          error?: { message?: string };
+        } | null;
+        if (!response.ok || !payload?.data) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+        data = { nodes: payload.data.nodes || [], edges: payload.data.edges || [] };
+        renderLists();
+        if (graph && threeModule) {
+          glowLayers.clear();
+          graph.nodeThreeObject((node) => createGlowNodeObject(node, threeModule as typeof import("three"))).nodeThreeObjectExtend(false);
+        }
+        graph?.graphData({ nodes: data.nodes, links: data.edges });
+        const nodeCount = root.querySelector<HTMLElement>("[data-node-count]");
+        const edgeCount = root.querySelector<HTMLElement>("[data-edge-count]");
+        if (nodeCount) nodeCount.textContent = String(data.nodes.length);
+        if (edgeCount) edgeCount.textContent = String(data.edges.length);
+        if (data.nodes[0]) selectNode(String(data.nodes[0].id));
+        if (status) status.textContent = payload.data.truncated ? copy.truncated : "";
+        fitGraph(false);
+      } catch (error) {
+        if (status) status.textContent = `${copy.error} ${error instanceof Error ? error.message : String(error)}`;
+      }
+    };
+    bindList();
+    void initializeGraph();
+    fitButton?.addEventListener("click", () => fitGraph(true));
+    root.querySelector<HTMLInputElement>("[data-inferred-toggle]")?.addEventListener("change", (event) => {
+      void refresh((event.currentTarget as HTMLInputElement).checked);
+    });
+  }
+</script>

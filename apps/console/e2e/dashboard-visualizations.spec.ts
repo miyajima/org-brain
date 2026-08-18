@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test.describe("dashboard visualizations", () => {
@@ -191,13 +192,45 @@ test.describe("dashboard visualizations", () => {
     await page.setViewportSize({ width: 572, height: 844 });
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision:rationale-e2e");
 
-    await page.locator("[data-trace-sheet-expand]").click();
+    const sheetToggle = page.locator("[data-trace-sheet-toggle]");
+    await expect(sheetToggle).toHaveAttribute("aria-expanded", "false");
+    await sheetToggle.click();
+    await expect(sheetToggle).toHaveAttribute("aria-expanded", "true");
     await page.locator("[data-trace-step='artifact']").click();
     const preview = page.getByRole("button", { name: "この画面で確認" }).first();
     await preview.focus();
     await expect(preview).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
+
+  test("keeps the map fit control, visual-only graph semantics, and single mobile sheet action", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all");
+
+    await expect(page.locator("[data-map-mode-badge]")).toHaveText("閲覧可能な全ノード");
+    await expect(page.locator("[data-map-visible-count]")).toHaveText("62");
+    await expect(page.locator("[data-map-fit]")).toHaveAttribute("aria-label", "メモリマップ全体を表示");
+    await expect(page.locator("[data-map-stage]")).toHaveAttribute("role", "img");
+    await expect(page.locator("[data-map-stage]")).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator("[data-map-render-status]")).not.toHaveText("");
+    await expect(page.locator("[data-trace-sheet-toggle]")).toHaveCount(1);
+    await expect(page.locator("[data-trace-sheet-toggle]")).toHaveAttribute("aria-controls", "memory-map-inspector-content");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    expect(await page.locator("[data-trace-sheet-toggle]").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  });
+
+  for (const locale of ["en", "ja", "zh"] as const) {
+    test(`has no WCAG A/AA violations in the memory map for ${locale}`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto(`/memories/constellation?tenant_id=default&project_id=org-brain&lang=${locale}&view=all`);
+      const results = await new AxeBuilder({ page })
+        .include("[data-memory-map-root]")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      expect(results.violations).toEqual([]);
+    });
+  }
 
   test("uses a full-width map and a bottom trace sheet at an intermediate width", async ({ page }) => {
     await page.setViewportSize({ width: 832, height: 863 });
@@ -293,6 +326,18 @@ test.describe("dashboard visualizations", () => {
     expect(geometry.stageVisible).toBe(true);
     expect(Math.min(...geometry.stepHeights)).toBeGreaterThanOrEqual(44);
   });
+
+  for (const width of [320, 768] as const) {
+    test(`keeps the memory map readable without horizontal overflow at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all`);
+      await expect(page.locator("[data-map-search]")).toBeVisible();
+      await expect(page.locator("[data-map-fit]")).toBeVisible();
+      await expect(page.locator("[data-map-stage]")).toHaveAttribute("aria-describedby", "memory-map-stage-instructions");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      expect(await page.locator("[data-map-search]").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    });
+  }
 
   test("keeps the map and trace in a bounded desktop reading surface", async ({ page }) => {
     await page.setViewportSize({ width: 1536, height: 900 });
