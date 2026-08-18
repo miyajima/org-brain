@@ -4,6 +4,8 @@ import InsightPageGuide from "./InsightPageGuide.astro";
 import InsightScopeRail from "./InsightScopeRail.astro";
 import IntelligencePoller from "./IntelligencePoller.astro";
 import RecommendedActions from "./RecommendedActions.astro";
+import AdminStatePanel from "../admin/AdminStatePanel.astro";
+import { adminCommonCopy } from "../../lib/admin-ui";
 import {
   historyHealthyCopy,
   historyRecommendedActions,
@@ -151,10 +153,11 @@ const dataState: "ready" | "empty" | "partial" | "error" = loadError
     ? "partial"
     : data.chains.length > 0 ? "ready" : "empty";
 const uiCopy = {
-  en: { source: "Org Brain knowledge history", window: "Recorded lineage", included: "History, revisions, relationships, and sources matching the current project and lineage filter.", excluded: "Other projects, filtered lineage types, and revisions or sources omitted by response limits.", unavailableTitle: "Knowledge history cannot be judged", unavailableBody: "The history request failed. Retry before treating the lineage as empty or reviewed." },
-  ja: { source: "Org Brain 知識履歴", window: "記録済みの全期間", included: "現在のプロジェクト・系譜フィルターに合う履歴、変更、関係、参照元。", excluded: "他プロジェクト、フィルター外の系譜、応答上限で省略された変更・参照元。", unavailableTitle: "知識の履歴を判断できません", unavailableBody: "履歴データを取得できませんでした。空・確認済みとして扱わず、更新後に判断してください。" },
-  zh: { source: "Org Brain 知识历史", window: "已记录的全部期间", included: "符合当前项目和谱系筛选的历史、修订、关系和来源。", excluded: "其他项目、筛选外谱系以及因响应上限省略的记录。", unavailableTitle: "无法判断知识历史", unavailableBody: "历史数据获取失败，请刷新后再判断。" }
+  en: { source: "Org Brain knowledge history", window: "Recorded lineage", included: "History, revisions, relationships, and sources matching the current project and lineage filter.", excluded: "Other projects, filtered lineage types, and revisions or sources omitted by response limits.", unavailableTitle: "Knowledge history cannot be judged", unavailableBody: "The history request failed. Retry before treating the lineage as empty or reviewed.", currentAction: "Open current content", evidenceAction: "Inspect evidence", compareAction: "Compare revisions", contextSummary: "Scope and data freshness", partialTitle: "Part of this history is omitted", partialBody: "Use the visible records for orientation, then narrow the filters before making a final decision." },
+  ja: { source: "Org Brain 知識履歴", window: "記録済みの全期間", included: "現在のプロジェクト・系譜フィルターに合う履歴、変更、関係、参照元。", excluded: "他プロジェクト、フィルター外の系譜、応答上限で省略された変更・参照元。", unavailableTitle: "知識の履歴を判断できません", unavailableBody: "履歴データを取得できませんでした。空・確認済みとして扱わず、更新後に判断してください。", currentAction: "現在の内容を開く", evidenceAction: "根拠を確認", compareAction: "変更を比較", contextSummary: "対象範囲とデータ鮮度", partialTitle: "履歴の一部が省略されています", partialBody: "表示中の記録で概要を確認し、最終判断の前にフィルターを絞ってください。" },
+  zh: { source: "Org Brain 知识历史", window: "已记录的全部期间", included: "符合当前项目和谱系筛选的历史、修订、关系和来源。", excluded: "其他项目、筛选外谱系以及因响应上限省略的记录。", unavailableTitle: "无法判断知识历史", unavailableBody: "历史数据获取失败，请刷新后再判断。", currentAction: "打开当前内容", evidenceAction: "查看依据", compareAction: "比较修订", contextSummary: "范围和数据时效", partialTitle: "部分历史记录已省略", partialBody: "请先查看现有记录，并在最终判断前缩小筛选范围。" }
 }[locale];
+const commonCopy = adminCommonCopy[locale];
 const ticks = Array.from({ length: 4 }, (_, index) => bounds.start + ((bounds.end - bounds.start) * index) / 3);
 const tone = (event: StrataTimelineEvent) => {
   if (event.attention?.severity === "critical") return "critical";
@@ -178,13 +181,18 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
     </div>
   </header>
 
-  <InsightPageGuide guide={guide} />
-  <InsightScopeRail params={params} locale={locale} windowLabel={uiCopy.window} sourceLabel={uiCopy.source} included={uiCopy.included} excluded={uiCopy.excluded} state={dataState} generatedAt={data.generated_at} />
   {loadError ? (
-    <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
+    <AdminStatePanel state="error" title={uiCopy.unavailableTitle} description={uiCopy.unavailableBody}>
+      <div slot="actions" class="history-error-actions">
+        <a class="primary-action" href={params.size ? `/decisions/history?${params.toString()}` : "/decisions/history"}>{commonCopy.retry}</a>
+        <details><summary>{commonCopy.technicalDetails}</summary><code>{loadError}</code></details>
+      </div>
+    </AdminStatePanel>
   ) : (
     <RecommendedActions locale={locale} title={briefingTitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
   )}
+
+  {!loadError && dataState === "partial" && <AdminStatePanel state="partial" title={uiCopy.partialTitle} description={uiCopy.partialBody} compact />}
 
   {!loadError && <div class="strata-filterbar">
     <form method="get" action="/decisions/history">
@@ -200,13 +208,24 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
   {!loadError && selectedChain && (
     <section class="history-overview" aria-label={plainHistoryCopy.currentSummary}>
       <dl>
-        <div><dt>{plainHistoryCopy.currentSummary}</dt><dd>{selectedChain.title}</dd><small>{friendlyState(selectedChain.current_state)}</small></div>
-        <div><dt>{plainHistoryCopy.latestChange}</dt><dd>{newestRevision?.summary ?? plainHistoryCopy.noChange}</dd><small>{newestRevision ? `${friendlyOperation(newestRevision.operation)} · ${formatDate(newestRevision.recorded_at)}` : plainHistoryCopy.noChange}</small></div>
-        <div><dt>{plainHistoryCopy.evidence}</dt><dd>{selectedChain.source_count} {copy.common.sources}</dd><small>{selectedChain.revision_count} {plainHistoryCopy.revisions}</small></div>
-        <div><dt>{plainHistoryCopy.reviewState}</dt><dd>{primaryReviewAction?.title ?? plainHistoryCopy.noReview}</dd><small>{primaryReviewAction?.evidence ?? friendlyState(selectedChain.current_state)}</small></div>
+        <div><dt>{plainHistoryCopy.currentSummary}</dt><dd>{selectedChain.title}<small>{friendlyState(selectedChain.current_state)}</small></dd></div>
+        <div><dt>{plainHistoryCopy.latestChange}</dt><dd>{newestRevision?.summary ?? plainHistoryCopy.noChange}<small>{newestRevision ? `${friendlyOperation(newestRevision.operation)} · ${formatDate(newestRevision.recorded_at)}` : plainHistoryCopy.noChange}</small></dd></div>
+        <div><dt>{plainHistoryCopy.evidence}</dt><dd>{selectedChain.source_count} {copy.common.sources}<small>{selectedChain.revision_count} {plainHistoryCopy.revisions}</small></dd></div>
+        <div><dt>{plainHistoryCopy.reviewState}</dt><dd>{primaryReviewAction?.title ?? plainHistoryCopy.noReview}<small>{primaryReviewAction?.evidence ?? friendlyState(selectedChain.current_state)}</small></dd></div>
       </dl>
+      <nav class="history-primary-actions" aria-label={commonCopy.nextAction}>
+        {selectedDeepLink && <a class="primary-action" href={selectedDeepLink}>{uiCopy.currentAction}</a>}
+        <a class="secondary-action" href="#history-evidence">{uiCopy.evidenceAction}</a>
+        <a class="secondary-action" href="#revision-history-title">{uiCopy.compareAction}</a>
+      </nav>
     </section>
   )}
+
+  <details class="history-context">
+    <summary>{uiCopy.contextSummary}</summary>
+    <InsightPageGuide guide={guide} />
+    <InsightScopeRail params={params} locale={locale} windowLabel={uiCopy.window} sourceLabel={uiCopy.source} included={uiCopy.included} excluded={uiCopy.excluded} state={dataState} generatedAt={data.generated_at} />
+  </details>
 
   {!loadError && (events.length > 0 ? (
     <>
@@ -356,9 +375,9 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
                               <span class={`change-kind change-${change.kind}`}>{copy.strata.changeKinds[change.kind]}</span>
                               <strong>{fieldLabel(change.field)}</strong>
                               <div class="change-values">
-                                <span><small>{copy.strata.before}</small><code>{formatSnapshotValue(change.field, change.before)}</code></span>
+                                <span><small>{copy.strata.before}</small><del>{formatSnapshotValue(change.field, change.before)}</del></span>
                                 <span aria-hidden="true">→</span>
-                                <span><small>{copy.strata.after}</small><code>{formatSnapshotValue(change.field, change.after)}</code></span>
+                                <span><small>{copy.strata.after}</small><ins>{formatSnapshotValue(change.field, change.after)}</ins></span>
                               </div>
                             </li>
                           ))}
@@ -372,7 +391,7 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
           ) : <div class="history-empty">{copy.strata.noRevisions}</div>}
         </section>
 
-        <aside class="history-evidence" aria-label={copy.strata.relationsSourcesAria}>
+        <aside class="history-evidence" id="history-evidence" aria-label={copy.strata.relationsSourcesAria}>
           <section>
             <h3>{copy.strata.relations} <span>{selectedChain.relations.length}</span></h3>
             {selectedChain.relations.length > 0 ? (
@@ -419,13 +438,31 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
 </section>
 
 <style>
-  .memory-strata { min-height: calc(100vh - 7rem); }
-  .data-unavailable { margin-bottom: 1rem; border: 1px solid rgba(255,92,103,.38); border-radius: 14px; background: rgba(76,18,27,.28); padding: 1rem; color: #ffd4d7; }.data-unavailable p { margin-top: .35rem; color: #d7aeb3; font-size: .76rem; line-height: 1.6; }
+  .memory-strata { display: flex; min-height: calc(100vh - 7rem); flex-direction: column; }
+  .memory-strata > .recommended-actions,
+  .memory-strata > .admin-state { order: 1; }
+  .strata-attention { order: 2; }
+  .history-overview { order: 3; }
+  .selected-chain-history { order: 4; }
+  .strata-filterbar { order: 5; }
+  .history-context { order: 6; }
+  .strata-board,
+  .strata-mobile,
+  .memory-strata > .intelligence-empty { order: 7; }
+  .data-unavailable { margin-bottom: 1rem; border: 1px solid rgba(255,92,103,.38); border-radius: 14px; background: rgba(76,18,27,.28); padding: 1rem; color: #ffd4d7; }.data-unavailable p { margin-top: .35rem; color: #d7aeb3; font-size: .875rem; line-height: 1.6; }
   .strata-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1.5rem; align-items: end; padding: 1rem 0 1.2rem; }.strata-header .surface-switcher { margin-bottom: 1.1rem; }.strata-header h1 { margin-top: .45rem; color: var(--intelligence-text); font-size: clamp(2rem,3.25vw,3rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.15; }.strata-header > div > p:last-child { margin-top: .65rem; color: var(--intelligence-muted); line-height: 1.75; }
-  .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: "Fira Code", monospace; font-size: .68rem; letter-spacing: .15em; text-transform: uppercase; }.strata-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .75rem; }.primary-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid #2998ff; border-radius: 10px; background: linear-gradient(180deg,#168cff,#0569ee); padding: .65rem 1rem; color: white; font-size: .8rem; font-weight: 600; box-shadow: 0 0 28px rgba(22,135,255,.18); }
-  .strata-filterbar { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: end; margin-bottom: .8rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(8,13,21,.72); padding: .75rem; }.strata-filterbar form { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }.strata-filterbar label { min-width: 11rem; margin: 0; }.strata-filterbar label span { display: block; margin-bottom: .32rem; color: var(--intelligence-muted); font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }.strata-filterbar input,.strata-filterbar select { min-height: 44px; border-radius: 10px; padding: .5rem .75rem; font-size: .76rem; }.strata-filterbar button { min-height: 44px; border-radius: 10px; background: rgba(22,135,255,.12); box-shadow: none; color: #c7e7ff; }
-  .selected-chain-summary { display: grid; min-width: 17rem; gap: .16rem; border-left: 2px solid var(--intelligence-blue); padding-left: .75rem; }.selected-chain-summary > span,.selected-chain-summary small { color: var(--intelligence-muted); font-size: .61rem; }.selected-chain-summary strong { overflow: hidden; max-width: 22rem; color: var(--intelligence-text); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }.selected-chain-summary a { display: inline-flex; min-height: 44px; align-items: center; margin-top: .2rem; color: var(--intelligence-blue-bright); font-size: .67rem; }
-  .history-overview { margin-bottom: .8rem; overflow: hidden; border: 1px solid rgba(103,180,242,.18); border-radius: 14px; background: linear-gradient(100deg,rgba(17,38,64,.56),rgba(5,11,19,.82)); }.history-overview dl { display: grid; grid-template-columns: 1.25fr 1.5fr .75fr 1fr; margin: 0; }.history-overview dl > div { min-width: 0; padding: .85rem 1rem; }.history-overview dl > div + div { border-left: 1px solid rgba(103,180,242,.12); }.history-overview dt { color: var(--intelligence-blue-bright); font-size: .62rem; font-weight: 650; letter-spacing: .06em; }.history-overview dd { margin: .42rem 0 0; overflow: hidden; color: var(--intelligence-text); font-size: .76rem; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }.history-overview small { display: block; margin-top: .3rem; overflow: hidden; color: rgba(206,226,241,.8); font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+  .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: var(--console-font-mono); font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; }.strata-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .75rem; }.primary-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid #2998ff; border-radius: 10px; background: linear-gradient(180deg,#168cff,#0569ee); padding: .65rem 1rem; color: white; font-size: .875rem; font-weight: 600; box-shadow: 0 0 28px rgba(22,135,255,.18); }
+  .strata-filterbar { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: end; margin: .8rem 0; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(8,13,21,.72); padding: .75rem; }.strata-filterbar form { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }.strata-filterbar label { min-width: 11rem; margin: 0; }.strata-filterbar label span { display: block; margin-bottom: .32rem; color: var(--intelligence-muted); font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; }.strata-filterbar input,.strata-filterbar select { min-height: 44px; border-radius: 10px; padding: .5rem .75rem; font-size: .875rem; }.strata-filterbar button { min-height: 44px; border-radius: 10px; background: rgba(22,135,255,.12); box-shadow: none; color: #c7e7ff; }
+  .selected-chain-summary { display: grid; min-width: 17rem; gap: .16rem; border-left: 2px solid var(--intelligence-blue); padding-left: .75rem; }.selected-chain-summary > span,.selected-chain-summary small { color: var(--intelligence-muted); font-size: .75rem; }.selected-chain-summary strong { overflow: hidden; max-width: 22rem; color: var(--intelligence-text); font-size: .875rem; text-overflow: ellipsis; white-space: nowrap; }.selected-chain-summary a { display: inline-flex; min-height: 44px; align-items: center; margin-top: .2rem; color: var(--intelligence-blue-bright); font-size: .8125rem; }
+  .history-overview { margin: .8rem 0; overflow: hidden; border: 1px solid rgba(103,180,242,.18); border-radius: 14px; background: linear-gradient(100deg,rgba(17,38,64,.56),rgba(5,11,19,.82)); }.history-overview dl { display: grid; grid-template-columns: 1.25fr 1.5fr .75fr 1fr; margin: 0; }.history-overview dl > div { min-width: 0; padding: .85rem 1rem; }.history-overview dl > div + div { border-left: 1px solid rgba(103,180,242,.12); }.history-overview dt { color: var(--intelligence-blue-bright); font-size: .75rem; font-weight: 650; letter-spacing: .05em; }.history-overview dd { margin: .42rem 0 0; overflow: hidden; color: var(--intelligence-text); font-size: .875rem; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }.history-overview small { display: block; margin-top: .3rem; overflow: hidden; color: rgba(206,226,241,.82); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+  .history-primary-actions { display: flex; flex-wrap: wrap; gap: .6rem; border-top: 1px solid rgba(103,180,242,.12); padding: .8rem 1rem; }
+  .history-context { margin: .8rem 0; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(8,13,21,.64); padding: .4rem .75rem; }
+  .history-context > summary { min-height: 44px; display: flex; cursor: pointer; align-items: center; color: #dff2ff; font-size: .875rem; font-weight: 650; }
+  .history-context > :not(summary) { margin-top: .75rem; }
+  .history-error-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+  .history-error-actions details { position: relative; }
+  .history-error-actions summary { display: inline-flex; min-height: 44px; cursor: pointer; align-items: center; border: 1px solid var(--intelligence-border); border-radius: 10px; padding: .55rem .8rem; color: #dff2ff; }
+  .history-error-actions code { position: absolute; z-index: 5; top: calc(100% + .4rem); right: 0; width: min(28rem, calc(100vw - 2rem)); border: 1px solid var(--intelligence-border); border-radius: 10px; background: #07111f; padding: .7rem; color: var(--intelligence-muted); font-size: .75rem; overflow-wrap: anywhere; }
   .strata-board { position: relative; min-width: 0; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--intelligence-border); border-radius: 16px; background: linear-gradient(90deg,rgba(8,13,22,.95),rgba(2,6,12,.98)); box-shadow: 0 28px 80px rgba(0,0,0,.35); scrollbar-gutter: stable; }.strata-canvas { position: relative; min-width: 100%; }.strata-axis { position: relative; height: 44px; margin-left: 12.5rem; border-bottom: 1px solid var(--intelligence-border); }.strata-axis span { position: absolute; top: 14px; transform: translateX(-50%); color: var(--intelligence-muted); font-size: .67rem; white-space: nowrap; }.strata-track-overlay { position: absolute; z-index: 4; top: 44px; bottom: 50px; left: 12.5rem; pointer-events: none; }.today-marker { position: absolute; top: 0; bottom: 0; width: 1px; background: #1687ff; box-shadow: 0 0 14px 2px rgba(22,135,255,.75); }.today-marker span { position: absolute; top: -19px; transform: translateX(-50%); border: 1px solid rgba(22,135,255,.5); border-radius: 999px; background: #092b5a; padding: .26rem .65rem; color: #e3f3ff; font-size: .62rem; white-space: nowrap; }
   .strata-lanes { position: relative; z-index: 2; }.strata-lane { display: grid; grid-template-columns: 12.5rem minmax(0,1fr); min-height: 102px; border-bottom: 1px solid rgba(137,157,184,.12); background: linear-gradient(90deg,rgba(14,31,55,.78),rgba(8,20,38,.46)); }.strata-lane-learning,.strata-lane-source { background: linear-gradient(90deg,rgba(39,45,55,.78),rgba(22,27,35,.5)); }.strata-lane-assumption { background: linear-gradient(90deg,rgba(70,46,10,.72),rgba(50,32,7,.45)); }.strata-lane > header { position: sticky; z-index: 5; left: 0; display: flex; gap: .7rem; align-items: center; border-right: 1px solid var(--intelligence-border); background: rgba(8,16,28,.94); padding: .8rem 1rem; backdrop-filter: blur(12px); }.strata-lane-learning > header,.strata-lane-source > header { background: rgba(26,31,40,.95); }.strata-lane-assumption > header { background: rgba(52,34,9,.95); }.lane-marker { width: 2rem; height: 2rem; flex: 0 0 auto; border: 1px solid rgba(22,135,255,.52); border-radius: 999px; background: rgba(22,135,255,.12); box-shadow: 0 0 20px rgba(22,135,255,.12); }.strata-lane-learning .lane-marker,.strata-lane-source .lane-marker { border-color: rgba(225,232,241,.4); background: rgba(225,232,241,.08); }.strata-lane-assumption .lane-marker { border-color: rgba(246,173,50,.65); background: rgba(246,173,50,.13); }.strata-lane h3 { color: var(--intelligence-text); font-size: .82rem; }.strata-lane header p { margin-top: .25rem; color: var(--intelligence-muted); font-size: .58rem; }
   .lane-track { position: relative; min-width: 0; }.lane-row-line { position: absolute; right: 0; left: 0; height: 1px; background: rgba(129,151,181,.2); }.strata-event { position: absolute; z-index: 3; width: 10.8rem; min-height: 66px; transform: translateX(-50%); border: 1px solid rgba(132,156,190,.38); border-radius: 10px; background: rgba(16,27,43,.93); padding: .58rem .7rem; color: var(--intelligence-text); box-shadow: 0 12px 32px rgba(0,0,0,.22); }.strata-event strong,.strata-event time,.strata-event small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.strata-event strong { font-size: .72rem; }.strata-event time { margin-top: .3rem; color: #b8c5d6; font-size: .62rem; }.strata-event small { margin-top: .2rem; color: #9aabc0; font-size: .6rem; }.strata-event-canonical,.strata-event-selected { border-color: #2a9cff; box-shadow: 0 0 22px rgba(22,135,255,.28),0 12px 32px rgba(0,0,0,.22); }.strata-event-warning { border-color: rgba(246,173,50,.62); background: rgba(50,34,10,.94); }.strata-event-critical { border-color: rgba(255,92,103,.66); background: rgba(46,15,20,.95); }
@@ -433,6 +470,36 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
   .strata-legend { display: flex; flex-wrap: wrap; gap: .65rem 1.2rem; min-height: 50px; align-items: center; padding: .7rem 1rem; color: var(--intelligence-muted); font-size: .64rem; }.strata-legend span::before { display: inline-block; width: 1.2rem; height: 3px; margin-right: .45rem; background: #1687ff; content: ""; vertical-align: middle; }.strata-legend .legend-support::before { background: #8791a1; }.strata-legend .legend-warning::before { background: var(--intelligence-warning); }.strata-legend .legend-truncated { margin-left: auto; color: var(--intelligence-warning); }.strata-legend .legend-truncated::before { display: none; }
   .strata-mobile { display: none; }.strata-attention { margin-top: 1rem; }.strata-attention > header { display: flex; align-items: end; justify-content: space-between; padding: .7rem 0; }.strata-attention h2 { margin-top: .25rem; font-size: 1.1rem; }.strata-attention header > span { display: grid; width: 1.55rem; height: 1.55rem; place-items: center; border-radius: 999px; background: rgba(22,135,255,.22); color: #bfe4ff; font-size: .7rem; }.attention-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem; }.attention-grid article { min-height: 10.5rem; border: 1px solid var(--intelligence-border); border-radius: 13px; background: linear-gradient(145deg,rgba(16,22,32,.9),rgba(8,12,19,.9)); padding: 1rem; }.attention-grid article.attention-critical { border-color: rgba(246,173,50,.38); background: linear-gradient(145deg,rgba(66,43,7,.92),rgba(38,25,6,.9)); }.attention-grid article > div { display: flex; justify-content: space-between; color: var(--intelligence-muted); font-size: .61rem; }.attention-grid h3 { margin-top: .9rem; color: var(--intelligence-text); font-size: .85rem; line-height: 1.5; }.attention-grid p { margin-top: .5rem; color: var(--intelligence-muted); font-size: .66rem; }.attention-grid a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 1rem; border: 1px solid var(--intelligence-border); border-radius: 8px; padding: .4rem .65rem; color: #dce5f1; font-size: .67rem; }
   .selected-chain-history { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 15px; background: rgba(5,10,17,.8); }.history-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--intelligence-border); padding: 1rem 1.1rem; }.history-heading h2 { margin-top: .25rem; font-size: 1.05rem; }.history-heading div > p:last-child,.history-heading > span { margin-top: .3rem; color: var(--intelligence-muted); font-size: .68rem; }.history-truncation { display: grid; gap: .25rem; border-bottom: 1px solid rgba(246,173,50,.24); background: rgba(246,173,50,.07); padding: .65rem 1.1rem; color: #ffd89a; font-size: .7rem; }.history-current-state { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: .55rem; border-bottom: 1px solid var(--intelligence-border); padding: .8rem 1rem; }.history-current-state div { min-width: 0; border: 1px solid rgba(126,158,195,.13); border-radius: 9px; background: rgba(255,255,255,.018); padding: .6rem; }.history-current-state dt { color: var(--intelligence-muted); font-size: .58rem; }.history-current-state dd { margin-top: .3rem; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .7rem; }.history-detail-layout { display: grid; grid-template-columns: minmax(0,1fr) 19rem; }.revision-history { min-width: 0; padding: 1rem; }.revision-history > h3,.history-evidence h3 { font-size: .82rem; }.revision-history ol { display: grid; gap: .75rem; margin-top: .75rem; }.revision-card { border: 1px solid rgba(128,157,194,.18); border-radius: 12px; background: rgba(11,20,33,.7); padding: .85rem; }.revision-card.revision-partial { border-style: dashed; }.revision-card > header { display: flex; flex-wrap: wrap; gap: .45rem .7rem; align-items: center; }.revision-card > header div { display: flex; gap: .55rem; align-items: center; }.revision-card > header div span { color: var(--intelligence-blue-bright); font-family: "Fira Code",monospace; font-size: .63rem; text-transform: uppercase; }.revision-card time { color: var(--intelligence-muted); font-size: .62rem; }.revision-card > header strong { margin-left: auto; color: var(--intelligence-text); font-size: .7rem; }.partial-badge { border: 1px solid rgba(246,173,50,.35); border-radius: 999px; padding: .15rem .4rem; color: var(--intelligence-warning); font-size: .55rem; text-transform: uppercase; }.revision-context { display: grid; grid-template-columns: minmax(0,2fr) minmax(8rem,1fr); gap: .6rem; margin-top: .7rem; }.revision-context div { border-left: 2px solid rgba(54,159,255,.34); padding-left: .6rem; }.revision-context dt { color: var(--intelligence-muted); font-size: .56rem; }.revision-context dd { margin-top: .25rem; overflow-wrap: anywhere; color: #d9e6f1; font-size: .72rem; line-height: 1.5; }.revision-metadata { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin-top: .65rem; }.revision-metadata div { display: flex; gap: .35rem; }.revision-metadata dt { color: var(--intelligence-muted); font-size: .58rem; }.revision-metadata dd { color: #dceeff; font-size: .6rem; overflow-wrap: anywhere; }.revision-diff { margin-top: .75rem; border-top: 1px solid rgba(128,157,194,.14); padding-top: .7rem; }.revision-diff h4 { color: #b9c7d5; font-size: .64rem; }.revision-diff > p { margin-top: .4rem; color: var(--intelligence-muted); font-size: .63rem; }.revision-diff ul { display: grid; gap: .42rem; margin-top: .55rem; }.revision-diff li { display: grid; grid-template-columns: 3.8rem 9rem minmax(0,1fr); gap: .55rem; align-items: start; border-radius: 8px; background: rgba(255,255,255,.018); padding: .48rem .55rem; }.change-kind { border-radius: 999px; padding: .15rem .35rem; color: #bfe5ff; font-size: .52rem; text-align: center; text-transform: uppercase; }.change-added { background: rgba(67,220,173,.12); color: #8ee8ca; }.change-removed { background: rgba(255,92,103,.12); color: #ffadb4; }.change-changed { background: rgba(22,135,255,.13); }.revision-diff li > strong { overflow-wrap: anywhere; color: #dfeaf3; font-size: .62rem; }.change-values { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: .45rem; align-items: center; }.change-values > span:not([aria-hidden]) { min-width: 0; }.change-values small { display: block; color: var(--intelligence-muted); font-size: .5rem; }.change-values code { display: block; margin-top: .15rem; overflow-wrap: anywhere; color: #d8e7f3; font-family: "Fira Code",monospace; font-size: .57rem; white-space: pre-wrap; }.history-evidence { display: grid; align-content: start; gap: 1rem; border-left: 1px solid var(--intelligence-border); padding: 1rem; }.history-evidence section + section { border-top: 1px solid var(--intelligence-border); padding-top: 1rem; }.history-evidence h3 { display: flex; justify-content: space-between; }.history-evidence h3 span { color: var(--intelligence-muted); font-size: .65rem; }.history-evidence ul { display: grid; gap: .5rem; margin-top: .65rem; }.history-evidence li { display: grid; gap: .2rem; border: 1px solid rgba(128,157,194,.13); border-radius: 9px; padding: .58rem; }.history-evidence strong { overflow-wrap: anywhere; color: #dcecff; font-size: .65rem; }.history-evidence li span,.history-evidence small,.history-evidence p,.history-empty { overflow-wrap: anywhere; color: var(--intelligence-muted); font-size: .58rem; }.history-evidence p { margin-top: .6rem; }.history-empty { margin-top: .7rem; }
+  .history-heading div > p:last-child,
+  .history-heading > span,
+  .history-truncation,
+  .history-current-state dt,
+  .history-current-state dd,
+  .revision-card > header div span,
+  .revision-card time,
+  .revision-card > header strong,
+  .partial-badge,
+  .revision-context dt,
+  .revision-context dd,
+  .revision-metadata dt,
+  .revision-metadata dd,
+  .revision-diff h4,
+  .revision-diff > p,
+  .change-kind,
+  .revision-diff li > strong,
+  .change-values small,
+  .history-evidence h3 span,
+  .history-evidence strong,
+  .history-evidence li span,
+  .history-evidence small,
+  .history-evidence p,
+  .history-empty { font-size: .75rem; }
+  .strata-event strong,
+  .history-evidence strong { font-size: .75rem; }
+  .change-values del,
+  .change-values ins { display: block; margin-top: .15rem; overflow-wrap: anywhere; border-radius: 6px; padding: .35rem; color: #d8e7f3; font-family: var(--console-font-mono); font-size: .75rem; line-height: 1.5; text-decoration: none; white-space: pre-wrap; }
+  .change-values del { background: rgba(255,92,103,.09); }
+  .change-values ins { background: rgba(67,220,173,.09); }
   .history-technical { border-bottom: 1px solid var(--intelligence-border); }.history-technical summary { display: flex; min-height: 44px; align-items: center; gap: .5rem; padding: .65rem 1rem; color: #c9dfef; cursor: pointer; font-size: .68rem; font-weight: 650; list-style: none; }.history-technical summary::-webkit-details-marker { display: none; }.history-technical summary::before { color: var(--intelligence-blue-bright); content: "+"; font-family: "Fira Code",monospace; }.history-technical[open] summary::before { content: "−"; }.history-technical .history-current-state { border-top: 1px solid var(--intelligence-border); border-bottom: 0; }
   .revision-technical { margin-top: .55rem; }.revision-technical summary { display: inline-flex; min-height: 32px; align-items: center; gap: .35rem; color: #9fb7c9; cursor: pointer; font-size: .58rem; list-style: none; }.revision-technical summary::-webkit-details-marker { display: none; }.revision-technical summary::before { color: var(--intelligence-blue-bright); content: "+"; }.revision-technical[open] summary::before { content: "−"; }
   .intelligence-empty { display: grid; min-height: 24rem; gap: .6rem; place-content: center; border: 1px dashed var(--intelligence-border); border-radius: 14px; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 7rem; }

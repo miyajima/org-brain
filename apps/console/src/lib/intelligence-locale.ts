@@ -176,8 +176,8 @@ const EN_COPY = {
       to: "To",
       anyPeriod: "Any period",
       applyFilters: "Apply filters",
-      fallbackTitle: "3D view is unavailable; opening the list",
-      fallbackBody: "The memory list uses the same filters. If it does not open automatically, use the link below.",
+      fallbackTitle: "3D view is unavailable; the accessible list remains available",
+      fallbackBody: "Search, select a node, and inspect its decision path on this page. You can also open the full memory list with the same filters.",
       openMemoryList: "Open memory list",
       selectedNode: "Selected node",
       nothingSelected: "Nothing selected",
@@ -310,7 +310,7 @@ const EN_COPY = {
       ,panelControls: "Trace panel controls"
       ,expandPanel: "Expand"
       ,collapsePanel: "Collapse"
-      ,keyboardSelection: "Select a node with the keyboard"
+      ,keyboardSelection: "Search and select a node"
       ,keyboardSearch: "Filter decisions and memories"
       ,keyboardSearchPlaceholder: "Search nodes"
       ,availableState: "Available"
@@ -371,6 +371,7 @@ const EN_COPY = {
       ,userStatementEvidence: "User statement"
       ,toolCallEvidence: "Tool call"
       ,pickerCount: "Showing {visible} of {total}"
+      ,viewDecisionPath: "View decision path"
     }
   },
   strata: {
@@ -650,8 +651,8 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       to: "終了",
       anyPeriod: "期間指定なし",
       applyFilters: "フィルターを適用",
-      fallbackTitle: "3D表示を利用できないため一覧を開きます",
-      fallbackBody: "同じ条件のメモリ一覧を開いています。自動で移動しない場合は、下のリンクを使用してください。",
+      fallbackTitle: "3D表示を利用できませんが、検索・一覧は利用できます",
+      fallbackBody: "この画面でノードを検索・選択し、判断経路を確認できます。同じ条件のメモリ一覧も開けます。",
       openMemoryList: "メモリ一覧を開く",
       selectedNode: "選択したノード",
       nothingSelected: "未選択",
@@ -784,7 +785,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
         ,panelControls: "トレースパネル操作"
         ,expandPanel: "広げる"
         ,collapsePanel: "縮める"
-        ,keyboardSelection: "キーボードでノードを選ぶ"
+        ,keyboardSelection: "ノードを検索・選択"
         ,keyboardSearch: "決定・メモリを絞り込む"
         ,keyboardSearchPlaceholder: "ノードを検索"
         ,availableState: "確認可能"
@@ -845,6 +846,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
         ,userStatementEvidence: "ユーザー発話"
         ,toolCallEvidence: "ツール実行"
         ,pickerCount: "{total}件中{visible}件を表示"
+        ,viewDecisionPath: "判断経路を見る"
       }
     },
     strata: {
@@ -1115,8 +1117,8 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       to: "到",
       anyPeriod: "任意期间",
       applyFilters: "应用筛选",
-      fallbackTitle: "3D视图不可用，正在打开列表",
-      fallbackBody: "记忆列表使用相同筛选条件。如果没有自动打开，请使用下面的链接。",
+      fallbackTitle: "3D视图不可用，但搜索和列表仍可使用",
+      fallbackBody: "可在本页搜索和选择节点并查看决策路径，也可打开使用相同筛选条件的完整列表。",
       openMemoryList: "打开记忆列表",
       selectedNode: "已选节点",
       nothingSelected: "未选择",
@@ -1249,7 +1251,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
         ,panelControls: "追踪面板控制"
         ,expandPanel: "展开"
         ,collapsePanel: "收起"
-        ,keyboardSelection: "使用键盘选择节点"
+        ,keyboardSelection: "搜索并选择节点"
         ,keyboardSearch: "筛选决策与记忆"
         ,keyboardSearchPlaceholder: "搜索节点"
         ,availableState: "可查看"
@@ -1310,6 +1312,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
         ,userStatementEvidence: "用户陈述"
         ,toolCallEvidence: "工具调用"
         ,pickerCount: "显示 {visible} / {total}"
+        ,viewDecisionPath: "查看决策路径"
       }
     },
     strata: {

@@ -694,6 +694,43 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  const taskEventsMatch = path.match(/^\/v1\/tasks\/([^/]+)\/events$/u);
+  if (taskEventsMatch && request.method === "GET") {
+    const taskId = decodeURIComponent(taskEventsMatch[1]);
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    if (projectId === "e2e-task-events-error") {
+      json(response, 503, { ok: false, error: { code: "task_events_unavailable", message: "Task events fixture unavailable" } });
+      return;
+    }
+    const task = taskFixtures(url.searchParams.get("tenant_id") || "default", projectId).find((item) => item.id === taskId);
+    if (!task) {
+      json(response, 404, { ok: false, error: { code: "task_not_found", message: "Task not found" } });
+      return;
+    }
+    json(response, 200, ok([
+      { id: `${taskId}-created`, kind: "created", payload: { capability: task.capability, project_id: task.project_id }, created_at: task.updated_at - 60_000 },
+      ...(task.status === "failed" ? [{ id: `${taskId}-failed`, kind: "task.failed", payload: { reason: "Fixture failure" }, created_at: task.updated_at }] : [])
+    ]));
+    return;
+  }
+
+  const taskDetailMatch = path.match(/^\/v1\/tasks\/([^/]+)$/u);
+  if (taskDetailMatch && request.method === "GET") {
+    const taskId = decodeURIComponent(taskDetailMatch[1]);
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    if (projectId === "e2e-task-detail-error") {
+      json(response, 503, { ok: false, error: { code: "task_unavailable", message: "Task detail fixture unavailable" } });
+      return;
+    }
+    const task = taskFixtures(url.searchParams.get("tenant_id") || "default", projectId).find((item) => item.id === taskId);
+    if (!task) {
+      json(response, 404, { ok: false, error: { code: "task_not_found", message: "Task not found" } });
+      return;
+    }
+    json(response, 200, ok({ ...task, priority: 0, created_at: task.updated_at - 60_000 }));
+    return;
+  }
+
   if (path === "/v1/ops/status" && request.method === "GET") {
     const tenantId = url.searchParams.get("tenant_id") || "default";
     json(response, 200, ok(operationsStatus(tenantId)));
@@ -962,8 +999,40 @@ const server = http.createServer(async (request, response) => {
 
   if (path === "/v1/dashboard/memory-analytics" && request.method === "GET") {
     json(response, 200, ok({
-      summary: { reference_count: 0, used_count: 0, net_saved_tokens: 0, injected_tokens: 0 },
-      rankings: { memories: [], owners: [] }
+      scope: url.searchParams.get("scope") === "org" ? "org" : "mine",
+      perspective: url.searchParams.get("perspective") === "spread" ? "spread" : "work",
+      period: {
+        from: Number(url.searchParams.get("from")) || now - 30 * 24 * 60 * 60 * 1000,
+        to: Number(url.searchParams.get("to")) || now
+      },
+      summary: {
+        reference_count: 12,
+        used_count: 9,
+        consumer_count: 4,
+        net_saved_tokens: 1840,
+        injected_tokens: 720,
+        utilization_rate: 0.75,
+        effective_utilization_rate: 0.75,
+        org_reuse_rate: 0.5,
+        token_efficiency: 0.72,
+        measurement_coverage: 1,
+        measurement_state: "verified"
+      },
+      trend: [
+        { day: "2026-08-16", reference_count: 4, net_saved_tokens: 480, measurement_state: "verified" },
+        { day: "2026-08-17", reference_count: 8, net_saved_tokens: 1360, measurement_state: "verified" }
+      ],
+      rankings: {
+        memories: [{ id: memory.id, label: memory.summary, project_id: "org-brain", reference_count: 12, measurement_state: "verified" }],
+        owners: [{ id: "owner-e2e", label: "Console operators", reference_count: 12, measurement_state: "verified" }],
+        projects: [{ id: "org-brain", label: "Org Brain", reference_count: 12, measurement_state: "verified" }],
+        consumers: [{ id: "consumer-e2e", label: "Administration team", reference_count: 9, measurement_state: "verified" }]
+      },
+      diagnostics: [],
+      definitions: {
+        utilization_rate: "Runs with at least one used memory divided by evaluated runs.",
+        measurement_coverage: "Terminal reports divided by eligible runs."
+      }
     }));
     return;
   }

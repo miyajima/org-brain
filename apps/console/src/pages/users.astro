@@ -1,45 +1,80 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
+import AdminSection from "../components/admin/AdminSection.astro";
+import LiveNotice from "../components/admin/LiveNotice.astro";
+import { adminRoleLabel, adminUserStatusLabel, userAdminCopy } from "../lib/admin-copy";
+import { dashboardPageParams } from "../lib/dashboard-page";
+
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const copy = userAdminCopy(lang);
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
-let message = ""; let error = "";
+let message = "";
+let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const principal = String(form.get("principal") ?? "");
   const fullNameLocked = form.get("full_name_locked") === "true";
-  const response = await api(principal ? `/api/v1/users/${encodeURIComponent(principal)}` : "/api/v1/users", { method: principal ? "PATCH" : "POST", headers: { "content-type": "application/json", "x-csrf-token": String(form.get("csrf_token") ?? "") }, body: JSON.stringify({
-    tenant_id: tenantId, email: String(form.get("email") ?? ""), display_name: String(form.get("display_name") ?? ""), ...(!fullNameLocked ? { full_name: String(form.get("full_name") ?? "") || null } : {}), role: String(form.get("role") ?? "reader"), ...(principal ? { status: String(form.get("status") ?? "active") } : {})
-  }) });
-  if (response.ok) message = principal ? "Updated" : "Invited"; else error = "User could not be saved";
+  const response = await api(principal ? `/api/v1/users/${encodeURIComponent(principal)}` : "/api/v1/users", {
+    method: principal ? "PATCH" : "POST",
+    headers: { "content-type": "application/json", "x-csrf-token": String(form.get("csrf_token") ?? "") },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      email: String(form.get("email") ?? ""),
+      display_name: String(form.get("display_name") ?? ""),
+      ...(!fullNameLocked ? { full_name: String(form.get("full_name") ?? "") || null } : {}),
+      role: String(form.get("role") ?? "reader"),
+      ...(principal ? { status: String(form.get("status") ?? "active") } : {})
+    })
+  });
+  if (response.ok) message = principal ? copy.updated : copy.invited;
+  else error = copy.saveError;
 }
 const response = await api(`/api/v1/users?tenant_id=${encodeURIComponent(tenantId)}`);
 const payload: any = await response.json().catch(() => null);
 const users = payload?.data?.users ?? [];
+const roles = ["reader", "contributor", "tenant_admin", "auditor"];
+const statuses = ["invited", "active", "suspended", "deprovisioned"];
 ---
-<BaseLayout title="Users">
-  <section class="space-y-5">
-    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5"><p class="surface-label">{tenantId}</p><h1 class="mt-2 text-3xl font-semibold">Users</h1></header>
-    {message && <p class="text-emerald-200">{message}</p>}{error && <p class="text-rose-200">{error}</p>}
-    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-4">
-      <input type="hidden" name="csrf_token" id="csrf-token" />
-      <label><span class="field-label">Email</span><input type="email" name="email" required /></label>
-      <label><span class="field-label">Display name</span><input name="display_name" required /></label>
-      <label><span class="field-label">Full name</span><input name="full_name" /></label>
-      <label><span class="field-label">Role</span><select name="role"><option value="reader">reader</option><option value="contributor">contributor</option><option value="tenant_admin">tenant_admin</option><option value="auditor">auditor</option></select></label>
-      <div class="md:col-span-4"><button type="submit">Invite</button></div>
-    </form>
-    <div class="grid gap-3">{users.map((user: any) => <form method="post" class="grid gap-3 rounded-[18px] border border-white/8 bg-white/[0.035] p-4 md:grid-cols-6 md:items-end">
-      <input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="principal" value={user.principal} />
-      <input type="hidden" name="full_name_locked" value={user.full_name_source === "scim" ? "true" : "false"} />
-      <label><span class="field-label">Display</span><input name="display_name" value={user.display_name} required /></label>
-      <label><span class="field-label">Full name</span><input name="full_name" value={user.full_name ?? ""} disabled={user.full_name_source === "scim"} /></label>
-      <label><span class="field-label">Email</span><input value={user.email ?? ""} disabled /></label>
-      <label><span class="field-label">Status</span><select name="status"><option value="invited" selected={user.status === "invited"}>invited</option><option value="active" selected={user.status === "active"}>active</option><option value="suspended" selected={user.status === "suspended"}>suspended</option><option value="deprovisioned" selected={user.status === "deprovisioned"}>deprovisioned</option></select></label>
-      <label><span class="field-label">Role</span><select name="role"><option value="reader" selected={user.role === "reader"}>reader</option><option value="contributor" selected={user.role === "contributor"}>contributor</option><option value="tenant_admin" selected={user.role === "tenant_admin"}>tenant_admin</option><option value="auditor" selected={user.role === "auditor"}>auditor</option></select></label>
-      <button type="submit">Save</button>
-      <p class="text-xs text-zinc-500 md:col-span-6">{user.principal} · {user.provision_source}</p>
-    </form>)}</div>
+<BaseLayout title={`${copy.title} · Org Brain`} lang={lang}>
+  <section class="admin-page">
+    <AdminPageHeader eyebrow={tenantId} title={copy.title} description={copy.description} />
+
+    {message && <LiveNotice message={message} />}
+    {error && <LiveNotice tone="error" message={error} />}
+
+    <AdminSection titleId="invite-user-title" title={copy.inviteTitle} description={copy.inviteDescription}>
+      <form method="post" class="admin-form-grid admin-form-grid-four">
+        <input type="hidden" name="csrf_token" id="csrf-token" />
+        <label><span>{copy.email}</span><input type="email" name="email" required /></label>
+        <label><span>{copy.displayName}</span><input name="display_name" required /></label>
+        <label><span>{copy.fullName}</span><input name="full_name" /></label>
+        <label><span>{copy.role}</span><select name="role">{roles.map((role) => <option value={role}>{adminRoleLabel(role, lang)}</option>)}</select></label>
+        <div class="admin-form-actions"><button type="submit">{copy.invite}</button></div>
+      </form>
+    </AdminSection>
+
+    <AdminSection titleId="existing-users-title" title={copy.existingTitle} description={copy.existingDescription}>
+      <span slot="actions" class="surface-chip">{users.length}</span>
+      {users.length === 0 ? <p class="admin-empty" role="status">{copy.noUsers}</p> : (
+        <div class="admin-record-list">{users.map((user: any) => (
+          <form method="post" class="admin-user-row">
+            <input type="hidden" name="csrf_token" class="csrf-token" />
+            <input type="hidden" name="principal" value={user.principal} />
+            <input type="hidden" name="full_name_locked" value={user.full_name_source === "scim" ? "true" : "false"} />
+            <label><span>{copy.displayName}</span><input name="display_name" value={user.display_name} required /></label>
+            <label><span>{copy.fullName}</span><input name="full_name" value={user.full_name ?? ""} disabled={user.full_name_source === "scim"} aria-describedby={user.full_name_source === "scim" ? `managed-${user.principal}` : undefined} /></label>
+            <label><span>{copy.email}</span><input value={user.email ?? ""} disabled /></label>
+            <label><span>{copy.status}</span><select name="status">{statuses.map((status) => <option value={status} selected={user.status === status}>{adminUserStatusLabel(status, lang)}</option>)}</select></label>
+            <label><span>{copy.role}</span><select name="role">{roles.map((role) => <option value={role} selected={user.role === role}>{adminRoleLabel(role, lang)}</option>)}</select></label>
+            <button type="submit">{copy.save}</button>
+            <p class="admin-record-meta"><span>{copy.userMeta}:</span> {user.principal} · {user.provision_source}</p>
+            {user.full_name_source === "scim" && <p id={`managed-${user.principal}`} class="admin-record-meta">{copy.managedName}</p>}
+          </form>
+        ))}</div>
+      )}
+    </AdminSection>
   </section>
 </BaseLayout>
 <script>document.querySelectorAll<HTMLInputElement>("#csrf-token, .csrf-token").forEach((input) => { input.value=sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>

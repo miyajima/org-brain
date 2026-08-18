@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
@@ -255,6 +256,13 @@ type AnalyticsSummary = {
 
 const url = Astro.url;
 const params = url.searchParams;
+const requestedLocale = params.get("lang");
+const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale === "zh" ? requestedLocale : "en";
+const explorerCopy = {
+  en: { title: "Memory Explorer", eyebrow: "Memory workspace", map: "Knowledge connections", fallbackTitle: "The accessible list is active", fallbackBody: "3D rendering is unavailable in this environment. The same filtered memories remain available here.", errorTitle: "Some memory information is unavailable", search: "Search", profile: "Profile", maintenance: "Maintenance", quality: "Quality", mine: "My memories", org: "Organization memories", active: "Active", review: "Needs review", trash: "Trash", scope: "Memory scope", lifecycle: "Memory lifecycle" },
+  ja: { title: "メモリエクスプローラー", eyebrow: "メモリワークスペース", map: "知識のつながり", fallbackTitle: "検索・一覧表示に切り替えました", fallbackBody: "この環境では3D描画を利用できません。同じ条件のメモリをこの一覧で確認できます。", errorTitle: "一部のメモリ情報を取得できません", search: "検索", profile: "プロファイル", maintenance: "メンテナンス", quality: "品質", mine: "自分のメモリ", org: "組織のメモリ", active: "有効", review: "要確認", trash: "ゴミ箱", scope: "メモリの範囲", lifecycle: "メモリの状態" },
+  zh: { title: "记忆浏览器", eyebrow: "记忆工作区", map: "知识关联", fallbackTitle: "已切换到搜索与列表", fallbackBody: "此环境无法使用3D渲染，仍可在此查看相同筛选条件下的记忆。", errorTitle: "部分记忆信息不可用", search: "搜索", profile: "配置", maintenance: "维护", quality: "质量", mine: "我的记忆", org: "组织记忆", active: "有效", review: "需要检查", trash: "回收站", scope: "记忆范围", lifecycle: "记忆状态" }
+}[locale];
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 const qualityUiMode = await resolveMemoryQualityUiMode(Astro.locals);
@@ -685,45 +693,45 @@ const clearQueryHref = makeHref({ q: "", selected: "", page: "1" });
 const constellationParams = new URLSearchParams({ tenant_id: tenantId });
 if (projectId) constellationParams.set("project_id", projectId);
 const requestedLang = params.get("lang");
-if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") {
-  constellationParams.set("lang", requestedLang);
-}
+if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") constellationParams.set("lang", requestedLang);
 const constellationHref = `/memories/constellation?${constellationParams.toString()}`;
 ---
-<BaseLayout title="Memory Explorer" wide>
+<BaseLayout title={explorerCopy.title} lang={locale} wide>
   {mapFallback && (
     <div class="intelligence-route-alert" role="status">
-      <strong>3D表示からメモリ一覧へ切り替えました</strong>
-      <span>この環境では3D描画を安定して表示できないため、同じ条件の一覧を表示しています。</span>
+      <strong>{explorerCopy.fallbackTitle}</strong>
+      <span>{explorerCopy.fallbackBody}</span>
     </div>
   )}
   <section class="memory-explorer space-y-4">
     <header class="memory-page-header">
       <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <div class="space-y-2">
-          <p class="surface-label">Memory workspace</p>
-          <h1 class="text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">Memory Explorer</h1>
+          <p class="surface-label">{explorerCopy.eyebrow}</p>
+          <h1 class="text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">{explorerCopy.title}</h1>
         </div>
-        {insightsRoutesEnabled && <a class="memory-map-link" href={constellationHref}><span>Knowledge connections</span><span aria-hidden="true">↗</span></a>}
+        {insightsRoutesEnabled && <a class="memory-map-link" href={constellationHref}><span>{explorerCopy.map}</span><span aria-hidden="true">↗</span></a>}
       </div>
     </header>
+
+    {loadErrors.length > 0 && <AdminStatePanel state="partial" title={explorerCopy.errorTitle} description={loadErrors.join(" · ")} />}
 
     <section class="memory-command-surface">
       <div class="memory-command-nav">
         <div class="flex flex-wrap gap-2">
-          <a class={tabClass(view === "search")} href={searchTabHref}>Search</a>
-          <a class={tabClass(view === "profile")} href={profileTabHref}>Profile</a>
-          <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>Maintenance</a>
-          {qualityViewEnabled && <a class={tabClass(view === "quality")} href={qualityTabHref}>Quality {qualityUiMode === "beta" ? "β" : ""}</a>}
+          <a class={tabClass(view === "search")} href={searchTabHref}>{explorerCopy.search}</a>
+          <a class={tabClass(view === "profile")} href={profileTabHref}>{explorerCopy.profile}</a>
+          <a class={tabClass(view === "maintenance")} href={maintenanceTabHref}>{explorerCopy.maintenance}</a>
+          {qualityViewEnabled && <a class={tabClass(view === "quality")} href={qualityTabHref}>{explorerCopy.quality} {qualityUiMode === "beta" ? "β" : ""}</a>}
         </div>
-        <div class="flex flex-wrap gap-2" aria-label="Memory scope">
-          <a class={tabClass(scope === "mine")} href={makeHref({ scope: "mine", owner_principal: "", lifecycle: lifecycle === "trash" ? "active" : lifecycle, page: "1", selected: "" })}>自分のメモリ</a>
-          <a class={tabClass(scope === "org")} href={makeHref({ scope: "org", page: "1", selected: "" })}>組織のメモリ</a>
+        <div class="flex flex-wrap gap-2" aria-label={explorerCopy.scope}>
+          <a class={tabClass(scope === "mine")} href={makeHref({ scope: "mine", owner_principal: "", lifecycle: lifecycle === "trash" ? "active" : lifecycle, page: "1", selected: "" })}>{explorerCopy.mine}</a>
+          <a class={tabClass(scope === "org")} href={makeHref({ scope: "org", page: "1", selected: "" })}>{explorerCopy.org}</a>
         </div>
-        <div class="flex flex-wrap gap-2" aria-label="Memory lifecycle">
-          <a class={tabClass(lifecycle === "active")} href={activeTabHref}>有効</a>
-          <a class={tabClass(lifecycle === "review")} href={reviewTabHref}>要確認</a>
-          <a class={tabClass(lifecycle === "trash")} href={trashTabHref}>ゴミ箱</a>
+        <div class="flex flex-wrap gap-2" aria-label={explorerCopy.lifecycle}>
+          <a class={tabClass(lifecycle === "active")} href={activeTabHref}>{explorerCopy.active}</a>
+          <a class={tabClass(lifecycle === "review")} href={reviewTabHref}>{explorerCopy.review}</a>
+          <a class={tabClass(lifecycle === "trash")} href={trashTabHref}>{explorerCopy.trash}</a>
         </div>
       </div>
 
@@ -906,15 +914,6 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
         </div>
       </details>
     </section>
-
-    {loadErrors.length > 0 && (
-      <section class="rounded-[28px] border border-rose-300/25 bg-rose-400/8 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
-        <strong class="block text-sm font-semibold text-rose-100">Data fetch warning</strong>
-        <ul class="mt-3 list-disc space-y-2 pl-5 text-sm leading-7 text-rose-100/80">
-          {loadErrors.map((message) => <li>{message}</li>)}
-        </ul>
-      </section>
-    )}
 
     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_22rem]">
       <section class="space-y-5">
@@ -1693,7 +1692,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
   }
   .memory-search-behavior strong {
     color: #dceffa;
-    font-size: .7rem;
+    font-size: .75rem;
   }
   .memory-results-card {
     min-width: 0;
@@ -1718,7 +1717,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     border-radius: 10px;
     background: rgba(99, 189, 255, .07);
     color: #d9f1ff;
-    font: 650 .72rem "Fira Code", monospace;
+    font: 650 .75rem "Fira Code", monospace;
   }
   .memory-row-meta {
     display: flex;

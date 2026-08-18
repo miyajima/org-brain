@@ -1,0 +1,22 @@
+---
+import type { AdminPageState } from "../../lib/admin-ui";
+
+const { state, title, description, compact = false } = Astro.props as {
+  state: AdminPageState;
+  title: string;
+  description?: string;
+  compact?: boolean;
+};
+const urgent = state === "error" || state === "attention";
+---
+<section
+  class:list={["admin-state", `admin-state-${state}`, compact && "admin-state-compact"]}
+  role={state === "error" ? "alert" : "status"}
+  aria-live={urgent ? "assertive" : "polite"}
+>
+  <div class="admin-state-copy">
+    <span class="admin-state-indicator" aria-hidden="true"></span>
+    <div><strong>{title}</strong>{description && <p>{description}</p>}</div>
+  </div>
+  {Astro.slots.has("actions") && <div class="admin-state-actions"><slot name="actions" /></div>}
+</section>

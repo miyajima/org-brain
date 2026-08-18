@@ -1,7 +1,9 @@
 ---
 import brandMark from "../../../../../assets/brand/org-brain-avatar.png";
 import IntelligencePoller from "./IntelligencePoller.astro";
+import RecommendedActions from "./RecommendedActions.astro";
 import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { activityHealthyCopy, activityRecommendedActions } from "../../lib/insight-guidance";
 import { dashboardLabel } from "../../lib/dashboard-copy";
 import {
   activityCapabilityForEvent,
@@ -70,6 +72,14 @@ const selectedCapability = selectedEvent ? activityCapabilityForEvent(selectedEv
 const highlightedCapability = activeCapability ?? selectedCapability;
 const severityLabel = (severity: ActivityEvent["severity"]) => copy.common.severity[severity];
 const activityPathname = Astro.url.pathname === "/" ? "/" : "/overview";
+const recommendedActions = activityRecommendedActions(data, params, activityPathname, locale);
+const healthyCopy = activityHealthyCopy(locale);
+const briefingCopy = {
+  en: { title: "Signals needing attention", subtitle: "Start here", events: "Events", agents: "Observed agents", critical: "Critical", actions: "Actions" },
+  ja: { title: "対応が必要なシグナル", subtitle: "最初に確認", events: "イベント", agents: "観測エージェント", critical: "重大", actions: "要対応" },
+  zh: { title: "需要处理的信号", subtitle: "请先查看", events: "事件", agents: "观察到的代理", critical: "严重", actions: "待处理" }
+}[locale];
+const criticalEventCount = data.events.filter((event) => event.severity === "critical" || event.status === "failed").length;
 const actorEvent = (actor: ObservedAgent) => data.events.find((event) => event.actor.id === actor.id) ?? null;
 const actorHref = (actor: ObservedAgent) => {
   const event = actorEvent(actor);
@@ -224,6 +234,18 @@ const agentStateLabel = (actor: ObservedAgent) => actor.state === "active" && ac
     <section class="data-unavailable" role="status"><strong>{uiCopy.unavailableTitle}</strong><p>{uiCopy.unavailableBody}</p></section>
   )}
 
+  {!loadError && (
+    <>
+      <RecommendedActions locale={locale} title={briefingCopy.title} subtitle={briefingCopy.subtitle} actions={recommendedActions} emptyTitle={healthyCopy.title} emptyBody={healthyCopy.body} />
+      <dl class="activity-health-summary" aria-label={briefingCopy.subtitle}>
+        <div><dt>{briefingCopy.actions}</dt><dd>{recommendedActions.length}</dd></div>
+        <div><dt>{briefingCopy.critical}</dt><dd>{criticalEventCount}</dd></div>
+        <div><dt>{briefingCopy.events}</dt><dd>{data.events.length}</dd></div>
+        <div><dt>{briefingCopy.agents}</dt><dd>{data.observed_agents.length}</dd></div>
+      </dl>
+    </>
+  )}
+
   {!loadError && selectedEvent && (
     <section class="selected-event" aria-labelledby="selected-event-title">
       <div class="selected-event-summary">
@@ -257,7 +279,7 @@ const agentStateLabel = (actor: ObservedAgent) => actor.state === "active" && ac
       <div class="topology-heading topology-heading-brain">{copy.nervous.brainHeading}</div>
       <div class="topology-heading topology-heading-projects">{copy.nervous.projectsHeading}</div>
 
-      <svg class="topology-map" viewBox="0 0 1200 440" role="img" aria-labelledby="topology-title topology-description">
+      <svg class="topology-map" viewBox="0 0 1200 440" role="group" aria-labelledby="topology-title topology-description">
         <title id="topology-title">{copy.nervous.topologyTitle}</title>
         <desc id="topology-description">{periodCopy(copy.nervous.topologyDescriptionPeriod)}</desc>
         <defs>
@@ -432,27 +454,32 @@ const agentStateLabel = (actor: ObservedAgent) => actor.state === "active" && ac
 
 <style>
   .nervous-system { padding-bottom: 2rem; }
-  .activity-topology { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(4,8,14,.72); }.activity-topology > header { display: flex; min-height: 48px; align-items: center; padding: .72rem 1rem .78rem; border-bottom: 1px solid var(--intelligence-border); }.activity-topology > header h2 { color: var(--intelligence-text); font-size: .86rem; font-weight: 650; }.activity-topology > header p { max-width: 78rem; margin-top: .28rem; color: var(--intelligence-muted); font-size: .66rem; line-height: 1.5; }
+  .activity-topology { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(4,8,14,.72); }.activity-topology > header { display: flex; min-height: 48px; align-items: center; padding: .72rem 1rem .78rem; border-bottom: 1px solid var(--intelligence-border); }.activity-topology > header h2 { color: var(--intelligence-text); font-size: .86rem; font-weight: 650; }.activity-topology > header p { max-width: 78rem; margin-top: .28rem; color: var(--intelligence-muted); font-size: .75rem; line-height: 1.5; }
   .intelligence-header { display: grid; grid-template-columns: minmax(18rem, 1fr) auto; gap: 1rem; align-items: center; padding: .8rem 0 .7rem; }
   .intelligence-header h1 { margin-top: .28rem; max-width: 26ch; color: var(--intelligence-text); font-size: clamp(2rem, 3.3vw, 3.25rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.04; }
-  .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: "Fira Code", monospace; font-size: .69rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+  .intelligence-eyebrow { color: var(--intelligence-blue-bright); font-family: var(--console-font-mono); font-size: .75rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
   .header-actions { display: grid; grid-template-columns: auto auto; gap: .35rem .5rem; align-items: center; justify-items: end; }
-  .header-actions :global(intelligence-poller) { grid-column: 1 / -1; min-height: 38px; gap: .45rem; font-size: .68rem; }
+  .header-actions :global(intelligence-poller) { grid-column: 1 / -1; min-height: 44px; gap: .45rem; font-size: .75rem; }
   .header-actions :global(.poll-updated) { padding-left: .5rem; }
   .header-actions :global(.poll-refresh) { min-height: 38px; padding: .25rem .55rem; }
   .activity-period { display: flex; min-height: 40px; align-items: center; gap: .4rem; border: 1px solid var(--intelligence-border); border-radius: 12px; background: rgba(5,10,18,.72); padding: .15rem .2rem .15rem .6rem; }
-  .activity-period > span { color: var(--intelligence-muted); font-size: .68rem; font-weight: 600; white-space: nowrap; }
+  .activity-period > span { color: var(--intelligence-muted); font-size: .75rem; font-weight: 600; white-space: nowrap; }
   .activity-period > div { display: flex; gap: .12rem; }
-  .activity-period a { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; border-radius: 9px; padding: 0 .55rem; color: #aeb9c8; font-size: .7rem; font-weight: 600; }
+  .activity-period a { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 9px; padding: 0 .55rem; color: #c1ccda; font-size: .75rem; font-weight: 600; }
   .activity-period a[aria-current="page"] { background: rgba(22,135,255,.18); color: #eaf6ff; box-shadow: inset 0 0 0 1px rgba(73,170,255,.45), 0 0 18px rgba(22,135,255,.14); }
   .secondary-action { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; border-radius: 11px; padding: .5rem .8rem; font-size: .76rem; font-weight: 600; }
   .secondary-action { border: 1px solid var(--intelligence-border); background: rgba(255,255,255,.025); color: var(--intelligence-text); }
   .data-unavailable { display: grid; min-height: 9rem; gap: .45rem; place-content: center; border: 1px solid color-mix(in srgb,var(--intelligence-danger) 38%,transparent); border-radius: 14px; background: color-mix(in srgb,var(--intelligence-danger) 7%,transparent); padding: 1rem; text-align: center; }.data-unavailable strong { color: #ffd7db; }.data-unavailable p { max-width: 48rem; color: var(--intelligence-muted); font-size: .78rem; line-height: 1.6; }
+  .activity-health-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; margin: 0 0 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(6,12,20,.76); }
+  .activity-health-summary > div { min-width: 0; padding: .75rem 1rem; }
+  .activity-health-summary > div + div { border-left: 1px solid var(--intelligence-border); }
+  .activity-health-summary dt { color: rgba(203,222,238,.82); font-size: .75rem; }
+  .activity-health-summary dd { margin: .3rem 0 0; color: var(--intelligence-text); font: 650 1.25rem/1.2 "Fira Code",monospace; font-variant-numeric: tabular-nums; }
   .system-stage { position: relative; min-height: 31rem; overflow: hidden; border-top: 1px solid rgba(111,136,172,.12); border-bottom: 1px solid rgba(111,136,172,.14); background: radial-gradient(circle at 50% 48%, rgba(0,112,255,.12), transparent 24%); }
   .topology-map { width: 100%; min-height: 31rem; }
   .topology-entity-link { outline: none; }
   .topology-entity-link:focus-visible .actor-ring,.topology-entity-link:focus-visible .project-card { stroke: #d9f1ff; stroke-width: 3; }
-  .topology-heading { position: absolute; z-index: 2; top: 1rem; color: #b4bdcb; font-size: .72rem; font-weight: 600; }
+  .topology-heading { position: absolute; z-index: 2; top: 1rem; color: #c3ceda; font-size: .75rem; font-weight: 600; }
   .topology-heading-actors { left: 3%; }.topology-heading-brain { left: 46%; }.topology-heading-projects { right: 3%; }
   .flow { fill: none; stroke: url(#flow-blue); stroke-width: 3; filter: url(#blue-glow); vector-effect: non-scaling-stroke; }
   .flow-out { stroke: #54b6ff; opacity: .92; }.flow-critical { stroke: url(#flow-critical); }
@@ -467,11 +494,11 @@ const agentStateLabel = (actor: ObservedAgent) => actor.state === "active" && ac
   .actor-initial { fill: #f7fbff; font-family: "Fira Code", monospace; font-size: 14px; font-weight: 600; }
   .agent-state { fill: none; stroke: #a5afbe; stroke-width: 1.5; }.agent-state-active { fill: #45dc8a; stroke: none; filter: url(#blue-glow); }
   .actor-label, .project-label { fill: #f4f8ff; font-size: 13px; font-weight: 600; }
-  .actor-detail, .project-detail, .actor-counter { fill: #8f99aa; font-size: 9px; }.actor-counter { fill: #46aaff; }
+  .actor-detail, .project-detail, .actor-counter { fill: #c0cad7; font-size: 12px; }.actor-counter { fill: #78c7ff; }
   .project-card { fill: rgba(10,15,23,.9); stroke: rgba(139,163,196,.28); }.project-card-critical { stroke: rgba(255,92,103,.65); }
   .brain-capability-link { cursor: pointer; outline: none; }
   .brain-capability rect { fill: rgba(9,17,29,.9); stroke: rgba(100,146,198,.34); transition: fill 180ms ease, stroke 180ms ease, filter 180ms ease; }
-  .brain-capability text { fill: #e5f3ff; font-size: 11px; font-weight: 600; pointer-events: none; }.brain-capability .capability-note { fill: #91a0b4; font-size: 8px; font-weight: 400; }.brain-capability .capability-count { fill: #62b8ff; font-family: "Fira Code", monospace; font-size: 8px; }.brain-capability .capability-latest { fill: #77869b; font-size: 6.5px; font-weight: 400; }
+  .brain-capability text { fill: #e5f3ff; font-size: 12px; font-weight: 600; pointer-events: none; }.brain-capability .capability-note { fill: #bdc9d7; font-size: 12px; font-weight: 400; }.brain-capability .capability-count { fill: #78c7ff; font-family: var(--console-font-mono); font-size: 12px; }.brain-capability .capability-latest { fill: #b5c2d2; font-size: 12px; font-weight: 400; }
   .brain-capability-link:hover rect,.brain-capability-link:focus-visible rect,.brain-capability-active rect { fill: rgba(12,39,70,.96); stroke: #69bdff; stroke-width: 2; filter: url(#blue-glow); }
   .brain-capability-link:focus-visible rect { stroke: #d9f1ff; stroke-width: 3; }
   .topology-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -479,23 +506,23 @@ const agentStateLabel = (actor: ObservedAgent) => actor.state === "active" && ac
   .selected-event { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) auto; gap: 1rem; align-items: center; margin-top: 1rem; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(7,11,18,.72); padding: 1rem 1.2rem; }
   .selected-event-summary { display: flex; align-items: flex-start; gap: .75rem; }.selected-event h2 { margin-top: .35rem; color: var(--intelligence-text); font-size: 1.05rem; }.selected-event-summary p:last-child { margin-top: .32rem; color: var(--intelligence-muted); font-size: .75rem; }
   .event-dot { width: .55rem; height: .55rem; flex: 0 0 auto; margin-top: .25rem; border-radius: 999px; background: var(--intelligence-blue); box-shadow: 0 0 14px rgba(22,135,255,.7); }.event-dot-warning { background: var(--intelligence-warning); }.event-dot-critical { background: var(--intelligence-danger); }
-  .selected-event dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .8rem; }.selected-event dt { color: var(--intelligence-muted); font-size: .62rem; text-transform: uppercase; }.selected-event dd { margin-top: .3rem; overflow: hidden; color: var(--intelligence-text); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
-  .activity-timeline { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(4,8,14,.72); }.activity-timeline > header { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1rem; border-bottom: 1px solid var(--intelligence-border); }.activity-timeline h2 { margin-top: .2rem; font-size: .92rem; }.activity-timeline > header > span { color: var(--intelligence-muted); font-family: "Fira Code", monospace; font-size: .68rem; }
+  .selected-event dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .8rem; }.selected-event dt { color: var(--intelligence-muted); font-size: .75rem; text-transform: uppercase; }.selected-event dd { margin-top: .3rem; overflow: hidden; color: var(--intelligence-text); font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
+  .activity-timeline { margin-top: 1rem; overflow: hidden; border: 1px solid var(--intelligence-border); border-radius: 14px; background: rgba(4,8,14,.72); }.activity-timeline > header { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1rem; border-bottom: 1px solid var(--intelligence-border); }.activity-timeline h2 { margin-top: .2rem; font-size: .92rem; }.activity-timeline > header > span { color: var(--intelligence-muted); font-family: var(--console-font-mono); font-size: .75rem; }
   .timeline-overview { padding: .85rem 1rem .5rem; background: linear-gradient(180deg,rgba(14,38,65,.2),transparent); }
   .timeline-chart { display: grid; height: 9rem; grid-template-columns: repeat(12,minmax(0,1fr)); gap: clamp(.18rem,.7vw,.55rem); align-items: end; border-bottom: 1px solid rgba(94,177,236,.36); background: repeating-linear-gradient(to top,transparent 0,transparent calc(33.333% - 1px),rgba(78,154,211,.12) 33.333%); padding: .55rem .2rem 0; }
   .timeline-bucket { position: relative; display: flex; min-width: 0; height: 100%; align-items: center; justify-content: flex-end; outline: none; }
   .timeline-bucket-bar { width: min(2.4rem,76%); height: var(--bar-height,2px); min-height: 2px; border-radius: 5px 5px 1px 1px; background: linear-gradient(180deg,#70c3ff,#126fd1); box-shadow: 0 0 14px rgba(35,142,230,.22); transition: filter 180ms ease, transform 180ms ease; }
   .timeline-bucket-warning .timeline-bucket-bar { background: linear-gradient(180deg,#ffd27a,#b96f10); }.timeline-bucket-critical .timeline-bucket-bar { background: linear-gradient(180deg,#ff8e97,#b72d3a); }
   .timeline-bucket:hover .timeline-bucket-bar,.timeline-bucket:focus-visible .timeline-bucket-bar { filter: brightness(1.24); transform: translateY(-2px); }.timeline-bucket:focus-visible { border-radius: 7px; box-shadow: inset 0 0 0 2px #9ad8ff; }
-  .timeline-bucket-count { position: absolute; top: .05rem; color: #cde8fa; font-family: "Fira Code",monospace; font-size: clamp(.52rem,.75vw,.64rem); font-variant-numeric: tabular-nums; }.timeline-bucket-empty .timeline-bucket-count { display: none; }.timeline-bucket-empty .timeline-bucket-bar { background: rgba(105,164,207,.18); box-shadow: none; }
-  .timeline-axis { display: flex; justify-content: space-between; padding-top: .4rem; color: var(--intelligence-muted); font-family: "Fira Code",monospace; font-size: .6rem; font-variant-numeric: tabular-nums; }
-  .timeline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem 1rem .75rem; color: var(--intelligence-muted); font-size: .65rem; }.timeline-legend span::before { display: inline-block; width: .4rem; height: .4rem; margin-right: .38rem; border-radius: 999px; background: var(--intelligence-blue); content: ""; }
-  .timeline-recent { border-top: 1px solid var(--intelligence-border); }.timeline-recent h3 { padding: .65rem 1rem; color: #c7d8e8; font-size: .7rem; font-weight: 600; }.timeline-recent ol { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 1px solid rgba(139,159,185,.1); }.timeline-recent li { min-width: 0; border-bottom: 1px solid rgba(139,159,185,.1); }.timeline-recent li:nth-child(odd) { border-right: 1px solid rgba(139,159,185,.1); }
-  .timeline-recent a,.timeline-event-list a { display: grid; min-height: 66px; gap: .24rem; align-content: center; padding: .55rem 1rem .62rem; transition: background 180ms ease; }.timeline-recent a:hover,.timeline-recent a:focus-visible,.timeline-event-list a:hover,.timeline-event-list a:focus-visible { background: rgba(30,126,205,.1); outline: none; }.timeline-recent strong,.timeline-event-list strong { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .72rem; line-height: 1.42; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }.timeline-event-context,.timeline-event-meta { display: flex; min-width: 0; overflow: hidden; align-items: center; gap: .35rem; color: var(--intelligence-muted); font-size: .58rem; white-space: nowrap; }.timeline-event-context em,.timeline-event-meta em { min-width: 0; overflow: hidden; border: 1px solid rgba(110,157,197,.16); border-radius: 5px; background: rgba(72,133,184,.07); padding: .12rem .3rem; font-style: normal; text-overflow: ellipsis; }.timeline-event-context em:first-child { max-width: 11rem; }.timeline-event-meta { justify-content: space-between; }.timeline-event-meta em { flex: 0 0 auto; }
-  .timeline-event-list { border-top: 1px solid var(--intelligence-border); }.timeline-event-list summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: .65rem 1rem; color: #c7d8e8; cursor: pointer; font-size: .7rem; }.timeline-event-list ol { display: grid; max-height: 22rem; overflow-y: auto; border-top: 1px solid var(--intelligence-border); }.timeline-event-list li + li { border-top: 1px solid rgba(139,159,185,.1); }
+  .timeline-bucket-count { position: absolute; top: .05rem; color: #cde8fa; font-family: "Fira Code",monospace; font-size: .75rem; font-variant-numeric: tabular-nums; }.timeline-bucket-empty .timeline-bucket-count { display: none; }.timeline-bucket-empty .timeline-bucket-bar { background: rgba(105,164,207,.18); box-shadow: none; }
+  .timeline-axis { display: flex; justify-content: space-between; padding-top: .4rem; color: rgba(203,222,238,.82); font-family: "Fira Code",monospace; font-size: .75rem; font-variant-numeric: tabular-nums; }
+  .timeline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .5rem 1rem .75rem; color: rgba(203,222,238,.82); font-size: .75rem; }.timeline-legend span::before { display: inline-block; width: .4rem; height: .4rem; margin-right: .38rem; border-radius: 999px; background: var(--intelligence-blue); content: ""; }
+  .timeline-recent { border-top: 1px solid var(--intelligence-border); }.timeline-recent h3 { padding: .65rem 1rem; color: #c7d8e8; font-size: .75rem; font-weight: 600; }.timeline-recent ol { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 1px solid rgba(139,159,185,.1); }.timeline-recent li { min-width: 0; border-bottom: 1px solid rgba(139,159,185,.1); }.timeline-recent li:nth-child(odd) { border-right: 1px solid rgba(139,159,185,.1); }
+  .timeline-recent a,.timeline-event-list a { display: grid; min-height: 72px; gap: .3rem; align-content: center; padding: .6rem 1rem .7rem; transition: background 180ms ease; }.timeline-recent a:hover,.timeline-recent a:focus-visible,.timeline-event-list a:hover,.timeline-event-list a:focus-visible { background: rgba(30,126,205,.1); outline: none; }.timeline-recent strong,.timeline-event-list strong { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; color: var(--intelligence-text); font-size: .8125rem; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }.timeline-event-context,.timeline-event-meta { display: flex; min-width: 0; overflow: hidden; align-items: center; gap: .35rem; color: rgba(203,222,238,.82); font-size: .75rem; white-space: nowrap; }.timeline-event-context em,.timeline-event-meta em { min-width: 0; overflow: hidden; border: 1px solid rgba(110,157,197,.2); border-radius: 5px; background: rgba(72,133,184,.09); padding: .12rem .3rem; font-style: normal; text-overflow: ellipsis; }.timeline-event-context em:first-child { max-width: 11rem; }.timeline-event-meta { justify-content: space-between; }.timeline-event-meta em { flex: 0 0 auto; }
+  .timeline-event-list { border-top: 1px solid var(--intelligence-border); }.timeline-event-list summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: .65rem 1rem; color: #c7d8e8; cursor: pointer; font-size: .75rem; }.timeline-event-list ol { display: grid; max-height: 22rem; overflow-y: auto; border-top: 1px solid var(--intelligence-border); }.timeline-event-list li + li { border-top: 1px solid rgba(139,159,185,.1); }
   .intelligence-empty { display: grid; gap: .55rem; min-height: 16rem; place-content: center; border: 1px dashed var(--intelligence-border); border-radius: 16px; color: var(--intelligence-muted); text-align: center; }.intelligence-empty strong { color: var(--intelligence-text); }.intelligence-empty.compact { min-height: 6rem; }
-  .project-scope-note { margin-top: .75rem; color: var(--intelligence-muted); font-size: .7rem; line-height: 1.5; }
+  .project-scope-note { margin-top: .75rem; color: var(--intelligence-muted); font-size: .75rem; line-height: 1.5; }
   @media (max-width: 1020px) { .intelligence-header { grid-template-columns: 1fr; }.header-actions { justify-content: start; justify-items: start; }.system-stage { padding-top: 2.5rem; }.topology-map { min-width: 880px; transform: translateX(calc((100% - 880px)/2)); }.selected-event { grid-template-columns: 1fr; } }
-  @media (max-width: 720px) { .header-actions { width: 100%; grid-template-columns: 1fr; }.header-actions :global(intelligence-poller) { grid-column: 1; }.secondary-action { width: 100%; }.topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: grid; gap: .25rem; color: var(--intelligence-muted); font-size: .72rem; }.topology-fallback strong { color: var(--intelligence-text); }.capability-fallback-list a { display: grid; width: 100%; min-height: 44px; gap: .25rem; border-radius: 9px; padding: .5rem; }.capability-fallback-list a[aria-current="true"] { background: rgba(22,135,255,.14); box-shadow: inset 0 0 0 1px rgba(73,170,255,.4); }.capability-fallback-list span { color: var(--intelligence-muted); }.selected-event dl { grid-template-columns: 1fr; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-period { width: 100%; justify-content: space-between; }.timeline-overview { padding-inline: .7rem; }.timeline-chart { height: 7.5rem; gap: .15rem; }.timeline-bucket-bar { width: 74%; }.timeline-bucket-count { writing-mode: vertical-rl; }.timeline-recent ol { grid-template-columns: 1fr; }.timeline-recent li:nth-child(odd) { border-right: 0; } }
+  @media (max-width: 720px) { .header-actions { width: 100%; grid-template-columns: 1fr; }.header-actions :global(intelligence-poller) { grid-column: 1; }.secondary-action { width: 100%; }.activity-health-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }.activity-health-summary > div:nth-child(3) { border-top: 1px solid var(--intelligence-border); border-left: 0; }.activity-health-summary > div:nth-child(4) { border-top: 1px solid var(--intelligence-border); }.topology-map, .topology-heading { display: none; }.topology-fallback { position: static; width: auto; height: auto; display: grid; gap: 1rem; overflow: visible; clip-path: none; padding: 1rem; white-space: normal; }.topology-fallback section { border: 1px solid var(--intelligence-border); border-radius: 13px; padding: .9rem; }.topology-fallback h2 { font-size: .85rem; }.topology-fallback ul { display: grid; gap: .55rem; margin-top: .7rem; }.topology-fallback li { display: grid; gap: .25rem; color: var(--intelligence-muted); font-size: .75rem; }.topology-fallback strong { color: var(--intelligence-text); }.capability-fallback-list a { display: grid; width: 100%; min-height: 44px; gap: .25rem; border-radius: 9px; padding: .5rem; }.capability-fallback-list a[aria-current="true"] { background: rgba(22,135,255,.14); box-shadow: inset 0 0 0 1px rgba(73,170,255,.4); }.capability-fallback-list span { color: var(--intelligence-muted); }.selected-event dl { grid-template-columns: 1fr; }.system-stage { padding-top: 0; }.selected-event { padding: .9rem; }.activity-period { width: 100%; justify-content: space-between; }.timeline-overview { padding-inline: .7rem; }.timeline-chart { height: 7.5rem; gap: .15rem; }.timeline-bucket-bar { width: 74%; }.timeline-bucket-count { writing-mode: vertical-rl; }.timeline-recent ol { grid-template-columns: 1fr; }.timeline-recent li:nth-child(odd) { border-right: 0; } }
   @media (prefers-reduced-motion: no-preference) { .flow { stroke-dasharray: 10 12; animation: flow-dash 7s linear infinite; }.brain-aura { animation: brain-pulse 3.4s ease-in-out infinite; } @keyframes flow-dash { to { stroke-dashoffset: -88; } } @keyframes brain-pulse { 50% { opacity: .58; transform: scale(1.04); transform-origin: 600px 220px; } } }
 </style>
