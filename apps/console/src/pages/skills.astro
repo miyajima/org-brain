@@ -1,0 +1,224 @@
+---
+import AccessDrawer from "../components/decision/AccessDrawer.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { normalizeSkillAssets, scopedHref } from "../lib/decision-console-ui";
+
+const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const behavior = decisionConsoleBehavior(mode);
+const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+if (!behavior.enabled) return Astro.redirect(scopedHref("/decisions", params), 307);
+const selectedSkillId = Astro.url.searchParams.get("skill_id")?.trim() ?? "";
+const decisionId = Astro.url.searchParams.get("decision_id")?.trim() ?? "";
+const sourceHash = Astro.url.searchParams.get("source_hash")?.trim() ?? "";
+const startGeneration = Astro.url.searchParams.get("start") === "generate";
+const normalizeProviders = (value: unknown): string[] => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Provider list was invalid");
+  const entries = (value as Record<string, unknown>).providers;
+  if (!Array.isArray(entries)) throw new Error("Provider list was invalid");
+  return entries.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const provider = (entry as Record<string, unknown>).provider;
+    return typeof provider === "string" ? [provider] : [];
+  });
+};
+const skills = await fetchDashboardData(
+  new URL(dashboardApiPath("/api/v1/skills", apiParams, { limit: 100 }), Astro.url),
+  normalizeSkillAssets,
+  []
+);
+const providers = await fetchDashboardData(
+  new URL(dashboardApiPath("/api/v1/skill-providers", apiParams), Astro.url),
+  normalizeProviders,
+  []
+);
+const selectedSummary = skills.data.find((skill) => skill.id === selectedSkillId) ?? null;
+const selectedDetails = selectedSummary
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/skills/${encodeURIComponent(selectedSummary.id)}`, apiParams), Astro.url),
+      (value) => value && typeof value === "object" ? value as Record<string, unknown> : {},
+      {} as Record<string, unknown>
+    )
+  : { data: {} as Record<string, unknown>, error: null as string | null };
+const access = selectedSummary
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/access-policies/skill_asset/${encodeURIComponent(selectedSummary.id)}`, apiParams), Astro.url),
+      (value) => value && typeof value === "object" ? value as Record<string, unknown> : {},
+      {} as Record<string, unknown>
+    )
+  : { data: {} as Record<string, unknown>, error: null as string | null };
+const versions = Array.isArray(selectedDetails.data.versions) ? selectedDetails.data.versions as Array<Record<string, unknown>> : [];
+const currentVersion = versions.find((version) => version.id === selectedSummary?.current_version_id) ?? versions[0] ?? null;
+const manifest = currentVersion?.manifest && typeof currentVersion.manifest === "object" ? currentVersion.manifest as Record<string, unknown> : {};
+const validationConditions = Array.isArray(manifest.validation_conditions) ? manifest.validation_conditions.filter((value): value is string => typeof value === "string") : [];
+const policy = access.data.policy && typeof access.data.policy === "object" ? access.data.policy as Record<string, unknown> : null;
+const utilizingAgents = Array.isArray(access.data.utilizing_agents) ? access.data.utilizing_agents.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
+const copy = {
+  en: { eyebrow: "Distribution layer", title: "Skills", lead: "Package a verified decision into an immutable version, then publish it deliberately for Agent use.", generate: "Generate from a decision", selected: "Selected knowledge", instruction: "Additional instruction", provider: "Provider", model: "Model", run: "Generate private draft", private: "Every generated Skill starts as a private draft. Nothing partial is published.", result: "Generation result", validation: "Validation conditions", publish: "Publish this version", publishing: "Publishing…", published: "Published", refresh: "Refresh draft", inventory: "Skill inventory", search: "Search Skills", empty: "No Skills yet.", choose: "Start from a decision detail to select its verified version.", files: "files", version: "version", source: "Source decision", owner: "Owner", exportLabel: "Export", retire: "Retire", error: "Skill operation failed" },
+  ja: { eyebrow: "Distribution layer", title: "Skills", lead: "検証済みの決定を内容不変の版としてまとめ、Agentで使う時点で明示的にPublishします。", generate: "決定からSkillを生成", selected: "選択した知識", instruction: "追加指示", provider: "Provider", model: "Model", run: "private draftを生成", private: "生成直後は常にprivate draftです。部分的な結果はPublishされません。", result: "生成結果", validation: "検証条件", publish: "この版をPublish", publishing: "Publish中…", published: "公開済み", refresh: "draftを再読込", inventory: "Skill一覧", search: "Skillを検索", empty: "Skillはまだありません。", choose: "決定詳細から、検証済みの版を選択して開始してください。", files: "files", version: "version", source: "参照元の決定", owner: "所有者", exportLabel: "Export", retire: "Retire", error: "Skill操作に失敗しました" },
+  zh: { eyebrow: "Distribution layer", title: "Skills", lead: "将已验证的决策打包为不可变版本，再明确发布给Agent使用。", generate: "从决策生成Skill", selected: "已选知识", instruction: "附加指示", provider: "Provider", model: "模型", run: "生成private draft", private: "生成后始终是private draft，部分结果不会发布。", result: "生成结果", validation: "验证条件", publish: "发布此版本", publishing: "发布中…", published: "已发布", refresh: "刷新draft", inventory: "Skill列表", search: "搜索Skill", empty: "暂无Skill。", choose: "请从决策详情选择其已验证版本。", files: "files", version: "version", source: "来源决策", owner: "所有者", exportLabel: "导出", retire: "停用", error: "Skill操作失败" }
+}[lang];
+const preferredModel: Record<string, string> = { openai: "gpt-5-mini", gemini: "gemini-2.5-flash", anthropic: "claude-sonnet-4-5" };
+const initialProvider = providers.data[0] ?? "";
+const listQuery = new URLSearchParams(params);
+const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
+---
+<BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
+  <section class="decision-assets-page" data-skills-page data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-decision-id={decisionId} data-source-hash={sourceHash} data-copy={JSON.stringify(copy)} data-preferred-model={JSON.stringify(preferredModel)}>
+    <header class="decision-page-header">
+      <div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div>
+      {selectedSummary && <AccessDrawer resourceType="skill_asset" resourceId={selectedSummary.id} tenantId={tenantId} projectId={projectId} policy={policy} utilizingAgents={utilizingAgents} locale={lang} />}
+    </header>
+    {(skills.error || providers.error || selectedDetails.error || access.error) && <div class="decision-alert" role="alert">{skills.error ?? providers.error ?? selectedDetails.error ?? access.error}</div>}
+
+    <div class="decision-assets-layout">
+      <aside class="decision-asset-inventory">
+        <div class="decision-section-heading"><div><p class="decision-eyebrow">{copy.inventory}</p><h2>{skills.data.length}</h2></div><label>{copy.search}<input type="search" data-skill-search placeholder={copy.search} /></label></div>
+        <div class="decision-asset-list" data-skill-list>
+          {skills.data.map((skill) => {
+            const next = new URLSearchParams(listQuery);
+            next.set("skill_id", skill.id);
+            return <a class:list={["decision-asset-card", selectedSkillId === skill.id && "is-selected"]} href={`/skills?${next}`} data-skill-card data-search={`${skill.name} ${skill.description} ${skill.status}`.toLocaleLowerCase(lang)}>
+              <div><span class:list={["decision-status-dot", `is-${skill.status}`]}></span><strong>{skill.name}</strong><small>{skill.status}</small></div>
+              <p>{skill.description}</p>
+              <footer><span>{skill.current_version_id ? "v" : "—"}</span><time datetime={new Date(skill.updated_at).toISOString()}>{formatDate(skill.updated_at)}</time></footer>
+            </a>;
+          })}
+          {skills.data.length === 0 && <p class="decision-empty">{copy.empty}</p>}
+        </div>
+      </aside>
+
+      <main class="decision-asset-main">
+        <section class:list={["skill-generation-wizard", (startGeneration || !selectedSummary) && "is-active"]} id="generate" data-generation-wizard>
+          <div class="decision-section-heading"><div><p class="decision-eyebrow">01 — 04</p><h2>{copy.generate}</h2></div><span class="decision-private-pill">Private draft</span></div>
+          <ol class="skill-wizard-steps">
+            <li class="is-active"><span>01</span>{copy.selected}</li><li><span>02</span>{copy.instruction}</li><li><span>03</span>{copy.result}</li><li><span>04</span>{copy.validation}</li>
+          </ol>
+          <form data-skill-generate-form>
+            <label>{copy.selected}<input value={decisionId || copy.choose} readonly aria-describedby="skill-source-help" /></label>
+            <p id="skill-source-help" class="decision-helper">{decisionId && sourceHash ? `${decisionId} · sha256:${sourceHash.slice(0, 12)}…` : copy.choose}</p>
+            <label>{copy.instruction}<textarea name="instructions" rows="6" required maxlength="4096" placeholder={lang === "ja" ? "利用条件、禁止事項、完了条件を追記" : "Add usage constraints and completion criteria"}></textarea></label>
+            <div class="decision-form-grid">
+              <label>{copy.provider}<select name="provider" disabled={providers.data.length === 0}>
+                {providers.data.map((provider) => <option value={provider}>{provider}</option>)}
+              </select></label>
+              <label>{copy.model}<input name="model" required value={initialProvider ? preferredModel[initialProvider] ?? "" : ""} disabled={providers.data.length === 0} /></label>
+            </div>
+            <p class="decision-private-note">{copy.private}</p>
+            <footer><p data-generation-status role="alert"></p><button type="submit" disabled={!decisionId || !sourceHash || providers.data.length === 0}>{copy.run}</button></footer>
+          </form>
+          <div class="skill-generation-result" data-generation-result hidden>
+            <h3>{copy.result}</h3><dl><div><dt>Task</dt><dd data-generation-task></dd></div><div><dt>Draft</dt><dd data-generation-asset></dd></div></dl><a data-generation-refresh>{copy.refresh}</a>
+          </div>
+        </section>
+
+        {selectedSummary && (
+          <section class="skill-version-detail">
+            <div class="decision-section-heading">
+              <div><p class="decision-eyebrow">{selectedSummary.status}</p><h2>{selectedSummary.name}</h2><p>{selectedSummary.description}</p></div>
+              <div class="decision-header-actions">
+                <a class="decision-action decision-action-secondary" href={`/api/v1/skills/${encodeURIComponent(selectedSummary.id)}/export?${apiParams}`}>{copy.exportLabel}</a>
+                {selectedSummary.current_version_id && selectedSummary.status !== "retired" && <button type="button" class="decision-action" data-publish-skill data-skill-id={selectedSummary.id} data-version-id={selectedSummary.current_version_id}>{selectedSummary.status === "published" && selectedSummary.published_version_id === selectedSummary.current_version_id ? copy.published : copy.publish}</button>}
+              </div>
+            </div>
+            <dl class="decision-asset-metadata">
+              <div><dt>{copy.owner}</dt><dd>{selectedSummary.owner_principal}</dd></div>
+              <div><dt>{copy.source}</dt><dd>{selectedSummary.source_decision_id ?? "—"}</dd></div>
+              <div><dt>{copy.version}</dt><dd>{String(currentVersion?.version ?? "—")}</dd></div>
+              <div><dt>{copy.files}</dt><dd>{Array.isArray(manifest.files) ? manifest.files.length : 0}</dd></div>
+            </dl>
+            <div class="skill-validation-panel">
+              <h3>{copy.validation}</h3>
+              {validationConditions.length > 0 ? <ul>{validationConditions.map((condition) => <li>{condition}</li>)}</ul> : <p>—</p>}
+            </div>
+            <p data-publish-status role="alert"></p>
+          </section>
+        )}
+      </main>
+    </div>
+  </section>
+  <script>
+    const root = document.querySelector<HTMLElement>("[data-skills-page]");
+    if (root) {
+      const copy = JSON.parse(root.dataset.copy || "{}");
+      const preferredModel = JSON.parse(root.dataset.preferredModel || "{}");
+      const search = root.querySelector<HTMLInputElement>("[data-skill-search]");
+      const cards = [...root.querySelectorAll<HTMLElement>("[data-skill-card]")];
+      search?.addEventListener("input", () => {
+        const query = search.value.trim().toLocaleLowerCase();
+        for (const card of cards) card.hidden = Boolean(query) && !(card.dataset.search || "").includes(query);
+      });
+      const provider = root.querySelector<HTMLInputElement>("[name=provider]");
+      const model = root.querySelector<HTMLInputElement>("[name=model]");
+      provider?.addEventListener("change", () => { if (model) model.value = preferredModel[provider.value] || ""; });
+      root.querySelector<HTMLFormElement>("[data-skill-generate-form]")?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const values = new FormData(form);
+        const status = root.querySelector<HTMLElement>("[data-generation-status]");
+        const submit = form.querySelector<HTMLButtonElement>("button[type=submit]");
+        const idempotencyKey = crypto.randomUUID();
+        if (submit) submit.disabled = true;
+        if (status) status.textContent = "";
+        try {
+          const response = await fetch("/api/v1/skills/generate", {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-idempotency-key": idempotencyKey },
+            body: JSON.stringify({
+              tenant_id: root.dataset.tenantId,
+              project_id: root.dataset.projectId || null,
+              name: `Decision ${root.dataset.decisionId}`,
+              description: `Generated from decision ${root.dataset.decisionId}`,
+              source_decision_id: root.dataset.decisionId,
+              sources: [{ source_type: "decision_memory", source_id: root.dataset.decisionId, version_hash: root.dataset.sourceHash }],
+              instructions: values.get("instructions"),
+              provider: values.get("provider"),
+              model: values.get("model"),
+              idempotency_key: idempotencyKey
+            })
+          });
+          const payload = await response.json().catch(() => null) as {
+            data?: { task_id?: string; asset_id?: string };
+            error?: { message?: string };
+          } | null;
+          if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+          const result = payload?.data;
+          if (!result?.task_id || !result.asset_id) throw new Error("Generation response was incomplete");
+          const panel = root.querySelector<HTMLElement>("[data-generation-result]");
+          const task = root.querySelector<HTMLElement>("[data-generation-task]");
+          const asset = root.querySelector<HTMLElement>("[data-generation-asset]");
+          const refresh = root.querySelector<HTMLAnchorElement>("[data-generation-refresh]");
+          if (task) task.textContent = result.task_id;
+          if (asset) asset.textContent = result.asset_id;
+          if (refresh) refresh.href = `/skills?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&skill_id=${encodeURIComponent(result.asset_id)}`;
+          if (panel) panel.hidden = false;
+          if (status) status.textContent = copy.private;
+        } catch (error) {
+          if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`;
+        } finally {
+          if (submit) submit.disabled = false;
+        }
+      });
+      root.querySelector<HTMLButtonElement>("[data-publish-skill]")?.addEventListener("click", async (event) => {
+        const button = event.currentTarget as HTMLButtonElement;
+        const status = root.querySelector<HTMLElement>("[data-publish-status]");
+        button.disabled = true;
+        button.textContent = copy.publishing;
+        try {
+          const response = await fetch(`/api/v1/skills/${encodeURIComponent(button.dataset.skillId || "")}/publish?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`, {
+            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, version_id: button.dataset.versionId, expected_current_version_id: button.dataset.versionId })
+          });
+          const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+          if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+          button.textContent = copy.published;
+          if (status) status.textContent = copy.published;
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = copy.publish;
+          if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      });
+    }
+  </script>
+</BaseLayout>

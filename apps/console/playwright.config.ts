@@ -6,6 +6,7 @@ const browserExecutablePath = process.env.CONSOLE_E2E_BROWSER_EXECUTABLE;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: process.env.CONSOLE_E2E_DECISION_MODE ? [] : ["**/decision-console-v2.spec.ts"],
   timeout: 30_000,
   expect: {
     timeout: 5_000
@@ -39,7 +40,8 @@ export default defineConfig({
         ACCESS_JWT_REQUIRED: "false",
         CLOUDFLARE_INCLUDE_PROCESS_ENV: "true",
         INSIGHTS_UI_MODE: "on",
-        MEMORY_QUALITY_UI_MODE: "on"
+        MEMORY_QUALITY_UI_MODE: "on",
+        DECISION_CONSOLE_MODE: process.env.CONSOLE_E2E_DECISION_MODE ?? "off"
       }
     }
   ],

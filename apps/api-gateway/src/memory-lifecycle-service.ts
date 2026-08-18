@@ -22,6 +22,7 @@ import {
   type MemoryWorkType
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import { ensureAccessPolicy, type AccessPolicySubject } from "./access-policy-service";
 import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
 
 type LifecycleWriteItem = {
@@ -301,6 +302,50 @@ function normalizeWriteItem(tenantId: string, source: string, item: LifecycleWri
     , learning: item.learning && typeof item.learning === "object" ? item.learning : null
     , quality_dimensions: qualityDimensions
   };
+}
+
+function memoryPolicySubjects(permissions: Array<Record<string, unknown>>): {
+  groupIds: string[];
+  restrictedSubjects: AccessPolicySubject[];
+} {
+  const groupIds = new Set<string>();
+  const restrictedSubjects = new Map<string, AccessPolicySubject>();
+  for (const grant of permissions) {
+    const permissionList = Array.isArray(grant.permissions) ? grant.permissions : [];
+    if (!permissionList.includes("read")) continue;
+    const subjectId = typeof grant.principal_id === "string" ? grant.principal_id.trim() : "";
+    if (!subjectId) continue;
+    if (grant.principal_type === "group") groupIds.add(subjectId);
+    if (grant.principal_type === "principal") {
+      restrictedSubjects.set(`principal:${subjectId}`, { subject_type: "principal", subject_id: subjectId });
+    }
+  }
+  return { groupIds: [...groupIds], restrictedSubjects: [...restrictedSubjects.values()] };
+}
+
+async function ensureMemoryAccessPolicy(
+  env: Env,
+  tenantId: string,
+  memoryId: string,
+  snapshot: ReturnType<typeof normalizeWriteItem>
+): Promise<void> {
+  const subjects = memoryPolicySubjects(snapshot.permissions);
+  const ownerPrincipal = snapshot.actor_id || "system:memory";
+  const hasRestrictions = subjects.groupIds.length > 0 || subjects.restrictedSubjects.length > 0;
+  await ensureAccessPolicy(env, {
+    tenantId,
+    resourceType: "memory",
+    resourceId: memoryId,
+    scope: hasRestrictions
+      ? subjects.groupIds.length > 0 && subjects.restrictedSubjects.length === 0 ? "group" : "restricted"
+      : snapshot.scope_type === "project" ? "project"
+        : "tenant",
+    ownerPrincipal,
+    projectId: snapshot.project_id,
+    groupIds: subjects.groupIds,
+    restrictedSubjects: subjects.restrictedSubjects,
+    actorPrincipal: ownerPrincipal
+  });
 }
 
 async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Promise<StoredMemoryRow> {
@@ -1052,6 +1097,7 @@ export async function captureMemoryItems(
       }
       throw error;
     }
+    await ensureMemoryAccessPolicy(env, args.tenantId, memoryId, item);
 
     if (existing) updated += 1;
     else inserted += 1;
@@ -1112,6 +1158,7 @@ export async function captureMemoryItems(
       }
       throw error;
     }
+    await ensureMemoryAccessPolicy(env, args.tenantId, memoryId, item);
     inserted += 1;
     if (item.canonical_key && item.lifecycle_state !== "suppressed") {
       existingByCanonicalKey.set(item.canonical_key, memoryId);

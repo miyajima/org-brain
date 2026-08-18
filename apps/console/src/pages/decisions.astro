@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { decisionEditorRedirect, decisionIndexRedirect } from "../lib/decision-console-ui";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import {
   buildDecisionVersionDiffs,
@@ -416,6 +418,11 @@ const PAGE_COPY: Record<Locale, Record<string, string>> = {
 
 const url = Astro.url;
 const params = url.searchParams;
+const decisionMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+if (decisionConsoleBehavior(decisionMode).enabled) {
+  const isEditorUrl = params.get("mode") === "create" || Boolean(params.get("selected")?.trim());
+  return Astro.redirect(isEditorUrl ? decisionEditorRedirect(url) : decisionIndexRedirect(url), 307);
+}
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 const tenantId = params.get("tenant_id")?.trim() || "default";

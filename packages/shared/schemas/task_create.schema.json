@@ -7,7 +7,7 @@
     "project_id": { "type": "string" },
     "capability": {
       "type": "string",
-      "enum": ["memory_measurement"]
+      "enum": ["memory_measurement", "skill_generation"]
     },
     "priority": { "type": "integer", "minimum": 0, "maximum": 100 },
     "input_ref": { "type": "string", "minLength": 1 },

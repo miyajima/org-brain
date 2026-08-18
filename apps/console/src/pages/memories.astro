@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
+import AccessDrawer from "../components/decision/AccessDrawer.astro";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
@@ -265,6 +267,8 @@ const explorerCopy = {
 }[locale];
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
+const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const decisionConsoleEnabled = decisionConsoleBehavior(decisionConsoleMode).enabled;
 const qualityUiMode = await resolveMemoryQualityUiMode(Astro.locals);
 const qualityViewEnabled = qualityUiMode !== "off";
 
@@ -670,6 +674,9 @@ const detailPayload = detail?.kind === "memory"
   ? preloadedDetailPayload ?? await fetchApi<MemoryDetailResponse>(`/api/v1/memories/${encodeURIComponent(detail.id)}/details?tenant_id=${encodeURIComponent(tenantId)}`)
   : preloadedDetailPayload;
 const memoryDetail = detailPayload?.ok ? detailPayload.data : null;
+const accessPayload = decisionConsoleEnabled && detail?.kind === "memory"
+  ? await fetchApi<{ policy: Record<string, unknown>; utilizing_agents: Array<Record<string, unknown>> }>(`/api/v1/access-policies/memory/${encodeURIComponent(detail.id)}?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(detail.project_id ?? projectId)}`)
+  : null;
 const loadErrors = [...new Set([
   listPayload?.ok === false ? listPayload.error?.message ?? "Memory list could not be loaded" : null,
   searchPayload?.ok === false ? searchPayload.error?.message ?? "Memory search could not be loaded" : null,
@@ -678,6 +685,7 @@ const loadErrors = [...new Set([
   , analyticsPayload?.ok === false ? analyticsPayload.error?.message ?? "Memory analytics could not be loaded" : null
   , qualityRunsPayload?.ok === false ? qualityRunsPayload.error?.message ?? "Quality runs could not be loaded" : null
   , qualityRunPayload?.ok === false ? qualityRunPayload.error?.message ?? "Quality run could not be loaded" : null
+  , accessPayload?.ok === false ? accessPayload.error?.message ?? "Memory access policy could not be loaded" : null
 ].filter(Boolean) as string[])];
 
 const prevPageHref = listPage?.meta.has_prev ? makeHref({ page: String(page - 1), selected: "" }) : null;
@@ -1247,9 +1255,10 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
               <p class="surface-label">Selected memory</p>
               <h2 class="memory-detail-title mt-1.5 text-xl font-semibold tracking-[-0.04em] text-white">{detail ? detail.title : "Pick a row"}</h2>
             </div>
-            {detail?.score !== null && detail?.score !== undefined && (
-              <span class="surface-chip">{detail.score.toFixed(3)}</span>
-            )}
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              {detail?.score !== null && detail?.score !== undefined && <span class="surface-chip">{detail.score.toFixed(3)}</span>}
+              {detail && accessPayload?.ok && <AccessDrawer resourceType="memory" resourceId={detail.id} tenantId={tenantId} projectId={detail.project_id ?? projectId} policy={accessPayload.data.policy} utilizingAgents={accessPayload.data.utilizing_agents} locale={locale} />}
+            </div>
           </div>
 
           {detail ? (

@@ -1,0 +1,1218 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "step_index": 0,
+      "action": "navigate",
+      "target": "/?tenant_id=default&project_id=org-brain&lang=ja",
+      "subtitle": "ホームのDecision Briefingで、重要な決定と次の操作を一覧します。",
+      "url": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 0
+    },
+    {
+      "step_index": 1,
+      "action": "fill",
+      "target": "[data-briefing-search]",
+      "subtitle": "決定文と理由の要約を検索し、対象を絞り込みます。",
+      "url_before": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 1088,
+          "y": 510,
+          "width": 320,
+          "height": 42,
+          "bottom": 552
+        },
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 1088,
+          "y": 510,
+          "width": 320,
+          "height": 42,
+          "bottom": 552
+        },
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 1244,
+      "targetCenter": {
+        "x": 1248,
+        "y": 531
+      }
+    },
+    {
+      "step_index": 2,
+      "action": "click",
+      "target": "[data-briefing-card] .decision-action",
+      "subtitle": "対象の決定を開き、判断の背景を確認します。",
+      "url_before": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 1131,
+          "y": 704,
+          "width": 253,
+          "height": 44,
+          "bottom": 748
+        },
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 195,
+      "targetCenter": {
+        "x": 1257.5,
+        "y": 726
+      }
+    },
+    {
+      "step_index": 3,
+      "action": "click",
+      "target": ".decision-trace-node:has-text(\"Verified usability note\")",
+      "subtitle": "根拠を選ぶと、右側の同じ画面で要約と参照先を確認できます。",
+      "url_before": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 47,
+          "y": 597,
+          "width": 596,
+          "height": 38,
+          "bottom": 635
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 47,
+          "y": 597,
+          "width": 596,
+          "height": 38,
+          "bottom": 635
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 919,
+      "targetCenter": {
+        "x": 345,
+        "y": 616
+      }
+    },
+    {
+      "step_index": 4,
+      "action": "click",
+      "target": "[data-access-open]",
+      "subtitle": "Access Drawerで、所有者・共有範囲・保存場所を確認します。",
+      "url_before": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 987,
+          "y": 269,
+          "width": 82,
+          "height": 44,
+          "bottom": 313
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 987,
+          "y": 269,
+          "width": 82,
+          "height": 44,
+          "bottom": 313
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 756,
+      "targetCenter": {
+        "x": 1028,
+        "y": 291
+      }
+    },
+    {
+      "step_index": 5,
+      "action": "assert",
+      "target": "[data-access-dialog][open]",
+      "subtitle": "資産種別が変わっても、アクセス情報の表示方法は統一されています。",
+      "url_before": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 928,
+          "y": 8,
+          "width": 512,
+          "height": 884,
+          "bottom": 892
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 928,
+          "y": 8,
+          "width": 512,
+          "height": 884,
+          "bottom": 892
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 223,
+      "targetCenter": {
+        "x": 1184,
+        "y": 450
+      }
+    },
+    {
+      "step_index": 6,
+      "action": "click",
+      "target": "[data-access-close]",
+      "subtitle": "内容を変更せず、決定の道筋マップへ進みます。",
+      "url_before": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 1367,
+          "y": 37,
+          "width": 44,
+          "height": 44,
+          "bottom": 81
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": null,
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 441,
+      "targetCenter": {
+        "x": 1389,
+        "y": 59
+      }
+    },
+    {
+      "step_index": 7,
+      "action": "click",
+      "target": ".decision-header-actions a:has-text(\"Decision Trace Mapを開く\")",
+      "subtitle": "決定から理由・根拠・成果物までを、一つのマップで追跡します。",
+      "url_before": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "before": {
+        "box": {
+          "x": 1078,
+          "y": 269,
+          "width": 187,
+          "height": 44,
+          "bottom": 313
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 318,
+      "targetCenter": {
+        "x": 1171.5,
+        "y": 291
+      }
+    },
+    {
+      "step_index": 8,
+      "action": "click",
+      "target": "[data-map-fit]",
+      "subtitle": "全体を表示すると、ノードとエッジを初期の視野に収められます。",
+      "url_before": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "url_after": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "before": {
+        "box": {
+          "x": 1142,
+          "y": 295,
+          "width": 98,
+          "height": 44,
+          "bottom": 339
+        },
+        "scrollY": 0,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 1142,
+          "y": 294,
+          "width": 98,
+          "height": 44,
+          "bottom": 338
+        },
+        "scrollY": 0,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 33,
+      "targetCenter": {
+        "x": 1191,
+        "y": 317
+      }
+    },
+    {
+      "step_index": 9,
+      "action": "click",
+      "target": ".decision-inferred-toggle",
+      "subtitle": "推論関係は明示的に切り替えたときだけ表示します。",
+      "url_before": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "url_after": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "before": {
+        "box": {
+          "x": 32,
+          "y": 295,
+          "width": 349,
+          "height": 22,
+          "bottom": 317
+        },
+        "scrollY": 0,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 32,
+          "y": 295,
+          "width": 349,
+          "height": 22,
+          "bottom": 317
+        },
+        "scrollY": 0,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 985,
+      "targetCenter": {
+        "x": 206.5,
+        "y": 306
+      }
+    },
+    {
+      "step_index": 10,
+      "action": "click",
+      "target": ".decision-map-list button:has-text(\"根拠\")",
+      "subtitle": "2D関係リストでも同じ情報を選択できます。この位置は初期画面の下端より下です。",
+      "url_before": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "url_after": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "before": {
+        "box": {
+          "x": 724,
+          "y": 1058,
+          "width": 330,
+          "height": 60,
+          "bottom": 1117
+        },
+        "scrollY": 0,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "box": {
+          "x": 724,
+          "y": 657,
+          "width": 330,
+          "height": 60,
+          "bottom": 716
+        },
+        "scrollY": 400,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": true,
+      "scrollDelta": 400,
+      "mouseDistancePx": 782,
+      "targetCenter": {
+        "x": 889,
+        "y": 688
+      }
+    },
+    {
+      "step_index": 11,
+      "action": "click",
+      "target": "[data-all-knowledge-map]",
+      "subtitle": "全知識を表示すると、決定に未選択のノードも含めて探索できます。",
+      "url_before": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e",
+      "url_after": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all",
+      "before": {
+        "box": {
+          "x": 1082,
+          "y": -265,
+          "width": 107,
+          "height": 44,
+          "bottom": -221
+        },
+        "scrollY": 400,
+        "scrollHeight": 1300,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 1059,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": true,
+      "scrollDelta": -400,
+      "mouseDistancePx": 585,
+      "targetCenter": {
+        "x": 1135.5,
+        "y": 157
+      }
+    },
+    {
+      "step_index": 12,
+      "action": "click",
+      "target": "[data-map-fit]",
+      "subtitle": "全ノード表示でも、全体を表示で62ノードの構造を見渡せます。",
+      "url_before": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all",
+      "url_after": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all",
+      "before": {
+        "box": {
+          "x": 1179,
+          "y": 202,
+          "width": 98,
+          "height": 44,
+          "bottom": 246
+        },
+        "scrollY": 0,
+        "scrollHeight": 1059,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 1179,
+          "y": 201,
+          "width": 98,
+          "height": 44,
+          "bottom": 245
+        },
+        "scrollY": 0,
+        "scrollHeight": 1059,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 114,
+      "targetCenter": {
+        "x": 1228,
+        "y": 224
+      }
+    },
+    {
+      "step_index": 13,
+      "action": "click",
+      "target": "[data-trace-step=reason]",
+      "subtitle": "判断の道筋は、決定・理由・根拠・成果物の4段階で確認します。",
+      "url_before": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all",
+      "url_after": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all",
+      "before": {
+        "box": {
+          "x": 376,
+          "y": 401,
+          "width": 160,
+          "height": 71,
+          "bottom": 472
+        },
+        "scrollY": 0,
+        "scrollHeight": 1059,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 376,
+          "y": 400,
+          "width": 160,
+          "height": 71,
+          "bottom": 471
+        },
+        "scrollY": 0,
+        "scrollHeight": 1059,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 801,
+      "targetCenter": {
+        "x": 456,
+        "y": 436.5
+      }
+    },
+    {
+      "step_index": 14,
+      "action": "navigate",
+      "target": "/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "subtitle": "決定詳細へ戻り、参照版をSkill化します。",
+      "url": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 0
+    },
+    {
+      "step_index": 15,
+      "action": "click",
+      "target": ".decision-header-actions a:has-text(\"この知識をSkill化\")",
+      "subtitle": "決定詳細からSkill生成を開始すると、参照版ハッシュも引き継がれます。",
+      "url_before": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "before": {
+        "box": {
+          "x": 1275,
+          "y": 269,
+          "width": 133,
+          "height": 44,
+          "bottom": 313
+        },
+        "scrollY": 0,
+        "scrollHeight": 1103,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 1105,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 897,
+      "targetCenter": {
+        "x": 1341.5,
+        "y": 291
+      }
+    },
+    {
+      "step_index": 16,
+      "action": "fill",
+      "target": "[data-skill-generate-form] textarea[name=instructions]",
+      "subtitle": "追加指示を入力し、生成条件を明確にします。",
+      "url_before": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "url_after": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "before": {
+        "box": {
+          "x": 496,
+          "y": 687,
+          "width": 887,
+          "height": 152,
+          "bottom": 839
+        },
+        "scrollY": 0,
+        "scrollHeight": 1105,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 496,
+          "y": 687,
+          "width": 887,
+          "height": 152,
+          "bottom": 839
+        },
+        "scrollY": 0,
+        "scrollHeight": 1105,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 620,
+      "targetCenter": {
+        "x": 939.5,
+        "y": 763
+      }
+    },
+    {
+      "step_index": 17,
+      "action": "click",
+      "target": "[data-skill-generate-form] button[type=submit]",
+      "subtitle": "private draft生成を実行します。このボタンは初期viewportの下側にあります。",
+      "url_before": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "url_after": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "before": {
+        "box": {
+          "x": 1225,
+          "y": 972,
+          "width": 158,
+          "height": 44,
+          "bottom": 1016
+        },
+        "scrollY": 0,
+        "scrollHeight": 1105,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "box": {
+          "x": 1225,
+          "y": 766,
+          "width": 158,
+          "height": 44,
+          "bottom": 810
+        },
+        "scrollY": 205,
+        "scrollHeight": 1246,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": true,
+      "scrollDelta": 205,
+      "mouseDistancePx": 365,
+      "targetCenter": {
+        "x": 1304,
+        "y": 789
+      }
+    },
+    {
+      "step_index": 18,
+      "action": "assert",
+      "target": "[data-generation-result]:not([hidden])",
+      "subtitle": "生成タスクとdraft IDを確認し、公開前に検証します。",
+      "url_before": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "url_after": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "before": {
+        "box": {
+          "x": 496,
+          "y": 827,
+          "width": 887,
+          "height": 125,
+          "bottom": 952
+        },
+        "scrollY": 205,
+        "scrollHeight": 1246,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "box": {
+          "x": 496,
+          "y": 775,
+          "width": 887,
+          "height": 125,
+          "bottom": 900
+        },
+        "scrollY": 257,
+        "scrollHeight": 1246,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": true,
+      "scrollDelta": 52,
+      "mouseDistancePx": 368,
+      "targetCenter": {
+        "x": 939.5,
+        "y": 837.5
+      }
+    },
+    {
+      "step_index": 19,
+      "action": "click",
+      "target": "nav[aria-label=\"Org Brain\"] a[href^=\"/agents\"]:visible",
+      "subtitle": "Agentsでは、SkillのLoadoutとAgentへ渡るコンテキストを確認します。",
+      "url_before": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate",
+      "url_after": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 402,
+          "y": -236,
+          "width": 70,
+          "height": 40,
+          "bottom": -196
+        },
+        "scrollY": 257,
+        "scrollHeight": 1246,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": true,
+      "scrollDelta": -257,
+      "mouseDistancePx": 942,
+      "targetCenter": {
+        "x": 437,
+        "y": 41
+      }
+    },
+    {
+      "step_index": 20,
+      "action": "click",
+      "target": ".decision-asset-card:has-text(\"Release reviewer\")",
+      "subtitle": "Agentを選ぶと、役割・参照元の決定・現在のLoadoutが表示されます。",
+      "url_before": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "before": {
+        "box": {
+          "x": 46,
+          "y": 467,
+          "width": 396,
+          "height": 104,
+          "bottom": 571
+        },
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 1476,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 515,
+      "targetCenter": {
+        "x": 244,
+        "y": 519
+      }
+    },
+    {
+      "step_index": 21,
+      "action": "fill",
+      "target": "[data-context-preview-form] textarea[name=task_text]",
+      "subtitle": "タスク文を入力し、ACLを反映したeffective contextを事前確認します。",
+      "url_before": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "url_after": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "before": {
+        "box": {
+          "x": 496,
+          "y": 1135,
+          "width": 887,
+          "height": 110,
+          "bottom": 1245
+        },
+        "scrollY": 0,
+        "scrollHeight": 1476,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "box": {
+          "x": 496,
+          "y": 559,
+          "width": 887,
+          "height": 110,
+          "bottom": 669
+        },
+        "scrollY": 576,
+        "scrollHeight": 1476,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": true,
+      "scrollDelta": 576,
+      "mouseDistancePx": 702,
+      "targetCenter": {
+        "x": 939.5,
+        "y": 614
+      }
+    },
+    {
+      "step_index": 22,
+      "action": "click",
+      "target": "[data-context-preview-form] button[type=submit]",
+      "subtitle": "コンテキストを解決します。このフォームはページ下部にあり、スクロールが発生します。",
+      "url_before": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "url_after": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "before": {
+        "box": {
+          "x": 1223,
+          "y": 767,
+          "width": 160,
+          "height": 44,
+          "bottom": 811
+        },
+        "scrollY": 576,
+        "scrollHeight": 1476,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 1223,
+          "y": 766,
+          "width": 160,
+          "height": 44,
+          "bottom": 810
+        },
+        "scrollY": 576,
+        "scrollHeight": 1626,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 403,
+      "targetCenter": {
+        "x": 1303,
+        "y": 789
+      }
+    },
+    {
+      "step_index": 23,
+      "action": "assert",
+      "target": "[data-context-result]:not([hidden])",
+      "subtitle": "注入・on_demand・権限で除外されたSkillを分けて確認できます。",
+      "url_before": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "url_after": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "before": {
+        "box": {
+          "x": 496,
+          "y": 827,
+          "width": 887,
+          "height": 134,
+          "bottom": 961
+        },
+        "scrollY": 576,
+        "scrollHeight": 1626,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "box": {
+          "x": 496,
+          "y": 766,
+          "width": 887,
+          "height": 134,
+          "bottom": 900
+        },
+        "scrollY": 637,
+        "scrollHeight": 1626,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": true,
+      "scrollDelta": 61,
+      "mouseDistancePx": 366,
+      "targetCenter": {
+        "x": 939.5,
+        "y": 833
+      }
+    },
+    {
+      "step_index": 24,
+      "action": "click",
+      "target": "nav[aria-label=\"Org Brain\"] a[href^=\"/reviews\"]:visible",
+      "subtitle": "Reviewsで、期限・確認・成果物・共有待ちの不足を横断確認します。",
+      "url_before": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e",
+      "url_after": "http://127.0.0.1:4321/reviews?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 476,
+          "y": -616,
+          "width": 80,
+          "height": 40,
+          "bottom": -576
+        },
+        "scrollY": 637,
+        "scrollHeight": 1626,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": false
+      },
+      "after": {
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900
+      },
+      "navigated": true,
+      "requiredScroll": true,
+      "scrollDelta": -637,
+      "mouseDistancePx": 898,
+      "targetCenter": {
+        "x": 516,
+        "y": 41
+      }
+    },
+    {
+      "step_index": 25,
+      "action": "assert",
+      "target": ".decision-review-grid",
+      "subtitle": "決定を理解し、根拠を確認し、安全に配布する一連の流れが完了です。",
+      "url_before": "http://127.0.0.1:4321/reviews?tenant_id=default&project_id=org-brain&lang=ja",
+      "url_after": "http://127.0.0.1:4321/reviews?tenant_id=default&project_id=org-brain&lang=ja",
+      "before": {
+        "box": {
+          "x": 32,
+          "y": 369,
+          "width": 1376,
+          "height": 269,
+          "bottom": 638
+        },
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "after": {
+        "box": {
+          "x": 32,
+          "y": 369,
+          "width": 1376,
+          "height": 269,
+          "bottom": 638
+        },
+        "scrollY": 0,
+        "scrollHeight": 900,
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "inViewport": true
+      },
+      "navigated": false,
+      "requiredScroll": false,
+      "scrollDelta": 0,
+      "mouseDistancePx": 505,
+      "targetCenter": {
+        "x": 720,
+        "y": 503.5
+      }
+    }
+  ],
+  "mobileAudit": [
+    {
+      "slug": "home",
+      "url": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollHeight": 1390,
+      "scrollWidth": 390,
+      "horizontalOverflow": false,
+      "targets": {
+        "[data-briefing-search]": {
+          "present": true,
+          "x": 16,
+          "y": 857,
+          "width": 358,
+          "height": 42,
+          "bottom": 899,
+          "inViewport": false
+        },
+        "[data-briefing-card]": {
+          "present": true,
+          "x": 16,
+          "y": 913,
+          "width": 358,
+          "height": 414,
+          "bottom": 1326,
+          "inViewport": false
+        },
+        "[data-briefing-card] .decision-action": {
+          "present": true,
+          "x": 33,
+          "y": 1265,
+          "width": 324,
+          "height": 44,
+          "bottom": 1309,
+          "inViewport": false
+        }
+      }
+    },
+    {
+      "slug": "map",
+      "url": "http://127.0.0.1:4321/map?decision_id=decision-console-e2e&tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollHeight": 3210,
+      "scrollWidth": 390,
+      "horizontalOverflow": false,
+      "targets": {
+        "[data-all-knowledge-map]": {
+          "present": true,
+          "x": 16,
+          "y": 271,
+          "width": 107,
+          "height": 44,
+          "bottom": 315,
+          "inViewport": true
+        },
+        ".decision-map-picker summary": {
+          "present": true,
+          "x": 30,
+          "y": 340,
+          "width": 330,
+          "height": 45,
+          "bottom": 385,
+          "inViewport": true
+        },
+        "[data-map-fit]": {
+          "present": true,
+          "x": 276,
+          "y": 408,
+          "width": 98,
+          "height": 44,
+          "bottom": 452,
+          "inViewport": true
+        }
+      }
+    },
+    {
+      "slug": "all-map",
+      "url": "http://127.0.0.1:4321/memories/constellation?view=all&tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollHeight": 1316,
+      "scrollWidth": 390,
+      "horizontalOverflow": false,
+      "targets": {
+        "[data-map-fit]": {
+          "present": true,
+          "x": 16,
+          "y": 230,
+          "width": 98,
+          "height": 44,
+          "bottom": 274,
+          "inViewport": true
+        },
+        "[data-trace-step=reason]": {
+          "present": true,
+          "x": 197,
+          "y": 451,
+          "width": 168,
+          "height": 44,
+          "bottom": 495,
+          "inViewport": true
+        },
+        "[data-memory-map-root]": {
+          "present": true,
+          "x": 16,
+          "y": 90,
+          "width": 358,
+          "height": 1162,
+          "bottom": 1252,
+          "inViewport": false
+        }
+      }
+    },
+    {
+      "slug": "skills",
+      "url": "http://127.0.0.1:4321/skills?decision_id=decision-console-e2e&source_hash=e2e-source-hash&tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollHeight": 1463,
+      "scrollWidth": 390,
+      "horizontalOverflow": false,
+      "targets": {
+        "[data-generation-wizard] textarea": {
+          "present": true,
+          "x": 33,
+          "y": 940,
+          "width": 324,
+          "height": 152,
+          "bottom": 1092,
+          "inViewport": false
+        },
+        "[data-generation-wizard] button[type=submit]": {
+          "present": true,
+          "x": 199,
+          "y": 1338,
+          "width": 158,
+          "height": 44,
+          "bottom": 1382,
+          "inViewport": false
+        }
+      }
+    },
+    {
+      "slug": "agents",
+      "url": "http://127.0.0.1:4321/agents?agent_id=agent-e2e&tenant_id=default&project_id=org-brain&lang=ja",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollHeight": 2079,
+      "scrollWidth": 390,
+      "horizontalOverflow": false,
+      "targets": {
+        "[data-context-preview-form] textarea": {
+          "present": true,
+          "x": 33,
+          "y": 1746,
+          "width": 722,
+          "height": 110,
+          "bottom": 1856,
+          "inViewport": false
+        },
+        "[data-context-preview-form] button[type=submit]": {
+          "present": true,
+          "x": 595,
+          "y": 1954,
+          "width": 160,
+          "height": 44,
+          "bottom": 1998,
+          "inViewport": false
+        }
+      }
+    }
+  ]
+}

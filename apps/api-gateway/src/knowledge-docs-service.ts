@@ -19,6 +19,7 @@ import {
   type KnowledgeLinkRelation
 } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
+import { ensureAccessPolicy } from "./access-policy-service";
 import type { Env } from "./types";
 
 type UpsertKnowledgeDocRequest = {
@@ -567,6 +568,16 @@ export async function upsertKnowledgeDoc(env: Env, rawBody: unknown, options: Pr
   if (!stored) {
     throw new HttpError(500, "doc_not_persisted", "knowledge doc could not be reloaded after save");
   }
+  const ownerPrincipal = options.principal?.trim() || stored.owner_principal?.trim() || "system:knowledge";
+  await ensureAccessPolicy(env, {
+    tenantId,
+    resourceType: "knowledge_doc",
+    resourceId: docId,
+    scope: visibility === "tenant" ? "tenant" : "private",
+    ownerPrincipal,
+    storageLocation: artifactRef ? "d1_r2" : "d1",
+    actorPrincipal: ownerPrincipal
+  });
 
   return {
     created: !existing,

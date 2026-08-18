@@ -3,6 +3,7 @@ import "../styles/global.css";
 import brandMark from "../../../../assets/brand/org-brain-avatar.png";
 import { dashboardTenantFromCookie } from "../lib/dashboard-page";
 import { adminCommonCopy } from "../lib/admin-ui";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 
 type LayoutLocale = "en" | "ja" | "zh";
@@ -43,8 +44,16 @@ const item = (
 
 const insightsUiMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsBehavior = insightsUiBehavior(insightsUiMode);
-const homeHref = insightsBehavior.useInsightsNavigation ? "/overview" : "/";
-const primaryItems: ConsoleNavItem[] = insightsBehavior.useInsightsNavigation ? [
+const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const decisionBehavior = decisionConsoleBehavior(decisionConsoleMode);
+const homeHref = decisionBehavior.useDecisionNavigation ? "/" : insightsBehavior.useInsightsNavigation ? "/overview" : "/";
+const primaryItems: ConsoleNavItem[] = decisionBehavior.useDecisionNavigation ? [
+  item("decisions", "/", "primary", { en: "Decisions", ja: "決定", zh: "决策" }, (path) => path === "/" || (starts("/decisions")(path) && path !== "/decisions/new" && path !== "/decisions/history")),
+  item("map", "/map", "primary", { en: "Map", ja: "マップ", zh: "地图" }, starts("/map")),
+  item("skills", "/skills", "primary", { en: "Skills", ja: "Skills", zh: "Skills" }, starts("/skills")),
+  item("agents", "/agents", "primary", { en: "Agents", ja: "Agents", zh: "Agents" }, starts("/agents")),
+  item("reviews", "/reviews", "primary", { en: "Reviews", ja: "レビュー", zh: "审核" }, starts("/reviews"))
+] : insightsBehavior.useInsightsNavigation ? [
   item("activity", "/overview", "primary", { en: "Activity", ja: "活動", zh: "活动" }, (path) => path === "/" || path === "/overview"),
   item("connections", "/memories/constellation", "primary", { en: "Knowledge connections", ja: "知識のつながり", zh: "知识关联" }),
   item("history", "/decisions/history", "primary", { en: "Knowledge history", ja: "知識の履歴", zh: "知识历史" }),
@@ -58,8 +67,11 @@ const primaryItems: ConsoleNavItem[] = insightsBehavior.useInsightsNavigation ? 
 const managementItems: ConsoleNavItem[] = [
   item("memory-explorer", "/memories", "knowledge", { en: "Memory Explorer", ja: "メモリエクスプローラー", zh: "记忆浏览器" }),
   item("memory-impact", "/memory-impact", "knowledge", { en: "Memory impact", ja: "活用分析", zh: "记忆活用分析" }),
-  item("decision-editor", "/decisions", "knowledge", { en: "Decision Editor", ja: "判断エディター", zh: "决策编辑器" }),
-  item("resources", "/resources", "knowledge", { en: "Resources", ja: "資料・成果物", zh: "资料与成果" }),
+  item("decision-editor", decisionBehavior.enabled ? "/decisions/new" : "/decisions", "knowledge", { en: "Decision Editor", ja: "決定の作成・編集", zh: "决策编辑器" }),
+  item("resources", "/resources", "knowledge", { en: "Storage & resources", ja: "保存先・資料・成果物", zh: "存储与资料" }),
+  ...(decisionBehavior.enabled ? [
+    item("knowledge-history", "/decisions/history", "knowledge", { en: "Knowledge history", ja: "知識の履歴", zh: "知识历史" })
+  ] : []),
   item("groups", "/groups", "organization", { en: "Groups", ja: "グループ", zh: "群组" }, starts("/groups")),
   item("users", "/users", "organization", { en: "Users", ja: "ユーザー", zh: "用户" }),
   item("organization", "/organization", "organization", { en: "Organization", ja: "組織", zh: "组织" }),
@@ -97,10 +109,11 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
     <a class="console-skip-link" href="#console-main">{commonCopy.skipToContent}</a>
     <div class="console-shell">
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(22,135,255,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_22%)]"></div>
-      <nav class:list={["console-nav", insightsBehavior.useInsightsNavigation && "console-nav-insights"]} aria-label="Org Brain">
+      <nav class:list={["console-nav", (decisionBehavior.useDecisionNavigation || insightsBehavior.useInsightsNavigation) && "console-nav-insights"]} aria-label="Org Brain">
         <a class="console-brand" href={withScope(homeHref)} aria-label="Org Brain">
           <img src={brandMark.src} width="28" height="28" alt="" />
           <span>Org Brain</span>
+          {decisionBehavior.showBetaLabel && <span class="console-beta-label">Beta</span>}
         </a>
         <div class="console-primary-links">
           {primaryItems.map((navItem) => (

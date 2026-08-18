@@ -60,6 +60,9 @@ importers:
 
   apps/cap-runner:
     dependencies:
+      '@org-brain/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@org-brain/shared':
         specifier: workspace:*
         version: link:../../packages/shared

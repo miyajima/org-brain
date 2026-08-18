@@ -25,6 +25,7 @@ const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.g
 const fromDate = params.get("from_date")?.trim() || (fromTimestamp ? new Date(fromTimestamp).toISOString().slice(0, 10) : "");
 const toDate = params.get("to_date")?.trim() || (toTimestamp ? new Date(toTimestamp).toISOString().slice(0, 10) : "");
 const selected = params.get("selected")?.trim();
+const allNodes = params.get("view") === "all";
 type MemoryMapData = {
   scope: "mine" | "org";
   cluster_mode: boolean;
@@ -75,9 +76,9 @@ type MemoryMapData = {
 const mapParams = new URLSearchParams({
   tenant_id: params.get("tenant_id") || "default",
   scope: params.get("scope") === "mine" ? "mine" : "org",
-  display: "top",
-  limit: "80"
+  limit: allNodes ? "1500" : "80"
 });
+mapParams.set("display", allNodes ? "all" : "top");
 if (projectId) mapParams.set("project_id", projectId);
 if (query) mapParams.set("q", query);
 if (ownerPrincipal) mapParams.set("owner_principal", ownerPrincipal);
@@ -96,5 +97,5 @@ const mapResult = await fetchDashboardData<MemoryMapData>(
       <span>{mapResult.error}</span>
     </div>
   )}
-  <MemoryMap3D data={mapResult.data} tenantId={params.get("tenant_id") || "default"} projectId={projectId || ""} query={query || ""} ownerPrincipal={ownerPrincipal} fromDate={fromDate} toDate={toDate} scope={mapParams.get("scope") as "mine" | "org"} selectedId={selected || ""} locale={lang} mapCopy={copy.constellation} traceCopy={copy.constellation.trace} />
+  <MemoryMap3D data={mapResult.data} tenantId={params.get("tenant_id") || "default"} projectId={projectId || ""} query={query || ""} ownerPrincipal={ownerPrincipal} fromDate={fromDate} toDate={toDate} scope={mapParams.get("scope") as "mine" | "org"} selectedId={selected || ""} allNodes={allNodes} locale={lang} mapCopy={copy.constellation} traceCopy={copy.constellation.trace} />
 </BaseLayout>

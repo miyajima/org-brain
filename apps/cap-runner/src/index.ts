@@ -12,6 +12,7 @@ import {
   runRecordedScheduledJob
 } from "@org-brain/shared";
 import { runCapability } from "./capabilities/runtime";
+import { runSkillGeneration } from "./capabilities/skill-generation";
 import { LeaseDO } from "./do/lease";
 import { MailboxDO } from "./do/mailbox";
 import { runScheduledMemoryMaintenance } from "./memory-maintenance";
@@ -374,7 +375,10 @@ async function processMessage(env: Env, raw: unknown): Promise<void> {
 
   try {
     await markRunning(env, tenantId, taskId);
-    const result = await runCapability(toContext(env, envelope));
+    const context = toContext(env, envelope);
+    const result = capability === "skill_generation"
+      ? await runSkillGeneration(context)
+      : await runCapability(context);
     assertWithinCapabilityCostLimit(result.durationMs, policy.costLimitMs);
     await recordMeasurementVariant(env, envelope, result);
 
@@ -410,6 +414,7 @@ function shouldRetry(error: unknown): boolean {
   return (
     error.message === "capacity" ||
     error.message === "lease acquire failed" ||
+    error.message.startsWith("retryable:") ||
     error.message.includes("not found")
   );
 }

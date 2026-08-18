@@ -1,18 +1,74 @@
 ---
-title: Org Brain Spec (MVP)
+title: Org Brain Spec
 doc_type: spec
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-15
+last_updated: 2026-08-18
 ---
 
-# Org Brain Spec (MVP)
+# Org Brain Spec
 
 ## Goal
 Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタスク/イベント駆動の通信バスを提供する。
 加えて、task / event / artifact / memory を正本のまま維持しつつ、人間とエージェント向けの知識インターフェースとして interlinked markdown docs layer を提供する。
 
+Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Skill
+とNamed Agent Loadoutは、確認済みの知識を実務へ配布する層として扱う。
+
 ## Requirements
+
+- R-DEC-001: Console MUST use `Decisions / Map / Skills / Agents / Reviews` as
+  its primary navigation. Users, groups, storage, tasks, resources, memory, and
+  operations MUST remain available under supporting or Manage navigation.
+- R-DEC-002: Decision Briefing MUST identify new, changed, expired,
+  unconfirmed, artifact-unlinked, and sharing-pending decisions, include a
+  reason summary and next action, and let a user reach the full decision chain
+  within two transitions.
+- R-DEC-003: Decision Trace MUST return Decision, reasons, evidence Resources,
+  artifacts, generated Skills, Agent bindings, and usage outcomes in one
+  contract. Authorization filtering MUST happen before node, edge, and count
+  aggregation.
+- R-DEC-004: Decision Map MUST default to saved or confirmed relations, expose
+  inferred relations only after explicit opt-in, cap responses at 150 nodes and
+  300 edges, and mark truncation.
+- R-DEC-005: Map navigation MUST provide keyboard operation, a 2D list,
+  reduced-motion behavior, and a mobile timeline over the same authorized data.
+- R-DEC-006: Map MUST retain a full readable-node view in addition to the
+  representative view, expose the mode in the URL and UI, and mark truncation
+  when the 1,500-node safety ceiling is reached.
+- R-ACL-001: `resource_access_policies` MUST be the canonical policy for new
+  APIs and MUST express `private|project|group|tenant|restricted`, owner,
+  subjects, project, storage location, and policy version consistently across
+  asset types.
+- R-ACL-002: legacy visibility and permission columns MUST remain compatibility
+  mirrors for at least one release. A shadow comparison MUST be observable
+  before unified reads are enabled, and every authorization decision MUST fail
+  closed.
+- R-SKILL-001: shared Skill identity, lifecycle, immutable versions, and file
+  metadata MUST be authoritative in D1; Skill file bodies MUST be stored in R2
+  and verified by hash and size.
+- R-SKILL-002: generation MUST receive only explicitly selected Decision,
+  reason, Resource references, immutable version hashes, and user instructions.
+  It MUST NOT discover raw conversations, unselected sources, repositories, or
+  source code.
+- R-SKILL-003: generated Skills MUST start as private drafts. Only the Owner or
+  an administrator may Publish; provider, schema, R2, retry, or conflict failure
+  MUST leave no partially published Skill.
+- R-SKILL-004: only configured OpenAI, Gemini, or Anthropic provider adapters
+  may be shown. Their structured output MUST validate against the shared Skill
+  schema before an immutable version is committed.
+- R-AGENT-001: a Named Agent MUST have a stable `agent_key`, role, state,
+  owner, optional source Decision, last-use time, and a named current Loadout.
+- R-AGENT-002: Loadout bindings MUST support `always|auto|on_demand`, priority
+  0-100, and `pinned|latest_published` version selection. Effective context MUST
+  be previewable before activation.
+- R-AGENT-003: Loadout resolution MUST evaluate current Agent, Loadout, Skill,
+  version, expiry, publication, retirement, and access state on every request.
+  Bindings MUST NOT grant access. `on_demand` MUST return a fetch handle without
+  unconditionally injecting the Skill body.
+- R-FLAG-001: `DECISION_CONSOLE_MODE` and `LOADOUT_RESOLUTION_MODE` MUST each
+  support `off|beta|on`. Off MUST preserve the legacy Console/context path; beta
+  MUST be staging-only.
 
 - R-AUTO-001: uncertain ingestion MUST enter quarantine and be retried
   automatically; it MUST NOT wait for a human approval queue.
@@ -24,6 +80,21 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
   Wilson lower bounds, provenance, and hard-guardrail counts.
 
 ## Acceptance criteria
+
+- A personal user can move from Decision Briefing to Decision, reason, evidence,
+  and artifact in no more than two transitions.
+- An organization user can share a Decision to a Group, generate a private
+  draft, Publish it, attach it to a Named Agent, and inspect the effective
+  context without losing the decision provenance.
+- Cross-tenant, same-tenant unauthorized, immediately revoked, and departed
+  Group access checks return zero protected nodes, edges, counts, files, or
+  context bodies.
+- Loadout resolution injects no unauthorized, retired, expired, unpublished, or
+  invalid Skill version.
+- A 100,000-decision fixture keeps local p95 below 500 ms; production p95 MUST
+  remain below 1 second and each gzipped Decision Trace response below 250 KiB.
+- The Console passes ja/en/zh desktop and mobile E2E coverage for keyboard,
+  screen-reader semantics, reduced motion, and empty/error/stale states.
 
 - A fresh workspace can install the autonomous scheduled runner and remain in
   fail-closed shadow mode until machine-reference and canary evidence qualify.
@@ -40,8 +111,29 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - MCP: Cloudflare Access保護の`open-brain-mcp` thin proxyからservice bindingでAPI Gatewayのstateless `/mcp`へ接続
 - Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `business_categories`, `memory_impact_events`, `memory_impact_daily_metrics`, `memory_usage_events`, `memory_usage_items`, `memory_effect_events`, `memory_effect_attributions`, `memory_failure_patterns`, `memory_effect_daily_metrics`, `retrieval_generations`, `retrieval_generation_assignments`, `retrieval_ranking_profiles`, `retrieval_units`, `retrieval_units_fts`, `retrieval_projection_jobs`, `retrieval_evaluation_events`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `mcp_client_installations`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
+- Decision/Skill/Agent storage: D1 (`resource_access_policies`,
+  `access_policy_shadow_diffs`, `skill_assets`, `skill_asset_versions`,
+  `skill_asset_files`, `skill_generation_runs`, `agents`, `agent_loadouts`,
+  `agent_loadout_bindings`, `asset_usage_events`) + R2 Skill files
 
 ## API
+- `GET /v1/decision-briefing`
+- `GET /v1/decisions/:id/trace`
+- `GET /v1/decisions/:id/map`
+- `GET /v1/skill-providers`
+- `GET|POST /v1/skills`
+- `GET /v1/skills/:id`
+- `POST /v1/skills/:id/versions`
+- `POST /v1/skills/:id/publish`
+- `POST /v1/skills/:id/retire`
+- `GET /v1/skills/:id/export`
+- `POST /v1/skills/generate`
+- `GET|POST /v1/agents`
+- `GET|PATCH /v1/agents/:id`
+- `PUT /v1/agents/:id/loadouts/:loadoutId`
+- `POST /v1/agents/:id/context-preview`
+- `GET|PUT /v1/access-policies/:resourceType/:resourceId`
+- `GET /v1/ops/access-policy-shadow`
 - `POST /v1/tasks`
 - `GET /v1/tasks`
 - `GET /v1/tasks/:taskId`
@@ -103,6 +195,9 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
   - memory refresh/suppress/delete
   - task create/get/events
   - agent message send/inbox/get/read/ack
+- `orgbrain_context_enrich` accepts optional `agent_key`. When Loadout
+  resolution is enabled, the response separates injected `always|auto` content,
+  `on_demand` metadata/handles, and omitted items with reason codes.
 - Tenant isolation: Access userはAccess tenant policy、導入済みhookはinstallationの単一tenant、legacy/dual移行時だけ`MCP_TENANT_POLICY_JSON`をserver-sideで適用する
 
 ## Agent Messages
@@ -245,12 +340,19 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - Task events table kind: `created`, `queued`, `started`, `completed`, `failed`, `memory.search`
 
 ## Console Pages
-- `/`
-- `/memories`
-- `/decisions`
+- `/`: Decision Briefing
+- `/decisions`: decision search and index
+- `/decisions/new`: decision creation
+- `/decisions/:id`: Decision Trace and same-screen preview
+- `/map`: Decision Trace Map
+- `/skills`: Skill generation, inventory, version, Publish, and Access Drawer
+- `/agents`: Named Agents, Loadouts, effective-context preview, and Access Drawer
+- `/reviews`: unconfirmed, expired, missing-artifact, and sharing review queues
 - `/tasks/new`
 - `/tasks`
 - `/tasks/[task_id]`
+- `/memories`, `/resources`, and `/operations` remain supporting or Manage
+  surfaces. Existing URLs remain valid for at least one release.
 
 ## Operator Workflow
 - `pnpm -s usage:status` queries the D1 source of truth and reports a tenant usage snapshot for memory/thread counts. It intentionally does not query task rows.
@@ -284,3 +386,4 @@ tenant boundaries, or bypassing deterministic and hard-guardrail checks.
 - Third-party SaaS connector ingestion
 - Complete adversarial poisoning, multilingual PII, and redaction evaluation
 - Raw agent transcript stores への直接書き込み統合
+- Code graph construction, repository ingestion, and local-only Skill storage

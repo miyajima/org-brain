@@ -7,7 +7,7 @@ export const TASK_STATUSES = [
   "canceled"
 ] as const;
 
-export const CAPABILITIES = ["memory_measurement"] as const;
+export const CAPABILITIES = ["memory_measurement", "skill_generation"] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type CapabilityName = (typeof CAPABILITIES)[number];

@@ -5,6 +5,8 @@ import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
 import { resolveRetrievalGenerationAssignment } from "./retrieval-generation-service";
+import { resolveAgentLoadoutContext } from "./agent-loadout-service";
+import { ensureAccessPolicy } from "./access-policy-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INFERRED_DECISION_TTL_MS = 180 * DAY_MS;
@@ -163,6 +165,8 @@ type ContextEnrichRequest = {
   project_id?: string | null;
   agentId?: string;
   agent_id?: string;
+  agentKey?: string;
+  agent_key?: string;
   userId?: string;
   user_id?: string;
   taskType?: TaskType;
@@ -750,6 +754,7 @@ function parseEnrichRequest(rawBody: unknown, principal?: string | null) {
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
     projectId: parseOptionalString(body.projectId ?? body.project_id, "projectId", 128),
     agentId: requestPrincipal ?? parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
+    agentKey: parseOptionalString(body.agentKey ?? body.agent_key, "agentKey", 128),
     userId: requestPrincipal ?? parseOptionalString(body.userId ?? body.user_id, "userId", 128),
     taskType: parseEnum(body.taskType ?? body.task_type, "taskType", TASK_TYPES, "implementation"),
     taskTitle: taskTitle ?? "",
@@ -1513,6 +1518,28 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
       options.autoOrigin ? 1 : 0
     )
     .run();
+  const ownerPrincipal = normalizePrincipal(options.principal)
+    ?? normalizePrincipal(memory.ownerRefs.find((owner) => owner.id)?.id)
+    ?? "system:decision";
+  await ensureAccessPolicy(env, {
+    tenantId: memory.tenantId,
+    resourceType: "decision_memory",
+    resourceId: memory.id,
+    scope: memory.visibility === "tenant"
+      ? "tenant"
+      : memory.visibility === "project"
+        ? "project"
+        : memory.allowedPrincipals.length > 0
+          ? "restricted"
+          : "private",
+    ownerPrincipal,
+    projectId: memory.projectId,
+    restrictedSubjects: memory.allowedPrincipals.map((principal) => ({
+      subject_type: "principal" as const,
+      subject_id: principal
+    })),
+    actorPrincipal: ownerPrincipal
+  });
   await insertDecisionMemoryVersion(env, { memory, operation: "create", actorRefs: memory.ownerRefs, reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
   await projectDecisionMemory(env, memory);
   return {
@@ -2198,6 +2225,19 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
     confidence < 0.45 ||
     selected.some((item) => item.memory.status === "uncertain") ||
     conflicts.some((conflict) => conflict.requiresHumanReview);
+  const agentContext = request.agentKey
+    ? await resolveAgentLoadoutContext(env, {
+        tenantId: request.tenantId,
+        agentKey: request.agentKey,
+        principal: normalizePrincipal(options.principal) ?? request.agentId ?? request.userId ?? "api",
+        projectId: request.projectId,
+        taskText: request.taskText,
+        maxTokens: Math.max(500, Math.floor(request.maxTokens / 2)),
+        recordUsage: options.recordUsage !== false,
+        usageEvent: "resolved",
+        enforceRuntimeFlag: true
+      })
+    : null;
 
   const response = trimToMaxTokens(
     {
@@ -2220,6 +2260,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
       constraints,
       knownPitfalls,
       conflicts,
+      ...(agentContext ? { agentContext } : {}),
       recommendedNextActions: [
         request.taskType === "implementation" ? "対象ファイルで既存方針に沿う実装例を確認する" : "差分が既存方針に反していないか確認する",
         constraints.length > 0 ? "PR前にconstraintsに対応するテストまたはレビュー観点を確認する" : "不足する組織文脈があればdecision memoryとして記録する"
