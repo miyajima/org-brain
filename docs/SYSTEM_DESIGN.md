@@ -3,7 +3,7 @@ title: Org Brain System Design
 doc_type: system_design
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-16
+last_updated: 2026-08-19
 ---
 
 # Org Brain System Design
@@ -59,6 +59,32 @@ grouping and coverage calculation so hidden counts are not observable.
 - `threads`: review-oriented conversation capture.
 - `mcp_client_installations`: 無人hookの導入単位をowner principalへ結び付ける独立control-plane table。memory、rationale、decisionの親子構造や検索indexには参加しない。
 - `memory_quality_runs` / `memory_quality_measurements` / `memory_quality_cases`: privacy-safe regression metadata. Case rows store only hashes, routes, split, reason codes, parity, and related IDs; they never store session text, reasoning, absolute paths, or command output.
+- `domain_pack_releases` / `domain_pack_installations` / `domain_pack_install_items`: tenant-safe Pack catalog, idempotent installation state, and provenance.
+- `managed_object_types` / `managed_objects` / relations / external refs: operational subjects kept separate from Knowledge Resources.
+- `metric_definitions` / immutable `metric_definition_versions` / bindings / targets / snapshots / `metric_source_bindings`: shared Pack and custom metric registry plus non-secret Connector readiness. Snapshot reads map expired measurements to `stale` and `null`.
+- `domain_dashboards` / `dashboard_metric_widgets`: generic Dashboard definitions that resolve metric keys through the installed registry, including Manifest-external custom metrics.
+- `GET /v1/domain-packs/:packId/workspace`: installed-Pack operating view with scoped KPI groups, Decision-linked Baseline/Outcome, evidence, Workflow, and Connector readiness.
+- `GET /v1/metric-snapshots/query` / `GET /v1/metric-source-bindings`: immutable history and future-Connector preparation reads.
+
+## Domain Pack control plane
+
+The API computes canonical JSON/SHA-256 digests, exact dependency order, a
+dry-run install diff, and idempotent install/upgrade results. Pack upgrades can
+mutate only definitions owned by the same Pack. Custom definitions and tenant
+Dashboards are never overwritten. First-party Pack fixtures are validated from
+the archive but never sent through the normal install data path.
+
+The shared contract rejects unknown executable fields and limits Connector
+queries to registered template IDs. Derived metrics use a fixed operation
+allowlist. The three Domain MCP tools are read-only; Pack Builder and release
+operations remain Enterprise HTTP/UI capabilities.
+
+The Pack Workspace is a read-only daily surface. It joins installation
+provenance, managed-object scope, the metric registry, immutable Snapshot
+history, target versions, `knowledge_assertions`, Knowledge Resources, and
+non-secret source bindings. Baseline and Outcome use only explicit
+`triggered_by_metric` and `verified_by_metric` links. It does not execute a
+Connector or Workflow and does not accept manual metric entry.
 
 ## Control Plane
 - `LeaseDO`: tenant and capability concurrency gate.

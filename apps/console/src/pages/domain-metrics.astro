@@ -1,0 +1,110 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+let message = "";
+let error = "";
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const csrf = String(form.get("csrf_token") ?? "");
+  const action = String(form.get("action") ?? "metric");
+  let path = "/api/v1/metric-definitions";
+  let body: any;
+  if (action === "dashboard") {
+    const metricKey = String(form.get("metric_key") ?? "").trim();
+    const dashboardKey = String(form.get("dashboard_key") ?? "custom-domain-dashboard").trim();
+    body = {
+      tenant_id: tenantId,
+      key: dashboardKey,
+      title: String(form.get("dashboard_title") ?? "Custom Domain Dashboard"),
+      widgets: [{ key: `${metricKey}-widget`, kind: "metric", title: metricKey, metric_keys: [metricKey], layout: { x: 0, y: 0, w: 6, h: 3 } }]
+    };
+    path = "/api/v1/domain-dashboards";
+  } else {
+    const sourceType = String(form.get("source_type") ?? "manual");
+    const metricKeys = String(form.get("formula_metric_keys") ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+    body = {
+      tenant_id: tenantId,
+      key: String(form.get("key") ?? "").trim(),
+      label: String(form.get("label") ?? "").trim(),
+      description: String(form.get("description") ?? "").trim(),
+      origin_type: "custom",
+      scope_type: String(form.get("scope_type") ?? "tenant"),
+      source_type: sourceType,
+      unit: String(form.get("unit") ?? "count"),
+      aggregation_window: String(form.get("aggregation_window") ?? "P7D"),
+      freshness_seconds: Number(form.get("freshness_seconds") ?? 86400),
+      target_direction: String(form.get("target_direction") ?? "increase"),
+      ...(sourceType === "derived" ? { formula: { operation: String(form.get("operation") ?? "ratio"), metric_keys: metricKeys } } : {}),
+      ...(sourceType === "connector" ? { connector: { adapter_id: String(form.get("adapter_id") ?? ""), query_template: String(form.get("query_template") ?? "") } } : {})
+    };
+  }
+  const response = await api(path, { method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify(body) });
+  const payload: any = await response.json().catch(() => null);
+  if (response.ok) message = action === "dashboard" ? "Manifest外の指標をDashboardへ追加しました。" : "カスタム指標を作成しました。";
+  else error = payload?.error?.message ?? "保存できませんでした。";
+}
+const [metricResponse, dashboardResponse] = await Promise.all([
+  api(`/api/v1/metrics/query?tenant_id=${encodeURIComponent(tenantId)}&limit=500`),
+  api(`/api/v1/domain-dashboards?tenant_id=${encodeURIComponent(tenantId)}`)
+]);
+const metricPayload: any = await metricResponse.json().catch(() => null);
+const dashboardPayload: any = await dashboardResponse.json().catch(() => null);
+const metrics = metricPayload?.data ?? [];
+const dashboards = dashboardPayload?.data ?? [];
+---
+<BaseLayout title="Domain Metrics" lang="ja" wide>
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6">
+      <p class="surface-label">{tenantId} · METRIC REGISTRY</p>
+      <h1 class="mt-2 text-3xl font-semibold">Packに依存しない指標レジストリ</h1>
+      <p class="surface-muted mt-2">独自指標は全エディションで作成できます。Pack upgradeは<code>origin_type=pack</code>だけを更新し、custom定義と版履歴を維持します。</p>
+    </header>
+    {message && <p class="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100">{message}</p>}
+    {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
+
+    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3">
+      <input type="hidden" name="csrf_token" class="domain-metric-csrf" />
+      <input type="hidden" name="action" value="metric" />
+      <label><span class="field-label">Metric key</span><input name="key" required placeholder="quality_adjusted_activation_rate" /></label>
+      <label><span class="field-label">表示名</span><input name="label" required placeholder="Quality adjusted activation" /></label>
+      <label><span class="field-label">Scope</span><select name="scope_type"><option value="tenant">tenant</option><option value="project">project</option><option value="managed_object">managed_object</option></select></label>
+      <label><span class="field-label">Source</span><select name="source_type"><option value="manual">manual</option><option value="connector">connector</option><option value="derived">derived</option></select></label>
+      <label><span class="field-label">Unit</span><input name="unit" value="percent" required /></label>
+      <label><span class="field-label">Window</span><input name="aggregation_window" value="P7D" required /></label>
+      <label><span class="field-label">Freshness (sec)</span><input name="freshness_seconds" type="number" value="86400" min="1" required /></label>
+      <label><span class="field-label">Target direction</span><select name="target_direction"><option value="increase">increase</option><option value="decrease">decrease</option><option value="range">range</option><option value="maintain">maintain</option></select></label>
+      <label><span class="field-label">Derived operation</span><select name="operation"><option value="ratio">ratio</option><option value="count">count</option><option value="sum">sum</option><option value="average">average</option><option value="percentile">percentile</option><option value="duration">duration</option><option value="distinct_count">distinct_count</option></select></label>
+      <label class="md:col-span-2"><span class="field-label">Formula metric keys（comma separated）</span><input name="formula_metric_keys" placeholder="qualified_activated_users,new_users" /></label>
+      <label><span class="field-label">Adapter ID</span><input name="adapter_id" placeholder="product-analytics" /></label>
+      <label><span class="field-label">Query template ID</span><input name="query_template" placeholder="registered_template_v1" /></label>
+      <label class="md:col-span-3"><span class="field-label">説明</span><input name="description" /></label>
+      <div class="md:col-span-3"><button type="submit">カスタム指標を作成</button></div>
+    </form>
+
+    <section class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+      <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="surface-label">REGISTRY</p><h2 class="mt-1 text-xl font-semibold">指標と最新snapshot</h2></div><p class="text-sm text-zinc-500">stale / unknownは数値を表示しません</p></div>
+      <div class="mt-4 grid gap-3 lg:grid-cols-2">
+        {metrics.map((metric: any) => <article class="rounded-xl border border-white/8 bg-black/20 p-4">
+          <div class="flex items-start justify-between gap-3"><div><strong>{metric.definition.label}</strong><p class="mt-1 font-mono text-xs text-zinc-500">{metric.metric_key}</p></div><span class:list={["rounded-full px-2 py-1 text-xs", metric.origin_type === "custom" ? "bg-violet-400/15 text-violet-200" : "bg-sky-400/15 text-sky-200"]}>{metric.origin_type}</span></div>
+          <div class="mt-3 flex items-baseline gap-2"><span class="text-2xl font-semibold">{metric.latest.state === "measured" ? metric.latest.value : "—"}</span><span class="text-sm text-zinc-500">{metric.definition.unit} · {metric.latest.state}</span></div>
+          {metric.latest.evidence_ref && <p class="mt-2 truncate text-xs text-zinc-500">Evidence: {metric.latest.evidence_ref}</p>}
+        </article>)}
+      </div>
+    </section>
+
+    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-4">
+      <input type="hidden" name="csrf_token" class="domain-metric-csrf" />
+      <input type="hidden" name="action" value="dashboard" />
+      <label><span class="field-label">Dashboard key</span><input name="dashboard_key" value="custom-domain-dashboard" required /></label>
+      <label><span class="field-label">Dashboard title</span><input name="dashboard_title" value="Custom Domain Dashboard" required /></label>
+      <label><span class="field-label">Metric key</span><select name="metric_key">{metrics.map((metric: any) => <option value={metric.metric_key}>{metric.definition.label} ({metric.origin_type})</option>)}</select></label>
+      <div class="self-end"><button type="submit">Dashboardへ追加</button></div>
+      <p class="surface-muted md:col-span-4">現在のDashboard: {dashboards.map((item: any) => item.title).join(" · ") || "なし"}</p>
+    </form>
+  </section>
+</BaseLayout>
+<script>document.querySelectorAll<HTMLInputElement>(".domain-metric-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>
+

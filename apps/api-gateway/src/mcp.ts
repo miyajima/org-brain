@@ -73,6 +73,7 @@ import {
   updateMemoryUsageStates
 } from "./memory-effect-service";
 import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
+import { getDomainContext, queryMetrics, searchManagedObjects } from "./domain-metric-service";
 import {
   getDecisionResources,
   getResourceDecisions,
@@ -1628,6 +1629,65 @@ class OrgBrainMcpTools {
           source_type,
           source_id
         }, { principal, projectId: project_id ?? null }));
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_domain_context",
+      {
+        tenant_id: z.string().optional(),
+        object_id: z.string().min(1).max(128).optional(),
+        metric_key: z.string().min(1).max(128).optional(),
+        decision_id: z.string().min(1).max(128).optional()
+      },
+      async ({ tenant_id, object_id, metric_key, decision_id }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read");
+        return toContent(await getDomainContext(this.env, tenantId, {
+          objectId: object_id,
+          metricKey: metric_key,
+          decisionId: decision_id
+        }));
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_managed_object_search",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(128).nullable().optional(),
+        q: z.string().max(256).optional(),
+        type_key: z.string().max(128).optional(),
+        limit: z.number().int().min(1).max(200).optional()
+      },
+      async ({ tenant_id, project_id, q, type_key, limit }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", project_id);
+        return toContent(await searchManagedObjects(this.env, tenantId, {
+          projectId: project_id,
+          q,
+          typeKey: type_key,
+          limit
+        }));
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_metric_query",
+      {
+        tenant_id: z.string().optional(),
+        metric_keys: z.array(z.string().min(1).max(128)).max(100).optional(),
+        scope_id: z.string().max(128).nullable().optional(),
+        limit: z.number().int().min(1).max(500).optional()
+      },
+      async ({ tenant_id, metric_keys, scope_id, limit }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read");
+        return toContent(await queryMetrics(this.env, tenantId, {
+          metricKeys: metric_keys,
+          scopeId: scope_id,
+          limit
+        }));
       }
     );
 

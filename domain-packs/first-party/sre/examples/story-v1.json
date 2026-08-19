@@ -1,0 +1,28 @@
+{
+  "story_id": "story-sre-inc-0042",
+  "fixture_date": "2026-07-15T00:00:00Z",
+  "install_fixture": false,
+  "objects": [
+    { "id": "payments-api", "type": "service", "name": "payments-api" },
+    { "id": "fraud-provider", "type": "dependency", "name": "fraud-provider" },
+    { "id": "payments-availability-9995", "type": "slo", "name": "Availability 99.95%" },
+    { "id": "INC-0042", "type": "incident", "name": "INC-0042" }
+  ],
+  "baseline": { "availability": 99.82, "error_budget_burn_rate": 3.4, "latency_p95": 840, "http_5xx_rate": 2.8, "mttr": 74 },
+  "targets": { "availability": 99.95, "error_budget_burn_rate": 1.0 },
+  "decision": {
+    "id": "DEC-SRE-INC-0042",
+    "statement": "retry上限を2回にし、circuit breakerを有効化する",
+    "rationale": "5xxの61%がretry amplification由来",
+    "constraints": ["決済受付自体は停止しない"],
+    "rejected_alternatives": [{ "statement": "timeoutを一律延長する", "reason": "retry amplificationを悪化させるため" }],
+    "workflow": "service-degradation-response",
+    "evidence": ["datadog-snapshot-inc-0042", "incident-report-inc-0042", "runbook-v12"],
+    "evidence_details": [
+      { "id": "datadog-snapshot-inc-0042", "title": "payments-api SLO・retry snapshot", "resource_kind": "dashboard", "source_system": "Datadog", "observed_at": "2026-07-15T00:00:00Z", "verification_state": "verified" },
+      { "id": "incident-report-inc-0042", "title": "INC-0042 Incident Report", "resource_kind": "report", "source_system": "Incident Management", "observed_at": "2026-07-15T00:00:00Z", "verification_state": "verified" },
+      { "id": "runbook-v12", "title": "payments-api degradation runbook v12", "resource_kind": "runbook", "source_system": "OrgBrain Resources", "observed_at": "2026-07-14T00:00:00Z", "verification_state": "verified" }
+    ]
+  },
+  "after": { "availability": 99.97, "error_budget_burn_rate": 0.6, "latency_p95": 310, "http_5xx_rate": 0.5, "mttr": 29 }
+}

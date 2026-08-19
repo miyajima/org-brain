@@ -1,0 +1,58 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const response = await fetch(new URL(`/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`, Astro.url), { headers: { cookie } });
+const payload: any = await response.json().catch(() => null);
+const packs = (payload?.data ?? []).filter((entry: any) => entry.installation?.state === "installed");
+const scope = new URLSearchParams({ tenant_id: tenantId, lang: "ja" });
+---
+<BaseLayout title="Pack Workspaces" lang="ja" wide>
+  <section class="space-y-5" data-testid="domain-workspaces-index">
+    <header class="workspace-index-hero">
+      <div>
+        <p class="surface-label">{tenantId} · INSTALLED DOMAIN PACKS</p>
+        <h1>チームの指標と判断を確認する</h1>
+        <p>指標の変化、判断理由、根拠、Workflow、事後成果をPackごとに一続きで確認します。</p>
+      </div>
+      <a class="button-secondary" href={`/domain-packs?${scope}`}>Pack管理</a>
+    </header>
+
+    {!response.ok && <div class="workspace-empty" role="alert"><h2>Workspaceを読み込めませんでした</h2><p>{payload?.error?.message ?? "APIへ接続できませんでした。"}</p></div>}
+    {response.ok && packs.length === 0 && <div class="workspace-empty"><h2>インストール済みPackがありません</h2><p>Domain Packを導入すると、ここに日常運用Workspaceが表示されます。</p><a class="button-secondary" href={`/domain-packs?${scope}`}>Domain Packを見る</a></div>}
+    {packs.length > 0 && <div class="workspace-card-grid">
+      {packs.map((entry: any) => <a class="workspace-card" href={`/domain-workspaces/${encodeURIComponent(entry.manifest.pack_id)}?${scope}`}>
+        <div class="workspace-card-top"><span>{entry.manifest.classification}</span><span>v{entry.manifest.version}</span></div>
+        <h2>{entry.manifest.title}</h2>
+        <p>{entry.manifest.description}</p>
+        <dl>
+          <div><dt>管理対象</dt><dd>{entry.manifest.object_types.length}</dd></div>
+          <div><dt>指標</dt><dd>{entry.manifest.metrics.length}</dd></div>
+          <div><dt>Connector候補</dt><dd>{entry.manifest.connectors.length}</dd></div>
+        </dl>
+        <strong>Workspaceを開く <span aria-hidden="true">→</span></strong>
+      </a>)}
+    </div>}
+  </section>
+</BaseLayout>
+
+<style>
+  .workspace-index-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem;padding:1.5rem;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:linear-gradient(135deg,rgba(14,165,233,.1),rgba(255,255,255,.025))}
+  .workspace-index-hero h1{margin:.45rem 0 0;font-size:clamp(1.8rem,4vw,2.7rem);line-height:1.12;font-weight:760;letter-spacing:-.035em}
+  .workspace-index-hero p:last-child{margin:.65rem 0 0;max-width:48rem;color:#a8bdd0;line-height:1.7}
+  .workspace-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+  .workspace-card{display:flex;min-height:270px;flex-direction:column;padding:1.35rem;border:1px solid rgba(99,179,237,.2);border-radius:20px;background:#07111e;color:inherit;text-decoration:none;transition:transform .18s ease,border-color .18s ease,background .18s ease}
+  .workspace-card:hover,.workspace-card:focus-visible{transform:translateY(-2px);border-color:rgba(56,189,248,.65);background:#091829;outline:none}
+  .workspace-card-top{display:flex;justify-content:space-between;color:#6f92ad;font:700 .72rem/1.2 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em}
+  .workspace-card h2{margin:1rem 0 0;font-size:1.45rem;font-weight:740}
+  .workspace-card>p{margin:.6rem 0 0;color:#9fb3c6;line-height:1.6}
+  .workspace-card dl{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin:auto 0 1rem;padding-top:1rem}
+  .workspace-card dl div{padding:.7rem;border-radius:12px;background:rgba(255,255,255,.035)}
+  .workspace-card dt{color:#7590a7;font-size:.72rem}.workspace-card dd{margin:.2rem 0 0;font-size:1.1rem;font-weight:750}
+  .workspace-card strong{color:#7dd3fc;font-size:.88rem}
+  .workspace-empty{padding:2rem;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:rgba(255,255,255,.025)}
+  .workspace-empty h2{font-size:1.25rem}.workspace-empty p{margin:.45rem 0 1rem;color:#9fb3c6}
+  @media(max-width:720px){.workspace-index-hero{flex-direction:column}.workspace-card-grid{grid-template-columns:1fr}.workspace-card{min-height:250px}}
+  @media(prefers-reduced-motion:reduce){.workspace-card{transition:none}.workspace-card:hover{transform:none}}
+</style>

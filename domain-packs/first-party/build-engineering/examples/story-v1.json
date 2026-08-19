@@ -1,0 +1,27 @@
+{
+  "story_id": "story-build-engineering-2026-07",
+  "fixture_date": "2026-07-31T00:00:00Z",
+  "install_fixture": false,
+  "objects": [
+    { "id": "checkout-web", "type": "repository", "name": "checkout-web" },
+    { "id": "ci-main", "type": "pipeline", "name": "ci-main" },
+    { "id": "gha-linux-medium", "type": "runner_pool", "name": "gha-linux-medium" },
+    { "id": "checkout-2026.07", "type": "release", "name": "checkout-2026.07" }
+  ],
+  "baseline": { "build_success_rate": 91.0, "build_duration_p95": 18.4, "queue_duration_p95": 6.2, "change_failure_rate": 14, "deployment_frequency": 2.1 },
+  "targets": { "build_success_rate": 98, "build_duration_p95": 10 },
+  "decision": {
+    "id": "DEC-BUILD-2026-07-01",
+    "statement": "runner poolを2台増やし、integration testを4 shardへ分割する",
+    "rationale": "遅延の61%がrunner待ち、27%が単一実行されるintegration test",
+    "rejected_alternatives": [{ "statement": "integration testを削除する", "reason": "品質ガードを失うため" }],
+    "workflow": "ci-bottleneck-diagnosis",
+    "evidence": ["github-actions-report-2026-07", "runner-utilization-2026-07", "test-result-2026-07"],
+    "evidence_details": [
+      { "id": "github-actions-report-2026-07", "title": "checkout-web CI 7日間レポート", "resource_kind": "report", "source_system": "GitHub Actions", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "runner-utilization-2026-07", "title": "gha-linux-medium runner利用率", "resource_kind": "dashboard", "source_system": "GitHub Actions", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "test-result-2026-07", "title": "integration test実行時間", "resource_kind": "test_result", "source_system": "CI Test Results", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" }
+    ]
+  },
+  "after": { "build_success_rate": 98.6, "build_duration_p95": 9.7, "queue_duration_p95": 1.4, "change_failure_rate": 9, "deployment_frequency": 3.0 }
+}

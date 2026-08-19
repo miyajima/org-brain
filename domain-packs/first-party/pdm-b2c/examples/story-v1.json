@@ -1,0 +1,106 @@
+{
+  "story_id": "story-pdm-b2c-personalized-discovery",
+  "fixture_date": "2026-07-31T00:00:00Z",
+  "followup_date": "2026-08-28T00:00:00Z",
+  "install_fixture": false,
+  "objects": [
+    { "id": "machi-market-consumer-app", "type": "product", "name": "MachiMarket Consumer App" },
+    { "id": "home-fitness", "type": "market_category", "name": "home-fitness" },
+    { "id": "paid-social", "type": "acquisition_channel", "name": "paid-social" },
+    { "id": "2026-07-new-users", "type": "user_cohort", "name": "2026-07-new-users" },
+    { "id": "search-to-purchase", "type": "product_funnel", "name": "search-to-purchase" },
+    { "id": "EXP-PERSONALIZED-DISCOVERY-01", "type": "experiment", "name": "EXP-PERSONALIZED-DISCOVERY-01" },
+    { "id": "summer-acquisition-2026", "type": "campaign", "name": "summer-acquisition-2026" }
+  ],
+  "baseline": {
+    "mau": 120000,
+    "new_users": 24000,
+    "paid_social_share": 62,
+    "activation_rate": 38,
+    "time_to_first_value_p75": 700,
+    "d1_retention": 31,
+    "d7_retention": 19,
+    "d30_retention": 8,
+    "dau_mau": 16,
+    "zero_result_rate": 14,
+    "search_to_detail_rate": 41,
+    "detail_to_cart_rate": 8.5,
+    "purchase_conversion": 2.1,
+    "repeat_purchase_rate": 17,
+    "cac": 2800,
+    "contribution_ltv_90d": 5600,
+    "ltv_cac": 2.0,
+    "inventory_fulfillment_rate": 76,
+    "favorite_user_d30_retention": 21,
+    "non_favorite_user_d30_retention": 8
+  },
+  "targets": {
+    "activation_rate": 55,
+    "time_to_first_value_p75": 300,
+    "d7_retention": 28,
+    "d30_retention": 15,
+    "zero_result_rate": 5,
+    "purchase_conversion": 3,
+    "repeat_purchase_rate": 25,
+    "ltv_cac": 3,
+    "inventory_fulfillment_rate": 90
+  },
+  "proposal": {
+    "statement": "MAU目標達成のためPaid Social予算を30%増額する",
+    "finding": "Paid Socialは獲得量を作れている一方、ActivationとD7 Retentionが低い。home-fitnessのZero-resultが多く、初日お気に入り利用者のD30 Retentionは未利用者の約2.6倍。"
+  },
+  "decision": {
+    "id": "DEC-PDM-EXP-PERSONALIZED-DISCOVERY-01",
+    "statement": "広告予算増額を保留し、home-fitnessで初回カテゴリ選択、Zero-result時の関連商品提示、検索条件保存、価格・在庫通知を実験する",
+    "rationale": "ボトルネックは獲得量ではなく、初回の商品発見と再訪動機にある",
+    "rejected_alternatives": [
+      { "statement": "Paid Social予算を30%増やす", "reason": "現状のActivationとRetentionではCAC悪化が見込まれる" },
+      { "statement": "全商品へ一律10% couponを配布する", "reason": "短期CVR以外のContribution Marginと継続利用への効果が不明" }
+    ],
+    "constraints": ["個人情報・広告同意を越えたパーソナライズをしない"],
+    "success_conditions": ["D7 Retention 26%以上", "Purchase Conversion 2.8%以上", "Contribution Marginを悪化させない"],
+    "workflow": "consumer-funnel-diagnosis-to-experiment",
+    "playbook": "b2c-product-experiment-review",
+    "evidence": ["product-analytics-2026-07", "channel-cohort-report-2026-07", "search-log-rollup-2026-07", "user-interviews-2026-07", "category-inventory-2026-07"],
+    "evidence_details": [
+      { "id": "product-analytics-2026-07", "title": "Consumer funnel overview", "resource_kind": "dashboard", "source_system": "Product Analytics", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "channel-cohort-report-2026-07", "title": "Paid Social cohort report", "resource_kind": "report", "source_system": "Product Analytics", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "search-log-rollup-2026-07", "title": "home-fitness search rollup", "resource_kind": "dataset", "source_system": "Search Analytics", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "user-interviews-2026-07", "title": "新規ユーザーインタビュー要約", "resource_kind": "document", "source_system": "Research Repository", "observed_at": "2026-07-28T00:00:00Z", "verification_state": "verified" },
+      { "id": "category-inventory-2026-07", "title": "home-fitness inventory coverage", "resource_kind": "report", "source_system": "Marketplace Inventory", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" }
+    ]
+  },
+  "after_four_weeks": {
+    "activation_rate": 54,
+    "time_to_first_value_p75": 290,
+    "d7_retention": 27,
+    "d30_retention_forecast": 14,
+    "zero_result_rate": 5.2,
+    "purchase_conversion": 3.0,
+    "repeat_purchase_rate": 22,
+    "contribution_ltv_90d": 7800,
+    "cac": 2800,
+    "ltv_cac": 2.79,
+    "inventory_fulfillment_rate": 89,
+    "contribution_margin_change_percent": 4
+  },
+  "followup_decision": {
+    "id": "DEC-PDM-EXP-PERSONALIZED-DISCOVERY-02",
+    "statement": "実験を他の2カテゴリへ展開し、広告増額はLTV/CAC 3.0到達まで段階的にする"
+  },
+  "custom_metric_test": {
+    "key": "quality_adjusted_activation_rate",
+    "origin_type": "custom",
+    "source_type": "derived",
+    "formula_text": "7日以内にActivationを達成し、かつ初回購入のキャンセル・返金がない新規ユーザー数 ÷ 対象新規ユーザー数",
+    "formula": { "operation": "ratio", "metric_keys": ["qualified_activated_users", "new_users"] },
+    "assertions": [
+      "manifestに存在しなくてもDashboardへ追加できる",
+      "experimentとDecisionへリンクできる",
+      "Pack upgrade後も維持される",
+      "Enterprise Builderでorganization_overlayへ昇格できる",
+      "couponで見かけ上のActivationだけが上がるケースを検出できる"
+    ],
+    "coupon_case": { "activation_rate": 60, "quality_adjusted_activation_rate": 42, "expected_signal": "warning" }
+  }
+}

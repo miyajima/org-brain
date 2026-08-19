@@ -1,5 +1,7 @@
 import type { AvoidedLookup, DecisionResourceLink, DecisionResourceRole, MemoryImpactSummary } from "@org-brain/contracts";
 
+export * from "./domain-pack.js";
+
 export type MemoryImpactObservation = {
   event_type: "eligible" | "assessed" | "failed";
   external_run_id: string;

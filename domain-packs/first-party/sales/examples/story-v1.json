@@ -1,0 +1,26 @@
+{
+  "story_id": "story-sales-fy26-q3",
+  "fixture_date": "2026-07-31T00:00:00Z",
+  "install_fixture": false,
+  "objects": [
+    { "id": "mid-market-jp", "type": "segment", "name": "mid-market-jp" },
+    { "id": "saas-webinar-july", "type": "campaign", "name": "saas-webinar-july" },
+    { "id": "sdr-tokyo", "type": "sales_team", "name": "sdr-tokyo" },
+    { "id": "FY26-Q3", "type": "sales_pipeline", "name": "FY26-Q3" }
+  ],
+  "baseline": { "lead_count": 200, "appointment_count": 54, "appointment_rate": 27, "opportunity_count": 16, "opportunity_conversion_rate": 29.6, "won_count": 5, "revenue": 7500000, "webinar_followup_appointment_rate": 43, "cold_outbound_appointment_rate": 18 },
+  "decision": {
+    "id": "DEC-SALES-FY26-Q3-01",
+    "statement": "SDR稼働の30%をCold outboundからWebinar follow-upへ移す",
+    "rationale": "同じ工数で期待アポ数が高く、未対応Webinar leadが残っている",
+    "rejected_alternatives": [{ "statement": "直ちに2名増員する", "reason": "既存稼働配分の改善を先に検証できるため" }],
+    "playbook": "webinar-followup-playbook",
+    "evidence": ["crm-report-fy26-q3", "campaign-attribution-july", "sdr-activity-history-july"],
+    "evidence_details": [
+      { "id": "crm-report-fy26-q3", "title": "FY26-Q3 Pipeline Report", "resource_kind": "report", "source_system": "CRM", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "campaign-attribution-july", "title": "July campaign attribution", "resource_kind": "dataset", "source_system": "CRM", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" },
+      { "id": "sdr-activity-history-july", "title": "SDR Tokyo activity history", "resource_kind": "report", "source_system": "Sales Engagement", "observed_at": "2026-07-31T00:00:00Z", "verification_state": "verified" }
+    ]
+  },
+  "after": { "appointment_count": 72, "appointment_rate": 36, "opportunity_count": 23, "opportunity_conversion_rate": 31.9, "won_count": 7, "revenue": 8900000 }
+}
