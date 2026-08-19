@@ -13,6 +13,80 @@ last_updated: 2026-08-19
 This document defines the internal autonomous quality-control, memory capture,
 maintenance, and rollback design described by `SPEC.md` and `ARCHITECTURE.md`.
 
+## Decision-first execution plane
+
+The human read model is anchored on the existing Decision original and follows
+`Decision -> Reason -> Evidence -> Artifact -> Skill -> Agent -> Outcome`.
+Decision Briefing, Trace, and Map are projections; they never become competing
+sources of truth. Every candidate node is authorized before counts, edges, and
+truncation are calculated. Hidden nodes therefore do not appear as placeholders
+and do not leave dangling edges or observable hidden counts.
+
+Decision Map includes saved and confirmed relations by default. An explicit
+`include_inferred=true` request may add inferred relations. Responses are
+deduplicated, limited to 150 nodes and 300 edges, and include a truncation flag.
+The Console renders the same response through 3D, 2D list, and mobile timeline
+adapters; keyboard selection and reduced-motion behavior do not change the data
+contract.
+
+### Unified access policy
+
+`resource_access_policies` is the read authority for new APIs. A policy contains
+tenant, resource type/id, `private|project|group|tenant|restricted` scope,
+owner, project, group/restricted subjects, storage location, and a monotonically
+increasing policy version. Update uses the expected policy version so concurrent
+drawers cannot silently overwrite one another.
+
+Legacy visibility and ACL data is backfilled and mirrored for compatibility.
+`access_policy_shadow_diffs` records unified/legacy read differences using
+identifiers and outcomes only. It does not store protected bodies. The new path
+fails closed on missing or invalid policy; the compatibility flag can restore
+legacy reads while operators repair shadow differences.
+
+### Skill asset lifecycle
+
+`skill_assets` owns mutable identity and lifecycle:
+`draft -> published -> retired`. `skill_asset_versions` and
+`skill_asset_files` are immutable. Each file is written to R2 and recorded in
+D1 with path, media type, SHA-256 hash, byte size, and R2 key. Publish requires a
+complete, schema-valid current version and Owner/admin authority.
+
+Generation first creates a private draft and `skill_generation_runs` record,
+then enqueues the existing task/capability path. The input object contains only
+selected Decision/reason/Resource references, their version hashes, user
+instructions, provider/model, and idempotency key. The runner rechecks ACL and
+source hashes immediately before provider execution and before commit.
+
+The common provider adapter returns structured output for the shared Skill
+schema. Timeout, malformed output, duplicate delivery, exhausted retry, R2
+failure, or concurrent revision marks the task failed. A version becomes
+current only after every file is stored and the D1 commit succeeds; Publish is a
+separate mutation, so a partial generation is never public.
+
+### Named Agent and Loadout resolution
+
+A Named Agent is selected by stable `(tenant_id, agent_key)` and points to one
+current named Loadout. Each binding defines usage mode, priority, validity, and
+version policy. Resolution orders by priority, resolves pinned or latest
+published versions, and then intersects current policies and lifecycle states
+for Agent, Loadout, Skill, and version.
+
+`always` and selected `auto` items may include verified content. `on_demand`
+items return name, summary, version, and a scoped fetch handle; the body is not
+injected. Omitted rows include a non-sensitive reason code. Preview and runtime
+resolution use the same resolver, while usage facts are append-only in
+`asset_usage_events`. Permission revocation, Group departure, retirement, or
+expiry therefore takes effect on the next resolution.
+
+### Feature flags and compatibility
+
+`DECISION_CONSOLE_MODE=off|beta|on` gates Decision Console read models and UI.
+`LOADOUT_RESOLUTION_MODE=off|beta|on` independently gates `agent_key`
+resolution. Legacy Decision URLs redirect to the new create/detail path while
+preserving query parameters and `tenant`, `project`, and `lang`. Supporting
+Memory, Resource, Task, and Operations URLs remain available for at least one
+release.
+
 ## Decision Resource Intelligence
 
 Resource identity, locations, immutable versions, relation assertions, and
@@ -85,6 +159,15 @@ history, target versions, `knowledge_assertions`, Knowledge Resources, and
 non-secret source bindings. Baseline and Outcome use only explicit
 `triggered_by_metric` and `verified_by_metric` links. It does not execute a
 Connector or Workflow and does not accept manual metric entry.
+- `resource_access_policies` / `access_policy_shadow_diffs`: unified access
+  authority plus privacy-safe legacy comparison.
+- `skill_assets` / `skill_asset_versions` / `skill_asset_files` /
+  `skill_generation_runs`: Skill identity, immutable versions, R2 file
+  references, and asynchronous generation state.
+- `agents` / `agent_loadouts` / `agent_loadout_bindings`: Named Agent identity
+  and version-aware Skill distribution configuration.
+- `asset_usage_events`: append-only preview, resolution, injection, fetch, and
+  outcome facts.
 
 ## Control Plane
 - `LeaseDO`: tenant and capability concurrency gate.
@@ -181,6 +264,13 @@ Connector or Workflow and does not accept manual metric entry.
   filtering after the common fixed-role RBAC and tenant/project gate.
 - API Gateway can resolve principals from API keys or verified Cloudflare Access JWTs. Login profile fields such as company and organization names are display-only metadata.
 - Tenant-scoped arbitrary groups and `resource_acl` entries provide group sharing for decision memories and knowledge docs without coupling access to company or organization labels.
+- Decision, Skill, Agent, Loadout, generation, preview, Trace, and Map paths use
+  the unified policy service. A binding never grants permission and filtering
+  always precedes response aggregation.
+- Skill generation excludes raw conversation, unselected sources, repository
+  content, source code, secrets, and model reasoning. Provider keys and R2
+  credentials remain Worker bindings and are never exposed by provider
+  discovery.
 
 ## Operator Workflows
 - `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
@@ -196,15 +286,50 @@ Connector or Workflow and does not accept manual metric entry.
 - `pnpm hook:bridge` and `pnpm sync:agents-memory` are the two memory ingress/egress bridges.
 
 ## Console Surfaces
-- `/`: dashboard
+- `/`: Decision Briefing
+- `/decisions/new`: decision creation
+- `/decisions/[id]`: persistent decision trace rail and same-screen preview
+- `/map`: decision-centered 3D map, 2D list, and mobile timeline
+- `/skills`: private draft generation, inventory, Publish, export, retire, and
+  access policy
+- `/agents`: Named Agent inventory, Loadout editor, effective context preview,
+  and access policy
+- `/reviews`: decision review queues
 - `/tasks/new`: task creation
 - `/tasks`: task list
 - `/tasks/[task_id]`: task detail
-- `/memories`: memory explorer and maintenance view
-- `/decisions`: decision knowledge search, editor, confirmation, and trust/provenance review.
+- `/memories`: supporting memory explorer and maintenance view
+- `/decisions`: decision index and search
 - `/operations`: memory/decision debt, queue, audit, retrieval quality, token,
   retention, and SLO status.
 - `/client-installations`: 本人のCodex／Claude Code／Cursor hook導入一覧、one-time enrollment表示、導入単位の失効。
+
+### Administration UX internals
+
+The decision surfaces use additive versioned read contracts and migration 0034;
+existing administration contracts remain compatible. Presentation state is
+normalized internally with `AdminPageState`, operator actions with
+`AdminAction`, and route-quality coverage with `RouteAuditCase`. Shared page
+headers, sections, status panels, action lists, and live notices live under
+`apps/console/src/components/admin`; decision-specific components live under
+`apps/console/src/components/decision`; common locale copy and
+scope-preserving URL helpers live under `apps/console/src/lib`.
+
+The route audit matrix covers every administration route in English, Japanese,
+and Chinese. Chromium automation enforces WCAG A/AA Axe results, responsive
+reflow, keyboard completion for the five primary workflows, forced-colors and
+reduced-motion behavior, and the 12px metadata floor. Screenshot evidence is
+generated from the same mock state at desktop and mobile widths. The knowledge
+constellation additionally verifies both an actual WebGL canvas and the
+non-WebGL list/trace fallback.
+
+The constellation uses one combobox for graph filtering and keyboard node
+selection. Its six-result suggestion surface overlays the workspace instead of
+adding document height, closes after selection, and returns focus to the
+combobox. The four-stage decision path is part of the map workspace above the
+WebGL/fallback surface, so changing decision, reason, evidence, or artifact
+keeps the graph and trace inspector in view. Node selection remains synchronized
+with the URL, graph highlighting, active path stage, and localized live status.
 
 ## Current State
 - The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
@@ -259,12 +384,29 @@ Wilson gates, quarantine re-evaluation, mutation budgets, idempotency,
 failure-injection rollback, local/cloud parity, privacy, contract checks, and
 scheduled-job smoke paths.
 
+Decision Console coverage additionally includes policy backfill/shadow parity,
+cross-tenant and same-tenant denial, immediate revocation, Group departure,
+Loadout lifecycle filtering, generation timeout/schema/idempotency/retry/R2 and
+publish conflicts, 100,000-decision performance, gzip size, ja/en/zh E2E,
+keyboard and screen-reader semantics, mobile layout, empty/error/stale states,
+fresh migration smoke, and live staging API/Console smoke.
+
 ## Rollout and migration
 
 New installations schedule the autonomous controller in shadow mode. Evidence
 advances scopes to guarded and autonomous; any hard violation automatically
 returns the scope to shadow. Migration 0032 adds quarantine while preserving
 legacy review reads.
+
+Decision Console migration is additive. Migration 0034 creates and backfills
+unified access, Skill, Agent, Loadout, generation, and usage tables without
+dropping legacy columns. Rollout uses `beta` in staging, then deploys production
+in the order migration, API/runner, Console, and finally changes both flags to
+`on` after all gates pass. Rollback sets `DECISION_CONSOLE_MODE=off` and
+`LOADOUT_RESOLUTION_MODE=off`; it does not roll down the migration. Skill/Agent
+rows and immutable R2 versions remain intact, and each generation provider can
+be disabled independently. Policy inconsistencies return reads to the legacy
+path until shadow differences are repaired.
 
 Autonomous memory control is a versioned policy layer shared by the local
 SQLite adapter and the Cloud D1 scheduled worker. The state machine is

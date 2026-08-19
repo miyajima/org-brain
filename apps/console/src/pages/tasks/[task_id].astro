@@ -1,77 +1,126 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
+import AdminStatePanel from "../../components/admin/AdminStatePanel.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
-import { dashboardLabel } from "../../lib/dashboard-copy";
+import { dashboardLabel, dashboardStatusTone } from "../../lib/dashboard-copy";
 
+type TaskDetailState = "ready" | "not_found" | "task_error" | "events_error";
 const taskId = Astro.params.task_id!;
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
-const taskParams = new URLSearchParams({ tenant_id: tenantId });
+const taskParams = new URLSearchParams({ tenant_id: tenantId, lang });
 if (projectId) taskParams.set("project_id", projectId);
-
 const [taskResponse, eventResponse] = await Promise.all([
   fetch(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}?${taskParams.toString()}`, Astro.url)),
   fetch(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}/events?${taskParams.toString()}&limit=200`, Astro.url))
 ]);
-
-const taskPayload: any = taskResponse.ok ? await taskResponse.json() : { ok: false, data: null };
-const eventPayload: any = eventResponse.ok ? await eventResponse.json() : { ok: false, data: [] };
-const task = taskPayload.ok ? taskPayload.data : null;
-const events = eventPayload.ok ? eventPayload.data : [];
+const taskPayload: any = await taskResponse.json().catch(() => null);
+const eventPayload: any = await eventResponse.json().catch(() => null);
+const task = taskResponse.ok && taskPayload?.ok ? taskPayload.data : null;
+const events = eventResponse.ok && eventPayload?.ok && Array.isArray(eventPayload.data) ? eventPayload.data : [];
+const state: TaskDetailState = !taskResponse.ok
+  ? (taskResponse.status === 404 ? "not_found" : "task_error")
+  : !task
+    ? "not_found"
+    : !eventResponse.ok || !eventPayload?.ok
+      ? "events_error"
+      : "ready";
 const copy = {
   en: {
-    title: "Task detail",
-    missing: "Task not found.",
-    timeline: "Event timeline",
-    kind: "Kind",
-    at: "At",
-    payload: "Payload",
-    empty: "No events"
+    title: "Task detail", taskId: "Task ID", capability: "Process", status: "Status", project: "Project", updated: "Updated", priority: "Priority",
+    timeline: "Event timeline", kind: "Kind", at: "At", payload: "Details", empty: "No events have been recorded yet.",
+    notFoundTitle: "Task not found", notFoundBody: "It may have been removed or it may belong to a different tenant or project.",
+    taskErrorTitle: "Task details could not be loaded", taskErrorBody: "The service did not return a usable response. Retry before making an operational decision.",
+    eventsErrorTitle: "Some event history is unavailable", eventsErrorBody: "The Task was loaded, but its event timeline could not be retrieved.",
+    back: "Back to Tasks", retry: "Retry", operations: "Open Operations", replay: "Replay Task", replaying: "Creating a replay Task…", replayed: "Replay Task created", replayError: "The Task could not be replayed."
   },
   ja: {
-    title: "Task詳細",
-    missing: "Taskが見つかりません。",
-    timeline: "イベント履歴",
-    kind: "種類",
-    at: "発生日時",
-    payload: "内容",
-    empty: "イベントなし"
+    title: "Task詳細", taskId: "Task ID", capability: "処理", status: "状態", project: "プロジェクト", updated: "更新日時", priority: "優先度",
+    timeline: "イベント履歴", kind: "種類", at: "発生日時", payload: "内容", empty: "イベントはまだ記録されていません。",
+    notFoundTitle: "Taskが見つかりません", notFoundBody: "削除されたか、別のテナントまたはプロジェクトに属している可能性があります。",
+    taskErrorTitle: "Task詳細を取得できませんでした", taskErrorBody: "サービスから利用可能な応答がありません。運用判断の前に再試行してください。",
+    eventsErrorTitle: "イベント履歴の一部を取得できませんでした", eventsErrorBody: "Task本体は取得できましたが、イベント履歴を読み込めませんでした。",
+    back: "Task一覧へ戻る", retry: "再試行", operations: "運用画面を開く", replay: "Taskを再実行", replaying: "再実行Taskを作成しています…", replayed: "再実行Taskを作成しました", replayError: "Taskを再実行できませんでした。"
   },
   zh: {
-    title: "任务详情",
-    missing: "未找到任务。",
-    timeline: "事件记录",
-    kind: "类型",
-    at: "时间",
-    payload: "内容",
-    empty: "没有事件"
+    title: "任务详情", taskId: "任务 ID", capability: "处理", status: "状态", project: "项目", updated: "更新时间", priority: "优先级",
+    timeline: "事件记录", kind: "类型", at: "时间", payload: "内容", empty: "尚未记录事件。",
+    notFoundTitle: "未找到任务", notFoundBody: "该任务可能已被删除，或属于其他租户或项目。",
+    taskErrorTitle: "无法加载任务详情", taskErrorBody: "服务未返回可用响应，请在做出运维判断前重试。",
+    eventsErrorTitle: "部分事件记录不可用", eventsErrorBody: "任务已加载，但无法获取事件记录。",
+    back: "返回任务列表", retry: "重试", operations: "打开运维页面", replay: "重新运行任务", replaying: "正在创建重试任务…", replayed: "已创建重试任务", replayError: "无法重新运行任务。"
   }
 }[lang];
+const scopedHref = (path: string) => `${path}?${taskParams.toString()}`;
 const eventKind = (value: unknown) => dashboardLabel("event", typeof value === "string" ? value : "", lang);
 const formatEventPayload = (value: unknown) => typeof value === "string" ? value : JSON.stringify(value, null, 2);
+const replayable = task && ["failed", "dead_letter"].includes(String(task.status));
 ---
 <BaseLayout title={`${copy.title} · ${taskId}`} lang={lang}>
-  <section class="card">
-    <h1>{copy.title}</h1>
-    {task ? <pre>{JSON.stringify(task, null, 2)}</pre> : <p>{copy.missing}</p>}
-  </section>
+  <section class="admin-page task-detail-page">
+    <AdminPageHeader eyebrow={`${copy.taskId} · ${taskId}`} title={copy.title}>
+      <div slot="actions" class="task-detail-actions">
+        <a class="secondary-action" href={scopedHref("/tasks")}>{copy.back}</a>
+        <a class="secondary-action" href={`${Astro.url.pathname}${Astro.url.search}`}>{copy.retry}</a>
+        <a class="secondary-action" href={`${scopedHref("/operations")}#failed-tasks`}>{copy.operations}</a>
+      </div>
+    </AdminPageHeader>
 
-  <section class="card">
-    <h2>{copy.timeline}</h2>
-    <table>
-      <thead>
-        <tr><th>{copy.kind}</th><th>{copy.at}</th><th>{copy.payload}</th></tr>
-      </thead>
-      <tbody>
-        {events.length === 0 ? (
-          <tr><td colspan="3">{copy.empty}</td></tr>
-        ) : events.map((event: any) => (
-          <tr>
-            <td title={event.kind}>{eventKind(event.kind)}</td>
-            <td>{new Date(event.created_at).toLocaleString("ja-JP")}</td>
-            <td><pre>{formatEventPayload(event.payload)}</pre></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    {state === "not_found" && <AdminStatePanel state="attention" title={copy.notFoundTitle} description={copy.notFoundBody} />}
+    {state === "task_error" && <AdminStatePanel state="error" title={copy.taskErrorTitle} description={copy.taskErrorBody} />}
+    {state === "events_error" && <AdminStatePanel state="partial" title={copy.eventsErrorTitle} description={copy.eventsErrorBody} />}
+
+    {task && (
+      <section class="admin-section" aria-labelledby="task-summary-title">
+        <header class="admin-section-header"><div><h2 id="task-summary-title">{task.id}</h2><p>{dashboardLabel("capability", String(task.capability), lang)}</p></div><span class={`task-status task-status-${dashboardStatusTone(task.status)}`}>{dashboardLabel("status", String(task.status), lang)}</span></header>
+        <dl class="task-detail-summary">
+          <div><dt>{copy.capability}</dt><dd>{dashboardLabel("capability", String(task.capability), lang)}</dd></div>
+          <div><dt>{copy.status}</dt><dd>{dashboardLabel("status", String(task.status), lang)}</dd></div>
+          <div><dt>{copy.project}</dt><dd>{task.project_id ?? "—"}</dd></div>
+          <div><dt>{copy.priority}</dt><dd>{task.priority ?? "—"}</dd></div>
+          <div><dt>{copy.updated}</dt><dd>{typeof task.updated_at === "number" ? new Date(task.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US") : "—"}</dd></div>
+        </dl>
+        {replayable && <div class="task-replay"><button id="replay-task" data-task-id={task.id} data-tenant-id={tenantId}>{copy.replay}</button><p id="replay-result" aria-live="polite" data-replaying={copy.replaying} data-replayed={copy.replayed} data-replay-error={copy.replayError}></p></div>}
+      </section>
+    )}
+
+    {task && (
+      <section class="admin-section" aria-labelledby="task-events-title">
+        <header class="admin-section-header"><div><h2 id="task-events-title">{copy.timeline}</h2></div><span>{events.length}</span></header>
+        <div class="overflow-x-auto"><table><thead><tr><th>{copy.kind}</th><th>{copy.at}</th><th>{copy.payload}</th></tr></thead><tbody>
+          {events.length === 0 ? <tr><td colspan="3">{copy.empty}</td></tr> : events.map((event: any) => <tr><td title={event.kind}>{eventKind(event.kind)}</td><td>{new Date(event.created_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td><td><pre>{formatEventPayload(event.payload)}</pre></td></tr>)}
+        </tbody></table></div>
+      </section>
+    )}
   </section>
 </BaseLayout>
+
+<script>
+  const replayButton = document.querySelector<HTMLButtonElement>("#replay-task");
+  const replayOutput = document.querySelector<HTMLElement>("#replay-result");
+  replayButton?.addEventListener("click", async () => {
+    if (!replayOutput || !replayButton.dataset.taskId) return;
+    replayButton.disabled = true;
+    replayOutput.textContent = replayOutput.dataset.replaying || "";
+    try {
+      const response = await fetch(`/api/v1/ops/tasks/${encodeURIComponent(replayButton.dataset.taskId)}/replay`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: replayButton.dataset.tenantId }) });
+      const payload = await response.json() as { ok?: boolean; data?: { task_id?: string }; error?: { message?: string } };
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || replayOutput.dataset.replayError);
+      replayOutput.textContent = `${replayOutput.dataset.replayed}: ${payload.data?.task_id ?? "—"}`;
+    } catch (error) {
+      replayOutput.textContent = error instanceof Error ? error.message : (replayOutput.dataset.replayError || "");
+      replayButton.disabled = false;
+    }
+  });
+</script>
+
+<style>
+  .task-detail-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+  .task-detail-actions a { min-height: 44px; }
+  .task-detail-summary { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .75rem; margin: 0; }
+  .task-detail-summary div { min-width: 0; border: 1px solid var(--console-border); border-radius: 14px; background: rgba(255,255,255,.025); padding: .8rem; }
+  .task-detail-summary dt { color: var(--console-muted); font-size: .75rem; }.task-detail-summary dd { margin: .35rem 0 0; overflow-wrap: anywhere; color: var(--console-text); font-size: .875rem; }
+  .task-replay { display: flex; gap: .8rem; align-items: center; margin-top: 1rem; }.task-replay p { color: var(--console-muted); font-size: .875rem; }
+  td pre { max-width: 46rem; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
+  @media (max-width: 760px) { .task-detail-summary { grid-template-columns: 1fr 1fr; }.task-replay { align-items: stretch; flex-direction: column; } }
+</style>

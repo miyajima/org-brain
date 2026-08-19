@@ -1,0 +1,18 @@
+---
+import type { AdminAction } from "../../lib/admin-ui";
+
+const { actions, label } = Astro.props as { actions: AdminAction[]; label: string };
+---
+<ol class="admin-action-list" aria-label={label}>
+  {actions.map((action) => (
+    <li class={`admin-action admin-action-${action.tone}`}>
+      <span class="admin-action-marker" aria-hidden="true"></span>
+      <div class="admin-action-copy">
+        <strong>{action.title}{typeof action.count === "number" ? ` (${action.count})` : ""}</strong>
+        <p>{action.description}</p>
+      </div>
+      {action.href && <a class="admin-action-link" href={action.href}>{action.title}</a>}
+      {!action.href && action.submitAction && <button type="submit" formaction={action.submitAction}>{action.title}</button>}
+    </li>
+  ))}
+</ol>

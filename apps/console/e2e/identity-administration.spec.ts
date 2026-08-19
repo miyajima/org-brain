@@ -13,7 +13,7 @@ test.describe("identity administration", () => {
     await page.getByLabel("Email").first().fill("invite@example.com");
     await page.getByLabel("Display name").first().fill("Invited User");
     await page.getByRole("button", { name: "Invite" }).click();
-    await expect(page.getByText("Invited", { exact: true })).toBeVisible();
+    await expect(page.getByText("Invitation created.", { exact: true })).toBeVisible();
 
     await page.goto("/groups?tenant_id=default");
     await expect(page.getByText("Local review group")).toBeVisible();

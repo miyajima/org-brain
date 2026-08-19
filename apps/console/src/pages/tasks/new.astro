@@ -13,7 +13,8 @@ const copy = {
     capability: "Capability",
     inputRef: "Input reference",
     inputPlaceholder: "r2://... or memory://... or plain text",
-    submit: "Create Task"
+    submit: "Create Task",
+    pending: "Not submitted"
   },
   ja: {
     title: "Task作成",
@@ -23,7 +24,8 @@ const copy = {
     capability: "処理",
     inputRef: "入力元",
     inputPlaceholder: "r2://... または memory://... またはテキスト",
-    submit: "Taskを作成"
+    submit: "Taskを作成",
+    pending: "未送信"
   },
   zh: {
     title: "新建任务",
@@ -33,7 +35,8 @@ const copy = {
     capability: "能力",
     inputRef: "输入引用",
     inputPlaceholder: "r2://... 或 memory://... 或纯文本",
-    submit: "创建任务"
+    submit: "创建任务",
+    pending: "尚未提交"
   }
 }[lang];
 const capability = dashboardLabel("capability", "memory_measurement", lang);
@@ -58,7 +61,7 @@ const capability = dashboardLabel("capability", "memory_measurement", lang);
 
       <button type="submit">{copy.submit}</button>
     </form>
-    <pre id="result">未送信</pre>
+    <pre id="result">{copy.pending}</pre>
   </section>
 
   <script>

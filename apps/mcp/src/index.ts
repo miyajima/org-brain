@@ -413,7 +413,7 @@ export class OrgBrainMCP extends McpAgent<Env, null, AgentProps> {
       {
         tenant_id: z.string().optional(),
         project_id: z.string().optional(),
-        capability: z.enum(["memory_measurement"]),
+        capability: z.enum(["memory_measurement", "skill_generation"]),
         input_ref: z.string().min(1),
         priority: z.number().int().min(0).max(10).optional(),
         trace_id: z.string().optional(),

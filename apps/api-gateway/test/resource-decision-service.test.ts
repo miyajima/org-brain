@@ -106,6 +106,23 @@ function testEnv() {
       created_by_principal TEXT NOT NULL, created_at INTEGER NOT NULL,
       UNIQUE(tenant_id, resource_type, resource_id, subject_type, subject_id, permission)
     );
+    CREATE TABLE resource_access_policies(
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      owner_principal TEXT NOT NULL,
+      project_id TEXT,
+      group_ids_json TEXT NOT NULL DEFAULT '[]',
+      restricted_subjects_json TEXT NOT NULL DEFAULT '[]',
+      storage_location TEXT NOT NULL DEFAULT 'd1',
+      policy_version INTEGER NOT NULL DEFAULT 1,
+      created_by_principal TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, resource_type, resource_id)
+    );
   `);
   const migration = readFileSync(`${runtime.cwd()}/../../migrations/0023_knowledge_resources.sql`, "utf8");
   database.exec(migration);

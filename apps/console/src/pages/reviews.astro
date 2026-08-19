@@ -1,0 +1,36 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { emptyDecisionBriefing, normalizeDecisionBriefing, scopedHref } from "../lib/decision-console-ui";
+
+const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const behavior = decisionConsoleBehavior(mode);
+const { params, apiParams, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+if (!behavior.enabled) return Astro.redirect(scopedHref("/decisions", params), 307);
+const briefing = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/decision-briefing", apiParams, { limit: 100 }), Astro.url), normalizeDecisionBriefing, emptyDecisionBriefing());
+const reviewKinds = ["expired", "unconfirmed", "artifact_missing", "share_pending"] as const;
+const copy = {
+  en: { eyebrow: "Decision governance", title: "Reviews", lead: "Resolve validity, confirmation, artifact, and sharing gaps before a decision is distributed through Skills and Agents.", expired: "Validity expired", unconfirmed: "Needs confirmation", artifact_missing: "Missing artifact", share_pending: "Waiting to share", none: "No decisions are waiting in this review lane.", open: "Review decision", error: "The review queue could not be refreshed" },
+  ja: { eyebrow: "Decision governance", title: "Reviews", lead: "決定をSkillやAgentへ配布する前に、有効期限、確認、成果物、共有範囲の不足を解消します。", expired: "有効期限切れ", unconfirmed: "確認が必要", artifact_missing: "成果物未接続", share_pending: "共有待ち", none: "このレビュー項目で待機中の決定はありません。", open: "決定をレビュー", error: "レビューキューを更新できませんでした" },
+  zh: { eyebrow: "Decision governance", title: "Reviews", lead: "在通过Skill和Agent分发决策前，解决有效期、确认、成果和共享问题。", expired: "有效期已过", unconfirmed: "需要确认", artifact_missing: "未连接成果", share_pending: "待共享", none: "此审核通道暂无待处理决策。", open: "审核决策", error: "无法刷新审核队列" }
+}[lang];
+---
+<BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
+  <section class="decision-reviews-page">
+    <header class="decision-page-header"><div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div></header>
+    {briefing.error && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{briefing.error}</span></div>}
+    <div class="decision-review-grid">
+      {reviewKinds.map((kind, laneIndex) => {
+        const items = briefing.data.items.filter((item) => item.flags.includes(kind));
+        return <section class="decision-review-lane" style={`--decision-index:${laneIndex}`}>
+          <header><div><span>{String(laneIndex + 1).padStart(2, "0")}</span><h2>{copy[kind]}</h2></div><strong>{items.length}</strong></header>
+          <div>
+            {items.map((item) => <article><span class:list={["decision-status-dot", `is-${item.status}`]}></span><div><h3>{item.title}</h3><p>{item.reason_summary}</p><a href={scopedHref(`${item.next_action.href}`, params)}>{copy.open} →</a></div></article>)}
+            {items.length === 0 && <p class="decision-empty">{copy.none}</p>}
+          </div>
+        </section>;
+      })}
+    </div>
+  </section>
+</BaseLayout>

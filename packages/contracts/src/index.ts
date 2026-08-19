@@ -492,6 +492,227 @@ export type MemoryMapTraceResponse = {
   };
 };
 
+export const DECISION_CONSOLE_CONTRACT_VERSION = "decision-console/v2" as const;
+export const ACCESS_POLICY_CONTRACT_VERSION = "resource-access-policy/v1" as const;
+export const SKILL_ASSET_CONTRACT_VERSION = "skill-asset/v1" as const;
+export const AGENT_LOADOUT_CONTRACT_VERSION = "agent-loadout/v1" as const;
+
+export const ACCESS_POLICY_SCOPES = ["private", "project", "group", "tenant", "restricted"] as const;
+export const ACCESS_POLICY_RESOURCE_TYPES = [
+  "memory",
+  "decision_memory",
+  "decision_rationale",
+  "knowledge_doc",
+  "knowledge_resource",
+  "skill_asset",
+  "agent",
+  "agent_loadout"
+] as const;
+export const ACCESS_POLICY_STORAGE_LOCATIONS = ["d1", "d1_r2", "external"] as const;
+export const SKILL_ASSET_STATUSES = ["draft", "published", "retired"] as const;
+export const SKILL_GENERATION_PROVIDERS = ["gemini", "openai", "anthropic"] as const;
+export const SKILL_SOURCE_TYPES = ["decision_memory", "decision_rationale", "knowledge_resource_version"] as const;
+export const AGENT_STATUSES = ["active", "paused", "retired"] as const;
+export const LOADOUT_USAGE_MODES = ["always", "auto", "on_demand"] as const;
+export const LOADOUT_VERSION_POLICIES = ["pinned", "latest_published"] as const;
+
+export type AccessPolicyScope = (typeof ACCESS_POLICY_SCOPES)[number];
+export type AccessPolicyResourceType = (typeof ACCESS_POLICY_RESOURCE_TYPES)[number];
+export type AccessPolicyStorageLocation = (typeof ACCESS_POLICY_STORAGE_LOCATIONS)[number];
+export type SkillAssetStatus = (typeof SKILL_ASSET_STATUSES)[number];
+export type SkillGenerationProvider = (typeof SKILL_GENERATION_PROVIDERS)[number];
+export type SkillSourceType = (typeof SKILL_SOURCE_TYPES)[number];
+export type AgentStatus = (typeof AGENT_STATUSES)[number];
+export type LoadoutUsageMode = (typeof LOADOUT_USAGE_MODES)[number];
+export type LoadoutVersionPolicy = (typeof LOADOUT_VERSION_POLICIES)[number];
+
+const accessPolicySubjectSchema = z.object({
+  subject_type: z.enum(["principal", "group"]),
+  subject_id: z.string().trim().min(1).max(128)
+});
+
+export const resourceAccessPolicyUpdateSchema = z.object({
+  contract_version: z.literal(ACCESS_POLICY_CONTRACT_VERSION).default(ACCESS_POLICY_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  resource_type: z.enum(ACCESS_POLICY_RESOURCE_TYPES),
+  resource_id: identifierSchema,
+  scope: z.enum(ACCESS_POLICY_SCOPES),
+  owner_principal: principalSchema.optional(),
+  project_id: optionalIdentifierSchema.nullable(),
+  group_ids: z.array(identifierSchema).max(64).default([]),
+  restricted_subjects: z.array(accessPolicySubjectSchema).max(100).default([]),
+  expected_policy_version: z.number().int().positive().optional()
+}).superRefine((value, context) => {
+  if (value.scope === "project" && !value.project_id) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["project_id"], message: "project scope requires project_id" });
+  }
+  if (value.scope === "group" && value.group_ids.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["group_ids"], message: "group scope requires group_ids" });
+  }
+  if (value.scope === "restricted" && value.restricted_subjects.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["restricted_subjects"], message: "restricted scope requires subjects" });
+  }
+});
+
+const embeddedAccessPolicySchema = z.object({
+  scope: z.enum(ACCESS_POLICY_SCOPES),
+  owner_principal: principalSchema.optional(),
+  project_id: optionalIdentifierSchema.nullable(),
+  group_ids: z.array(identifierSchema).max(64).default([]),
+  restricted_subjects: z.array(accessPolicySubjectSchema).max(100).default([])
+}).superRefine((value, context) => {
+  if (value.scope === "project" && !value.project_id) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["project_id"], message: "project scope requires project_id" });
+  }
+  if (value.scope === "group" && value.group_ids.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["group_ids"], message: "group scope requires group_ids" });
+  }
+  if (value.scope === "restricted" && value.restricted_subjects.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["restricted_subjects"], message: "restricted scope requires subjects" });
+  }
+});
+
+export const skillAssetFileInputSchema = z.object({
+  path: z.string().trim().min(1).max(240).superRefine((value, context) => {
+    if (value.startsWith("/") || value.startsWith("\\") || value.split(/[\\/]/u).includes("..")) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "file path must be relative and cannot traverse" });
+    }
+  }),
+  media_type: z.string().trim().min(1).max(128).default("text/plain"),
+  content: z.string().max(1_048_576)
+});
+
+export const skillManifestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(1000),
+  instructions: z.string().trim().min(1).max(64_000),
+  validation_conditions: z.array(z.string().trim().min(1).max(1000)).min(1).max(32),
+  files: z.array(skillAssetFileInputSchema).max(49).default([])
+});
+
+export const skillSourceRefSchema = z.object({
+  source_type: z.enum(SKILL_SOURCE_TYPES),
+  source_id: identifierSchema,
+  version_hash: sha256Schema
+});
+
+export const skillAssetCreateSchema = z.object({
+  contract_version: z.literal(SKILL_ASSET_CONTRACT_VERSION).default(SKILL_ASSET_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: optionalIdentifierSchema.nullable(),
+  source_decision_id: optionalIdentifierSchema.nullable(),
+  manifest: skillManifestSchema,
+  access_policy: embeddedAccessPolicySchema.optional()
+});
+
+export const skillAssetVersionCreateSchema = z.object({
+  contract_version: z.literal(SKILL_ASSET_CONTRACT_VERSION).default(SKILL_ASSET_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  manifest: skillManifestSchema,
+  expected_current_version_id: optionalIdentifierSchema
+});
+
+export const skillGenerationCreateSchema = z.object({
+  contract_version: z.literal(SKILL_ASSET_CONTRACT_VERSION).default(SKILL_ASSET_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: optionalIdentifierSchema.nullable(),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000).default(""),
+  source_decision_id: optionalIdentifierSchema.nullable(),
+  sources: z.array(skillSourceRefSchema).min(1).max(32),
+  instructions: z.string().trim().min(1).max(4096),
+  provider: z.enum(SKILL_GENERATION_PROVIDERS),
+  model: z.string().trim().min(1).max(128),
+  idempotency_key: identifierSchema,
+  access_policy: embeddedAccessPolicySchema.optional()
+}).superRefine((value, context) => {
+  if (
+    value.source_decision_id &&
+    !value.sources.some((source) =>
+      source.source_type === "decision_memory" &&
+      source.source_id === value.source_decision_id
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["source_decision_id"],
+      message: "source_decision_id must be one of the selected versioned Decision sources"
+    });
+  }
+});
+
+export const skillPublishSchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  version_id: identifierSchema,
+  expected_current_version_id: identifierSchema
+});
+
+export const agentCreateSchema = z.object({
+  contract_version: z.literal(AGENT_LOADOUT_CONTRACT_VERSION).default(AGENT_LOADOUT_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: optionalIdentifierSchema.nullable(),
+  agent_key: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/u),
+  name: z.string().trim().min(1).max(120),
+  role: z.string().trim().min(1).max(500),
+  source_decision_id: optionalIdentifierSchema.nullable(),
+  loadout_name: z.string().trim().min(1).max(120).default("Default"),
+  access_policy: embeddedAccessPolicySchema.optional()
+});
+
+export const agentLoadoutUpdateSchema = z.object({
+  contract_version: z.literal(AGENT_LOADOUT_CONTRACT_VERSION).default(AGENT_LOADOUT_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(1000).optional(),
+  bindings: z.array(z.object({
+    skill_asset_id: identifierSchema,
+    usage_mode: z.enum(LOADOUT_USAGE_MODES),
+    priority: z.number().int().min(0).max(100).default(50),
+    version_policy: z.enum(LOADOUT_VERSION_POLICIES),
+    pinned_version_id: optionalIdentifierSchema.nullable(),
+    valid_until: z.number().int().nonnegative().nullable().optional()
+  }).superRefine((value, context) => {
+    if (value.version_policy === "pinned" && !value.pinned_version_id) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["pinned_version_id"], message: "pinned policy requires pinned_version_id" });
+    }
+    if (value.version_policy === "latest_published" && value.pinned_version_id) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["pinned_version_id"], message: "latest_published cannot pin a version" });
+    }
+  })).max(100)
+});
+
+export const agentContextPreviewSchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  task_text: z.string().trim().min(1).max(4000),
+  max_tokens: z.number().int().min(256).max(16_000).default(8000),
+  record_usage: z.boolean().default(false)
+});
+
+export const decisionBriefingQuerySchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: optionalIdentifierSchema,
+  limit: z.coerce.number().int().min(1).max(100).default(30)
+});
+
+export const decisionTraceQuerySchema = z.object({
+  tenant_id: z.string().trim().min(1).max(128).optional(),
+  project_id: optionalIdentifierSchema,
+  include_inferred: z.preprocess((value) => value === "true" || value === true, z.boolean()).default(false),
+  node_limit: z.coerce.number().int().min(1).max(150).default(150),
+  edge_limit: z.coerce.number().int().min(1).max(300).default(300)
+});
+
+export type ResourceAccessPolicyUpdateInput = z.input<typeof resourceAccessPolicyUpdateSchema>;
+export type SkillManifest = z.infer<typeof skillManifestSchema>;
+export type SkillAssetCreateInput = z.input<typeof skillAssetCreateSchema>;
+export type SkillAssetVersionCreateInput = z.input<typeof skillAssetVersionCreateSchema>;
+export type SkillGenerationCreateInput = z.input<typeof skillGenerationCreateSchema>;
+export type AgentCreateInput = z.input<typeof agentCreateSchema>;
+export type AgentLoadoutUpdateInput = z.input<typeof agentLoadoutUpdateSchema>;
+export type AgentContextPreviewInput = z.input<typeof agentContextPreviewSchema>;
+export type DecisionBriefingQuery = z.infer<typeof decisionBriefingQuerySchema>;
+export type DecisionTraceQuery = z.infer<typeof decisionTraceQuerySchema>;
+
 export const DASHBOARD_CONTRACT_VERSION = "dashboard/v1" as const;
 
 export const DASHBOARD_NODE_TYPES = ["project", "memory", "decision", "resource", "entity", "task"] as const;

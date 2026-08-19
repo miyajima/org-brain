@@ -1,5 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { decisionEditorRedirect, decisionIndexRedirect } from "../lib/decision-console-ui";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import {
   buildDecisionVersionDiffs,
@@ -415,6 +418,11 @@ const PAGE_COPY: Record<Locale, Record<string, string>> = {
 
 const url = Astro.url;
 const params = url.searchParams;
+const decisionMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+if (decisionConsoleBehavior(decisionMode).enabled) {
+  const isEditorUrl = params.get("mode") === "create" || Boolean(params.get("selected")?.trim());
+  return Astro.redirect(isEditorUrl ? decisionEditorRedirect(url) : decisionIndexRedirect(url), 307);
+}
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 const tenantId = params.get("tenant_id")?.trim() || "default";
@@ -607,6 +615,8 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
       </div>
     </header>
 
+    {errors.length > 0 && <AdminStatePanel state="partial" title={copy.dataSourceError} description={errors.join(" · ")} />}
+
     <section class="rounded-[22px] border border-white/8 bg-white/[0.04] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.28)] sm:p-5">
       <form class="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(11rem,0.75fr)_minmax(11rem,0.75fr)_auto] lg:items-end" method="get" action="/decisions">
         <label>
@@ -648,18 +658,6 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
         </details>
       </form>
     </section>
-
-    {errors.length > 0 && (
-      <section class="rounded-[22px] border border-rose-300/25 bg-rose-400/8 p-5">
-        <strong class="block text-sm font-semibold text-rose-100">{copy.dataSourceError}</strong>
-        <details class="mt-3 text-sm leading-7 text-rose-100/80">
-          <summary>{copy.details}</summary>
-          <ul class="mt-2 list-disc space-y-2 pl-5">
-            {errors.map((message) => <li>{message}</li>)}
-          </ul>
-        </details>
-      </section>
-    )}
 
     {selectedSummary && (
       <section class="xl:hidden rounded-[20px] border border-white/8 bg-white/[0.04] p-4">

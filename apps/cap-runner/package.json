@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@org-brain/contracts": "workspace:*",
     "@org-brain/shared": "workspace:*"
   },
   "devDependencies": {

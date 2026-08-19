@@ -1,6 +1,10 @@
 name = "open-brain-cap-runner"
 main = "src/index.ts"
 compatibility_date = "2026-03-03"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SKILL_GENERATION_PROVIDERS_JSON = "[]"
 
 [[d1_databases]]
 binding = "OPEN_BRAIN_DB"

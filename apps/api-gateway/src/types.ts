@@ -50,6 +50,12 @@ export type Env = {
   RETRIEVAL_GENERATION_ROUTING?: "legacy" | "observe" | "enforce";
   RETRIEVAL_OPERATOR_PRINCIPALS_JSON?: string;
   GEMINI_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  SKILL_GENERATION_PROVIDERS_JSON?: string;
+  DECISION_CONSOLE_MODE?: "off" | "beta" | "on";
+  LOADOUT_RESOLUTION_MODE?: "off" | "beta" | "on";
+  ACCESS_POLICY_SHADOW_MODE?: "off" | "on";
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;
   API_RATE_LIMIT_FAIL_OPEN?: "true" | "false";

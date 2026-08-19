@@ -1,0 +1,18 @@
+---
+const { title, description, titleId, class: className = "" } = Astro.props as {
+  title: string;
+  description?: string;
+  titleId: string;
+  class?: string;
+};
+---
+<section class:list={["admin-section", className]} aria-labelledby={titleId}>
+  <header class="admin-section-header">
+    <div>
+      <h2 id={titleId}>{title}</h2>
+      {description && <p>{description}</p>}
+    </div>
+    {Astro.slots.has("actions") && <div class="admin-section-actions"><slot name="actions" /></div>}
+  </header>
+  <slot />
+</section>

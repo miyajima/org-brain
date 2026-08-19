@@ -2,143 +2,104 @@
 import "../styles/global.css";
 import brandMark from "../../../../assets/brand/org-brain-avatar.png";
 import { dashboardTenantFromCookie } from "../lib/dashboard-page";
+import { adminCommonCopy } from "../lib/admin-ui";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
+
+type LayoutLocale = "en" | "ja" | "zh";
+type ConsoleNavGroup = "primary" | "knowledge" | "organization" | "system";
+type ConsoleNavItem = {
+  id: string;
+  href: string;
+  group: ConsoleNavGroup;
+  labels: Record<LayoutLocale, string>;
+  activeMatcher: (path: string) => boolean;
+};
 
 const { title = "Org Brain Console", lang = "en", wide = false } = Astro.props;
 const currentPath = Astro.url.pathname;
-type LayoutLocale = "en" | "ja" | "zh";
-const locale: LayoutLocale = lang === "ja" || lang === "zh" ? lang : "en";
-const navCopy = {
-  en: {
-    overview: "Overview",
-    activity: "Activity",
-    connections: "Knowledge connections",
-    history: "Knowledge history",
-    memories: "Memories",
-    decisions: "Decisions",
-    menu: "Menu",
-    management: "Manage",
-    dashboard: "Dashboard",
-    labs: "Labs · Overview",
-    memoryExplorer: "Memory Explorer",
-    memoryImpact: "Memory impact",
-    decisionEditor: "Decision Editor",
-    resources: "Resources",
-    groups: "Groups",
-    users: "Users",
-    clients: "Client installations",
-    organization: "Organization",
-    categories: "Business Categories",
-    domainPacks: "Domain Packs",
-    domainWorkspaces: "Pack Workspaces",
-    domainMetrics: "Domain Metrics",
-    profile: "Profile",
-    operations: "Operations",
-    newTask: "New Task",
-    tasks: "Tasks"
-  },
-  ja: {
-    overview: "概要",
-    activity: "活動",
-    connections: "知識のつながり",
-    history: "知識の履歴",
-    memories: "メモリ",
-    decisions: "判断",
-    menu: "メニュー",
-    management: "管理",
-    dashboard: "ダッシュボード",
-    labs: "新しい概要",
-    memoryExplorer: "メモリエクスプローラー",
-    memoryImpact: "活用分析",
-    decisionEditor: "判断エディター",
-    resources: "資料・成果物",
-    groups: "グループ",
-    users: "ユーザー",
-    clients: "クライアント接続",
-    organization: "組織",
-    categories: "業務カテゴリ",
-    domainPacks: "Domain Pack",
-    domainWorkspaces: "Pack Workspace",
-    domainMetrics: "業務指標",
-    profile: "プロフィール",
-    operations: "運用",
-    newTask: "Task作成",
-    tasks: "Task一覧"
-  },
-  zh: {
-    overview: "概览",
-    activity: "活动",
-    connections: "知识关联",
-    history: "知识历史",
-    memories: "记忆",
-    decisions: "决策",
-    menu: "菜单",
-    management: "管理",
-    dashboard: "仪表盘",
-    labs: "Labs · 新概览",
-    memoryExplorer: "记忆浏览器",
-    memoryImpact: "记忆活用分析",
-    decisionEditor: "决策编辑器",
-    resources: "资料与成果",
-    groups: "群组",
-    users: "用户",
-    clients: "客户端连接",
-    organization: "组织",
-    categories: "业务类别",
-    domainPacks: "Domain Packs",
-    domainWorkspaces: "Pack Workspaces",
-    domainMetrics: "业务指标",
-    profile: "个人资料",
-    operations: "运维",
-    newTask: "新建任务",
-    tasks: "任务"
-  }
+const requestedLang = Astro.url.searchParams.get("lang")?.trim();
+const propLocale: LayoutLocale = lang === "ja" || lang === "zh" ? lang : "en";
+const locale: LayoutLocale = requestedLang === "ja" || requestedLang === "zh" || requestedLang === "en" ? requestedLang : propLocale;
+const groupLabels: Record<Exclude<ConsoleNavGroup, "primary">, Record<LayoutLocale, string>> = {
+  knowledge: { en: "Knowledge management", ja: "知識管理", zh: "知识管理" },
+  organization: { en: "People and organization", ja: "ユーザー・組織", zh: "用户与组织" },
+  system: { en: "System operations", ja: "システム運用", zh: "系统运维" }
+};
+const menuLabels = {
+  en: { menu: "Menu", management: "Manage" },
+  ja: { menu: "メニュー", management: "管理" },
+  zh: { menu: "菜单", management: "管理" }
 }[locale];
-const insightsUiMode = await resolveRequestInsightsUiMode(
-  Astro.locals,
-  processInsightsUiModeFallback()
-);
+const commonCopy = adminCommonCopy[locale];
+const exact = (href: string) => (path: string) => path === href;
+const starts = (href: string) => (path: string) => path === href || path.startsWith(`${href}/`);
+const item = (
+  id: string,
+  href: string,
+  group: ConsoleNavGroup,
+  labels: Record<LayoutLocale, string>,
+  activeMatcher = exact(href)
+): ConsoleNavItem => ({ id, href, group, labels, activeMatcher });
+
+const insightsUiMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsBehavior = insightsUiBehavior(insightsUiMode);
-const homeHref = insightsBehavior.useInsightsNavigation ? "/overview" : "/";
+const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const decisionBehavior = decisionConsoleBehavior(decisionConsoleMode);
+const homeHref = decisionBehavior.useDecisionNavigation ? "/" : insightsBehavior.useInsightsNavigation ? "/overview" : "/";
+const primaryItems: ConsoleNavItem[] = decisionBehavior.useDecisionNavigation ? [
+  item("decisions", "/", "primary", { en: "Decisions", ja: "決定", zh: "决策" }, (path) => path === "/" || (starts("/decisions")(path) && path !== "/decisions/new" && path !== "/decisions/history")),
+  item("map", "/map", "primary", { en: "Map", ja: "マップ", zh: "地图" }, starts("/map")),
+  item("skills", "/skills", "primary", { en: "Skills", ja: "Skills", zh: "Skills" }, starts("/skills")),
+  item("agents", "/agents", "primary", { en: "Agents", ja: "Agents", zh: "Agents" }, starts("/agents")),
+  item("reviews", "/reviews", "primary", { en: "Reviews", ja: "レビュー", zh: "审核" }, starts("/reviews"))
+] : insightsBehavior.useInsightsNavigation ? [
+  item("activity", "/overview", "primary", { en: "Activity", ja: "活動", zh: "活动" }, (path) => path === "/" || path === "/overview"),
+  item("connections", "/memories/constellation", "primary", { en: "Knowledge connections", ja: "知識のつながり", zh: "知识关联" }),
+  item("history", "/decisions/history", "primary", { en: "Knowledge history", ja: "知識の履歴", zh: "知识历史" }),
+  item("tasks", "/tasks", "primary", { en: "Tasks", ja: "Task一覧", zh: "任务" }, (path) => starts("/tasks")(path) && path !== "/tasks/new")
+] : [
+  item("dashboard", "/", "primary", { en: "Dashboard", ja: "ダッシュボード", zh: "仪表盘" }),
+  item("memories", "/memories", "primary", { en: "Memories", ja: "メモリ", zh: "记忆" }, starts("/memories")),
+  item("decisions", "/decisions", "primary", { en: "Decisions", ja: "判断", zh: "决策" }, starts("/decisions")),
+  item("tasks", "/tasks", "primary", { en: "Tasks", ja: "Task一覧", zh: "任务" }, (path) => starts("/tasks")(path) && path !== "/tasks/new")
+];
+const managementItems: ConsoleNavItem[] = [
+  item("memory-explorer", "/memories", "knowledge", { en: "Memory Explorer", ja: "メモリエクスプローラー", zh: "记忆浏览器" }),
+  item("memory-impact", "/memory-impact", "knowledge", { en: "Memory impact", ja: "活用分析", zh: "记忆活用分析" }),
+  item("decision-editor", decisionBehavior.enabled ? "/decisions/new" : "/decisions", "knowledge", { en: "Decision Editor", ja: "決定の作成・編集", zh: "决策编辑器" }),
+  item("resources", "/resources", "knowledge", { en: "Storage & resources", ja: "保存先・資料・成果物", zh: "存储与资料" }),
+  item("domain-packs", "/domain-packs", "knowledge", { en: "Domain Packs", ja: "Domain Pack", zh: "Domain Packs" }, starts("/domain-packs")),
+  item("domain-workspaces", "/domain-workspaces", "knowledge", { en: "Pack Workspaces", ja: "Pack Workspace", zh: "Pack Workspaces" }, starts("/domain-workspaces")),
+  item("domain-metrics", "/domain-metrics", "knowledge", { en: "Domain Metrics", ja: "業務指標", zh: "业务指标" }, starts("/domain-metrics")),
+  ...(decisionBehavior.enabled ? [
+    item("knowledge-history", "/decisions/history", "knowledge", { en: "Knowledge history", ja: "知識の履歴", zh: "知识历史" })
+  ] : []),
+  item("groups", "/groups", "organization", { en: "Groups", ja: "グループ", zh: "群组" }, starts("/groups")),
+  item("users", "/users", "organization", { en: "Users", ja: "ユーザー", zh: "用户" }),
+  item("organization", "/organization", "organization", { en: "Organization", ja: "組織", zh: "组织" }),
+  item("categories", "/business-categories", "organization", { en: "Business Categories", ja: "業務カテゴリ", zh: "业务类别" }),
+  item("clients", "/client-installations", "system", { en: "Client installations", ja: "クライアント接続", zh: "客户端连接" }),
+  item("operations", "/operations", "system", { en: "Operations", ja: "運用", zh: "运维" }),
+  item("profile", "/profile", "system", { en: "Profile", ja: "プロフィール", zh: "个人资料" }),
+  item("new-task", "/tasks/new", "system", { en: "New Task", ja: "Task作成", zh: "新建任务" })
+];
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || dashboardTenantFromCookie(Astro.request.headers.get("cookie"));
 const projectId = Astro.url.searchParams.get("project_id")?.trim();
-const requestedLang = Astro.url.searchParams.get("lang")?.trim();
 const withScope = (href: string) => {
   const target = new URL(href, Astro.url);
   if (tenantId) target.searchParams.set("tenant_id", tenantId);
   if (projectId) target.searchParams.set("project_id", projectId);
-  if (requestedLang === "en" || requestedLang === "ja" || requestedLang === "zh") {
-    target.searchParams.set("lang", requestedLang);
-  } else if (locale !== "en") {
-    target.searchParams.set("lang", locale);
-  }
+  target.searchParams.set("lang", locale);
   return `${target.pathname}${target.search}`;
 };
-
-const isActive = (href: string) => {
-  if (href === "/") return currentPath === "/";
-  if (href === "/overview") return currentPath === "/overview";
-  if (href === "/memories/constellation") return currentPath === "/memories" || currentPath.startsWith("/memories/");
-  if (href === "/decisions/history") return currentPath === "/decisions" || currentPath.startsWith("/decisions/");
-  if (href === "/tasks") return currentPath === "/tasks" || (currentPath.startsWith("/tasks/") && currentPath !== "/tasks/new");
-  if (href === "/tasks/new") return currentPath === "/tasks/new";
-  if (href === "/decisions") return currentPath === "/decisions";
-  if (href === "/resources") return currentPath === "/resources";
-  if (href === "/groups") return currentPath === "/groups";
-  if (href === "/users") return currentPath === "/users";
-  if (href === "/client-installations") return currentPath === "/client-installations";
-  if (href === "/organization") return currentPath === "/organization";
-  if (href === "/business-categories") return currentPath === "/business-categories";
-  if (href === "/domain-packs") return currentPath === "/domain-packs";
-  if (href === "/domain-workspaces") return currentPath === "/domain-workspaces" || currentPath.startsWith("/domain-workspaces/");
-  if (href === "/domain-metrics") return currentPath === "/domain-metrics";
-  if (href === "/profile") return currentPath === "/profile";
-  if (href === "/operations") return currentPath === "/operations";
-  if (href === "/memory-impact") return currentPath === "/memory-impact";
-  return currentPath === href;
-};
+const groupedItems = (["knowledge", "organization", "system"] as const).map((group) => ({
+  group,
+  label: groupLabels[group][locale],
+  items: managementItems.filter((navItem) => navItem.group === group)
+}));
 ---
-<html lang={lang}>
+<html lang={locale}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -148,116 +109,53 @@ const isActive = (href: string) => {
     <title>{title}</title>
   </head>
   <body>
+    <a class="console-skip-link" href="#console-main">{commonCopy.skipToContent}</a>
     <div class="console-shell">
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(22,135,255,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_22%)]"></div>
-      <nav class:list={["console-nav", insightsBehavior.useInsightsNavigation && "console-nav-insights"]}>
+      <nav class:list={["console-nav", (decisionBehavior.useDecisionNavigation || insightsBehavior.useInsightsNavigation) && "console-nav-insights"]} aria-label="Org Brain">
         <a class="console-brand" href={withScope(homeHref)} aria-label="Org Brain">
           <img src={brandMark.src} width="28" height="28" alt="" />
           <span>Org Brain</span>
+          {decisionBehavior.showBetaLabel && <span class="console-beta-label">Beta</span>}
         </a>
-        {insightsBehavior.useInsightsNavigation ? (
-          <>
-            <div class="console-primary-links">
-              <a class="console-nav-link" href={withScope("/overview")} aria-current={isActive("/overview") || currentPath === "/" ? "page" : undefined}>{navCopy.activity}</a>
-              <a class="console-nav-link" href={withScope("/memories/constellation")} aria-current={isActive("/memories/constellation") ? "page" : undefined}>{navCopy.connections}</a>
-              <a class="console-nav-link" href={withScope("/decisions/history")} aria-current={isActive("/decisions/history") ? "page" : undefined}>{navCopy.history}</a>
-              <a class="console-nav-link" href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
-            </div>
-            <details class="console-nav-menu">
-              <summary>{navCopy.management}</summary>
-              <div class="console-nav-menu-panel">
-                <a href={withScope("/memories")} aria-current={currentPath === "/memories" ? "page" : undefined}>{navCopy.memoryExplorer}</a>
-                <a href={withScope("/memory-impact")} aria-current={isActive("/memory-impact") ? "page" : undefined}>{navCopy.memoryImpact}</a>
-                <a href={withScope("/decisions")} aria-current={currentPath === "/decisions" ? "page" : undefined}>{navCopy.decisionEditor}</a>
-                <a href={withScope("/resources")} aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
-                <a href={withScope("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
-                <a href={withScope("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
-                <a href={withScope("/client-installations")} aria-current={isActive("/client-installations") ? "page" : undefined}>{navCopy.clients}</a>
-                <a href={withScope("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
-                <a href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
-                <a href={withScope("/domain-packs")} aria-current={isActive("/domain-packs") ? "page" : undefined}>{navCopy.domainPacks}</a>
-                <a href={withScope("/domain-workspaces")} aria-current={isActive("/domain-workspaces") ? "page" : undefined}>{navCopy.domainWorkspaces}</a>
-                <a href={withScope("/domain-metrics")} aria-current={isActive("/domain-metrics") ? "page" : undefined}>{navCopy.domainMetrics}</a>
-                <a href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
-                <a href={withScope("/operations")} aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
-                <a href={withScope("/tasks/new")} aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
-              </div>
-            </details>
-            <details class="console-mobile-nav">
-              <summary>{navCopy.menu}</summary>
-              <div class="console-mobile-nav-panel">
-                <a href={withScope("/overview")} aria-current={isActive("/overview") || currentPath === "/" ? "page" : undefined}>{navCopy.activity}</a>
-                <a href={withScope("/memories/constellation")} aria-current={isActive("/memories/constellation") ? "page" : undefined}>{navCopy.connections}</a>
-                <a href={withScope("/decisions/history")} aria-current={isActive("/decisions/history") ? "page" : undefined}>{navCopy.history}</a>
-                <a href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
-                <span>{navCopy.management}</span>
-                <a href={withScope("/memories")}>{navCopy.memoryExplorer}</a>
-                <a href={withScope("/memory-impact")}>{navCopy.memoryImpact}</a>
-                <a href={withScope("/decisions")}>{navCopy.decisionEditor}</a>
-                <a href={withScope("/resources")}>{navCopy.resources}</a>
-                <a href={withScope("/client-installations")}>{navCopy.clients}</a>
-                <a href={withScope("/domain-packs")}>{navCopy.domainPacks}</a>
-                <a href={withScope("/domain-workspaces")}>{navCopy.domainWorkspaces}</a>
-                <a href={withScope("/domain-metrics")}>{navCopy.domainMetrics}</a>
-                <a href={withScope("/operations")}>{navCopy.operations}</a>
-                <a href={withScope("/tasks/new")}>{navCopy.newTask}</a>
-              </div>
-            </details>
-          </>
-        ) : (
-          <>
-            <div class="console-primary-links">
-              <a class="console-nav-link" href={withScope("/")} aria-current={isActive("/") ? "page" : undefined}>{navCopy.dashboard}</a>
-              <a class="console-nav-link" href={withScope("/memories")} aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
-              <a class="console-nav-link" href={withScope("/decisions")} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
-              <a class="console-nav-link" href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
-            </div>
-            <details class="console-nav-menu">
-              <summary>{navCopy.management}</summary>
-              <div class="console-nav-menu-panel">
-                {insightsBehavior.showOverviewLab && <a href={withScope("/overview")} aria-current={isActive("/overview") ? "page" : undefined}>{navCopy.labs}</a>}
-                <a href={withScope("/resources")} aria-current={isActive("/resources") ? "page" : undefined}>{navCopy.resources}</a>
-                <a href={withScope("/groups")} aria-current={isActive("/groups") ? "page" : undefined}>{navCopy.groups}</a>
-                <a href={withScope("/users")} aria-current={isActive("/users") ? "page" : undefined}>{navCopy.users}</a>
-                <a href={withScope("/organization")} aria-current={isActive("/organization") ? "page" : undefined}>{navCopy.organization}</a>
-                <a href={withScope("/business-categories")} aria-current={isActive("/business-categories") ? "page" : undefined}>{navCopy.categories}</a>
-                <a href={withScope("/domain-packs")} aria-current={isActive("/domain-packs") ? "page" : undefined}>{navCopy.domainPacks}</a>
-                <a href={withScope("/domain-workspaces")} aria-current={isActive("/domain-workspaces") ? "page" : undefined}>{navCopy.domainWorkspaces}</a>
-                <a href={withScope("/domain-metrics")} aria-current={isActive("/domain-metrics") ? "page" : undefined}>{navCopy.domainMetrics}</a>
-                <a href={withScope("/profile")} aria-current={isActive("/profile") ? "page" : undefined}>{navCopy.profile}</a>
-                <a href={withScope("/client-installations")} aria-current={isActive("/client-installations") ? "page" : undefined}>{navCopy.clients}</a>
-                <a href={withScope("/operations")} aria-current={isActive("/operations") ? "page" : undefined}>{navCopy.operations}</a>
-                <a href={withScope("/memory-impact")} aria-current={isActive("/memory-impact") ? "page" : undefined}>{navCopy.memoryImpact}</a>
-                <a href={withScope("/tasks/new")} aria-current={isActive("/tasks/new") ? "page" : undefined}>{navCopy.newTask}</a>
-              </div>
-            </details>
-            <details class="console-mobile-nav">
-              <summary>{navCopy.menu}</summary>
-              <div class="console-mobile-nav-panel">
-                <a href={withScope("/")} aria-current={isActive("/") ? "page" : undefined}>{navCopy.dashboard}</a>
-                <a href={withScope("/memories")} aria-current={isActive("/memories") ? "page" : undefined}>{navCopy.memories}</a>
-                <a href={withScope("/decisions")} aria-current={isActive("/decisions") ? "page" : undefined}>{navCopy.decisions}</a>
-                <a href={withScope("/tasks")} aria-current={isActive("/tasks") ? "page" : undefined}>{navCopy.tasks}</a>
-                <span>{navCopy.management}</span>
-                <a href={withScope("/resources")}>{navCopy.resources}</a>
-                <a href={withScope("/groups")}>{navCopy.groups}</a>
-                <a href={withScope("/users")}>{navCopy.users}</a>
-                <a href={withScope("/organization")}>{navCopy.organization}</a>
-                <a href={withScope("/business-categories")}>{navCopy.categories}</a>
-                <a href={withScope("/domain-packs")}>{navCopy.domainPacks}</a>
-                <a href={withScope("/domain-workspaces")}>{navCopy.domainWorkspaces}</a>
-                <a href={withScope("/domain-metrics")}>{navCopy.domainMetrics}</a>
-                <a href={withScope("/profile")}>{navCopy.profile}</a>
-                <a href={withScope("/client-installations")}>{navCopy.clients}</a>
-                <a href={withScope("/operations")}>{navCopy.operations}</a>
-                <a href={withScope("/memory-impact")}>{navCopy.memoryImpact}</a>
-                <a href={withScope("/tasks/new")}>{navCopy.newTask}</a>
-              </div>
-            </details>
-          </>
-        )}
+        <div class="console-primary-links">
+          {primaryItems.map((navItem) => (
+            <a class="console-nav-link" href={withScope(navItem.href)} aria-current={navItem.activeMatcher(currentPath) ? "page" : undefined}>{navItem.labels[locale]}</a>
+          ))}
+        </div>
+        <details class="console-nav-menu">
+          <summary>{menuLabels.management}</summary>
+          <div class="console-nav-menu-panel">
+            {groupedItems.map(({ group, label, items }) => (
+              <section class="console-nav-group" aria-labelledby={`desktop-nav-${group}`}>
+                <h2 id={`desktop-nav-${group}`}>{label}</h2>
+                {items.map((navItem) => (
+                  <a href={withScope(navItem.href)} aria-current={navItem.activeMatcher(currentPath) ? "page" : undefined}>{navItem.labels[locale]}</a>
+                ))}
+              </section>
+            ))}
+          </div>
+        </details>
+        <details class="console-mobile-nav">
+          <summary>{menuLabels.menu}</summary>
+          <div class="console-mobile-nav-panel">
+            <section class="console-nav-group console-nav-group-primary" aria-label={menuLabels.menu}>
+              {primaryItems.map((navItem) => (
+                <a href={withScope(navItem.href)} aria-current={navItem.activeMatcher(currentPath) ? "page" : undefined}>{navItem.labels[locale]}</a>
+              ))}
+            </section>
+            {groupedItems.map(({ group, label, items }) => (
+              <section class="console-nav-group" aria-labelledby={`mobile-nav-${group}`}>
+                <h2 id={`mobile-nav-${group}`}>{label}</h2>
+                {items.map((navItem) => (
+                  <a href={withScope(navItem.href)} aria-current={navItem.activeMatcher(currentPath) ? "page" : undefined}>{navItem.labels[locale]}</a>
+                ))}
+              </section>
+            ))}
+          </div>
+        </details>
       </nav>
-      <main class:list={["console-main", wide && "console-main-wide"]}>
+      <main id="console-main" class:list={["console-main", wide && "console-main-wide"]} tabindex="-1">
         <slot />
       </main>
     </div>
