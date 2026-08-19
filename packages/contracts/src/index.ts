@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./domain-pack.js";
+
 export const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
 
 export const IDENTITY_CONTRACT_VERSION = "identity/v1" as const;

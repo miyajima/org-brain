@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import pathModule from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { domainPackCatalog, workspaceFor } from "./domain-workspace-fixtures.mjs";
 
 const args = new Map(
   process.argv.slice(2).flatMap((arg, index, all) => (arg.startsWith("--") ? [[arg.slice(2), all[index + 1]]] : []))
@@ -667,12 +668,94 @@ function operationsStatus(tenantId) {
   };
 }
 
+const domainPacks = domainPackCatalog(false);
+const domainMetrics = [];
+const domainDashboards = [];
+
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
   const path = url.pathname;
 
   if (path === "/health") {
     json(response, 200, { ok: true });
+    return;
+  }
+
+  if (path === "/v1/capabilities" && request.method === "GET") {
+    json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
+    return;
+  }
+  if (path === "/v1/domain-packs" && request.method === "GET") {
+    json(response, 200, ok((url.searchParams.get("tenant_id") || "").startsWith("workspace-") ? domainPackCatalog(true) : domainPacks));
+    return;
+  }
+  const workspaceMatch = path.match(/^\/v1\/domain-packs\/(.+)\/workspace$/);
+  if (workspaceMatch && request.method === "GET") {
+    const tenantId = url.searchParams.get("tenant_id") || "";
+    const workspace = workspaceFor(decodeURIComponent(workspaceMatch[1]));
+    if (!workspace || !tenantId.startsWith("workspace-")) {
+      json(response, 404, { ok: false, error: { code: "domain_pack_workspace_not_installed", message: "Workspace not found" } });
+      return;
+    }
+    for (const source of workspace.source_readiness) source.tenant_id = tenantId;
+    const sourceMode = tenantId.slice("workspace-".length);
+    if (["unconfigured", "configured", "error", "stale"].includes(sourceMode)) {
+      for (const source of workspace.source_readiness) {
+        source.status = sourceMode === "stale" ? "active" : sourceMode;
+        source.connection_ref = sourceMode === "unconfigured" ? null : source.connection_ref;
+        source.last_success_at = sourceMode === "unconfigured" || sourceMode === "configured" || sourceMode === "error" ? null : source.last_success_at;
+        source.last_error_code = sourceMode === "error" ? "upstream_unavailable" : null;
+      }
+      for (const metric of workspace.metric_groups.flatMap((group) => group.metrics)) {
+        if (metric.origin_type === "custom") continue;
+        metric.source.state = sourceMode === "stale" ? "active" : sourceMode;
+        metric.source.last_error_code = sourceMode === "error" ? "upstream_unavailable" : null;
+        if (["unconfigured", "configured", "error"].includes(sourceMode)) {
+          metric.current = null;
+          metric.outcome = null;
+          metric.series = [];
+          metric.delta = null;
+          metric.status = sourceMode === "unconfigured" || sourceMode === "configured" ? "waiting" : "unknown";
+        } else if (sourceMode === "stale" && metric.current) {
+          metric.current = { ...metric.current, value: null, state: "stale" };
+          metric.status = "stale";
+        }
+      }
+    }
+    json(response, 200, ok(workspace));
+    return;
+  }
+  if (path === "/v1/domain-packs/installations/plan" && request.method === "POST") {
+    const body = await readJson(request);
+    json(response, 200, ok({
+      plan_digest: "a".repeat(64), examples_loaded: false, warnings: [],
+      packs: body.pack_ids.map((pack_id) => ({ pack_id, version: "1.0.0", action: "install", creates: { managed_object_types: 1, metric_definitions: 1, dashboards: 1, asset_references: 1, loadout_references: 0 }, preserved_custom_conflicts: { managed_object_types: [], metric_definitions: [], dashboards: [] }, connector_permissions: [] }))
+    }));
+    return;
+  }
+  if (path === "/v1/domain-packs/installations" && request.method === "POST") {
+    const body = await readJson(request);
+    json(response, 201, ok({ installations: body.pack_ids.map((pack_id) => ({ pack_id, action: "installed" })), examples_loaded: false, plan_digest: body.plan_digest }));
+    return;
+  }
+  if (path === "/v1/metrics/query" && request.method === "GET") {
+    json(response, 200, ok(domainMetrics));
+    return;
+  }
+  if (path === "/v1/metric-definitions" && request.method === "POST") {
+    const body = await readJson(request);
+    domainMetrics.push({ id: `metric-${domainMetrics.length + 1}`, metric_key: body.key, origin_type: "custom", definition: body, latest: { value: null, state: "unknown", evidence_ref: null } });
+    json(response, 201, ok(domainMetrics.at(-1)));
+    return;
+  }
+  if (path === "/v1/domain-dashboards" && request.method === "GET") {
+    json(response, 200, ok(domainDashboards));
+    return;
+  }
+  if (path === "/v1/domain-dashboards" && request.method === "POST") {
+    const body = await readJson(request);
+    domainDashboards.push({ id: `dashboard-${domainDashboards.length + 1}`, title: body.title, origin_type: "custom", definition: body });
+    json(response, 201, ok(domainDashboards.at(-1)));
     return;
   }
 

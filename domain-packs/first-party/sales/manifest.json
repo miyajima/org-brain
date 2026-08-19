@@ -1,0 +1,35 @@
+{
+  "contract_version": "domain-pack/v1",
+  "pack_id": "function.sales",
+  "version": "1.0.0",
+  "classification": "function",
+  "title": "Sales",
+  "description": "Segments, campaigns, teams, pipeline conversion, and revenue outcomes.",
+  "language": "ja",
+  "min_orgbrain_version": "0.2.0",
+  "dependencies": [],
+  "object_types": [
+    { "key": "segment", "label": "Segment" },
+    { "key": "campaign", "label": "Campaign" },
+    { "key": "sales_team", "label": "Sales Team" },
+    { "key": "sales_pipeline", "label": "Sales Pipeline" }
+  ],
+  "metrics": [
+    { "key": "lead_count", "label": "Lead数", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "count", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "lead_count_v1" } },
+    { "key": "appointment_count", "label": "Appointment数", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "count", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "appointment_count_v1" } },
+    { "key": "appointment_rate", "label": "アポ率", "origin_type": "pack", "scope_type": "managed_object", "source_type": "derived", "unit": "percent", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "formula": { "operation": "ratio", "metric_keys": ["appointment_count", "lead_count"] } },
+    { "key": "opportunity_conversion_rate", "label": "商談化率", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "percent", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "opportunity_conversion_rate_v1" } },
+    { "key": "opportunity_count", "label": "商談化数", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "count", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "opportunity_count_v1" } },
+    { "key": "won_count", "label": "受注数", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "count", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "won_count_v1" } },
+    { "key": "revenue", "label": "売上", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "jpy", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "revenue_v1" } },
+    { "key": "channel_appointment_rate", "label": "channel別アポ率", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "percent", "aggregation_window": "P30D", "dimensions": ["channel"], "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "crm", "query_template": "channel_appointment_rate_v1" } }
+  ],
+  "dashboards": [{ "key": "sales-overview", "title": "Sales Overview", "widgets": [
+    { "key": "funnel", "kind": "metric", "title": "Sales funnel", "metric_keys": ["lead_count", "appointment_rate", "opportunity_conversion_rate", "won_count", "revenue"], "layout": { "x": 0, "y": 0, "w": 12, "h": 3 } },
+    { "key": "decision-trace", "kind": "decision_trace", "title": "Decision trace", "layout": { "x": 0, "y": 3, "w": 12, "h": 6 } }
+  ] }],
+  "connectors": [{ "adapter_id": "crm", "description": "Validated CRM aggregate adapter" }],
+  "assets": [{ "asset_key": "webinar-followup-playbook", "asset_type": "playbook", "version": "1.0.0" }],
+  "loadout_templates": [{ "key": "sales-ops", "asset_keys": ["webinar-followup-playbook"] }],
+  "example_refs": ["examples/story-v1.json"]
+}

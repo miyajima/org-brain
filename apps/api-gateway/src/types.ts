@@ -57,6 +57,9 @@ export type Env = {
   DECISION_RESOURCE_LINKS_ENABLED?: "true" | "false";
   RESOURCE_RELATION_EXTRACTION_ENABLED?: "true" | "false";
   KNOWLEDGE_RESOURCE_CONNECTORS_JSON?: string;
+  DOMAIN_PACKS_MODE?: "off" | "catalog" | "install";
+  DOMAIN_METRICS_MODE?: "off" | "shadow" | "on";
+  DOMAIN_WORKSPACES_MODE?: "off" | "preview" | "on";
   RETENTION_SWEEP_MODE?: "off" | "observe" | "enforce";
   OPS_WATCHDOG_TOKEN?: string;
   OPS_ALERT_WEBHOOK_URL?: string;

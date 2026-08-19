@@ -3,7 +3,7 @@ title: Org Brain architecture
 doc_type: architecture
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-15
+last_updated: 2026-08-19
 ---
 
 # Org Brain architecture
@@ -36,6 +36,12 @@ post-apply rollback checks.
 - autonomy controller: policy, judge execution, maintenance, tuning, and
   circuit-breaker rollback;
 - quality certifier: independent Wilson gates and hard guardrails.
+- Domain Pack registry and installer: canonical, signed distribution of
+  managed-object types, metric definitions, Dashboards, and external execution
+  asset references; examples remain preview-only.
+- Pack Workspace read model: scoped KPI, Decision rationale, evidence, Outcome,
+  and non-secret Connector readiness over the installed registry and immutable
+  Snapshot history; it does not execute Connectors or Workflows.
 
 ## External systems and integrations
 
@@ -56,6 +62,12 @@ last-known-good policy.
 Tenant, project, workspace, Git common-directory, and retention boundaries are
 immutable to AI tuning. The controller depends on deterministic verifiers and
 the independent council but never on human signatures or approval state.
+
+Domain metrics are an aggregate evidence layer, not a replacement TSDB. Pack
+Manifests contain registered adapter/query-template IDs but no secrets or
+executable code. Enterprise owns Pack Builder entitlements, review, signing,
+tenant-private publication, and revocation; OSS owns install, custom metrics,
+Dashboard consumption, and read-only MCP context.
 
 ## Cross-cutting operational concerns
 

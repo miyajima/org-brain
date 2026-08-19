@@ -3,7 +3,7 @@ title: Org Brain Spec (MVP)
 doc_type: spec
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-15
+last_updated: 2026-08-19
 ---
 
 # Org Brain Spec (MVP)
@@ -13,6 +13,25 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 加えて、task / event / artifact / memory を正本のまま維持しつつ、人間とエージェント向けの知識インターフェースとして interlinked markdown docs layer を提供する。
 
 ## Requirements
+
+- R-PACK-001: a tenant MUST be able to preview and idempotently install a
+  Domain Pack without loading its synthetic example fixtures.
+- R-PACK-002: a Pack upgrade MUST NOT overwrite a custom metric, managed object
+  type, or Dashboard.
+- R-PACK-003: expired metric snapshots MUST be represented as `stale` or
+  `unknown` with no numeric value.
+- R-PACK-004: initial Domain Pack publication MUST reject `public`; only
+  first-party and same-tenant `private`/`unlisted` releases are allowed.
+- R-PACK-005: Pack Manifests MUST NOT contain executable code, secrets,
+  arbitrary SQL, or unregistered derived operations.
+- R-PACK-006: an installed Pack MUST expose a daily Workspace whose Current,
+  Baseline, Outcome, and Target values follow Snapshot/Decision links and MUST
+  remain `unknown` when the corresponding fact is absent.
+- R-PACK-007: Connector metrics MUST install a non-secret source-binding
+  placeholder and MUST accept future Connector observations through the
+  existing immutable Snapshot API.
+- R-PACK-008: a Pack-linked custom metric MUST remain visible in its Workspace
+  after a Pack upgrade.
 
 - R-AUTO-001: uncertain ingestion MUST enter quarantine and be retried
   automatically; it MUST NOT wait for a human approval queue.
@@ -40,6 +59,8 @@ Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタ�
 - MCP: Cloudflare Access保護の`open-brain-mcp` thin proxyからservice bindingでAPI Gatewayのstateless `/mcp`へ接続
 - Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `business_categories`, `memory_impact_events`, `memory_impact_daily_metrics`, `memory_usage_events`, `memory_usage_items`, `memory_effect_events`, `memory_effect_attributions`, `memory_failure_patterns`, `memory_effect_daily_metrics`, `retrieval_generations`, `retrieval_generation_assignments`, `retrieval_ranking_profiles`, `retrieval_units`, `retrieval_units_fts`, `retrieval_projection_jobs`, `retrieval_evaluation_events`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `mcp_client_installations`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
+- Domain Pack Platform: shared signed contracts, D1 install/metric registry,
+  first-party function Packs, generic Dashboards, and Enterprise-only Builder.
 
 ## API
 - `POST /v1/tasks`

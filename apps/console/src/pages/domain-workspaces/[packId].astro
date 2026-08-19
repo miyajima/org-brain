@@ -1,0 +1,218 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const packId = decodeURIComponent(Astro.params.packId ?? "");
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const selectedScope = Astro.url.searchParams.get("scope_id")?.trim() || "";
+const fromValue = Astro.url.searchParams.get("from")?.trim() || "";
+const toValue = Astro.url.searchParams.get("to")?.trim() || "";
+const apiQuery = new URLSearchParams({ tenant_id: tenantId });
+if (selectedScope) apiQuery.set("scope_id", selectedScope);
+if (fromValue && Number.isFinite(Date.parse(fromValue))) apiQuery.set("from", String(Date.parse(`${fromValue}T00:00:00Z`)));
+if (toValue && Number.isFinite(Date.parse(toValue))) apiQuery.set("to", String(Date.parse(`${toValue}T23:59:59Z`)));
+const api = (path: string) => fetch(new URL(path, Astro.url), { headers: { cookie } });
+const [workspaceResponse, catalogResponse] = await Promise.all([
+  api(`/api/v1/domain-packs/${encodeURIComponent(packId)}/workspace?${apiQuery}`),
+  api(`/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`)
+]);
+const workspacePayload: any = await workspaceResponse.json().catch(() => null);
+const catalogPayload: any = await catalogResponse.json().catch(() => null);
+const workspace: any = workspacePayload?.data ?? null;
+const packs = (catalogPayload?.data ?? []).filter((entry: any) => entry.installation?.state === "installed");
+
+const scopeFor = (id: string) => {
+  const query = new URLSearchParams({ tenant_id: tenantId, lang: "ja" });
+  if (fromValue) query.set("from", fromValue);
+  if (toValue) query.set("to", toValue);
+  return `/domain-workspaces/${encodeURIComponent(id)}?${query}`;
+};
+const allMetrics = workspace?.metric_groups?.flatMap((group: any) => group.metrics) ?? [];
+const metricCount = allMetrics.length;
+const measuredCount = allMetrics.filter((metric: any) => metric.current?.state === "measured").length;
+const achievedCount = allMetrics.filter((metric: any) => metric.status === "achieved").length;
+const waitingCount = allMetrics.filter((metric: any) => ["waiting", "unknown", "stale"].includes(metric.status)).length;
+const primaryObjects = workspace?.managed_objects ?? [];
+
+const statusCopy: Record<string, string> = {
+  achieved: "目標達成",
+  approaching: "目標に接近",
+  missed: "未達",
+  waiting: "取得待ち",
+  stale: "期限切れ",
+  unknown: "不明"
+};
+const sourceCopy: Record<string, string> = {
+  unconfigured: "未接続",
+  configured: "接続準備済み",
+  active: "正常取得",
+  error: "取得エラー",
+  paused: "停止中"
+};
+const unitCopy: Record<string, string> = {
+  percent: "%",
+  minutes: "分",
+  seconds: "秒",
+  milliseconds: "ms",
+  ratio: "倍",
+  jpy: "円",
+  count: "件",
+  users: "人",
+  deployments_per_day: "回/日"
+};
+const number = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+const formatValue = (value: number | null | undefined, unit: string) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  if (unit === "jpy") return `${number.format(value)}円`;
+  if (unit === "seconds" && value >= 60) return `${Math.floor(value / 60)}分${Math.round(value % 60)}秒`;
+  return `${number.format(value)}${unitCopy[unit] ?? ` ${unit}`}`;
+};
+const dateTime = (value: number | null | undefined) => value ? new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) : "未取得";
+const dateInput = (value: number) => new Date(value).toISOString().slice(0, 10);
+const defaultTo = workspace?.generated_at ? dateInput(workspace.generated_at) : "";
+const defaultFrom = workspace?.generated_at ? dateInput(workspace.generated_at - 90 * 86_400_000) : "";
+const targetValue = (metric: any) => metric.target?.value ?? metric.target?.max ?? metric.target?.min ?? null;
+const bullet = (metric: any) => {
+  const values = [metric.baseline?.value, metric.current?.value, targetValue(metric)].filter((value) => typeof value === "number").map(Math.abs);
+  const max = Math.max(...values, 1) * 1.08;
+  return {
+    current: typeof metric.current?.value === "number" ? Math.max(2, Math.min(100, Math.abs(metric.current.value) / max * 100)) : 0,
+    target: typeof targetValue(metric) === "number" ? Math.min(100, Math.abs(targetValue(metric)) / max * 100) : null,
+    baseline: typeof metric.baseline?.value === "number" ? Math.min(100, Math.abs(metric.baseline.value) / max * 100) : null
+  };
+};
+const sparkline = (metric: any) => {
+  const values = (metric.series ?? []).map((item: any) => item.value).filter((value: any) => typeof value === "number");
+  if (values.length < 4) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  return values.map((value: number, index: number) => `${(index / (values.length - 1) * 100).toFixed(1)},${(34 - ((value - min) / range * 28)).toFixed(1)}`).join(" ");
+};
+const signalSummary = allMetrics.slice(0, 3).map((metric: any) => `${metric.label} ${formatValue(metric.baseline?.value, metric.unit)} → ${formatValue(metric.current?.value, metric.unit)}`).join("、");
+const pdmContext = workspace?.fixture_context ?? null;
+---
+<BaseLayout title={`${workspace?.pack?.title ?? "Pack Workspace"} · Org Brain`} lang="ja" wide>
+  <section class="workspace-shell" data-testid="domain-pack-workspace" data-pack-id={packId}>
+    <nav class="workspace-breadcrumb" aria-label="パンくず"><a href={`/domain-workspaces?tenant_id=${encodeURIComponent(tenantId)}&lang=ja`}>Pack Workspaces</a><span aria-hidden="true">/</span><span>{workspace?.pack?.title ?? packId}</span></nav>
+
+    {!workspaceResponse.ok && <div class="workspace-error" role="alert"><p class="surface-label">WORKSPACE ERROR</p><h1>Pack Workspaceを表示できません</h1><p>{workspacePayload?.error?.message ?? "APIへ接続できませんでした。"}</p><a class="button-secondary" href={`/domain-workspaces?tenant_id=${encodeURIComponent(tenantId)}&lang=ja`}>Workspace一覧へ戻る</a></div>}
+
+    {workspace && <>
+      <div class="pack-switcher-desktop" role="tablist" aria-label="Domain Packを切り替える">
+        {packs.map((entry: any) => <a role="tab" aria-selected={entry.manifest.pack_id === packId ? "true" : "false"} href={scopeFor(entry.manifest.pack_id)}>{entry.manifest.title.replace(" — B2C Marketplace", " · B2C")}</a>)}
+      </div>
+      <label class="pack-switcher-mobile"><span>Domain Pack</span><select id="pack-workspace-select" aria-label="Domain Packを切り替える">
+        {packs.map((entry: any) => <option value={scopeFor(entry.manifest.pack_id)} selected={entry.manifest.pack_id === packId}>{entry.manifest.title}</option>)}
+      </select></label>
+
+      <header class="workspace-hero">
+        <div class="workspace-hero-copy">
+          <div class="hero-meta"><span>{workspace.pack.title}</span><span>v{workspace.pack.version}</span>{pdmContext && <span class="fixture-badge">合成テストデータ</span>}</div>
+          <h1>{workspace.pack.title} Workspace</h1>
+          <p>{workspace.pack.description}</p>
+          <div class="object-chips" aria-label="管理対象">{primaryObjects.map((object: any) => <span><small>{object.type_label}</small>{object.name}</span>)}</div>
+        </div>
+        <dl class="outcome-summary" aria-label="現在の成果状態">
+          <div><dt>取得済み</dt><dd>{measuredCount}<small>/{metricCount} 指標</small></dd></div>
+          <div><dt>目標達成</dt><dd>{achievedCount}<small>指標</small></dd></div>
+          <div><dt>要確認</dt><dd>{waitingCount}<small>指標</small></dd></div>
+        </dl>
+      </header>
+
+      <form class="workspace-filters" method="get" aria-label="表示範囲">
+        <input type="hidden" name="tenant_id" value={tenantId} /><input type="hidden" name="lang" value="ja" />
+        <label><span>管理対象</span><select name="scope_id"><option value="">すべての管理対象</option>{primaryObjects.map((object: any) => <option value={object.id} selected={selectedScope === object.id}>{object.type_label} · {object.name}</option>)}</select></label>
+        <label><span>開始日</span><input type="date" name="from" value={fromValue || defaultFrom} /></label>
+        <label><span>終了日</span><input type="date" name="to" value={toValue || defaultTo} /></label>
+        <button type="submit" class="button-secondary">表示を更新</button>
+      </form>
+
+      <section class="workspace-section" aria-labelledby="workspace-kpi-title">
+        <div class="section-heading"><div><p class="surface-label">CURRENT PERFORMANCE</p><h2 id="workspace-kpi-title">主要KPI</h2></div><p>Current・Baseline・Target・取得状態を同じカードで比較</p></div>
+        {workspace.metric_groups.map((group: any) => <section class="metric-group" aria-labelledby={`group-${group.key}`}>
+          <div class="metric-group-heading"><h3 id={`group-${group.key}`}>{group.label}</h3><span>{group.metrics.length} 指標</span></div>
+          <div class="metric-grid">
+            {group.metrics.map((metric: any) => {
+              const scale = bullet(metric);
+              const line = sparkline(metric);
+              const sourceState = metric.source?.state ?? "unconfigured";
+              return <article class:list={["metric-card", `metric-status-${metric.status}`, metric.origin_type === "custom" && "metric-card-custom"]} data-testid={`metric-${metric.metric_key}`}>
+                <div class="metric-card-heading"><div><span class="metric-origin">{metric.origin_type === "custom" ? "CUSTOM" : group.label}</span><h4>{metric.label}</h4></div><span class="metric-status">{statusCopy[metric.status] ?? metric.status}</span></div>
+                <div class="metric-current"><strong>{formatValue(metric.current?.state === "measured" ? metric.current.value : null, metric.unit)}</strong>{metric.baseline && <span>Baseline {formatValue(metric.baseline.value, metric.unit)}</span>}</div>
+                {metric.current?.state === "measured" ? <div class="metric-delta"><span>差分</span><strong>{metric.delta === null ? "—" : `${metric.delta > 0 ? "+" : ""}${formatValue(metric.delta, metric.unit)}`}</strong></div> : <p class="metric-missing">{metric.status === "stale" ? "値の有効期限が切れています。" : "Connectorからの最初のSnapshotを待っています。"}</p>}
+                {metricCount >= 3 && <div class="bullet-chart" role="img" aria-label={`${metric.label}: Current ${formatValue(metric.current?.value, metric.unit)}、Baseline ${formatValue(metric.baseline?.value, metric.unit)}、Target ${formatValue(targetValue(metric), metric.unit)}`}>
+                  <span class="bullet-track"><span class="bullet-value" style={`width:${scale.current}%`}></span>{scale.baseline !== null && <i class="bullet-baseline" style={`left:${scale.baseline}%`}></i>}{scale.target !== null && <i class="bullet-target" style={`left:${scale.target}%`}></i>}</span>
+                  <span class="bullet-labels"><span>Baseline {formatValue(metric.baseline?.value, metric.unit)}</span><span>Target {formatValue(targetValue(metric), metric.unit)}</span></span>
+                </div>}
+                {line && <div class="metric-trend"><svg viewBox="0 0 100 40" role="img" aria-label={`${metric.label}の4期間trend`}><polyline points={line} /></svg><details><summary>履歴値</summary><ol>{metric.series.map((item: any) => <li><time datetime={new Date(item.observed_at).toISOString()}>{dateTime(item.observed_at)}</time> {formatValue(item.value, metric.unit)}</li>)}</ol></details></div>}
+                <div class="metric-source"><span>{sourceCopy[sourceState] ?? sourceState}</span><span>{metric.source?.adapter_id ?? "manual"}</span></div>
+                <dl class="metric-audit"><div><dt>観測</dt><dd>{dateTime(metric.current?.observed_at)}</dd></div><div><dt>期限</dt><dd>{dateTime(metric.current?.expires_at)}</dd></div><div><dt>Window</dt><dd>{metric.aggregation_window}</dd></div></dl>
+              </article>;
+            })}
+          </div>
+        </section>)}
+      </section>
+
+      {pdmContext?.experiment_success && <section class="success-panel" aria-labelledby="experiment-success-title" data-testid="pdm-success-conditions">
+        <div><p class="surface-label">EXPERIMENT GATE</p><h2 id="experiment-success-title">実験成功条件と長期Target</h2><p>短期の実験判定と、継続して追う戦略目標を分けて確認します。</p></div>
+        <div class="success-grid">{pdmContext.experiment_success.map((item: any) => <article><span class="success-state">実験条件 達成</span><h3>{item.label}</h3><strong>{item.result}</strong>{item.strategic_target && <p>長期Target {item.strategic_target} · <b>{item.strategic_achieved ? "達成" : "未達"}</b></p>}</article>)}</div>
+      </section>}
+
+      <section class="workspace-section" aria-labelledby="workspace-decision-title">
+        <div class="section-heading"><div><p class="surface-label">DECISION TRACE</p><h2 id="workspace-decision-title">Decisionと追跡可能性</h2></div>{workspace.decision && <span class="decision-id">{workspace.decision.id}</span>}</div>
+        {!workspace.decision && <div class="workspace-empty"><h3>関連するDecisionはまだありません</h3><p>指標SnapshotをDecisionへ接続すると、判断理由と成果をここで追跡できます。</p></div>}
+        {workspace.decision && <div class="decision-layout">
+          <article class="decision-card" data-testid="decision-summary"><span class="decision-state">{workspace.decision.confirmation_state === "confirmed" ? "確認済みDecision" : "提案中"}</span><h3>{workspace.decision.statement}</h3><h4>理由</h4><p>{workspace.decision.rationale}</p>
+            {workspace.decision.rejected_alternatives.length > 0 && <div class="decision-subsection"><h4>却下案</h4>{workspace.decision.rejected_alternatives.map((item: any) => <div class="rejected"><strong>{item.statement}</strong><span>{item.reason}</span></div>)}</div>}
+            {workspace.decision.constraints.length > 0 && <div class="decision-subsection"><h4>制約</h4><ul>{workspace.decision.constraints.map((item: string) => <li>{item}</li>)}</ul></div>}
+          </article>
+          <article class="trace-card" data-testid="decision-trace"><ol>
+            <li><span>01</span><div><small>METRIC SIGNAL</small><p>{signalSummary || "指標Snapshotとの接続待ち"}</p></div></li>
+            <li><span>02</span><div><small>DECISION</small><p>{workspace.decision.statement}</p></div></li>
+            <li><span>03</span><div><small>EVIDENCE</small><p>{workspace.decision.evidence.length}件の根拠 · 検証状態を確認可能</p></div></li>
+            <li><span>04</span><div><small>WORKFLOW / PLAYBOOK</small><p>{[workspace.decision.workflow, workspace.decision.playbook].filter(Boolean).join(" · ") || "実行参照は未登録"}</p></div></li>
+            <li><span>05</span><div><small>OUTCOME</small><p>{workspace.decision.outcome_summary ?? "verified_by_metricとの接続待ち"}</p></div></li>
+          </ol></article>
+        </div>}
+        {workspace.decision?.outcome_summary && <div class="outcome-verified"><div><span>Outcome verified</span><strong>{workspace.decision.outcome_summary}</strong></div>{workspace.decision.followup_decision && <div><span>Follow-up Decision</span><strong>{workspace.decision.followup_decision}</strong></div>}</div>}
+      </section>
+
+      {workspace.decision?.evidence?.length > 0 && <section class="workspace-section" aria-labelledby="workspace-evidence-title">
+        <div class="section-heading"><div><p class="surface-label">EVIDENCE</p><h2 id="workspace-evidence-title">判断を支えた根拠</h2></div><p>資料名、source、観測日、検証状態を表示</p></div>
+        <div class="evidence-grid">{workspace.decision.evidence.map((evidence: any) => <article><div><span>{evidence.resource_kind}</span><span class:list={["evidence-state", evidence.verification_state === "verified" && "is-verified"]}>{evidence.verification_state === "verified" ? "検証済み" : evidence.verification_state}</span></div><h3>{evidence.title}</h3><p>{evidence.source_system} · {dateTime(evidence.observed_at)}</p><details><summary>監査詳細</summary><code>{evidence.technical_ref}</code></details></article>)}</div>
+      </section>}
+
+      <section class="workspace-section" aria-labelledby="workspace-source-title">
+        <div class="section-heading"><div><p class="surface-label">DATA READINESS</p><h2 id="workspace-source-title">データ取得状態</h2></div><p>Connector本体は後から追加できます。秘密情報はWorkspaceに保存しません。</p></div>
+        <div class="source-grid">{workspace.source_readiness.map((source: any) => <article data-source-state={source.status}><div><span class:list={["source-dot", `source-dot-${source.status}`]} aria-hidden="true"></span><strong>{source.metric_key ?? source.metric_definition_id}</strong><span>{sourceCopy[source.status] ?? source.status}</span></div><p>{source.adapter_id} · {source.query_template}</p>{source.status === "unconfigured" ? <small>Connector追加後に自動反映</small> : <small>最終成功 {dateTime(source.last_success_at)}</small>}{source.last_error_code && <p class="source-error">{source.last_error_code}</p>}</article>)}</div>
+        {workspace.source_readiness.length === 0 && <div class="workspace-empty"><h3>Connector参照はありません</h3><p>manual／derived指標だけで構成されています。</p></div>}
+      </section>
+
+      {pdmContext?.coupon_case && <aside class="custom-warning" data-testid="quality-adjusted-warning"><div><span>MANIFEST外 CUSTOM METRIC</span><h2>couponによる見かけ上のActivationを検知</h2></div><div><p>通常Activation</p><strong>{pdmContext.coupon_case.activation_rate}%</strong></div><div><p>Quality adjusted</p><strong>{pdmContext.coupon_case.quality_adjusted_activation_rate}%</strong></div><p>{pdmContext.coupon_case.expected_signal === "warning" ? "短期Activationだけでは成功と判定しません。キャンセル・返金を除外した品質指標をDecisionへ接続します。" : ""}</p></aside>}
+    </>}
+  </section>
+</BaseLayout>
+
+<script>
+  document.querySelector("#pack-workspace-select")?.addEventListener("change", (event: Event) => {
+    const target = event.currentTarget as Element & { value?: string };
+    if (target.value) window.location.assign(target.value);
+  });
+</script>
+
+<style>
+  .workspace-shell{display:grid;gap:1.1rem;color:#e8f2fa}.workspace-breadcrumb{display:flex;align-items:center;gap:.55rem;color:#7895ad;font-size:.82rem}.workspace-breadcrumb a{display:inline-flex;min-height:44px;align-items:center;color:#9cc8e8}.workspace-error,.workspace-empty{padding:1.5rem;border:1px solid rgba(255,255,255,.1);border-radius:18px;background:#07101b}.workspace-error h1{margin:.4rem 0;font-size:1.8rem}.workspace-error p{margin:0 0 1rem;color:#a6bbcc}
+  .pack-switcher-desktop{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;padding:.45rem;border:1px solid #16324a;border-radius:16px;background:#040c14}.pack-switcher-desktop a{display:grid;min-height:48px;place-items:center;border:1px solid transparent;border-radius:11px;color:#9fb5c6;font-weight:730;text-decoration:none}.pack-switcher-desktop a[aria-selected="true"]{border-color:#258ac7;background:#0d2b43;color:white}.pack-switcher-desktop a:focus-visible{outline:2px solid #7dd3fc;outline-offset:2px}.pack-switcher-mobile{display:none}
+  .workspace-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1.5rem;padding:1.45rem;border:1px solid #173b57;border-radius:22px;background:linear-gradient(135deg,#0c263b,#07111d 65%)}.hero-meta{display:flex;flex-wrap:wrap;gap:.45rem;color:#78bce7;font:750 .72rem/1.2 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em}.hero-meta span{padding:.35rem .55rem;border:1px solid rgba(125,211,252,.22);border-radius:999px}.hero-meta .fixture-badge{border-color:#8b6b2b;color:#f6ca77}.workspace-hero h1{margin:.7rem 0 0;font-size:clamp(2rem,4vw,3.35rem);line-height:1.02;letter-spacing:-.045em}.workspace-hero-copy>p{max-width:52rem;margin:.65rem 0 0;color:#a9bfd0;line-height:1.65}.object-chips{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem}.object-chips span{display:flex;gap:.4rem;align-items:center;padding:.42rem .62rem;border:1px solid #20506f;border-radius:999px;background:rgba(4,19,32,.7);font:650 .75rem/1.2 ui-monospace,monospace}.object-chips small{color:#6f99b7;text-transform:uppercase}.outcome-summary{display:grid;grid-template-columns:repeat(3,minmax(100px,1fr));align-self:start;gap:.55rem;margin:0}.outcome-summary div{padding:1rem;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(3,13,22,.62)}.outcome-summary dt{color:#87a2b7;font-size:.72rem}.outcome-summary dd{margin:.25rem 0 0;font-size:1.55rem;font-weight:780}.outcome-summary small{display:block;color:#7794aa;font-size:.7rem;font-weight:600}
+  .workspace-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:.7rem;align-items:end;padding:1rem;border:1px solid rgba(255,255,255,.08);border-radius:16px;background:rgba(255,255,255,.025)}.workspace-filters label{display:grid;gap:.35rem}.workspace-filters label>span{color:#87a2b7;font-size:.75rem;font-weight:700}.workspace-filters input,.workspace-filters select{min-height:44px;width:100%;border-color:#1a405b;background:#06111c;color:#e8f2fa}.workspace-filters button{min-height:44px}
+  .workspace-section{display:grid;gap:1rem;padding:1.25rem;border:1px solid rgba(255,255,255,.08);border-radius:22px;background:rgba(4,12,21,.64)}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:1rem}.section-heading h2{margin:.25rem 0 0;font-size:1.45rem;letter-spacing:-.025em}.section-heading>p{margin:0;color:#7f9bb0;font-size:.82rem}.metric-group{display:grid;gap:.65rem}.metric-group-heading{display:flex;align-items:center;justify-content:space-between}.metric-group-heading h3{font-size:1rem}.metric-group-heading span{color:#718ca2;font-size:.75rem}.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem}.metric-card{display:grid;gap:.75rem;min-width:0;padding:1rem;border:1px solid #16344c;border-radius:16px;background:#06111d}.metric-card-custom{border-color:#604a8c;background:#100d1e}.metric-card-heading{display:flex;align-items:start;justify-content:space-between;gap:.7rem}.metric-origin{display:block;color:#69bdea;font:750 .64rem/1.2 ui-monospace,monospace;letter-spacing:.08em}.metric-card h4{margin:.3rem 0 0;font-size:.9rem}.metric-status{flex:none;padding:.3rem .48rem;border-radius:999px;background:#153045;color:#b9d4e7;font-size:.68rem;font-weight:750}.metric-status-achieved .metric-status{background:#073d38;color:#7ff0d2}.metric-status-missed .metric-status,.metric-status-stale .metric-status{background:#3b2224;color:#ffb0b6}.metric-current{display:flex;align-items:baseline;gap:.65rem}.metric-current strong{font-size:clamp(1.7rem,3vw,2.25rem);letter-spacing:-.04em}.metric-current span{color:#7894a9;font-size:.72rem}.metric-delta{display:flex;gap:.4rem;color:#7894aa;font-size:.72rem}.metric-delta strong{color:#d4e5f1}.metric-missing{margin:0;color:#d4a76b;font-size:.78rem;line-height:1.5}.bullet-chart{display:grid;gap:.35rem}.bullet-track{position:relative;height:9px;border-radius:999px;background:#142c40}.bullet-value{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#168dff,#43ddbc)}.bullet-baseline,.bullet-target{position:absolute;top:-4px;width:2px;height:17px}.bullet-baseline{background:#9bb5c8}.bullet-target{background:#ffc76d;box-shadow:0 0 0 2px rgba(255,199,109,.16)}.bullet-labels{display:flex;justify-content:space-between;gap:.6rem;color:#7390a6;font-size:.64rem}.metric-trend{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.5rem}.metric-trend svg{width:100%;height:40px;overflow:visible}.metric-trend polyline{fill:none;stroke:#55d9c0;stroke-width:2;vector-effect:non-scaling-stroke}.metric-trend details{font-size:.68rem}.metric-trend summary{cursor:pointer;color:#8cabc0}.metric-trend ol{position:absolute;z-index:20;max-width:280px;padding:1rem 1rem 1rem 2rem;border:1px solid #24455c;border-radius:10px;background:#07111d}.metric-source{display:flex;justify-content:space-between;gap:.5rem;padding-top:.6rem;border-top:1px solid rgba(255,255,255,.07);color:#7d9cb2;font-size:.68rem}.metric-audit{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;margin:0}.metric-audit dt{color:#607e94;font-size:.6rem;text-transform:uppercase}.metric-audit dd{overflow:hidden;margin:.15rem 0 0;color:#a9c0d1;font-size:.65rem;text-overflow:ellipsis;white-space:nowrap}
+  .success-panel{display:grid;grid-template-columns:minmax(230px,.7fr) 2fr;gap:1rem;padding:1.25rem;border:1px solid #66502d;border-radius:20px;background:linear-gradient(135deg,rgba(127,89,24,.18),rgba(7,17,29,.85))}.success-panel h2{margin:.3rem 0 0;font-size:1.35rem}.success-panel>div>p:last-child{color:#aebed0;font-size:.82rem}.success-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem}.success-grid article{padding:1rem;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(3,12,20,.65)}.success-state{color:#69e6c2;font-size:.7rem;font-weight:750}.success-grid h3{margin:.5rem 0;font-size:.82rem}.success-grid strong{font-size:1.5rem}.success-grid p{margin:.45rem 0 0;color:#a0b5c6;font-size:.72rem}.success-grid b{color:#f6c778}
+  .decision-id{color:#7896ac;font:650 .72rem/1.3 ui-monospace,monospace}.decision-layout{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.decision-card,.trace-card{padding:1.2rem;border:1px solid #19415e;border-radius:17px;background:#06111d}.decision-state{color:#64cffa;font:750 .68rem/1.2 ui-monospace,monospace;letter-spacing:.09em}.decision-card>h3{margin:.65rem 0 1.1rem;font-size:1.3rem;line-height:1.35}.decision-card h4{margin:.85rem 0 .3rem;color:#6dcff6;font-size:.72rem}.decision-card p,.decision-card li{color:#c4d4df;font-size:.86rem;line-height:1.65}.decision-card ul{margin:.35rem 0 0;padding-left:1.2rem}.decision-subsection{margin-top:.9rem}.rejected{display:grid;gap:.18rem;margin-top:.45rem;padding:.7rem;border-left:3px solid #ff7180;border-radius:0 9px 9px 0;background:#161724}.rejected strong{font-size:.8rem}.rejected span{color:#9db0bf;font-size:.72rem}.trace-card ol{display:grid;gap:.8rem;margin:0;padding:0;list-style:none}.trace-card li{display:grid;grid-template-columns:34px 1fr;gap:.7rem;align-items:start}.trace-card li>span{display:grid;width:34px;height:34px;place-items:center;border:1px solid #2777a6;border-radius:10px;background:#0b2b42;color:#7dd3fc;font-size:.7rem}.trace-card small{color:#6c8ba2;font:750 .65rem/1.3 ui-monospace,monospace;letter-spacing:.07em}.trace-card p{margin:.25rem 0 0;color:#d5e1e9;font-size:.8rem;line-height:1.5}.outcome-verified{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;padding:1rem;border:1px solid #176253;border-radius:15px;background:#06231f}.outcome-verified div{display:grid;gap:.25rem}.outcome-verified span{color:#6ae7c5;font-size:.68rem;font-weight:750}.outcome-verified strong{font-size:.8rem;line-height:1.5}
+  .workspace-shell summary{display:flex;min-height:44px;align-items:center;cursor:pointer}.evidence-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.evidence-grid article{padding:1rem;border:1px solid #17354c;border-radius:14px;background:#07131f}.evidence-grid article>div{display:flex;justify-content:space-between;color:#6f92aa;font-size:.66rem;text-transform:uppercase}.evidence-state.is-verified{color:#6ee6c4}.evidence-grid h3{margin:.65rem 0 .35rem;font-size:.9rem}.evidence-grid p{margin:0;color:#819db2;font-size:.72rem}.evidence-grid details{margin-top:.7rem}.evidence-grid summary{color:#92b4ca;font-size:.7rem}.evidence-grid code{display:block;overflow:auto;margin-top:.45rem;color:#829db0;font-size:.65rem}
+  .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}.source-grid article{padding:.85rem;border:1px solid #17354c;border-radius:13px;background:#07131f}.source-grid article>div{display:grid;grid-template-columns:auto 1fr auto;gap:.45rem;align-items:center}.source-grid strong{overflow:hidden;font:700 .72rem/1.3 ui-monospace,monospace;text-overflow:ellipsis}.source-grid article>div>span:last-child{color:#91afc3;font-size:.66rem}.source-grid p{overflow:hidden;margin:.5rem 0 .25rem;color:#7f9bb0;font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}.source-grid small{color:#7090a7;font-size:.65rem}.source-dot{width:8px;height:8px;border-radius:50%;background:#7890a0}.source-dot-active{background:#54dfbd}.source-dot-error{background:#ff7180}.source-dot-unconfigured{background:#f2bd62}.source-error{color:#ff9ea7!important}.custom-warning{display:grid;grid-template-columns:1.5fr auto auto 1fr;gap:1rem;align-items:center;padding:1.1rem;border:1px solid #614b8a;border-radius:18px;background:#120f20}.custom-warning span{color:#c8a9ff;font:750 .66rem/1.2 ui-monospace,monospace}.custom-warning h2{margin:.35rem 0 0;font-size:1rem}.custom-warning>div>p{margin:0;color:#9e8dbb;font-size:.68rem}.custom-warning>div>strong{font-size:1.5rem}.custom-warning>p{margin:0;color:#c8bdd8;font-size:.75rem;line-height:1.5}
+  @media(max-width:1050px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-hero{grid-template-columns:1fr}.outcome-summary{grid-template-columns:repeat(3,1fr)}.evidence-grid,.source-grid{grid-template-columns:repeat(2,1fr)}.success-panel{grid-template-columns:1fr}.custom-warning{grid-template-columns:1fr auto auto}.custom-warning>p{grid-column:1/-1}}
+  @media(max-width:720px){.pack-switcher-desktop{display:none}.pack-switcher-mobile{display:grid;gap:.35rem}.pack-switcher-mobile>span{color:#87a2b7;font-size:.75rem;font-weight:700}.pack-switcher-mobile select{min-height:48px;width:100%;border-color:#20506f;background:#07131f;color:white}.workspace-hero{padding:1.1rem}.workspace-hero h1{font-size:2rem}.outcome-summary{grid-template-columns:repeat(3,1fr)}.outcome-summary div{padding:.7rem}.outcome-summary dd{font-size:1.25rem}.object-chips span{width:100%;justify-content:space-between}.workspace-filters{grid-template-columns:1fr 1fr}.workspace-filters label:first-of-type,.workspace-filters button{grid-column:1/-1}.metric-grid,.decision-layout,.evidence-grid,.source-grid,.success-grid{grid-template-columns:1fr}.section-heading{align-items:start;flex-direction:column}.workspace-section{padding:1rem}.metric-card{padding:.9rem}.outcome-verified{grid-template-columns:1fr}.custom-warning{grid-template-columns:1fr 1fr}.custom-warning>div:first-child,.custom-warning>p{grid-column:1/-1}.workspace-breadcrumb{font-size:.75rem}.decision-id{overflow-wrap:anywhere}}
+  @media(max-width:420px){.outcome-summary{grid-template-columns:1fr}.workspace-filters{grid-template-columns:1fr}.workspace-filters label,.workspace-filters button{grid-column:1}.metric-audit{grid-template-columns:1fr 1fr}.metric-audit div:last-child{grid-column:1/-1}}
+  @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>

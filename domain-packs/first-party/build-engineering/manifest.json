@@ -1,0 +1,32 @@
+{
+  "contract_version": "domain-pack/v1",
+  "pack_id": "function.build-engineering",
+  "version": "1.0.0",
+  "classification": "function",
+  "title": "Build Engineering",
+  "description": "CI/CD systems, repositories, runners, releases, and delivery performance.",
+  "language": "ja",
+  "min_orgbrain_version": "0.2.0",
+  "dependencies": [],
+  "object_types": [
+    { "key": "repository", "label": "Repository", "allowed_relations": ["uses_pipeline"] },
+    { "key": "pipeline", "label": "CI/CD Pipeline", "allowed_relations": ["uses_runner_pool", "produces_release"] },
+    { "key": "runner_pool", "label": "Runner Pool" },
+    { "key": "release", "label": "Release" }
+  ],
+  "metrics": [
+    { "key": "build_success_rate", "label": "Build成功率", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "percent", "aggregation_window": "P7D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "github-actions", "query_template": "build_success_rate_v1" } },
+    { "key": "build_duration_p95", "label": "p95 Build時間", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "minutes", "aggregation_window": "P7D", "freshness_seconds": 3600, "target_direction": "decrease", "connector": { "adapter_id": "github-actions", "query_template": "build_duration_p95_v1" } },
+    { "key": "queue_duration_p95", "label": "p95 Queue時間", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "minutes", "aggregation_window": "P7D", "freshness_seconds": 3600, "target_direction": "decrease", "connector": { "adapter_id": "github-actions", "query_template": "queue_duration_p95_v1" } },
+    { "key": "change_failure_rate", "label": "変更失敗率", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "percent", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "decrease", "connector": { "adapter_id": "github-actions", "query_template": "change_failure_rate_v1" } },
+    { "key": "deployment_frequency", "label": "デプロイ頻度", "origin_type": "pack", "scope_type": "managed_object", "source_type": "connector", "unit": "deployments_per_day", "aggregation_window": "P30D", "freshness_seconds": 3600, "target_direction": "increase", "connector": { "adapter_id": "github-actions", "query_template": "deployment_frequency_v1" } }
+  ],
+  "dashboards": [{ "key": "build-engineering-overview", "title": "Build Engineering Overview", "widgets": [
+    { "key": "delivery-health", "kind": "metric", "title": "Delivery health", "metric_keys": ["build_success_rate", "build_duration_p95", "queue_duration_p95", "change_failure_rate", "deployment_frequency"], "layout": { "x": 0, "y": 0, "w": 12, "h": 3 } },
+    { "key": "decision-trace", "kind": "decision_trace", "title": "Decision trace", "layout": { "x": 0, "y": 3, "w": 12, "h": 6 } }
+  ] }],
+  "connectors": [{ "adapter_id": "github-actions", "required": false, "description": "Validated GitHub Actions aggregate adapter" }],
+  "assets": [{ "asset_key": "ci-bottleneck-diagnosis", "asset_type": "workflow", "version": "1.0.0" }],
+  "loadout_templates": [{ "key": "build-engineering-operator", "asset_keys": ["ci-bottleneck-diagnosis"] }],
+  "example_refs": ["examples/story-v1.json"]
+}
