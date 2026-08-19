@@ -1,7 +1,16 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
+import LiveNotice from "../../components/admin/LiveNotice.astro";
+import { dashboardPageParams } from "../../lib/dashboard-page";
+import { scopedAdminHref } from "../../lib/admin-ui";
 
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const copy = {
+  en: { title: "Group details", fallback: "Group", back: "Back to groups", user: "User", groupRole: "Group role", add: "Add or update", principal: "Identity", role: "Role", source: "Source", remove: "Remove", archive: "Archive group", archived: "Group archived", updated: "Membership updated", updateError: "The group could not be updated", loadError: "The group could not be loaded", roles: { member: "Member", admin: "Group administrator", owner: "Owner" } },
+  ja: { title: "グループ詳細", fallback: "グループ", back: "グループ一覧へ戻る", user: "ユーザー", groupRole: "グループ内の役割", add: "追加・更新", principal: "ID", role: "役割", source: "登録元", remove: "削除", archive: "グループをアーカイブ", archived: "グループをアーカイブしました", updated: "所属を更新しました", updateError: "グループを更新できませんでした", loadError: "グループを読み込めませんでした", roles: { member: "メンバー", admin: "グループ管理者", owner: "所有者" } },
+  zh: { title: "群组详情", fallback: "群组", back: "返回群组列表", user: "用户", groupRole: "群组角色", add: "添加或更新", principal: "身份", role: "角色", source: "来源", remove: "移除", archive: "归档群组", archived: "群组已归档", updated: "成员关系已更新", updateError: "无法更新群组", loadError: "无法加载群组", roles: { member: "成员", admin: "群组管理员", owner: "所有者" } }
+}[lang];
 const groupId = Astro.params.groupId ?? "";
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
@@ -36,10 +45,10 @@ if (Astro.request.method === "POST") {
     headers: { "content-type": "application/json", "x-csrf-token": csrf },
     body
   });
-  if (response.ok) message = action === "archive" ? "Archived" : "Membership updated";
+  if (response.ok) message = action === "archive" ? copy.archived : copy.updated;
   else {
     const failure = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-    error = failure?.error?.message ?? "Group could not be updated";
+    error = failure?.error?.message ?? copy.updateError;
   }
 }
 
@@ -52,32 +61,32 @@ const directoryPayload: any = await directoryResponse.json().catch(() => null);
 const group = groupPayload?.data?.group;
 const members = groupPayload?.data?.members ?? [];
 const directory = directoryPayload?.data?.users ?? [];
-if (!groupResponse.ok && !message) error = groupPayload?.error?.message ?? "Group could not be loaded";
+if (!groupResponse.ok && !message) error = groupPayload?.error?.message ?? copy.loadError;
+const backHref = scopedAdminHref("/groups", Astro.url.searchParams);
+const roleLabel = (value: string) => copy.roles[value as keyof typeof copy.roles] ?? value;
 ---
-<BaseLayout title="Group detail">
-  <section class="space-y-5">
-    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
-      <p class="surface-label">{tenantId} · {group?.source ?? "local"}</p>
-      <h1 class="mt-2 text-3xl font-semibold">{group?.name ?? "Group"}</h1>
-      {group?.description && <p class="mt-2 text-zinc-400">{group.description}</p>}
-    </header>
-    {message && <p class="text-emerald-200">{message}</p>}{error && <p class="text-rose-200">{error}</p>}
+<BaseLayout title={copy.title} lang={lang}>
+  <section class="admin-page">
+    <AdminPageHeader eyebrow={`${tenantId} · ${group?.source ?? "local"}`} title={group?.name ?? copy.fallback} description={group?.description}>
+      <a slot="actions" class="secondary-action" href={backHref}>{copy.back}</a>
+    </AdminPageHeader>
+    {message && <LiveNotice message={message} />}{error && <LiveNotice tone="error" message={error} />}
 
     {group?.source === "local" && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-[1fr_12rem_auto] md:items-end">
       <input type="hidden" name="csrf_token" class="csrf-token" />
       <input type="hidden" name="action" value="member" />
-      <label><span class="field-label">User</span><input name="principal" list="directory-users" required /></label>
+      <label><span class="field-label">{copy.user}</span><input name="principal" list="directory-users" required /></label>
       <datalist id="directory-users">{directory.map((user: any) => <option value={user.principal}>{user.display_name}</option>)}</datalist>
-      <label><span class="field-label">Group role</span><select name="role"><option value="member">member</option><option value="admin">admin</option><option value="owner">owner</option></select></label>
-      <button type="submit">Add / update</button>
+      <label><span class="field-label">{copy.groupRole}</span><select name="role">{Object.keys(copy.roles).map((role) => <option value={role}>{roleLabel(role)}</option>)}</select></label>
+      <button type="submit">{copy.add}</button>
     </form>}
 
     <div class="overflow-x-auto rounded-[22px] border border-white/8">
-      <table><thead><tr><th>Principal</th><th>Role</th><th>Source</th><th></th></tr></thead><tbody>
-        {members.map((member: any) => <tr><td>{member.principal}</td><td>{member.role}</td><td>{member.source}</td><td>{group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><button type="submit">Remove</button></form>}</td></tr>)}
+      <table><thead><tr><th>{copy.principal}</th><th>{copy.role}</th><th>{copy.source}</th><th></th></tr></thead><tbody>
+        {members.map((member: any) => <tr><td>{member.principal}</td><td title={member.role}>{roleLabel(member.role)}</td><td>{member.source}</td><td>{group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><button type="submit">{copy.remove}</button></form>}</td></tr>)}
       </tbody></table>
     </div>
-    {group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">Archive group</button></form>}
+    {group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">{copy.archive}</button></form>}
   </section>
 </BaseLayout>
 <script>

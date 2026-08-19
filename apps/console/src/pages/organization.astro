@@ -1,6 +1,14 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
+import LiveNotice from "../components/admin/LiveNotice.astro";
+import { dashboardPageParams } from "../lib/dashboard-page";
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const copy = {
+  en: { title: "Organization", displayName: "Display name", slug: "Slug", domains: "Allowed email domains", selfRegistration: "Allow email self-registration", save: "Save", saved: "Saved", saveError: "Organization could not be saved", ownership: "Memory ownership", mappings: "Producer → owner mappings", mappingBody: "Connect memories recorded by a service or agent principal to the responsible business owner.", producer: "Producer principal", owner: "Owner principal", saveMapping: "Save mapping", mappingSaved: "Ownership mapping saved", mappingError: "Ownership mapping could not be saved", updated: "Updated", empty: "No producer-owner mappings yet." },
+  ja: { title: "組織設定", displayName: "表示名", slug: "識別子", domains: "許可するメールドメイン", selfRegistration: "メールでの自己登録を許可", save: "保存", saved: "保存しました", saveError: "組織設定を保存できませんでした", ownership: "メモリの所有者", mappings: "記録者 → 所有者の対応", mappingBody: "サービスやエージェントが記録したメモリを、業務上の所有者へ明示的に結び付けます。", producer: "記録者principal", owner: "所有者principal", saveMapping: "対応を保存", mappingSaved: "所有者の対応を保存しました", mappingError: "所有者の対応を保存できませんでした", updated: "更新日時", empty: "記録者と所有者の対応はまだありません。" },
+  zh: { title: "组织设置", displayName: "显示名称", slug: "标识符", domains: "允许的邮箱域名", selfRegistration: "允许邮箱自助注册", save: "保存", saved: "已保存", saveError: "无法保存组织设置", ownership: "记忆所有权", mappings: "记录者 → 所有者映射", mappingBody: "将服务或代理记录的记忆明确关联到业务负责人。", producer: "记录者 principal", owner: "所有者 principal", saveMapping: "保存映射", mappingSaved: "已保存所有权映射", mappingError: "无法保存所有权映射", updated: "更新时间", empty: "尚无记录者与所有者映射。" }
+}[lang];
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
   ...init, headers: { cookie, ...(init.headers ?? {}) }
@@ -32,8 +40,8 @@ if (Astro.request.method === "POST") {
         allowed_email_domains: String(form.get("allowed_email_domains") ?? "").split(/[\s,]+/u).filter(Boolean),
         email_self_registration_enabled: form.get("email_self_registration_enabled") === "on"
       }) });
-  if (response.ok) message = action === "mapping" ? "Ownership mapping saved" : "Saved";
-  else error = action === "mapping" ? "Ownership mapping could not be saved" : "Organization could not be saved";
+  if (response.ok) message = action === "mapping" ? copy.mappingSaved : copy.saved;
+  else error = action === "mapping" ? copy.mappingError : copy.saveError;
 }
 const response = await api(`/api/v1/organization?tenant_id=${encodeURIComponent(tenantId)}`);
 const payload: any = await response.json().catch(() => null);
@@ -42,41 +50,41 @@ const mappingsResponse = await api(`/api/v1/principal-owner-mappings?tenant_id=$
 const mappingsPayload: any = await mappingsResponse.json().catch(() => null);
 const mappings = mappingsResponse.ok && Array.isArray(mappingsPayload?.data) ? mappingsPayload.data : [];
 ---
-<BaseLayout title="Organization">
-  <section class="space-y-5">
-    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5"><p class="surface-label">{tenantId}</p><h1 class="mt-2 text-3xl font-semibold">Organization</h1></header>
-    {message && <p class="text-emerald-200">{message}</p>}{error && <p class="text-rose-200">{error}</p>}
-    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-2">
+<BaseLayout title={copy.title} lang={lang}>
+  <section class="admin-page">
+    <AdminPageHeader eyebrow={tenantId} title={copy.title} />
+    {message && <LiveNotice message={message} />}{error && <LiveNotice tone="error" message={error} />}
+    <form method="post" class="admin-section admin-form-grid">
       <input type="hidden" name="action" value="organization" />
       <input type="hidden" name="csrf_token" id="csrf-token" />
-      <label><span class="field-label">Display name</span><input name="display_name" value={organization?.display_name ?? tenantId} required /></label>
-      <label><span class="field-label">Slug</span><input name="slug" value={organization?.slug ?? tenantId} required /></label>
-      <label class="md:col-span-2"><span class="field-label">Allowed email domains</span><input name="allowed_email_domains" value={(organization?.allowed_email_domains ?? []).join(", ")} /></label>
-      <label class="flex items-center gap-2"><input type="checkbox" name="email_self_registration_enabled" checked={organization?.email_self_registration_enabled} /> Allow email self-registration</label>
-      <div class="md:col-span-2"><button type="submit">Save</button></div>
+      <label><span class="field-label">{copy.displayName}</span><input name="display_name" value={organization?.display_name ?? tenantId} required /></label>
+      <label><span class="field-label">{copy.slug}</span><input name="slug" value={organization?.slug ?? tenantId} required /></label>
+      <label><span class="field-label">{copy.domains}</span><input name="allowed_email_domains" value={(organization?.allowed_email_domains ?? []).join(", ")} /></label>
+      <label class="checkbox-label"><input type="checkbox" name="email_self_registration_enabled" checked={organization?.email_self_registration_enabled} /> {copy.selfRegistration}</label>
+      <div class="admin-form-actions"><button type="submit">{copy.save}</button></div>
     </form>
 
     <section class="grid gap-4 rounded-[22px] border border-amber-300/15 bg-amber-300/[0.04] p-5">
       <div>
-        <p class="surface-label">Memory ownership</p>
-        <h2 class="mt-2 text-xl font-semibold text-white">Producer → owner mappings</h2>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">サービス・エージェントprincipalが記録したメモリを、業務上の所有者へ明示的に結び付けます。</p>
+        <p class="surface-label">{copy.ownership}</p>
+        <h2 class="mt-2 text-xl font-semibold text-white">{copy.mappings}</h2>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">{copy.mappingBody}</p>
       </div>
       <form method="post" class="grid gap-4 md:grid-cols-2 md:items-end">
         <input type="hidden" name="action" value="mapping" />
         <input type="hidden" name="csrf_token" id="mapping-csrf-token" />
-        <label><span class="field-label">Producer principal</span><input name="producer_principal" placeholder="service:codex-hook" required /></label>
-        <label><span class="field-label">Owner principal</span><input name="owner_principal" placeholder="user:member" required /></label>
-        <div class="md:col-span-2"><button type="submit">Save mapping</button></div>
+        <label><span class="field-label">{copy.producer}</span><input name="producer_principal" placeholder="service:codex-hook" required /></label>
+        <label><span class="field-label">{copy.owner}</span><input name="owner_principal" placeholder="user:member" required /></label>
+        <div class="md:col-span-2"><button type="submit">{copy.saveMapping}</button></div>
       </form>
       {mappings.length > 0 ? (
         <div class="overflow-x-auto rounded-xl border border-white/8">
           <table class="w-full text-left text-sm">
-            <thead class="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-zinc-500"><tr><th class="px-3 py-3">Producer</th><th class="px-3 py-3">Owner</th><th class="px-3 py-3">Updated</th></tr></thead>
-            <tbody>{mappings.map((mapping: any) => <tr class="border-t border-white/8 text-zinc-300"><td class="px-3 py-3 font-mono text-xs">{mapping.producer_principal}</td><td class="px-3 py-3 font-mono text-xs">{mapping.owner_principal}</td><td class="px-3 py-3 text-xs text-zinc-500">{new Date(mapping.updated_at).toLocaleString()}</td></tr>)}</tbody>
+            <thead class="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-zinc-400"><tr><th class="px-3 py-3">{copy.producer}</th><th class="px-3 py-3">{copy.owner}</th><th class="px-3 py-3">{copy.updated}</th></tr></thead>
+            <tbody>{mappings.map((mapping: any) => <tr class="border-t border-white/8 text-zinc-300"><td class="px-3 py-3 font-mono text-xs">{mapping.producer_principal}</td><td class="px-3 py-3 font-mono text-xs">{mapping.owner_principal}</td><td class="px-3 py-3 text-xs text-zinc-400">{new Date(mapping.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td></tr>)}</tbody>
           </table>
         </div>
-      ) : <p class="text-sm text-zinc-500">No producer-owner mappings yet.</p>}
+      ) : <p class="admin-empty" role="status">{copy.empty}</p>}
     </section>
   </section>
 </BaseLayout>

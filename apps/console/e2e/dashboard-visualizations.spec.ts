@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test.describe("dashboard visualizations", () => {
@@ -16,7 +17,9 @@ test.describe("dashboard visualizations", () => {
     expect(headerLayout.height).toBeLessThan(130);
     expect(headerLayout.actionsLeft).toBeGreaterThan(headerLayout.titleRight);
     await expect(page.locator(".insight-scope-rail")).toHaveCount(0);
-    await expect(page.locator(".recommended-actions")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "対応が必要なシグナル" })).toBeVisible();
+    await expect(page.locator(".recommended-actions .action-card")).toHaveCount(1);
+    await expect(page.locator(".activity-health-summary")).toBeVisible();
     await expect(page.locator(".activity-omissions")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "エージェント、Org Brain、プロジェクト間のアクティビティ経路" })).toBeVisible();
     await expect(page.getByText("中央の項目を選ぶと、下のReplayをその種類に絞り込みます。", { exact: false })).toBeVisible();
@@ -56,7 +59,7 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByRole("link", { name: "すべての活動を表示" })).toHaveAttribute("aria-current", "true");
   });
 
-  test("keeps the 3D map search and filters collapsed in one panel", async ({ browser }) => {
+  test("keeps one node search visible while advanced filters stay collapsed", async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const page = await context.newPage();
 
@@ -65,6 +68,8 @@ test.describe("dashboard visualizations", () => {
 
       await expect(page.getByRole("heading", { name: "3Dメモリマップ" })).toBeVisible();
       await expect(page.locator("#memory-map-pathway-title")).toHaveText("判断の道筋");
+      await expect(page.locator("[data-map-search]")).toHaveCount(1);
+      await expect(page.locator("[data-map-search]")).toBeVisible();
       await expect(page.locator("[data-trace-step='decision']")).toContainText("何を決めたか");
       await expect(page.locator("[data-trace-step='reason']")).toContainText("なぜその案を選んだか");
       await expect(page.locator("[data-trace-step='evidence']")).toContainText("何が判断を支えたか");
@@ -187,13 +192,45 @@ test.describe("dashboard visualizations", () => {
     await page.setViewportSize({ width: 572, height: 844 });
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision:rationale-e2e");
 
-    await page.locator("[data-trace-sheet-expand]").click();
+    const sheetToggle = page.locator("[data-trace-sheet-toggle]");
+    await expect(sheetToggle).toHaveAttribute("aria-expanded", "false");
+    await sheetToggle.click();
+    await expect(sheetToggle).toHaveAttribute("aria-expanded", "true");
     await page.locator("[data-trace-step='artifact']").click();
     const preview = page.getByRole("button", { name: "この画面で確認" }).first();
     await preview.focus();
     await expect(preview).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
+
+  test("keeps the map fit control, visual-only graph semantics, and single mobile sheet action", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all");
+
+    await expect(page.locator("[data-map-mode-badge]")).toHaveText("閲覧可能な全ノード");
+    await expect(page.locator("[data-map-visible-count]")).toHaveText("62");
+    await expect(page.locator("[data-map-fit]")).toHaveAttribute("aria-label", "メモリマップ全体を表示");
+    await expect(page.locator("[data-map-stage]")).toHaveAttribute("role", "img");
+    await expect(page.locator("[data-map-stage]")).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator("[data-map-render-status]")).not.toHaveText("");
+    await expect(page.locator("[data-trace-sheet-toggle]")).toHaveCount(1);
+    await expect(page.locator("[data-trace-sheet-toggle]")).toHaveAttribute("aria-controls", "memory-map-inspector-content");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    expect(await page.locator("[data-trace-sheet-toggle]").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  });
+
+  for (const locale of ["en", "ja", "zh"] as const) {
+    test(`has no WCAG A/AA violations in the memory map for ${locale}`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto(`/memories/constellation?tenant_id=default&project_id=org-brain&lang=${locale}&view=all`);
+      const results = await new AxeBuilder({ page })
+        .include("[data-memory-map-root]")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      expect(results.violations).toEqual([]);
+    });
+  }
 
   test("uses a full-width map and a bottom trace sheet at an intermediate width", async ({ page }) => {
     await page.setViewportSize({ width: 832, height: 863 });
@@ -218,37 +255,109 @@ test.describe("dashboard visualizations", () => {
     expect(geometry.stageWidth).toBeGreaterThan(760);
     expect(geometry.inspectorWidth).toBeGreaterThan(800);
     expect(geometry.inspectorPosition).toBe("fixed");
-    expect(geometry.documentHeight).toBeLessThan(1200);
+    expect(geometry.documentHeight).toBeLessThan(1350);
   });
 
-  test("keeps keyboard node selection concise and closes it after selection", async ({ page }) => {
+  test("keeps keyboard node selection visible and synchronized after selection", async ({ page }) => {
     await page.goto("/memories/constellation?tenant_id=default&project_id=e2e-failure-trace&lang=ja");
 
-    const picker = page.locator(".memory-map-accessible-picker");
-    await picker.locator("summary").click();
-    await expect(picker.locator("[data-map-accessible-count]")).toHaveText("2件中2件を表示");
-    await expect(picker.locator("li")).toHaveCount(2);
-    await expect(picker).not.toContainText("failure_prevention:");
-    await picker.locator("button").last().click();
-    await expect(picker).not.toHaveAttribute("open", "");
+    const search = page.locator("[data-map-search]");
+    const results = page.locator("[data-map-search-results]");
+    await search.focus();
+    await expect(results.locator("[data-map-accessible-count]")).toHaveText("2件中2件を表示");
+    await expect(results.locator("li")).toHaveCount(2);
+    await expect(results).not.toContainText("failure_prevention:");
+    await expect(results).toContainText("プロジェクト:");
+    await expect(results).toContainText("確認状態:");
+    await results.locator("button").last().click();
+    await expect(results).toBeHidden();
+    await expect(search).toBeFocused();
+    await expect(page.locator("[data-map-selection-status]")).toContainText("選択したノード:");
+    await expect(page).toHaveURL(/selected=/u);
   });
+
+  test("keeps the four-step path and 3D map together in the first desktop viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision:rationale-e2e");
+
+    const geometry = await page.evaluate(() => {
+      const pathway = document.querySelector<HTMLElement>("[data-map-pathway]")!.getBoundingClientRect();
+      const stage = document.querySelector<HTMLElement>("[data-map-stage-shell]")!.getBoundingClientRect();
+      const search = document.querySelector<HTMLElement>("[data-map-search]")!.getBoundingClientRect();
+      return {
+        pathwayTop: pathway.top,
+        pathwayBottom: pathway.bottom,
+        stageTop: stage.top,
+        stageBottom: stage.bottom,
+        stageHeight: stage.height,
+        searchBottom: search.bottom,
+        viewportHeight: window.innerHeight
+      };
+    });
+    expect(geometry.pathwayTop).toBeLessThan(geometry.viewportHeight);
+    expect(geometry.stageTop).toBeLessThan(geometry.viewportHeight);
+    expect(geometry.pathwayBottom).toBeLessThanOrEqual(geometry.stageTop);
+    expect(geometry.searchBottom).toBeLessThanOrEqual(geometry.pathwayTop);
+    expect(geometry.stageHeight).toBeGreaterThanOrEqual(439);
+    expect(geometry.stageBottom).toBeGreaterThan(geometry.viewportHeight - 80);
+  });
+
+  test("keeps search, all four path steps, and the map usable at 390px", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision:rationale-e2e");
+
+    await expect(page.locator("[data-map-search]")).toBeVisible();
+    await expect(page.locator("[data-trace-step]")).toHaveCount(4);
+    await expect(page.locator("[data-map-stage-shell]")).toBeVisible();
+    const geometry = await page.evaluate(() => {
+      const stage = document.querySelector<HTMLElement>("[data-map-stage-shell]")!.getBoundingClientRect();
+      const pathway = document.querySelector<HTMLElement>("[data-map-pathway]")!.getBoundingClientRect();
+      const stepHeights = Array.from(document.querySelectorAll<HTMLElement>("[data-trace-step]"), (step) => step.getBoundingClientRect().height);
+      return {
+        noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        pathwayBottom: pathway.bottom,
+        stageTop: stage.top,
+        stageVisible: stage.top < window.innerHeight,
+        stepHeights
+      };
+    });
+    expect(geometry.noHorizontalOverflow).toBe(true);
+    expect(geometry.pathwayBottom).toBeLessThanOrEqual(geometry.stageTop);
+    expect(geometry.stageVisible).toBe(true);
+    expect(Math.min(...geometry.stepHeights)).toBeGreaterThanOrEqual(44);
+  });
+
+  for (const width of [320, 768] as const) {
+    test(`keeps the memory map readable without horizontal overflow at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all`);
+      await expect(page.locator("[data-map-search]")).toBeVisible();
+      await expect(page.locator("[data-map-fit]")).toBeVisible();
+      await expect(page.locator("[data-map-stage]")).toHaveAttribute("aria-describedby", "memory-map-stage-instructions");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      expect(await page.locator("[data-map-search]").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    });
+  }
 
   test("keeps the map and trace in a bounded desktop reading surface", async ({ page }) => {
     await page.setViewportSize({ width: 1536, height: 900 });
     await page.goto("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision:rationale-e2e&trace_step=artifact");
 
     const geometry = await page.evaluate(() => {
+      const workspace = document.querySelector<HTMLElement>(".memory-map-workspace")!.getBoundingClientRect();
       const stage = document.querySelector<HTMLElement>("[data-map-stage-shell]")!.getBoundingClientRect();
       const inspector = document.querySelector<HTMLElement>("[data-map-inspector]")!;
       const inspectorRect = inspector.getBoundingClientRect();
       return {
+        workspaceHeight: workspace.height,
         stageHeight: stage.height,
         inspectorHeight: inspectorRect.height,
         inspectorClientHeight: inspector.clientHeight,
         inspectorScrollHeight: inspector.scrollHeight
       };
     });
-    expect(Math.abs(geometry.stageHeight - geometry.inspectorHeight)).toBeLessThan(3);
+    expect(Math.abs(geometry.workspaceHeight - geometry.inspectorHeight)).toBeLessThan(24);
+    expect(geometry.stageHeight).toBeGreaterThanOrEqual(439);
     expect(geometry.stageHeight).toBeLessThanOrEqual(545);
     expect(geometry.inspectorScrollHeight).toBeGreaterThanOrEqual(geometry.inspectorClientHeight);
     await page.locator("[data-trace-step='decision']").focus();
@@ -290,7 +399,18 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByRole("heading", { name: "観測中のエージェント" })).toBeVisible();
     await expect(page.locator(".console-primary-links")).toBeHidden();
     await page.locator(".console-mobile-nav summary").click();
-    await expect(page.locator(".console-mobile-nav-panel").getByRole("link", { name: "知識のつながり" })).toBeVisible();
+    const mobilePanel = page.locator(".console-mobile-nav-panel");
+    await expect(mobilePanel.getByRole("link", { name: "知識のつながり" })).toBeVisible();
+    for (const name of ["ユーザー", "グループ", "組織", "業務カテゴリ", "プロフィール", "クライアント接続", "運用"]) {
+      await expect(mobilePanel.getByRole("link", { name, exact: true })).toBeVisible();
+    }
+    const firstView = await page.evaluate(() => ({
+      height: window.innerHeight,
+      freshnessBottom: document.querySelector(".poll-updated")?.getBoundingClientRect().bottom ?? Infinity,
+      actionTop: document.querySelector(".recommended-actions .action-card, .recommended-actions .healthy-state")?.getBoundingClientRect().top ?? Infinity
+    }));
+    expect(firstView.freshnessBottom).toBeLessThanOrEqual(firstView.height);
+    expect(firstView.actionTop).toBeLessThan(firstView.height);
     expect(await page.locator(".activity-timeline").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.locator(".timeline-overview").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(180);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -310,6 +430,23 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByRole("link", { name: /Labs/ })).toHaveCount(0);
   });
 
+  test("keeps management route parity and scope in all supported languages", async ({ page }) => {
+    const locales = [["en", "Groups"], ["ja", "グループ"], ["zh", "群组"]] as const;
+    for (const [lang, groupsLabel] of locales) {
+      await page.goto(`/users?tenant_id=tenant-a&project_id=project-a&lang=${lang}`);
+      const desktopHrefs = await page.locator(".console-nav-menu-panel a").evaluateAll((links) => links.map((link) => (link as HTMLAnchorElement).pathname));
+      const mobileHrefs = await page.locator(".console-mobile-nav-panel .console-nav-group:not(.console-nav-group-primary) a").evaluateAll((links) => links.map((link) => (link as HTMLAnchorElement).pathname));
+      expect(mobileHrefs).toEqual(desktopHrefs);
+      await page.locator(".console-nav-menu summary").click();
+      await page.locator(".console-nav-menu-panel").getByRole("link", { name: groupsLabel, exact: true }).click();
+      const target = new URL(page.url());
+      expect(target.pathname).toBe("/groups");
+      expect(target.searchParams.get("tenant_id")).toBe("tenant-a");
+      expect(target.searchParams.get("project_id")).toBe("project-a");
+      expect(target.searchParams.get("lang")).toBe(lang);
+    }
+  });
+
   test("disables visualization animation for reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/overview?tenant_id=default&project_id=org-brain&lang=ja");
@@ -325,6 +462,9 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByText("表示できるアクティビティはまだありません")).toBeVisible();
 
     await page.goto("/decisions/history?tenant_id=default&project_id=e2e-partial-error&lang=ja");
+    await expect(page.getByRole("alert")).toHaveCount(1);
+    await expect(page.getByRole("alert")).toContainText("知識の履歴を判断できません");
+    await page.getByRole("alert").getByText("技術情報").click();
     await expect(page.getByRole("alert")).toContainText("Strata detail fixture unavailable");
     await expect(page.getByRole("heading", { name: "知識の履歴" })).toBeVisible();
   });
@@ -358,6 +498,25 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByRole("searchbox", { name: "Taskを検索" })).toHaveValue("memory");
   });
 
+  test("always offers a next action for every Task detail state", async ({ page }) => {
+    const states = [
+      ["/tasks/task-e2e?tenant_id=default&project_id=org-brain&lang=ja", "イベント履歴"],
+      ["/tasks/missing?tenant_id=default&project_id=org-brain&lang=ja", "Taskが見つかりません"],
+      ["/tasks/task-e2e?tenant_id=default&project_id=e2e-task-detail-error&lang=ja", "Task詳細を取得できませんでした"],
+      ["/tasks/task-e2e?tenant_id=default&project_id=e2e-task-events-error&lang=ja", "イベント履歴の一部を取得できませんでした"]
+    ] as const;
+    for (const [url, expected] of states) {
+      await page.goto(url);
+      await expect(page.getByText(expected, { exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Task一覧へ戻る" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "再試行" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "運用画面を開く" })).toBeVisible();
+    }
+
+    await page.goto("/tasks/task-failed?tenant_id=default&project_id=org-brain&lang=ja");
+    await expect(page.getByRole("button", { name: "Taskを再実行" })).toBeVisible();
+  });
+
   test("keeps Operations tenant-scoped through status and replay", async ({ page }) => {
     await page.context().addCookies([{ name: "orgbrain_tenant", value: "tenant-a", domain: "127.0.0.1", path: "/" }]);
     const replayRequests = [];
@@ -365,7 +524,7 @@ test.describe("dashboard visualizations", () => {
       if (request.url().includes("/api/v1/ops/tasks/") && request.method() === "POST") replayRequests.push(request);
     });
 
-    await page.goto("/operations");
+    await page.goto("/operations?lang=ja");
     await expect(page.getByText("対象: tenant-a")).toBeVisible();
     await expect(page.getByRole("heading", { name: "対応が必要な項目" })).toBeVisible();
     await page.getByRole("button", { name: "再実行" }).click();

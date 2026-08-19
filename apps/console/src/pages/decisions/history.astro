@@ -52,11 +52,5 @@ if (sourceType && sourceId) {
 }
 ---
 <BaseLayout title={copy.routes.strataTitle} lang={lang} wide>
-  {(result.error || detailError) && (
-    <div class="intelligence-route-alert" role="alert">
-      <strong>{copy.routes.strataError}</strong>
-      <span>{result.error || detailError}</span>
-    </div>
-  )}
   <MemoryStrata data={result.data} detail={detail} loadError={result.error || detailError} refreshUrl={refreshUrl} params={params} locale={lang} />
 </BaseLayout>

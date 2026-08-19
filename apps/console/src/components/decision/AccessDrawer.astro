@@ -1,0 +1,171 @@
+---
+import type { ConsoleLocale } from "../../lib/decision-console-ui";
+
+const {
+  resourceType,
+  resourceId,
+  tenantId,
+  projectId = null,
+  policy = null,
+  utilizingAgents = [],
+  locale = "en"
+} = Astro.props as {
+  resourceType: string;
+  resourceId: string;
+  tenantId: string;
+  projectId?: string | null;
+  policy?: Record<string, unknown> | null;
+  utilizingAgents?: Array<Record<string, unknown>>;
+  locale?: ConsoleLocale;
+};
+
+const copy = {
+  en: { open: "Access", title: "Access & storage", scope: "Visibility", project: "Project ID", owner: "Owner", agents: "Using agents", storage: "Storage", groups: "Group IDs", restricted: "Restricted subjects", save: "Save access", close: "Close", saving: "Saving…", saved: "Access updated", none: "None", help: "Use one subject per line: principal:name or group:id." },
+  ja: { open: "アクセス", title: "アクセスと保存先", scope: "共有範囲", project: "プロジェクトID", owner: "所有者", agents: "利用Agent", storage: "保存場所", groups: "グループID", restricted: "限定対象", save: "アクセスを保存", close: "閉じる", saving: "保存中…", saved: "アクセスを更新しました", none: "なし", help: "1行に1対象を principal:name または group:id で入力します。" },
+  zh: { open: "访问", title: "访问与存储", scope: "可见范围", project: "项目ID", owner: "所有者", agents: "使用中的Agent", storage: "存储位置", groups: "群组ID", restricted: "限定对象", save: "保存访问设置", close: "关闭", saving: "保存中…", saved: "访问设置已更新", none: "无", help: "每行一个对象：principal:name 或 group:id。" }
+}[locale];
+const drawerId = `access-${resourceType}-${resourceId}`.replace(/[^a-zA-Z0-9_-]/gu, "-");
+const drawerTitleId = `${drawerId}-title`;
+const scope = typeof policy?.scope === "string" ? policy.scope : "private";
+const owner = typeof policy?.owner_principal === "string" ? policy.owner_principal : "—";
+const policyProjectId = typeof policy?.project_id === "string" ? policy.project_id : projectId ?? "";
+const storage = typeof policy?.storage_location === "string" ? policy.storage_location : resourceType === "skill_asset" ? "d1_r2" : "d1";
+const policyVersion = typeof policy?.policy_version === "number" ? policy.policy_version : 1;
+const groupIds = Array.isArray(policy?.group_ids) ? policy.group_ids.filter((value): value is string => typeof value === "string") : [];
+const restrictedSubjects = Array.isArray(policy?.restricted_subjects)
+  ? policy.restricted_subjects.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const subject = value as Record<string, unknown>;
+      return typeof subject.subject_type === "string" && typeof subject.subject_id === "string"
+        ? [`${subject.subject_type}:${subject.subject_id}`]
+        : [];
+    })
+  : [];
+---
+<div
+  class="access-drawer-root"
+  data-access-drawer
+  data-resource-type={resourceType}
+  data-resource-id={resourceId}
+  data-tenant-id={tenantId}
+  data-project-id={projectId ?? ""}
+  data-copy={JSON.stringify(copy)}
+>
+  <button type="button" class="decision-action decision-action-secondary" data-access-open aria-haspopup="dialog" aria-controls={drawerId}>{copy.open}</button>
+  <dialog id={drawerId} class="access-drawer-dialog" data-access-dialog aria-labelledby={drawerTitleId}>
+    <form class="access-drawer-panel" method="dialog" data-access-form>
+      <header>
+        <div>
+          <p class="decision-eyebrow">{resourceType.replaceAll("_", " ")}</p>
+          <h2 id={drawerTitleId}>{copy.title}</h2>
+        </div>
+        <button type="button" class="access-drawer-close" data-access-close aria-label={copy.close}>×</button>
+      </header>
+      <div class="access-drawer-summary">
+        <div><span>{copy.owner}</span><strong>{owner}</strong></div>
+        <div><span>{copy.storage}</span><strong>{storage.toUpperCase().replace("_", " + ")}</strong></div>
+        <div><span>{copy.agents}</span><strong>{utilizingAgents.length || copy.none}</strong></div>
+      </div>
+      {utilizingAgents.length > 0 && (
+        <ul class="access-agent-list">
+          {utilizingAgents.map((agent) => <li>{String(agent.name ?? agent.agent_key ?? agent.id ?? "Agent")}</li>)}
+        </ul>
+      )}
+      <label>
+        {copy.scope}
+        <select name="scope" data-access-scope>
+          {[
+            ["private", "Private"],
+            ["project", "Project"],
+            ["group", "Group"],
+            ["tenant", "Tenant"],
+            ["restricted", "Restricted"]
+          ].map(([value, label]) => <option value={value} selected={scope === value}>{label}</option>)}
+        </select>
+      </label>
+      <label>
+        {copy.project}
+        <input name="project_id" value={policyProjectId} />
+      </label>
+      <label>
+        {copy.groups}
+        <input name="group_ids" value={groupIds.join(", ")} placeholder="group-design, group-platform" />
+      </label>
+      <label>
+        {copy.restricted}
+        <textarea name="restricted_subjects" rows="5" placeholder="principal:user@example.com">{restrictedSubjects.join("\n")}</textarea>
+        <small>{copy.help}</small>
+      </label>
+      <input type="hidden" name="policy_version" value={String(policyVersion)} />
+      <input type="hidden" name="owner_principal" value={owner === "—" ? "" : owner} />
+      <footer>
+        <p data-access-status aria-live="polite"></p>
+        <button type="submit" data-access-submit>{copy.save}</button>
+      </footer>
+    </form>
+  </dialog>
+</div>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>("[data-access-drawer]")) {
+    if (root.dataset.ready === "true") continue;
+    root.dataset.ready = "true";
+    const copy = JSON.parse(root.dataset.copy || "{}");
+    const dialog = root.querySelector<HTMLDialogElement>("[data-access-dialog]");
+    const form = root.querySelector<HTMLFormElement>("[data-access-form]");
+    const status = root.querySelector<HTMLElement>("[data-access-status]");
+    const submit = root.querySelector<HTMLButtonElement>("[data-access-submit]");
+    root.querySelector("[data-access-open]")?.addEventListener("click", () => dialog?.showModal());
+    root.querySelector("[data-access-close]")?.addEventListener("click", () => dialog?.close());
+    dialog?.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form || !submit) return;
+      const values = new FormData(form);
+      const groupIds = String(values.get("group_ids") ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+      const restrictedSubjects = String(values.get("restricted_subjects") ?? "").split("\n").flatMap((line) => {
+        const [subjectType, ...idParts] = line.trim().split(":");
+        const subjectId = idParts.join(":").trim();
+        return (subjectType === "principal" || subjectType === "group") && subjectId
+          ? [{ subject_type: subjectType, subject_id: subjectId }]
+          : [];
+      });
+      const scope = String(values.get("scope") ?? "private");
+      const query = new URLSearchParams({ tenant_id: root.dataset.tenantId || "default" });
+      if (root.dataset.projectId) query.set("project_id", root.dataset.projectId);
+      submit.disabled = true;
+      submit.textContent = copy.saving;
+      if (status) status.textContent = "";
+      try {
+        const response = await fetch(`/api/v1/access-policies/${encodeURIComponent(root.dataset.resourceType || "")}/${encodeURIComponent(root.dataset.resourceId || "")}?${query}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: root.dataset.tenantId,
+            scope,
+            owner_principal: values.get("owner_principal") || undefined,
+            project_id: String(values.get("project_id") || "").trim() || null,
+            group_ids: groupIds,
+            restricted_subjects: restrictedSubjects,
+            expected_policy_version: Number(values.get("policy_version") || 1)
+          })
+        });
+        const payload = await response.json().catch(() => null) as {
+          data?: { policy?: { policy_version?: number } };
+          error?: { message?: string };
+        } | null;
+        if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+        const version = payload?.data?.policy?.policy_version;
+        if (version) form.querySelector<HTMLInputElement>("[name=policy_version]")!.value = String(version);
+        if (status) status.textContent = copy.saved;
+      } catch (error) {
+        if (status) status.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = copy.save;
+      }
+    });
+  }
+</script>

@@ -50,7 +50,7 @@ type MemoryMapData = {
   clusters: Array<{ id: string; kind: string; label: string; node_ids: string[] }>;
 };
 
-const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal = "", fromDate = "", toDate = "", scope = "org", selectedId: initialSelectedId = "", locale = "en", mapCopy = {}, traceCopy = {} } = Astro.props as {
+const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal = "", fromDate = "", toDate = "", scope = "org", selectedId: initialSelectedId = "", allNodes = false, locale = "en", mapCopy = {}, traceCopy = {} } = Astro.props as {
   data: MemoryMapData;
   tenantId?: string;
   projectId?: string;
@@ -60,6 +60,7 @@ const { data, tenantId = "default", projectId = "", query = "", ownerPrincipal =
   toDate?: string;
   scope?: "mine" | "org";
   selectedId?: string;
+  allNodes?: boolean;
   locale?: "en" | "ja" | "zh";
   mapCopy?: Record<string, unknown>;
   traceCopy?: Record<string, unknown>;
@@ -77,6 +78,14 @@ const listHref = `/memories?${listParams.toString()}`;
 const fallbackParams = new URLSearchParams(listParams);
 fallbackParams.set("map_fallback", "1");
 const fallbackHref = `/memories?${fallbackParams.toString()}`;
+const modeParams = new URLSearchParams(listParams);
+if (allNodes) modeParams.delete("view");
+else modeParams.set("view", "all");
+const modeHref = `/memories/constellation?${modeParams.toString()}`;
+const visibleNodeCount = data.visible_count ?? data.nodes.length;
+const totalMemoryCount = data.total_count ?? data.nodes.filter((node) => node.node_type === "memory").length;
+const mapModeLabel = allNodes ? mapText("allNodesMode", "All nodes") : mapText("topNodesMode", "Top nodes");
+const mapModeAction = allNodes ? mapText("topNodesAction", "Show representative nodes") : mapText("allNodesAction", "Show all nodes");
 const projectOptionMap = new Map<string, string>();
 for (const node of data.nodes) {
   if (node.node_type === "project" && node.project_id) projectOptionMap.set(node.project_id, node.label || node.project_id);
@@ -94,100 +103,140 @@ const filterSummary = [
   fromDate || toDate ? `${fromDate || "…"} – ${toDate || "…"}` : mapText("anyPeriod", "Any period")
 ].filter(Boolean).join(" · ");
 ---
-<section class="memory-map-shell" data-memory-map-root data-map={serialized} data-list-href={fallbackHref} data-tenant-id={tenantId} data-project-id={projectId} data-scope={scope} data-selected-id={initialSelectedId} data-locale={locale} data-map-copy={JSON.stringify(mapCopy)} data-trace-copy={JSON.stringify(traceCopy)}>
+<section class="memory-map-shell" data-memory-map-root data-map={serialized} data-list-href={fallbackHref} data-tenant-id={tenantId} data-project-id={projectId} data-scope={scope} data-selected-id={initialSelectedId} data-locale={locale} data-map-mode={allNodes ? "all" : "top"} data-map-copy={JSON.stringify(mapCopy)} data-trace-copy={JSON.stringify(traceCopy)}>
   <header class="memory-map-header">
     <div>
       <p class="intelligence-eyebrow">{mapText("mapEyebrow", "Memory constellation / WebGL")}</p>
       <h1>{mapText("memoryMapTitle", "3D memory map")}</h1>
     </div>
+    <div class="memory-map-header-meta">
+      <span class="memory-map-mode-badge" data-map-mode-badge>{mapModeLabel}</span>
+      <a class="memory-map-mode-link" data-map-mode-toggle href={modeHref}>{mapModeAction}</a>
+      <button type="button" class="memory-map-fit" data-map-fit aria-controls="memory-map-stage" aria-label={mapText("fitAllAria", "Fit the complete memory map in view")}>{mapText("fitAll", "Fit all nodes")}</button>
+      <span class="memory-map-count" data-map-count aria-live="polite">
+        <strong data-map-visible-count>{visibleNodeCount}</strong>
+        <span>{mapText("visibleNodes", "visible nodes")}</span>
+        <small><span data-map-total-count>{totalMemoryCount}</span> {mapText("sourceMemories", "memories in scope")}</small>
+      </span>
+      {data.truncated && <span class="memory-map-truncation-note" data-map-truncated>{mapText("truncatedNodes", "Some nodes are omitted by the display ceiling")}</span>}
+    </div>
   </header>
 
-  <details class="memory-map-controls" data-map-controls>
-    <summary class="memory-map-controls-summary">
-      <span class="memory-map-controls-copy">
-        <strong>{mapText("searchFilters", "Search & filters")}</strong>
-        <span>{filterSummary}</span>
-      </span>
-      <span class="memory-map-controls-chevron" aria-hidden="true"></span>
-    </summary>
-    <div class="memory-map-controls-body">
-      <div class="memory-map-toolbar">
-        <label class="memory-map-search"><span>{mapText("searchMap", "Search map")}</span><input type="search" data-map-search value={query} placeholder={mapText("mapSearchPlaceholder", "memory ID / summary / owner")} /></label>
-        <div class="memory-map-presets" aria-label={mapText("presetsAria", "Map color presets")}>
-          <button type="button" class="is-active" data-map-preset="project">{mapText("projectPreset", "Project")}</button>
-          <button type="button" data-map-preset="owner">{mapText("ownerPreset", "Owner")}</button>
-          <button type="button" data-map-preset="utilization">{mapText("utilizationPreset", "Utilization")}</button>
+  <section class="memory-map-command-bar" data-map-command-bar aria-labelledby="memory-map-node-picker-title">
+    <h2 id="memory-map-node-picker-title" class="sr-only">{traceText("keyboardSelection", "Search and select a node")}</h2>
+    <div class="memory-map-command-row">
+      <label class="memory-map-search memory-map-accessible-search">
+        <span class="sr-only">{traceText("keyboardSearch", "Filter decisions and memories")}</span>
+        <input
+          type="search"
+          data-map-search
+          data-map-accessible-search
+          value={query}
+          placeholder={traceText("keyboardSearchPlaceholder", "Search nodes")}
+          role="combobox"
+          aria-controls="memory-map-search-results"
+          aria-expanded="false"
+          aria-autocomplete="list"
+          autocomplete="off"
+        />
+      </label>
+      <p class="memory-map-selection-status" data-map-selection-status role="status" aria-live="polite"></p>
+      <a class="memory-map-view-trace" data-map-view-trace href="#memory-map-pathway-title" hidden>{traceText("viewDecisionPath", "View decision path")}</a>
+      <details class="memory-map-controls" data-map-controls>
+        <summary class="memory-map-controls-summary">
+          <span class="memory-map-controls-copy">
+            <strong>{mapText("searchFilters", "Search & filters")}</strong>
+            <span>{filterSummary}</span>
+          </span>
+          <span class="memory-map-controls-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="memory-map-controls-body">
+          <div class="memory-map-toolbar">
+            <div class="memory-map-presets" aria-label={mapText("presetsAria", "Map color presets")}>
+              <button type="button" class="is-active" data-map-preset="project">{mapText("projectPreset", "Project")}</button>
+              <button type="button" data-map-preset="owner">{mapText("ownerPreset", "Owner")}</button>
+              <button type="button" data-map-preset="utilization">{mapText("utilizationPreset", "Utilization")}</button>
+            </div>
+            <a class="memory-map-list-link" href={listHref}>{mapText("openList", "Open memory list")}</a>
+          </div>
+          <form class="memory-map-filters" method="get" action="/memories/constellation">
+            <input type="hidden" name="tenant_id" value={tenantId} />
+            <input type="hidden" name="scope" value={scope} />
+            <label><span>{mapText("projectLabel", "Project")}</span><select name="project_id"><option value="" selected={!projectId}>{mapText("allProjects", "All projects")}</option>{projectOptions.map(([value, label]) => <option value={value} selected={projectId === value}>{label}</option>)}</select></label>
+            <label><span>{mapText("ownerLabel", "Owner")}</span><select name="owner_principal" disabled={scope === "mine"}><option value="" selected={!ownerPrincipal}>{scope === "mine" ? mapText("myMemories", "My memories") : mapText("allOwners", "All owners")}</option>{ownerOptions.map((value) => <option value={value} selected={ownerPrincipal === value}>{value}</option>)}</select></label>
+            <fieldset class="memory-map-date-range" aria-label={`${mapText("from", "From")} / ${mapText("to", "To")}`}><label><span>{mapText("from", "From")}</span><input type="date" name="from_date" value={fromDate} /></label><span class="memory-map-range-arrow" aria-hidden="true">→</span><label><span>{mapText("to", "To")}</span><input type="date" name="to_date" value={toDate} /></label></fieldset>
+            <button type="submit">{mapText("applyFilters", "Apply filters")}</button>
+          </form>
         </div>
-        <a class="memory-map-list-link" href={listHref}>{mapText("openList", "Open memory list")}</a>
-      </div>
-      <form class="memory-map-filters" method="get" action="/memories/constellation">
-        <input type="hidden" name="tenant_id" value={tenantId} />
-        <input type="hidden" name="scope" value={scope} />
-        <label><span>{mapText("projectLabel", "Project")}</span><select name="project_id"><option value="" selected={!projectId}>{mapText("allProjects", "All projects")}</option>{projectOptions.map(([value, label]) => <option value={value} selected={projectId === value}>{label}</option>)}</select></label>
-        <label><span>{mapText("ownerLabel", "Owner")}</span><select name="owner_principal" disabled={scope === "mine"}><option value="" selected={!ownerPrincipal}>{scope === "mine" ? mapText("myMemories", "My memories") : mapText("allOwners", "All owners")}</option>{ownerOptions.map((value) => <option value={value} selected={ownerPrincipal === value}>{value}</option>)}</select></label>
-        <fieldset class="memory-map-date-range" aria-label={`${mapText("from", "From")} / ${mapText("to", "To")}`}><label><span>{mapText("from", "From")}</span><input type="date" name="from_date" value={fromDate} /></label><span class="memory-map-range-arrow" aria-hidden="true">→</span><label><span>{mapText("to", "To")}</span><input type="date" name="to_date" value={toDate} /></label></fieldset>
-        <button type="submit">{mapText("applyFilters", "Apply filters")}</button>
-      </form>
+      </details>
     </div>
-  </details>
-
-  <section class="memory-map-pathway" data-map-pathway aria-labelledby="memory-map-pathway-title">
-    <header class="memory-map-pathway-header">
-      <p class="intelligence-eyebrow">{traceText("pathwayEyebrow", "Decision lineage")}</p>
-      <h2 id="memory-map-pathway-title">{traceText("pathwayTitle", "The path of a decision")}</h2>
-      <p>{traceText("pathwayIntro", "Follow what was decided, why it was chosen, what supports it, and where it was reflected.")}</p>
-    </header>
-    <ol class="memory-map-pathway-steps" aria-label={traceText("pathwayTitle", "The path of a decision")}>
-      {([
-        ["decision", "01", traceText("stepDecision", "Decision"), traceText("stepDecisionDescription", "What was decided")],
-        ["reason", "02", traceText("stepReason", "Reason"), traceText("stepReasonDescription", "Why it was chosen")],
-        ["evidence", "03", traceText("stepEvidence", "Evidence"), traceText("stepEvidenceDescription", "What supports it")],
-        ["artifact", "04", traceText("stepArtifact", "Artifact"), traceText("stepArtifactDescription", "Where it was reflected")]
-      ] as const).map(([id, index, label, description]) => (
-        <li data-trace-step-item={id} data-state="concept">
-          <button type="button" data-trace-step={id} aria-current={id === "decision" ? "step" : undefined}>
-            <span class="memory-map-pathway-index">{index}</span>
-            <span class="memory-map-pathway-copy"><strong data-trace-step-label>{label}</strong><small data-trace-step-description>{description}</small></span>
-            <span class="memory-map-pathway-state" data-trace-step-state aria-hidden="true"></span>
-          </button>
-        </li>
-      ))}
-    </ol>
-    <p class="memory-map-pathway-prompt" data-trace-pathway-prompt>{traceText("conceptPrompt", "Select a decision node to inspect a real path.")}</p>
+    <div class="memory-map-search-results" data-map-search-results id="memory-map-search-results" hidden>
+      <p class="memory-map-accessible-count" data-map-accessible-count aria-live="polite"></p>
+      <ul data-map-accessible-list></ul>
+    </div>
+    <p class="memory-map-interaction-hint" data-map-interaction-hint>{mapText("mapInteractionHint", "Use the list to select a node. The 3D view is visual only.")}</p>
   </section>
 
   <div class="memory-map-layout">
-    <div class="memory-map-stage-shell" data-map-stage-shell>
-      <div class="memory-map-stage" data-map-stage role="application" aria-label={mapText("mapAriaLabel", "3D memory map")}></div>
-      <svg class="memory-map-glow-overlay" data-map-glow-overlay aria-hidden="true" focusable="false">
-        <defs>
-          <filter id="memory-map-gaussian-glow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-            <feGaussianBlur stdDeviation="3.5" />
-          </filter>
-        </defs>
-        <g data-map-svg-glow filter="url(#memory-map-gaussian-glow)"></g>
-      </svg>
-    </div>
-    <div class="memory-map-fallback" data-map-fallback hidden>
-      <div class="memory-map-fallback-note"><strong>{mapText("fallbackTitle", "3D view is unavailable; opening the list")}</strong><span>{mapText("fallbackBody", "The memory list uses the same filters. If it does not open automatically, use the link below.")}</span><a data-map-fallback-link href={fallbackHref}>{mapText("openMemoryList", "Open memory list")}</a></div>
-      <ul data-map-fallback-list></ul>
-    </div>
-    <aside class="memory-map-inspector" data-map-inspector aria-label={traceText("pathwayTitle", "The path of a decision")} data-sheet-state="peek">
-      <div class="memory-map-sheet-controls" aria-label={traceText("panelControls", "Trace panel controls")}>
-        <button type="button" data-trace-sheet-expand>{traceText("expandPanel", "Expand")}</button>
-        <button type="button" data-trace-sheet-collapse>{traceText("collapsePanel", "Collapse")}</button>
+    <div class="memory-map-workspace">
+      <section class="memory-map-pathway" data-map-pathway aria-labelledby="memory-map-pathway-title">
+        <header class="memory-map-pathway-header">
+          <p class="intelligence-eyebrow">{traceText("pathwayEyebrow", "Decision lineage")}</p>
+          <h2 id="memory-map-pathway-title">{traceText("pathwayTitle", "The path of a decision")}</h2>
+          <p>{traceText("pathwayIntro", "Follow what was decided, why it was chosen, what supports it, and where it was reflected.")}</p>
+        </header>
+        <ol class="memory-map-pathway-steps" aria-label={traceText("pathwayTitle", "The path of a decision")}>
+          {([
+            ["decision", "01", traceText("stepDecision", "Decision"), traceText("stepDecisionDescription", "What was decided")],
+            ["reason", "02", traceText("stepReason", "Reason"), traceText("stepReasonDescription", "Why it was chosen")],
+            ["evidence", "03", traceText("stepEvidence", "Evidence"), traceText("stepEvidenceDescription", "What supports it")],
+            ["artifact", "04", traceText("stepArtifact", "Artifact"), traceText("stepArtifactDescription", "Where it was reflected")]
+          ] as const).map(([id, index, label, description]) => (
+            <li data-trace-step-item={id} data-state="concept">
+              <button type="button" data-trace-step={id} aria-current={id === "decision" ? "step" : undefined}>
+                <span class="memory-map-pathway-index">{index}</span>
+                <span class="memory-map-pathway-copy"><strong data-trace-step-label>{label}</strong><small data-trace-step-description>{description}</small></span>
+                <span class="memory-map-pathway-state" data-trace-step-state aria-hidden="true"></span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <p class="memory-map-pathway-prompt" data-trace-pathway-prompt>{traceText("conceptPrompt", "Select a decision node to inspect a real path.")}</p>
+      </section>
+      <div class="memory-map-stage-shell" data-map-stage-shell>
+        <p class="sr-only" id="memory-map-stage-instructions">{mapText("mapInteractionHint", "Use the list to select a node. The 3D view is visual only.")}</p>
+        <div class="memory-map-stage" id="memory-map-stage" data-map-stage role="img" aria-label={mapText("mapAriaLabel", "3D memory map")} aria-describedby="memory-map-stage-instructions" aria-busy="true"></div>
+        <p class="memory-map-stage-status" data-map-render-status role="status" aria-live="polite" aria-atomic="true">{mapText("loadingNodes", "Rendering nodes…")}</p>
+        <svg class="memory-map-glow-overlay" data-map-glow-overlay aria-hidden="true" focusable="false">
+          <defs>
+            <filter id="memory-map-gaussian-glow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+              <feGaussianBlur stdDeviation="3.5" />
+            </filter>
+          </defs>
+          <g data-map-svg-glow filter="url(#memory-map-gaussian-glow)"></g>
+        </svg>
       </div>
-      <p class="intelligence-eyebrow" data-map-trace-workspace-eyebrow>{traceText("currentPath", "This decision path")}</p>
-      <span class="memory-map-node-kind" data-map-inspector-kind>{mapText("nothingSelected", "Nothing selected")}</span>
-      <h2 data-map-inspector-title>{mapText("selectNode", "Select a node.")}</h2>
-      <p data-map-inspector-summary>{mapText("selectNodeHint", "Select a node to inspect its owner, references, and net savings.")}</p>
-      <p class="memory-map-inspector-status" data-map-inspector-status role="status" aria-live="polite" hidden></p>
-      <section class="memory-map-inspector-section memory-map-trace-workspace" data-map-inspector-rationales-section>
+      <div class="memory-map-fallback" data-map-fallback hidden>
+        <div class="memory-map-fallback-note"><strong>{mapText("fallbackTitle", "3D view is unavailable; the accessible list remains available")}</strong><span>{mapText("fallbackBody", "Search, select a node, and inspect its decision path on this page. You can also open the full memory list with the same filters.")}</span><a data-map-fallback-link href={fallbackHref}>{mapText("openMemoryList", "Open memory list")}</a></div>
+        <ul data-map-fallback-list></ul>
+      </div>
+    </div>
+    <aside class="memory-map-inspector" id="memory-map-inspector" data-map-inspector aria-label={traceText("pathwayTitle", "The path of a decision")} data-sheet-state="peek">
+      <div class="memory-map-sheet-controls" aria-label={traceText("panelControls", "Trace panel controls")}>
+        <button type="button" data-trace-sheet-toggle aria-expanded="false" aria-controls="memory-map-inspector-content">{traceText("expandPanel", "Open details")}</button>
+      </div>
+      <div id="memory-map-inspector-content" data-map-inspector-content-panel>
+        <p class="intelligence-eyebrow" data-map-trace-workspace-eyebrow>{traceText("currentPath", "This decision path")}</p>
+        <span class="memory-map-node-kind" data-map-inspector-kind>{mapText("nothingSelected", "Nothing selected")}</span>
+        <h2 data-map-inspector-title>{mapText("selectNode", "Select a node.")}</h2>
+        <p data-map-inspector-summary>{mapText("selectNodeHint", "Select a node to inspect its owner, references, and net savings.")}</p>
+        <p class="memory-map-inspector-status" data-map-inspector-status role="status" aria-live="polite" hidden></p>
+        <section class="memory-map-inspector-section memory-map-trace-workspace" data-map-inspector-rationales-section>
         <h3 class="sr-only" data-map-trace-heading tabindex="-1">{traceText("pathwayTitle", "The path of a decision")}</h3>
         <p class="memory-map-trace-status" data-map-trace-status role="status" aria-live="polite" hidden></p>
         <div class="memory-map-inspector-records" data-map-inspector-rationales></div>
-      </section>
-      <details class="memory-map-technical" data-map-technical hidden>
+        </section>
+        <details class="memory-map-technical" data-map-technical hidden>
         <summary>{traceText("technicalDetails", "Technical details")}</summary>
         <div class="memory-map-technical-body memory-map-inspector-detail" data-map-inspector-detail hidden>
           <dl class="memory-map-inspector-summary-grid">
@@ -211,8 +260,9 @@ const filterSummary = [
             <div class="memory-map-inspector-records" data-map-inspector-versions></div>
           </section>
         </div>
-      </details>
-      <a class="memory-map-open" data-map-inspector-link href="/memories" target="_blank" rel="noreferrer" hidden>{mapText("openMemory", "Open in memory library")}</a>
+        </details>
+        <a class="memory-map-open" data-map-inspector-link href="/memories" target="_blank" rel="noreferrer" hidden>{mapText("openMemory", "Open in memory library")}</a>
+      </div>
     </aside>
   </div>
 
@@ -236,13 +286,16 @@ const filterSummary = [
   </dialog>
 
   <footer class="memory-map-footer">
-    <div class="memory-map-legend"><div class="memory-map-project-legend" data-project-legend></div><span class="legend-line legend-line-source"></span><span>{mapText("sourceNodeLegend", "line color = source node")}</span><span class="legend-arrow">→</span><span>{mapText("directedRelationLegend", "directed relation")}</span></div>
-    <details class="memory-map-accessible-picker">
-      <summary>{traceText("keyboardSelection", "Select a node with the keyboard")}</summary>
-      <label class="memory-map-accessible-search"><span>{traceText("keyboardSearch", "Filter decisions and memories")}</span><input type="search" data-map-accessible-search placeholder={traceText("keyboardSearchPlaceholder", "Search nodes")} /></label>
-      <p class="memory-map-accessible-count" data-map-accessible-count></p>
-      <ul data-map-accessible-list></ul>
-    </details>
+    <div class="memory-map-legend" aria-label={mapText("mapLegend", "Map legend")}>
+      <span class="memory-map-legend-title">{mapText("mapLegend", "Map legend")}</span>
+      <span class="memory-map-legend-item"><i class="legend-node legend-node-selected"></i>{mapText("legendSelected", "Selected node")}</span>
+      <span class="memory-map-legend-item"><i class="legend-node legend-node-ambient"></i>{mapText("legendAmbient", "Readable node")}</span>
+      <span class="memory-map-project-legend" data-project-legend></span><span class="legend-line legend-line-source"></span><span>{mapText("sourceNodeLegend", "line color = source node")}</span><span class="legend-arrow">→</span><span>{mapText("directedRelationLegend", "directed relation")}</span>
+      <span class="memory-map-legend-stage"><i class="legend-node legend-node-decision"></i>{mapText("legendStageDecision", "Decision")}</span>
+      <span class="memory-map-legend-stage"><i class="legend-node legend-node-reason"></i>{mapText("legendStageReason", "Reason")}</span>
+      <span class="memory-map-legend-stage"><i class="legend-node legend-node-evidence"></i>{mapText("legendStageEvidence", "Evidence")}</span>
+      <span class="memory-map-legend-stage"><i class="legend-node legend-node-artifact"></i>{mapText("legendStageArtifact", "Artifact")}</span>
+    </div>
   </footer>
 </section>
 
@@ -484,11 +537,15 @@ const filterSummary = [
     const technicalDetails = root.querySelector<HTMLDetailsElement>("[data-map-technical]");
     const pathwayPrompt = root.querySelector<HTMLElement>("[data-trace-pathway-prompt]");
     const pathwayButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-trace-step]")];
-    const sheetExpand = root.querySelector<HTMLButtonElement>("[data-trace-sheet-expand]");
-    const sheetCollapse = root.querySelector<HTMLButtonElement>("[data-trace-sheet-collapse]");
-    const accessiblePicker = root.querySelector<HTMLDetailsElement>(".memory-map-accessible-picker");
+    const sheetToggle = root.querySelector<HTMLButtonElement>("[data-trace-sheet-toggle]");
+    const fitButton = root.querySelector<HTMLButtonElement>("[data-map-fit]");
+    const renderStatus = root.querySelector<HTMLElement>("[data-map-render-status]");
+    const commandBar = root.querySelector<HTMLElement>("[data-map-command-bar]");
+    const searchResults = root.querySelector<HTMLElement>("[data-map-search-results]");
     const accessibleList = root.querySelector<HTMLUListElement>("[data-map-accessible-list]");
     const accessibleSearch = root.querySelector<HTMLInputElement>("[data-map-accessible-search]");
+    const selectionStatus = root.querySelector<HTMLElement>("[data-map-selection-status]");
+    const viewTraceLink = root.querySelector<HTMLAnchorElement>("[data-map-view-trace]");
     const accessibleCount = root.querySelector<HTMLElement>("[data-map-accessible-count]");
     const resourceDialog = root.querySelector<HTMLDialogElement>("[data-map-resource-dialog]");
     const resourceDialogTitle = root.querySelector<HTMLElement>("[data-map-resource-dialog-title]");
@@ -503,13 +560,15 @@ const filterSummary = [
     const mapText = (key: string, fallback: string) => typeof mapCopy[key] === "string" ? String(mapCopy[key]) : fallback;
     const traceCopy = JSON.parse(root.dataset.traceCopy || "{}") as Record<string, unknown>;
     const traceText = (key: string, fallback: string) => typeof traceCopy[key] === "string" ? String(traceCopy[key]) : fallback;
-    let fallbackScheduled = false;
     let preset = "project";
     let selectedId = root.dataset.selectedId || "";
     let activeTraceStep = normalizeTraceStep(new URL(window.location.href).searchParams.get("trace_step"));
     root.dataset.activeTraceStep = activeTraceStep;
     let activeTracePayload: MemoryMapTraceResponse | null = null;
     let activeRationaleId: string | null = null;
+    let refreshAccessibleChoices = () => {};
+    let openSearchResults = () => {};
+    let closeSearchResults = () => {};
     let preserveInitialTraceStep = Boolean(selectedId);
     type GraphLink = { id?: string; source: string | MapNode; target: string | MapNode; relation?: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean };
     type GraphInstance = {
@@ -559,6 +618,16 @@ const filterSummary = [
     };
     const glowLayers = new Map<string, { core: GlowLayer; halo: GlowLayer; outer: GlowLayer }>();
     let glowTexture: any = null;
+    const setSheetState = (state: "peek" | "half" | "expanded") => {
+      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
+      if (!inspector) return;
+      inspector.dataset.sheetState = state;
+      const expanded = state !== "peek";
+      sheetToggle?.setAttribute("aria-expanded", String(expanded));
+      if (sheetToggle) sheetToggle.textContent = expanded
+        ? traceText("collapsePanel", "Close details")
+        : traceText("expandPanel", "Open details");
+    };
 
     const palette = [
       "#4bb8ff", "#9c87ff", "#ffb454", "#42d6ac",
@@ -708,10 +777,6 @@ const filterSummary = [
         circle.setAttribute("display", "none");
         return;
       }
-      if (!selected && selectedId && !selectedRelatedIds.has(node.id)) {
-        circle.setAttribute("display", "none");
-        return;
-      }
       const projected = (svgProjectionVector || (svgProjectionVector = new threeInstance.Vector3()))
         .set(positionedNode.x, positionedNode.y, positionedNode.z)
         .project(graph.camera());
@@ -773,13 +838,13 @@ const filterSummary = [
         layers.core.material.color.set(color);
         layers.halo.material.color.set(color);
         layers.outer.material.color.set(color);
-        layers.core.material.opacity = selected ? 1 : dimmed ? 0.34 : 0.88;
-        layers.halo.material.opacity = selected ? 0.62 + pulse * 0.14 : dimmed ? 0.022 : Math.min(0.36, 0.2 * ambientGlowIntensity);
-        layers.outer.material.opacity = selected ? 0.24 + pulse * 0.08 : dimmed ? 0.008 : Math.min(0.11, 0.06 * ambientGlowIntensity);
-        const coreScale = selected ? 1.28 + pulse * 0.08 : dimmed ? 0.9 : 1;
+        layers.core.material.opacity = selected ? 1 : dimmed ? 0.58 : 0.88;
+        layers.halo.material.opacity = selected ? 0.62 + pulse * 0.14 : dimmed ? 0.12 : Math.min(0.36, 0.2 * ambientGlowIntensity);
+        layers.outer.material.opacity = selected ? 0.24 + pulse * 0.08 : dimmed ? 0.04 : Math.min(0.11, 0.06 * ambientGlowIntensity);
+        const coreScale = selected ? 1.28 + pulse * 0.08 : dimmed ? 0.94 : 1;
         layers.core.scale.set(coreScale, coreScale, coreScale);
-        const haloSize = layers.core.coreSize * (selected ? 11 + pulse * 0.5 : dimmed ? 2.8 : 5.4 * ambientGlowSize);
-        const outerSize = layers.core.coreSize * (selected ? 18 + pulse * 0.8 : dimmed ? 4.6 : 8.5 * ambientGlowSize);
+        const haloSize = layers.core.coreSize * (selected ? 11 + pulse * 0.5 : dimmed ? 4 : 5.4 * ambientGlowSize);
+        const outerSize = layers.core.coreSize * (selected ? 18 + pulse * 0.8 : dimmed ? 6.2 : 8.5 * ambientGlowSize);
         layers.halo.scale.set(haloSize, haloSize, 1);
         layers.outer.scale.set(outerSize, outerSize, 1);
       }
@@ -917,6 +982,7 @@ const filterSummary = [
       if (inspectorStatus) {
         inspectorStatus.hidden = true;
         inspectorStatus.textContent = "";
+        delete inspectorStatus.dataset.detailState;
       }
       for (const section of [inspectorTagsSection, inspectorContentSection, inspectorVersionsSection]) {
         if (section) section.hidden = true;
@@ -1323,6 +1389,10 @@ const filterSummary = [
         inspectorTraceStatus.textContent = "";
       }
       activeTracePayload = payload as MemoryMapTraceResponse;
+      if (inspectorStatus && inspectorStatus.dataset.detailState) {
+        inspectorStatus.hidden = true;
+        inspectorStatus.textContent = "";
+      }
       const view = buildMemoryMapTraceView(activeTracePayload, activeRationaleId);
       updatePathway(activeTracePayload, activeRationaleId);
       activeRationaleId = view.rationaleId;
@@ -1476,6 +1546,7 @@ const filterSummary = [
       if (inspectorStatus) {
         inspectorStatus.hidden = false;
         inspectorStatus.textContent = mapText("loadingMemoryDetail", "Loading content, history, and evidence…");
+        inspectorStatus.dataset.detailState = "loading";
       }
       try {
         const response = await fetch(`/api/v1/memories/${encodeURIComponent(node.memory_id)}/details?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`, { headers: { accept: "application/json" } });
@@ -1486,12 +1557,16 @@ const filterSummary = [
         if (inspectorStatus) {
           inspectorStatus.hidden = true;
           inspectorStatus.textContent = "";
+          delete inspectorStatus.dataset.detailState;
         }
-      } catch (error) {
+      } catch {
         if (requestId !== detailRequestId || selectedId !== node.id) return;
         if (inspectorStatus) {
-          inspectorStatus.hidden = false;
-          inspectorStatus.textContent = `${mapText("detailFallback", "Details could not be loaded; showing map metadata.")}${error instanceof Error ? ` ${error.message}` : ""}`;
+          inspectorStatus.dataset.detailState = "unavailable";
+          inspectorStatus.hidden = Boolean(activeTracePayload);
+          inspectorStatus.textContent = activeTracePayload
+            ? ""
+            : mapText("detailFallback", "Details could not be loaded; showing map metadata.");
         }
       }
     };
@@ -1521,12 +1596,12 @@ const filterSummary = [
         if (requestId !== traceRequestId || selectedId !== node.id) return;
         if (!response.ok || !payload.data) throw new Error(payload.error?.message || traceText("error", "The decision trace could not be loaded."));
         renderMemoryTrace(payload.data);
-      } catch (error) {
+      } catch {
         if (requestId !== traceRequestId || selectedId !== node.id) return;
         if (inspectorRationalesSection) inspectorRationalesSection.hidden = false;
         if (inspectorTraceStatus) {
           inspectorTraceStatus.hidden = false;
-          inspectorTraceStatus.textContent = `${traceText("traceLoadFailure", "The real data could not be loaded. You can continue selecting nodes on the map.")} ${error instanceof Error ? error.message : ""}`.trim();
+          inspectorTraceStatus.textContent = traceText("traceLoadFailure", "The real data could not be loaded. You can continue selecting nodes on the map.");
         }
         activeTracePayload = null;
         activeRationaleId = null;
@@ -1613,7 +1688,7 @@ const filterSummary = [
       const hasTraceTarget = Boolean(node && (isMemory || isDecision));
       root.classList.toggle("has-trace-selection", hasTraceTarget);
       const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
-      if (inspector) inspector.dataset.sheetState = hasTraceTarget ? "half" : "peek";
+      setSheetState(options.preserveStep ? "peek" : hasTraceTarget ? "half" : "peek");
       if (node) {
         renderNodeMetadata(node);
       }
@@ -1668,6 +1743,10 @@ const filterSummary = [
         ? traceText("openDetailsNewTab", "Open details in a new tab")
         : `${mapText("openMemory", "Open in memory library")} ↗`;
       if (inspectorLink) inspectorLink.hidden = !node;
+      if (selectionStatus) selectionStatus.textContent = node
+        ? `${mapText("selectedNode", "Selected node")}: ${displayNodeLabel(node)}`
+        : mapText("nothingSelected", "Nothing selected");
+      if (viewTraceLink) viewTraceLink.hidden = !hasTraceTarget;
       if (hasTraceTarget && node) {
         updatePathway(null, null);
         root.classList.add("has-trace-selection");
@@ -1678,12 +1757,21 @@ const filterSummary = [
       }
       if (isMemory && node) void loadMemoryDetail(node);
       updateRouteState();
-      if (options.keyboard && hasTraceTarget) inspectorTraceHeading?.focus();
       updateGlowAppearance();
       graph?.nodeColor?.(colorFor);
       graph?.linkColor?.(linkColorFor);
       graph?.linkVisibility?.(linkVisible);
       graph?.linkWidth?.(linkWidthFor);
+      if (options.keyboard && accessibleSearch) {
+        accessibleSearch.value = "";
+        closeSearchResults();
+        graph?.nodeVisibility?.(visible);
+      }
+      refreshAccessibleChoices();
+      if (options.keyboard && node) window.requestAnimationFrame(() => {
+        accessibleSearch?.focus();
+        closeSearchResults();
+      });
     };
     renderLegend();
     renderConceptTrace();
@@ -1694,19 +1782,25 @@ const filterSummary = [
     }
     const renderFallback = (reason: string) => {
       if (stage) stage.hidden = true;
+      stage?.setAttribute("aria-busy", "false");
       if (fallback) fallback.hidden = false;
+      if (renderStatus) renderStatus.textContent = reason;
       if (fallbackList) {
         fallbackList.innerHTML = "";
         for (const node of data.nodes.filter((candidate) => candidate.node_type === "memory").filter(visible).slice(0, 24)) {
           const item = document.createElement("li");
-          item.innerHTML = `<span class="fallback-node-dot" style="background:${colorFor(node)}"></span><div><strong></strong><small></small></div><b></b>`;
-          const strong = item.querySelector("strong");
-          const small = item.querySelector("small");
-          const count = item.querySelector("b");
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "memory-map-fallback-node";
+          button.innerHTML = `<span class="fallback-node-dot" style="background:${colorFor(node)}"></span><div><strong></strong><small></small></div><b></b>`;
+          const strong = button.querySelector("strong");
+          const small = button.querySelector("small");
+          const count = button.querySelector("b");
           if (strong) strong.textContent = node.label;
           if (small) small.textContent = `${node.project_id || mapText("notSet", "Not set")} · ${node.owner_principal || mapText("noAssignment", "Unassigned")}`;
           if (count) count.textContent = `${node.reference_count} ${mapText("refsLabel", "refs")}`;
-          item.addEventListener("click", () => selectNode(node));
+          button.addEventListener("click", () => selectNode(node, { keyboard: true }));
+          item.appendChild(button);
           fallbackList.appendChild(item);
         }
       }
@@ -1714,11 +1808,6 @@ const filterSummary = [
     };
     const redirectToList = (reason: string) => {
       renderFallback(reason);
-      if (fallbackScheduled) return;
-      fallbackScheduled = true;
-      window.setTimeout(() => {
-        window.location.replace(root.dataset.listHref || "/memories");
-      }, 450);
     };
     const supports3D = () => {
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1773,7 +1862,11 @@ const filterSummary = [
       : null;
     search?.addEventListener("input", updateGraph);
     for (const [index, button] of pathwayButtons.entries()) {
-      button.addEventListener("click", () => setActiveTraceStep(normalizeTraceStep(button.dataset.traceStep), { focus: Boolean(activeTracePayload) }));
+      button.addEventListener("click", () => {
+        setActiveTraceStep(normalizeTraceStep(button.dataset.traceStep), { focus: Boolean(activeTracePayload) });
+        const selectedNode = data.nodes.find((node) => node.id === selectedId);
+        if (selectedNode) focusGraphNode(selectedNode);
+      });
       button.addEventListener("keydown", (event) => {
         const nextIndex = event.key === "ArrowRight" || event.key === "ArrowDown"
           ? Math.min(pathwayButtons.length - 1, index + 1)
@@ -1784,6 +1877,8 @@ const filterSummary = [
         event.preventDefault();
         pathwayButtons[nextIndex]?.focus();
         setActiveTraceStep(normalizeTraceStep(pathwayButtons[nextIndex]?.dataset.traceStep), { focus: false });
+        const selectedNode = data.nodes.find((node) => node.id === selectedId);
+        if (selectedNode) focusGraphNode(selectedNode);
       });
     }
     root.addEventListener("click", async (event) => {
@@ -1800,14 +1895,6 @@ const filterSummary = [
         action.title = value;
       }
     });
-    sheetExpand?.addEventListener("click", () => {
-      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
-      if (inspector) inspector.dataset.sheetState = "expanded";
-    });
-    sheetCollapse?.addEventListener("click", () => {
-      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
-      if (inspector) inspector.dataset.sheetState = "peek";
-    });
     for (const close of root.querySelectorAll<HTMLButtonElement>("[data-map-resource-dialog-close], [data-map-resource-dialog-done]")) {
       close.addEventListener("click", () => resourceDialog?.close());
     }
@@ -1816,8 +1903,7 @@ const filterSummary = [
     });
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || window.matchMedia("(min-width: 901px)").matches) return;
-      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
-      if (inspector) inspector.dataset.sheetState = "peek";
+      setSheetState("peek");
     });
     const selectableNodes = data.nodes.filter((candidate) => candidate.node_type === "decision" || candidate.node_type === "memory");
     const pickerNodeLabel = (node: MapNode) => presentNarrative(displayNodeLabel(node))
@@ -1836,22 +1922,29 @@ const filterSummary = [
       const query = rawQuery.trim().toLocaleLowerCase();
       const matches = selectableNodes.filter((node) => {
         if (!query) return true;
-        return [pickerNodeLabel(node), node.id, node.project_id || ""]
+        return [pickerNodeLabel(node), pickerNodeKind(node), node.id, node.project_id || "", node.confirmation_state || ""]
           .some((value) => value.toLocaleLowerCase().includes(query));
       });
-      const visible = matches.slice(0, query ? 40 : 20);
+      const orderedMatches = selectedId
+        ? [...matches.filter((node) => node.id === selectedId), ...matches.filter((node) => node.id !== selectedId)]
+        : matches;
+      const visible = orderedMatches.slice(0, 6);
       accessibleList.innerHTML = "";
       for (const node of visible) {
         const item = document.createElement("li");
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = `${pickerNodeKind(node)} · ${pickerNodeLabel(node)}`;
+        button.className = "memory-map-accessible-node";
+        button.dataset.mapAccessibleNodeId = node.id;
+        button.setAttribute("aria-pressed", String(node.id === selectedId));
+        button.setAttribute("aria-current", String(node.id === selectedId));
+        appendText(button, "strong", pickerNodeLabel(node));
+        appendText(button, "span", pickerNodeKind(node), "memory-map-accessible-node-kind");
+        appendText(button, "span", `${mapText("projectLabel", "Project")}: ${node.project_id || mapText("notSet", "Not set")}`, "memory-map-accessible-node-project");
+        appendText(button, "span", `${mapText("confirmationLabel", "Confirmation")}: ${stateValueLabel(node.confirmation_state || mapText("notSet", "Not set"))}`, "memory-map-accessible-node-state");
         button.addEventListener("click", () => {
           selectNode(node, { keyboard: true });
           focusGraphNode(node);
-          if (accessiblePicker) accessiblePicker.open = false;
-          if (accessibleSearch) accessibleSearch.value = "";
-          renderAccessibleChoices();
         });
         item.appendChild(button);
         accessibleList.appendChild(item);
@@ -1862,10 +1955,50 @@ const filterSummary = [
           .replace("{total}", String(matches.length));
       }
     };
+    refreshAccessibleChoices = () => renderAccessibleChoices(accessibleSearch?.value || "");
+    openSearchResults = () => {
+      if (!searchResults || !accessibleSearch) return;
+      searchResults.hidden = false;
+      accessibleSearch.setAttribute("aria-expanded", "true");
+    };
+    closeSearchResults = () => {
+      if (!searchResults || !accessibleSearch) return;
+      searchResults.hidden = true;
+      accessibleSearch.setAttribute("aria-expanded", "false");
+    };
     renderAccessibleChoices();
-    accessibleSearch?.addEventListener("input", () => renderAccessibleChoices(accessibleSearch.value));
-    accessiblePicker?.addEventListener("toggle", () => {
-      if (accessiblePicker.open) window.setTimeout(() => accessibleSearch?.focus(), 0);
+    accessibleSearch?.addEventListener("focus", () => {
+      renderAccessibleChoices(accessibleSearch.value);
+      openSearchResults();
+    });
+    accessibleSearch?.addEventListener("input", () => {
+      renderAccessibleChoices(accessibleSearch.value);
+      openSearchResults();
+    });
+    accessibleSearch?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSearchResults();
+        return;
+      }
+      if (event.key !== "ArrowDown" && event.key !== "Enter") return;
+      const firstChoice = accessibleList?.querySelector<HTMLButtonElement>("[data-map-accessible-node-id]");
+      if (!firstChoice) return;
+      event.preventDefault();
+      if (event.key === "Enter") firstChoice.click();
+      else firstChoice.focus();
+    });
+    commandBar?.addEventListener("keydown", (event) => {
+      const choice = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-map-accessible-node-id]");
+      if (!choice) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSearchResults();
+        accessibleSearch?.focus();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!commandBar?.contains(event.target as Node)) closeSearchResults();
     });
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-map-preset]")) {
       button.addEventListener("click", () => {
@@ -1875,8 +2008,22 @@ const filterSummary = [
         updateGraph();
       });
     }
+    stage?.setAttribute("aria-busy", "true");
+    fitButton?.addEventListener("click", () => {
+      if (!graph) {
+        if (renderStatus) renderStatus.textContent = mapText("mapRenderFallback", "The accessible list is active.");
+        return;
+      }
+      centerGraph(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 450);
+      if (renderStatus) renderStatus.textContent = mapText("fitAll", "Fit all nodes");
+    });
+    sheetToggle?.addEventListener("click", () => {
+      const inspector = root.querySelector<HTMLElement>("[data-map-inspector]");
+      const expanded = inspector?.dataset.sheetState !== "peek";
+      setSheetState(expanded ? "peek" : "expanded");
+    });
     if (!supports3D()) {
-      redirectToList(mapText("fallbackTitle", "3D view is unavailable; opening the list"));
+      redirectToList(mapText("fallbackTitle", "3D view is unavailable; the accessible list remains available"));
     } else if (stage) {
       (async () => {
         try {
@@ -1935,11 +2082,13 @@ const filterSummary = [
             if (pendingNode) window.setTimeout(() => focusGraphNode(pendingNode), 1100);
           }
           stage.hidden = false;
+          stage.setAttribute("aria-busy", "false");
+          if (renderStatus) renderStatus.textContent = "";
           if (fallback) fallback.hidden = true;
           startSvgGlowLoop();
           resizeObserver?.observe(stage);
           stage.querySelector("canvas")?.addEventListener("webglcontextlost", () => {
-            redirectToList(mapText("fallbackTitle", "3D view is unavailable; opening the list"));
+            redirectToList(mapText("fallbackTitle", "3D view is unavailable; the accessible list remains available"));
           }, { once: true });
           window.setTimeout(() => {
             const canvas = stage.querySelector("canvas");
@@ -1966,8 +2115,254 @@ const filterSummary = [
 </script>
 
 <style>
-  .memory-map-shell { display:grid; gap:1rem; }.memory-map-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:end; padding:1.5rem 0 .5rem; }.memory-map-header h1 { margin-top:.45rem; color:#effaff; font-size:clamp(2.2rem,5vw,4.5rem); letter-spacing:-.075em; line-height:.95; }.memory-map-header p:not(.intelligence-eyebrow) { max-width:50rem; margin-top:1rem; color:rgba(191,216,235,.7); line-height:1.7; }.memory-map-count { display:grid; gap:.2rem; justify-items:end; color:rgba(191,216,235,.52); font: .7rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.12em; }.memory-map-count strong { color:#f2fbff; font:600 3rem Inter,sans-serif; letter-spacing:-.08em; }.memory-map-toolbar { display:flex; flex-wrap:wrap; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(90,172,238,.2); border-radius:22px; background:rgba(7,17,31,.78); }.memory-map-search { flex:1 1 18rem; margin:0; }.memory-map-search span { display:block; margin-bottom:.35rem; }.memory-map-search input { min-height:2.7rem; border-radius:14px; }.memory-map-presets { display:flex; gap:.3rem; }.memory-map-presets button { min-height:2.7rem; border-radius:999px; padding:0 .8rem; border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(224,241,248,.7); box-shadow:none; font-size:.75rem; }.memory-map-presets button.is-active,.memory-map-presets button:hover { border-color:rgba(99,189,255,.5); background:rgba(22,135,255,.17); color:#effaff; }.memory-map-list-link { display:inline-flex; min-height:2.7rem; align-items:center; padding:0 .9rem; border:1px solid rgba(255,184,77,.28); border-radius:999px; color:#ffd989; font-size:.78rem; font-weight:600; }.memory-map-filters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(255,255,255,.08); border-radius:18px; background:rgba(4,11,21,.7); }.memory-map-filters label { display:grid; gap:.35rem; margin:0; }.memory-map-filters span { color:rgba(191,216,235,.48); font: .65rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.08em; }.memory-map-filters input { min-height:2.5rem; border-radius:12px; }.memory-map-filters button { min-height:2.5rem; white-space:nowrap; }.memory-map-layout { display:grid; grid-template-columns:minmax(0,1fr) 20rem; gap:1rem; }.memory-map-stage { min-height:38rem; overflow:hidden; border:1px solid rgba(90,172,238,.2); border-radius:28px; background:#050a12; box-shadow:inset 0 0 80px rgba(22,135,255,.06),0 25px 80px rgba(0,0,0,.28); }.memory-map-inspector { align-self:start; position:sticky; top:5rem; display:grid; gap:.8rem; border:1px solid rgba(90,172,238,.2); border-radius:24px; padding:1.1rem; background:linear-gradient(180deg,rgba(8,20,36,.94),rgba(4,11,21,.92)); }.memory-map-inspector h2 { color:#f1fbff; font-size:1.15rem; letter-spacing:-.035em; }.memory-map-inspector > p:not(.intelligence-eyebrow) { color:rgba(191,216,235,.64); font-size:.78rem; line-height:1.6; }.memory-map-inspector dl { display:grid; gap:.5rem; margin-top:.4rem; }.memory-map-inspector dl div { display:flex; justify-content:space-between; gap:.75rem; padding-top:.5rem; border-top:1px solid rgba(255,255,255,.07); }.memory-map-inspector dt { color:rgba(191,216,235,.46); font-size:.68rem; }.memory-map-inspector dd { max-width:10rem; overflow:hidden; color:#eaf8ff; font: .7rem "Fira Code",monospace; text-align:right; text-overflow:ellipsis; white-space:nowrap; }.memory-map-open { display:inline-flex; min-height:2.6rem; align-items:center; justify-content:center; border:1px solid rgba(99,189,255,.32); border-radius:14px; background:rgba(22,135,255,.12); color:#dff5ff; font-size:.78rem; font-weight:600; }.memory-map-fallback { min-height:38rem; overflow:auto; border:1px solid rgba(90,172,238,.2); border-radius:28px; padding:1rem; background:rgba(5,12,22,.9); }.memory-map-fallback-note { display:grid; gap:.3rem; margin-bottom:1rem; padding:.8rem; border-radius:16px; background:rgba(255,184,77,.08); }.memory-map-fallback-note strong { color:#ffe4ad; font-size:.8rem; }.memory-map-fallback-note span { color:rgba(255,228,173,.65); font-size:.72rem; }.memory-map-fallback-note a { display:inline-flex; width:max-content; margin-top:.3rem; padding:.45rem .65rem; border:1px solid rgba(255,216,137,.32); border-radius:10px; color:#ffe4ad; font-size:.72rem; font-weight:600; }.memory-map-fallback ul { display:grid; gap:.35rem; }.memory-map-fallback li { display:grid; grid-template-columns:.6rem minmax(0,1fr) auto; gap:.65rem; align-items:center; cursor:pointer; padding:.65rem .5rem; border-bottom:1px solid rgba(255,255,255,.06); }.fallback-node-dot { width:.55rem; height:.55rem; border-radius:50%; }.memory-map-fallback li strong,.memory-map-fallback li small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.memory-map-fallback li strong { color:#eefaff; font-size:.78rem; }.memory-map-fallback li small { margin-top:.2rem; color:rgba(191,216,235,.5); font-size:.65rem; }.memory-map-fallback li b { color:#ffd989; font: .68rem "Fira Code",monospace; white-space:nowrap; }.memory-map-footer { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; color:rgba(191,216,235,.48); font-size:.7rem; }.memory-map-legend { display:flex; align-items:center; gap:.4rem; color:rgba(191,216,235,.66); }.legend-sample { width:.55rem; height:.55rem; display:inline-block; border-radius:50%; }.legend-blue { background:#54b7ff; }.legend-amber { background:#ffb84d; }.legend-mint { background:#55dfbb; }.legend-line { width:1.1rem; height:1px; display:inline-block; opacity:.8; }.legend-line-project { background:#91aabe; }.legend-line-entity { background:#d5e7ef; }
-  @media (max-width:1100px){.memory-map-filters{grid-template-columns:repeat(2,minmax(0,1fr));}}@media (max-width:900px){.memory-map-layout{grid-template-columns:1fr;}.memory-map-inspector{position:static;}.memory-map-stage{min-height:30rem;}}@media (max-width:760px){.memory-map-header{grid-template-columns:1fr;}.memory-map-count{justify-items:start;}.memory-map-toolbar{align-items:stretch;}.memory-map-presets{width:100%;}.memory-map-presets button{flex:1;}.memory-map-list-link{justify-content:center;}.memory-map-filters{grid-template-columns:1fr;}.memory-map-filters button{width:100%;}.memory-map-stage{min-height:0;}.memory-map-footer{align-items:flex-start;flex-direction:column;}}
+  .memory-map-shell { display:grid; gap:1rem; }.memory-map-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:end; padding:1.5rem 0 .5rem; }.memory-map-header h1 { margin-top:.45rem; color:#effaff; font-size:clamp(2.2rem,5vw,4.5rem); letter-spacing:-.075em; line-height:.95; }.memory-map-header p:not(.intelligence-eyebrow) { max-width:50rem; margin-top:1rem; color:rgba(191,216,235,.7); line-height:1.7; }.memory-map-header-meta { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:.55rem; }.memory-map-mode-badge { border:1px solid rgba(99,189,255,.34); border-radius:999px; background:rgba(22,135,255,.12); padding:.38rem .65rem; color:#dff5ff; font-size:.68rem; font-weight:700; letter-spacing:.03em; }.memory-map-mode-link { display:inline-flex; min-height:2.35rem; align-items:center; border:1px solid rgba(255,184,77,.3); border-radius:999px; padding:0 .7rem; color:#ffd989; font-size:.68rem; font-weight:700; text-decoration:none; }.memory-map-mode-link:hover { border-color:rgba(255,216,137,.6); background:rgba(255,184,77,.1); }.memory-map-count { display:grid; gap:.2rem; justify-items:end; color:rgba(191,216,235,.52); font: .7rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.12em; }.memory-map-count strong { color:#f2fbff; font:600 3rem Inter,sans-serif; letter-spacing:-.08em; }.memory-map-count small { color:rgba(191,216,235,.48); font-size:.62rem; letter-spacing:.02em; text-transform:none; }.memory-map-truncation-note { max-width:16rem; border:1px solid rgba(255,184,77,.3); border-radius:12px; background:rgba(255,184,77,.08); padding:.45rem .55rem; color:#ffe4ad; font-size:.66rem; line-height:1.4; }.memory-map-toolbar { display:flex; flex-wrap:wrap; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(90,172,238,.2); border-radius:22px; background:rgba(7,17,31,.78); }.memory-map-search { flex:1 1 18rem; margin:0; }.memory-map-search span { display:block; margin-bottom:.35rem; }.memory-map-search input { min-height:2.7rem; border-radius:14px; }.memory-map-presets { display:flex; gap:.3rem; }.memory-map-presets button { min-height:2.7rem; border-radius:999px; padding:0 .8rem; border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:rgba(224,241,248,.7); box-shadow:none; font-size:.75rem; }.memory-map-presets button.is-active,.memory-map-presets button:hover { border-color:rgba(99,189,255,.5); background:rgba(22,135,255,.17); color:#effaff; }.memory-map-list-link { display:inline-flex; min-height:2.7rem; align-items:center; padding:0 .9rem; border:1px solid rgba(255,184,77,.28); border-radius:999px; color:#ffd989; font-size:.78rem; font-weight:600; }.memory-map-filters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:.7rem; align-items:end; padding:.75rem; border:1px solid rgba(255,255,255,.08); border-radius:18px; background:rgba(4,11,21,.7); }.memory-map-filters label { display:grid; gap:.35rem; margin:0; }.memory-map-filters span { color:rgba(191,216,235,.48); font: .65rem "Fira Code",monospace; text-transform:uppercase; letter-spacing:.08em; }.memory-map-filters input { min-height:2.5rem; border-radius:12px; }.memory-map-filters button { min-height:2.5rem; white-space:nowrap; }.memory-map-layout { display:grid; grid-template-columns:minmax(0,1fr) 20rem; gap:1rem; }.memory-map-stage { min-height:38rem; overflow:hidden; border:1px solid rgba(90,172,238,.2); border-radius:28px; background:#050a12; box-shadow:inset 0 0 80px rgba(22,135,255,.06),0 25px 80px rgba(0,0,0,.28); }.memory-map-inspector { align-self:start; position:sticky; top:5rem; display:grid; gap:.8rem; border:1px solid rgba(90,172,238,.2); border-radius:24px; padding:1.1rem; background:linear-gradient(180deg,rgba(8,20,36,.94),rgba(4,11,21,.92)); }.memory-map-inspector h2 { color:#f1fbff; font-size:1.15rem; letter-spacing:-.035em; }.memory-map-inspector > p:not(.intelligence-eyebrow) { color:rgba(191,216,235,.64); font-size:.78rem; line-height:1.6; }.memory-map-inspector dl { display:grid; gap:.5rem; margin-top:.4rem; }.memory-map-inspector dl div { display:flex; justify-content:space-between; gap:.75rem; padding-top:.5rem; border-top:1px solid rgba(255,255,255,.07); }.memory-map-inspector dt { color:rgba(191,216,235,.46); font-size:.68rem; }.memory-map-inspector dd { max-width:10rem; overflow:hidden; color:#eaf8ff; font: .7rem "Fira Code",monospace; text-align:right; text-overflow:ellipsis; white-space:nowrap; }.memory-map-open { display:inline-flex; min-height:2.6rem; align-items:center; justify-content:center; border:1px solid rgba(99,189,255,.32); border-radius:14px; background:rgba(22,135,255,.12); color:#dff5ff; font-size:.78rem; font-weight:600; }.memory-map-fallback { min-height:38rem; overflow:auto; border:1px solid rgba(90,172,238,.2); border-radius:28px; padding:1rem; background:rgba(5,12,22,.9); }.memory-map-fallback-note { display:grid; gap:.3rem; margin-bottom:1rem; padding:.8rem; border-radius:16px; background:rgba(255,184,77,.08); }.memory-map-fallback-note strong { color:#ffe4ad; font-size:.8rem; }.memory-map-fallback-note span { color:rgba(255,228,173,.65); font-size:.72rem; }.memory-map-fallback-note a { display:inline-flex; width:max-content; margin-top:.3rem; padding:.45rem .65rem; border:1px solid rgba(255,216,137,.32); border-radius:10px; color:#ffe4ad; font-size:.72rem; font-weight:600; }.memory-map-fallback ul { display:grid; gap:.35rem; }.memory-map-fallback li { display:grid; grid-template-columns:.6rem minmax(0,1fr) auto; gap:.65rem; align-items:center; cursor:pointer; padding:.65rem .5rem; border-bottom:1px solid rgba(255,255,255,.06); }.fallback-node-dot { width:.55rem; height:.55rem; border-radius:50%; }.memory-map-fallback li strong,.memory-map-fallback li small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.memory-map-fallback li strong { color:#eefaff; font-size:.78rem; }.memory-map-fallback li small { margin-top:.2rem; color:rgba(191,216,235,.5); font-size:.65rem; }.memory-map-fallback li b { color:#ffd989; font: .68rem "Fira Code",monospace; white-space:nowrap; }.memory-map-footer { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; color:rgba(191,216,235,.48); font-size:.7rem; }.memory-map-legend { display:flex; align-items:center; gap:.4rem; color:rgba(191,216,235,.66); }.legend-sample { width:.55rem; height:.55rem; display:inline-block; border-radius:50%; }.legend-blue { background:#54b7ff; }.legend-amber { background:#ffb84d; }.legend-mint { background:#55dfbb; }.legend-line { width:1.1rem; height:1px; display:inline-block; opacity:.8; }.legend-line-project { background:#91aabe; }.legend-line-entity { background:#d5e7ef; }
+  @media (max-width:1100px){.memory-map-filters{grid-template-columns:repeat(2,minmax(0,1fr));}}@media (max-width:900px){.memory-map-layout{grid-template-columns:1fr;}.memory-map-inspector{position:static;}.memory-map-stage{min-height:30rem;}}@media (max-width:760px){.memory-map-header{grid-template-columns:1fr;}.memory-map-header-meta{justify-content:flex-start;}.memory-map-count{justify-items:start;}.memory-map-toolbar{align-items:stretch;}.memory-map-presets{width:100%;}.memory-map-presets button{flex:1;}.memory-map-list-link{justify-content:center;}.memory-map-filters{grid-template-columns:1fr;}.memory-map-filters button{width:100%;}.memory-map-stage{min-height:0;}.memory-map-footer{align-items:flex-start;flex-direction:column;}}
+</style>
+
+<style is:global>
+  /* Integrated map workspace: one search entry, one visible decision path, one graph. */
+  .memory-map-command-bar {
+    position: relative;
+    z-index: 40;
+    min-width: 0;
+  }
+  .memory-map-command-row {
+    display: grid;
+    grid-template-columns: minmax(17rem, 1.35fr) minmax(0, 1fr) auto auto;
+    gap: .45rem;
+    align-items: center;
+    min-height: 3.25rem;
+    padding: .35rem;
+    border: 1px solid rgba(90,172,238,.22);
+    border-radius: 16px;
+    background: rgba(7,17,31,.92);
+    box-shadow: 0 14px 38px rgba(0,0,0,.18);
+  }
+  .memory-map-command-row .memory-map-search { min-width: 0; margin: 0; }
+  .memory-map-command-row .memory-map-search input {
+    width: 100%;
+    min-height: 44px;
+    border-color: rgba(99,189,255,.32);
+    background: rgba(2,8,15,.72);
+    font-size: .875rem;
+  }
+  .memory-map-command-row .memory-map-search input:focus-visible {
+    outline: 2px solid #63bdff;
+    outline-offset: 1px;
+  }
+  .memory-map-command-row .memory-map-selection-status {
+    min-width: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: .42rem .6rem;
+    border-radius: 999px;
+    background: rgba(99,189,255,.08);
+    color: rgba(226,242,249,.86);
+    font-size: .75rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .memory-map-command-row .memory-map-selection-status:empty { display: none; }
+  .memory-map-command-row .memory-map-view-trace {
+    min-height: 44px;
+    margin: 0;
+    padding-inline: .7rem;
+    white-space: nowrap;
+  }
+  .memory-map-command-row .memory-map-controls {
+    position: relative;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+  .memory-map-command-row .memory-map-controls-summary {
+    min-height: 44px;
+    padding: .45rem .7rem;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 11px;
+    background: rgba(255,255,255,.035);
+  }
+  .memory-map-command-row .memory-map-controls-copy > span { display: none; }
+  .memory-map-command-row .memory-map-controls-body {
+    position: absolute;
+    z-index: 48;
+    top: calc(100% + .45rem);
+    right: 0;
+    width: min(58rem, calc(100vw - 2rem));
+    overflow: hidden;
+    border: 1px solid rgba(99,189,255,.24);
+    border-radius: 16px;
+    background: rgba(7,17,31,.98);
+    box-shadow: 0 24px 70px rgba(0,0,0,.5);
+  }
+  .memory-map-command-row .memory-map-toolbar {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+  .memory-map-search-results {
+    position: absolute;
+    z-index: 50;
+    top: calc(100% + .42rem);
+    left: 0;
+    width: min(44rem, calc(100% - 1rem));
+    max-height: min(31rem, calc(100vh - 10rem));
+    overflow: auto;
+    padding: .5rem;
+    border: 1px solid rgba(99,189,255,.28);
+    border-radius: 15px;
+    background: rgba(5,12,22,.985);
+    box-shadow: 0 24px 70px rgba(0,0,0,.56);
+  }
+  .memory-map-search-results[hidden] { display: none; }
+  .memory-map-search-results .memory-map-accessible-count {
+    margin: 0 0 .35rem;
+    padding: 0 .35rem;
+    color: rgba(216,235,246,.72);
+    font-size: .75rem;
+  }
+  .memory-map-search-results ul {
+    display: grid;
+    gap: .25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .memory-map-search-results .memory-map-accessible-node {
+    display: grid;
+    width: 100%;
+    min-height: 52px;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: .16rem .7rem;
+    align-items: center;
+    padding: .5rem .6rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: #dff5ff;
+    box-shadow: none;
+    text-align: left;
+  }
+  .memory-map-search-results .memory-map-accessible-node:hover,
+  .memory-map-search-results .memory-map-accessible-node[aria-pressed="true"] { border-color: rgba(99,189,255,.36); background: rgba(99,189,255,.1); }
+  .memory-map-search-results .memory-map-accessible-node:focus-visible { outline: 2px solid #9ad8ff; outline-offset: -2px; }
+  .memory-map-search-results .memory-map-accessible-node strong { min-width: 0; overflow: hidden; font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
+  .memory-map-search-results .memory-map-accessible-node span { font-size: .75rem; }
+
+  .memory-map-workspace {
+    display: grid;
+    min-width: 0;
+    gap: .45rem;
+  }
+  .memory-map-workspace .memory-map-pathway {
+    grid-template-columns: minmax(8rem, 10rem) minmax(0,1fr);
+    gap: .45rem .7rem;
+    min-height: 4.25rem;
+    padding: .35rem .5rem;
+    border-radius: 15px;
+  }
+  .memory-map-workspace .memory-map-pathway-header { gap: .08rem; }
+  .memory-map-workspace .memory-map-pathway-header .intelligence-eyebrow { font-size: .5rem; }
+  .memory-map-workspace .memory-map-pathway-header h2 { font-size: .82rem; line-height: 1.2; }
+  .memory-map-workspace .memory-map-pathway-header > p:last-child,
+  .memory-map-workspace .memory-map-pathway-prompt { display: none; }
+  .memory-map-workspace .memory-map-pathway-steps { gap: .25rem; }
+  .memory-map-workspace .memory-map-pathway-steps::before { top: .9rem; }
+  .memory-map-workspace .memory-map-pathway-steps li::after { top: 1.2rem; }
+  .memory-map-workspace .memory-map-pathway-steps button {
+    min-height: 3.3rem;
+    grid-template-columns: 1.7rem minmax(0,1fr);
+    gap: .35rem;
+    padding: .35rem .4rem;
+  }
+  .memory-map-workspace .memory-map-pathway-index { width: 1.7rem; height: 1.7rem; }
+  .memory-map-workspace .memory-map-pathway-copy strong { font-size: .75rem; }
+  .memory-map-workspace .memory-map-pathway-copy small { font-size: .75rem; line-height: 1.2; }
+  .memory-map-workspace .memory-map-pathway-state { min-height: 0; font-size: .75rem; }
+  .memory-map-layout,
+  .memory-map-shell.has-trace-selection .memory-map-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(24rem, 38%);
+    gap: .75rem;
+    align-items: start;
+  }
+  @media (min-width: 901px) {
+    .memory-map-workspace .memory-map-stage-shell,
+    .memory-map-workspace .memory-map-fallback {
+      width: 100%;
+      height: 27.5rem;
+      min-height: 27.5rem;
+      max-height: 27.5rem;
+    }
+    .memory-map-workspace .memory-map-stage,
+    .memory-map-workspace .memory-map-fallback { height: 100%; min-height: 0; }
+    .memory-map-layout .memory-map-inspector {
+      height: 32.2rem;
+      min-height: 32.2rem;
+      max-height: 32.2rem;
+      overflow-y: auto;
+    }
+  }
+  @media (max-width: 900px) {
+    .memory-map-command-row { grid-template-columns: minmax(0,1fr) auto; }
+    .memory-map-command-row .memory-map-selection-status { grid-column: 1; grid-row: 2; }
+    .memory-map-command-row .memory-map-view-trace { grid-column: 2; grid-row: 2; }
+    .memory-map-command-row .memory-map-controls { grid-column: 2; grid-row: 1; }
+    .memory-map-command-row .memory-map-controls-body { position: fixed; top: auto; right: .75rem; left: .75rem; width: auto; }
+    .memory-map-layout,
+    .memory-map-shell.has-trace-selection .memory-map-layout { display: block; padding-bottom: 7.5rem; }
+    .memory-map-workspace .memory-map-pathway { margin-bottom: .45rem; }
+  }
+  @media (max-width: 620px) {
+    .memory-map-header h1 { font-size: 1.65rem; }
+    .memory-map-command-row { align-items: stretch; }
+    .memory-map-command-row .memory-map-controls-copy strong { font-size: .75rem; }
+    .memory-map-command-row .memory-map-selection-status { white-space: normal; }
+    .memory-map-search-results { right: 0; width: 100%; max-height: min(27rem, calc(100vh - 9rem)); }
+    .memory-map-workspace .memory-map-pathway { grid-template-columns: 1fr; }
+    .memory-map-workspace .memory-map-pathway-header { display: none; }
+    .memory-map-workspace .memory-map-pathway-steps { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .memory-map-workspace .memory-map-pathway-steps::before,
+    .memory-map-workspace .memory-map-pathway-steps li::after { display: none; }
+    .memory-map-workspace .memory-map-pathway-steps button { min-height: 44px; }
+    .memory-map-workspace .memory-map-pathway-copy small,
+    .memory-map-workspace .memory-map-pathway-state { display: none; }
+  }
+</style>
+
+<style is:global>
+  /* Accessibility and fallback contract: text remains readable and every task works without WebGL. */
+  .memory-map-selection-status { margin: .35rem 0 0; color: rgba(226,242,249,.84); font-size: .8125rem; line-height: 1.55; }
+  .memory-map-view-trace { display: inline-flex; width: max-content; min-height: 44px; align-items: center; margin-top: .45rem; border: 1px solid rgba(99,189,255,.38); border-radius: 11px; background: rgba(22,135,255,.12); padding: .55rem .8rem; color: #dff5ff; font-size: .875rem; font-weight: 650; }
+  .memory-map-view-trace[hidden] { display: none; }
+  .memory-map-accessible-count { font-size: .75rem; line-height: 1.5; color: rgba(216,235,246,.72); }
+  .memory-map-accessible-search { font-size: .75rem; color: rgba(216,235,246,.78); }
+  .memory-map-accessible-search input { min-height: 44px; font-size: .875rem; }
+  .memory-map-accessible-node { min-height: 44px; }
+  .memory-map-fallback li { display: block; padding: 0; }
+  .memory-map-fallback-node { display: grid; width: 100%; min-height: 44px; grid-template-columns: .6rem minmax(0,1fr) auto; gap: .65rem; align-items: center; justify-content: stretch; border: 0; border-radius: 10px; background: transparent; padding: .65rem .5rem; box-shadow: none; text-align: left; }
+  .memory-map-fallback-node:hover { background: rgba(99,189,255,.08); transform: none; }
+  .memory-map-fallback-note strong,
+  .memory-map-fallback-note span,
+  .memory-map-fallback-note a,
+  .memory-map-fallback-node strong,
+  .memory-map-fallback-node small,
+  .memory-map-fallback-node b,
+  .memory-map-footer,
+  .memory-map-shell small,
+  .memory-map-shell dt,
+  .memory-map-inspector .memory-map-node-kind,
+  .memory-map-inspector-summary-grid dt,
+  .memory-map-inspector-metadata .memory-map-inspector-field-label,
+  .memory-map-record small,
+  .memory-map-record code,
+  .memory-map-tag,
+  .memory-map-trace-local-reference,
+  .memory-map-resource-dialog-reference a,
+  .memory-map-resource-dialog-reference code { font-size: .75rem; }
+  .memory-map-trace-resource-preview,
+  .memory-map-trace-resource-link,
+  .memory-map-resource-dialog-actions button,
+  .memory-map-resource-dialog-actions a,
+  .memory-map-resource-dialog-close { min-width: 44px; min-height: 44px; font-size: .75rem; }
 </style>
 
 <style is:global>
@@ -1986,7 +2381,7 @@ const filterSummary = [
 
   @media (max-width: 900px) {
     /* Parent-qualified selectors override the scoped legacy two-column rules. */
-    .memory-map-shell .memory-map-layout { display: block; grid-template-columns: none; padding-bottom: 7.5rem; }
+    .memory-map-shell .memory-map-layout { display: block; grid-template-columns: none; padding-bottom: calc(7.5rem - 2px); }
     .memory-map-shell .memory-map-stage-shell,
     .memory-map-shell .memory-map-fallback { width: 100%; min-height: min(32rem,50vh); max-height: 50vh; }
     .memory-map-shell .memory-map-inspector {
@@ -2259,10 +2654,20 @@ const filterSummary = [
   .memory-map-trace-nav-next { margin-left: auto; }
   .memory-map-trace-concept { min-height: 12rem; align-content: start; }
   .memory-map-trace-concept-prompt { margin: 0; padding: .65rem .7rem; border-left: 2px solid #63bdff; background: rgba(99,189,255,.06); color: rgba(236,248,255,.72); font: .74rem/1.55 Inter,sans-serif; }
-  .memory-map-accessible-picker { max-width: min(36rem,100%); }
-  .memory-map-accessible-picker > summary { cursor: pointer; color: rgba(216,235,246,.62); }
-  .memory-map-accessible-picker ul { display: grid; gap: .3rem; max-height: 14rem; overflow: auto; margin-top: .5rem; padding: .5rem; list-style: none; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: #07111f; }
-  .memory-map-accessible-picker button { width: 100%; min-height: 2rem; padding: .35rem .45rem; border: 0; background: transparent; color: #dff5ff; box-shadow: none; text-align: left; font-size: .68rem; }
+  .memory-map-accessible-picker { width: min(44rem,100%); padding: .85rem; border: 1px solid rgba(99,189,255,.2); border-radius: 16px; background: rgba(7,17,31,.86); }
+  .memory-map-accessible-picker h2 { margin: 0 0 .65rem; color: #effaff; font-size: .875rem; }
+  .memory-map-accessible-search { display: grid; gap: .35rem; margin: 0; color: rgba(216,235,246,.82); font-size: .75rem; }
+  .memory-map-accessible-search input { min-height: 44px; border-radius: 11px; }
+  .memory-map-accessible-count { margin: .5rem 0 0; color: rgba(216,235,246,.76); font-size: .75rem; }
+  .memory-map-accessible-picker ul { display: grid; gap: .35rem; max-height: 20rem; overflow: auto; margin-top: .5rem; padding: .5rem; list-style: none; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: #07111f; }
+  .memory-map-accessible-picker button { display: grid; width: 100%; min-height: 52px; grid-template-columns: minmax(0,1fr) auto; gap: .2rem .75rem; align-items: center; padding: .55rem .65rem; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #dff5ff; box-shadow: none; text-align: left; font-size: .75rem; }
+  .memory-map-accessible-picker button:hover { background: rgba(99,189,255,.08); }
+  .memory-map-accessible-picker button:focus-visible { border-color: #9ad8ff; outline: 2px solid #9ad8ff; outline-offset: 2px; }
+  .memory-map-accessible-picker button[aria-pressed="true"] { border-color: rgba(99,189,255,.46); background: rgba(22,135,255,.16); }
+  .memory-map-accessible-picker button strong { overflow: hidden; color: #effaff; font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
+  .memory-map-accessible-node-kind { color: #8fd0ff; font-weight: 650; }
+  .memory-map-accessible-node-project,
+  .memory-map-accessible-node-state { overflow: hidden; color: rgba(216,235,246,.76); text-overflow: ellipsis; white-space: nowrap; }
 
   @media (min-width: 901px) and (max-width: 1199px) {
     .memory-map-pathway { grid-template-columns: 14rem minmax(0,1fr); }
@@ -2551,5 +2956,110 @@ const filterSummary = [
     .memory-map-stage,
     .memory-map-fallback { min-height: 0; height: 100%; }
     .memory-map-inspector { overflow-y: auto; overscroll-behavior: contain; }
+  }
+</style>
+
+<style is:global>
+  /* Authoritative readability overrides after all legacy map layers. */
+  .memory-map-selection-status { margin: .35rem 0 0; color: rgba(226,242,249,.84); font-size: .8125rem; line-height: 1.55; }
+  .memory-map-view-trace { display: inline-flex; width: max-content; min-height: 44px; align-items: center; margin-top: .45rem; border: 1px solid rgba(99,189,255,.38); border-radius: 11px; background: rgba(22,135,255,.12); padding: .55rem .8rem; color: #dff5ff; font-size: .875rem; font-weight: 650; }
+  .memory-map-view-trace[hidden] { display: none; }
+  .memory-map-accessible-count,
+  .memory-map-accessible-search,
+  .memory-map-fallback-note strong,
+  .memory-map-fallback-note span,
+  .memory-map-fallback-note a,
+  .memory-map-fallback-node strong,
+  .memory-map-fallback-node small,
+  .memory-map-fallback-node b,
+  .memory-map-footer,
+  .memory-map-shell small,
+  .memory-map-shell dt,
+  .memory-map-inspector .memory-map-node-kind,
+  .memory-map-inspector-summary-grid dt,
+  .memory-map-inspector-metadata .memory-map-inspector-field-label,
+  .memory-map-record small,
+  .memory-map-record code,
+  .memory-map-tag,
+  .memory-map-trace-local-reference,
+  .memory-map-resource-dialog-reference a,
+  .memory-map-resource-dialog-reference code { font-size: .75rem; line-height: 1.5; }
+  .memory-map-accessible-count,
+  .memory-map-accessible-search { color: rgba(216,235,246,.72); }
+  .memory-map-accessible-search input { min-height: 44px; font-size: .875rem; }
+  .memory-map-accessible-node { min-height: 44px; }
+  .memory-map-fallback li { display: block; padding: 0; }
+  .memory-map-fallback-node { display: grid; width: 100%; min-height: 44px; grid-template-columns: .6rem minmax(0,1fr) auto; gap: .65rem; align-items: center; justify-content: stretch; border: 0; border-radius: 10px; background: transparent; padding: .65rem .5rem; box-shadow: none; text-align: left; }
+  .memory-map-fallback-node:hover { background: rgba(99,189,255,.08); transform: none; }
+  .memory-map-trace-resource-preview,
+  .memory-map-trace-resource-link,
+  .memory-map-resource-dialog-actions button,
+  .memory-map-resource-dialog-actions a,
+  .memory-map-resource-dialog-close { min-width: 44px; min-height: 44px; font-size: .75rem; }
+
+  /* Final authority for the integrated path rail and first-viewport map geometry. */
+  .memory-map-shell .memory-map-layout,
+  .memory-map-shell.has-trace-selection .memory-map-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(24rem, 38%);
+    gap: .75rem;
+    align-items: start;
+  }
+  .memory-map-shell .memory-map-workspace .memory-map-pathway {
+    grid-template-columns: minmax(8rem, 10rem) minmax(0,1fr);
+    min-height: 4.25rem;
+    padding: .35rem .5rem;
+  }
+  .memory-map-shell.has-trace-selection .memory-map-workspace .memory-map-pathway { padding: .35rem .5rem; }
+  .memory-map-header p:not(.intelligence-eyebrow),
+  .memory-map-inspector > p:not(.intelligence-eyebrow),
+  .memory-map-selection-status,
+  .memory-map-footer { color: var(--console-muted); }
+  .memory-map-count,
+  .memory-map-count small,
+  .memory-map-project-legend-item,
+  .memory-map-inspector dt,
+  .memory-map-inspector .memory-map-node-kind { color: var(--console-subtle); }
+  .memory-map-fit { display: inline-flex; min-height: 44px; align-items: center; border: 1px solid rgba(99,189,255,.38); border-radius: 12px; background: rgba(22,135,255,.12); padding: .55rem .8rem; color: #dff5ff; box-shadow: none; font-size: .75rem; font-weight: 700; }
+  .memory-map-interaction-hint { margin: .35rem 0 0; color: #b4d1e4; font-size: .875rem; line-height: 1.55; }
+  .memory-map-stage { scroll-margin-block: 6rem 8rem; }
+  .memory-map-stage[aria-busy="true"] { cursor: progress; }
+  .memory-map-stage-status { position: absolute; z-index: 3; top: .75rem; left: .75rem; max-width: min(22rem, calc(100% - 1.5rem)); margin: 0; border: 1px solid rgba(99,189,255,.26); border-radius: 10px; background: rgba(4,12,22,.88); padding: .4rem .55rem; color: var(--console-muted); font-size: .75rem; line-height: 1.4; }
+  .memory-map-stage-status:empty { display: none; }
+  .memory-map-sheet-controls button { min-width: 44px; min-height: 44px; padding: .55rem .75rem; color: #dff5ff; font-size: .75rem; }
+  .memory-map-inspector { scroll-padding-block: 1rem calc(7.5rem + env(safe-area-inset-bottom)); }
+  .memory-map-inspector [data-map-inspector-content-panel] { scroll-margin-block: 1rem calc(7.5rem + env(safe-area-inset-bottom)); }
+  .memory-map-legend { color: #b4d1e4; }
+  .memory-map-legend-title { color: #effaff; font-weight: 700; }
+  .memory-map-legend-item,
+  .memory-map-legend-stage { display: inline-flex; min-height: 24px; align-items: center; gap: .28rem; color: #b4d1e4; }
+  .legend-node { display: inline-block; width: .65rem; height: .65rem; flex: 0 0 auto; border-radius: 999px; }
+  .legend-node-selected { background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.2), 0 0 14px rgba(255,255,255,.72); }
+  .legend-node-ambient { background: rgba(99,189,255,.62); box-shadow: 0 0 12px rgba(99,189,255,.62); }
+  .legend-node-decision { background: #ffb454; }
+  .legend-node-reason { background: #9c87ff; }
+  .legend-node-evidence { background: #42d6ac; }
+  .legend-node-artifact { background: #4bb8ff; }
+  @media (min-width: 901px) {
+    .memory-map-shell .memory-map-workspace .memory-map-stage-shell,
+    .memory-map-shell .memory-map-workspace .memory-map-fallback {
+      width: 100%;
+      height: 27.5rem;
+      min-height: 27.5rem;
+      max-height: 27.5rem;
+    }
+    .memory-map-shell .memory-map-layout .memory-map-inspector {
+      height: 34.25rem;
+      min-height: 34.25rem;
+      max-height: 34.25rem;
+    }
+  }
+  @media (max-width: 900px) {
+    .memory-map-shell .memory-map-layout,
+    .memory-map-shell.has-trace-selection .memory-map-layout { display: block; padding-bottom: 7.5rem; }
+    .memory-map-shell .memory-map-workspace .memory-map-pathway { grid-template-columns: 1fr; }
+    .memory-map-shell .memory-map-inspector[data-sheet-state="expanded"] { max-height: 58vh; }
+    .memory-map-shell .memory-map-inspector { bottom: calc(.5rem + env(safe-area-inset-bottom)); padding-bottom: calc(1.1rem + env(safe-area-inset-bottom)); }
+    .memory-map-interaction-hint,
+    .memory-map-header p:not(.intelligence-eyebrow) { font-size: 1rem; }
   }
 </style>

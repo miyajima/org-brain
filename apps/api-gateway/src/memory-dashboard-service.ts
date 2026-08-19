@@ -17,7 +17,7 @@ export type MemoryMapOptions = {
   tenantId: string;
   principal: string;
   scope: "mine" | "org";
-  display?: "top" | "cluster";
+  display?: "top" | "cluster" | "all";
   projectId?: string | null;
   ownerPrincipal?: string | null;
   q?: string | null;
@@ -433,7 +433,7 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
   ).bind(...filter.bindings).first<{ total_count: number }>();
   const totalCount = numeric(countRow?.total_count);
   const limit = Math.max(1, Math.min(1500, options.limit ?? 1500));
-  if (options.display !== "top" && totalCount > limit) {
+  if (options.display !== "top" && options.display !== "all" && totalCount > limit) {
     const clusters = await env.OPEN_BRAIN_DB.prepare(
       `SELECT COALESCE(m.project_id, 'unassigned') AS id,
               COALESCE(m.project_id, 'プロジェクト未設定') AS label,

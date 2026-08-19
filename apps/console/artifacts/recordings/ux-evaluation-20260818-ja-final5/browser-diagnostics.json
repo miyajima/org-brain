@@ -1,0 +1,134 @@
+[
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "message": "[.WebGL-0x11c004e5c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "url": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "message": "[.WebGL-0x11c004e5c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "url": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "message": "[.WebGL-0x11c004e5c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "url": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e"
+  },
+  {
+    "type": "console",
+    "level": "warning",
+    "message": "[.WebGL-0x11c004e5c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "url": "http://127.0.0.1:4321/map?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&view=all"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/skills?tenant_id=default&project_id=org-brain&lang=ja&decision_id=decision-console-e2e&source_hash=e2e-source-hash&start=generate"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/agents?tenant_id=default&project_id=org-brain&lang=ja&agent_id=agent-e2e"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connecting...",
+    "url": "http://127.0.0.1:4321/reviews?tenant_id=default&project_id=org-brain&lang=ja"
+  },
+  {
+    "type": "console",
+    "level": "debug",
+    "message": "[vite] connected.",
+    "url": "http://127.0.0.1:4321/reviews?tenant_id=default&project_id=org-brain&lang=ja"
+  }
+]

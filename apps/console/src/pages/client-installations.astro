@@ -1,9 +1,15 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../lib/dashboard-page";
 
 Astro.response.headers.set("Cache-Control", "no-store");
 
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const copy = {
+  en: { title: "Client installations", body: "Manage unattended hook credentials for Codex, Claude Code, and Cursor by machine and client. Interactive OAuth sessions remain managed by Cloudflare Access and each client.", revoked: "Client installation revoked.", revokeError: "Client installation could not be revoked.", pending: "Pending client installation created.", createError: "Client installation could not be created", oneTime: "This enrollment code is shown only once", expires: "Expires", secretNote: "Store it securely and separately from the service-token secret.", client: "Client", device: "Device label", devicePlaceholder: "Work Mac", create: "Create enrollment", created: "Created", lastUsed: "Last used", never: "Never used", revoke: "Revoke", empty: "No client installations yet." },
+  ja: { title: "クライアント導入", body: "Codex、Claude Code、Cursorの無人hook credentialをマシン・クライアント単位で管理します。対話型OAuth sessionはCloudflare Accessと各クライアントが管理します。", revoked: "クライアント導入を無効化しました。", revokeError: "クライアント導入を無効化できませんでした。", pending: "保留中のクライアント導入を作成しました。", createError: "クライアント導入を作成できませんでした", oneTime: "登録コードは今回だけ表示されます", expires: "有効期限", secretNote: "service tokenのsecretとは分けて安全に保管してください。", client: "クライアント", device: "端末名", devicePlaceholder: "業務用Mac", create: "登録を作成", created: "作成", lastUsed: "最終利用", never: "未使用", revoke: "無効化", empty: "クライアント導入はまだありません。" },
+  zh: { title: "客户端安装", body: "按设备和客户端管理 Codex、Claude Code 与 Cursor 的无人值守 hook 凭据。交互式 OAuth 会话仍由 Cloudflare Access 和各客户端管理。", revoked: "已撤销客户端安装。", revokeError: "无法撤销客户端安装。", pending: "已创建待处理的客户端安装。", createError: "无法创建客户端安装", oneTime: "此注册码仅显示一次", expires: "有效期至", secretNote: "请与 service token 密钥分开安全保存。", client: "客户端", device: "设备名称", devicePlaceholder: "工作 Mac", create: "创建注册", created: "创建于", lastUsed: "最后使用", never: "从未使用", revoke: "撤销", empty: "尚无客户端安装。" }
+}[lang];
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const accessJwt = Astro.request.headers.get("cf-access-jwt-assertion")?.trim() || "";
 const api = async (path: string, init: RequestInit = {}) => {
@@ -30,8 +36,8 @@ if (Astro.request.method === "POST") {
       `/api/v1/mcp-client-installations/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(tenantId)}`,
       { method: "DELETE", headers: { "x-csrf-token": csrf } }
     );
-    if (response.ok) message = "Client installation revoked.";
-    else error = "Client installation could not be revoked.";
+    if (response.ok) message = copy.revoked;
+    else error = copy.revokeError;
   } else {
     const response = await api("/api/v1/mcp-client-installations", {
       method: "POST",
@@ -48,12 +54,12 @@ if (Astro.request.method === "POST") {
         code: payload.data.enrollment_code,
         expiresAt: Number(payload.data.enrollment_expires_at)
       };
-      message = "Pending client installation created.";
+      message = copy.pending;
     } else {
       const errorCode = typeof payload?.error?.code === "string" ? payload.error.code : null;
       const errorMessage = typeof payload?.error?.message === "string" ? payload.error.message : null;
       error = errorMessage ??
-        `Client installation could not be created (HTTP ${response.status}${errorCode ? `, ${errorCode}` : ""}).`;
+        `${copy.createError} (HTTP ${response.status}${errorCode ? `, ${errorCode}` : ""}).`;
     }
   }
 }
@@ -65,29 +71,26 @@ const payload: any = await response.json().catch(() => null);
 const installations: any[] = payload?.data?.installations ?? [];
 const formatDate = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value)
-    ? new Date(value).toLocaleString("ja-JP")
-    : "未使用";
+    ? new Date(value).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")
+    : copy.never;
 ---
-<BaseLayout title="Client installations">
-  <section class="space-y-5">
-    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
+<BaseLayout title={copy.title} lang={lang}>
+  <section class="admin-page">
+    <header class="admin-page-header">
       <p class="surface-label">{tenantId}</p>
-      <h1 class="mt-2 text-3xl font-semibold">Client installations</h1>
-      <p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-        Codex、Claude Code、Cursorの無人hook credentialをマシン・クライアント単位で管理します。
-        対話型OAuth sessionはCloudflare Accessと各クライアントが管理します。
-      </p>
+      <h1>{copy.title}</h1>
+      <p>{copy.body}</p>
     </header>
 
-    {message && <p class="text-emerald-200">{message}</p>}
-    {error && <p class="text-rose-200">{error}</p>}
+    {message && <p class="admin-notice admin-notice-success" role="status">{message}</p>}
+    {error && <p class="admin-notice admin-notice-error" role="alert">{error}</p>}
 
     {enrollment && (
       <aside class="rounded-[20px] border border-amber-300/30 bg-amber-300/[0.08] p-5">
-        <p class="font-semibold text-amber-100">登録コードは今回だけ表示されます</p>
+        <p class="font-semibold text-amber-100">{copy.oneTime}</p>
         <code class="mt-3 block break-all rounded-xl bg-black/40 p-3 text-sm">{enrollment.code}</code>
         <p class="mt-2 text-xs text-amber-100/70">
-          有効期限: {formatDate(enrollment.expiresAt)}。service tokenのsecretとは別に安全に扱ってください。
+          {copy.expires}: {formatDate(enrollment.expiresAt)}。{copy.secretNote}
         </p>
       </aside>
     )}
@@ -96,7 +99,7 @@ const formatDate = (value: unknown) =>
       <input type="hidden" name="csrf_token" class="csrf-token" />
       <input type="hidden" name="action" value="create" />
       <label>
-        <span class="field-label">Client</span>
+        <span class="field-label">{copy.client}</span>
         <select name="client_type" required>
           <option value="codex">Codex</option>
           <option value="claude">Claude Code</option>
@@ -104,10 +107,10 @@ const formatDate = (value: unknown) =>
         </select>
       </label>
       <label class="md:col-span-2">
-        <span class="field-label">Device label</span>
-        <input name="device_label" maxlength="80" placeholder="Work Mac" required />
+        <span class="field-label">{copy.device}</span>
+        <input name="device_label" maxlength="80" placeholder={copy.devicePlaceholder} required />
       </label>
-      <div class="md:col-span-3"><button type="submit">Create enrollment</button></div>
+      <div class="md:col-span-3"><button type="submit">{copy.create}</button></div>
     </form>
 
     <div class="grid gap-3">
@@ -120,7 +123,7 @@ const formatDate = (value: unknown) =>
               <span class="rounded-full border border-white/10 px-2 py-0.5 text-xs">{installation.status}</span>
             </div>
             <p class="mt-2 text-xs text-zinc-500">
-              作成 {formatDate(installation.created_at)} · 最終利用 {formatDate(installation.last_used_at)}
+              {copy.created} {formatDate(installation.created_at)} · {copy.lastUsed} {formatDate(installation.last_used_at)}
             </p>
           </div>
           {installation.status !== "revoked" && (
@@ -128,11 +131,12 @@ const formatDate = (value: unknown) =>
               <input type="hidden" name="csrf_token" class="csrf-token" />
               <input type="hidden" name="action" value="revoke" />
               <input type="hidden" name="installation_id" value={installation.id} />
-              <button type="submit">Revoke</button>
+              <button type="submit">{copy.revoke}</button>
             </form>
           )}
         </article>
       ))}
+      {installations.length === 0 && <p class="admin-empty" role="status">{copy.empty}</p>}
     </div>
   </section>
 </BaseLayout>

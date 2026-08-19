@@ -1,9 +1,14 @@
 import {
+  ACCESS_POLICY_RESOURCE_TYPES,
   DASHBOARD_SOURCE_TYPES,
+  agentContextPreviewSchema,
   dashboardActivityQuerySchema,
   dashboardKnowledgeGraphQuerySchema,
   dashboardStrataQuerySchema,
+  decisionBriefingQuerySchema,
+  decisionTraceQuerySchema,
   memoryMapTraceQuerySchema,
+  type AccessPolicyResourceType,
   type DashboardSourceType
 } from "@org-brain/contracts";
 import { HttpError, runRecordedScheduledJob, type AgentMemoryEventV1, type OrgPermission } from "@org-brain/shared";
@@ -18,6 +23,15 @@ import {
   sendAgentMessage
 } from "./agent-message-service";
 import { getActivityDashboard } from "./activity-dashboard-service";
+import { getAccessPolicy, getAccessPolicyShadowSummary, updateAccessPolicy } from "./access-policy-service";
+import {
+  createAgent,
+  getAgent,
+  listAgents,
+  resolveAgentLoadoutContext,
+  updateAgent,
+  updateAgentLoadout
+} from "./agent-loadout-service";
 import { appendAuditEvent, listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
 import {
   getDomainContext,
@@ -75,6 +89,7 @@ import {
   rebuildSemanticIndex
 } from "./retrieval-index-service";
 import { getOperationsStatus } from "./operations-service";
+import { getDecisionBriefing, getDecisionMap, getDecisionTrace } from "./decision-console-service";
 import { runOpsWatchdog } from "./ops-watchdog-service";
 import { assertRequestRateLimit } from "./rate-limit-service";
 import { extractMemoryCandidates } from "./memory-extraction-service";
@@ -148,6 +163,17 @@ import {
 import { getMemoryStrata, getMemoryStrataDetail } from "./memory-strata-service";
 import { getMemoryAnalytics, getMemoryMap } from "./memory-dashboard-service";
 import { getMemoryMapTrace } from "./memory-map-trace-service";
+import {
+  availableSkillProviders,
+  createSkillAsset,
+  createSkillVersion,
+  exportSkillAsset,
+  generateSkillAsset,
+  getSkillAsset,
+  listSkillAssets,
+  publishSkillAsset,
+  retireSkillAsset
+} from "./skill-asset-service";
 import { getMemoryQualityRun, listMemoryQualityRuns } from "./memory-quality-service";
 import { mountMcp } from "./mcp";
 import {
@@ -254,6 +280,19 @@ function assertFeatureEnabled(env: Env, key: "KNOWLEDGE_RESOURCE_INGESTION_ENABL
   if (env[key] !== "true") throw new HttpError(404, "feature_disabled", "Feature is not enabled for this deployment");
 }
 
+function assertDecisionConsoleEnabled(env: Env) {
+  if (!["beta", "on"].includes(env.DECISION_CONSOLE_MODE ?? "off")) {
+    throw new HttpError(404, "feature_disabled", "Decision Console is not enabled for this deployment");
+  }
+}
+
+function accessPolicyResourceType(value: string): AccessPolicyResourceType {
+  if (!ACCESS_POLICY_RESOURCE_TYPES.includes(value as AccessPolicyResourceType)) {
+    throw new HttpError(400, "invalid_resource_type", "Unsupported access policy resource type");
+  }
+  return value as AccessPolicyResourceType;
+}
+
 function requireIdempotencyKey(c: { req: { header(name: string): string | undefined } }): string {
   const value = c.req.header("x-idempotency-key")?.trim();
   if (!value || value.length > 256) {
@@ -352,11 +391,13 @@ function permissionForRequest(method: string, path: string): OrgPermission {
   ) return "admin";
   if (path.startsWith("/v1/business-categories")) return method === "GET" ? "read" : "admin";
   if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
+  if (path.startsWith("/v1/access-policies")) return method === "GET" ? "read" : "share";
   if (path.startsWith("/v1/audit-events")) return "export";
   if (
     path.endsWith("/search") ||
     path.endsWith("/profile") ||
     path.endsWith("/context") ||
+    path.endsWith("/context-preview") ||
     path.endsWith("/review-queue") ||
     path.startsWith("/v1/context/") ||
     path === "/api/context/enrich"
@@ -621,6 +662,290 @@ app.get("/v1/domain-context", async (c) => {
   }));
 });
 
+app.get("/v1/decision-briefing", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const parsed = decisionBriefingQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id"),
+    limit: c.req.query("limit")
+  });
+  if (!parsed.success) throw new HttpError(400, "invalid_query", parsed.error.issues[0]?.message ?? "Invalid query");
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  return jsonOk(c, await getDecisionBriefing(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    projectId: parsed.data.project_id,
+    limit: parsed.data.limit
+  }));
+});
+
+app.get("/v1/decisions/:id/trace", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const parsed = decisionTraceQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id"),
+    include_inferred: c.req.query("include_inferred"),
+    node_limit: c.req.query("node_limit"),
+    edge_limit: c.req.query("edge_limit")
+  });
+  if (!parsed.success) throw new HttpError(400, "invalid_query", parsed.error.issues[0]?.message ?? "Invalid query");
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  return jsonOk(c, await getDecisionTrace(c.env, {
+    tenantId,
+    decisionId: c.req.param("id"),
+    principal: getApiPrincipal(c),
+    projectId: parsed.data.project_id,
+    includeInferred: parsed.data.include_inferred,
+    nodeLimit: parsed.data.node_limit,
+    edgeLimit: parsed.data.edge_limit
+  }));
+});
+
+app.get("/v1/decisions/:id/map", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const parsed = decisionTraceQuerySchema.safeParse({
+    tenant_id: c.req.query("tenant_id"),
+    project_id: c.req.query("project_id"),
+    include_inferred: c.req.query("include_inferred"),
+    node_limit: c.req.query("node_limit"),
+    edge_limit: c.req.query("edge_limit")
+  });
+  if (!parsed.success) throw new HttpError(400, "invalid_query", parsed.error.issues[0]?.message ?? "Invalid query");
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id);
+  return jsonOk(c, await getDecisionMap(c.env, {
+    tenantId,
+    decisionId: c.req.param("id"),
+    principal: getApiPrincipal(c),
+    projectId: parsed.data.project_id,
+    includeInferred: parsed.data.include_inferred,
+    nodeLimit: parsed.data.node_limit,
+    edgeLimit: parsed.data.edge_limit
+  }));
+});
+
+app.get("/v1/skill-providers", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, { providers: availableSkillProviders(c.env) });
+});
+
+app.post("/v1/skills/generate", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const payload = body && typeof body === "object" && !Array.isArray(body)
+    ? { ...body as Record<string, unknown>, idempotency_key: requireIdempotencyKey(c) }
+    : body;
+  return jsonOk(c, await generateSkillAsset(c.env, payload, {
+    tenantId,
+    actorPrincipal: getApiPrincipal(c)
+  }), 202);
+});
+
+app.get("/v1/skills", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listSkillAssets(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    q: c.req.query("q") ?? null,
+    status: c.req.query("status") ?? null,
+    limit: Number(c.req.query("limit") ?? 50)
+  }));
+});
+
+app.post("/v1/skills", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await createSkillAsset(c.env, body, {
+    tenantId,
+    actorPrincipal: getApiPrincipal(c)
+  }), 201);
+});
+
+app.get("/v1/skills/:id/export", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await exportSkillAsset(c.env, {
+    tenantId,
+    assetId: c.req.param("id"),
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    versionId: c.req.query("version_id") ?? null
+  }));
+});
+
+app.get("/v1/skills/:id", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getSkillAsset(c.env, {
+    tenantId,
+    assetId: c.req.param("id"),
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null
+  }));
+});
+
+app.post("/v1/skills/:id/versions", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  return jsonOk(c, await createSkillVersion(c.env, tenantId, c.req.param("id"), body, {
+    actorPrincipal: getApiPrincipal(c),
+    isAdmin: await isTenantAdmin(c, tenantId)
+  }), 201);
+});
+
+app.post("/v1/skills/:id/publish", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  return jsonOk(c, await publishSkillAsset(c.env, tenantId, c.req.param("id"), body, {
+    actorPrincipal: getApiPrincipal(c),
+    isAdmin: await isTenantAdmin(c, tenantId)
+  }));
+});
+
+app.post("/v1/skills/:id/retire", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  return jsonOk(c, await retireSkillAsset(c.env, tenantId, c.req.param("id"), {
+    actorPrincipal: getApiPrincipal(c),
+    isAdmin: await isTenantAdmin(c, tenantId)
+  }));
+});
+
+app.get("/v1/agents", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await listAgents(c.env, {
+    tenantId,
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    limit: Number(c.req.query("limit") ?? 50)
+  }));
+});
+
+app.post("/v1/agents", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await createAgent(c.env, body, {
+    tenantId,
+    actorPrincipal: getApiPrincipal(c)
+  }), 201);
+});
+
+app.get("/v1/agents/:id", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getAgent(c.env, {
+    tenantId,
+    agentId: c.req.param("id"),
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null
+  }));
+});
+
+app.patch("/v1/agents/:id", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  return jsonOk(c, await updateAgent(c.env, tenantId, c.req.param("id"), body, {
+    actorPrincipal: getApiPrincipal(c),
+    isAdmin: await isTenantAdmin(c, tenantId)
+  }));
+});
+
+app.put("/v1/agents/:id/loadouts/:loadoutId", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  return jsonOk(c, await updateAgentLoadout(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    c.req.param("loadoutId"),
+    body,
+    { actorPrincipal: getApiPrincipal(c), isAdmin: await isTenantAdmin(c, tenantId) }
+  ));
+});
+
+app.post("/v1/agents/:id/context-preview", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const parsed = agentContextPreviewSchema.safeParse(body);
+  if (!parsed.success) throw new HttpError(400, "invalid_payload", parsed.error.issues[0]?.message ?? "Invalid preview request");
+  const tenantId = assertApiTenantAccess(c, parsed.data.tenant_id ?? c.req.query("tenant_id"));
+  const agent = await getAgent(c.env, {
+    tenantId,
+    agentId: c.req.param("id"),
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null
+  });
+  return jsonOk(c, await resolveAgentLoadoutContext(c.env, {
+    tenantId,
+    agentKey: agent.agent.agent_key,
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    taskText: parsed.data.task_text,
+    maxTokens: parsed.data.max_tokens,
+    recordUsage: parsed.data.record_usage,
+    usageEvent: "previewed"
+  }));
+});
+
+app.get("/v1/access-policies/:resourceType/:resourceId", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getAccessPolicy(c.env, {
+    tenantId,
+    resourceType: accessPolicyResourceType(c.req.param("resourceType")),
+    resourceId: c.req.param("resourceId"),
+    principal: getApiPrincipal(c),
+    projectId: c.req.query("project_id") ?? null,
+    isAdmin: await isTenantAdmin(c, tenantId)
+  }));
+});
+
+app.put("/v1/access-policies/:resourceType/:resourceId", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  const payload = body && typeof body === "object" && !Array.isArray(body)
+    ? {
+        ...body as Record<string, unknown>,
+        tenant_id: tenantId,
+        resource_type: accessPolicyResourceType(c.req.param("resourceType")),
+        resource_id: c.req.param("resourceId")
+      }
+    : body;
+  return jsonOk(c, await updateAccessPolicy(c.env, payload, {
+    tenantId,
+    actorPrincipal: getApiPrincipal(c),
+    isAdmin: await isTenantAdmin(c, tenantId)
+  }));
+});
+
+app.get("/v1/ops/access-policy-shadow", async (c) => {
+  assertDecisionConsoleEnabled(c.env);
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!await isTenantAdmin(c, tenantId)) {
+    throw new HttpError(403, "forbidden", "Tenant admin role is required");
+  }
+  const rawLimit = Number(c.req.query("limit") ?? 100);
+  if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 500) {
+    throw new HttpError(400, "invalid_query", "limit must be an integer between 1 and 500");
+  }
+  return jsonOk(c, await getAccessPolicyShadowSummary(c.env, tenantId, {
+    limit: rawLimit,
+    includeResolved: c.req.query("include_resolved") === "true"
+  }));
+});
+
 app.get("/v1/dashboard/activity", async (c) => {
   const parsed = dashboardActivityQuerySchema.safeParse({
     tenant_id: c.req.query("tenant_id"),
@@ -742,7 +1067,7 @@ app.get("/v1/dashboard/memory-map", async (c) => {
     throw new HttpError(400, "invalid_period", "memory map period cannot exceed 180 days");
   }
   const limit = Number.parseInt(c.req.query("limit") ?? "1500", 10);
-  const display = c.req.query("display") === "top" ? "top" : c.req.query("display") === "cluster" ? "cluster" : undefined;
+  const display = c.req.query("display") === "top" ? "top" : c.req.query("display") === "cluster" ? "cluster" : c.req.query("display") === "all" ? "all" : undefined;
   return jsonOk(c, await getMemoryMap(c.env, {
     tenantId,
     principal: getApiPrincipal(c),

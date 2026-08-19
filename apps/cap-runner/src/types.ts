@@ -20,6 +20,11 @@ export type Env = {
   AUTONOMY_JUDGE_URL?: string;
   /** Optional bearer credential for the managed AI council endpoint. */
   AUTONOMY_JUDGE_API_KEY?: string;
+  /** Provider credentials are configured as Worker secrets. */
+  GEMINI_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  SKILL_GENERATION_PROVIDERS_JSON?: string;
 };
 
 export type CapabilityContext = {

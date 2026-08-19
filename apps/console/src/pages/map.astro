@@ -1,0 +1,78 @@
+---
+import DecisionTraceMap from "../components/decision/DecisionTraceMap.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { emptyDecisionBriefing, emptyDecisionTrace, normalizeDecisionBriefing, normalizeDecisionTrace, scopedHref } from "../lib/decision-console-ui";
+
+const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
+const behavior = decisionConsoleBehavior(mode);
+const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+if (!behavior.enabled) return Astro.redirect(scopedHref("/memories/constellation", params), 307);
+const decisionId = Astro.url.searchParams.get("decision_id")?.trim() ?? "";
+const briefing = await fetchDashboardData(
+  new URL(dashboardApiPath("/api/v1/decision-briefing", apiParams, { limit: 100 }), Astro.url),
+  normalizeDecisionBriefing,
+  emptyDecisionBriefing()
+);
+const trace = decisionId
+  ? await fetchDashboardData(
+      new URL(dashboardApiPath(`/api/v1/decisions/${encodeURIComponent(decisionId)}/map`, apiParams, {
+        node_limit: 150,
+        edge_limit: 300,
+        include_inferred: "false"
+      }), Astro.url),
+      normalizeDecisionTrace,
+      emptyDecisionTrace()
+  )
+  : { data: emptyDecisionTrace(), error: null as string | null };
+const selectedDecision = briefing.data.items.find((item) => item.id === decisionId);
+const copy = {
+  en: { eyebrow: "Decision trace", title: "Decision Trace Map", allKnowledge: "All knowledge", choose: "Choose a decision", search: "Find a decision", open: "Open map", empty: "No readable decisions are available in this scope.", error: "Map data is unavailable" },
+  ja: { eyebrow: "決定の道筋", title: "決定の道筋マップ", allKnowledge: "全知識を表示", choose: "中心にする決定を選択", search: "決定を検索", open: "マップを開く", empty: "この範囲で閲覧できる決定はありません。", error: "マップデータを利用できません" },
+  zh: { eyebrow: "决策路径", title: "决策路径地图", allKnowledge: "查看全部知识", choose: "选择中心决策", search: "搜索决策", open: "打开地图", empty: "此范围内没有可读决策。", error: "地图数据不可用" }
+}[lang];
+const allKnowledgeParams = new URLSearchParams(params);
+allKnowledgeParams.set("view", "all");
+const allKnowledgeHrefUrl = new URL(scopedHref("/memories/constellation", allKnowledgeParams), "https://console.invalid");
+allKnowledgeHrefUrl.searchParams.set("view", "all");
+const allKnowledgeHref = `${allKnowledgeHrefUrl.pathname}${allKnowledgeHrefUrl.search}`;
+---
+<BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
+  <section class="decision-map-page">
+    <header class="decision-page-header">
+      <div>
+        <p class="decision-eyebrow">{copy.eyebrow}</p>
+        <h1>{copy.title}</h1>
+      </div>
+      <div class="decision-header-actions">
+        <a class="decision-action decision-action-secondary" data-all-knowledge-map href={allKnowledgeHref}>{copy.allKnowledge}</a>
+        {selectedDecision && <a class="decision-action" href={scopedHref(`/decisions/${encodeURIComponent(selectedDecision.id)}`, params)}>{selectedDecision.title}</a>}
+      </div>
+    </header>
+    {(briefing.error || trace.error) && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{trace.error ?? briefing.error}</span></div>}
+    <details class="decision-map-picker">
+      <summary>{copy.choose}{selectedDecision ? ` · ${selectedDecision.title}` : ""}</summary>
+      <label>{copy.search}<input type="search" data-map-picker-search placeholder={copy.search} /></label>
+      <div data-map-picker-list>
+        {briefing.data.items.map((item) => {
+          const next = new URLSearchParams(params);
+          next.set("decision_id", item.id);
+          return <a href={`/map?${next.toString()}`} data-map-picker-item data-search={`${item.title} ${item.decision} ${item.reason_summary}`.toLocaleLowerCase(lang)}>
+            <strong>{item.title}</strong><span>{item.reason_summary}</span><small>{copy.open} →</small>
+          </a>;
+        })}
+      </div>
+      {briefing.data.items.length === 0 && <p class="decision-empty">{copy.empty}</p>}
+    </details>
+    {decisionId && <DecisionTraceMap trace={trace.data} decisionId={decisionId} tenantId={tenantId} projectId={projectId} locale={lang} />}
+  </section>
+  <script>
+    const search = document.querySelector<HTMLInputElement>("[data-map-picker-search]");
+    const items = [...document.querySelectorAll<HTMLElement>("[data-map-picker-item]")];
+    search?.addEventListener("input", () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      for (const item of items) item.hidden = Boolean(query) && !(item.dataset.search || "").includes(query);
+    });
+  </script>
+</BaseLayout>

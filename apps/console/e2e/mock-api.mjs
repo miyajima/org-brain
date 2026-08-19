@@ -170,6 +170,190 @@ function traceMapFor(projectId) {
   };
 }
 
+function knowledgeMapNode(id, nodeType, projectId, values = {}) {
+  const isMemory = nodeType === "memory";
+  const isDecision = nodeType === "decision";
+  const isProject = nodeType === "project";
+  const isEntity = nodeType === "entity";
+  return {
+    id,
+    node_type: nodeType,
+    memory_id: values.memory_id ?? (isMemory ? id.replace(/^memory:/u, "") : null),
+    decision_id: isDecision ? values.decision_id ?? id.replace(/^decision:/u, "") : null,
+    related_memory_id: isDecision ? values.memory_id ?? null : null,
+    entity_id: isEntity ? values.entity_id ?? id.replace(/^entity:/u, "") : null,
+    entity_type: isEntity ? values.entity_type ?? "concept" : null,
+    tenant_id: "default",
+    label: values.label ?? id,
+    summary: values.summary ?? values.label ?? id,
+    project_id: projectId,
+    owner_principal: isMemory || isDecision ? "user:e2e-login-sub" : null,
+    created_by_principal: isMemory || isDecision ? "user:e2e-login-sub" : null,
+    reference_count: values.reference_count ?? (isProject ? 6 : isEntity ? 4 : 2),
+    consumer_count: values.consumer_count ?? (isMemory ? 2 : 0),
+    used_count: values.used_count ?? (isMemory ? 3 : 0),
+    utilization_rate: isMemory ? values.utilization_rate ?? 0.62 : null,
+    net_saved_tokens: values.net_saved_tokens ?? (isMemory ? 180 : 0),
+    injected_tokens: values.injected_tokens ?? (isMemory ? 52 : 0),
+    member_count: values.member_count ?? (isProject ? 3 : undefined),
+    entity_link_count: isEntity ? values.entity_link_count ?? 3 : undefined,
+    updated_at: now,
+    decision_type: isDecision ? values.decision_type ?? "decision" : null,
+    confirmation_state: isDecision ? values.confirmation_state ?? "confirmed" : null,
+    confidence_score: isDecision ? values.confidence_score ?? 0.92 : null
+  };
+}
+
+function allKnowledgeMapFor(projectId) {
+  if (projectId && projectId !== "org-brain") return traceMapFor(projectId);
+  const project = "org-brain";
+  const sharedProject = "delivery-ops";
+  const nodes = [
+    knowledgeMapNode("tenant:default", "tenant", null, { label: "Org Brain workspace", summary: "All readable knowledge", member_count: 3, reference_count: 12 }),
+    knowledgeMapNode("project:org-brain", "project", project, { label: "Org Brain · org-brain", summary: "Decision-first workspace", member_count: 3, reference_count: 8 }),
+    knowledgeMapNode("project:delivery-ops", "project", sharedProject, { label: "Delivery Ops", summary: "Shared delivery knowledge", member_count: 2, reference_count: 6 }),
+    knowledgeMapNode("memory:auth-acl", "memory", project, { label: "Login principal group ACL design", summary: "Authenticated principals can read shared organization memory", memory_id: "mem_auth_group_acl", reference_count: 5, net_saved_tokens: 260 }),
+    knowledgeMapNode("memory:canonical-api", "memory", project, { label: "Canonical API endpoint decision", summary: "Use one canonical endpoint to prevent configuration drift", memory_id: "mem-orgbrain-api", reference_count: 4, net_saved_tokens: 220 }),
+    knowledgeMapNode("memory:skill-publish", "memory", project, { label: "Publish skills as private drafts", summary: "Generated skills stay private until an owner publishes them", memory_id: "mem-skill-publish", reference_count: 3, net_saved_tokens: 190 }),
+    knowledgeMapNode("memory:agent-loadout", "memory", sharedProject, { label: "ACL-first agent loadout", summary: "Resolve agent context only after access checks", memory_id: "mem-agent-loadout", reference_count: 4, net_saved_tokens: 240 }),
+    knowledgeMapNode("memory:review-loop", "memory", sharedProject, { label: "Review before release", summary: "A review gate catches stale decisions before rollout", memory_id: "mem-review-loop", reference_count: 3, net_saved_tokens: 150 }),
+    knowledgeMapNode("decision:rationale-e2e", "decision", project, { label: "Canonical API endpoint decision", summary: "Adopt ORGBRAIN_API_URL as the canonical endpoint", memory_id: "mem_auth_group_acl", decision_id: "rationale-e2e" }),
+    knowledgeMapNode("decision:skill-publish", "decision", project, { label: "Skill publish boundary", summary: "Publish only after owner verification", memory_id: "mem-skill-publish", decision_id: "rationale-skill-publish" }),
+    knowledgeMapNode("decision:review-loop", "decision", sharedProject, { label: "Release review gate", summary: "Keep a human review gate before rollout", memory_id: "mem-review-loop", decision_id: "rationale-review-loop" }),
+    knowledgeMapNode("entity:acl-policy", "entity", project, { label: "ACL-first access", summary: "Shared access policy concept", entity_id: "acl-policy", reference_count: 7, entity_link_count: 4 }),
+    knowledgeMapNode("entity:release-gate", "entity", sharedProject, { label: "Release gate", summary: "Review and verification concept", entity_id: "release-gate", reference_count: 5, entity_link_count: 3 })
+  ];
+  const extraProjects = [
+    { id: "context-lab", label: "Context Lab", summary: "Reusable context patterns" },
+    { id: "support-ops", label: "Support Ops", summary: "Support response knowledge" },
+    { id: "product-research", label: "Product Research", summary: "Validated product learning" },
+    { id: "governance", label: "Governance", summary: "Review and access controls" }
+  ];
+  const projectIds = [project, sharedProject, ...extraProjects.map((item) => item.id)];
+  for (const item of extraProjects) {
+    nodes.push(knowledgeMapNode(`project:${item.id}`, "project", item.id, {
+      label: item.label,
+      summary: item.summary,
+      member_count: 0,
+      reference_count: 0
+    }));
+  }
+  const extraEntitySpecs = [
+    ["policy-boundary", "Policy boundary", "Access and lifecycle boundary"],
+    ["evidence-loop", "Evidence loop", "Reviewable evidence chain"],
+    ["context-window", "Context window", "Bounded context selection"],
+    ["owner-review", "Owner review", "Human publish gate"],
+    ["freshness-check", "Freshness check", "Staleness detection" ]
+  ];
+  for (const [id, label, summary] of extraEntitySpecs) {
+    nodes.push(knowledgeMapNode(`entity:${id}`, "entity", project, {
+      label,
+      summary,
+      entity_id: id,
+      entity_link_count: 0,
+      reference_count: 0
+    }));
+  }
+  for (let index = 1; index <= 32; index += 1) {
+    const projectId = projectIds[(index - 1) % projectIds.length];
+    const memoryKey = `fixture-${String(index).padStart(2, "0")}`;
+    nodes.push(knowledgeMapNode(`memory:${memoryKey}`, "memory", projectId, {
+      memory_id: `mem-${memoryKey}`,
+      label: `Fixture knowledge ${String(index).padStart(2, "0")}`,
+      summary: `Synthetic shared knowledge for ${projectId} · scenario ${index}`,
+      reference_count: 2 + (index % 6),
+      net_saved_tokens: 90 + index * 11,
+      utilization_rate: 0.35 + (index % 6) * 0.08
+    }));
+    if (index % 4 === 0) {
+      nodes.push(knowledgeMapNode(`decision:fixture-${String(index).padStart(2, "0")}`, "decision", projectId, {
+        memory_id: `mem-${memoryKey}`,
+        decision_id: `rationale-fixture-${String(index).padStart(2, "0")}`,
+        label: `Fixture decision ${String(index).padStart(2, "0")}`,
+        summary: "Synthetic decision with a reviewable rationale"
+      }));
+    }
+  }
+  const link = (id, source, target, relation, values = {}) => ({ id, source, target, relation, directed: values.directed ?? true, inferred: values.inferred ?? false, weight: values.weight ?? 1, confidence: values.confidence ?? 0.94, cross_project: values.cross_project ?? false });
+  const links = [
+    link("tenant-project:org-brain", "tenant:default", "project:org-brain", "contains"),
+    link("tenant-project:delivery-ops", "tenant:default", "project:delivery-ops", "contains"),
+    link("project-memory:auth-acl", "project:org-brain", "memory:auth-acl", "contains"),
+    link("project-memory:canonical-api", "project:org-brain", "memory:canonical-api", "contains"),
+    link("project-memory:skill-publish", "project:org-brain", "memory:skill-publish", "contains"),
+    link("project-memory:agent-loadout", "project:delivery-ops", "memory:agent-loadout", "contains"),
+    link("project-memory:review-loop", "project:delivery-ops", "memory:review-loop", "contains"),
+    link("memory-decision:api", "memory:canonical-api", "decision:rationale-e2e", "explains"),
+    link("memory-decision:skill", "memory:skill-publish", "decision:skill-publish", "explains"),
+    link("memory-decision:review", "memory:review-loop", "decision:review-loop", "explains"),
+    link("memory-entity:auth", "memory:auth-acl", "entity:acl-policy", "references"),
+    link("memory-entity:loadout", "memory:agent-loadout", "entity:acl-policy", "references", { cross_project: true }),
+    link("memory-entity:release", "memory:review-loop", "entity:release-gate", "references"),
+    link("decision-entity:skill", "decision:skill-publish", "entity:acl-policy", "supports"),
+    link("decision-entity:review", "decision:review-loop", "entity:release-gate", "supports"),
+    link("inferred:api-review", "decision:rationale-e2e", "decision:review-loop", "related", { inferred: true, confidence: 0.58, cross_project: true })
+  ];
+  for (const projectId of extraProjects.map((item) => item.id)) {
+    links.push(link(`tenant-project:${projectId}`, "tenant:default", `project:${projectId}`, "contains"));
+  }
+  for (let index = 1; index <= 32; index += 1) {
+    const projectId = projectIds[(index - 1) % projectIds.length];
+    const memoryKey = `fixture-${String(index).padStart(2, "0")}`;
+    const memoryNodeId = `memory:${memoryKey}`;
+    links.push(link(`project-memory:${memoryKey}`, `project:${projectId}`, memoryNodeId, "contains"));
+    if (index > 1) {
+      const previousKey = `fixture-${String(index - 1).padStart(2, "0")}`;
+      links.push(link(`memory-related:${previousKey}:${memoryKey}`, `memory:${previousKey}`, memoryNodeId, "related", {
+        directed: false,
+        inferred: index % 3 === 0,
+        confidence: index % 3 === 0 ? 0.64 : 0.88,
+        cross_project: projectIds[(index - 2) % projectIds.length] !== projectId
+      }));
+    }
+    const entityId = extraEntitySpecs[(index - 1) % extraEntitySpecs.length][0];
+    links.push(link(`memory-entity:${memoryKey}`, memoryNodeId, `entity:${entityId}`, "references", {
+      inferred: index % 5 === 0,
+      confidence: index % 5 === 0 ? 0.61 : 0.9,
+      cross_project: projectId !== project
+    }));
+    if (index % 4 === 0) {
+      const decisionId = `decision:fixture-${String(index).padStart(2, "0")}`;
+      links.push(link(`memory-decision:${memoryKey}`, memoryNodeId, decisionId, "explains"));
+      links.push(link(`decision-entity:${memoryKey}`, decisionId, `entity:${entityId}`, "supports", { cross_project: projectId !== project }));
+    }
+  }
+  for (const projectNode of nodes.filter((node) => node.node_type === "project")) {
+    const memberCount = nodes.filter((node) => node.project_id === projectNode.project_id && node.node_type !== "project").length;
+    projectNode.member_count = memberCount;
+    projectNode.reference_count = memberCount;
+  }
+  nodes[0].member_count = projectIds.length;
+  nodes[0].reference_count = nodes.filter((node) => node.node_type === "memory").length;
+  return {
+    contract_version: "dashboard/v1",
+    scope: "org",
+    cluster_mode: false,
+    total_count: nodes.length,
+    visible_count: nodes.length,
+    memory_visible_count: nodes.filter((node) => node.node_type === "memory").length,
+    project_count: nodes.filter((node) => node.node_type === "project").length,
+    entity_count: nodes.filter((node) => node.node_type === "entity").length,
+    decision_count: nodes.filter((node) => node.node_type === "decision").length,
+    related_count: nodes.length - 1,
+    relationship_count: links.length,
+    cross_project_link_count: links.filter((item) => item.cross_project).length,
+    truncated: false,
+    nodes,
+    links,
+    clusters: projectIds.map((projectId) => ({
+      id: `cluster:${projectId}`,
+      kind: "project",
+      label: projectId,
+      node_ids: nodes.filter((node) => node.project_id === projectId).map((node) => node.id)
+    }))
+  };
+}
+
 function traceResource(projectId, role, language, title, kind, uri, locator) {
   const resourceId = `resource-${projectId}-${role}`;
   const versionId = `${resourceId}-v1`;
@@ -603,6 +787,129 @@ const decisionContext = {
   related: []
 };
 
+const consoleDecisionId = "decision-console-e2e";
+const consolePolicy = (resourceType, resourceId, storageLocation = "d1") => ({
+  id: `policy:${resourceType}:${resourceId}`,
+  tenant_id: "default",
+  resource_type: resourceType,
+  resource_id: resourceId,
+  scope: "project",
+  owner_principal: "user:e2e-login-sub",
+  project_id: "org-brain",
+  group_ids: [],
+  restricted_subjects: [],
+  storage_location: storageLocation,
+  policy_version: 1,
+  created_at: now,
+  updated_at: now
+});
+const consoleBriefing = {
+  contract_version: "decision-console/v1",
+  generated_at: now,
+  counts: { new: 1, changed: 1, expired: 0, unconfirmed: 0, artifact_missing: 0, share_pending: 0 },
+  items: [{
+    id: consoleDecisionId,
+    project_id: "org-brain",
+    title: "Keep decision context visible",
+    decision: "Keep the active decision visible while people inspect evidence and apply it.",
+    reason_summary: "This makes the decision and its rationale understandable before implementation details.",
+    status: "active",
+    confidence: 0.94,
+    confirmation_state: "user_confirmed",
+    valid_until: null,
+    updated_at: now,
+    artifact_count: 1,
+    flags: ["new", "changed"],
+    next_action: { label: "Open trace", action: "open", href: `/decisions/${consoleDecisionId}` }
+  }],
+  truncated: false
+};
+
+function consoleTrace(includeInferred = false) {
+  const nodes = [
+    { id: `decision:${consoleDecisionId}`, type: "decision", stage: "decision", label: "Keep decision context visible", summary: "Keep the active decision visible while people inspect evidence and apply it.", status: "active", deep_link: `/decisions/${consoleDecisionId}`, metadata: { version_hash: "e2e-source-hash" } },
+    { id: `reason:${consoleDecisionId}`, type: "reason", stage: "reason", label: "Reason", summary: "This makes the decision and its rationale understandable before implementation details.", status: "user_confirmed", deep_link: null, metadata: {} },
+    { id: "evidence:e2e", type: "evidence", stage: "evidence", label: "Verified usability note", summary: "Observed in moderated review", status: "active", deep_link: "/resources?selected=evidence-e2e", metadata: { version_hash: "evidence-hash" } },
+    { id: "artifact:e2e", type: "artifact", stage: "artifact", label: "Console release checklist", summary: "Implementation artifact", status: "active", deep_link: "/resources?selected=artifact-e2e", metadata: {} },
+    { id: "skill:skill-e2e", type: "skill", stage: "skill", label: "Decision rollout checklist", summary: "Apply the verified rollout safely", status: "published", deep_link: "/skills?skill_id=skill-e2e", metadata: {} },
+    { id: "agent:agent-e2e", type: "agent", stage: "agent", label: "Release reviewer", summary: "Reviews a rollout before release", status: "active", deep_link: "/agents?agent_id=agent-e2e", metadata: {} },
+    { id: "result:result-e2e", type: "result", stage: "result", label: "Validation passed", summary: "Release reviewer", status: "outcome", deep_link: null, metadata: { context_tokens: 72 } },
+    ...(includeInferred ? [{ id: "inferred:e2e", type: "evidence", stage: "evidence", label: "Suggested follow-up", summary: "Proposed relationship", status: "proposal", deep_link: null, metadata: { confidence: 0.72 } }] : [])
+  ];
+  const edges = [
+    { id: "decision-reason", source: `decision:${consoleDecisionId}`, target: `reason:${consoleDecisionId}`, relation: "explained_by", inferred: false },
+    { id: "reason-evidence", source: `reason:${consoleDecisionId}`, target: "evidence:e2e", relation: "rationale_source", inferred: false },
+    { id: "reason-artifact", source: `reason:${consoleDecisionId}`, target: "artifact:e2e", relation: "output_artifact", inferred: false },
+    { id: "decision-skill", source: `decision:${consoleDecisionId}`, target: "skill:skill-e2e", relation: "generated_skill", inferred: false },
+    { id: "skill-agent", source: "skill:skill-e2e", target: "agent:agent-e2e", relation: "bound:always", inferred: false },
+    { id: "agent-result", source: "agent:agent-e2e", target: "result:result-e2e", relation: "usage_result", inferred: false },
+    ...(includeInferred ? [{ id: "reason-inferred", source: `reason:${consoleDecisionId}`, target: "inferred:e2e", relation: "rationale_source", inferred: true }] : [])
+  ];
+  const stageNames = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"];
+  return {
+    contract_version: "decision-console/v1",
+    generated_at: now,
+    decision: {
+      id: consoleDecisionId,
+      project_id: "org-brain",
+      title: "Keep decision context visible",
+      decision: "Keep the active decision visible while people inspect evidence and apply it.",
+      rationale: "This makes the decision and its rationale understandable before implementation details.",
+      status: "active",
+      confirmation_state: "user_confirmed",
+      confidence: 0.94,
+      valid_from: now - 86_400_000,
+      valid_until: null,
+      owner_refs: [{ type: "principal", id: "user:e2e-login-sub" }],
+      reviewer_refs: [],
+      version_hash: "e2e-source-hash"
+    },
+    access_policy: consolePolicy("decision_memory", consoleDecisionId),
+    stages: Object.fromEntries(stageNames.map((stage) => [stage, nodes.filter((node) => node.stage === stage)])),
+    nodes,
+    edges,
+    truncated: false,
+    omitted_node_count: 0,
+    omitted_edge_count: 0,
+    include_inferred: includeInferred
+  };
+}
+
+const consoleSkill = {
+  id: "skill-e2e",
+  tenant_id: "default",
+  project_id: "org-brain",
+  name: "Decision rollout checklist",
+  description: "Apply the verified rollout safely",
+  status: "published",
+  current_version_id: "skill-e2e-v1",
+  published_version_id: "skill-e2e-v1",
+  source_decision_id: consoleDecisionId,
+  owner_principal: "user:e2e-login-sub",
+  valid_until: null,
+  generation_task_id: null,
+  created_at: now,
+  updated_at: now,
+  published_at: now
+};
+const consoleAgent = {
+  id: "agent-e2e",
+  tenant_id: "default",
+  project_id: "org-brain",
+  agent_key: "release-reviewer",
+  name: "Release reviewer",
+  role: "Reviews a rollout before release",
+  status: "active",
+  current_loadout_id: "loadout-e2e",
+  source_decision_id: consoleDecisionId,
+  owner_principal: "user:e2e-login-sub",
+  last_used_at: now,
+  created_at: now,
+  updated_at: now,
+  loadout_name: "Release checks",
+  binding_count: 1
+};
+
 function json(response, status, payload) {
   response.writeHead(status, { "content-type": "application/json" });
   response.end(JSON.stringify(payload));
@@ -759,6 +1066,157 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (path === "/v1/decision-briefing" && request.method === "GET") {
+    json(response, 200, ok(consoleBriefing));
+    return;
+  }
+
+  if (path === `/v1/decisions/${consoleDecisionId}/trace` && request.method === "GET") {
+    json(response, 200, ok(consoleTrace(url.searchParams.get("include_inferred") === "true")));
+    return;
+  }
+
+  if (path === `/v1/decisions/${consoleDecisionId}/map` && request.method === "GET") {
+    json(response, 200, ok(consoleTrace(url.searchParams.get("include_inferred") === "true")));
+    return;
+  }
+
+  if (path === "/v1/skill-providers" && request.method === "GET") {
+    json(response, 200, ok({ providers: [{ provider: "openai", available: true }] }));
+    return;
+  }
+
+  if (path === "/v1/skills" && request.method === "GET") {
+    json(response, 200, ok({ contract_version: "skill-assets/v1", items: [consoleSkill] }));
+    return;
+  }
+
+  if (path === "/v1/skills" && request.method === "POST") {
+    await readJson(request);
+    json(response, 201, ok({ contract_version: "skill-assets/v1", asset: consoleSkill }));
+    return;
+  }
+
+  if (path === "/v1/skills/generate" && request.method === "POST") {
+    await readJson(request);
+    json(response, 202, ok({
+      contract_version: "skill-assets/v1",
+      asset_id: "skill-generated-e2e",
+      generation_run_id: "generation-e2e",
+      task_id: "task-generation-e2e",
+      status: "pending",
+      private_draft: true,
+      deduped: false
+    }));
+    return;
+  }
+
+  if (path === "/v1/skills/skill-e2e" && request.method === "GET") {
+    json(response, 200, ok({
+      contract_version: "skill-assets/v1",
+      asset: consoleSkill,
+      policy: consolePolicy("skill_asset", "skill-e2e", "d1_r2"),
+      versions: [{
+        id: "skill-e2e-v1",
+        version: 1,
+        schema_version: 1,
+        content_hash: "skill-e2e-hash",
+        validation: { schema: "passed" },
+        manifest: {
+          name: consoleSkill.name,
+          description: consoleSkill.description,
+          validation_conditions: ["All required checks report success"],
+          files: [{ path: "SKILL.md", media_type: "text/markdown", content_hash: "skill-file-hash", size_bytes: 256 }]
+        },
+        files: [{ path: "SKILL.md", media_type: "text/markdown", content_hash: "skill-file-hash", size_bytes: 256 }],
+        created_at: now
+      }]
+    }));
+    return;
+  }
+
+  if (path === "/v1/skills/skill-e2e/publish" && request.method === "POST") {
+    await readJson(request);
+    json(response, 200, ok({ contract_version: "skill-assets/v1", asset: consoleSkill }));
+    return;
+  }
+
+  if (path === "/v1/agents" && request.method === "GET") {
+    json(response, 200, ok({ contract_version: "agent-loadouts/v1", items: [consoleAgent] }));
+    return;
+  }
+
+  if (path === "/v1/agents" && request.method === "POST") {
+    await readJson(request);
+    json(response, 201, ok({ contract_version: "agent-loadouts/v1", agent: consoleAgent, loadout: { id: "loadout-e2e", name: "Release checks" } }));
+    return;
+  }
+
+  if (path === "/v1/agents/agent-e2e" && request.method === "GET") {
+    json(response, 200, ok({
+      contract_version: "agent-loadouts/v1",
+      agent: consoleAgent,
+      loadout: { id: "loadout-e2e", tenant_id: "default", agent_id: "agent-e2e", name: "Release checks", description: "Release verification", status: "active", owner_principal: "user:e2e-login-sub", created_at: now, updated_at: now },
+      bindings: [{
+        id: "binding-e2e", skill_asset_id: "skill-e2e", usage_mode: "always", priority: 90,
+        version_policy: "latest_published", pinned_version_id: null, valid_until: null,
+        asset_name: consoleSkill.name, asset_description: consoleSkill.description,
+        asset_status: "published", published_version_id: "skill-e2e-v1"
+      }]
+    }));
+    return;
+  }
+
+  if (path === "/v1/agents/agent-e2e/loadouts/loadout-e2e" && request.method === "PUT") {
+    await readJson(request);
+    json(response, 200, ok({ contract_version: "agent-loadouts/v1", agent: consoleAgent }));
+    return;
+  }
+
+  if (path === "/v1/agents/agent-e2e/context-preview" && request.method === "POST") {
+    await readJson(request);
+    json(response, 200, ok({
+      contract_version: "agent-loadouts/v1",
+      disabled: false,
+      agent: { id: "agent-e2e", agent_key: "release-reviewer", name: "Release reviewer", status: "active" },
+      loadout: { id: "loadout-e2e", name: "Release checks" },
+      injected_skills: [{ skill_asset_id: "skill-e2e", version_id: "skill-e2e-v1", name: consoleSkill.name, usage_mode: "always", priority: 90, content: "# Decision rollout checklist", estimated_tokens: 72 }],
+      on_demand_skills: [{ skill_asset_id: "skill-on-demand-e2e", version_id: "skill-on-demand-v1", name: "Optional diagnostics", priority: 30, handle: "orgbrain://skills/skill-on-demand-e2e/versions/skill-on-demand-v1" }],
+      omitted: [{ skill_asset_id: "skill-retired-e2e", reason: "not_published" }],
+      estimated_tokens: 72
+    }));
+    return;
+  }
+
+  const accessPolicyMatch = path.match(/^\/v1\/access-policies\/([^/]+)\/([^/]+)$/u);
+  if (accessPolicyMatch && request.method === "GET") {
+    const resourceType = decodeURIComponent(accessPolicyMatch[1]);
+    const resourceId = decodeURIComponent(accessPolicyMatch[2]);
+    json(response, 200, ok({
+      contract_version: "resource-access-policy/v1",
+      policy: consolePolicy(resourceType, resourceId, resourceType === "skill_asset" ? "d1_r2" : "d1"),
+      utilizing_agents: resourceType === "skill_asset" ? [{ id: "agent-e2e", name: "Release reviewer", agent_key: "release-reviewer" }] : []
+    }));
+    return;
+  }
+
+  if (accessPolicyMatch && request.method === "PUT") {
+    const body = await readJson(request);
+    const resourceType = decodeURIComponent(accessPolicyMatch[1]);
+    const resourceId = decodeURIComponent(accessPolicyMatch[2]);
+    json(response, 200, ok({
+      contract_version: "resource-access-policy/v1",
+      policy: { ...consolePolicy(resourceType, resourceId, resourceType === "skill_asset" ? "d1_r2" : "d1"), ...body, policy_version: Number(body.expected_policy_version || 1) + 1 }
+    }));
+    return;
+  }
+
+  if (path === "/v1/decision-memories" && request.method === "POST") {
+    const body = await readJson(request);
+    json(response, 201, ok({ decisionMemory: { ...decisionMemory, ...body, id: "decision-created-e2e" } }));
+    return;
+  }
+
   if (path === "/v1/tasks" && request.method === "GET") {
     const projectId = url.searchParams.get("project_id") || "org-brain";
     if (projectId === "e2e-task-error") {
@@ -774,6 +1232,43 @@ const server = http.createServer(async (request, response) => {
       .filter((task) => !status || task.status === status)
       .filter((task) => !query || (" " + task.id + " " + task.capability + " " + task.project_id).toLowerCase().includes(query));
     json(response, 200, ok(tasks.slice(offset, offset + limit)));
+    return;
+  }
+
+  const taskEventsMatch = path.match(/^\/v1\/tasks\/([^/]+)\/events$/u);
+  if (taskEventsMatch && request.method === "GET") {
+    const taskId = decodeURIComponent(taskEventsMatch[1]);
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    if (projectId === "e2e-task-events-error") {
+      json(response, 503, { ok: false, error: { code: "task_events_unavailable", message: "Task events fixture unavailable" } });
+      return;
+    }
+    const task = taskFixtures(url.searchParams.get("tenant_id") || "default", projectId).find((item) => item.id === taskId);
+    if (!task) {
+      json(response, 404, { ok: false, error: { code: "task_not_found", message: "Task not found" } });
+      return;
+    }
+    json(response, 200, ok([
+      { id: `${taskId}-created`, kind: "created", payload: { capability: task.capability, project_id: task.project_id }, created_at: task.updated_at - 60_000 },
+      ...(task.status === "failed" ? [{ id: `${taskId}-failed`, kind: "task.failed", payload: { reason: "Fixture failure" }, created_at: task.updated_at }] : [])
+    ]));
+    return;
+  }
+
+  const taskDetailMatch = path.match(/^\/v1\/tasks\/([^/]+)$/u);
+  if (taskDetailMatch && request.method === "GET") {
+    const taskId = decodeURIComponent(taskDetailMatch[1]);
+    const projectId = url.searchParams.get("project_id") || "org-brain";
+    if (projectId === "e2e-task-detail-error") {
+      json(response, 503, { ok: false, error: { code: "task_unavailable", message: "Task detail fixture unavailable" } });
+      return;
+    }
+    const task = taskFixtures(url.searchParams.get("tenant_id") || "default", projectId).find((item) => item.id === taskId);
+    if (!task) {
+      json(response, 404, { ok: false, error: { code: "task_not_found", message: "Task not found" } });
+      return;
+    }
+    json(response, 200, ok({ ...task, priority: 0, created_at: task.updated_at - 60_000 }));
     return;
   }
 
@@ -837,7 +1332,7 @@ const server = http.createServer(async (request, response) => {
 
   if (path === "/v1/dashboard/memory-map" && request.method === "GET") {
     const projectId = url.searchParams.get("project_id") || "org-brain";
-    json(response, 200, ok(traceMapFor(projectId)));
+    json(response, 200, ok(allKnowledgeMapFor(projectId)));
     return;
   }
 
@@ -1045,8 +1540,40 @@ const server = http.createServer(async (request, response) => {
 
   if (path === "/v1/dashboard/memory-analytics" && request.method === "GET") {
     json(response, 200, ok({
-      summary: { reference_count: 0, used_count: 0, net_saved_tokens: 0, injected_tokens: 0 },
-      rankings: { memories: [], owners: [] }
+      scope: url.searchParams.get("scope") === "org" ? "org" : "mine",
+      perspective: url.searchParams.get("perspective") === "spread" ? "spread" : "work",
+      period: {
+        from: Number(url.searchParams.get("from")) || now - 30 * 24 * 60 * 60 * 1000,
+        to: Number(url.searchParams.get("to")) || now
+      },
+      summary: {
+        reference_count: 12,
+        used_count: 9,
+        consumer_count: 4,
+        net_saved_tokens: 1840,
+        injected_tokens: 720,
+        utilization_rate: 0.75,
+        effective_utilization_rate: 0.75,
+        org_reuse_rate: 0.5,
+        token_efficiency: 0.72,
+        measurement_coverage: 1,
+        measurement_state: "verified"
+      },
+      trend: [
+        { day: "2026-08-16", reference_count: 4, net_saved_tokens: 480, measurement_state: "verified" },
+        { day: "2026-08-17", reference_count: 8, net_saved_tokens: 1360, measurement_state: "verified" }
+      ],
+      rankings: {
+        memories: [{ id: memory.id, label: memory.summary, project_id: "org-brain", reference_count: 12, measurement_state: "verified" }],
+        owners: [{ id: "owner-e2e", label: "Console operators", reference_count: 12, measurement_state: "verified" }],
+        projects: [{ id: "org-brain", label: "Org Brain", reference_count: 12, measurement_state: "verified" }],
+        consumers: [{ id: "consumer-e2e", label: "Administration team", reference_count: 9, measurement_state: "verified" }]
+      },
+      diagnostics: [],
+      definitions: {
+        utilization_rate: "Runs with at least one used memory divided by evaluated runs.",
+        measurement_coverage: "Terminal reports divided by eligible runs."
+      }
     }));
     return;
   }

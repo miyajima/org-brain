@@ -119,6 +119,7 @@ const contextEnrichInputShape = {
   project_id: z.string().nullable().optional(),
   user_id: z.string().max(128).optional(),
   agent_id: z.string().max(128).optional(),
+  agent_key: z.string().max(128).optional(),
   task_type: z.enum(["implementation", "review", "debug", "proposal", "support"]).optional(),
   task: z.object({
     title: z.string().max(240).optional(),
@@ -1520,7 +1521,7 @@ class OrgBrainMcpTools {
       {
         tenant_id: z.string().optional(),
         project_id: z.string().optional(),
-        capability: z.enum(["memory_measurement"]),
+        capability: z.enum(["memory_measurement", "skill_generation"]),
         input_ref: z.string().min(1),
         priority: z.number().int().min(0).max(10).optional(),
         trace_id: z.string().optional(),

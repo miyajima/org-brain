@@ -1,5 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
+import LiveNotice from "../components/admin/LiveNotice.astro";
+import { dashboardPageParams } from "../lib/dashboard-page";
 
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error?: { code?: string; message?: string } };
@@ -15,8 +18,12 @@ type Group = {
 };
 
 const url = Astro.url;
-const params = url.searchParams;
-const tenantId = params.get("tenant_id")?.trim() || "default";
+const { tenantId, projectId, lang } = dashboardPageParams(url, Astro.request.headers.get("cookie"));
+const copy = {
+  en: { title: "Groups", create: "Create group", name: "Name", slug: "Slug", description: "Description", details: "Details", empty: "No groups yet.", created: "Created", createError: "Group could not be created", loadError: "Groups could not be loaded" },
+  ja: { title: "グループ", create: "グループを作成", name: "名前", slug: "識別子", description: "説明", details: "詳細", empty: "グループはまだありません。", created: "作成しました", createError: "グループを作成できませんでした", loadError: "グループを取得できませんでした" },
+  zh: { title: "群组", create: "创建群组", name: "名称", slug: "标识符", description: "说明", details: "详情", empty: "尚无群组。", created: "已创建", createError: "无法创建群组", loadError: "无法加载群组" }
+}[lang];
 const cookie = Astro.request.headers.get("cookie") ?? "";
 let message = "";
 let error = "";
@@ -43,39 +50,41 @@ if (Astro.request.method === "POST") {
       description: String(form.get("description") ?? "")
     })
   });
-  if (saved?.ok) message = "Created";
-  else error = saved?.error?.message ?? "Group could not be created";
+  if (saved?.ok) message = copy.created;
+  else error = saved?.error?.message ?? copy.createError;
 }
 
 const groupsPayload = await fetchApi<{ groups: Group[] }>(`/api/v1/groups?tenant_id=${encodeURIComponent(tenantId)}`);
 const groups = groupsPayload?.ok ? groupsPayload.data.groups : [];
-if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? "Groups could not be loaded";
+if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? copy.loadError;
+const scopedGroupHref = (id: string) => {
+  const scoped = new URLSearchParams({ tenant_id: tenantId, lang });
+  if (projectId) scoped.set("project_id", projectId);
+  return `/groups/${encodeURIComponent(id)}?${scoped.toString()}`;
+};
 ---
-<BaseLayout title="Groups">
-  <section class="space-y-5">
-    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-5">
-      <p class="surface-label">{tenantId}</p>
-      <h1 class="mt-2 text-3xl font-semibold text-white">Groups</h1>
-    </header>
+<BaseLayout title={copy.title} lang={lang}>
+  <section class="admin-page">
+    <AdminPageHeader eyebrow={tenantId} title={copy.title} />
 
-    {message && <div class="rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">{message}</div>}
-    {error && <div class="rounded-lg border border-rose-300/20 bg-rose-400/10 p-3 text-sm text-rose-100">{error}</div>}
+    {message && <LiveNotice message={message} />}
+    {error && <LiveNotice tone="error" message={error} />}
 
-    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 lg:grid-cols-[minmax(0,1fr)_14rem_auto] lg:items-end">
+    <form method="post" class="admin-section admin-form-grid">
       <input type="hidden" name="csrf_token" id="csrf-token" />
       <label>
-        <span class="field-label">Name</span>
+        <span class="field-label">{copy.name}</span>
         <input name="name" required />
       </label>
       <label>
-        <span class="field-label">Slug</span>
+        <span class="field-label">{copy.slug}</span>
         <input name="slug" />
       </label>
-      <button type="submit">Create</button>
-      <label class="lg:col-span-3">
-        <span class="field-label">Description</span>
+      <label>
+        <span class="field-label">{copy.description}</span>
         <input name="description" />
       </label>
+      <button type="submit">{copy.create}</button>
     </form>
 
     <section class="grid gap-3">
@@ -86,12 +95,12 @@ if (groupsPayload?.ok === false) error = groupsPayload.error?.message ?? "Groups
               <h2 class="text-lg font-semibold text-white">{group.name}</h2>
               <p class="mt-1 text-sm text-zinc-400">{group.slug} · {group.role ?? "member"} · {group.source}</p>
             </div>
-            <a href={`/groups/${encodeURIComponent(group.id)}?tenant_id=${encodeURIComponent(tenantId)}`} class="rounded bg-black/30 px-2 py-1 text-xs text-zinc-300">Details</a>
+            <a href={scopedGroupHref(group.id)} class="secondary-action">{copy.details}</a>
           </div>
           {group.description && <p class="mt-3 text-sm leading-6 text-zinc-300">{group.description}</p>}
         </article>
       ))}
-      {groups.length === 0 && <p class="rounded-[18px] border border-white/8 bg-white/[0.035] p-4 text-sm text-zinc-400">No groups.</p>}
+      {groups.length === 0 && <p class="admin-empty" role="status">{copy.empty}</p>}
     </section>
   </section>
 </BaseLayout>

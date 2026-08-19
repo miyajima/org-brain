@@ -1,5 +1,7 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
+import { adminLocale } from "../lib/admin-copy";
 
 type MetricRow = Record<string, unknown> & {
   id?: string;
@@ -43,6 +45,12 @@ type ApiResponse<T> = { ok: true; data: T } | { ok: false; error?: { message?: s
 
 const url = Astro.url;
 const params = url.searchParams;
+const lang = adminLocale(params.get("lang"));
+const copy = {
+  en: { pageTitle: "Memory impact", eyebrow: "Memory impact / measurement desk", description: "Review how much referenced knowledge moved real work forward using consistent definitions.", used: "used", effective: "effective utilization", mine: "Mine", org: "Organization", ownWork: "My work", spread: "How my memories spread", day: "days", loadTitle: "Analytics could not be loaded", loadError: "Analytics data could not be loaded.", verified: "Verified", estimated: "Estimated", unmeasured: "Unmeasured", unmeasuredNote: "Unmeasured is not treated as zero", utilization: "Utilization", effectiveUtilization: "Effective utilization", reuse: "Reuse across the organization", savedTokens: "Net tokens saved", tokenEfficiency: "Token efficiency", coverage: "Measurement coverage", period: "Period trace", trend: "References and savings over time", references: "References", savings: "Net savings", noTrend: "No reference events were recorded in this period. Unmeasured values are not filled with zero.", diagnosis: "Harness diagnosis", candidates: "Review candidates", noSetting: "No setting changes", noCandidates: "The current measurements show no high-priority review candidates.", top: "top 12", refs: "refs", definitions: "Show metric definitions", noData: "No analytics data is available. Check the API and local D1 connection.", rankings: ["Most referenced memories", "Spread by owner", "By project", "By consumer"] },
+  ja: { pageTitle: "メモリ活用分析", eyebrow: "メモリ活用 / 計測デスク", description: "参照された知識が実際の作業をどれだけ前に進めたかを、同じ定義で振り返ります。", used: "活用", effective: "有効利用率", mine: "自分", org: "組織", ownWork: "自分の作業", spread: "自分のメモリの広がり", day: "日", loadTitle: "分析データを取得できません", loadError: "分析データを読み込めませんでした。", verified: "検証済み", estimated: "推定", unmeasured: "未計測", unmeasuredNote: "未計測は0として扱いません", utilization: "活用率", effectiveUtilization: "有効利用率", reuse: "組織内再利用", savedTokens: "純削減トークン", tokenEfficiency: "トークン効率", coverage: "計測カバレッジ", period: "期間の推移", trend: "参照と削減の推移", references: "参照", savings: "純削減", noTrend: "この期間の参照イベントはありません。未計測を0として補完していません。", diagnosis: "運用診断", candidates: "見直し候補", noSetting: "設定変更なし", noCandidates: "現在の計測値からは優先的な見直し候補はありません。", top: "上位12件", refs: "参照", definitions: "指標の定義を表示", noData: "分析データがありません。APIとローカルD1の接続を確認してください。", rankings: ["最も参照されたメモリ", "所有者別の広がり", "プロジェクト別", "利用者別"] },
+  zh: { pageTitle: "记忆使用分析", eyebrow: "记忆使用 / 测量台", description: "使用统一定义回顾被引用的知识在多大程度上推动了实际工作。", used: "已使用", effective: "有效使用率", mine: "我的", org: "组织", ownWork: "我的工作", spread: "我的记忆传播", day: "天", loadTitle: "无法加载分析数据", loadError: "无法读取分析数据。", verified: "已验证", estimated: "估算", unmeasured: "未测量", unmeasuredNote: "未测量不会按零处理", utilization: "使用率", effectiveUtilization: "有效使用率", reuse: "组织内复用", savedTokens: "净节省令牌", tokenEfficiency: "令牌效率", coverage: "测量覆盖率", period: "期间趋势", trend: "引用与节省趋势", references: "引用", savings: "净节省", noTrend: "此期间没有引用事件，未测量值不会补零。", diagnosis: "运行诊断", candidates: "检查候选项", noSetting: "无需更改设置", noCandidates: "当前测量结果中没有高优先级检查项。", top: "前12项", refs: "引用", definitions: "显示指标定义", noData: "没有分析数据，请检查API和本地D1连接。", rankings: ["引用最多的记忆", "按所有者传播", "按项目", "按使用者"] }
+}[lang];
 const tenantId = params.get("tenant_id")?.trim() || "default";
 const scope = params.get("scope") === "org" ? "org" : "mine";
 const perspective = scope === "mine" && params.get("perspective") === "spread" ? "spread" : "work";
@@ -64,7 +72,7 @@ const payload = await fetchApi<AnalyticsResponse>(
   `/api/v1/dashboard/memory-analytics?tenant_id=${encodeURIComponent(tenantId)}&scope=${scope}&perspective=${perspective}&project_id=${encodeURIComponent(projectId)}&owner_principal=${encodeURIComponent(ownerPrincipal)}&from=${from}&to=${to}`
 );
 const analytics = payload?.ok ? payload.data : null;
-const error = payload?.ok === false ? payload.error?.message || "分析データを読み込めませんでした。" : null;
+const error = payload?.ok === false ? payload.error?.message || copy.loadError : null;
 
 function href(overrides: Record<string, string | null | undefined>) {
   const next = new URLSearchParams(params);
@@ -77,15 +85,15 @@ function href(overrides: Record<string, string | null | undefined>) {
 }
 
 function percent(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value * 100)}%` : "未計測";
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value * 100)}%` : copy.unmeasured;
 }
 
 function tokens(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "未計測";
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : copy.unmeasured;
 }
 
 function stateLabel(value: unknown) {
-  return value === "verified" ? "検証済み" : value === "estimated" ? "推定" : "未計測";
+  return value === "verified" ? copy.verified : value === "estimated" ? copy.estimated : copy.unmeasured;
 }
 
 function rateClass(value: unknown) {
@@ -101,85 +109,91 @@ function maxTrendValue(key: string) {
   return Math.max(1, ...values);
 }
 const rankingSections: Array<[string, MetricRow[], "reference_count"]> = [
-  ["最も参照されたメモリ", analytics?.rankings.memories ?? [], "reference_count"],
-  ["所有者別の広がり", analytics?.rankings.owners ?? [], "reference_count"],
-  ["プロジェクト別", analytics?.rankings.projects ?? [], "reference_count"],
-  ["利用者別", analytics?.rankings.consumers ?? [], "reference_count"]
+  [copy.rankings[0], analytics?.rankings.memories ?? [], "reference_count"],
+  [copy.rankings[1], analytics?.rankings.owners ?? [], "reference_count"],
+  [copy.rankings[2], analytics?.rankings.projects ?? [], "reference_count"],
+  [copy.rankings[3], analytics?.rankings.consumers ?? [], "reference_count"]
 ];
 ---
-<BaseLayout title="Memory impact">
+<BaseLayout title={copy.pageTitle} lang={lang}>
   <section class="space-y-5">
     <header class="impact-hero">
       <div>
-        <p class="surface-label">Memory impact / measurement desk</p>
-        <h1>Memory impact</h1>
-        <p>参照された知識が、実際の作業をどれだけ前に進めたかを同じ定義で振り返ります。</p>
+        <p class="surface-label">{copy.eyebrow}</p>
+        <h1>{copy.pageTitle}</h1>
+        <p>{copy.description}</p>
       </div>
-      <div class="impact-hero-mark" aria-hidden="true"><span>used</span><strong>{analytics ? percent(analytics.summary.effective_utilization_rate) : "—"}</strong><small>effective utilization</small></div>
+      <div class="impact-hero-mark" aria-hidden="true"><span>{copy.used}</span><strong>{analytics ? percent(analytics.summary.effective_utilization_rate) : "—"}</strong><small>{copy.effective}</small></div>
     </header>
+
+    {error ? (
+      <AdminStatePanel state="error" title={copy.loadTitle} description={error} />
+    ) : !analytics ? (
+      <AdminStatePanel state="empty" title={copy.unmeasured} description={copy.noData} />
+    ) : analytics.diagnostics.length > 0 ? (
+      <AdminStatePanel state="attention" title={`${copy.candidates} (${analytics.diagnostics.length})`} description={analytics.diagnostics[0].reason} />
+    ) : (
+      <AdminStatePanel state="healthy" title={copy.noSetting} description={copy.noCandidates} />
+    )}
 
     <section class="impact-toolbar">
       <div class="impact-tabs" aria-label="Analytics scope">
-        <a class:list={[scope === "mine" && "is-active"]} href={href({ scope: "mine", perspective: "work" })}>自分</a>
-        <a class:list={[scope === "org" && "is-active"]} href={href({ scope: "org", perspective: "work" })}>組織</a>
+        <a class:list={[scope === "mine" && "is-active"]} href={href({ scope: "mine", perspective: "work" })}>{copy.mine}</a>
+        <a class:list={[scope === "org" && "is-active"]} href={href({ scope: "org", perspective: "work" })}>{copy.org}</a>
       </div>
       {scope === "mine" && (
         <div class="impact-tabs" aria-label="Personal perspective">
-          <a class:list={[perspective === "work" && "is-active"]} href={href({ perspective: "work" })}>自分の作業</a>
-          <a class:list={[perspective === "spread" && "is-active"]} href={href({ perspective: "spread" })}>自分のメモリの広がり</a>
+          <a class:list={[perspective === "work" && "is-active"]} href={href({ perspective: "work" })}>{copy.ownWork}</a>
+          <a class:list={[perspective === "spread" && "is-active"]} href={href({ perspective: "spread" })}>{copy.spread}</a>
         </div>
       )}
       <div class="impact-tabs impact-period" aria-label="Period">
-        {[7, 30, 90].map((value) => <a class:list={[days === value && "is-active"]} href={href({ days: String(value) })}>{value}日</a>)}
+        {[7, 30, 90].map((value) => <a class:list={[days === value && "is-active"]} href={href({ days: String(value) })}>{value}{copy.day}</a>)}
       </div>
     </section>
-
-    {error && <section class="impact-error" role="alert"><strong>分析データを取得できません</strong><span>{error}</span></section>}
 
     {analytics ? (
       <>
         <section class="impact-state-legend" aria-label="Measurement state">
-          <span><i class="state-dot state-verified"></i>検証済み</span><span><i class="state-dot state-estimated"></i>推定</span><span><i class="state-dot state-unmeasured"></i>未計測は0として扱いません</span>
+          <span><i class="state-dot state-verified"></i>{copy.verified}</span><span><i class="state-dot state-estimated"></i>{copy.estimated}</span><span><i class="state-dot state-unmeasured"></i>{copy.unmeasuredNote}</span>
         </section>
 
         <section class="metric-grid" aria-label="Summary metrics">
-          <article class="impact-metric"><span>活用率</span><strong class={rateClass(analytics.summary.utilization_rate)}>{percent(analytics.summary.utilization_rate)}</strong><small>memory used runs / evaluated runs</small></article>
-          <article class="impact-metric"><span>有効利用率</span><strong class={rateClass(analytics.summary.effective_utilization_rate)}>{percent(analytics.summary.effective_utilization_rate)}</strong><small>used references / references</small></article>
-          <article class="impact-metric"><span>組織内再利用</span><strong class={rateClass(analytics.summary.org_reuse_rate)}>{percent(analytics.summary.org_reuse_rate)}</strong><small>owner ≠ consumer</small></article>
-          <article class="impact-metric"><span>純削減 tokens</span><strong>{tokens(analytics.summary.net_saved_tokens)}</strong><small>estimated and verified attribution</small></article>
-          <article class="impact-metric"><span>token efficiency</span><strong class={rateClass(analytics.summary.token_efficiency)}>{percent(analytics.summary.token_efficiency)}</strong><small>net saved / injected</small></article>
-          <article class="impact-metric"><span>計測カバレッジ</span><strong class={rateClass(analytics.summary.measurement_coverage)}>{percent(analytics.summary.measurement_coverage)}</strong><small>terminal reports / target runs</small></article>
+          <article class="impact-metric"><span>{copy.utilization}</span><strong class={rateClass(analytics.summary.utilization_rate)}>{percent(analytics.summary.utilization_rate)}</strong><small>memory used runs / evaluated runs</small></article>
+          <article class="impact-metric"><span>{copy.effectiveUtilization}</span><strong class={rateClass(analytics.summary.effective_utilization_rate)}>{percent(analytics.summary.effective_utilization_rate)}</strong><small>used references / references</small></article>
+          <article class="impact-metric"><span>{copy.reuse}</span><strong class={rateClass(analytics.summary.org_reuse_rate)}>{percent(analytics.summary.org_reuse_rate)}</strong><small>owner ≠ consumer</small></article>
+          <article class="impact-metric"><span>{copy.savedTokens}</span><strong>{tokens(analytics.summary.net_saved_tokens)}</strong><small>estimated and verified attribution</small></article>
+          <article class="impact-metric"><span>{copy.tokenEfficiency}</span><strong class={rateClass(analytics.summary.token_efficiency)}>{percent(analytics.summary.token_efficiency)}</strong><small>net saved / injected</small></article>
+          <article class="impact-metric"><span>{copy.coverage}</span><strong class={rateClass(analytics.summary.measurement_coverage)}>{percent(analytics.summary.measurement_coverage)}</strong><small>terminal reports / target runs</small></article>
         </section>
 
         <section class="impact-grid impact-grid-main">
           <article class="impact-panel impact-trend-panel">
-            <div class="impact-panel-heading"><div><p class="surface-label">Period trace</p><h2>参照と削減の推移</h2></div><span class={`state-pill state-${analytics.summary.measurement_state}`}>{stateLabel(analytics.summary.measurement_state)}</span></div>
+            <div class="impact-panel-heading"><div><p class="surface-label">{copy.period}</p><h2>{copy.trend}</h2></div><span class={`state-pill state-${analytics.summary.measurement_state}`}>{stateLabel(analytics.summary.measurement_state)}</span></div>
             {analytics.trend.length > 0 ? (
               <div class="trend-chart" role="img" aria-label="Daily memory references and net saved tokens">
                 {analytics.trend.map((row) => <div class="trend-column"><div class="trend-bars"><span class="trend-bar refs" style={`height:${Math.max(8, Number(row.reference_count ?? 0) / maxTrendValue("reference_count") * 100)}%`}></span><span class="trend-bar savings" style={`height:${Math.max(8, Math.abs(Number(row.net_saved_tokens ?? 0)) / maxTrendValue("net_saved_tokens") * 100)}%`}></span></div><small>{String(row.day ?? "").slice(5)}</small></div>)}
               </div>
-            ) : <div class="impact-empty">この期間の参照イベントはありません。未計測を0として補完していません。</div>}
-            <div class="chart-key"><span><i class="key-blue"></i>参照</span><span><i class="key-amber"></i>純削減</span></div>
+            ) : <div class="impact-empty">{copy.noTrend}</div>}
+            <div class="chart-key"><span><i class="key-blue"></i>{copy.references}</span><span><i class="key-amber"></i>{copy.savings}</span></div>
           </article>
           <article class="impact-panel">
-            <div class="impact-panel-heading"><div><p class="surface-label">Harness diagnosis</p><h2>見直し候補</h2></div><span class="surface-chip">設定変更なし</span></div>
+            <div class="impact-panel-heading"><div><p class="surface-label">{copy.diagnosis}</p><h2>{copy.candidates}</h2></div><span class="surface-chip">{copy.noSetting}</span></div>
             <div class="diagnostic-list">
-              {analytics.diagnostics.length > 0 ? analytics.diagnostics.map((item) => <div class={`diagnostic diagnostic-${item.severity}`}><div class="diagnostic-top"><strong>{item.title}</strong><span class={`state-pill state-${item.measurement_state}`}>{stateLabel(item.measurement_state)}</span></div><p>{item.reason}</p><small>{item.recommendation}</small></div>) : <div class="impact-empty">現在の計測値からは優先的な見直し候補はありません。</div>}
+              {analytics.diagnostics.length > 0 ? analytics.diagnostics.map((item) => <div class={`diagnostic diagnostic-${item.severity}`}><div class="diagnostic-top"><strong>{item.title}</strong><span class={`state-pill state-${item.measurement_state}`}>{stateLabel(item.measurement_state)}</span></div><p>{item.reason}</p><small>{item.recommendation}</small></div>) : <div class="impact-empty">{copy.noCandidates}</div>}
             </div>
           </article>
         </section>
 
         <section class="impact-grid impact-grid-rankings">
           {rankingSections.map(([title, rows, metric]) => (
-            <article class="impact-panel ranking-panel"><div class="impact-panel-heading"><h2>{title}</h2><span class="surface-label">top 12</span></div>{(rows as MetricRow[]).length > 0 ? <ol>{(rows as MetricRow[]).slice(0, 6).map((row, index) => <li><span class="rank-index">{String(index + 1).padStart(2, "0")}</span><div><strong title={rowLabel(row)}>{rowLabel(row)}</strong><small>{row.project_id ? String(row.project_id) : ""}</small></div><b>{Number(row[metric] ?? 0).toLocaleString()}<em> refs</em></b></li>)}</ol> : <div class="impact-empty">未計測</div>}</article>
+            <article class="impact-panel ranking-panel"><div class="impact-panel-heading"><h2>{title}</h2><span class="surface-label">{copy.top}</span></div>{(rows as MetricRow[]).length > 0 ? <ol>{(rows as MetricRow[]).slice(0, 6).map((row, index) => <li><span class="rank-index">{String(index + 1).padStart(2, "0")}</span><div><strong title={rowLabel(row)}>{rowLabel(row)}</strong><small>{row.project_id ? String(row.project_id) : ""}</small></div><b>{Number(row[metric] ?? 0).toLocaleString()}<em> {copy.refs}</em></b></li>)}</ol> : <div class="impact-empty">{copy.unmeasured}</div>}</article>
           ))}
         </section>
 
-        <details class="definition-panel"><summary>指標の定義を表示</summary><div>{Object.entries(analytics.definitions).map(([key, value]) => <p><strong>{key}</strong><span>{value}</span></p>)}</div></details>
+        <details class="definition-panel"><summary>{copy.definitions}</summary><div>{Object.entries(analytics.definitions).map(([key, value]) => <p><strong>{key}</strong><span>{value}</span></p>)}</div></details>
       </>
-    ) : (
-      <section class="impact-empty impact-empty-large">分析データがありません。APIとローカルD1の接続を確認してください。</section>
-    )}
+    ) : null}
   </section>
 </BaseLayout>
 
@@ -214,4 +228,6 @@ const rankingSections: Array<[string, MetricRow[], "reference_count"]> = [
   @media (max-width:1100px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.impact-grid-rankings{grid-template-columns:repeat(2,minmax(0,1fr));}}
   @media (max-width:760px){.impact-hero{grid-template-columns:1fr;padding:1.35rem;}.impact-hero-mark{justify-items:start;padding:0;}.impact-toolbar{align-items:stretch;}.impact-period{width:100%;}.impact-grid-main,.impact-grid-rankings{grid-template-columns:1fr;}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.impact-metric{min-height:8rem;}.definition-panel p{grid-template-columns:1fr;gap:.25rem;}}
   @media (prefers-reduced-motion:reduce){.impact-tabs a,.impact-panel{transition:none;}}
+  .impact-hero-mark small,.impact-tabs a,.impact-state-legend,.chart-key,.impact-metric span,.impact-metric small,.state-pill,.trend-column small,.diagnostic strong,.diagnostic p,.diagnostic small,.rank-index,.ranking-panel li strong,.ranking-panel li small,.ranking-panel li b,.ranking-panel li em,.definition-panel summary,.definition-panel p,.definition-panel strong,.impact-empty,.impact-error span { font-size:.75rem; line-height:1.5; }
+  .impact-tabs a { min-height:44px; }
 </style>
