@@ -20,9 +20,9 @@ const {
 };
 
 const copy = {
-  en: { eyebrow: "Decision trace", reason: "Reason", evidence: "Evidence", artifact: "Artifacts", skill: "Skills", agent: "Using agents", result: "Results", decision: "Decision", empty: "Nothing connected yet", preview: "Selected item", details: "Technical details", skillize: "Turn this knowledge into a Skill", map: "Open Decision Trace Map", access: "Access", unavailable: "This decision trail could not be loaded", nodesHidden: "Some items were omitted by the display limit.", back: "Back to briefing" },
-  ja: { eyebrow: "Decision trace", reason: "理由", evidence: "根拠", artifact: "成果物", skill: "Skill", agent: "利用Agent", result: "結果", decision: "決定", empty: "まだ接続されていません", preview: "選択中の要素", details: "技術的な詳細", skillize: "この知識をSkill化", map: "Decision Trace Mapを開く", access: "アクセス", unavailable: "決定の流れを読み込めませんでした", nodesHidden: "表示上限により一部の要素を省略しています。", back: "Briefingへ戻る" },
-  zh: { eyebrow: "Decision trace", reason: "理由", evidence: "依据", artifact: "成果", skill: "Skill", agent: "使用中的Agent", result: "结果", decision: "决策", empty: "尚未连接", preview: "当前选择", details: "技术详情", skillize: "将此知识转为Skill", map: "打开决策追踪地图", access: "访问", unavailable: "无法加载决策链", nodesHidden: "部分项目因显示上限而省略。", back: "返回简报" }
+  en: { eyebrow: "Decision trace", reason: "Reason", evidence: "Evidence", artifact: "Artifacts", skill: "Skills", agent: "Using agents", result: "Results", decision: "Decision", empty: "Nothing connected yet", preview: "Selected item", details: "Technical details", verification: "Evidence verification", coverage: "Provenance coverage", source: "Source", evidenceCount: "Evidence receipts", missing: "Missing stages", skillize: "Turn this knowledge into a Skill", map: "Open Decision Trace Map", open: "Open source", retry: "Try again", access: "Access", unavailable: "This decision trail could not be loaded", nodesHidden: "Some items were omitted by the display limit.", back: "Back to briefing" },
+  ja: { eyebrow: "Decision trace", reason: "理由", evidence: "根拠", artifact: "成果物", skill: "Skill", agent: "利用Agent", result: "結果", decision: "決定", empty: "まだ接続されていません", preview: "選択中の要素", details: "技術的な詳細", verification: "証拠の検証", coverage: "出典カバレッジ", source: "抽出元", evidenceCount: "証拠レシート", missing: "不足ステージ", skillize: "この知識をSkill化", map: "決定の道筋マップを開く", open: "元の情報を開く", retry: "再試行", access: "アクセス", unavailable: "決定の流れを読み込めませんでした", nodesHidden: "表示上限により一部の要素を省略しています。", back: "Briefingへ戻る" },
+  zh: { eyebrow: "Decision trace", reason: "理由", evidence: "依据", artifact: "成果", skill: "Skill", agent: "使用中的Agent", result: "结果", decision: "决策", empty: "尚未连接", preview: "当前选择", details: "技术详情", verification: "证据验证", coverage: "来源覆盖率", source: "来源", evidenceCount: "证据收据", missing: "缺失阶段", skillize: "将此知识转为Skill", map: "打开决策追踪地图", open: "打开来源", retry: "重试", access: "访问", unavailable: "无法加载决策链", nodesHidden: "部分项目因显示上限而省略。", back: "返回简报" }
 }[locale];
 const stageOrder = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"] as const;
 const stageLabels = Object.fromEntries(stageOrder.map((stage) => [stage, copy[stage]]));
@@ -63,7 +63,7 @@ const serializedNodes = JSON.stringify(trace.nodes).replace(/</gu, "\\u003c");
     </div>
   </header>
 
-  {error && <div class="decision-alert" role="alert"><strong>{copy.unavailable}</strong><span>{error}</span></div>}
+  {error && <div class="decision-alert" role="alert"><strong>{copy.unavailable}</strong><span>{error}</span><a class="decision-action decision-action-secondary decision-alert-action" href={scopedHref(`/decisions/${encodeURIComponent(decisionId)}`, params)}>{copy.retry}</a></div>}
   {trace.truncated && <div class="decision-truncation-note" role="status">{copy.nodesHidden} ({trace.omitted_node_count} / {trace.omitted_edge_count})</div>}
 
   <div class="decision-trace-layout">
@@ -105,7 +105,14 @@ const serializedNodes = JSON.stringify(trace.nodes).replace(/</gu, "\\u003c");
       </div>
       <p class="decision-preview-summary" data-preview-summary>{selected?.summary ?? decisionStatement}</p>
       <div class="decision-preview-status" data-preview-status hidden={!selected?.status}>{selected?.status}</div>
-      <a class="decision-action decision-action-secondary" data-preview-link href={selected?.deep_link ?? "#"} hidden={!selected?.deep_link}>Open</a>
+      <dl class="decision-verification-summary" data-verification-summary hidden={!selected?.metadata?.verification_state}>
+        <div><dt>{copy.verification}</dt><dd data-verification-state>{String(selected?.metadata?.verification_state ?? "")}</dd></div>
+        <div><dt>{copy.coverage}</dt><dd data-verification-coverage>{typeof selected?.metadata?.provenance_coverage === "number" ? `${Math.round(selected.metadata.provenance_coverage * 100)}%` : "—"}</dd></div>
+        <div><dt>{copy.source}</dt><dd data-verification-source>{String(selected?.metadata?.source_label ?? "—")}</dd></div>
+        <div><dt>{copy.evidenceCount}</dt><dd data-verification-evidence>{String(selected?.metadata?.evidence_count ?? "0")}</dd></div>
+        <div><dt>{copy.missing}</dt><dd data-verification-missing>{Array.isArray(selected?.metadata?.missing_stages) ? selected.metadata.missing_stages.join(", ") || "—" : "—"}</dd></div>
+      </dl>
+      <a class="decision-action decision-action-secondary" data-preview-link href={selected?.deep_link ?? "#"} hidden={!selected?.deep_link}>{copy.open}</a>
       <details class="decision-technical-details">
         <summary>{copy.details}</summary>
         <dl data-preview-metadata>
@@ -137,6 +144,12 @@ const serializedNodes = JSON.stringify(trace.nodes).replace(/</gu, "\\u003c");
       const label = root.querySelector<HTMLElement>("[data-preview-label]");
       const summary = root.querySelector<HTMLElement>("[data-preview-summary]");
       const status = root.querySelector<HTMLElement>("[data-preview-status]");
+      const verificationSummary = root.querySelector<HTMLElement>("[data-verification-summary]");
+      const verificationState = root.querySelector<HTMLElement>("[data-verification-state]");
+      const verificationCoverage = root.querySelector<HTMLElement>("[data-verification-coverage]");
+      const verificationSource = root.querySelector<HTMLElement>("[data-verification-source]");
+      const verificationEvidence = root.querySelector<HTMLElement>("[data-verification-evidence]");
+      const verificationMissing = root.querySelector<HTMLElement>("[data-verification-missing]");
       const link = root.querySelector<HTMLAnchorElement>("[data-preview-link]");
       if (stageElement) stageElement.textContent = stageLabels[stage] || stage;
       if (label) label.textContent = String(node.label || "");
@@ -145,6 +158,13 @@ const serializedNodes = JSON.stringify(trace.nodes).replace(/</gu, "\\u003c");
         status.textContent = String(node.status || "");
         status.hidden = !node.status;
       }
+      const verification = node.metadata && typeof node.metadata === "object" ? node.metadata as Record<string, unknown> : {};
+      if (verificationSummary) verificationSummary.hidden = typeof verification.verification_state !== "string";
+      if (verificationState) verificationState.textContent = String(verification.verification_state || "");
+      if (verificationCoverage) verificationCoverage.textContent = typeof verification.provenance_coverage === "number" ? `${Math.round(verification.provenance_coverage * 100)}%` : "—";
+      if (verificationSource) verificationSource.textContent = String(verification.source_label || "—");
+      if (verificationEvidence) verificationEvidence.textContent = String(verification.evidence_count ?? "0");
+      if (verificationMissing) verificationMissing.textContent = Array.isArray(verification.missing_stages) && verification.missing_stages.length ? verification.missing_stages.join(", ") : "—";
       if (link) {
         const deepLink = typeof node.deep_link === "string" ? node.deep_link : "";
         link.hidden = !deepLink;

@@ -10,6 +10,7 @@ const behavior = decisionConsoleBehavior(mode);
 const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 if (!behavior.enabled) return Astro.redirect(scopedHref("/memories/constellation", params), 307);
 const decisionId = Astro.url.searchParams.get("decision_id")?.trim() ?? "";
+const initialMapQuery = Astro.url.searchParams.get("map_q")?.trim().slice(0, 120) ?? "";
 const briefing = await fetchDashboardData(
   new URL(dashboardApiPath("/api/v1/decision-briefing", apiParams, { limit: 100 }), Astro.url),
   normalizeDecisionBriefing,
@@ -28,9 +29,9 @@ const trace = decisionId
   : { data: emptyDecisionTrace(), error: null as string | null };
 const selectedDecision = briefing.data.items.find((item) => item.id === decisionId);
 const copy = {
-  en: { eyebrow: "Decision trace", title: "Decision Trace Map", allKnowledge: "All knowledge", choose: "Choose a decision", search: "Find a decision", open: "Open map", empty: "No readable decisions are available in this scope.", error: "Map data is unavailable" },
-  ja: { eyebrow: "決定の道筋", title: "決定の道筋マップ", allKnowledge: "全知識を表示", choose: "中心にする決定を選択", search: "決定を検索", open: "マップを開く", empty: "この範囲で閲覧できる決定はありません。", error: "マップデータを利用できません" },
-  zh: { eyebrow: "决策路径", title: "决策路径地图", allKnowledge: "查看全部知识", choose: "选择中心决策", search: "搜索决策", open: "打开地图", empty: "此范围内没有可读决策。", error: "地图数据不可用" }
+  en: { eyebrow: "Decision trace", title: "Decision Trace Map", allKnowledge: "All knowledge", choose: "Choose a decision", search: "Find a decision", open: "Open map", list: "Jump to relationships / timeline", actions: "Map actions", retry: "Try again", empty: "No readable decisions are available in this scope.", error: "Map data is unavailable" },
+  ja: { eyebrow: "決定の道筋", title: "決定の道筋マップ", allKnowledge: "全知識を表示", choose: "中心にする決定を選択", search: "決定を検索", open: "マップを開く", list: "関係リスト/タイムラインへ移動", actions: "マップ操作", retry: "再試行", empty: "この範囲で閲覧できる決定はありません。", error: "マップデータを利用できません" },
+  zh: { eyebrow: "决策路径", title: "决策路径地图", allKnowledge: "查看全部知识", choose: "选择中心决策", search: "搜索决策", open: "打开地图", list: "跳转到关系列表/时间线", actions: "地图操作", retry: "重试", empty: "此范围内没有可读决策。", error: "地图数据不可用" }
 }[lang];
 const allKnowledgeParams = new URLSearchParams(params);
 allKnowledgeParams.set("view", "all");
@@ -46,14 +47,17 @@ const allKnowledgeHref = `${allKnowledgeHrefUrl.pathname}${allKnowledgeHrefUrl.s
         <h1>{copy.title}</h1>
       </div>
       <div class="decision-header-actions">
-        <a class="decision-action decision-action-secondary" data-all-knowledge-map href={allKnowledgeHref}>{copy.allKnowledge}</a>
         {selectedDecision && <a class="decision-action" href={scopedHref(`/decisions/${encodeURIComponent(selectedDecision.id)}`, params)}>{selectedDecision.title}</a>}
       </div>
     </header>
-    {(briefing.error || trace.error) && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{trace.error ?? briefing.error}</span></div>}
+    <nav class="decision-map-action-rail" aria-label={copy.actions}>
+      <a class="decision-action decision-action-secondary" data-all-knowledge-map href={allKnowledgeHref}>{copy.allKnowledge}</a>
+      {decisionId && trace.data.nodes.length > 0 && <a class="decision-action decision-action-secondary" href="#decision-map-list-region">{copy.list}</a>}
+    </nav>
+    {(briefing.error || trace.error) && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{trace.error ?? briefing.error}</span><a class="decision-action decision-action-secondary decision-alert-action" href={`${Astro.url.pathname}${Astro.url.search}`}>{copy.retry}</a></div>}
     <details class="decision-map-picker">
       <summary>{copy.choose}{selectedDecision ? ` · ${selectedDecision.title}` : ""}</summary>
-      <label>{copy.search}<input type="search" data-map-picker-search placeholder={copy.search} /></label>
+      <label>{copy.search}<input type="search" name="map_q" data-map-picker-search value={initialMapQuery} placeholder={copy.search} /></label>
       <div data-map-picker-list>
         {briefing.data.items.map((item) => {
           const next = new URLSearchParams(params);
@@ -70,9 +74,32 @@ const allKnowledgeHref = `${allKnowledgeHrefUrl.pathname}${allKnowledgeHrefUrl.s
   <script>
     const search = document.querySelector<HTMLInputElement>("[data-map-picker-search]");
     const items = [...document.querySelectorAll<HTMLElement>("[data-map-picker-item]")];
-    search?.addEventListener("input", () => {
-      const query = search.value.trim().toLocaleLowerCase();
+    const syncMapLinks = (rawQuery: string) => {
+      for (const item of items) {
+        if (!(item instanceof HTMLAnchorElement)) continue;
+        const href = new URL(item.href, window.location.href);
+        if (rawQuery) href.searchParams.set("map_q", rawQuery);
+        else href.searchParams.delete("map_q");
+        item.href = `${href.pathname}${href.search}`;
+      }
+    };
+    const filterMapItems = (updateUrl = true) => {
+      const rawQuery = search?.value.trim() || "";
+      const query = rawQuery.toLocaleLowerCase();
       for (const item of items) item.hidden = Boolean(query) && !(item.dataset.search || "").includes(query);
+      syncMapLinks(rawQuery);
+      if (updateUrl) {
+        const url = new URL(window.location.href);
+        if (rawQuery) url.searchParams.set("map_q", rawQuery.slice(0, 120));
+        else url.searchParams.delete("map_q");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    };
+    search?.addEventListener("input", () => filterMapItems());
+    window.addEventListener("popstate", () => {
+      if (search) search.value = new URL(window.location.href).searchParams.get("map_q")?.trim().slice(0, 120) || "";
+      filterMapItems(false);
     });
+    filterMapItems(false);
   </script>
 </BaseLayout>

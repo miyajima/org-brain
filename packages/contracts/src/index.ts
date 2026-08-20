@@ -1002,3 +1002,210 @@ export type DashboardStrataChainSummary = z.infer<typeof dashboardStrataChainSum
 export type DashboardStrataChain = z.infer<typeof dashboardStrataChainSchema>;
 export type DashboardStrataResponse = z.infer<typeof dashboardStrataResponseSchema>;
 export type DashboardStrataDetailResponse = z.infer<typeof dashboardStrataDetailResponseSchema>;
+
+// Local evidence-chain ingestion is deliberately a separate contract from the
+// legacy memory capture and AI-learning contracts.  The server accepts the
+// signed manifest, but never delegates promotion or provenance decisions to a
+// model.
+export const EXTRACTION_PROFILE_CONTRACT_VERSION = "extraction-profile/v1" as const;
+export const VERIFIED_KNOWLEDGE_BUNDLE_CONTRACT_VERSION = "verified-knowledge-bundle/v1" as const;
+
+export const VERIFIED_EVIDENCE_TYPES = [
+  "user_statement",
+  "tool_result",
+  "command_result",
+  "file_change",
+  "resource_snapshot",
+  "explicit_confirmation"
+] as const;
+export const VERIFIED_CANDIDATE_TYPES = [
+  "scene",
+  "decision",
+  "reason",
+  "evidence",
+  "artifact",
+  "supersedes"
+] as const;
+export const VERIFIED_EDGE_RELATIONS = [
+  "decision_reason",
+  "reason_evidence",
+  "decision_artifact",
+  "reason_artifact",
+  "decision_supersedes"
+] as const;
+export const VERIFIED_INGESTION_STATES = [
+  "active",
+  "verified_draft",
+  "quarantined",
+  "duplicate",
+  "extractor_disagreement"
+] as const;
+export const VERIFIED_COLLECTOR_KEY_STATES = ["active", "revoked"] as const;
+
+export type VerifiedEvidenceType = (typeof VERIFIED_EVIDENCE_TYPES)[number];
+export type VerifiedCandidateType = (typeof VERIFIED_CANDIDATE_TYPES)[number];
+export type VerifiedEdgeRelation = (typeof VERIFIED_EDGE_RELATIONS)[number];
+export type VerifiedIngestionState = (typeof VERIFIED_INGESTION_STATES)[number];
+export type VerifiedCollectorKeyState = (typeof VERIFIED_COLLECTOR_KEY_STATES)[number];
+
+const verifiedIdentifierSchema = z.string().trim().min(1).max(256);
+const verifiedDigestSchema = z.string().regex(/^[0-9a-f]{64}$/u, "must be a lowercase SHA-256 digest");
+const verifiedExcerptSchema = z.string().max(2_000);
+
+export const extractionProfileV1Schema = z.object({
+  contract_version: z.literal(EXTRACTION_PROFILE_CONTRACT_VERSION).default(EXTRACTION_PROFILE_CONTRACT_VERSION),
+  profile_id: verifiedIdentifierSchema,
+  version: z.number().int().positive(),
+  scope: z.enum(["agent", "project", "tenant", "built_in"]),
+  tenant_id: z.string().trim().min(1).max(128).nullable().optional(),
+  agent_id: verifiedIdentifierSchema.nullable().optional(),
+  project_id: verifiedIdentifierSchema.nullable().optional(),
+  terminology: z.record(z.string().trim().min(1).max(120), z.array(z.string().trim().min(1).max(200)).max(32)).default({}),
+  priority_candidate_types: z.array(z.enum(VERIFIED_CANDIDATE_TYPES)).max(VERIFIED_CANDIDATE_TYPES.length).default([]),
+  exclusions: z.array(z.string().trim().min(1).max(500)).max(64).default([]),
+  few_shot_examples: z.array(z.object({
+    input: z.string().min(1).max(2_000),
+    output: z.record(z.unknown())
+  })).max(16).default([]),
+  scene_hints: z.array(z.string().trim().min(1).max(500)).max(32).default([]),
+  profile_hash: verifiedDigestSchema.optional()
+});
+
+export type ExtractionProfileV1 = z.infer<typeof extractionProfileV1Schema>;
+
+export const verifiedSourceSpanSchema = z.object({
+  event_id: verifiedIdentifierSchema,
+  turn_id: verifiedIdentifierSchema.nullable().optional(),
+  start: z.number().int().nonnegative(),
+  end: z.number().int().nonnegative(),
+  excerpt: verifiedExcerptSchema.optional()
+}).superRefine((value, context) => {
+  if (value.end < value.start) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["end"], message: "end must be greater than or equal to start" });
+  }
+  if (value.end - value.start > 20_000) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["end"], message: "source span is too large" });
+  }
+});
+
+export const verifiedEventRefSchema = z.object({
+  event_id: verifiedIdentifierSchema,
+  turn_id: verifiedIdentifierSchema.nullable().optional(),
+  digest: verifiedDigestSchema,
+  is_new_input: z.boolean().default(true),
+  signed_tool_event: z.boolean().default(false),
+  excerpt: verifiedExcerptSchema.optional()
+});
+
+export const verifiedKnowledgeCandidateSchema = z.object({
+  candidate_id: verifiedIdentifierSchema,
+  candidate_type: z.enum(VERIFIED_CANDIDATE_TYPES),
+  semantic_key: verifiedIdentifierSchema.nullable().optional(),
+  value: z.string().trim().min(1).max(20_000),
+  summary: z.string().trim().max(2_000).nullable().optional(),
+  source_spans: z.array(verifiedSourceSpanSchema).min(1).max(32),
+  source_event_ids: z.array(verifiedIdentifierSchema).min(1).max(32),
+  artifact_ref: z.string().trim().min(1).max(2_048).nullable().optional(),
+  content_hash: verifiedDigestSchema.nullable().optional(),
+  safety_flags: z.array(z.enum(["pii", "secret", "prompt_injection"])).max(3).optional(),
+  actor_type: z.enum(["human", "principal", "agent", "tool", "system"]).nullable().optional(),
+  actor_id: verifiedIdentifierSchema.nullable().optional()
+});
+
+export const verifiedFieldBindingSchema = z.object({
+  binding_id: verifiedIdentifierSchema,
+  entity: z.enum(["scene", "decision", "reason", "evidence", "artifact", "supersedes"]),
+  field: verifiedIdentifierSchema,
+  candidate_id: verifiedIdentifierSchema,
+  source_span_index: z.number().int().nonnegative(),
+  receipt_id: verifiedIdentifierSchema
+});
+
+export const verifiedEdgeBindingSchema = z.object({
+  binding_id: verifiedIdentifierSchema,
+  relation: z.enum(VERIFIED_EDGE_RELATIONS),
+  source_candidate_id: verifiedIdentifierSchema,
+  target_candidate_id: verifiedIdentifierSchema,
+  receipt_ids: z.array(verifiedIdentifierSchema).min(1).max(32)
+});
+
+export const verifiedEvidenceReceiptSchema = z.object({
+  receipt_id: verifiedIdentifierSchema,
+  event_id: verifiedIdentifierSchema,
+  evidence_type: z.enum(VERIFIED_EVIDENCE_TYPES),
+  source_span: verifiedSourceSpanSchema,
+  digest: verifiedDigestSchema,
+  is_new_input: z.boolean().default(true),
+  signed_tool_event: z.boolean().default(false),
+  content_hash: verifiedDigestSchema.nullable().optional(),
+  artifact_ref: z.string().trim().min(1).max(2_048).nullable().optional(),
+  observed_at: z.number().int().nonnegative().optional()
+});
+
+export const verifiedExtractorRefSchema = z.object({
+  name: verifiedIdentifierSchema,
+  schema_version: verifiedIdentifierSchema,
+  implementation_digest: verifiedDigestSchema.nullable().optional()
+});
+
+export const verifiedModelRefSchema = z.object({
+  provider: z.enum(["none", "local"]),
+  model_id: verifiedIdentifierSchema,
+  prompt_hash: verifiedDigestSchema.nullable().optional()
+});
+
+export const verifiedKnowledgeBundleV1Schema = z.object({
+  contract_version: z.literal(VERIFIED_KNOWLEDGE_BUNDLE_CONTRACT_VERSION).default(VERIFIED_KNOWLEDGE_BUNDLE_CONTRACT_VERSION),
+  tenant_id: z.string().trim().min(1).max(128),
+  project_id: verifiedIdentifierSchema.nullable().optional(),
+  task_id: verifiedIdentifierSchema.nullable().optional(),
+  decision_thread_id: verifiedIdentifierSchema.nullable().optional(),
+  bundle_key: verifiedIdentifierSchema,
+  source_digest: verifiedDigestSchema,
+  scene_key: verifiedIdentifierSchema,
+  new_input_refs: z.array(verifiedEventRefSchema).min(1).max(10),
+  background_refs: z.array(verifiedEventRefSchema).max(5).default([]),
+  extractor_ref: verifiedExtractorRefSchema,
+  prompt_ref: verifiedIdentifierSchema.nullable().optional(),
+  model_ref: verifiedModelRefSchema,
+  extraction_profile_ref: z.object({
+    profile_id: verifiedIdentifierSchema,
+    version: z.number().int().positive(),
+    hash: verifiedDigestSchema,
+    scope: z.enum(["agent", "project", "tenant", "built_in"])
+  }),
+  candidates: z.array(verifiedKnowledgeCandidateSchema).max(200),
+  field_bindings: z.array(verifiedFieldBindingSchema).max(1_000),
+  edge_bindings: z.array(verifiedEdgeBindingSchema).max(1_000),
+  evidence_receipts: z.array(verifiedEvidenceReceiptSchema).max(500),
+  policy_version: verifiedIdentifierSchema,
+  collector_key_id: verifiedIdentifierSchema,
+  event_chain_hash: verifiedDigestSchema,
+  bundle_digest: verifiedDigestSchema,
+  signature: z.object({
+    algorithm: z.literal("ECDSA-P256-SHA256"),
+    key_id: verifiedIdentifierSchema,
+    value: z.string().regex(/^[A-Za-z0-9_-]+={0,2}$/u)
+  }),
+  created_at: z.number().int().nonnegative()
+}).superRefine((value, context) => {
+  if (value.signature.key_id !== value.collector_key_id) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["signature", "key_id"], message: "signature key_id must match collector_key_id" });
+  }
+  const newIds = new Set(value.new_input_refs.map((ref) => ref.event_id));
+  for (const ref of value.background_refs) {
+    if (newIds.has(ref.event_id)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["background_refs"], message: "an event cannot be both new input and background" });
+    }
+  }
+});
+
+export type VerifiedSourceSpan = z.infer<typeof verifiedSourceSpanSchema>;
+export type VerifiedEventRef = z.infer<typeof verifiedEventRefSchema>;
+export type VerifiedKnowledgeCandidate = z.infer<typeof verifiedKnowledgeCandidateSchema>;
+export type VerifiedFieldBinding = z.infer<typeof verifiedFieldBindingSchema>;
+export type VerifiedEdgeBinding = z.infer<typeof verifiedEdgeBindingSchema>;
+export type VerifiedEvidenceReceipt = z.infer<typeof verifiedEvidenceReceiptSchema>;
+export type VerifiedExtractorRef = z.infer<typeof verifiedExtractorRefSchema>;
+export type VerifiedModelRef = z.infer<typeof verifiedModelRefSchema>;
+export type VerifiedKnowledgeBundleV1 = z.infer<typeof verifiedKnowledgeBundleV1Schema>;

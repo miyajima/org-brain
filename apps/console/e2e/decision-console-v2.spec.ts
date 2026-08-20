@@ -30,6 +30,56 @@ test.describe("Decision-first Console v2", () => {
     });
   });
 
+  test("keeps briefing controls in the mobile first viewport and syncs shareable filter state", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(auditUrl("/?briefing_filter=changed&briefing_q=cache", "ja"));
+    const search = page.locator("[data-briefing-search]");
+    await expect(search).toHaveValue("cache");
+    expect(await search.evaluate((element) => element.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+    expect(await page.locator("[data-briefing-card]").first().evaluate((element) => element.getBoundingClientRect().top <= window.innerHeight)).toBe(true);
+    expect(await page.locator("[data-briefing-card]").first().locator(".decision-brief-aside .decision-action").evaluate((element) => element.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+    await page.locator(".decision-filter-tabs").getByRole("button", { name: "すべて", exact: true }).click();
+    expect(new URL(page.url()).searchParams.has("briefing_filter")).toBe(false);
+    await search.fill("decision");
+    expect(new URL(page.url()).searchParams.get("briefing_q")).toBe("decision");
+  });
+
+  test("keeps Agent preview controls within the mobile viewport and preserves navigation context", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(auditUrl("/agents?agent_id=agent-e2e&decision_id=" + decisionId + "&source_hash=e2e-source-h", "ja"));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    const preview = page.locator(".agent-context-preview");
+    const submit = page.locator("[data-context-preview-form] button[type=submit]");
+    const mobileSubmit = page.locator("[data-context-mobile-submit]");
+    expect(await preview.evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
+    expect(await submit.evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
+    await expect(mobileSubmit).toBeVisible();
+    expect(await mobileSubmit.evaluate((element) => element.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+    await page.getByRole("navigation", { name: "Org Brain" }).getByText("メニュー", { exact: true }).click();
+    await page.getByRole("navigation", { name: "Org Brain" }).getByRole("link", { name: "Skills" }).click();
+    expect(new URL(page.url()).searchParams.get("decision_id")).toBe(decisionId);
+    expect(new URL(page.url()).searchParams.get("source_hash")).toBe("e2e-source-h");
+  });
+
+  test("preserves Map and Skill inventory search state in shareable URLs", async ({ page }) => {
+    await page.goto(auditUrl("/map?map_q=cache", "ja"));
+    const picker = page.locator(".decision-map-picker");
+    await picker.locator("summary").click();
+    const mapSearch = picker.locator("[data-map-picker-search]");
+    await expect(mapSearch).toHaveValue("cache");
+    await mapSearch.fill("decision");
+    expect(new URL(page.url()).searchParams.get("map_q")).toBe("decision");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(auditUrl(`/skills?decision_id=${decisionId}&source_hash=e2e-source-h&skill_q=rollout`, "ja"));
+    const skillSearch = page.locator("[data-skill-search]");
+    await expect(skillSearch).toHaveValue("rollout");
+    await expect(page.locator("[data-skill-mobile-submit]")).toBeVisible();
+    expect(await page.locator("[data-skill-mobile-submit]").evaluate((element) => element.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+    await skillSearch.fill("checklist");
+    await expect.poll(() => page.evaluate(() => new URL(window.location.href).searchParams.get("skill_q"))).toBe("checklist");
+  });
+
   test("reaches the complete decision trace from the briefing in one transition", async ({ page }) => {
     await page.goto(auditUrl("/", "ja"));
     await expect(page.getByRole("heading", { level: 1, name: "Decision Briefing" })).toBeVisible();
@@ -106,6 +156,15 @@ test.describe("Decision-first Console v2", () => {
     await expect(page.locator("[data-map-glow=ambient-selection]")).toBeVisible();
   });
 
+  test("keeps the map action rail visible while reaching the relationship list", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(auditUrl(`/map?decision_id=${decisionId}`, "ja"));
+    const rail = page.locator(".decision-map-action-rail");
+    await page.locator(".decision-map-list button").first().scrollIntoViewIfNeeded();
+    await expect(rail).toBeInViewport();
+    await expect(rail.locator("[data-all-knowledge-map]")).toBeInViewport();
+  });
+
   for (const width of [320, 768] as const) {
     test(`keeps decision map controls usable without horizontal overflow at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
@@ -166,6 +225,33 @@ test.describe("Decision-first Console v2", () => {
     await dialog.getByLabel("Visibility").selectOption("tenant");
     await dialog.getByRole("button", { name: "Save access" }).click();
     await expect(dialog).toContainText("Access updated");
+  });
+
+  for (const [path, title] of [
+    [`/skills?decision_id=${decisionId}&source_hash=e2e-source-h&start=generate`, "Skills"],
+    ["/agents?agent_id=agent-e2e", "Agents"],
+    ["/reviews", "Reviews"]
+  ] as const) {
+    test(`has no WCAG A/AA violations on the V2 ${title} screen`, async ({ page }) => {
+      await page.goto(auditUrl(path, "ja"));
+      await expect(page.locator("main h1")).toHaveText(title);
+      const results = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      expect(results.violations).toEqual([]);
+    });
+  }
+
+  test("keeps V2 asset screens usable in landscape without horizontal overflow", async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    for (const path of [
+      `/skills?decision_id=${decisionId}&source_hash=e2e-source-h&start=generate`,
+      "/agents?agent_id=agent-e2e",
+      "/reviews"
+    ]) {
+      await page.goto(auditUrl(path, "ja"));
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), path).toBe(true);
+    }
   });
 
   for (const locale of ["en", "ja", "zh"] as const) {

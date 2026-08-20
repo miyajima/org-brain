@@ -13,6 +13,7 @@ const selectedSkillId = Astro.url.searchParams.get("skill_id")?.trim() ?? "";
 const decisionId = Astro.url.searchParams.get("decision_id")?.trim() ?? "";
 const sourceHash = Astro.url.searchParams.get("source_hash")?.trim() ?? "";
 const startGeneration = Astro.url.searchParams.get("start") === "generate";
+const initialSkillQuery = Astro.url.searchParams.get("skill_q")?.trim().slice(0, 120) ?? "";
 const normalizeProviders = (value: unknown): string[] => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Provider list was invalid");
   const entries = (value as Record<string, unknown>).providers;
@@ -55,26 +56,30 @@ const validationConditions = Array.isArray(manifest.validation_conditions) ? man
 const policy = access.data.policy && typeof access.data.policy === "object" ? access.data.policy as Record<string, unknown> : null;
 const utilizingAgents = Array.isArray(access.data.utilizing_agents) ? access.data.utilizing_agents.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
 const copy = {
-  en: { eyebrow: "Distribution layer", title: "Skills", lead: "Package a verified decision into an immutable version, then publish it deliberately for Agent use.", generate: "Generate from a decision", selected: "Selected knowledge", instruction: "Additional instruction", provider: "Provider", model: "Model", run: "Generate private draft", private: "Every generated Skill starts as a private draft. Nothing partial is published.", result: "Generation result", validation: "Validation conditions", publish: "Publish this version", publishing: "Publishing…", published: "Published", refresh: "Refresh draft", inventory: "Skill inventory", search: "Search Skills", empty: "No Skills yet.", choose: "Start from a decision detail to select its verified version.", files: "files", version: "version", source: "Source decision", owner: "Owner", exportLabel: "Export", retire: "Retire", error: "Skill operation failed" },
-  ja: { eyebrow: "Distribution layer", title: "Skills", lead: "検証済みの決定を内容不変の版としてまとめ、Agentで使う時点で明示的にPublishします。", generate: "決定からSkillを生成", selected: "選択した知識", instruction: "追加指示", provider: "Provider", model: "Model", run: "private draftを生成", private: "生成直後は常にprivate draftです。部分的な結果はPublishされません。", result: "生成結果", validation: "検証条件", publish: "この版をPublish", publishing: "Publish中…", published: "公開済み", refresh: "draftを再読込", inventory: "Skill一覧", search: "Skillを検索", empty: "Skillはまだありません。", choose: "決定詳細から、検証済みの版を選択して開始してください。", files: "files", version: "version", source: "参照元の決定", owner: "所有者", exportLabel: "Export", retire: "Retire", error: "Skill操作に失敗しました" },
-  zh: { eyebrow: "Distribution layer", title: "Skills", lead: "将已验证的决策打包为不可变版本，再明确发布给Agent使用。", generate: "从决策生成Skill", selected: "已选知识", instruction: "附加指示", provider: "Provider", model: "模型", run: "生成private draft", private: "生成后始终是private draft，部分结果不会发布。", result: "生成结果", validation: "验证条件", publish: "发布此版本", publishing: "发布中…", published: "已发布", refresh: "刷新draft", inventory: "Skill列表", search: "搜索Skill", empty: "暂无Skill。", choose: "请从决策详情选择其已验证版本。", files: "files", version: "version", source: "来源决策", owner: "所有者", exportLabel: "导出", retire: "停用", error: "Skill操作失败" }
+  en: { eyebrow: "Distribution layer", title: "Skills", lead: "Package a verified decision into an immutable version, then publish it deliberately for Agent use.", generate: "Generate from a decision", selected: "Selected knowledge", instruction: "Additional instruction", provider: "Provider", model: "Model", run: "Generate private draft", private: "Every generated Skill starts as a private draft. Nothing partial is published.", result: "Generation result", validation: "Validation conditions", publish: "Publish this version", publishing: "Publishing…", published: "Published", refresh: "Refresh draft", inventory: "Skill inventory", search: "Search Skills", empty: "No Skills yet.", choose: "Start from a decision detail to select its verified version.", files: "files", version: "version", source: "Source decision", owner: "Owner", exportLabel: "Export", retire: "Retire", error: "Skill operation failed", retry: "Try again" },
+  ja: { eyebrow: "配布レイヤー", title: "Skills", lead: "検証済みの決定を内容不変の版としてまとめ、Agentで使う時点で明示的にPublishします。", generate: "決定からSkillを生成", selected: "選択した知識", instruction: "追加指示", provider: "Provider", model: "Model", run: "private draftを生成", private: "生成直後は常に非公開の下書き（private draft）です。部分的な結果はPublishされません。", result: "生成結果", validation: "検証条件", publish: "この版をPublish", publishing: "Publish中…", published: "公開済み", refresh: "draftを再読込", inventory: "Skill一覧", search: "Skillを検索", empty: "Skillはまだありません。", choose: "決定詳細から、検証済みの版を選択して開始してください。", files: "files", version: "version", source: "参照元の決定", owner: "所有者", exportLabel: "Export", retire: "Retire", error: "Skill操作に失敗しました", retry: "再試行" },
+  zh: { eyebrow: "分发层", title: "Skills", lead: "将已验证的决策打包为不可变版本，再明确发布给Agent使用。", generate: "从决策生成Skill", selected: "已选知识", instruction: "附加指示", provider: "Provider", model: "模型", run: "生成private draft", private: "生成后始终是private draft（私有草稿），部分结果不会发布。", result: "生成结果", validation: "验证条件", publish: "发布此版本", publishing: "发布中…", published: "已发布", refresh: "刷新draft", inventory: "Skill列表", search: "搜索Skill", empty: "暂无Skill。", choose: "请从决策详情选择其已验证版本。", files: "files", version: "version", source: "来源决策", owner: "所有者", exportLabel: "导出", retire: "停用", error: "Skill操作失败", retry: "重试" }
 }[lang];
+const uxCopy = Object.assign(copy, {
+  generating: lang === "ja" ? "生成中…" : lang === "zh" ? "生成中…" : "Generating…",
+  back: lang === "ja" ? "決定一覧へ戻る" : lang === "zh" ? "返回决策列表" : "Back to decisions"
+});
 const preferredModel: Record<string, string> = { openai: "gpt-5-mini", gemini: "gemini-2.5-flash", anthropic: "claude-sonnet-4-5" };
 const initialProvider = providers.data[0] ?? "";
 const listQuery = new URLSearchParams(params);
 const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
-  <section class="decision-assets-page" data-skills-page data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-decision-id={decisionId} data-source-hash={sourceHash} data-copy={JSON.stringify(copy)} data-preferred-model={JSON.stringify(preferredModel)}>
+  <section class="decision-assets-page" data-skills-page data-asset-kind="skills" data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-decision-id={decisionId} data-source-hash={sourceHash} data-copy={JSON.stringify(uxCopy)} data-preferred-model={JSON.stringify(preferredModel)}>
     <header class="decision-page-header">
-      <div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div>
+      <div><a class="decision-back-link" href={scopedHref("/", params)}>← {uxCopy.back}</a><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div>
       {selectedSummary && <AccessDrawer resourceType="skill_asset" resourceId={selectedSummary.id} tenantId={tenantId} projectId={projectId} policy={policy} utilizingAgents={utilizingAgents} locale={lang} />}
     </header>
-    {(skills.error || providers.error || selectedDetails.error || access.error) && <div class="decision-alert" role="alert">{skills.error ?? providers.error ?? selectedDetails.error ?? access.error}</div>}
+    {(skills.error || providers.error || selectedDetails.error || access.error) && <div class="decision-alert" role="alert"><span>{skills.error ?? providers.error ?? selectedDetails.error ?? access.error}</span><a class="decision-action decision-action-secondary decision-alert-action" href={`${Astro.url.pathname}${Astro.url.search}`}>{copy.retry}</a></div>}
 
     <div class="decision-assets-layout">
       <aside class="decision-asset-inventory">
-        <div class="decision-section-heading"><div><p class="decision-eyebrow">{copy.inventory}</p><h2>{skills.data.length}</h2></div><label>{copy.search}<input type="search" data-skill-search placeholder={copy.search} /></label></div>
+        <div class="decision-section-heading"><div><p class="decision-eyebrow">{copy.inventory}</p><h2>{skills.data.length}</h2></div><label>{copy.search}<input type="search" name="skill_q" data-skill-search value={initialSkillQuery} placeholder={copy.search} /></label></div>
         <div class="decision-asset-list" data-skill-list>
           {skills.data.map((skill) => {
             const next = new URLSearchParams(listQuery);
@@ -95,7 +100,10 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
           <ol class="skill-wizard-steps">
             <li class="is-active"><span>01</span>{copy.selected}</li><li><span>02</span>{copy.instruction}</li><li><span>03</span>{copy.result}</li><li><span>04</span>{copy.validation}</li>
           </ol>
-          <form data-skill-generate-form>
+          <form id="skill-generate-form" data-skill-generate-form>
+            <div class="mobile-form-action" data-mobile-form-action>
+              <button type="button" data-skill-mobile-submit aria-controls="skill-generate-form" disabled={!decisionId || !sourceHash || providers.data.length === 0}>{copy.run}</button>
+            </div>
             <label>{copy.selected}<input value={decisionId || copy.choose} readonly aria-describedby="skill-source-help" /></label>
             <p id="skill-source-help" class="decision-helper">{decisionId && sourceHash ? `${decisionId} · sha256:${sourceHash.slice(0, 12)}…` : copy.choose}</p>
             <label>{copy.instruction}<textarea name="instructions" rows="6" required maxlength="4096" placeholder={lang === "ja" ? "利用条件、禁止事項、完了条件を追記" : "Add usage constraints and completion criteria"}></textarea></label>
@@ -106,7 +114,7 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
               <label>{copy.model}<input name="model" required value={initialProvider ? preferredModel[initialProvider] ?? "" : ""} disabled={providers.data.length === 0} /></label>
             </div>
             <p class="decision-private-note">{copy.private}</p>
-            <footer><p data-generation-status role="alert"></p><button type="submit" disabled={!decisionId || !sourceHash || providers.data.length === 0}>{copy.run}</button></footer>
+            <footer><p data-generation-status role="alert" tabindex="-1"></p><button type="submit" data-skill-generate-submit disabled={!decisionId || !sourceHash || providers.data.length === 0}>{copy.run}</button></footer>
           </form>
           <div class="skill-generation-result" data-generation-result hidden>
             <h3>{copy.result}</h3><dl><div><dt>Task</dt><dd data-generation-task></dd></div><div><dt>Draft</dt><dd data-generation-asset></dd></div></dl><a data-generation-refresh>{copy.refresh}</a>
@@ -145,21 +153,51 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
       const preferredModel = JSON.parse(root.dataset.preferredModel || "{}");
       const search = root.querySelector<HTMLInputElement>("[data-skill-search]");
       const cards = [...root.querySelectorAll<HTMLElement>("[data-skill-card]")];
-      search?.addEventListener("input", () => {
-        const query = search.value.trim().toLocaleLowerCase();
+      const syncSkillLinks = (query: string) => {
+        for (const card of cards) {
+          if (!(card instanceof HTMLAnchorElement)) continue;
+          const href = new URL(card.href, window.location.href);
+          if (query) href.searchParams.set("skill_q", query);
+          else href.searchParams.delete("skill_q");
+          card.href = `${href.pathname}${href.search}`;
+        }
+      };
+      const filterCards = (updateUrl = true) => {
+        const rawQuery = search?.value.trim() || "";
+        const query = rawQuery.toLocaleLowerCase();
         for (const card of cards) card.hidden = Boolean(query) && !(card.dataset.search || "").includes(query);
+        syncSkillLinks(rawQuery);
+        if (updateUrl) {
+          const url = new URL(window.location.href);
+          if (rawQuery) url.searchParams.set("skill_q", rawQuery.slice(0, 120));
+          else url.searchParams.delete("skill_q");
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+      };
+      search?.addEventListener("input", () => filterCards());
+      window.addEventListener("popstate", () => {
+        if (search) search.value = new URL(window.location.href).searchParams.get("skill_q")?.trim().slice(0, 120) || "";
+        filterCards(false);
       });
+      if (search) filterCards(false);
       const provider = root.querySelector<HTMLInputElement>("[name=provider]");
       const model = root.querySelector<HTMLInputElement>("[name=model]");
       provider?.addEventListener("change", () => { if (model) model.value = preferredModel[provider.value] || ""; });
-      root.querySelector<HTMLFormElement>("[data-skill-generate-form]")?.addEventListener("submit", async (event) => {
+      const mobileSubmit = root.querySelector<HTMLButtonElement>("[data-skill-mobile-submit]");
+      const generationForm = root.querySelector<HTMLFormElement>("[data-skill-generate-form]");
+      mobileSubmit?.addEventListener("click", () => generationForm?.requestSubmit());
+      generationForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const form = event.currentTarget as HTMLFormElement;
         const values = new FormData(form);
         const status = root.querySelector<HTMLElement>("[data-generation-status]");
         const submit = form.querySelector<HTMLButtonElement>("button[type=submit]");
         const idempotencyKey = crypto.randomUUID();
-        if (submit) submit.disabled = true;
+        const originalLabel = submit?.textContent || "";
+        const mobileOriginalLabel = mobileSubmit?.textContent || "";
+        form.setAttribute("aria-busy", "true");
+        if (submit) { submit.disabled = true; submit.textContent = copy.generating; }
+        if (mobileSubmit) { mobileSubmit.disabled = true; mobileSubmit.textContent = copy.generating; }
         if (status) status.textContent = "";
         try {
           const response = await fetch("/api/v1/skills/generate", {
@@ -195,9 +233,14 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
           if (panel) panel.hidden = false;
           if (status) status.textContent = copy.private;
         } catch (error) {
-          if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`;
+          if (status) {
+            status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`;
+            status.focus({ preventScroll: false });
+          }
         } finally {
-          if (submit) submit.disabled = false;
+          form.removeAttribute("aria-busy");
+          if (submit) { submit.disabled = false; submit.textContent = originalLabel; }
+          if (mobileSubmit) { mobileSubmit.disabled = false; mobileSubmit.textContent = mobileOriginalLabel; }
         }
       });
       root.querySelector<HTMLButtonElement>("[data-publish-skill]")?.addEventListener("click", async (event) => {

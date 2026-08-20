@@ -75,6 +75,7 @@ import {
 import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
 import { getDomainContext, queryMetrics, searchManagedObjects } from "./domain-metric-service";
 import { getDomainRecall, recordDomainRecallFeedback } from "./domain-recall-service";
+import { ingestVerifiedKnowledgeBundle } from "./verified-ingestion-service";
 import {
   getDecisionResources,
   getResourceDecisions,
@@ -586,6 +587,29 @@ class OrgBrainMcpTools {
           view
         });
         return toContent(memories);
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_memory_commit_verified",
+      {
+        tenant_id: z.string().optional(),
+        bundle: z.record(z.string(), z.unknown())
+      },
+      async ({ tenant_id, bundle }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const projectId = typeof bundle.project_id === "string" ? bundle.project_id : null;
+        await this.requirePermission(tenantId, "write", projectId);
+        await this.requirePermission(tenantId, "memory:attest", projectId);
+        return toContent(await this.auditedMutation(
+          tenantId,
+          "mcp.orgbrain_memory_commit_verified",
+          "verified_ingestion_manifest",
+          () => ingestVerifiedKnowledgeBundle(this.env, tenantId, bundle, this.props.principal, {
+            publishAuthorized: true,
+            allowShadow: false
+          })
+        ));
       }
     );
 

@@ -581,6 +581,7 @@ const filterSummary = [
       nodeColor(fn: (node: MapNode) => string): GraphInstance;
       nodeThreeObject(fn: (node: MapNode) => unknown): GraphInstance;
       nodeThreeObjectExtend(value: boolean): GraphInstance;
+      enablePointerInteraction?(value: boolean): GraphInstance;
       nodeOpacity(value: number): GraphInstance;
       nodeVisibility(fn: (node: MapNode) => boolean): GraphInstance;
       linkColor(fn: (link: GraphLink) => string): GraphInstance;
@@ -611,6 +612,8 @@ const filterSummary = [
     let pendingFocusId = "";
     let hasFocusedNode = false;
     let svgGlowLoopActive = false;
+    let mapVisible = document.visibilityState === "visible";
+    let glowTimer: number | null = null;
     type GlowLayer = {
       scale: { set(x: number, y: number, z: number): void };
       material: { color: { set(value: string): void }; opacity: number };
@@ -735,7 +738,8 @@ const filterSummary = [
     const totalNodeCount = Number(data.total_count ?? data.nodes.length);
     // Calculate once at display start: sparse maps need a readable halo, while
     // dense maps keep the same visual language without turning into a light wall.
-    const budgetedGlow = totalNodeCount > 1500 || data.nodes.length > 1500;
+    const denseGraph = totalNodeCount > 1000 || data.nodes.length > 1000 || data.links.length > 2200;
+    const budgetedGlow = denseGraph || totalNodeCount > 1500 || data.nodes.length > 1500;
     const ambientGlowIntensity = Math.max(0.78, Math.min(1.5, 2.2 - Math.log10(Math.max(1, totalNodeCount)) * 0.25));
     const ambientGlowSize = 0.82 + ambientGlowIntensity * 0.28;
     const svgAmbientOpacity = Math.min(budgetedGlow ? 0.4 : 0.62, (budgetedGlow ? 0.26 : 0.28) * ambientGlowIntensity);
@@ -815,11 +819,14 @@ const filterSummary = [
       }
     };
     const startSvgGlowLoop = () => {
-      if (svgGlowLoopActive || !glowOverlay) return;
+      if (svgGlowLoopActive || !glowOverlay || !mapVisible || document.visibilityState !== "visible") return;
       svgGlowLoopActive = true;
       glowOverlay.removeAttribute("hidden");
       const frame = () => {
-        if (!svgGlowLoopActive) return;
+        if (!svgGlowLoopActive || !mapVisible || document.visibilityState !== "visible") {
+          svgGlowLoopActive = false;
+          return;
+        }
         if (budgetedGlow) glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
         updateSvgGlow();
         window.requestAnimationFrame(frame);
@@ -849,6 +856,34 @@ const filterSummary = [
         layers.outer.scale.set(outerSize, outerSize, 1);
       }
     };
+    const stopGlowTimer = () => {
+      if (glowTimer !== null) window.clearInterval(glowTimer);
+      glowTimer = null;
+    };
+    const startGlowTimer = () => {
+      if (budgetedGlow || glowTimer !== null || !mapVisible || document.visibilityState !== "visible" || data.nodes.length === 0) return;
+      glowTimer = window.setInterval(() => {
+        glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
+        updateGlowAppearance();
+        graph?.nodeColor?.(colorFor);
+        graph?.nodeVal?.(nodeValue);
+      }, 180);
+    };
+    const setMapVisibility = (visible: boolean) => {
+      mapVisible = visible;
+      if (visible) {
+        startSvgGlowLoop();
+        startGlowTimer();
+      } else {
+        svgGlowLoopActive = false;
+        stopGlowTimer();
+      }
+    };
+    document.addEventListener("visibilitychange", () => setMapVisibility(document.visibilityState === "visible"));
+    window.addEventListener("pagehide", () => setMapVisibility(false), { once: true });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(([entry]) => setMapVisibility(Boolean(entry?.isIntersecting)), { threshold: 0.01 }).observe(root);
+    }
     const createGlowNodeObject = (node: MapNode, THREE: typeof import("three")) => {
       const coreSize = Math.max(1.1, Math.cbrt(nodeValue(node)) * 1.3);
       const coreMaterial = new THREE.MeshBasicMaterial({
@@ -2041,6 +2076,7 @@ const filterSummary = [
             .backgroundColor("#050a12")
             .showNavInfo(false)
             .nodeLabel((node: MapNode) => {
+              if (denseGraph) return "";
               if (node.node_type === "tenant") return `${mapText("tenantRoot", "Tenant root")} · ${node.label}<br/>${node.member_count || 0} ${mapText("projectsLabel", "projects")} · ${node.reference_count || 0} ${mapText("memoriesLabel", "memories")}`;
               if (node.node_type === "project") return `${mapText("projectHub", "Project hub")} · ${node.label}<br/>${node.member_count || node.reference_count} ${mapText("membersLabel", "members")}`;
               if (node.node_type === "entity") return `${mapText("sharedConcept", "Shared concept")} · ${node.label}<br/>${node.reference_count} ${mapText("memoriesLabel", "memories")}`;
@@ -2056,16 +2092,20 @@ const filterSummary = [
             .linkVisibility(linkVisible)
             .linkWidth(linkWidthFor)
             .linkCurvature(linkCurvatureFor)
-            .linkOpacity(0.6)
+            .linkOpacity(denseGraph ? 0.42 : 0.6)
             .linkDirectionalArrowLength((link: GraphLink) => link.directed === false ? 0 : 2.4)
             .linkDirectionalArrowRelPos(1)
-            .linkDirectionalParticles(linkParticlesFor)
-            .linkDirectionalParticleSpeed(0.012)
-            .linkDirectionalParticleWidth(1.3)
+            .linkDirectionalParticles(denseGraph ? (() => 0) : linkParticlesFor)
+            .linkDirectionalParticleSpeed(denseGraph ? 0 : 0.012)
+            .linkDirectionalParticleWidth(denseGraph ? 0 : 1.3)
             .linkDirectionalParticleColor(linkColorFor)
             .onNodeClick((node: MapNode) => selectNode(node))
             .onBackgroundClick(() => selectNode(null))
             .graphData({ nodes: data.nodes, links: data.links });
+          if (denseGraph) {
+            graph.enablePointerInteraction?.(false);
+            if (renderStatus) renderStatus.textContent = mapText("denseMapHint", "High-density mode: use the accessible list to select nodes.");
+          }
           updateGlowAppearance();
           graph.width(stage.clientWidth).height(stage.clientHeight);
           graph.d3Force("charge")?.strength?.(-65);
@@ -2085,7 +2125,7 @@ const filterSummary = [
           stage.setAttribute("aria-busy", "false");
           if (renderStatus) renderStatus.textContent = "";
           if (fallback) fallback.hidden = true;
-          startSvgGlowLoop();
+          setMapVisibility(true);
           resizeObserver?.observe(stage);
           stage.querySelector("canvas")?.addEventListener("webglcontextlost", () => {
             redirectToList(mapText("fallbackTitle", "3D view is unavailable; the accessible list remains available"));
@@ -2097,14 +2137,7 @@ const filterSummary = [
               redirectToList(mapText("mapRenderFallback", "The 3D view could not be rendered, so the list is shown."));
             }
           }, 2500);
-          if (data.nodes.length > 0 && !budgetedGlow) {
-            window.setInterval(() => {
-              glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
-              updateGlowAppearance();
-              graph?.nodeColor?.(colorFor);
-              graph?.nodeVal?.(nodeValue);
-            }, 90);
-          }
+          startGlowTimer();
         } catch (error) {
           console.error("MemoryMap3D initialization failed", error);
           redirectToList(mapText("mapRenderFallback", "The 3D view could not be rendered, so the list is shown."));

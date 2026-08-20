@@ -43,6 +43,20 @@ Browser -> Console Pages -> API Gateway -> D1
 Agent/MCP client -----------------+                    -> generation provider
 ```
 
+The local evidence-chain collector is a parallel write plane:
+
+```text
+Local session -> scene/rule extractor -> signed VerifiedKnowledgeBundleV1
+             -> API Gateway / MCP -> D1 manifest + provenance audit layer
+             -> deterministic projection -> existing Decision/Resource/Trace
+```
+
+The collector owns private-key custody. D1 stores only the registered public
+key, principal, tenant, state, and expiry. The Gateway performs signature,
+event-chain, tenant, and permission checks; it does not call a server-side LLM.
+Migration 0035 is additive and leaves the existing capture and AI-review paths
+available for rollback.
+
 The Console, MCP, and direct API surfaces converge on the same Gateway services
 and unified authorization decision. Provider credentials remain server-side.
 
@@ -195,6 +209,49 @@ Beta is staging-only. After migrations and shadow comparison, the
 deployment order is API migration, API/runner, then Console. Production changes
 to `on` only after security, performance, accessibility, migration, and live
 smoke gates pass.
+
+## Infrastructure and deployment topology
+
+Cloudflare Workers host the API Gateway, D1 remains the organization source of
+truth, and the Console is deployed as the existing Cloudflare Pages/Workers
+surface. Local verified collection runs on the operator device and reaches the
+Gateway over the authenticated HTTP or MCP boundary.
+
+## Major components
+
+The major components are the shared contracts package, local extractor and
+collector CLI, verified-ingestion service, additive D1 manifest/provenance
+tables, deterministic projection, Decision Trace service, and Console detail
+panel. Existing Memory, Decision, Resource, ACL, Skill, and Agent components
+remain authoritative for their respective read models.
+
+## External systems and integrations
+
+The verified path integrates with the local OS credential store for collector
+private keys and with Web Crypto-compatible ECDSA verification in the Gateway.
+It does not call a remote model. Existing D1, R2, Vectorize, Queue, and
+provider integrations remain behind their current boundaries.
+
+## Data and control flow
+
+Local session events are scene-split, rule-extracted, optionally completed by a
+single local model call, source-matched, canonically hashed, and signed. The
+Gateway verifies tenant, key, signature, event chain, ACL, schema, and
+provenance before it writes a manifest and optionally projects Active data.
+
+## Boundaries and dependencies
+
+Profile terminology may influence extraction only. It cannot change Bundle
+schema, source receipts, ACL, signatures, or the Active gate. The Gateway never
+trusts model confidence or client-supplied IDs, hashes, versions, or promotion
+states. Legacy capture and AI-review paths do not depend on this new write plane.
+
+## Cross-cutting operational concerns
+
+The rollout uses independent shadow/beta/on flags, additive migrations, masked
+excerpts, bounded payloads, deterministic idempotency, and fail-closed handling
+for verification failures. Collector revocation retains manifests so operators
+can enumerate and re-verify affected data without deleting audit history.
 
 ## Alternatives
 
