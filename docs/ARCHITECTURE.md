@@ -3,7 +3,7 @@ title: Org Brain architecture
 doc_type: architecture
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 ---
 
 # Org Brain architecture
@@ -34,7 +34,7 @@ second authority for shared Skills or Agent Loadouts.
 - Ed25519 metadata, SHA-256 content hashes, and versioned policies preserve
   provenance without persisting transcripts or model reasoning.
 
-## Deployment topology
+## Infrastructure and deployment topology
 
 ```text
 Browser -> Console Pages -> API Gateway -> D1
@@ -45,6 +45,8 @@ Agent/MCP client -----------------+                    -> generation provider
 
 The Console, MCP, and direct API surfaces converge on the same Gateway services
 and unified authorization decision. Provider credentials remain server-side.
+
+## Major components
 
 - session importer and hook bridge: privacy-safe projections and routing;
 - deterministic verifier and machine-reference council: qualification;
@@ -58,6 +60,25 @@ and unified authorization decision. Provider credentials remain server-side.
 - Pack Workspace read model: scoped KPI, Decision rationale, evidence, Outcome,
   and non-secret Connector readiness over the installed registry and immutable
   Snapshot history; it does not execute Connectors or Workflows.
+- Domain Recall plane: deterministic, ACL-first retrieval of Pack-scoped
+  Decision units for Local CLI/hooks and opt-in Cloud API/MCP injection.
+  Candidate events store a query SHA-256 and evidence metadata, never a raw
+  prompt or evidence body.
+
+## External systems and integrations
+
+Connector providers, CI/observability/CRM/product-analytics systems, identity
+providers, and external Workflow runners remain outside OrgBrain authority.
+OrgBrain stores registered adapter/template references, aggregate snapshots,
+execution references, and evidence metadata; it does not embed provider secrets
+or execute arbitrary Pack code.
+
+## Data and control flow
+
+Writes preserve canonical records and immutable versions before producing FTS,
+graph, Dashboard, Recall, or cache projections. Reads authorize candidates
+before ranking and aggregation. Local-to-Cloud promotion verifies a portable
+archive before changing authority, after which Local writes become proposals.
 ## Decision read plane
 
 The Decision Briefing, Decision Trace, and Decision Map are bounded read models
@@ -84,6 +105,11 @@ Named Agents point to named Loadouts. Bindings select `always`, `auto`, or
 published version. Runtime resolution evaluates Agent, Loadout, Skill, and
 version state against the current policy. `on_demand` returns metadata and a
 fetch handle, not the Skill body.
+
+## Boundaries and dependencies
+
+The following access, generation, runtime, and storage boundaries are explicit
+dependencies of every Console, API, MCP, hook, and migration path.
 
 ## Access-policy boundary
 
@@ -124,6 +150,20 @@ Loadout feature flag is active, resolution is ACL-first and uses the current
 published state at request time. Revocation therefore takes effect on the next
 request. When absent or disabled, the existing context path remains unchanged.
 
+Domain Recall is a second, explicitly gated enrichment. The local hook uses
+`DOMAIN_RECALL_MODE=off|shadow|on`; Cloud uses the same flag and adds
+`DOMAIN_RECALL_HOOK_MODE=off|personal|team`. Existing Context Enrich responses
+remain byte-shape compatible unless `include_domain_recall=true` is supplied.
+Recall MCP installations use purpose `recall`; capture installations remain
+restricted to the capture tool. Runtime actor and owner principal are recorded
+separately, and authorization is evaluated against the owner.
+
+Local SQLite is authoritative until a verified portable JSONL archive is
+accepted by Cloud. Promotion changes Local to read-cache plus proposal-outbox
+mode; it does not dual-write mutable domain knowledge. Import records are
+canonicalized, SHA-256 verified, planned before apply, and reject an existing
+ID with a different digest.
+
 ## Existing subsystems
 
 Session ingestion, deterministic verification, quarantine, retrieval,
@@ -149,7 +189,9 @@ from a decision; Tasks and Operations move under Manage without being removed.
 
 `DECISION_CONSOLE_MODE=off|beta|on` gates the new read and Console surfaces;
 `LOADOUT_RESOLUTION_MODE=off|beta|on` independently gates Agent context
-resolution. Beta is staging-only. After migrations and shadow comparison, the
+resolution. `DOMAIN_RECALL_MODE`, `DOMAIN_RECALL_HOOK_MODE`, and
+`PORTABLE_ARCHIVE_MODE` independently gate Recall and authority migration.
+Beta is staging-only. After migrations and shadow comparison, the
 deployment order is API migration, API/runner, then Console. Production changes
 to `on` only after security, performance, accessibility, migration, and live
 smoke gates pass.

@@ -66,6 +66,21 @@ function runtimeEnv() {
   );`);
   database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0034_domain_pack_platform.sql`, "utf8"));
   database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0035_domain_pack_workspaces.sql`, "utf8"));
+  database.exec(`CREATE TABLE domain_recall_events(
+    id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_principal TEXT,
+    mode TEXT NOT NULL, client_name TEXT, candidate_count INTEGER NOT NULL,
+    bundle_json TEXT NOT NULL, created_at INTEGER NOT NULL
+  );`);
+  database.exec(`CREATE TABLE domain_recall_event_candidates(
+    recall_id TEXT NOT NULL, tenant_id TEXT NOT NULL, recall_unit_id TEXT NOT NULL,
+    pack_id TEXT NOT NULL, role TEXT NOT NULL, rank INTEGER NOT NULL,
+    score REAL NOT NULL, created_at INTEGER NOT NULL,
+    PRIMARY KEY(recall_id, recall_unit_id)
+  );`);
+  database.exec(`CREATE TABLE domain_recall_feedback(
+    id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, recall_id TEXT NOT NULL,
+    feedback TEXT NOT NULL, created_at INTEGER NOT NULL
+  );`);
   const db = {
     prepare: (sql: string) => new D1StatementAdapter(database, sql),
     batch: async (statements: D1StatementAdapter[]) => {

@@ -2,6 +2,14 @@
   "story_id": "story-sales-fy26-q3",
   "fixture_date": "2026-07-31T00:00:00Z",
   "install_fixture": false,
+  "recall_fixture": {
+    "prompt": "mid-market-jpのFY26-Q3でSDRを増員したい",
+    "object_type_key": "segment",
+    "object_id": "mid-market-jp",
+    "scope": { "segment": "mid-market-jp", "team": "sdr-tokyo", "quarter": "FY26-Q3" },
+    "expected_decision_id": "DEC-SALES-FY26-Q3-01",
+    "forbidden_payload_fields": ["customer_id", "customer_name", "contact_email"]
+  },
   "objects": [
     { "id": "mid-market-jp", "type": "segment", "name": "mid-market-jp" },
     { "id": "saas-webinar-july", "type": "campaign", "name": "saas-webinar-july" },

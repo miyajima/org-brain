@@ -1032,6 +1032,37 @@ const server = http.createServer(async (request, response) => {
     json(response, 200, ok(workspace));
     return;
   }
+  if (path === "/v1/domain-recalls/recall-build-e2e" && request.method === "GET") {
+    json(response, 200, ok({
+      contract_version: "domain-recall/v1",
+      id: "recall-build-e2e",
+      tenant_id: "workspace-demo",
+      project_id: "org-brain",
+      generated_at: now,
+      query_hash: "a".repeat(64),
+      summary: "checkout-webのCI変更に関連する確認済みDecision",
+      primary: {
+        recall_unit_id: "unit-build-e2e",
+        pack_id: "function.build-engineering",
+        role: "primary",
+        score: { total: 0.91 },
+        why_recalled: ["object exact", "intent matched"],
+        scope: { repository: "checkout-web", pipeline: "ci-main" },
+        decision: {
+          id: "DEC-BUILD-2026-07-01",
+          statement: "runnerを2台増やしintegration testを4 shardへ分割する",
+          rationale: "遅延の大半がrunner待ちだったため",
+          confirmation_state: "confirmed"
+        },
+        metrics: [{ metric_key: "build_duration_p95", value: 9.7, unit: "minutes", state: "measured" }],
+        evidence: [{ id: "ci-report", title: "checkout-web CI 7日間レポート", source: "GitHub Actions", verification_state: "verified" }]
+      },
+      supporting: [],
+      conflicts: [],
+      warnings: []
+    }));
+    return;
+  }
   if (path === "/v1/domain-packs/installations/plan" && request.method === "POST") {
     const body = await readJson(request);
     json(response, 200, ok({

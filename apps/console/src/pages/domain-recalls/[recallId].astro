@@ -1,0 +1,42 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const recallId = decodeURIComponent(Astro.params.recallId ?? "");
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
+const language = Astro.url.searchParams.get("lang") === "ja" ? "ja" : "ja";
+const requestedReturnTo = Astro.url.searchParams.get("return_to")?.trim() || "";
+const returnTo = requestedReturnTo.startsWith("/domain-workspaces/") ? requestedReturnTo : `/domain-workspaces?tenant_id=${encodeURIComponent(tenantId)}&lang=${language}`;
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const response = await fetch(new URL(`/api/v1/domain-recalls/${encodeURIComponent(recallId)}?tenant_id=${encodeURIComponent(tenantId)}`, Astro.url), { headers: { cookie } });
+const payload: any = await response.json().catch(() => null);
+const recall: any = payload?.data ?? null;
+const candidates = recall ? [recall.primary, ...(recall.supporting ?? []), ...(recall.conflicts ?? [])].filter(Boolean) : [];
+const roleCopy: Record<string, string> = { primary: "主想起", supporting: "補助", conflict: "矛盾候補" };
+const reasonCopy: Record<string, string> = { object: "対象が一致", intent: "相談内容が一致", scope: "対象範囲が一致", project: "プロジェクトが一致", decision: "Decisionとの関係", active_confirmed: "確認済みDecision", evidence_verified: "検証済みの根拠", metric_fresh: "最新の指標" };
+const reasonLabel = (value: string) => reasonCopy[value.replace(/ exact$/u, "").replace(/ matched$/u, "")] ?? value;
+const stateCopy: Record<string, string> = { confirmed: "確認済み", proposal: "提案中", superseded: "更新済み", conflict: "要確認", measured: "観測済み", stale: "期限切れ", verified: "検証済み", unverified: "未検証" };
+const relevance = (value: number | null | undefined) => typeof value !== "number" ? "—" : value >= .8 ? "高" : value >= .6 ? "中" : "低";
+const dateTime = (value: number) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
+---
+
+<BaseLayout title={`Domain Recall Trace · ${recallId}`}>
+  <main class="recall-trace-shell">
+    <nav aria-label="パンくず"><a href={`/domain-workspaces?tenant_id=${encodeURIComponent(tenantId)}&lang=${language}`}>Pack Workspaces</a><span>/</span><a href={returnTo}>元のWorkspace</a><span>/</span><span>想起の監査情報</span></nav>
+    {!response.ok || !recall ? <section class="trace-empty"><p class="surface-label">DOMAIN RECALL</p><h1>Traceを表示できません</h1><p>{payload?.error?.message ?? "対象のRecallが見つかりません。"}</p></section> : <>
+      <header class="trace-hero"><div><p class="surface-label">AI RECALL AUDIT</p><h1>{recall.summary}</h1><p>AIがこのDecisionを参照した理由と、判断を支えた指標・根拠を確認できます。入力本文は保存していません。</p><a class="back-to-workspace" href={returnTo}>Decisionの正本へ戻る</a></div><dl><div><dt>AIが参照した日時</dt><dd>{dateTime(recall.generated_at)}</dd></div><div><dt>関連するDecision</dt><dd>{candidates.length}件</dd></div><div><dt>監査ID</dt><dd>{recall.id}</dd></div></dl></header>
+      {recall.warnings?.length > 0 && <aside class="trace-warning"><strong>注意</strong><ul>{recall.warnings.map((warning: string) => <li>{warning}</li>)}</ul></aside>}
+      <section class="trace-section" aria-labelledby="candidate-title"><div class="section-heading"><div><p class="surface-label">REFERRED DECISIONS</p><h2 id="candidate-title">AIが参照したDecision</h2></div><span>{candidates.length}件</span></div>
+        {candidates.length === 0 ? <p class="empty-copy">この相談に十分関連するDecisionはありませんでした。</p> : <div class="candidate-list">{candidates.map((candidate: any) => <article><div class="candidate-meta"><span>{roleCopy[candidate.role] ?? candidate.role}</span><span>関連度 {relevance(candidate.score?.total)}</span><span>{stateCopy[candidate.decision?.confirmation_state] ?? candidate.decision?.confirmation_state ?? "状態不明"}</span></div><h3>{candidate.decision?.statement ?? "Decision"}</h3><p>{candidate.decision?.rationale ?? "理由は未登録です。"}</p><dl><div><dt>参照した理由</dt><dd>{candidate.why_recalled?.map(reasonLabel).join(" / ") || "—"}</dd></div><div><dt>対象範囲</dt><dd>{Object.entries(candidate.scope ?? {}).map(([key, value]) => `${key}=${value}`).join(" / ") || "組織全体"}</dd></div><div><dt>確認できる根拠</dt><dd>指標 {candidate.metrics?.length ?? 0}件 · 資料 {candidate.evidence?.length ?? 0}件</dd></div></dl>
+          {candidate.metrics?.length > 0 && <details><summary>指標を確認する <span>{candidate.metrics.length}件</span></summary><ul>{candidate.metrics.map((metric: any) => <li><strong>{metric.metric_key}</strong> {metric.value === null ? "値は表示しません" : `${metric.value} ${metric.unit ?? ""}`} <span>{stateCopy[metric.state] ?? metric.state}</span></li>)}</ul></details>}
+          {candidate.evidence?.length > 0 && <details><summary>根拠資料を確認する <span>{candidate.evidence.length}件</span></summary><ul>{candidate.evidence.map((evidence: any) => <li><strong>{evidence.title ?? evidence.id}</strong> {evidence.source ?? ""} <span>{stateCopy[evidence.verification_state] ?? evidence.verification_state ?? "未検証"}</span></li>)}</ul></details>}
+        </article>)}</div>}
+      </section>
+      <details class="audit-detail"><summary>技術監査情報</summary><dl><div><dt>Query SHA-256</dt><dd><code>{recall.query_hash}</code></dd></div><div><dt>Contract</dt><dd><code>{recall.contract_version}</code></dd></div>{candidates.map((candidate: any) => <div><dt>{candidate.recall_unit_id}</dt><dd><code>score {candidate.score?.total ?? "—"}</code></dd></div>)}</dl></details>
+    </>}
+  </main>
+</BaseLayout>
+
+<style>
+  .recall-trace-shell{display:grid;gap:1rem;color:#e8f2fa}.recall-trace-shell nav{display:flex;flex-wrap:wrap;gap:.5rem;color:#7895ad;font-size:.8rem}.recall-trace-shell nav a{display:inline-flex;min-height:44px;align-items:center;color:#9cc8e8}.trace-empty,.trace-hero,.trace-section,.audit-detail{padding:1.25rem;border:1px solid rgba(255,255,255,.09);border-radius:20px;background:#07111d}.surface-label{margin:0;color:#69bdea;font:750 .68rem/1.2 ui-monospace,monospace;letter-spacing:.09em}.trace-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1.5rem;background:radial-gradient(circle at 10% 0,rgba(41,122,145,.18),transparent 42%),#071721}.trace-hero h1{max-width:24ch;margin:.55rem 0;font-size:clamp(1.8rem,4vw,3rem);line-height:1.1;text-wrap:balance}.trace-hero>div>p{max-width:55rem;color:#9eb5c6;line-height:1.6}.back-to-workspace{display:inline-flex;min-height:44px;align-items:center;margin-top:.5rem;border-bottom:1px solid #4dbda8;color:#d7fff7;text-decoration:none}.trace-hero dl{display:grid;gap:.45rem;margin:0}.trace-hero dl div{padding:.7rem;border:1px solid rgba(255,255,255,.08);border-radius:12px}.trace-hero dt{color:#7494aa;font-size:.66rem}.trace-hero dd{margin:.2rem 0 0;font:700 .75rem/1.3 ui-monospace,monospace}.trace-warning{padding:1rem;border:1px solid #6d5226;border-radius:14px;background:#211a0d;color:#ffd791}.trace-warning ul{margin:.35rem 0 0}.trace-section{display:grid;gap:1rem}.section-heading{display:flex;align-items:end;justify-content:space-between}.section-heading h2{margin:.25rem 0 0}.section-heading>span{color:#7895ad}.candidate-list{display:grid;gap:.75rem}.candidate-list article{padding:1rem;border:1px solid #19415e;border-radius:15px;background:#06111d}.candidate-meta{display:flex;flex-wrap:wrap;gap:.45rem;color:#7193aa;font:700 .65rem/1.3 ui-monospace,monospace}.candidate-meta span:first-child{padding:.22rem .4rem;border-radius:999px;background:#0a3c3b;color:#73e5ce}.candidate-list h3{margin:.7rem 0 .35rem;text-wrap:balance}.candidate-list>article>p{color:#b6c9d7;line-height:1.6}.candidate-list dl{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin:1rem 0}.candidate-list dl div{padding:.65rem;border:1px solid rgba(255,255,255,.07);border-radius:10px}.candidate-list dt{color:#6f8da3;font-size:.65rem}.candidate-list dd{margin:.25rem 0 0;font-size:.75rem}.candidate-list details,.audit-detail{margin-top:.5rem}.candidate-list summary,.audit-detail summary{display:flex;min-height:48px;align-items:center;justify-content:space-between;gap:1rem;cursor:pointer;color:#9cc8e8}.candidate-list summary span{color:#6f8da3;font-size:.7rem}.candidate-list li{margin:.35rem 0;color:#a9bfce;font-size:.76rem}.candidate-list li span{color:#6f8da3}.audit-detail dl{display:grid;gap:.7rem}.audit-detail dt{color:#6f8da3;font-size:.67rem}.audit-detail dd{overflow-wrap:anywhere;margin:.2rem 0 0;color:#a9bfce}.empty-copy{color:#9eb5c6}
+  @media(max-width:720px){.trace-hero{grid-template-columns:1fr}.candidate-list dl{grid-template-columns:1fr}}
+</style>

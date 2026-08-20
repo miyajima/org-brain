@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { buildCodexMemoryContext } from "../packages/orgbrain-cli/src/codex-memory-context.mjs";
 import { MEMORY_CONTRACT_JUDGE_PROMPT_HASH } from "../packages/shared/src/memory-contract-judge.mjs";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
+import { installLocalDomainPack, upsertLocalDomainRecallUnit } from "../packages/orgbrain-cli/src/lib/local-domain-recall.mjs";
 import { TaskCommitmentStore, guardCodexQuestion } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
 
 async function fixture() {
@@ -55,6 +56,44 @@ test("Codex prompt hook injects only a bounded local summary for a relevant prom
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /user@example\.com/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /Use the Codex notify and prompt hooks/u);
     assert.ok(result.hookSpecificOutput.additionalContext.length < 1_000);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("Codex prompt hook injects a business-readable Recall contract and visible provenance rule", async () => {
+  const ctx = await fixture();
+  try {
+    const manifest = JSON.parse(await readFile(new URL("../domain-packs/first-party/build-engineering/manifest.json", import.meta.url), "utf8"));
+    await installLocalDomainPack(ctx.store, "default", manifest);
+    await upsertLocalDomainRecallUnit(ctx.store, "default", {
+      id: "unit-build-hook", project_id: "org-brain", pack_id: manifest.pack_id,
+      object_type_key: "repository", object_id: "checkout-web", intent_aliases: ["CI改善", "test削除"],
+      scope: { repository: "checkout-web", pipeline: "ci-main" }, relation: "primary",
+      decision: {
+        source_type: "decision_memory", id: "DEC-BUILD-HOOK", statement: "runnerを2台増やしintegration testを4 shardへ分割する",
+        rationale: "遅延の61%がrunner待ち", confirmation_state: "confirmed", valid_from: null, valid_until: null,
+        rejected_alternatives: [{ statement: "testを削除", reason: "品質ガードを失う" }], constraints: [], success_conditions: []
+      },
+      metrics: [{ metric_key: "build_duration_p95", role: "outcome", value: 9.7, unit: "minutes", state: "measured", observed_at: Date.now(), expires_at: Date.now() + 60_000 }],
+      evidence: [{ id: "ci-report-hook", title: "CI 7日間レポート", source: "GitHub Actions", resource_kind: "report", verification_state: "verified", observed_at: Date.now(), body: "never inject" }],
+      workflow: "ci-bottleneck-diagnosis", follow_up: null, evidence_verified: true, metric_fresh: true
+    });
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit", session_id: "recall-session", cwd: ctx.workspace,
+      prompt: "checkout-webのCI改善でtest削除を検討している"
+    }, {
+      ...ctx,
+      env: { ...ctx.env, DOMAIN_RECALL_MODE: "on", DOMAIN_RECALL_HOOK_MODE: "personal" }
+    });
+    const context = result.hookSpecificOutput.additionalContext;
+    assert.match(context, /OrgBrainの記憶（回答用コンテキスト）/u);
+    assert.match(context, /Decision: runnerを2台増やしintegration testを4 shardへ分割する/u);
+    assert.match(context, /採用しなかった案[\s\S]*testを削除 — 品質ガードを失う/u);
+    assert.match(context, /参照した記憶:/u);
+    assert.match(context, /orgbrain_domain_recall_feedback/u);
+    assert.doesNotMatch(context, /object_match|scope_match|Feedback: useful|build_duration_p95/u);
+    assert.ok(context.length < 8_192);
   } finally {
     await ctx.cleanup();
   }

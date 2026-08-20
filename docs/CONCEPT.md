@@ -3,7 +3,7 @@ title: Org Brain concept
 doc_type: concept
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-18
+last_updated: 2026-08-20
 ---
 
 # Org Brain concept
@@ -56,6 +56,10 @@ still valid, and where it was applied.
 - **Cloud source of truth:** shared P0 Skills, immutable Skill versions, named
   Agents, Loadouts, policies, and usage records are authoritative in D1; Skill
   file bodies are authoritative in R2 with hashes and metadata in D1.
+- **Relevant recall, not search dumping:** agent context is selected by exact
+  object and scope, current authorization, explicit relevance weights, and a
+  bounded payload. Confirmation improves rank but never hides proposals or
+  conflicts.
 - **Accessible alternatives:** the map always has keyboard, 2D list, reduced
   motion, and mobile timeline experiences with the same authorized data.
 - **Fail closed and recoverable:** provider, schema, storage, policy, or

@@ -2,6 +2,14 @@
   "story_id": "story-sre-inc-0042",
   "fixture_date": "2026-07-15T00:00:00Z",
   "install_fixture": false,
+  "recall_fixture": {
+    "prompt": "payments-apiの障害でtimeout延長を検討している",
+    "object_type_key": "service",
+    "object_id": "payments-api",
+    "scope": { "service": "payments-api", "dependency": "fraud-provider" },
+    "expected_decision_id": "DEC-SRE-INC-0042",
+    "wrong_scope": { "scope": { "service": "catalog-api", "dependency": "search" }, "expected_recall": false }
+  },
   "objects": [
     { "id": "payments-api", "type": "service", "name": "payments-api" },
     { "id": "fraud-provider", "type": "dependency", "name": "fraud-provider" },

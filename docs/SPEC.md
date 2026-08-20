@@ -3,7 +3,7 @@ title: Org Brain Spec
 doc_type: spec
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 ---
 
 # Org Brain Spec
@@ -35,6 +35,22 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
   existing immutable Snapshot API.
 - R-PACK-008: a Pack-linked custom metric MUST remain visible in its Workspace
   after a Pack upgrade.
+- R-RECALL-001: Domain Recall MUST filter tenant/project, ACL, object identity,
+  exact required scope, validity, and personal suppression before deterministic
+  scoring. High-assurance profiles MUST reject a partial scope match.
+- R-RECALL-002: Recall output MUST be no larger than 6 KiB, MUST expose evidence
+  metadata instead of evidence bodies, and MUST remove numeric values from stale
+  or unknown metric snapshots.
+- R-RECALL-003: existing Context Enrich behavior MUST remain unchanged unless
+  `include_domain_recall=true`; `off|shadow|on` MUST gate Recall independently.
+- R-RECALL-004: Recall telemetry MUST store the query SHA-256 instead of the raw
+  prompt and MUST keep owner principal separate from runtime actor/client.
+- R-RECALL-005: feedback MUST create session suppression, personal preference,
+  or team review Proposal according to type and MUST NOT directly mutate a
+  Decision or Knowledge Assertion.
+- R-RECALL-006: portable import MUST verify canonical record and archive digests,
+  reject same-ID/different-digest conflicts, and plan before apply. Cloud
+  promotion MUST leave Local in read-cache plus proposal-outbox mode.
 - R-DEC-001: Console MUST use `Decisions / Map / Skills / Agents / Reviews` as
   its primary navigation. Users, groups, storage, tasks, resources, memory, and
   operations MUST remain available under supporting or Manage navigation.
@@ -113,6 +129,10 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
   remain below 1 second and each gzipped Decision Trace response below 250 KiB.
 - The Console passes ja/en/zh desktop and mobile E2E coverage for keyboard,
   screen-reader semantics, reduced motion, and empty/error/stale states.
+- Repeating the same offline Recall query over unchanged data produces the same
+  candidate order and bundle ID; wrong object/scope returns no primary candidate.
+- Existing Context Enrich callers receive no Recall fields until they explicitly
+  opt in. Recall events contain no raw prompt or evidence body.
 
 - A fresh workspace can install the autonomous scheduled runner and remain in
   fail-closed shadow mode until machine-reference and canary evidence qualify.
@@ -130,7 +150,9 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - Storage: D1 (`tasks`, `task_events`, `capabilities`, `memories`, `memories_fts`, `memory_versions`, `memory_edges`, `memory_deletions`, `entities`, `memory_entities`, `decision_rationales`, `decision_evidence`, `decision_memories`, `memory_confirmations`, `agent_messages`, `threads`, `retrieval_events`, `retrieval_daily_metrics`, `business_categories`, `memory_impact_events`, `memory_impact_daily_metrics`, `memory_usage_events`, `memory_usage_items`, `memory_effect_events`, `memory_effect_attributions`, `memory_failure_patterns`, `memory_effect_daily_metrics`, `retrieval_generations`, `retrieval_generation_assignments`, `retrieval_ranking_profiles`, `retrieval_units`, `retrieval_units_fts`, `retrieval_projection_jobs`, `retrieval_evaluation_events`, `knowledge_docs`, `knowledge_links`, `knowledge_docs_fts`, `principal_role_assignments`, `scoped_tokens`, `mcp_client_installations`, `audit_events`, `retention_policies`) + R2 artifacts
 - Console: Astro on Cloudflare Pages + Functions proxy
 - Domain Pack Platform: shared signed contracts, D1 install/metric registry,
-  first-party function Packs, generic Dashboards, and Enterprise-only Builder.
+      first-party function Packs, generic Dashboards, and Enterprise-only Builder.
+    - Domain Recall: Local SQLite/CLI/hook, D1/API/MCP, Recall history/Trace,
+      feedback review, and portable Local-to-Cloud authority transfer.
 - Decision/Skill/Agent storage: D1 (`resource_access_policies`,
   `access_policy_shadow_diffs`, `skill_assets`, `skill_asset_versions`,
   `skill_asset_files`, `skill_generation_runs`, `agents`, `agent_loadouts`,
@@ -183,8 +205,14 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - `GET /v1/decision-memories/:id/context`
 - `POST /v1/decision-memories/:id/revise`
 - `POST /v1/decision-memories/:id/confirm`
-- `POST /v1/context/enrich`
-- `POST /api/context/enrich` (agent-facing alias)
+    - `POST /v1/context/enrich`
+    - `POST /api/context/enrich` (agent-facing alias)
+    - `GET /v1/domain-recalls/:id`
+    - `POST /v1/domain-recalls/:id/feedback`
+    - `POST /v1/portable-imports`
+    - `PUT /v1/portable-imports/:id/chunks/:sequence`
+    - `POST /v1/portable-imports/:id/plan`
+    - `POST /v1/portable-imports/:id/apply`
 - `GET/POST/PATCH /v1/business-categories`
 - `POST /v1/memory-usages` (idempotent local outbox ingestion)
 - `POST /v1/memory-usages/state`
@@ -208,7 +236,10 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - 無人hook: `(マシン, クライアント)`単位のAccess Service Token。Access JWTのservice subject hashをactiveな`mcp_client_installations`へ解決し、owner principalと`client:<installation-id>` runtime actorを分離する
 - `MCP_ACCESS_AUD`は必須でAPI用`ACCESS_AUD`と分離する。`MCP_AUTH_MODE`は`legacy|dual|access`、未設定はfail-closedな`access`
 - thin proxyは`Cf-Access-Jwt-Assertion`とMCP protocol allowlist headerだけをservice bindingへ転送し、OAuth bearerと生のservice-token headerを転送しない
-- service-token hookが呼べるtoolは`orgbrain_memories_capture_rationale`だけで、task、message、管理toolを拒否する
+    - service-token hookが呼べるtoolは`orgbrain_memories_capture_rationale`だけで、task、message、管理toolを拒否する
+    - purpose=`recall` installationは`orgbrain_prompt_recall`と
+      `orgbrain_domain_recall_feedback`だけを追加で実行できる。purpose=`capture`
+      installationとのcapability境界は交差しない
 - 導入管理API: `POST|GET /v1/mcp-client-installations`、`DELETE /v1/mcp-client-installations/:id`、service-token activation用`POST /mcp/client-installations/activate`。activationは登録時の`client_type`と導入対象を原子的に照合し、不一致の登録コードを消費しない
 - Tool surface:
   - memory list/upsert/search/profile

@@ -55,6 +55,15 @@ import {
 } from "./domain-metric-service";
 import { getDomainPackWorkspace } from "./domain-workspace-service";
 import {
+  applyPortableImport,
+  createPortableImport,
+  getDomainRecall,
+  getDomainRecallById,
+  planPortableImport,
+  putPortableImportChunk,
+  recordDomainRecallFeedback
+} from "./domain-recall-service";
+import {
   installDomainPacks,
   listDomainPacks,
   planDomainPackInstallation,
@@ -386,6 +395,7 @@ function permissionForRequest(method: string, path: string): OrgPermission {
     path.startsWith("/v1/retrieval-generations") ||
     path.startsWith("/v1/retrieval-generation-assignments") ||
     (path.startsWith("/v1/domain-packs/installations") && method !== "GET") ||
+    path.startsWith("/v1/portable-imports") ||
     path.endsWith("/promotion") ||
     path === "/v1/resources/backfill"
   ) return "admin";
@@ -538,7 +548,9 @@ app.get("/v1/domain-packs/:packId/workspace", async (c) => {
   return jsonOk(c, await getDomainPackWorkspace(c.env, tenantId, c.req.param("packId"), {
     scopeId: c.req.query("scope_id") ?? null,
     from: c.req.query("from") ? Number(c.req.query("from")) : undefined,
-    to: c.req.query("to") ? Number(c.req.query("to")) : undefined
+    to: c.req.query("to") ? Number(c.req.query("to")) : undefined,
+    principal: getApiPrincipal(c),
+    includeAllRecalls: await isTenantAdmin(c, tenantId)
   }));
 });
 
@@ -2371,9 +2383,67 @@ app.post("/v1/decision-memories/:id/confirm", async (c) => {
 
 app.post("/v1/context/enrich", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
   const result = await enrichContext(c.env, body, { principal: getApiPrincipal(c) });
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  if (payload.include_domain_recall === true) {
+    const task = payload.task && typeof payload.task === "object" && !Array.isArray(payload.task) ? payload.task as Record<string, unknown> : {};
+    const recall = await getDomainRecall(c.env, {
+      tenant_id: tenantId,
+      project_id: payload.project_id ?? payload.projectId,
+      query: payload.query ?? payload.prompt ?? [task.title, task.description].filter((value) => typeof value === "string").join(" "),
+      object_type_key: payload.object_type_key,
+      object_id: payload.object_id,
+      scope: payload.scope,
+      max_tokens: payload.domain_recall_max_tokens ?? 2_000
+    }, { ownerPrincipal: getApiPrincipal(c), runtimeActor: `principal:${getApiPrincipal(c)}`, clientName: "api" });
+    return jsonOk(c, { ...result, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } });
+  }
   return jsonOk(c, result);
+});
+
+app.get("/v1/domain-recalls/:id", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getDomainRecallById(c.env, tenantId, c.req.param("id"), getApiPrincipal(c), await isTenantAdmin(c, tenantId)));
+});
+
+app.post("/v1/domain-recalls/:id/feedback", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  const principal = getApiPrincipal(c);
+  return jsonOk(c, await recordDomainRecallFeedback(c.env, tenantId, c.req.param("id"), body, {
+    ownerPrincipal: principal,
+    runtimeActor: `principal:${principal}`,
+    clientName: "api"
+  }), 201);
+});
+
+app.post("/v1/portable-imports", async (c) => {
+  if (!["plan", "on"].includes(c.env.PORTABLE_ARCHIVE_MODE ?? "off")) throw new HttpError(404, "feature_disabled", "Portable archive import is not enabled");
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await createPortableImport(c.env, tenantId, getApiPrincipal(c), body), 201);
+});
+
+app.put("/v1/portable-imports/:id/chunks/:sequence", async (c) => {
+  if (!["plan", "on"].includes(c.env.PORTABLE_ARCHIVE_MODE ?? "off")) throw new HttpError(404, "feature_disabled", "Portable archive import is not enabled");
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await putPortableImportChunk(c.env, tenantId, c.req.param("id"), Number(c.req.param("sequence")), body));
+});
+
+app.post("/v1/portable-imports/:id/plan", async (c) => {
+  if (!["plan", "on"].includes(c.env.PORTABLE_ARCHIVE_MODE ?? "off")) throw new HttpError(404, "feature_disabled", "Portable archive import is not enabled");
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await planPortableImport(c.env, tenantId, c.req.param("id")));
+});
+
+app.post("/v1/portable-imports/:id/apply", async (c) => {
+  if (c.env.PORTABLE_ARCHIVE_MODE !== "on") throw new HttpError(404, "feature_disabled", "Portable archive apply is not enabled");
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  return jsonOk(c, await applyPortableImport(c.env, tenantId, c.req.param("id")));
 });
 
 app.post("/v1/context/pre-action-gate", async (c) => {
@@ -2402,8 +2472,22 @@ app.post("/v1/context/debt/scan", async (c) => {
 
 app.post("/api/context/enrich", async (c) => {
   const body = await c.req.json<unknown>();
-  assertApiTenantAccess(c, tenantFromBody(body));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
   const result = await enrichContext(c.env, body, { principal: getApiPrincipal(c) });
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  if (payload.include_domain_recall === true) {
+    const task = payload.task && typeof payload.task === "object" && !Array.isArray(payload.task) ? payload.task as Record<string, unknown> : {};
+    const recall = await getDomainRecall(c.env, {
+      tenant_id: tenantId,
+      project_id: payload.project_id ?? payload.projectId,
+      query: payload.query ?? payload.prompt ?? [task.title, task.description].filter((value) => typeof value === "string").join(" "),
+      object_type_key: payload.object_type_key,
+      object_id: payload.object_id,
+      scope: payload.scope,
+      max_tokens: payload.domain_recall_max_tokens ?? 2_000
+    }, { ownerPrincipal: getApiPrincipal(c), runtimeActor: `principal:${getApiPrincipal(c)}`, clientName: "api-compat" });
+    return jsonOk(c, { ...result, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } });
+  }
   return jsonOk(c, result);
 });
 

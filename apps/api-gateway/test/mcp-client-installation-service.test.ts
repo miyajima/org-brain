@@ -43,6 +43,10 @@ function testEnv(): Env {
     new URL("../../../migrations/0029_mcp_client_installations.sql", import.meta.url),
     "utf8"
   ));
+  database.exec(readFileSync(
+    new URL("../../../migrations/0036_domain_recall.sql", import.meta.url),
+    "utf8"
+  ));
   database.exec(`
     CREATE TABLE user_profiles (
       tenant_id TEXT NOT NULL,
@@ -76,7 +80,7 @@ describe("MCP client installations", () => {
 
     const pending = await listMcpClientInstallations(env, "default", "user:alice");
     expect(pending).toHaveLength(1);
-    expect(pending[0]).toMatchObject({ status: "pending", client_type: "codex" });
+    expect(pending[0]).toMatchObject({ status: "pending", client_type: "codex", purpose: "capture" });
     expect(JSON.stringify(pending)).not.toContain("access_subject_hash");
 
     const active = await activateMcpClientInstallation(

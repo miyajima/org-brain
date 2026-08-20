@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { domainRecallBundleSchema, domainRecallFeedbackSchema } from "../src/domain-recall";
 import {
   domainPackManifestSchema,
   domainPackWorkspaceSchema,
@@ -75,6 +76,32 @@ describe("Domain Pack contracts", () => {
       min_orgbrain_version: "0.2.0"
     });
     expect(pack.metrics).toEqual([]);
+    expect(pack.recall_profile).toBeUndefined();
+  });
+
+  it("validates recall feedback effects and never exposes stale numeric values", () => {
+    expect(() => domainRecallFeedbackSchema.parse({
+      recall_id: "recall-1",
+      feedback: "wrong_scope",
+      effect: "team_review_proposal",
+      occurred_at: 1
+    })).toThrow();
+    expect(() => domainRecallBundleSchema.parse({
+      id: "recall-1",
+      generated_at: 1,
+      query_hash: "a".repeat(64),
+      primary: {
+        recall_unit_id: "unit-1",
+        role: "primary",
+        why_recalled: ["scope"],
+        scope: { service: "payments-api" },
+        score: { object_match: 0.35, intent_match: 0.2, scope_match: 0.15, decision_link: 0.1, active_confirmed: 0.08, verified_evidence: 0.07, fresh_metric: 0, total: 0.95 },
+        decision: { source_type: "decision_memory", id: "DEC-1", statement: "Use a breaker", rationale: "Retries amplify failures", confirmation_state: "confirmed", valid_from: null, valid_until: null, rejected_alternatives: [], constraints: [], success_conditions: [] },
+        metrics: [{ metric_key: "burn_rate", role: "current", value: 3.4, unit: "ratio", state: "stale", observed_at: 1 }],
+        evidence: [], workflow: null, follow_up: null
+      },
+      supporting: [], conflicts: [], warnings: ["stale"], trace_url: "/domain-recalls/recall-1", summary: "Recall"
+    })).toThrow();
   });
 
   it("accepts connector-ready source bindings without credentials", () => {

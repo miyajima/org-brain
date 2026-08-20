@@ -237,10 +237,73 @@ async function decisionDetail(env: Env, tenantId: string, selected: Awaited<Retu
   };
 }
 
+async function recallHistory(env: Env, tenantId: string, packId: string, principal?: string, includeAll = false) {
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT DISTINCT e.id, e.created_at, e.mode, e.client_name, e.candidate_count, e.bundle_json
+     FROM domain_recall_events e
+     JOIN domain_recall_event_candidates c
+       ON c.tenant_id=e.tenant_id AND c.recall_id=e.id
+     WHERE e.tenant_id=? AND c.pack_id=? AND (?=1 OR e.owner_principal=?)
+     ORDER BY e.created_at DESC, e.id DESC
+     LIMIT 50`
+  ).bind(tenantId, packId, includeAll || !principal ? 1 : 0, principal ?? "").all<Row>();
+  if (!rows.results.length) return [];
+  const recallIds = rows.results.map((row) => String(row.id));
+  const candidateRows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT recall_id, recall_unit_id, role, score
+     FROM domain_recall_event_candidates
+     WHERE tenant_id=? AND recall_id IN (${recallIds.map(() => "?").join(",")}) AND pack_id=?
+     ORDER BY recall_id, rank`
+  ).bind(tenantId, ...recallIds, packId).all<Row>();
+  const feedbackRows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT recall_id, feedback FROM domain_recall_feedback
+     WHERE tenant_id=? AND recall_id IN (${recallIds.map(() => "?").join(",")})
+     ORDER BY created_at`
+  ).bind(tenantId, ...recallIds).all<Row>();
+  return rows.results.map((row) => {
+    const bundle = typeof row.bundle_json === "string" ? parseJsonObject(row.bundle_json) : {};
+    const bundleCandidates = [bundle.primary, ...jsonArray(bundle.supporting), ...jsonArray(bundle.conflicts)]
+      .filter((item): item is Row => Boolean(item && typeof item === "object" && !Array.isArray(item)));
+    const candidateById = new Map(bundleCandidates.map((item) => [String(item.recall_unit_id), item]));
+    return {
+      id: String(row.id),
+      created_at: Number(row.created_at),
+      mode: row.mode === "shadow" ? "shadow" as const : "on" as const,
+      client_name: typeof row.client_name === "string" && row.client_name ? row.client_name : null,
+      candidate_count: Number(row.candidate_count),
+      candidates: candidateRows.results.filter((candidate) => candidate.recall_id === row.id).map((candidate) => {
+        const bundleCandidate = candidateById.get(String(candidate.recall_unit_id)) ?? {};
+        const decision = bundleCandidate.decision && typeof bundleCandidate.decision === "object" && !Array.isArray(bundleCandidate.decision)
+          ? bundleCandidate.decision as Row : {};
+        return {
+          recall_unit_id: String(candidate.recall_unit_id),
+          role: candidate.role as "primary" | "supporting" | "conflict",
+          score: Number(candidate.score),
+          why_recalled: jsonArray(bundleCandidate.why_recalled).map(String),
+          decision_statement: String(decision.statement ?? "Decision")
+        };
+      }),
+      feedback: feedbackRows.results.filter((feedback) => feedback.recall_id === row.id).map((feedback) => String(feedback.feedback)),
+      trace_url: `/domain-recalls/${encodeURIComponent(String(row.id))}?tenant_id=${encodeURIComponent(tenantId)}`
+    };
+  });
+}
+
+function parseJsonObject(value: string): Row {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Row : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function getDomainPackWorkspace(env: Env, tenantId: string, packId: string, input: {
   scopeId?: string | null;
   from?: number;
   to?: number;
+  principal?: string;
+  includeAllRecalls?: boolean;
 }): Promise<DomainPackWorkspaceV1> {
   if (!env.DOMAIN_WORKSPACES_MODE || env.DOMAIN_WORKSPACES_MODE === "off") {
     throw new HttpError(404, "domain_workspaces_disabled", "Domain Pack Workspaces are disabled");
@@ -267,7 +330,7 @@ export async function getDomainPackWorkspace(env: Env, tenantId: string, packId:
 
   const definitionRows = await packMetricRows(env, tenantId, packId, objectIds);
   const metricKeys = definitionRows.map((item) => String(item.metric_key));
-  const [series, sources, selected] = await Promise.all([
+  const [series, sources, selected, recalls] = await Promise.all([
     queryMetricSnapshots(env, tenantId, {
       metricKeys,
       scopeId: input.scopeId ?? null,
@@ -276,7 +339,8 @@ export async function getDomainPackWorkspace(env: Env, tenantId: string, packId:
       limit: 2_000
     }),
     listMetricSourceBindings(env, tenantId, {}),
-    selectDecision(env, tenantId, packId)
+    selectDecision(env, tenantId, packId),
+    recallHistory(env, tenantId, packId, input.principal, input.includeAllRecalls)
   ]);
   const decision = await decisionDetail(env, tenantId, selected);
   const decisionAssertions = selected?.assertions ?? [];
@@ -368,6 +432,7 @@ export async function getDomainPackWorkspace(env: Env, tenantId: string, packId:
     selected_scope_id: input.scopeId ?? null,
     metric_groups: [...grouped.entries()].map(([key, items]) => ({ key, label: GROUP_LABELS[key] ?? key, metrics: items })),
     decision,
+    recall_history: recalls,
     source_readiness: sources
       .filter((item) => definitionRows.some((row) => row.id === item.metric_definition_id))
       .map((item) => ({

@@ -3,7 +3,7 @@ title: Domain Pack Platform
 doc_type: reference
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 ---
 
 # Domain Pack Platform
@@ -75,11 +75,39 @@ promoted release ID so OSS can audit the promotion while retaining
 
 ## Pack Workspace
 
-`/domain-workspaces` is the daily operating surface for installed Packs;
-Catalog, installation, and Enterprise Builder remain separate control-plane
-flows. `GET /v1/domain-packs/:packId/workspace` returns the selected managed
-object scope, metric groups, the current Decision, linked evidence and
-Workflow, and source readiness in one `DomainPackWorkspaceV1` envelope.
+`/domain-workspaces` is the human review and collaboration surface for
+installed Packs. Daily questions, Recall feedback, and requests for an
+explanation happen in the connected AI client. People open the Workspace when
+they need to inspect the authoritative Decision and evidence, or review that
+Decision together. Catalog, installation, and Enterprise Builder remain
+separate control-plane flows. `GET /v1/domain-packs/:packId/workspace` returns
+the selected managed object scope, metric groups, the current Decision, linked
+evidence and Workflow, and source readiness in one
+`DomainPackWorkspaceV1` envelope.
+
+The Workspace presents information in this order:
+
+1. current confirmed Decision and rationale;
+2. evidence provenance and verification state;
+3. outcome and follow-up Decision;
+4. progressively disclosed metric and connector detail;
+5. a collapsed AI activity log for audit-only use.
+
+The Decision statement is the page title. Pack and view names are navigation
+context, not hero copy or badges. The standard view does not repeat the Pack
+name in an explanatory heading and does not keep usage instructions on screen.
+A compact help menu explains the AI-versus-Workspace boundary on demand, while
+the visual order and the Decision rail communicate the normal reading path.
+Domain switching stays one-step on desktop and uses one native select on small
+screens. Meeting view and link copying live in a single Share menu.
+
+`view=meeting` provides a share-oriented view that keeps Decision, rationale,
+evidence, outcome, and Pack context while hiding operational filters, metric
+inspection, connector readiness, and AI activity. The Workspace generates a
+copyable meeting-view link without creating a new share authority or changing
+ACLs. Recall Trace links carry a validated same-application `return_to` path so
+reviewers can return to the authoritative Workspace with tenant and language
+context preserved.
 
 Workspace values are never inferred. Current is the latest Snapshot in the
 selected scope; Baseline is the Snapshot linked by `triggered_by_metric`;
@@ -123,16 +151,58 @@ Together with Knowledge Resource evidence, they support:
 
 REST provides Pack catalog/plan/install, managed object creation/search,
 custom metric definition/version/binding/target/snapshot/query, generic
-Dashboards, and Decision-domain links. MCP exposes only read operations:
+Dashboards, Decision-domain links, opt-in Recall, and portable import. MCP
+exposes domain reads plus bounded Recall feedback:
 `orgbrain_domain_context`, `orgbrain_managed_object_search`, and
-`orgbrain_metric_query`. Pack creation, signing, publication, and revocation are
-never exposed through MCP.
+`orgbrain_metric_query`; a purpose=`recall` installation additionally exposes
+`orgbrain_prompt_recall` and `orgbrain_domain_recall_feedback`. Pack creation,
+signing, publication, and revocation are never exposed through MCP.
+
+## Domain Recall
+
+`recall_profile` is a declarative part of the Manifest. It selects an assurance
+level, relevance threshold, known intent aliases, allowed managed-object types,
+required scope keys, and an output budget. It cannot contain raw prompts,
+customer data, code, SQL, or secrets. First-party story fixtures provide
+positive, wrong-scope, conflict, stale-metric, and forbidden-customer-field
+acceptance cases but remain validation-only inputs.
+
+Recall filters ACL, tenant/project, managed-object identity, validity, and
+personal suppression before applying the fixed weighted scorer. SRE uses
+high-assurance exact `service` and `dependency` scope. Confirmation is a small
+ranking signal, not a truth shortcut, so proposals and conflicts remain visible.
+The response is at most 6 KiB, removes numeric values for stale/unknown metrics,
+and includes evidence metadata only.
+
+Automatic AI context is business-readable Japanese rather than a raw ranking
+dump. It includes the confirmed Decision and rationale, rejected alternatives,
+constraints, success conditions, human-readable metrics, evidence provenance,
+Workflow, follow-up Decision, and a Trace link. Internal ranking keys and
+feedback enums are not exposed in the answer copy. When an AI uses the memory,
+its response contract requires a compact `参照した記憶` line and invites the
+user to correct it conversationally with `範囲が違う`, `古い`, or `関係ない`.
+Recall-purpose MCP tool descriptions map those phrases to bounded feedback
+operations without mutating the underlying Decision.
+
+The Workspace includes a Pack-filtered AI Recall history. Each event links to a
+Trace showing why candidates were selected, their Scope and score, Decision
+state, metric freshness, evidence metadata, and feedback. The event stores the
+query SHA-256, owner/runtime identities, client installation, mode, and
+candidate links; it never stores the raw prompt.
+
+Local CLI supports Pack install/validation, metric snapshot ingest, Recall
+preview/feedback, portable export/import, and Cloud-authority promotion. Normal
+install never imports story fixtures and never overwrites a custom metric.
+Portable imports require a successful digest/conflict plan before apply.
 
 ## Rollout and rollback
 
 - `DOMAIN_PACKS_MODE=off|catalog|install`
 - `DOMAIN_METRICS_MODE=off|shadow|on`
 - `DOMAIN_WORKSPACES_MODE=off|preview|on`
+- `DOMAIN_RECALL_MODE=off|shadow|on`
+- `DOMAIN_RECALL_HOOK_MODE=off|personal|team`
+- `PORTABLE_ARCHIVE_MODE=off|plan|on`
 - Enterprise: `PACK_BUILDER_MODE=off|preview|on`
 
 Rollback revokes or pins a release and disables new mutations. It does not

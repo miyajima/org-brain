@@ -3,7 +3,7 @@ title: Org Brain System Design
 doc_type: system_design
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 ---
 
 # Org Brain System Design
@@ -139,6 +139,14 @@ grouping and coverage calculation so hidden counts are not observable.
 - `domain_dashboards` / `dashboard_metric_widgets`: generic Dashboard definitions that resolve metric keys through the installed registry, including Manifest-external custom metrics.
 - `GET /v1/domain-packs/:packId/workspace`: installed-Pack operating view with scoped KPI groups, Decision-linked Baseline/Outcome, evidence, Workflow, and Connector readiness.
 - `GET /v1/metric-snapshots/query` / `GET /v1/metric-source-bindings`: immutable history and future-Connector preparation reads.
+- `domain_recall_units` / FTS: Pack-scoped Decision projection used only after
+  tenant, project, object, scope, ACL, validity, and personal-suppression gates.
+- `domain_recall_events` / `domain_recall_event_candidates`: prompt-hash-only
+  execution trace plus normalized Pack/candidate membership for Workspace
+  history. Feedback and review proposals never rewrite Knowledge Assertions.
+- `portable_imports` / chunks / immutable records and
+  `domain_authority_state`: staged Local-to-Cloud archive verification and the
+  single-authority handoff.
 
 ## Domain Pack control plane
 
@@ -159,6 +167,36 @@ history, target versions, `knowledge_assertions`, Knowledge Resources, and
 non-secret source bindings. Baseline and Outcome use only explicit
 `triggered_by_metric` and `verified_by_metric` links. It does not execute a
 Connector or Workflow and does not accept manual metric entry.
+
+### Domain Recall
+
+Each installed Pack may define a declarative `recall_profile`: assurance level,
+threshold, intent aliases, permitted object types, required high-assurance
+scope keys, and output budget. Profiles contain no prompts or executable code.
+The scorer is deterministic: object `0.35`, intent `0.20`, scope/project
+`0.15`, Decision link `0.10`, active-confirmed `0.08`, verified evidence
+`0.07`, and fresh metric `0.05`. ACL, tenant/project, object identity, validity,
+and suppression are hard filters before scoring. High-assurance SRE recall
+requires exact service and dependency scope. Proposal and conflict state remain
+visible; confirmation contributes only its bounded score.
+
+Recall output is capped at 6 KiB, strips stale/unknown numeric values, exposes
+evidence metadata rather than bodies, and links to `/domain-recalls/:id`.
+`orgbrain_context_enrich` is unchanged unless Domain Recall is explicitly
+requested. `orgbrain_prompt_recall` and feedback are available only to a
+purpose=`recall` MCP installation; purpose=`capture` cannot cross that tool
+boundary. Local hooks fail open on Recall errors and do not make a network call.
+
+Feedback effects are separated: session dismissal is ephemeral, irrelevant or
+wrong-scope creates a personal suppression, and outdated/incorrect-relation
+creates a team review Proposal. None directly mutates a Decision or Knowledge
+Assertion.
+
+Portable archives are canonical JSONL with a header, per-record digests, and a
+footer content digest. Cloud upload is chunked, then plan/apply; non-contiguous
+chunks, digest mismatches, and same-ID/different-digest records are rejected.
+After Cloud authority promotion, Local direct domain writes are blocked while
+feedback and proposed changes enter an outbox.
 - `resource_access_policies` / `access_policy_shadow_diffs`: unified access
   authority plus privacy-safe legacy comparison.
 - `skill_assets` / `skill_asset_versions` / `skill_asset_files` /
@@ -196,7 +234,7 @@ Connector or Workflow and does not accept manual metric entry.
   it is not expected to improve retrieval quality by storage substitution
   alone. The backend contract, activation criteria, migration rules, and parity
   gates are defined in [`STORAGE_BACKENDS.md`](STORAGE_BACKENDS.md).
-- Local SQLite uses the Node-bundled driver, WAL, schema version 18, SHA-256
+- Local SQLite uses the Node-bundled driver, WAL, schema version 24, SHA-256
   content hashes, immutable JSON version snapshots,
   verified backup/restore, `quick_check`, read-only query connections, and
   POSIX-private file modes.

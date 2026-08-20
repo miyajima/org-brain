@@ -3,13 +3,24 @@
 import { createServer } from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
   DEFAULT_LOCAL_DB,
   LocalMemoryStore,
   MEMORY_SCHEMA_VERSION
 } from "./lib/local-memory-store.mjs";
+import {
+  applyPortableImport,
+  exportPortableArchive,
+  ingestLocalMetricSnapshot,
+  installLocalDomainPack,
+  listLocalDomainPacks,
+  planPortableImport,
+  previewLocalDomainRecall,
+  promoteCloudAuthority,
+  recordLocalDomainRecallFeedback
+} from "./lib/local-domain-recall.mjs";
 
 function printHelp() {
   console.log(`OrgBrain local-first memory CLI
@@ -51,6 +62,15 @@ Usage:
   orgbrain failure-pattern update <pattern-id> [json-payload]
   orgbrain telemetry sync [--limit <n>]
   orgbrain metrics memory-impact [--tenant-id <id>] [--group-by memory|business_category|work_type|project|day] [--day YYYY-MM-DD]
+  orgbrain pack list [--tenant-id <id>]
+  orgbrain pack install <pack-id|manifest-path> [--tenant-id <id>]
+  orgbrain pack validate <pack-id|manifest-path>
+  orgbrain metric snapshot ingest [json-payload]
+  orgbrain recall preview <prompt> [--tenant-id <id>] [--project-id <id>]
+  orgbrain recall feedback [json-payload]
+  orgbrain portable export [--tenant-id <id>] [--output <path>]
+  orgbrain portable import [--tenant-id <id>] [--apply]
+  orgbrain portable promote --archive-digest <sha256> [--tenant-id <id>]
   orgbrain index rebuild
   orgbrain index rebuild-dense [--tenant-id <id>] [--project-id <id>]
   orgbrain evidence run -- <command> [args...]
@@ -169,6 +189,28 @@ async function readPayload(args) {
     ...(args.get("--evidence") ? { evidence: parseJsonOption(args.get("--evidence"), []) } : {}),
     ...(args.get("--permissions") ? { permissions: parseJsonOption(args.get("--permissions"), []) } : {})
   };
+}
+
+async function readDomainPackManifest(reference) {
+  if (!reference) throw new Error("pack manifest path or pack id is required");
+  const aliases = {
+    "function.build-engineering": "build-engineering",
+    "function.sre": "sre",
+    "function.sales": "sales",
+    "function.pdm-b2c-marketplace": "pdm-b2c"
+  };
+  const path = aliases[reference]
+    ? new URL(`../../../domain-packs/first-party/${aliases[reference]}/manifest.json`, import.meta.url)
+    : resolve(reference);
+  return JSON.parse(await readFile(path, "utf8"));
+}
+
+function validateDomainPackManifest(manifest) {
+  if (manifest?.contract_version !== "domain-pack/v1" || !manifest.pack_id || !manifest.version) throw new Error("invalid_domain_pack_manifest");
+  if (!manifest.recall_profile || !["standard", "high_assurance"].includes(manifest.recall_profile.risk_mode)) throw new Error("invalid_recall_profile");
+  if (manifest.recall_profile.risk_mode === "high_assurance" && !(manifest.recall_profile.required_scope_keys?.length > 0)) throw new Error("high_assurance_scope_required");
+  if (Object.hasOwn(manifest, "prompt") || Object.hasOwn(manifest, "sql") || Object.hasOwn(manifest, "code")) throw new Error("executable_or_prompt_content_forbidden");
+  return manifest;
 }
 
 function emit(value) {
@@ -704,6 +746,42 @@ async function main() {
       day: args.get("--day"),
       group_by: args.get("--group-by")
     }));
+  } else if (command === "pack" && action === "list") {
+    emit(await listLocalDomainPacks(store, args.get("--tenant-id", "default")));
+  } else if (command === "pack" && action === "install") {
+    const manifest = validateDomainPackManifest(await readDomainPackManifest(rest[0] || args.get("--from")));
+    emit(await installLocalDomainPack(store, args.get("--tenant-id", "default"), manifest));
+  } else if (command === "pack" && action === "validate") {
+    const manifest = validateDomainPackManifest(await readDomainPackManifest(rest[0] || args.get("--from")));
+    emit({ valid: true, pack_id: manifest.pack_id, version: manifest.version, recall_profile: manifest.recall_profile });
+  } else if (command === "metric" && action === "snapshot" && rest[0] === "ingest") {
+    const payload = await readStructuredPayload(args, rest.slice(1));
+    emit(await ingestLocalMetricSnapshot(store, args.get("--tenant-id", payload.tenant_id || "default"), payload));
+  } else if (command === "recall" && action === "preview") {
+    const payload = await readStructuredPayload(args, []);
+    emit(await previewLocalDomainRecall(store, {
+      ...payload,
+      tenant_id: args.get("--tenant-id", payload.tenant_id || "default"),
+      project_id: args.get("--project-id", payload.project_id),
+      prompt: rest.join(" ") || payload.prompt || payload.query
+    }));
+  } else if (command === "recall" && action === "feedback") {
+    const payload = await readStructuredPayload(args, rest);
+    emit(await recordLocalDomainRecallFeedback(store, { ...payload, tenant_id: args.get("--tenant-id", payload.tenant_id || "default") }));
+  } else if (command === "portable" && action === "export") {
+    const archive = await exportPortableArchive(store, { tenant_id: args.get("--tenant-id", "default") });
+    const output = args.get("--output");
+    if (output) {
+      await writeOutput(output, archive.jsonl);
+      emit({ output: resolve(output), record_count: archive.footer.record_count, content_digest: archive.footer.content_digest });
+    } else process.stdout.write(archive.jsonl);
+  } else if (command === "portable" && action === "import") {
+    const jsonl = await readStdin();
+    if (!jsonl) throw new Error("portable import requires a JSONL archive on stdin");
+    const input = { tenant_id: args.get("--tenant-id") };
+    emit(args.flags.has("--apply") ? await applyPortableImport(store, jsonl, input) : await planPortableImport(store, jsonl, input));
+  } else if (command === "portable" && action === "promote") {
+    emit(await promoteCloudAuthority(store, { tenant_id: args.get("--tenant-id", "default"), archive_digest: args.get("--archive-digest") }));
   } else if (command === "index" && action === "rebuild") {
     await store.rebuildIndex();
     emit({ ok: true, ...(await store.verify()) });

@@ -123,7 +123,7 @@ describe("authorizeMcpRequest", () => {
       owner_principal: "user:alice",
       client_type: "codex",
       device_label: "Work Mac",
-      purpose: "hook",
+      purpose: "capture",
       status: "active",
       access_subject_hash: "ignored-by-fake",
       enrollment_token_hash: null,

@@ -2,6 +2,14 @@
   "story_id": "story-build-engineering-2026-07",
   "fixture_date": "2026-07-31T00:00:00Z",
   "install_fixture": false,
+  "recall_fixture": {
+    "prompt": "checkout-webのCI時間を短縮したい。testを減らすべき？",
+    "object_type_key": "repository",
+    "object_id": "checkout-web",
+    "scope": { "repository": "checkout-web", "pipeline": "ci-main" },
+    "expected_decision_id": "DEC-BUILD-2026-07-01",
+    "wrong_scope": { "object_id": "billing-worker", "expected_recall": false }
+  },
   "objects": [
     { "id": "checkout-web", "type": "repository", "name": "checkout-web" },
     { "id": "ci-main", "type": "pipeline", "name": "ci-main" },
