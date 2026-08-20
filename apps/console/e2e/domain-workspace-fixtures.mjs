@@ -215,6 +215,22 @@ export function workspaceFor(packId) {
       followup_decision: story.followup_decision?.statement ?? null,
       evidence
     },
+    recall_history: packId === "function.build-engineering" ? [{
+      id: "recall-build-e2e",
+      created_at: observedAt,
+      mode: "shadow",
+      client_name: "Codex",
+      candidate_count: 1,
+      candidates: [{
+        recall_unit_id: "unit-build-e2e",
+        role: "primary",
+        score: 0.91,
+        why_recalled: ["object exact", "intent matched"],
+        decision_statement: story.decision.statement
+      }],
+      feedback: ["useful"],
+      trace_url: "/domain-recalls/recall-build-e2e?tenant_id=workspace-demo"
+    }] : [],
     source_readiness: sourceReadiness,
     fixture_context: packId === "function.pdm-b2c-marketplace" ? {
       experiment_success: [

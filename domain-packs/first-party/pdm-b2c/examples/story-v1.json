@@ -3,6 +3,14 @@
   "fixture_date": "2026-07-31T00:00:00Z",
   "followup_date": "2026-08-28T00:00:00Z",
   "install_fixture": false,
+  "recall_fixture": {
+    "prompt": "Paid Socialを増額して獲得を伸ばしたい",
+    "object_type_key": "acquisition_channel",
+    "object_id": "paid-social",
+    "scope": { "channel": "paid-social", "category": "home-fitness" },
+    "expected_decision_id": "DEC-PDM-EXP-PERSONALIZED-DISCOVERY-01",
+    "required_metric_distinctions": ["activation_rate", "quality_adjusted_activation_rate", "d7_retention", "ltv_cac"]
+  },
   "objects": [
     { "id": "machi-market-consumer-app", "type": "product", "name": "MachiMarket Consumer App" },
     { "id": "home-fitness", "type": "market_category", "name": "home-fitness" },

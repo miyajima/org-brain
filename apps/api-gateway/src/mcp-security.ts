@@ -4,6 +4,7 @@ import { resolveVerifiedAccessUser } from "./auth";
 import {
   resolveMcpClientInstallation,
   touchMcpClientInstallation,
+  type McpClientPurpose,
   type McpClientType
 } from "./mcp-client-installation-service";
 import type { Env } from "./types";
@@ -39,6 +40,8 @@ export type McpAuthResult = {
   defaultRole: OrgRole;
   clientInstallationId?: string;
   clientType?: McpClientType;
+  clientPurpose?: McpClientPurpose;
+  ownerPrincipal?: string;
   runtimeActor: string;
   allowedTools?: string[];
 };
@@ -203,8 +206,12 @@ async function authorizeAccessRequest(request: Request, env: Env): Promise<McpAu
       defaultRole: "contributor",
       clientInstallationId: installation.id,
       clientType: installation.client_type,
+      clientPurpose: installation.purpose,
+      ownerPrincipal: installation.owner_principal,
       runtimeActor,
-      allowedTools: ["orgbrain_memories_capture_rationale"]
+      allowedTools: installation.purpose === "recall"
+        ? ["orgbrain_prompt_recall", "orgbrain_domain_recall_feedback"]
+        : ["orgbrain_memories_capture_rationale"]
     };
   }
   const grant = await resolveVerifiedAccessUser(

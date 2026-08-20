@@ -1,6 +1,7 @@
 import type { AvoidedLookup, DecisionResourceLink, DecisionResourceRole, MemoryImpactSummary } from "@org-brain/contracts";
 
 export * from "./domain-pack.js";
+export * from "./domain-recall.js";
 
 export type MemoryImpactObservation = {
   event_type: "eligible" | "assessed" | "failed";

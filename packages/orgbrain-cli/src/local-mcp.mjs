@@ -11,8 +11,54 @@ import {
 } from "../../shared/src/memory-contract-v2-contract.mjs";
 import { isAiConsensusCertified } from "../../shared/src/memory-contract-judge.mjs";
 import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
+import {
+  previewLocalDomainRecall,
+  queryLocalMetrics,
+  recallBundleMarkdown,
+  recordLocalDomainRecallFeedback,
+  searchLocalManagedObjects
+} from "./lib/local-domain-recall.mjs";
 
 const TOOL_DEFINITIONS = [
+  {
+    name: "orgbrain_context_enrich",
+    description: "Retrieve local memory context and optional Domain Recall without network access.",
+    inputSchema: {
+      type: "object", required: ["query"],
+      properties: {
+        query: { type: "string" }, tenant_id: { type: "string" }, project_id: { type: ["string", "null"] },
+        principal_id: { type: ["string", "null"] }, include_domain_recall: { type: "boolean" },
+        object_type_key: { type: ["string", "null"] }, object_id: { type: ["string", "null"] }, scope: { type: "object" }
+      }
+    }
+  },
+  {
+    name: "orgbrain_domain_context",
+    description: "Use before answering an organization-specific question. Return a relevance-gated local Decision with rationale, rejected alternatives, constraints, success conditions, metrics, evidence, follow-up, and a trace link. Cite the trace when the answer uses this memory.",
+    inputSchema: {
+      type: "object", required: ["query"],
+      properties: {
+        query: { type: "string" }, tenant_id: { type: "string" }, project_id: { type: ["string", "null"] },
+        principal_id: { type: ["string", "null"] }, session_id: { type: ["string", "null"] },
+        object_type_key: { type: ["string", "null"] }, object_id: { type: ["string", "null"] }, scope: { type: "object" }
+      }
+    }
+  },
+  {
+    name: "orgbrain_managed_object_search",
+    description: "Search ACL-filtered managed objects in local SQLite.",
+    inputSchema: { type: "object", required: ["query"], properties: { query: { type: "string" }, tenant_id: { type: "string" }, project_id: { type: ["string", "null"] }, object_type_key: { type: ["string", "null"] }, principal_id: { type: ["string", "null"] }, limit: { type: "integer", minimum: 1, maximum: 50 } } }
+  },
+  {
+    name: "orgbrain_metric_query",
+    description: "Query aggregate local metric snapshots; stale and unknown values are numeric-free.",
+    inputSchema: { type: "object", properties: { tenant_id: { type: "string" }, project_id: { type: ["string", "null"] }, metric_key: { type: ["string", "null"] }, scope_id: { type: ["string", "null"] }, limit: { type: "integer", minimum: 1, maximum: 200 } } }
+  },
+  {
+    name: "orgbrain_domain_recall_feedback",
+    description: "Record a user's correction without mutating the Decision. Map 範囲が違う to wrong_scope, 古い to outdated, 関係ない to not_relevant, 関係が違う to incorrect_relation, and この会話では使わない to dismiss_for_session.",
+    inputSchema: { type: "object", required: ["recall_id", "feedback"], properties: { tenant_id: { type: "string" }, recall_id: { type: "string" }, candidate_id: { type: ["string", "null"] }, principal_id: { type: ["string", "null"] }, session_id: { type: ["string", "null"] }, feedback: { type: "string", enum: ["useful", "not_relevant", "wrong_scope", "outdated", "incorrect_relation", "dismiss_for_session"] }, note: { type: ["string", "null"] } } }
+  },
   {
     name: "orgbrain_memory_observe",
     description: "Validate one current-turn durable learning event without persisting it. Use at most three times per turn.",
@@ -428,6 +474,15 @@ function captureDefaults(input) {
 
 async function callTool(store, name, input) {
   const tenantId = input.tenant_id || "default";
+  if (name === "orgbrain_context_enrich") {
+    const memory = await store.retrieveContext({ tenant_id: tenantId, project_id: input.project_id ?? null, query: input.query, top_k: 5, token_budget: 6_000, principal_id: input.principal_id ?? null, search_mode: "hybrid_v4" });
+    const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
+    return { ...memory, ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
+  }
+  if (name === "orgbrain_domain_context") return previewLocalDomainRecall(store, { ...input, prompt: input.query });
+  if (name === "orgbrain_managed_object_search") return searchLocalManagedObjects(store, input);
+  if (name === "orgbrain_metric_query") return queryLocalMetrics(store, input);
+  if (name === "orgbrain_domain_recall_feedback") return recordLocalDomainRecallFeedback(store, input);
   if (name === "orgbrain_memory_observe") {
     const observe = input.schema_version === 2
       ? observeMemoryContractV2Event

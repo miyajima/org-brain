@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recallProfileSchema } from "./domain-recall.js";
 
 export const DOMAIN_PACK_CONTRACT_VERSION = "domain-pack/v1" as const;
 export const PACK_ENVELOPE_CONTRACT_VERSION = "pack-envelope/v1" as const;
@@ -218,6 +219,23 @@ const workspaceMetricSchema = z.object({
   series: z.array(workspaceSnapshotSchema).max(500)
 }).strict();
 
+const workspaceRecallHistorySchema = z.object({
+  id: identifier,
+  created_at: z.number().int().nonnegative(),
+  mode: z.enum(["shadow", "on"]),
+  client_name: z.string().trim().min(1).max(128).nullable(),
+  candidate_count: z.number().int().nonnegative(),
+  candidates: z.array(z.object({
+    recall_unit_id: identifier,
+    role: z.enum(["primary", "supporting", "conflict"]),
+    score: z.number().finite().min(0).max(1),
+    why_recalled: z.array(z.string().trim().min(1).max(128)).max(16),
+    decision_statement: z.string().trim().min(1).max(4_000)
+  }).strict()).max(8),
+  feedback: z.array(z.enum(["useful", "not_relevant", "wrong_scope", "outdated", "incorrect_relation", "dismiss_for_session"])).max(100),
+  trace_url: z.string().trim().min(1).max(2_048)
+}).strict();
+
 export const domainPackWorkspaceSchema = z.object({
   contract_version: z.literal(DOMAIN_PACK_CONTRACT_VERSION).default(DOMAIN_PACK_CONTRACT_VERSION),
   generated_at: z.number().int().nonnegative(),
@@ -262,6 +280,7 @@ export const domainPackWorkspaceSchema = z.object({
     followup_decision: z.string().trim().max(4_000).nullable(),
     evidence: z.array(workspaceEvidenceSchema).max(100)
   }).strict().nullable(),
+  recall_history: z.array(workspaceRecallHistorySchema).max(50).default([]),
   source_readiness: z.array(metricSourceBindingSchema).max(512)
 }).strict();
 
@@ -293,6 +312,7 @@ export const domainPackManifestSchema = z.object({
   description: z.string().trim().min(1).max(2_000),
   language: z.string().trim().min(2).max(16).default("ja"),
   min_orgbrain_version: semver,
+  recall_profile: recallProfileSchema.optional(),
   dependencies: z.array(domainPackDependencySchema).max(32).default([]),
   object_types: z.array(managedObjectTypeSchema).max(128).default([]),
   metrics: z.array(metricDefinitionSchema).max(256).default([]),

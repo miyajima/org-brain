@@ -3,7 +3,7 @@ title: Decision Console v2 release and rollback runbook
 doc_type: runbook
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-18
+last_updated: 2026-08-20
 ---
 
 # Decision Console v2 release and rollback runbook
@@ -32,6 +32,9 @@ layer behind independent feature flags.
 | --- | --- | --- | --- |
 | `DECISION_CONSOLE_MODE` | legacy Console/read path | staging v2 surfaces | production v2 surfaces |
 | `LOADOUT_RESOLUTION_MODE` | existing context enrichment | staging ACL-first Loadout resolution | production ACL-first Loadout resolution |
+| `DOMAIN_RECALL_MODE` | no Recall query/injection | store shadow trace, do not inject | return and inject bounded Recall |
+| `DOMAIN_RECALL_HOOK_MODE` | no hook Recall | personal Local Recall | team/Cloud Recall path |
+| `PORTABLE_ARCHIVE_MODE` | reject Cloud archive import | n/a | accept staged plan/apply import |
 
 Provider availability is independent. A provider is advertised only when its
 server-side key and model configuration are present. Disable one provider by
@@ -55,13 +58,18 @@ remain readable.
    motion, and empty/error/stale states.
 7. Confirm old Decision URLs preserve their query parameters and
    `tenant`, `project`, and `lang` when redirecting.
+8. Run Domain Recall story fixtures and require deterministic offline results,
+   zero wrong-object/scope primary candidates, stale numeric stripping, metadata-
+   only evidence, payloads below 6 KiB, and unchanged default Context Enrich.
+9. Export a Local portable archive, verify the Cloud import plan twice, and
+   confirm same-ID/different-digest rejection before any authority switch.
 
 Do not start production rollout when any gate is missing, flaky, or failed.
 
 ## Staging sequence
 
 1. Back up the current D1 schema and record current Worker/Page versions.
-2. Apply migration 0034.
+2. Apply migrations 0034 through 0036.
 3. Deploy API Gateway and capability runner with
    `DECISION_CONSOLE_MODE=beta` and `LOADOUT_RESOLUTION_MODE=beta`.
 4. Run API smoke for Briefing, Trace, Map, Skill generation, Publish, Agent
@@ -72,6 +80,8 @@ Do not start production rollout when any gate is missing, flaky, or failed.
    differences; resolve all unexplained mismatches before production.
 7. Run a staging generation with each configured provider and verify the draft
    remains private until an explicit Owner/admin Publish.
+8. Enable `DOMAIN_RECALL_MODE=shadow`, keep hook mode `off`, and inspect Pack
+   history/Trace for query-hash-only events before any injection.
 
 ## Production sequence
 
@@ -83,7 +93,11 @@ Use one change window and keep the flags off until every component is present.
 4. Run authenticated live API and Console smoke without changing the flags.
 5. Change `DECISION_CONSOLE_MODE=on`.
 6. Change `LOADOUT_RESOLUTION_MODE=on`.
-7. Repeat the live smoke and watch access-policy shadow differences, task
+7. Change `DOMAIN_RECALL_MODE=shadow`, verify candidate quality and event
+   privacy, then change it to `on` for the approved tenant cohort.
+8. Keep portable import and Cloud-authority promotion off until a separately
+   approved archive digest and rollback owner are recorded.
+9. Repeat the live smoke and watch access-policy shadow differences, task
    failures, provider failure rates, Decision API p95, response size, and
    context omission reasons.
 
@@ -104,19 +118,25 @@ Use one change window and keep the flags off until every component is present.
 - Revoking a Skill policy removes it on the next preview/context request.
 - Access Drawer reads and updates the same policy version across asset types.
 - Old URLs and Manage/supporting pages remain reachable.
+- Context Enrich without `include_domain_recall=true` is unchanged; explicit
+  Recall shows the expected Pack candidate, Scope, score, and Trace.
+- Recall event rows contain a query hash and candidate links but no prompt or
+  evidence body; stale/unknown metrics display no numeric value.
 
 ## Rollback
 
-1. Set `LOADOUT_RESOLUTION_MODE=off` to restore existing context enrichment.
-2. Set `DECISION_CONSOLE_MODE=off` to restore legacy Console/read behavior.
-3. If one generator is failing, disable only that provider configuration.
-4. If unified-policy results differ unexpectedly, return reads to the legacy
+1. Set `DOMAIN_RECALL_MODE=off` and `DOMAIN_RECALL_HOOK_MODE=off`; preserve
+   Recall events, feedback, import records, and review Proposals.
+2. Set `LOADOUT_RESOLUTION_MODE=off` to restore existing context enrichment.
+3. Set `DECISION_CONSOLE_MODE=off` to restore legacy Console/read behavior.
+4. If one generator is failing, disable only that provider configuration.
+5. If unified-policy results differ unexpectedly, return reads to the legacy
    compatibility path, inspect the shadow summary, repair/backfill policies,
    and rerun authorization tests before reenabling.
-5. Keep migration 0034, Skill/Agent rows, usage records, generation records, and
+6. Keep migrations 0034 through 0036, Skill/Agent rows, usage records, generation records, and
    immutable R2 versions. Do not perform a down migration or delete evidence as
    part of application rollback.
-6. Redeploy the last-known-good Worker/Page versions only if flags do not fully
+7. Redeploy the last-known-good Worker/Page versions only if flags do not fully
    restore behavior, then repeat the legacy live smoke.
 
 ## Completion record

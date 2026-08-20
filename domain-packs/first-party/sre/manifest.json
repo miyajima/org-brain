@@ -1,12 +1,21 @@
 {
   "contract_version": "domain-pack/v1",
   "pack_id": "function.sre",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "classification": "function",
   "title": "SRE",
   "description": "Services, dependencies, SLOs, incidents, and reliability outcomes.",
   "language": "ja",
   "min_orgbrain_version": "0.2.0",
+  "recall_profile": {
+    "intent_aliases": ["障害対応", "timeout", "retry", "circuit breaker", "burn rate", "degradation"],
+    "object_type_keys": ["service", "dependency", "incident", "slo"],
+    "primary_metric_keys": ["error_budget_burn_rate", "http_5xx_rate", "latency_p95"],
+    "guardrail_metric_keys": ["availability", "mttr"],
+    "risk_mode": "high_assurance",
+    "auto_recall_threshold": 0.72,
+    "required_scope_keys": ["service", "dependency"]
+  },
   "dependencies": [],
   "object_types": [
     { "key": "service", "label": "Service", "allowed_relations": ["depends_on", "governed_by_slo"] },

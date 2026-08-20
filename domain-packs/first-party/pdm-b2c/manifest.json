@@ -1,12 +1,20 @@
 {
   "contract_version": "domain-pack/v1",
   "pack_id": "function.pdm-b2c-marketplace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "classification": "function",
   "title": "PdM — B2C Marketplace",
   "description": "B2C marketplace acquisition, activation, retention, commerce, unit economics, and market quality.",
   "language": "ja",
   "min_orgbrain_version": "0.2.0",
+  "recall_profile": {
+    "intent_aliases": ["Paid Social", "広告増額", "Activation", "Retention", "初回価値", "LTV/CAC"],
+    "object_type_keys": ["product", "market_category", "acquisition_channel", "user_cohort", "product_funnel", "experiment", "campaign"],
+    "primary_metric_keys": ["activation_rate", "d7_retention", "ltv_cac", "time_to_first_value_p75"],
+    "guardrail_metric_keys": ["contribution_margin_per_buyer", "cancellation_refund_rate", "coupon_dependency_rate"],
+    "risk_mode": "standard",
+    "auto_recall_threshold": 0.6
+  },
   "dependencies": [],
   "object_types": [
     { "key": "product", "label": "Product" },

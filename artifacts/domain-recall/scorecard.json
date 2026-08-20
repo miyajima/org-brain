@@ -1,0 +1,116 @@
+{
+  "generated_at": "2026-08-20T02:18:31.317Z",
+  "threshold": 95,
+  "answer_ux_threshold": 96,
+  "critical_threshold": 0,
+  "results": [
+    {
+      "pack_id": "function.build-engineering",
+      "version": "1.1.0",
+      "score": 100,
+      "dimensions": {
+        "memory_content": 25,
+        "automatic_recall": 25,
+        "traceability": 25,
+        "freshness_safety": 15,
+        "feedback": 10
+      },
+      "answer_ux_score": 97,
+      "answer_ux_dimensions": {
+        "decision_and_reason": 20,
+        "scope_and_relevance": 15,
+        "complete_decision_context": 15,
+        "metrics_and_evidence": 20,
+        "transparency_and_client_delivery": 12,
+        "correction_and_control": 10,
+        "readability_and_safety": 5
+      },
+      "answer_ux_limitations": [
+        "native_client_rendering_and_live_model_A_B_not_verified"
+      ],
+      "critical": 0,
+      "failures": []
+    },
+    {
+      "pack_id": "function.sre",
+      "version": "1.1.0",
+      "score": 100,
+      "dimensions": {
+        "memory_content": 25,
+        "automatic_recall": 25,
+        "traceability": 25,
+        "freshness_safety": 15,
+        "feedback": 10
+      },
+      "answer_ux_score": 97,
+      "answer_ux_dimensions": {
+        "decision_and_reason": 20,
+        "scope_and_relevance": 15,
+        "complete_decision_context": 15,
+        "metrics_and_evidence": 20,
+        "transparency_and_client_delivery": 12,
+        "correction_and_control": 10,
+        "readability_and_safety": 5
+      },
+      "answer_ux_limitations": [
+        "native_client_rendering_and_live_model_A_B_not_verified"
+      ],
+      "critical": 0,
+      "failures": []
+    },
+    {
+      "pack_id": "function.sales",
+      "version": "1.1.0",
+      "score": 100,
+      "dimensions": {
+        "memory_content": 25,
+        "automatic_recall": 25,
+        "traceability": 25,
+        "freshness_safety": 15,
+        "feedback": 10
+      },
+      "answer_ux_score": 97,
+      "answer_ux_dimensions": {
+        "decision_and_reason": 20,
+        "scope_and_relevance": 15,
+        "complete_decision_context": 15,
+        "metrics_and_evidence": 20,
+        "transparency_and_client_delivery": 12,
+        "correction_and_control": 10,
+        "readability_and_safety": 5
+      },
+      "answer_ux_limitations": [
+        "native_client_rendering_and_live_model_A_B_not_verified"
+      ],
+      "critical": 0,
+      "failures": []
+    },
+    {
+      "pack_id": "function.pdm-b2c-marketplace",
+      "version": "1.1.0",
+      "score": 100,
+      "dimensions": {
+        "memory_content": 25,
+        "automatic_recall": 25,
+        "traceability": 25,
+        "freshness_safety": 15,
+        "feedback": 10
+      },
+      "answer_ux_score": 97,
+      "answer_ux_dimensions": {
+        "decision_and_reason": 20,
+        "scope_and_relevance": 15,
+        "complete_decision_context": 15,
+        "metrics_and_evidence": 20,
+        "transparency_and_client_delivery": 12,
+        "correction_and_control": 10,
+        "readability_and_safety": 5
+      },
+      "answer_ux_limitations": [
+        "native_client_rendering_and_live_model_A_B_not_verified"
+      ],
+      "critical": 0,
+      "failures": []
+    }
+  ]
+}

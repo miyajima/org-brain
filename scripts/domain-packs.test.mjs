@@ -71,5 +71,17 @@ test("the four fixed stories reproduce their metric change and Decision trace", 
     assert.ok(story.decision.id);
     assert.ok(story.decision.rationale);
     assert.ok(story.decision.evidence.length > 0);
+    assert.equal(story.recall_fixture.expected_decision_id, story.decision.id);
   }
+});
+
+test("Recall profiles enforce the four domain gates", async () => {
+  const root = fileURLToPath(new URL("../domain-packs/first-party", import.meta.url));
+  const manifests = await Promise.all(["build-engineering", "sre", "sales", "pdm-b2c"].map(async (pack) =>
+    JSON.parse(await readFile(`${root}/${pack}/manifest.json`, "utf8"))
+  ));
+  assert.deepEqual(manifests.map((manifest) => manifest.recall_profile.auto_recall_threshold), [0.6, 0.72, 0.6, 0.6]);
+  assert.equal(manifests[1].recall_profile.risk_mode, "high_assurance");
+  assert.deepEqual(manifests[1].recall_profile.required_scope_keys, ["service", "dependency"]);
+  assert.ok(manifests.every((manifest) => !("prompt" in manifest) && !("sql" in manifest) && !("code" in manifest)));
 });

@@ -1,12 +1,20 @@
 {
   "contract_version": "domain-pack/v1",
   "pack_id": "function.build-engineering",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "classification": "function",
   "title": "Build Engineering",
   "description": "CI/CD systems, repositories, runners, releases, and delivery performance.",
   "language": "ja",
   "min_orgbrain_version": "0.2.0",
+  "recall_profile": {
+    "intent_aliases": ["CI改善", "build時間", "pipeline", "runner", "test shard", "品質ガード"],
+    "object_type_keys": ["repository", "pipeline", "runner_pool"],
+    "primary_metric_keys": ["build_duration_p95", "queue_duration_p95"],
+    "guardrail_metric_keys": ["build_success_rate", "change_failure_rate"],
+    "risk_mode": "standard",
+    "auto_recall_threshold": 0.6
+  },
   "dependencies": [],
   "object_types": [
     { "key": "repository", "label": "Repository", "allowed_relations": ["uses_pipeline"] },

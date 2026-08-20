@@ -6,13 +6,14 @@ const LAST_USED_WRITE_INTERVAL_MS = 15 * 60 * 1000;
 const CLIENT_TYPES = new Set(["codex", "claude", "cursor"]);
 
 export type McpClientType = "codex" | "claude" | "cursor";
+export type McpClientPurpose = "capture" | "recall";
 export type McpClientInstallation = {
   id: string;
   tenant_id: string;
   owner_principal: string;
   client_type: McpClientType;
   device_label: string;
-  purpose: "hook";
+  purpose: McpClientPurpose;
   status: "pending" | "active" | "revoked";
   created_at: number;
   activated_at: number | null;
@@ -59,6 +60,14 @@ function parseDeviceLabel(value: unknown): string {
   return normalized;
 }
 
+function parsePurpose(value: unknown): McpClientPurpose {
+  if (value === undefined) return "capture";
+  if (value !== "capture" && value !== "recall") {
+    throw new HttpError(400, "invalid_payload", "purpose must be capture or recall");
+  }
+  return value;
+}
+
 function randomToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -87,6 +96,7 @@ export async function createMcpClientInstallation(
   const body = raw as Record<string, unknown>;
   const clientType = parseClientType(body.client_type);
   const deviceLabel = parseDeviceLabel(body.device_label);
+  const purpose = parsePurpose(body.purpose);
   const owner = await env.OPEN_BRAIN_DB.prepare(
     "SELECT status FROM user_profiles WHERE tenant_id=? AND principal=?"
   ).bind(tenantId, ownerPrincipal).first<{ status: string }>();
@@ -103,8 +113,8 @@ export async function createMcpClientInstallation(
       id, tenant_id, owner_principal, client_type, device_label, purpose, status,
       access_subject_hash, enrollment_token_hash, enrollment_expires_at,
       created_at, activated_at, last_used_at, revoked_at
-    ) VALUES(?,?,?,?,?,'hook','pending',NULL,?,?,?,NULL,NULL,NULL)`
-  ).bind(id, tenantId, ownerPrincipal, clientType, deviceLabel, enrollmentHash, expiresAt, now).run();
+    ) VALUES(?,?,?,?,?,?,'pending',NULL,?,?,?,NULL,NULL,NULL)`
+  ).bind(id, tenantId, ownerPrincipal, clientType, deviceLabel, purpose, enrollmentHash, expiresAt, now).run();
   return {
     installation: {
       id,
@@ -112,7 +122,7 @@ export async function createMcpClientInstallation(
       owner_principal: ownerPrincipal,
       client_type: clientType,
       device_label: deviceLabel,
-      purpose: "hook",
+      purpose,
       status: "pending",
       created_at: now,
       activated_at: null,

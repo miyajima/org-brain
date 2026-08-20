@@ -9,6 +9,7 @@ import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { hasTaskIdentity, TaskCommitmentStore, taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
 import { MEMORY_CONTRACT_V2_PROMPT } from "../../shared/src/memory-contract-v2-runtime.mjs";
+import { previewLocalDomainRecall, recallBundleMarkdown } from "./lib/local-domain-recall.mjs";
 import {
   loadWorkspaceConfig,
   normalizeWorkspaceRoot,
@@ -228,6 +229,24 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
       contextParts.push(...relevant.map(({ memory }) =>
         `- memory_id=${memory.id}; summary=${compact(redactHookMemoryText(memory.summary || memory.content))}`
       ));
+    }
+    const recallMode = ["shadow", "on"].includes(String(env.DOMAIN_RECALL_MODE ?? "off").toLowerCase())
+      ? String(env.DOMAIN_RECALL_MODE).toLowerCase()
+      : "off";
+    const hookMode = ["personal", "team"].includes(String(env.DOMAIN_RECALL_HOOK_MODE ?? "off").toLowerCase())
+      ? String(env.DOMAIN_RECALL_HOOK_MODE).toLowerCase()
+      : "off";
+    if (recallMode !== "off" && hookMode !== "off" && hookEventName(payload) === "UserPromptSubmit") {
+      const recall = await previewLocalDomainRecall(store, {
+        tenant_id: scope.tenantId,
+        project_id: projectIdFromPayload(payload, scope),
+        prompt,
+        principal_id: payload.principal_id ?? env.USER ?? "local-user",
+        session_id: payload.session_id ?? null,
+        client_name: "codex-hook",
+        mode: recallMode
+      }).catch(() => null);
+      if (recall?.inject && recall.bundle?.primary) contextParts.push(recallBundleMarkdown(recall.bundle));
     }
   }
   if (learningInstruction) contextParts.push(learningInstruction);

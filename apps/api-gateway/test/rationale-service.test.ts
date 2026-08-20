@@ -639,7 +639,10 @@ describe("rationale service", () => {
     ]);
     expect(db.memories).toHaveLength(0);
 
-    const createdAt = Date.parse("2026-08-12T00:00:00.000Z");
+    // Keep this retention assertion independent of the wall-clock date on
+    // which the suite runs. A fixed timestamp eventually becomes expired and
+    // exercises the usefulness rejection path instead of PII redaction.
+    const createdAt = Date.now() - 24 * 60 * 60 * 1000;
     const restricted = await captureMemoryWithInferredRationale(env, {
       tenant_id: "default",
       source: "hook",

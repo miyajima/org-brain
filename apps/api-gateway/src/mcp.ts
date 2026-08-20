@@ -74,6 +74,7 @@ import {
 } from "./memory-effect-service";
 import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
 import { getDomainContext, queryMetrics, searchManagedObjects } from "./domain-metric-service";
+import { getDomainRecall, recordDomainRecallFeedback } from "./domain-recall-service";
 import {
   getDecisionResources,
   getResourceDecisions,
@@ -93,6 +94,8 @@ type AgentProps = {
   runtimeActor?: string;
   clientInstallationId?: string;
   clientType?: string;
+  clientPurpose?: string;
+  ownerPrincipal?: string;
   allowedTools?: string[];
 };
 
@@ -130,7 +133,12 @@ const contextEnrichInputShape = {
   max_tokens: z.number().int().min(500).max(32000).optional(),
   include_sources: z.boolean().optional(),
   include_conflicts: z.boolean().optional(),
-  debug_scores: z.boolean().optional()
+  debug_scores: z.boolean().optional(),
+  include_domain_recall: z.boolean().optional(),
+  domain_recall_max_tokens: z.number().int().min(256).max(8_000).optional(),
+  object_type_key: z.string().max(128).nullable().optional(),
+  object_id: z.string().max(128).nullable().optional(),
+  scope: z.record(z.string(), z.string().max(256)).optional()
 };
 const contextEnrichInputSchema = z.object(contextEnrichInputShape);
 type ContextEnrichInput = z.infer<typeof contextEnrichInputSchema>;
@@ -150,6 +158,11 @@ type ToolHandler<Shape extends z.ZodRawShape> = (
   args: z.output<z.ZodObject<Shape>>
 ) => CallToolResult | Promise<CallToolResult>;
 
+const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
+  orgbrain_prompt_recall: "Use before answering an organization-specific question. Return the relevant Decision, rationale, rejected alternatives, constraints, success conditions, metrics, evidence metadata, follow-up, and trace URL. If the answer uses the memory, cite the trace and invite the user to say 範囲が違う, 古い, or 関係ない.",
+  orgbrain_domain_recall_feedback: "Record the user's correction without mutating the underlying Decision. Map 範囲が違う to wrong_scope, 古い to outdated, 関係ない to not_relevant, 関係が違う to incorrect_relation, and この会話では使わない to dismiss_for_session. Call this when the user corrects a recalled memory."
+};
+
 function registerTool<Shape extends z.ZodRawShape>(
   server: McpServer,
   name: string,
@@ -158,7 +171,7 @@ function registerTool<Shape extends z.ZodRawShape>(
 ) {
   return server.registerTool(
     name,
-    { inputSchema: z.object(inputShape) },
+    { ...(MCP_TOOL_DESCRIPTIONS[name] ? { description: MCP_TOOL_DESCRIPTIONS[name] } : {}), inputSchema: z.object(inputShape) },
     handler
   );
 }
@@ -957,7 +970,21 @@ class OrgBrainMcpTools {
           agent_id: agent_id ?? principal,
           ...payload
         }, { principal });
-        return toContent(result);
+        if (payload.include_domain_recall !== true) return toContent(result);
+        const recall = await getDomainRecall(this.env, {
+          tenant_id: tenantId,
+          project_id: payload.project_id,
+          query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
+          object_type_key: payload.object_type_key,
+          object_id: payload.object_id,
+          scope: payload.scope
+        }, {
+          ownerPrincipal: this.props.ownerPrincipal ?? principal,
+          runtimeActor: this.props.runtimeActor,
+          clientInstallationId: this.props.clientInstallationId,
+          clientName: this.props.clientType ?? "mcp"
+        });
+        return toContent({ ...result, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } });
       }
     );
 
@@ -1692,6 +1719,54 @@ class OrgBrainMcpTools {
       }
     );
 
+    registerTool(this.server,
+      "orgbrain_prompt_recall",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().max(128).nullable().optional(),
+        query: z.string().min(1).max(4_000),
+        object_type_key: z.string().max(128).nullable().optional(),
+        object_id: z.string().max(128).nullable().optional(),
+        scope: z.record(z.string(), z.string().max(256)).optional(),
+        session_id: z.string().max(256).nullable().optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", payload.project_id);
+        if (this.props.clientPurpose === "recall" && (this.env.DOMAIN_RECALL_HOOK_MODE ?? "off") === "off") {
+          throw new HttpError(404, "domain_recall_hook_disabled", "Domain Recall hook access is disabled");
+        }
+        return toContent(await getDomainRecall(this.env, { tenant_id: tenantId, ...payload }, {
+          ownerPrincipal: this.props.ownerPrincipal ?? this.props.principal,
+          runtimeActor: this.props.runtimeActor,
+          clientInstallationId: this.props.clientInstallationId,
+          clientName: this.props.clientType ?? "mcp"
+        }));
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_domain_recall_feedback",
+      {
+        tenant_id: z.string().optional(),
+        recall_id: z.string().min(1).max(256),
+        candidate_id: z.string().max(256).nullable().optional(),
+        feedback: z.enum(["useful", "not_relevant", "wrong_scope", "outdated", "incorrect_relation", "dismiss_for_session"]),
+        session_id: z.string().max(256).nullable().optional(),
+        note: z.string().max(2_000).nullable().optional()
+      },
+      async ({ tenant_id, recall_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read");
+        return toContent(await recordDomainRecallFeedback(this.env, tenantId, recall_id, payload, {
+          ownerPrincipal: this.props.ownerPrincipal ?? this.props.principal,
+          runtimeActor: this.props.runtimeActor,
+          clientInstallationId: this.props.clientInstallationId,
+          clientName: this.props.clientType ?? "mcp"
+        }));
+      }
+    );
+
   }
 }
 
@@ -1864,7 +1939,21 @@ async function tryHandleContextEnrichFastPath(
       agent_id: agent_id ?? principal,
       ...payload
     }, { principal, bestEffortUsage: true });
-    return jsonRpcResult(body.id, toContent(result));
+    if (payload.include_domain_recall !== true) return jsonRpcResult(body.id, toContent(result));
+    const recall = await getDomainRecall(env, {
+      tenant_id: tenantId,
+      project_id: payload.project_id,
+      query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
+      object_type_key: payload.object_type_key,
+      object_id: payload.object_id,
+      scope: payload.scope
+    }, {
+      ownerPrincipal: props.ownerPrincipal ?? principal,
+      runtimeActor: props.runtimeActor,
+      clientInstallationId: props.clientInstallationId,
+      clientName: props.clientType ?? "mcp-fast-path"
+    });
+    return jsonRpcResult(body.id, toContent({ ...result, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } }));
   } catch (error) {
     if (error instanceof HttpError && error.status < 500) throw error;
     console.warn({
@@ -2063,6 +2152,7 @@ export function mountMcp(app: Hono<any>) {
           id: auth.clientInstallationId,
           tenant_id: auth.tenantId,
           client_type: auth.clientType,
+          purpose: auth.clientPurpose,
           runtime_actor: auth.runtimeActor
         }
       });
@@ -2089,6 +2179,8 @@ export function mountMcp(app: Hono<any>) {
         runtimeActor: auth.runtimeActor,
         clientInstallationId: auth.clientInstallationId,
         clientType: auth.clientType,
+        clientPurpose: auth.clientPurpose,
+        ownerPrincipal: auth.ownerPrincipal,
         allowedTools: auth.allowedTools
       };
       const transportValidationResponse = mcpTransportValidationResponse(request);

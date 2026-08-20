@@ -32,7 +32,7 @@ test("decision-first product documents keep approved frontmatter", () => {
     assert.match(body, /^---\n/);
     assert.match(body, /\nstatus: approved\n/, `${name} status`);
     assert.match(body, /\nowner: org-brain-maintainers\n/, `${name} owner`);
-    assert.match(body, /\nlast_updated: 2026-08-18\n/, `${name} freshness`);
+    assert.match(body, /\nlast_updated: 2026-08-20\n/, `${name} freshness`);
   }
 });
 

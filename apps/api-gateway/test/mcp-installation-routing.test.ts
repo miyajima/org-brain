@@ -43,7 +43,7 @@ describe("MCP client installation routes", () => {
       owner_principal: "user:alice",
       client_type: "codex",
       device_label: "Work Mac",
-      purpose: "hook",
+      purpose: "capture",
       status: "active",
       created_at: 1,
       activated_at: 2,

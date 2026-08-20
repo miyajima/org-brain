@@ -1,12 +1,21 @@
 {
   "contract_version": "domain-pack/v1",
   "pack_id": "function.sales",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "classification": "function",
   "title": "Sales",
   "description": "Segments, campaigns, teams, pipeline conversion, and revenue outcomes.",
   "language": "ja",
   "min_orgbrain_version": "0.2.0",
+  "recall_profile": {
+    "intent_aliases": ["増員", "稼働配分", "webinar follow-up", "商談", "pipeline", "revenue"],
+    "object_type_keys": ["segment", "campaign", "sales_team", "sales_pipeline"],
+    "primary_metric_keys": ["appointment_count", "opportunity_count", "revenue"],
+    "guardrail_metric_keys": ["appointment_rate", "opportunity_conversion_rate"],
+    "risk_mode": "standard",
+    "auto_recall_threshold": 0.6,
+    "required_scope_keys": ["segment", "team", "quarter"]
+  },
   "dependencies": [],
   "object_types": [
     { "key": "segment", "label": "Segment" },

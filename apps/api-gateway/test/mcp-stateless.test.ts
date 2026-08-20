@@ -88,7 +88,7 @@ describe("MCP 2026-07-28 stateless transport", () => {
     const tools = await app.fetch(modernRequest("tools/list", 2), env, ctx);
     const toolsBody = await tools.json() as {
       result?: {
-        tools?: Array<{ name: string }>;
+        tools?: Array<{ name: string; description?: string }>;
         ttlMs?: number;
         cacheScope?: string;
       };
@@ -98,6 +98,8 @@ describe("MCP 2026-07-28 stateless transport", () => {
     expect(tools.headers.get("mcp-session-id")).toBeNull();
     expect(toolsBody).toHaveProperty("result");
     expect(toolsBody.result?.tools?.some((tool) => tool.name === "orgbrain_context_enrich")).toBe(true);
+    expect(toolsBody.result?.tools?.find((tool) => tool.name === "orgbrain_prompt_recall")?.description).toContain("cite the trace");
+    expect(toolsBody.result?.tools?.find((tool) => tool.name === "orgbrain_domain_recall_feedback")?.description).toContain("範囲が違う");
     expect(toolsBody.result).toMatchObject({
       ttlMs: 300_000,
       cacheScope: "private"

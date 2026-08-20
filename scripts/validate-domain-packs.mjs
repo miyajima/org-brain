@@ -38,6 +38,15 @@ export async function validateDomainPacks() {
     invariant(Array.isArray(manifest.object_types) && manifest.object_types.length, `${directory}: object_types required`);
     invariant(Array.isArray(manifest.metrics) && manifest.metrics.length, `${directory}: metrics required`);
     invariant(Array.isArray(manifest.dashboards) && manifest.dashboards.length, `${directory}: dashboards required`);
+    invariant(manifest.recall_profile && typeof manifest.recall_profile === "object", `${directory}: recall_profile required`);
+    invariant(["standard", "high_assurance"].includes(manifest.recall_profile.risk_mode), `${directory}: invalid recall risk mode`);
+    invariant(manifest.recall_profile.auto_recall_threshold >= 0.6, `${directory}: recall threshold too low`);
+    invariant(manifest.recall_profile.object_type_keys.every((key) => manifest.object_types.some((item) => item.key === key)), `${directory}: recall object type missing from pack`);
+    invariant([...manifest.recall_profile.primary_metric_keys, ...manifest.recall_profile.guardrail_metric_keys].every((key) => manifest.metrics.some((item) => item.key === key)), `${directory}: recall metric missing from pack`);
+    if (manifest.recall_profile.risk_mode === "high_assurance") {
+      invariant(manifest.recall_profile.auto_recall_threshold >= 0.72, `${directory}: high assurance threshold must be at least 0.72`);
+      invariant(manifest.recall_profile.required_scope_keys.length > 0, `${directory}: high assurance scope keys required`);
+    }
     unique(manifest.object_types.map((item) => item.key), `${directory}: object type keys`);
     unique(manifest.metrics.map((item) => item.key), `${directory}: metric keys`);
     unique(manifest.dashboards.map((item) => item.key), `${directory}: dashboard keys`);
@@ -62,6 +71,9 @@ export async function validateDomainPacks() {
       invariant(story.install_fixture === false, `${directory}: examples must never load during a normal install`);
       invariant(typeof story.story_id === "string" && typeof story.fixture_date === "string", `${directory}: fixed story ID and date required`);
       invariant(story.decision?.id, `${directory}: decision trace fixture required`);
+      invariant(story.recall_fixture?.prompt && story.recall_fixture?.expected_decision_id === story.decision.id, `${directory}: recall fixture must target its Decision`);
+      invariant(JSON.stringify(story.recall_fixture).length < 6 * 1024, `${directory}: recall fixture exceeds hook payload budget`);
+      invariant(!/customer_(?:id|name)|contact_email|secret|token/iu.test(JSON.stringify(story.recall_fixture.scope ?? {})), `${directory}: recall scope contains forbidden customer or secret fields`);
     }
     const digest = createHash("sha256").update(JSON.stringify(canonical(manifest))).digest("hex");
     results.push({ directory, pack_id: manifest.pack_id, version: manifest.version, digest });
@@ -75,4 +87,3 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const results = await validateDomainPacks();
   for (const result of results) process.stdout.write(`${result.pack_id}@${result.version} ${result.digest}\n`);
 }
-

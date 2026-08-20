@@ -66,6 +66,9 @@ export type Env = {
   DOMAIN_PACKS_MODE?: "off" | "catalog" | "install";
   DOMAIN_METRICS_MODE?: "off" | "shadow" | "on";
   DOMAIN_WORKSPACES_MODE?: "off" | "preview" | "on";
+  DOMAIN_RECALL_MODE?: "off" | "shadow" | "on";
+  DOMAIN_RECALL_HOOK_MODE?: "off" | "personal" | "team";
+  PORTABLE_ARCHIVE_MODE?: "off" | "plan" | "on";
   RETENTION_SWEEP_MODE?: "off" | "observe" | "enforce";
   OPS_WATCHDOG_TOKEN?: string;
   OPS_ALERT_WEBHOOK_URL?: string;
