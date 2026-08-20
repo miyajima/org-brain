@@ -28,4 +28,5 @@ export * from "./retrieval-units";
 export * from "./schemas";
 export * from "./scheduled-jobs";
 export * from "./autonomy-policy";
+export * from "./verified-knowledge-bundle";
 export * from "./types";

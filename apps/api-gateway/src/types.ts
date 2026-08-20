@@ -56,6 +56,8 @@ export type Env = {
   DECISION_CONSOLE_MODE?: "off" | "beta" | "on";
   LOADOUT_RESOLUTION_MODE?: "off" | "beta" | "on";
   ACCESS_POLICY_SHADOW_MODE?: "off" | "on";
+  VERIFIED_INGESTION_MODE?: "off" | "shadow" | "beta" | "on";
+  VERIFIED_AUTO_PROMOTE?: "off" | "on";
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;
   API_RATE_LIMIT_FAIL_OPEN?: "true" | "false";

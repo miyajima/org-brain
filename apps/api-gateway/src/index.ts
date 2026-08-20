@@ -225,6 +225,13 @@ import {
   upsertKnowledgeResource
 } from "./resource-decision-service";
 import { createTask, getTask, getTaskEvents, listTasks, replayFailedTask } from "./task-service";
+import {
+  getVerifiedIngestionManifest,
+  ingestVerifiedKnowledgeBundle,
+  listVerifiedManifestsByCollector,
+  registerCollectorKey,
+  revokeCollectorKey
+} from "./verified-ingestion-service";
 import { issueScopedToken, listScopedTokens, revokeScopedToken } from "./token-service";
 import type { Env } from "./types";
 
@@ -397,7 +404,8 @@ function permissionForRequest(method: string, path: string): OrgPermission {
     (path.startsWith("/v1/domain-packs/installations") && method !== "GET") ||
     path.startsWith("/v1/portable-imports") ||
     path.endsWith("/promotion") ||
-    path === "/v1/resources/backfill"
+    path === "/v1/resources/backfill" ||
+    path.startsWith("/v1/memory-collectors/keys")
   ) return "admin";
   if (path.startsWith("/v1/business-categories")) return method === "GET" ? "read" : "admin";
   if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
@@ -733,6 +741,54 @@ app.get("/v1/decisions/:id/map", async (c) => {
     nodeLimit: parsed.data.node_limit,
     edgeLimit: parsed.data.edge_limit
   }));
+});
+
+app.post("/v1/memory-collectors/keys", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body));
+  if (!await isTenantAdmin(c, tenantId)) throw new HttpError(403, "forbidden", "Tenant admin role is required");
+  return jsonOk(c, await registerCollectorKey(c.env, tenantId, body, getApiPrincipal(c)), 201);
+});
+
+app.post("/v1/memory-collectors/keys/:id/revoke", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(body) ?? c.req.query("tenant_id"));
+  if (!await isTenantAdmin(c, tenantId)) throw new HttpError(403, "forbidden", "Tenant admin role is required");
+  return jsonOk(c, await revokeCollectorKey(c.env, tenantId, c.req.param("id"), getApiPrincipal(c)));
+});
+
+app.get("/v1/memory-collectors/keys/:id/manifests", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!await isTenantAdmin(c, tenantId)) throw new HttpError(403, "forbidden", "Tenant admin role is required");
+  return jsonOk(c, await listVerifiedManifestsByCollector(c.env, tenantId, c.req.param("id")));
+});
+
+app.post("/v1/memory-ingestions/verified", async (c) => {
+  const body = await c.req.json<unknown>();
+  const bundle = body && typeof body === "object" && !Array.isArray(body) && "bundle" in body
+    ? (body as Record<string, unknown>).bundle
+    : body;
+  const tenantId = assertApiTenantAccess(c, tenantFromBody(bundle));
+  const principal = getApiPrincipal(c);
+  const projectId = bundle && typeof bundle === "object" && !Array.isArray(bundle)
+    ? ((bundle as Record<string, unknown>).project_id as string | null | undefined) ?? null
+    : null;
+  const publish = await authorizePermission(c.env, {
+    tenantId,
+    projectId,
+    principal,
+    permission: "memory:attest",
+    fallbackRole: getApiAuthContext(c).defaultRole
+  });
+  return jsonOk(c, await ingestVerifiedKnowledgeBundle(c.env, tenantId, body, principal, {
+    publishAuthorized: publish.allowed,
+    allowShadow: false
+  }), 202);
+});
+
+app.get("/v1/memory-ingestions/verified/:id", async (c) => {
+  const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return jsonOk(c, await getVerifiedIngestionManifest(c.env, tenantId, c.req.param("id"), getApiPrincipal(c)));
 });
 
 app.get("/v1/skill-providers", async (c) => {

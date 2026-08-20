@@ -35,6 +35,7 @@ const copy = {
     updated: "Updated",
     create: "Record a decision",
     map: "Open trace map",
+    retry: "Try again",
     noItems: "No decisions need attention in this scope.",
     noMatch: "No decisions match this filter.",
     errorTitle: "The briefing could not be refreshed",
@@ -57,7 +58,8 @@ const copy = {
     artifacts: "成果物",
     updated: "更新",
     create: "決定を記録",
-    map: "Trace Mapを開く",
+    map: "決定の道筋マップを開く",
+    retry: "再試行",
     noItems: "この範囲で対応が必要な決定はありません。",
     noMatch: "条件に一致する決定はありません。",
     errorTitle: "Briefingを更新できませんでした",
@@ -81,6 +83,7 @@ const copy = {
     updated: "更新",
     create: "记录决策",
     map: "打开追踪地图",
+    retry: "重试",
     noItems: "此范围内没有需要处理的决策。",
     noMatch: "没有符合筛选条件的决策。",
     errorTitle: "无法刷新简报",
@@ -89,6 +92,11 @@ const copy = {
 }[locale];
 
 const filters = ["all", "new", "changed", "expired", "unconfirmed", "artifact_missing", "share_pending"] as const;
+const requestedFilter = params.get("briefing_filter")?.trim() ?? "";
+const initialFilter = filters.includes(requestedFilter as (typeof filters)[number])
+  ? requestedFilter
+  : "all";
+const initialQuery = params.get("briefing_q")?.trim().slice(0, 120) ?? "";
 const flagLabels = Object.fromEntries(filters.map((key) => [key, copy[key]]));
 const dateLocale = locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
 const formatDate = (value: number) => value
@@ -102,7 +110,7 @@ const actionLabel = (action: string, fallback: string) => ({
   share: locale === "ja" ? "共有範囲を確認" : locale === "zh" ? "检查共享范围" : "Review access"
 }[action] ?? fallback);
 ---
-<section class="decision-briefing" data-decision-briefing>
+<section class="decision-briefing" data-decision-briefing data-briefing-filter={initialFilter} data-briefing-query={initialQuery}>
   <header class="decision-page-header">
     <div>
       <p class="decision-eyebrow">{copy.eyebrow}</p>
@@ -122,12 +130,13 @@ const actionLabel = (action: string, fallback: string) => ({
     <div class="decision-alert" role="alert">
       <strong>{copy.errorTitle}</strong>
       <span>{error}</span>
+      <a class="decision-action decision-action-secondary decision-alert-action" href={scopedHref("/", params)}>{copy.retry}</a>
     </div>
   )}
 
   <div class="decision-stat-grid" aria-label={copy.title}>
     {filters.slice(1).map((filter) => (
-      <button class="decision-stat" type="button" data-briefing-filter={filter} aria-pressed="false">
+      <button class="decision-stat" type="button" data-briefing-filter={filter} aria-pressed={initialFilter === filter}>
         <span>{copy[filter]}</span>
         <strong>{data.counts[filter] ?? 0}</strong>
       </button>
@@ -137,12 +146,12 @@ const actionLabel = (action: string, fallback: string) => ({
   <div class="decision-briefing-toolbar">
     <div class="decision-filter-tabs" role="group" aria-label={copy.title}>
       {filters.map((filter) => (
-        <button type="button" data-briefing-filter={filter} aria-pressed={filter === "all" ? "true" : "false"}>{copy[filter]}</button>
+        <button type="button" data-briefing-filter={filter} aria-pressed={initialFilter === filter}>{copy[filter]}</button>
       ))}
     </div>
     <label class="decision-search-field">
       <span>{copy.search}</span>
-      <input type="search" placeholder={copy.search} data-briefing-search />
+      <input type="search" name="briefing_q" value={initialQuery} placeholder={copy.search} data-briefing-search />
     </label>
   </div>
 
@@ -194,8 +203,18 @@ const actionLabel = (action: string, fallback: string) => ({
     const controls = [...root.querySelectorAll<HTMLButtonElement>("[data-briefing-filter]")];
     const search = root.querySelector<HTMLInputElement>("[data-briefing-search]");
     const empty = root.querySelector<HTMLElement>("[data-briefing-empty]");
-    let active = "all";
-    const refresh = () => {
+    const allowedFilters = new Set(controls.map((control) => control.dataset.briefingFilter || "all"));
+    let active = allowedFilters.has(root.dataset.briefingFilter || "") ? root.dataset.briefingFilter || "all" : "all";
+    const syncUrl = () => {
+      const url = new URL(window.location.href);
+      const query = search?.value.trim() ?? "";
+      if (active === "all") url.searchParams.delete("briefing_filter");
+      else url.searchParams.set("briefing_filter", active);
+      if (query) url.searchParams.set("briefing_q", query);
+      else url.searchParams.delete("briefing_q");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    };
+    const refresh = (updateUrl = true) => {
       const query = search?.value.trim().toLocaleLowerCase() ?? "";
       let visible = 0;
       for (const card of cards) {
@@ -206,11 +225,21 @@ const actionLabel = (action: string, fallback: string) => ({
       }
       if (empty) empty.hidden = visible > 0;
       for (const control of controls) control.setAttribute("aria-pressed", String(control.dataset.briefingFilter === active));
+      if (updateUrl) syncUrl();
     };
     for (const control of controls) control.addEventListener("click", () => {
       active = control.dataset.briefingFilter || "all";
       refresh();
     });
-    search?.addEventListener("input", refresh);
+    search?.addEventListener("input", () => refresh());
+    const syncFromUrl = () => {
+      const url = new URL(window.location.href);
+      const requested = url.searchParams.get("briefing_filter") || "all";
+      active = allowedFilters.has(requested) ? requested : "all";
+      if (search) search.value = url.searchParams.get("briefing_q")?.trim().slice(0, 120) || "";
+      refresh(false);
+    };
+    window.addEventListener("popstate", syncFromUrl);
+    refresh(false);
   }
 </script>

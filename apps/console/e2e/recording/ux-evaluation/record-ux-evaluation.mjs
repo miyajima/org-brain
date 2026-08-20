@@ -19,7 +19,7 @@ const steps = [
   { action: "click", target: "[data-access-open]", subtitle: "Access Drawerで、所有者・共有範囲・保存場所を確認します。", pace: 1500 },
   { action: "assert", target: "[data-access-dialog][open]", subtitle: "資産種別が変わっても、アクセス情報の表示方法は統一されています。", pace: 1600 },
   { action: "click", target: "[data-access-close]", subtitle: "内容を変更せず、決定の道筋マップへ進みます。", pace: 1100 },
-  { action: "click", target: ".decision-header-actions a:has-text(\"Decision Trace Mapを開く\")", subtitle: "決定から理由・根拠・成果物までを、一つのマップで追跡します。", pace: 1900 },
+  { action: "click", target: ".decision-header-actions a:has-text(\"決定の道筋マップを開く\")", subtitle: "決定から理由・根拠・成果物までを、一つのマップで追跡します。", pace: 1900 },
   { action: "click", target: "[data-map-fit]", subtitle: "全体を表示すると、ノードとエッジを初期の視野に収められます。", pace: 1600 },
   { action: "click", target: ".decision-inferred-toggle", subtitle: "推論関係は明示的に切り替えたときだけ表示します。", pace: 1500 },
   { action: "click", target: ".decision-map-list button:has-text(\"根拠\")", subtitle: "2D関係リストでも同じ情報を選択できます。この位置は初期画面の下端より下です。", pace: 1700 },
@@ -29,12 +29,12 @@ const steps = [
   { action: "navigate", target: `/decisions/decision-console-e2e?${scope}`, subtitle: "決定詳細へ戻り、参照版をSkill化します。", pace: 1700 },
   { action: "click", target: ".decision-header-actions a:has-text(\"この知識をSkill化\")", subtitle: "決定詳細からSkill生成を開始すると、参照版ハッシュも引き継がれます。", pace: 1800 },
   { action: "fill", target: "[data-skill-generate-form] textarea[name=instructions]", value: "利用条件と完了条件を含める", subtitle: "追加指示を入力し、生成条件を明確にします。", pace: 1500 },
-  { action: "click", target: "[data-skill-generate-form] button[type=submit]", subtitle: "private draft生成を実行します。このボタンは初期viewportの下側にあります。", pace: 2000 },
+  { action: "click", target: "[data-skill-generate-form] button[type=submit]", subtitle: "private draft生成を実行します。モバイルではフォーム上部の固定CTAからも実行できます。", pace: 2000 },
   { action: "assert", target: "[data-generation-result]:not([hidden])", subtitle: "生成タスクとdraft IDを確認し、公開前に検証します。", pace: 1800 },
   { action: "click", target: "nav[aria-label=\"Org Brain\"] a[href^=\"/agents\"]:visible", subtitle: "Agentsでは、SkillのLoadoutとAgentへ渡るコンテキストを確認します。", pace: 1700 },
   { action: "click", target: ".decision-asset-card:has-text(\"Release reviewer\")", subtitle: "Agentを選ぶと、役割・参照元の決定・現在のLoadoutが表示されます。", pace: 1700 },
   { action: "fill", target: "[data-context-preview-form] textarea[name=task_text]", value: "リリース判断をレビューする", subtitle: "タスク文を入力し、ACLを反映したeffective contextを事前確認します。", pace: 1600 },
-  { action: "click", target: "[data-context-preview-form] button[type=submit]", subtitle: "コンテキストを解決します。このフォームはページ下部にあり、スクロールが発生します。", pace: 2000 },
+  { action: "click", target: "[data-context-preview-form] button[type=submit]", subtitle: "コンテキストを解決します。モバイルではフォーム上部の固定CTAからも実行できます。", pace: 2000 },
   { action: "assert", target: "[data-context-result]:not([hidden])", subtitle: "注入・on_demand・権限で除外されたSkillを分けて確認できます。", pace: 1800 },
   { action: "click", target: "nav[aria-label=\"Org Brain\"] a[href^=\"/reviews\"]:visible", subtitle: "Reviewsで、期限・確認・成果物・共有待ちの不足を横断確認します。", pace: 1700 },
   { action: "assert", target: ".decision-review-grid", subtitle: "決定を理解し、根拠を確認し、安全に配布する一連の流れが完了です。", pace: 2300 }
@@ -177,8 +177,8 @@ async function runMobileAudit(browser) {
     ["home", `/?${scope}`, ["[data-briefing-search]", "[data-briefing-card]", "[data-briefing-card] .decision-action"]],
     ["map", `/map?decision_id=decision-console-e2e&${scope}`, ["[data-all-knowledge-map]", ".decision-map-picker summary", "[data-map-fit]"]],
     ["all-map", `/memories/constellation?view=all&${scope}`, ["[data-map-fit]", "[data-trace-step=reason]", "[data-memory-map-root]"]],
-    ["skills", `/skills?decision_id=decision-console-e2e&source_hash=e2e-source-hash&${scope}`, ["[data-generation-wizard] textarea", "[data-generation-wizard] button[type=submit]"]],
-    ["agents", `/agents?agent_id=agent-e2e&${scope}`, ["[data-context-preview-form] textarea", "[data-context-preview-form] button[type=submit]"]]
+    ["skills", `/skills?decision_id=decision-console-e2e&source_hash=e2e-source-hash&${scope}`, ["[data-generation-wizard] textarea", "[data-skill-mobile-submit]"]],
+    ["agents", `/agents?agent_id=agent-e2e&${scope}`, ["[data-context-preview-form] textarea", "[data-context-mobile-submit]"]]
   ];
   const result = [];
   for (const [slug, route, selectors] of routes) {
@@ -193,6 +193,7 @@ async function runMobileAudit(browser) {
       };
       return { viewport: { width: innerWidth, height: innerHeight }, scrollHeight: document.documentElement.scrollHeight, scrollWidth: document.documentElement.scrollWidth, horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1, targets: Object.fromEntries(selectors.map((selector) => [selector, measure(selector)])) };
     }, selectors);
+    await mobilePage.screenshot({ path: path.join(outputDir, `${slug}-mobile.png`), fullPage: false });
     result.push({ slug, url: mobilePage.url(), ...data });
   }
   await mobile.close();

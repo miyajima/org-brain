@@ -41,19 +41,20 @@ const bindingBySkill = new Map(bindings.map((binding) => [String(binding.skill_a
 const policy = access.data.policy && typeof access.data.policy === "object" ? access.data.policy as Record<string, unknown> : null;
 const loadoutPolicy = loadoutAccess.data.policy && typeof loadoutAccess.data.policy === "object" ? loadoutAccess.data.policy as Record<string, unknown> : null;
 const copy = {
-  en: { eyebrow: "Execution layer", title: "Agents", lead: "See each named Agent’s role, decision lineage, active Loadout, and the exact context it will receive.", inventory: "Agent inventory", create: "Create Agent", name: "Name", key: "Agent key", role: "Role", source: "Source decision", loadout: "Current Loadout", lastUse: "Last use", status: "Status", add: "Create", saving: "Saving…", loadoutEditor: "Loadout editor", loadoutName: "Loadout name", skill: "Skill", mode: "Mode", priority: "Priority", version: "Version", latest: "Latest published", pinned: "Pinned", saveLoadout: "Save Loadout", preview: "Effective context preview", previewTask: "Task to preview", previewRun: "Resolve context", injected: "Injected", onDemand: "On demand handles", omitted: "Omitted", empty: "No named Agents yet.", noSkills: "Publish a Skill before adding it to a Loadout.", error: "Agent operation failed" },
-  ja: { eyebrow: "Execution layer", title: "Agents", lead: "Named Agentごとに、役割、参照元の決定、現在のLoadout、最終的に渡るコンテキストを確認できます。", inventory: "Agent一覧", create: "Agentを作成", name: "名前", key: "Agent key", role: "役割", source: "参照元の決定", loadout: "現在のLoadout", lastUse: "最終利用", status: "状態", add: "作成", saving: "保存中…", loadoutEditor: "Loadout編集", loadoutName: "Loadout名", skill: "Skill", mode: "モード", priority: "優先度", version: "版", latest: "最新公開版", pinned: "固定版", saveLoadout: "Loadoutを保存", preview: "effective contextの事前確認", previewTask: "確認するタスク", previewRun: "コンテキストを解決", injected: "注入されるSkill", onDemand: "on_demand handle", omitted: "除外", empty: "Named Agentはまだありません。", noSkills: "Loadoutへ追加する前にSkillをPublishしてください。", error: "Agent操作に失敗しました" },
-  zh: { eyebrow: "Execution layer", title: "Agents", lead: "查看每个Named Agent的角色、决策来源、当前Loadout以及最终上下文。", inventory: "Agent列表", create: "创建Agent", name: "名称", key: "Agent key", role: "角色", source: "来源决策", loadout: "当前Loadout", lastUse: "最近使用", status: "状态", add: "创建", saving: "保存中…", loadoutEditor: "编辑Loadout", loadoutName: "Loadout名称", skill: "Skill", mode: "模式", priority: "优先级", version: "版本", latest: "最新发布版", pinned: "固定版", saveLoadout: "保存Loadout", preview: "预览effective context", previewTask: "预览任务", previewRun: "解析上下文", injected: "已注入", onDemand: "按需handle", omitted: "已排除", empty: "暂无Named Agent。", noSkills: "请先发布Skill，再添加到Loadout。", error: "Agent操作失败" }
+  en: { eyebrow: "Execution layer", title: "Agents", lead: "See each named Agent’s role, decision lineage, active Loadout, and the exact context it will receive.", inventory: "Agent inventory", create: "Create Agent", name: "Name", key: "Agent key", role: "Role", source: "Source decision", loadout: "Current Loadout", lastUse: "Last use", status: "Status", add: "Create", saving: "Saving…", saved: "Saved", loadoutEditor: "Loadout editor", loadoutName: "Loadout name", skill: "Skill", mode: "Mode", priority: "Priority", version: "Version", latest: "Latest published", pinned: "Pinned", saveLoadout: "Save Loadout", preview: "Effective context preview", previewTask: "Task to preview", previewRun: "Resolve context", previewing: "Resolving…", injected: "Injected", onDemand: "On demand handles", omitted: "Omitted", empty: "No named Agents yet.", noSkills: "Publish a Skill before adding it to a Loadout.", error: "Agent operation failed", retry: "Try again", back: "Back to decisions" },
+  ja: { eyebrow: "実行レイヤー", title: "Agents", lead: "Named Agentごとに、役割、参照元の決定、現在のLoadout、最終的に渡るコンテキストを確認できます。", inventory: "Agent一覧", create: "Agentを作成", name: "名前", key: "Agent key", role: "役割", source: "参照元の決定", loadout: "現在のLoadout", lastUse: "最終利用", status: "状態", add: "作成", saving: "保存中…", saved: "保存しました", loadoutEditor: "Loadout編集", loadoutName: "Loadout名", skill: "Skill", mode: "モード", priority: "優先度", version: "版", latest: "最新公開版", pinned: "固定版", saveLoadout: "Loadoutを保存", preview: "実効コンテキストの事前確認", previewTask: "確認するタスク", previewRun: "コンテキストを解決", previewing: "解決中…", injected: "注入されるSkill", onDemand: "オンデマンド参照", omitted: "除外", empty: "Named Agentはまだありません。", noSkills: "Loadoutへ追加する前にSkillをPublishしてください。", error: "Agent操作に失敗しました", retry: "再試行", back: "決定一覧へ戻る" },
+  zh: { eyebrow: "执行层", title: "Agents", lead: "查看每个Named Agent的角色、决策来源、当前Loadout以及最终上下文。", inventory: "Agent列表", create: "创建Agent", name: "名称", key: "Agent key", role: "角色", source: "来源决策", loadout: "当前Loadout", lastUse: "最近使用", status: "状态", add: "创建", saving: "保存中…", saved: "已保存", loadoutEditor: "编辑Loadout", loadoutName: "Loadout名称", skill: "Skill", mode: "模式", priority: "优先级", version: "版本", latest: "最新发布版", pinned: "固定版", saveLoadout: "保存Loadout", preview: "预览有效上下文", previewTask: "预览任务", previewRun: "解析上下文", previewing: "解析中…", injected: "已注入", onDemand: "按需引用", omitted: "已排除", empty: "暂无Named Agent。", noSkills: "请先发布Skill，再添加到Loadout。", error: "Agent操作失败", retry: "重试", back: "返回决策列表" }
 }[lang];
+const previewJump = lang === "ja" ? "コンテキスト確認へ" : lang === "zh" ? "跳转到上下文预览" : "Jump to context preview";
 const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
-  <section class="decision-assets-page" data-agents-page data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-agent-id={selectedSummary?.id ?? ""} data-loadout-id={loadoutId} data-copy={JSON.stringify(copy)}>
+  <section class="decision-assets-page" data-agents-page data-asset-kind="agents" data-selected-agent={selectedSummary ? "true" : "false"} data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-agent-id={selectedSummary?.id ?? ""} data-loadout-id={loadoutId} data-copy={JSON.stringify(copy)}>
     <header class="decision-page-header">
-      <div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div>
+      <div><a class="decision-back-link" href={scopedHref("/", params)}>← {copy.back}</a><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p>{selectedSummary && <a class="decision-action decision-action-secondary agent-preview-jump" href="#agent-context-preview">{previewJump}</a>}{selectedSummary && <div class="mobile-form-action mobile-context-header-action" data-mobile-form-action><button type="button" data-context-mobile-submit aria-controls="context-preview-form">{copy.previewRun}</button></div>}</div>
       {selectedSummary && <AccessDrawer resourceType="agent" resourceId={selectedSummary.id} tenantId={tenantId} projectId={projectId} policy={policy} locale={lang} />}
     </header>
-    {(agents.error || skills.error || details.error || access.error || loadoutAccess.error) && <div class="decision-alert" role="alert">{agents.error ?? skills.error ?? details.error ?? access.error ?? loadoutAccess.error}</div>}
+    {(agents.error || skills.error || details.error || access.error || loadoutAccess.error) && <div class="decision-alert" role="alert"><span>{agents.error ?? skills.error ?? details.error ?? access.error ?? loadoutAccess.error}</span><a class="decision-action decision-action-secondary decision-alert-action" href={`${Astro.url.pathname}${Astro.url.search}`}>{copy.retry}</a></div>}
 
     <div class="decision-assets-layout">
       <aside class="decision-asset-inventory">
@@ -75,7 +76,7 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
             <label>{copy.key}<input name="agent_key" required pattern="[a-z0-9][a-z0-9._-]{0,127}" placeholder="support-reviewer" /></label>
             <label>{copy.role}<textarea name="role" required maxlength="500" rows="4"></textarea></label>
             <label>{copy.source}<input name="source_decision_id" /></label>
-            <button type="submit">{copy.add}</button><p data-agent-create-status role="alert"></p>
+            <button type="submit" data-agent-create-submit>{copy.add}</button><p data-agent-create-status role="alert" tabindex="-1"></p>
           </form>
         </details>
       </aside>
@@ -113,16 +114,16 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
                   })}
                 </div>
                 {skills.data.length === 0 && <p class="decision-empty">{copy.noSkills}</p>}
-                <footer><p data-loadout-status role="alert"></p><button type="submit" disabled={!loadout}>{copy.saveLoadout}</button></footer>
+                <footer><p data-loadout-status role="alert" tabindex="-1"></p><button type="submit" data-loadout-submit disabled={!loadout}>{copy.saveLoadout}</button></footer>
               </form>
             </section>
 
-            <section class="agent-context-preview">
+            <section class="agent-context-preview" id="agent-context-preview">
               <div class="decision-section-heading"><div><p class="decision-eyebrow">ACL-first</p><h2>{copy.preview}</h2></div></div>
-              <form data-context-preview-form>
+              <form id="context-preview-form" data-context-preview-form>
                 <label>{copy.previewTask}<textarea name="task_text" rows="4" maxlength="4000" required></textarea></label>
-                <label>Token budget<input name="max_tokens" type="number" min="256" max="16000" value="4000" /></label>
-                <footer><p data-preview-status role="alert"></p><button type="submit">{copy.previewRun}</button></footer>
+                <label>Token budget<input name="max_tokens" type="number" inputmode="numeric" min="256" max="16000" value="4000" /></label>
+                <footer><p data-preview-status role="alert" tabindex="-1"></p><button type="submit" data-context-preview-submit>{copy.previewRun}</button></footer>
               </form>
               <div class="agent-context-result" data-context-result hidden>
                 <section><h3>{copy.injected}</h3><div data-context-injected></div></section>
@@ -139,11 +140,29 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
     const root = document.querySelector<HTMLElement>("[data-agents-page]");
     if (root) {
       const copy = JSON.parse(root.dataset.copy || "{}");
+      const setPending = (form: HTMLFormElement, button: HTMLButtonElement | null, label: string) => {
+        form.setAttribute("aria-busy", "true");
+        if (!button) return () => form.removeAttribute("aria-busy");
+        const originalLabel = button.textContent || "";
+        button.disabled = true;
+        button.textContent = label;
+        return () => {
+          form.removeAttribute("aria-busy");
+          button.disabled = false;
+          button.textContent = originalLabel;
+        };
+      };
+      const announceError = (status: HTMLElement | null, message: string) => {
+        if (!status) return;
+        status.textContent = message;
+        status.focus({ preventScroll: false });
+      };
       root.querySelector<HTMLFormElement>("[data-agent-create-form]")?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const form = event.currentTarget as HTMLFormElement;
         const values = new FormData(form);
         const status = root.querySelector<HTMLElement>("[data-agent-create-status]");
+        const restore = setPending(form, form.querySelector<HTMLButtonElement>("[data-agent-create-submit]"), copy.saving);
         try {
           const response = await fetch("/api/v1/agents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, project_id: root.dataset.projectId || null, agent_key: values.get("agent_key"), name: values.get("name"), role: values.get("role"), source_decision_id: values.get("source_decision_id") || null, loadout_name: "Default" }) });
           const payload = await response.json().catch(() => null) as {
@@ -154,12 +173,14 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
           const agentId = payload?.data?.agent?.id;
           if (!agentId) throw new Error("Agent response did not include an id");
           location.assign(`/agents?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&agent_id=${encodeURIComponent(agentId)}`);
-        } catch (error) { if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`; }
+        } catch (error) { announceError(status, `${copy.error}: ${error instanceof Error ? error.message : String(error)}`); }
+        finally { restore(); }
       });
       root.querySelector<HTMLFormElement>("[data-loadout-form]")?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const form = event.currentTarget as HTMLFormElement;
         const status = root.querySelector<HTMLElement>("[data-loadout-status]");
+        const restore = setPending(form, form.querySelector<HTMLButtonElement>("[data-loadout-submit]"), copy.saving);
         const bindings = [...form.querySelectorAll<HTMLElement>("[data-binding-row]")].flatMap((row) => {
           if (!row.querySelector<HTMLInputElement>("[name=enabled]")?.checked) return [];
           const versionPolicy = row.querySelector<HTMLInputElement>("[name=version_policy]")?.value || "latest_published";
@@ -169,14 +190,21 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
           const response = await fetch(`/api/v1/agents/${encodeURIComponent(root.dataset.agentId || "")}/loadouts/${encodeURIComponent(root.dataset.loadoutId || "")}?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, name: new FormData(form).get("loadout_name"), bindings }) });
           const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
           if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
-          if (status) status.textContent = copy.saveLoadout;
-        } catch (error) { if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`; }
+          if (status) status.textContent = copy.saved;
+        } catch (error) { announceError(status, `${copy.error}: ${error instanceof Error ? error.message : String(error)}`); }
+        finally { restore(); }
       });
-      root.querySelector<HTMLFormElement>("[data-context-preview-form]")?.addEventListener("submit", async (event) => {
+      const contextMobileSubmit = root.querySelector<HTMLButtonElement>("[data-context-mobile-submit]");
+      const contextPreviewForm = root.querySelector<HTMLFormElement>("[data-context-preview-form]");
+      contextMobileSubmit?.addEventListener("click", () => contextPreviewForm?.requestSubmit());
+      contextPreviewForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const form = event.currentTarget as HTMLFormElement;
         const values = new FormData(form);
         const status = root.querySelector<HTMLElement>("[data-preview-status]");
+        const restore = setPending(form, form.querySelector<HTMLButtonElement>("[data-context-preview-submit]"), copy.previewing);
+        const mobileOriginalLabel = contextMobileSubmit?.textContent || "";
+        if (contextMobileSubmit) { contextMobileSubmit.disabled = true; contextMobileSubmit.textContent = copy.previewing; }
         try {
           const response = await fetch(`/api/v1/agents/${encodeURIComponent(root.dataset.agentId || "")}/context-preview?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}${root.dataset.projectId ? `&project_id=${encodeURIComponent(root.dataset.projectId)}` : ""}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tenant_id: root.dataset.tenantId, task_text: values.get("task_text"), max_tokens: Number(values.get("max_tokens") || 4000), record_usage: false }) });
           const payload = await response.json().catch(() => null) as {
@@ -212,7 +240,11 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
           const panel = root.querySelector<HTMLElement>("[data-context-result]");
           if (panel) panel.hidden = false;
           if (status) status.textContent = result.disabled ? "Loadout resolution is disabled" : `${result.estimated_tokens || 0} tokens`;
-        } catch (error) { if (status) status.textContent = `${copy.error}: ${error instanceof Error ? error.message : String(error)}`; }
+        } catch (error) { announceError(status, `${copy.error}: ${error instanceof Error ? error.message : String(error)}`); }
+        finally {
+          restore();
+          if (contextMobileSubmit) { contextMobileSubmit.disabled = false; contextMobileSubmit.textContent = mobileOriginalLabel; }
+        }
       });
     }
   </script>

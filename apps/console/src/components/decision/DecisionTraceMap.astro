@@ -83,6 +83,7 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
           <pre data-map-preview-details>{JSON.stringify(selected?.metadata ?? {}, null, 2)}</pre>
         </details>
       </aside>
+      <span id="decision-map-list-region" class="decision-map-list-anchor" aria-hidden="true"></span>
       <section class="decision-map-list" aria-labelledby="decision-map-list-title">
         <h2 id="decision-map-list-title">{copy.list}</h2>
         <div data-map-list>
@@ -172,6 +173,24 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
       outer: { scale: { set(x: number, y: number, z: number): void }; material: { color: { set(value: string): void }; opacity: number } };
     };
     const glowLayers = new Map<string, GlowLayer>();
+    let glowTimer: number | null = null;
+    const setGlowLoop = (visible: boolean) => {
+      if (!visible || reducedMotion.matches || data.nodes.length === 0) {
+        if (glowTimer !== null) window.clearInterval(glowTimer);
+        glowTimer = null;
+        return;
+      }
+      if (glowTimer !== null) return;
+      glowTimer = window.setInterval(() => {
+        glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
+        updateGlowAppearance();
+      }, 180);
+    };
+    document.addEventListener("visibilitychange", () => setGlowLoop(document.visibilityState === "visible"));
+    window.addEventListener("pagehide", () => setGlowLoop(false), { once: true });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(([entry]) => setGlowLoop(Boolean(entry?.isIntersecting)), { threshold: 0.01 }).observe(root);
+    }
     const nodeColor = (node: MapNode) => glowColors[node.stage] || "#eef8ff";
     const nodeValue = (node: MapNode) => node.id === selectedId ? 15 : node.stage === "decision" ? 11 : 5;
     const endpointId = (value: string | MapNode) => typeof value === "string" ? value : value.id;
@@ -486,12 +505,7 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
         new ResizeObserver(() => graph?.width(canvas.clientWidth).height(canvas.clientHeight)).observe(canvas);
         window.setTimeout(() => fitGraph(false), reducedMotion.matches ? 0 : 80);
         setMapBusy(false);
-        if (data.nodes.length > 0) {
-          window.setInterval(() => {
-            glowPhase = (Math.sin(Date.now() / 560) + 1) / 2;
-            updateGlowAppearance();
-          }, 90);
-        }
+        setGlowLoop(true);
       } catch {
         if (fallback) fallback.hidden = false;
         setMapBusy(false, copy.fallback);

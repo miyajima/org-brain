@@ -1,0 +1,15 @@
+{
+  "title": "Decision-first Console UX evaluation",
+  "subtitle_mode": "burned-in-overlay",
+  "external_vtt": false,
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "step_count": 26,
+  "recordingPath": "/Users/miyajimakazuhiro/.codex/worktrees/e972/org-brain/apps/console/artifacts/recordings/ux-evaluation-20260818-ja-final10/recording.webm",
+  "mp4Path": "/Users/miyajimakazuhiro/.codex/worktrees/e972/org-brain/apps/console/artifacts/recordings/ux-evaluation-20260818-ja-final10/ux-evaluation-ja.mp4",
+  "playerPath": "/Users/miyajimakazuhiro/.codex/worktrees/e972/org-brain/apps/console/artifacts/recordings/ux-evaluation-20260818-ja-final10/player.html",
+  "metricsPath": "/Users/miyajimakazuhiro/.codex/worktrees/e972/org-brain/apps/console/artifacts/recordings/ux-evaluation-20260818-ja-final10/metrics.json",
+  "diagnosticsPath": "/Users/miyajimakazuhiro/.codex/worktrees/e972/org-brain/apps/console/artifacts/recordings/ux-evaluation-20260818-ja-final10/browser-diagnostics.json"
+}

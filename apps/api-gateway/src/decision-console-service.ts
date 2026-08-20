@@ -50,6 +50,17 @@ type TraceEdge = {
   inferred: boolean;
 };
 
+type VerifiedTraceMetadata = {
+  verification_state: string;
+  source_label: string | null;
+  source_digest: string | null;
+  evidence_count: number;
+  missing_stages: string[];
+  provenance_coverage: number;
+  collector_key_id: string | null;
+  extraction_profile_version: number | null;
+};
+
 function parseArray(raw: string): unknown[] {
   try {
     const value = JSON.parse(raw) as unknown;
@@ -168,6 +179,54 @@ async function decisionVersionHash(env: Env, tenantId: string, decisionId: strin
   return sha256(row?.snapshot_json ?? decisionId);
 }
 
+async function loadVerifiedTraceMetadata(env: Env, tenantId: string, decisionId: string): Promise<VerifiedTraceMetadata | null> {
+  try {
+    const row = await env.OPEN_BRAIN_DB.prepare(
+      "SELECT verification_state, source_digest, evidence_count, missing_stages_json, provenance_coverage, collector_key_id, extraction_profile_version, manifest_json FROM verified_ingestion_manifests WHERE tenant_id = ? AND projected_decision_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(tenantId, decisionId).first<{
+      verification_state: string;
+      source_digest: string | null;
+      evidence_count: number;
+      missing_stages_json: string | null;
+      provenance_coverage: number;
+      collector_key_id: string | null;
+      extraction_profile_version: number | null;
+      manifest_json: string | null;
+    }>();
+    if (!row) return null;
+    let missingStages: string[] = [];
+    try {
+      const parsed = JSON.parse(row.missing_stages_json ?? "[]") as unknown;
+      missingStages = Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+    } catch {
+      missingStages = [];
+    }
+    let sourceLabel: string | null = null;
+    try {
+      const manifest = row.manifest_json ? JSON.parse(row.manifest_json) as Record<string, unknown> : null;
+      const extractor = manifest?.extractor_ref && typeof manifest.extractor_ref === "object" && !Array.isArray(manifest.extractor_ref)
+        ? manifest.extractor_ref as Record<string, unknown>
+        : null;
+      sourceLabel = typeof extractor?.name === "string" ? extractor.name : null;
+    } catch {
+      sourceLabel = null;
+    }
+    return {
+      verification_state: row.verification_state,
+      source_label: sourceLabel,
+      source_digest: row.source_digest,
+      evidence_count: Number(row.evidence_count ?? 0),
+      missing_stages: missingStages,
+      provenance_coverage: Number(row.provenance_coverage ?? 0),
+      collector_key_id: row.collector_key_id,
+      extraction_profile_version: row.extraction_profile_version === null ? null : Number(row.extraction_profile_version)
+    };
+  } catch {
+    // Older installations can serve the trace before migration 0035 is applied.
+    return null;
+  }
+}
+
 export async function getDecisionTrace(
   env: Env,
   args: {
@@ -211,6 +270,7 @@ export async function getDecisionTrace(
     )) readableResourceIds.add(item.resource.id);
   }
   const versionHash = await decisionVersionHash(env, args.tenantId, decision.id);
+  const verification = await loadVerifiedTraceMetadata(env, args.tenantId, decision.id);
   const nodes: TraceNode[] = [];
   const edges: TraceEdge[] = [];
   const decisionNodeId = `decision:${decision.id}`;
@@ -228,7 +288,8 @@ export async function getDecisionTrace(
       domain: decision.domain,
       confidence: decision.confidence,
       confirmation_state: decision.confirmation_state,
-      version_hash: versionHash
+      version_hash: versionHash,
+      ...(verification ?? {})
     }
   });
   nodes.push({
@@ -239,7 +300,7 @@ export async function getDecisionTrace(
     summary: decision.rationale,
     status: decision.confirmation_state,
     deep_link: `/decisions/${decision.id}#reason`,
-    metadata: { constraints: parseArray(decision.constraints_json), known_pitfalls: parseArray(decision.known_pitfalls_json), version_hash: versionHash }
+    metadata: { constraints: parseArray(decision.constraints_json), known_pitfalls: parseArray(decision.known_pitfalls_json), version_hash: versionHash, ...(verification ?? {}) }
   });
   edges.push({ id: `${decisionNodeId}->${reasonNodeId}`, source: decisionNodeId, target: reasonNodeId, relation: "explained_by", inferred: false });
 

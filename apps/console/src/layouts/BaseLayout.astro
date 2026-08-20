@@ -86,11 +86,21 @@ const managementItems: ConsoleNavItem[] = [
 ];
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || dashboardTenantFromCookie(Astro.request.headers.get("cookie"));
 const projectId = Astro.url.searchParams.get("project_id")?.trim();
+const contextParamsByPath: Record<string, readonly string[]> = {
+  "/skills": ["decision_id", "source_hash"],
+  "/agents": ["agent_id", "decision_id", "source_hash"],
+  "/map": ["decision_id"],
+  "/reviews": ["decision_id"]
+};
 const withScope = (href: string) => {
   const target = new URL(href, Astro.url);
   if (tenantId) target.searchParams.set("tenant_id", tenantId);
   if (projectId) target.searchParams.set("project_id", projectId);
   target.searchParams.set("lang", locale);
+  for (const key of contextParamsByPath[target.pathname] ?? []) {
+    const value = Astro.url.searchParams.get(key)?.trim();
+    if (value) target.searchParams.set(key, value);
+  }
   return `${target.pathname}${target.search}`;
 };
 const groupedItems = (["knowledge", "organization", "system"] as const).map((group) => ({

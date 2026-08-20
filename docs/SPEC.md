@@ -104,6 +104,30 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
   support `off|beta|on`. Off MUST preserve the legacy Console/context path; beta
   MUST be staging-only.
 
+- R-VER-001: Local verified ingestion MUST use `ExtractionProfileV1` and
+  `VerifiedKnowledgeBundleV1` across CLI, MCP, HTTP, and seed paths. Profile
+  resolution MUST be Agent -> Project -> Tenant -> built-in and MUST NOT alter
+  evidence, ACL, signing, or promotion rules.
+- The verified HTTP surface is `POST /v1/memory-collectors/keys`,
+  `POST /v1/memory-collectors/keys/:id/revoke`,
+  `GET /v1/memory-collectors/keys/:id/manifests`,
+  `POST /v1/memory-ingestions/verified`, and
+  `GET /v1/memory-ingestions/verified/:id`; the MCP mutation is
+  `orgbrain_memory_commit_verified`.
+- R-VER-002: A Bundle MUST be signed by a registered ECDSA P-256/SHA-256
+  collector. Unknown, revoked, expired, cross-tenant, unsigned, tampered, or
+  event-chain-invalid Bundles MUST be rejected or quarantined.
+- R-VER-003: Automatic Active promotion MUST require explicit human decision,
+  explicit reason, independent current evidence, a content-hashed artifact,
+  100% field/edge provenance coverage, clean PII/schema checks, valid
+  signatures, and `memory:attest` scope. Confidence MUST NOT decide promotion.
+- R-VER-004: Identical `bundle_key + bundle_digest` submissions MUST be
+  idempotent no-ops. Unsupported or incomplete material MUST remain a draft or
+  quarantine record and MUST NOT overwrite an existing decision.
+- R-VER-005: `VERIFIED_INGESTION_MODE=off|shadow|beta|on` and
+  `VERIFIED_AUTO_PROMOTE=off|on` MUST be independently rollbackable. Shadow
+  MUST retain audit manifests without changing existing memory/decision data.
+
 - R-AUTO-001: uncertain ingestion MUST enter quarantine and be retried
   automatically; it MUST NOT wait for a human approval queue.
 - R-AUTO-002: active promotion MUST pass deterministic verification and the

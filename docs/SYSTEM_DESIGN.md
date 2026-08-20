@@ -461,3 +461,39 @@ cannot physically delete a memory; deletion is available only to an explicit,
 versioned retention policy. The public CLI exposes status, explanation,
 configuration, freeze, rollback, and dry-run controls, but normal operation
 requires no human approval or queue processing.
+
+## Evidence-chain verified ingestion
+
+The local evidence-chain path is additive to the legacy capture and AI-review
+paths. A local session is grouped by `(project, task, decision thread)`, then
+bounded to at most ten new-input events, five background events, and 24 KiB per
+turn-boundary batch. Background events can resolve a scene but cannot satisfy
+an evidence receipt.
+
+`ExtractionProfileV1` is resolved in the fixed order Agent, Project, Tenant,
+then built-in. It can change terminology, candidate priorities, exclusions,
+few-shot examples, and scene hints only. It cannot change schemas, ACLs,
+provenance rules, signing, or the Active gate.
+
+`VerifiedKnowledgeBundleV1` is the shared CLI/MCP/HTTP/seed contract. Its
+canonical JSON projection is hashed and signed with ECDSA P-256/SHA-256 by a
+registered local collector. Field and edge bindings point to minimized,
+masked source spans and evidence receipts. A local model is optional, is
+called only when rule extraction is incomplete, and is cached by source digest,
+profile hash, extractor schema, and model ID. Model output cannot supply an ID,
+hash, ACL, confidence, version, or promotion decision; candidates must match a
+new-input source span or they are discarded/quarantined.
+
+The deterministic Active gate requires an explicit human/principal decision,
+an explicit reason, independent current evidence, a real artifact reference
+with content hash, complete field/edge coverage, valid collector and event-chain
+signatures, clean PII/injection/schema checks, and `memory:attest` permission.
+Missing support becomes `verified_draft`; forged, contradictory, invalid, or
+unsafe material becomes `quarantined`; same bundle digest is a no-op. The
+server stores only the signed manifest, masked excerpt locators, digest, and
+provenance bindings in migration 0035; it never calls an LLM.
+
+Feature flags are independent: `VERIFIED_INGESTION_MODE=off|shadow|beta|on`
+and `VERIFIED_AUTO_PROMOTE=off|on`. Shadow records manifests without changing
+existing data. Rollback disables auto-promotion and retains manifests,
+quarantine, drafts, and provenance for audit.
