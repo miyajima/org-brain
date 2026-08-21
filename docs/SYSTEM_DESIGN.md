@@ -3,7 +3,7 @@ title: Org Brain System Design
 doc_type: system_design
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 ---
 
 # Org Brain System Design
@@ -213,6 +213,42 @@ feedback and proposed changes enter an outbox.
 - Agent messages do not use `MailboxDO` as their source of truth; D1 remains the durable inbox and polling surface.
 
 ## Memory and Retrieval
+
+### Local rationale backfill and grounding boundary
+
+The Cloud `memory-rationale-backfill` planner and the local SQLite adapter are
+deliberately separate persistence adapters. The Cloud planner writes
+`decision_rationales` and `decision_evidence` rows selected by Cloud-specific
+high-value tags. The local adapter reads `memories` through a read-only
+connection, requires schema version 24, and selects only active AIma rationale
+records with an existing stable `aima/...` artifact reference and SHA-256
+digest. Missing conclusion, rationale, reuse condition, or evidence is skipped;
+the planner never copies a transcript.
+
+An apply keeps the existing memory `id` and `external_key`, creates a new
+`memory_versions` snapshot through `LocalMemoryStore.revise`, and writes only
+the structured `reuse_rule`, `learning_json`, `verification_state`, and
+backfill provenance fields. The learning object is a review candidate
+(`schema_version=2`, `capture_intent=review`) with an explicit gap stating that
+the source artifact was not re-verified during backfill. Such rows are marked
+`partial` and never promoted to `verified`. Apply first creates a private
+`VACUUM INTO` backup, stops on a stale id/version or failed revision, rebuilds
+all retrieval projections, and runs `doctor`; the backup is the rollback input.
+Dry-run does not initialize the store, change permissions, rebuild indexes, or
+write a plan unless an explicit plan-output path is supplied. The implementation
+is `scripts/local-memory-rationale-backfill.mjs`; the reviewable command is
+`node ./scripts/local-memory-rationale-backfill.mjs --project aima --dry-run --json`.
+Apply is a separate explicit invocation only after a human approves the emitted
+plan.
+
+Local grounding uses ordinary MemoryRecord retrieval plus declarative Pack and
+portable-archive projections. A local SQLite database does not emulate Cloud
+Named Agent Loadouts: it has no Cloud ACL/resource authority, published Skill
+version resolver, or revocation boundary. Pack manifests and portable archives
+therefore carry the reusable domain context; authority, ACL, version pinning,
+and loadout resolution remain Cloud-only until a separate local contract is
+approved.
+
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
 - Shared rationale inference heuristics live in `packages/shared/src/rationale-extraction.ts`.
 - Runtime-neutral memory quality assessment lives in `packages/shared/src/memory-quality-runtime.mjs`; the Cloud TypeScript facade and Node compatibility entry point both execute this single classifier.
