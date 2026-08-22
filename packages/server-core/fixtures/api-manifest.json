@@ -1,0 +1,2143 @@
+{
+  "contract_version": "orgbrain-api-manifest/v1",
+  "oss_ref": "4746fe70406656b4ec85fec485033dc4be5d4303",
+  "generated_at": "2026-08-22T05:53:03.000Z",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "permission": null,
+      "request_schema": null,
+      "response_schema": "OAuthAuthorizationServerMetadata",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "permission": null,
+      "request_schema": null,
+      "response_schema": "OAuthProtectedResourceMetadata",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "permission": null,
+      "request_schema": null,
+      "response_schema": "OAuthProtectedResourceMetadata",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/context/enrich",
+      "permission": "read",
+      "request_schema": "PostApiContextEnrichRequest",
+      "response_schema": "PostApiContextEnrichResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/mcp",
+      "permission": "read",
+      "request_schema": "McpRequest",
+      "response_schema": "McpResponse",
+      "success_statuses": [
+        200,
+        202
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/oauth/authorize",
+      "permission": null,
+      "request_schema": "OAuthAuthorizationRequest",
+      "response_schema": null,
+      "success_statuses": [
+        200,
+        302
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/oauth/authorize",
+      "permission": null,
+      "request_schema": "OAuthAuthorizationDecision",
+      "response_schema": null,
+      "success_statuses": [
+        302
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/oauth/register",
+      "permission": null,
+      "request_schema": "OAuthClientRegistrationRequest",
+      "response_schema": "OAuthClientRegistrationResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/oauth/revoke",
+      "permission": null,
+      "request_schema": "OAuthRevocationRequest",
+      "response_schema": null,
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/oauth/token",
+      "permission": null,
+      "request_schema": "OAuthTokenRequest",
+      "response_schema": "OAuthTokenResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/access-policies/:resourceType/:resourceId",
+      "permission": "read",
+      "request_schema": "GetV1AccessPoliciesResourceTypeResourceIdRequest",
+      "response_schema": "GetV1AccessPoliciesResourceTypeResourceIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/access-policies/:resourceType/:resourceId",
+      "permission": "share",
+      "request_schema": "PutV1AccessPoliciesResourceTypeResourceIdRequest",
+      "response_schema": "PutV1AccessPoliciesResourceTypeResourceIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agent-messages",
+      "permission": "read",
+      "request_schema": "GetV1AgentMessagesRequest",
+      "response_schema": "GetV1AgentMessagesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agent-messages",
+      "permission": "write",
+      "request_schema": "PostV1AgentMessagesRequest",
+      "response_schema": "PostV1AgentMessagesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agent-messages/:messageId",
+      "permission": "read",
+      "request_schema": "GetV1AgentMessagesMessageIdRequest",
+      "response_schema": "GetV1AgentMessagesMessageIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agent-messages/:messageId/ack",
+      "permission": "write",
+      "request_schema": "PostV1AgentMessagesMessageIdAckRequest",
+      "response_schema": "PostV1AgentMessagesMessageIdAckResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agent-messages/:messageId/read",
+      "permission": "write",
+      "request_schema": "PostV1AgentMessagesMessageIdReadRequest",
+      "response_schema": "PostV1AgentMessagesMessageIdReadResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents",
+      "permission": "read",
+      "request_schema": "GetV1AgentsRequest",
+      "response_schema": "GetV1AgentsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "permission": "write",
+      "request_schema": "PostV1AgentsRequest",
+      "response_schema": "PostV1AgentsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents/:id",
+      "permission": "read",
+      "request_schema": "GetV1AgentsIdRequest",
+      "response_schema": "GetV1AgentsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/agents/:id",
+      "permission": "write",
+      "request_schema": "PatchV1AgentsIdRequest",
+      "response_schema": "PatchV1AgentsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/:id/context-preview",
+      "permission": "read",
+      "request_schema": "PostV1AgentsIdContextPreviewRequest",
+      "response_schema": "PostV1AgentsIdContextPreviewResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/agents/:id/loadouts/:loadoutId",
+      "permission": "write",
+      "request_schema": "PutV1AgentsIdLoadoutsLoadoutIdRequest",
+      "response_schema": "PutV1AgentsIdLoadoutsLoadoutIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit-events",
+      "permission": "export",
+      "request_schema": "GetV1AuditEventsRequest",
+      "response_schema": "GetV1AuditEventsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit-events/verify",
+      "permission": "export",
+      "request_schema": "GetV1AuditEventsVerifyRequest",
+      "response_schema": "GetV1AuditEventsVerifyResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/email/request-code",
+      "permission": "write",
+      "request_schema": "PostV1AuthEmailRequestCodeRequest",
+      "response_schema": "PostV1AuthEmailRequestCodeResponse",
+      "success_statuses": [
+        202
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/email/verify",
+      "permission": "write",
+      "request_schema": "PostV1AuthEmailVerifyRequest",
+      "response_schema": "PostV1AuthEmailVerifyResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "permission": "write",
+      "request_schema": "PostV1AuthLogoutRequest",
+      "response_schema": "PostV1AuthLogoutResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/auth/me",
+      "permission": "read",
+      "request_schema": "GetV1AuthMeRequest",
+      "response_schema": "GetV1AuthMeResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/auth/me/profile",
+      "permission": "write",
+      "request_schema": "PutV1AuthMeProfileRequest",
+      "response_schema": "PutV1AuthMeProfileResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/business-categories",
+      "permission": "read",
+      "request_schema": "GetV1BusinessCategoriesRequest",
+      "response_schema": "GetV1BusinessCategoriesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/business-categories",
+      "permission": "admin",
+      "request_schema": "PostV1BusinessCategoriesRequest",
+      "response_schema": "PostV1BusinessCategoriesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/business-categories/:id",
+      "permission": "admin",
+      "request_schema": "PatchV1BusinessCategoriesIdRequest",
+      "response_schema": "PatchV1BusinessCategoriesIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/capabilities",
+      "permission": "read",
+      "request_schema": "GetV1CapabilitiesRequest",
+      "response_schema": "GetV1CapabilitiesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/context/debt/scan",
+      "permission": "read",
+      "request_schema": "PostV1ContextDebtScanRequest",
+      "response_schema": "PostV1ContextDebtScanResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/context/enrich",
+      "permission": "read",
+      "request_schema": "PostV1ContextEnrichRequest",
+      "response_schema": "PostV1ContextEnrichResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/context/pre-action-gate",
+      "permission": "read",
+      "request_schema": "PostV1ContextPreActionGateRequest",
+      "response_schema": "PostV1ContextPreActionGateResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/context/review-check",
+      "permission": "read",
+      "request_schema": "PostV1ContextReviewCheckRequest",
+      "response_schema": "PostV1ContextReviewCheckResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/activity",
+      "permission": "read",
+      "request_schema": "GetV1DashboardActivityRequest",
+      "response_schema": "GetV1DashboardActivityResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/knowledge-graph",
+      "permission": "read",
+      "request_schema": "GetV1DashboardKnowledgeGraphRequest",
+      "response_schema": "GetV1DashboardKnowledgeGraphResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/memory-analytics",
+      "permission": "read",
+      "request_schema": "GetV1DashboardMemoryAnalyticsRequest",
+      "response_schema": "GetV1DashboardMemoryAnalyticsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/memory-map",
+      "permission": "read",
+      "request_schema": "GetV1DashboardMemoryMapRequest",
+      "response_schema": "GetV1DashboardMemoryMapResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/memory-map/trace",
+      "permission": "read",
+      "request_schema": "GetV1DashboardMemoryMapTraceRequest",
+      "response_schema": "GetV1DashboardMemoryMapTraceResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/strata",
+      "permission": "read",
+      "request_schema": "GetV1DashboardStrataRequest",
+      "response_schema": "GetV1DashboardStrataResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/strata/:sourceType/:sourceId",
+      "permission": "read",
+      "request_schema": "GetV1DashboardStrataSourceTypeSourceIdRequest",
+      "response_schema": "GetV1DashboardStrataSourceTypeSourceIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/decision-briefing",
+      "permission": "read",
+      "request_schema": "GetV1DecisionBriefingRequest",
+      "response_schema": "GetV1DecisionBriefingResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-domain-links",
+      "permission": "write",
+      "request_schema": "PostV1DecisionDomainLinksRequest",
+      "response_schema": "PostV1DecisionDomainLinksResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-memories",
+      "permission": "write",
+      "request_schema": "PostV1DecisionMemoriesRequest",
+      "response_schema": "PostV1DecisionMemoriesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-memories/:id/confirm",
+      "permission": "write",
+      "request_schema": "PostV1DecisionMemoriesIdConfirmRequest",
+      "response_schema": "PostV1DecisionMemoriesIdConfirmResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/decision-memories/:id/context",
+      "permission": "read",
+      "request_schema": "GetV1DecisionMemoriesIdContextRequest",
+      "response_schema": "GetV1DecisionMemoriesIdContextResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-memories/:id/revise",
+      "permission": "write",
+      "request_schema": "PostV1DecisionMemoriesIdReviseRequest",
+      "response_schema": "PostV1DecisionMemoriesIdReviseResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-memories/review-queue",
+      "permission": "read",
+      "request_schema": "PostV1DecisionMemoriesReviewQueueRequest",
+      "response_schema": "PostV1DecisionMemoriesReviewQueueResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-memories/search",
+      "permission": "read",
+      "request_schema": "PostV1DecisionMemoriesSearchRequest",
+      "response_schema": "PostV1DecisionMemoriesSearchResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-resource-links",
+      "permission": "write",
+      "request_schema": "PostV1DecisionResourceLinksRequest",
+      "response_schema": "PostV1DecisionResourceLinksResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-resource-links/:id/confirm",
+      "permission": "write",
+      "request_schema": "PostV1DecisionResourceLinksIdConfirmRequest",
+      "response_schema": "PostV1DecisionResourceLinksIdConfirmResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/decision-resource-links/:id/retire",
+      "permission": "write",
+      "request_schema": "PostV1DecisionResourceLinksIdRetireRequest",
+      "response_schema": "PostV1DecisionResourceLinksIdRetireResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/decision-resource-links/review-queue",
+      "permission": "read",
+      "request_schema": "GetV1DecisionResourceLinksReviewQueueRequest",
+      "response_schema": "GetV1DecisionResourceLinksReviewQueueResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/decisions/:decisionRef{.+}/resources",
+      "permission": "read",
+      "request_schema": "GetV1DecisionsDecisionRefResourcesRequest",
+      "response_schema": "GetV1DecisionsDecisionRefResourcesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/decisions/:id/map",
+      "permission": "read",
+      "request_schema": "GetV1DecisionsIdMapRequest",
+      "response_schema": "GetV1DecisionsIdMapResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/decisions/:id/trace",
+      "permission": "read",
+      "request_schema": "GetV1DecisionsIdTraceRequest",
+      "response_schema": "GetV1DecisionsIdTraceResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/directory",
+      "permission": "read",
+      "request_schema": "GetV1DirectoryRequest",
+      "response_schema": "GetV1DirectoryResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/docs",
+      "permission": "write",
+      "request_schema": "PostV1DocsRequest",
+      "response_schema": "PostV1DocsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/docs/:slug{.+}",
+      "permission": "read",
+      "request_schema": "GetV1DocsSlugRequest",
+      "response_schema": "GetV1DocsSlugResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/docs/:slug{.+}/context",
+      "permission": "read",
+      "request_schema": "GetV1DocsSlugContextRequest",
+      "response_schema": "GetV1DocsSlugContextResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/docs/search",
+      "permission": "read",
+      "request_schema": "PostV1DocsSearchRequest",
+      "response_schema": "PostV1DocsSearchResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/domain-context",
+      "permission": "read",
+      "request_schema": "GetV1DomainContextRequest",
+      "response_schema": "GetV1DomainContextResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/domain-dashboards",
+      "permission": "read",
+      "request_schema": "GetV1DomainDashboardsRequest",
+      "response_schema": "GetV1DomainDashboardsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/domain-dashboards",
+      "permission": "write",
+      "request_schema": "PostV1DomainDashboardsRequest",
+      "response_schema": "PostV1DomainDashboardsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/domain-packs",
+      "permission": "read",
+      "request_schema": "GetV1DomainPacksRequest",
+      "response_schema": "GetV1DomainPacksResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/domain-packs/:packId/workspace",
+      "permission": "read",
+      "request_schema": "GetV1DomainPacksPackIdWorkspaceRequest",
+      "response_schema": "GetV1DomainPacksPackIdWorkspaceResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/domain-packs/installations",
+      "permission": "admin",
+      "request_schema": "PostV1DomainPacksInstallationsRequest",
+      "response_schema": "PostV1DomainPacksInstallationsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/domain-packs/installations/:id",
+      "permission": "admin",
+      "request_schema": "DeleteV1DomainPacksInstallationsIdRequest",
+      "response_schema": "DeleteV1DomainPacksInstallationsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/domain-packs/installations/plan",
+      "permission": "admin",
+      "request_schema": "PostV1DomainPacksInstallationsPlanRequest",
+      "response_schema": "PostV1DomainPacksInstallationsPlanResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/domain-recalls/:id",
+      "permission": "read",
+      "request_schema": "GetV1DomainRecallsIdRequest",
+      "response_schema": "GetV1DomainRecallsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/domain-recalls/:id/feedback",
+      "permission": "write",
+      "request_schema": "PostV1DomainRecallsIdFeedbackRequest",
+      "response_schema": "PostV1DomainRecallsIdFeedbackResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups",
+      "permission": "admin",
+      "request_schema": "GetV1GroupsRequest",
+      "response_schema": "GetV1GroupsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups",
+      "permission": "admin",
+      "request_schema": "PostV1GroupsRequest",
+      "response_schema": "PostV1GroupsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/groups/:groupId",
+      "permission": "admin",
+      "request_schema": "DeleteV1GroupsGroupIdRequest",
+      "response_schema": "DeleteV1GroupsGroupIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/:groupId",
+      "permission": "admin",
+      "request_schema": "GetV1GroupsGroupIdRequest",
+      "response_schema": "GetV1GroupsGroupIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/:groupId",
+      "permission": "admin",
+      "request_schema": "PatchV1GroupsGroupIdRequest",
+      "response_schema": "PatchV1GroupsGroupIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups/:groupId/members",
+      "permission": "admin",
+      "request_schema": "PostV1GroupsGroupIdMembersRequest",
+      "response_schema": "PostV1GroupsGroupIdMembersResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/groups/:groupId/members/:principal",
+      "permission": "admin",
+      "request_schema": "DeleteV1GroupsGroupIdMembersPrincipalRequest",
+      "response_schema": "DeleteV1GroupsGroupIdMembersPrincipalResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/managed-object-external-refs",
+      "permission": "write",
+      "request_schema": "PostV1ManagedObjectExternalRefsRequest",
+      "response_schema": "PostV1ManagedObjectExternalRefsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/managed-object-relations",
+      "permission": "write",
+      "request_schema": "PostV1ManagedObjectRelationsRequest",
+      "response_schema": "PostV1ManagedObjectRelationsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/managed-object-types",
+      "permission": "write",
+      "request_schema": "PostV1ManagedObjectTypesRequest",
+      "response_schema": "PostV1ManagedObjectTypesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/managed-objects",
+      "permission": "write",
+      "request_schema": "PostV1ManagedObjectsRequest",
+      "response_schema": "PostV1ManagedObjectsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/managed-objects/search",
+      "permission": "read",
+      "request_schema": "GetV1ManagedObjectsSearchRequest",
+      "response_schema": "GetV1ManagedObjectsSearchResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp-client-installations",
+      "permission": "read",
+      "request_schema": "GetV1McpClientInstallationsRequest",
+      "response_schema": "GetV1McpClientInstallationsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/mcp-client-installations",
+      "permission": "read",
+      "request_schema": "PostV1McpClientInstallationsRequest",
+      "response_schema": "PostV1McpClientInstallationsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/mcp-client-installations/:id",
+      "permission": "read",
+      "request_schema": "DeleteV1McpClientInstallationsIdRequest",
+      "response_schema": "DeleteV1McpClientInstallationsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memories",
+      "permission": "read",
+      "request_schema": "GetV1MemoriesRequest",
+      "response_schema": "GetV1MemoriesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memories/:memoryId",
+      "permission": "delete",
+      "request_schema": "DeleteV1MemoriesMemoryIdRequest",
+      "response_schema": "DeleteV1MemoriesMemoryIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memories/:memoryId/details",
+      "permission": "read",
+      "request_schema": "GetV1MemoriesMemoryIdDetailsRequest",
+      "response_schema": "GetV1MemoriesMemoryIdDetailsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/:memoryId/restore",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesMemoryIdRestoreRequest",
+      "response_schema": "PostV1MemoriesMemoryIdRestoreResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/:memoryId/trash",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesMemoryIdTrashRequest",
+      "response_schema": "PostV1MemoriesMemoryIdTrashResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/capture",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesCaptureRequest",
+      "response_schema": "PostV1MemoriesCaptureResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/capture-rationale",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesCaptureRationaleRequest",
+      "response_schema": "PostV1MemoriesCaptureRationaleResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/confirm",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesConfirmRequest",
+      "response_schema": "PostV1MemoriesConfirmResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/extract",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesExtractRequest",
+      "response_schema": "PostV1MemoriesExtractResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/profile",
+      "permission": "read",
+      "request_schema": "PostV1MemoriesProfileRequest",
+      "response_schema": "PostV1MemoriesProfileResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/propose",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesProposeRequest",
+      "response_schema": "PostV1MemoriesProposeResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/refresh",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesRefreshRequest",
+      "response_schema": "PostV1MemoriesRefreshResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/retrieve-context",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesRetrieveContextRequest",
+      "response_schema": "PostV1MemoriesRetrieveContextResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/revise",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesReviseRequest",
+      "response_schema": "PostV1MemoriesReviseResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/search",
+      "permission": "read",
+      "request_schema": "PostV1MemoriesSearchRequest",
+      "response_schema": "PostV1MemoriesSearchResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/suppress",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesSuppressRequest",
+      "response_schema": "PostV1MemoriesSuppressResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/upsert",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesUpsertRequest",
+      "response_schema": "PostV1MemoriesUpsertResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-collectors/keys",
+      "permission": "admin",
+      "request_schema": "PostV1MemoryCollectorsKeysRequest",
+      "response_schema": "PostV1MemoryCollectorsKeysResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-collectors/keys/:id/manifests",
+      "permission": "admin",
+      "request_schema": "GetV1MemoryCollectorsKeysIdManifestsRequest",
+      "response_schema": "GetV1MemoryCollectorsKeysIdManifestsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-collectors/keys/:id/revoke",
+      "permission": "admin",
+      "request_schema": "PostV1MemoryCollectorsKeysIdRevokeRequest",
+      "response_schema": "PostV1MemoryCollectorsKeysIdRevokeResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-effects",
+      "permission": "write",
+      "request_schema": "PostV1MemoryEffectsRequest",
+      "response_schema": "PostV1MemoryEffectsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-failure-patterns",
+      "permission": "read",
+      "request_schema": "GetV1MemoryFailurePatternsRequest",
+      "response_schema": "GetV1MemoryFailurePatternsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-failure-patterns",
+      "permission": "write",
+      "request_schema": "PostV1MemoryFailurePatternsRequest",
+      "response_schema": "PostV1MemoryFailurePatternsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/memory-failure-patterns/:id",
+      "permission": "write",
+      "request_schema": "PatchV1MemoryFailurePatternsIdRequest",
+      "response_schema": "PatchV1MemoryFailurePatternsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-impact-executions",
+      "permission": "write",
+      "request_schema": "PostV1MemoryImpactExecutionsRequest",
+      "response_schema": "PostV1MemoryImpactExecutionsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-impact-executions/:externalRunId",
+      "permission": "read",
+      "request_schema": "GetV1MemoryImpactExecutionsExternalRunIdRequest",
+      "response_schema": "GetV1MemoryImpactExecutionsExternalRunIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-impact-executions/:externalRunId/report",
+      "permission": "write",
+      "request_schema": "PostV1MemoryImpactExecutionsExternalRunIdReportRequest",
+      "response_schema": "PostV1MemoryImpactExecutionsExternalRunIdReportResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-impact-summary",
+      "permission": "read",
+      "request_schema": "GetV1MemoryImpactSummaryRequest",
+      "response_schema": "GetV1MemoryImpactSummaryResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-ingestions/verified",
+      "permission": "write",
+      "request_schema": "PostV1MemoryIngestionsVerifiedRequest",
+      "response_schema": "PostV1MemoryIngestionsVerifiedResponse",
+      "success_statuses": [
+        202
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-ingestions/verified/:id",
+      "permission": "read",
+      "request_schema": "GetV1MemoryIngestionsVerifiedIdRequest",
+      "response_schema": "GetV1MemoryIngestionsVerifiedIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-quality/runs",
+      "permission": "read",
+      "request_schema": "GetV1MemoryQualityRunsRequest",
+      "response_schema": "GetV1MemoryQualityRunsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-quality/runs/:runId",
+      "permission": "read",
+      "request_schema": "GetV1MemoryQualityRunsRunIdRequest",
+      "response_schema": "GetV1MemoryQualityRunsRunIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-usages",
+      "permission": "write",
+      "request_schema": "PostV1MemoryUsagesRequest",
+      "response_schema": "PostV1MemoryUsagesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory-usages/state",
+      "permission": "write",
+      "request_schema": "PostV1MemoryUsagesStateRequest",
+      "response_schema": "PostV1MemoryUsagesStateResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/metric-definitions",
+      "permission": "write",
+      "request_schema": "PostV1MetricDefinitionsRequest",
+      "response_schema": "PostV1MetricDefinitionsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/metric-definitions/:id/bindings",
+      "permission": "write",
+      "request_schema": "PostV1MetricDefinitionsIdBindingsRequest",
+      "response_schema": "PostV1MetricDefinitionsIdBindingsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/metric-definitions/:id/promotion",
+      "permission": "admin",
+      "request_schema": "PostV1MetricDefinitionsIdPromotionRequest",
+      "response_schema": "PostV1MetricDefinitionsIdPromotionResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/metric-definitions/:id/target",
+      "permission": "write",
+      "request_schema": "PutV1MetricDefinitionsIdTargetRequest",
+      "response_schema": "PutV1MetricDefinitionsIdTargetResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/metric-definitions/:id/versions",
+      "permission": "write",
+      "request_schema": "PostV1MetricDefinitionsIdVersionsRequest",
+      "response_schema": "PostV1MetricDefinitionsIdVersionsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/metric-snapshots",
+      "permission": "write",
+      "request_schema": "PostV1MetricSnapshotsRequest",
+      "response_schema": "PostV1MetricSnapshotsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/metric-snapshots/query",
+      "permission": "read",
+      "request_schema": "GetV1MetricSnapshotsQueryRequest",
+      "response_schema": "GetV1MetricSnapshotsQueryResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/metric-source-bindings",
+      "permission": "read",
+      "request_schema": "GetV1MetricSourceBindingsRequest",
+      "response_schema": "GetV1MetricSourceBindingsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/metrics/memory-impact",
+      "permission": "read",
+      "request_schema": "GetV1MetricsMemoryImpactRequest",
+      "response_schema": "GetV1MetricsMemoryImpactResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/metrics/query",
+      "permission": "read",
+      "request_schema": "GetV1MetricsQueryRequest",
+      "response_schema": "GetV1MetricsQueryResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ops/access-policy-shadow",
+      "permission": "admin",
+      "request_schema": "GetV1OpsAccessPolicyShadowRequest",
+      "response_schema": "GetV1OpsAccessPolicyShadowResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ops/auth-sessions/revoke-all",
+      "permission": "admin",
+      "request_schema": "PostV1OpsAuthSessionsRevokeAllRequest",
+      "response_schema": "PostV1OpsAuthSessionsRevokeAllResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ops/status",
+      "permission": "admin",
+      "request_schema": "GetV1OpsStatusRequest",
+      "response_schema": "GetV1OpsStatusResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ops/tasks/:id/replay",
+      "permission": "admin",
+      "request_schema": "PostV1OpsTasksIdReplayRequest",
+      "response_schema": "PostV1OpsTasksIdReplayResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/organization",
+      "permission": "admin",
+      "request_schema": "GetV1OrganizationRequest",
+      "response_schema": "GetV1OrganizationResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/organization",
+      "permission": "admin",
+      "request_schema": "PatchV1OrganizationRequest",
+      "response_schema": "PatchV1OrganizationResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/portable-imports",
+      "permission": "admin",
+      "request_schema": "PostV1PortableImportsRequest",
+      "response_schema": "PostV1PortableImportsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/portable-imports/:id/apply",
+      "permission": "admin",
+      "request_schema": "PostV1PortableImportsIdApplyRequest",
+      "response_schema": "PostV1PortableImportsIdApplyResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/portable-imports/:id/chunks/:sequence",
+      "permission": "admin",
+      "request_schema": "PutV1PortableImportsIdChunksSequenceRequest",
+      "response_schema": "PutV1PortableImportsIdChunksSequenceResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/portable-imports/:id/plan",
+      "permission": "admin",
+      "request_schema": "PostV1PortableImportsIdPlanRequest",
+      "response_schema": "PostV1PortableImportsIdPlanResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/principal-owner-mappings",
+      "permission": "read",
+      "request_schema": "GetV1PrincipalOwnerMappingsRequest",
+      "response_schema": "GetV1PrincipalOwnerMappingsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/principal-owner-mappings",
+      "permission": "write",
+      "request_schema": "PutV1PrincipalOwnerMappingsRequest",
+      "response_schema": "PutV1PrincipalOwnerMappingsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/principal-owner-mappings/me",
+      "permission": "read",
+      "request_schema": "GetV1PrincipalOwnerMappingsMeRequest",
+      "response_schema": "GetV1PrincipalOwnerMappingsMeResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/principal-owner-mappings/me",
+      "permission": "write",
+      "request_schema": "PutV1PrincipalOwnerMappingsMeRequest",
+      "response_schema": "PutV1PrincipalOwnerMappingsMeResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/resource-shares",
+      "permission": "share",
+      "request_schema": "PutV1ResourceSharesRequest",
+      "response_schema": "PutV1ResourceSharesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/resource-shares/:resourceType/:resourceId",
+      "permission": "read",
+      "request_schema": "GetV1ResourceSharesResourceTypeResourceIdRequest",
+      "response_schema": "GetV1ResourceSharesResourceTypeResourceIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/resources",
+      "permission": "write",
+      "request_schema": "PostV1ResourcesRequest",
+      "response_schema": "PostV1ResourcesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/resources/:id/decisions",
+      "permission": "read",
+      "request_schema": "GetV1ResourcesIdDecisionsRequest",
+      "response_schema": "GetV1ResourcesIdDecisionsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/resources/:id/locations",
+      "permission": "write",
+      "request_schema": "PostV1ResourcesIdLocationsRequest",
+      "response_schema": "PostV1ResourcesIdLocationsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/resources/:id/refresh",
+      "permission": "write",
+      "request_schema": "PostV1ResourcesIdRefreshRequest",
+      "response_schema": "PostV1ResourcesIdRefreshResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/resources/backfill",
+      "permission": "admin",
+      "request_schema": "PostV1ResourcesBackfillRequest",
+      "response_schema": "PostV1ResourcesBackfillResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/resources/resolve",
+      "permission": "read",
+      "request_schema": "GetV1ResourcesResolveRequest",
+      "response_schema": "GetV1ResourcesResolveResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/resources/search",
+      "permission": "read",
+      "request_schema": "PostV1ResourcesSearchRequest",
+      "response_schema": "PostV1ResourcesSearchResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retention-policies",
+      "permission": "admin",
+      "request_schema": "GetV1RetentionPoliciesRequest",
+      "response_schema": "GetV1RetentionPoliciesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/retention-policies",
+      "permission": "admin",
+      "request_schema": "PutV1RetentionPoliciesRequest",
+      "response_schema": "PutV1RetentionPoliciesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retention-policies/apply",
+      "permission": "admin",
+      "request_schema": "PostV1RetentionPoliciesApplyRequest",
+      "response_schema": "PostV1RetentionPoliciesApplyResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retention-queue",
+      "permission": "admin",
+      "request_schema": "GetV1RetentionQueueRequest",
+      "response_schema": "GetV1RetentionQueueResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retention-queue/cancel",
+      "permission": "admin",
+      "request_schema": "PostV1RetentionQueueCancelRequest",
+      "response_schema": "PostV1RetentionQueueCancelResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/retrieval-generation-assignments",
+      "permission": "admin",
+      "request_schema": "PutV1RetrievalGenerationAssignmentsRequest",
+      "response_schema": "PutV1RetrievalGenerationAssignmentsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retrieval-generation-assignments/resolve",
+      "permission": "admin",
+      "request_schema": "GetV1RetrievalGenerationAssignmentsResolveRequest",
+      "response_schema": "GetV1RetrievalGenerationAssignmentsResolveResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-generations",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalGenerationsRequest",
+      "response_schema": "PostV1RetrievalGenerationsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/retrieval-generations/:id",
+      "permission": "admin",
+      "request_schema": "PatchV1RetrievalGenerationsIdRequest",
+      "response_schema": "PatchV1RetrievalGenerationsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-generations/:id/backfill",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalGenerationsIdBackfillRequest",
+      "response_schema": "PostV1RetrievalGenerationsIdBackfillResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-index/rebuild",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalIndexRebuildRequest",
+      "response_schema": "PostV1RetrievalIndexRebuildResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-index/v3/backfill",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalIndexV3BackfillRequest",
+      "response_schema": "PostV1RetrievalIndexV3BackfillResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-index/v4/backfill",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalIndexV4BackfillRequest",
+      "response_schema": "PostV1RetrievalIndexV4BackfillResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-index/v4/decisions/backfill",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalIndexV4DecisionsBackfillRequest",
+      "response_schema": "PostV1RetrievalIndexV4DecisionsBackfillResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrieval-ranking-profiles",
+      "permission": "admin",
+      "request_schema": "PostV1RetrievalRankingProfilesRequest",
+      "response_schema": "PostV1RetrievalRankingProfilesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/role-assignments",
+      "permission": "admin",
+      "request_schema": "GetV1RoleAssignmentsRequest",
+      "response_schema": "GetV1RoleAssignmentsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/role-assignments",
+      "permission": "admin",
+      "request_schema": "PutV1RoleAssignmentsRequest",
+      "response_schema": "PutV1RoleAssignmentsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/role-assignments/:id",
+      "permission": "admin",
+      "request_schema": "DeleteV1RoleAssignmentsIdRequest",
+      "response_schema": "DeleteV1RoleAssignmentsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/scoped-tokens",
+      "permission": "admin",
+      "request_schema": "GetV1ScopedTokensRequest",
+      "response_schema": "GetV1ScopedTokensResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/scoped-tokens",
+      "permission": "admin",
+      "request_schema": "PostV1ScopedTokensRequest",
+      "response_schema": "PostV1ScopedTokensResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/scoped-tokens/:id",
+      "permission": "admin",
+      "request_schema": "DeleteV1ScopedTokensIdRequest",
+      "response_schema": "DeleteV1ScopedTokensIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/skill-providers",
+      "permission": "read",
+      "request_schema": "GetV1SkillProvidersRequest",
+      "response_schema": "GetV1SkillProvidersResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/skills",
+      "permission": "read",
+      "request_schema": "GetV1SkillsRequest",
+      "response_schema": "GetV1SkillsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/skills",
+      "permission": "write",
+      "request_schema": "PostV1SkillsRequest",
+      "response_schema": "PostV1SkillsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/skills/:id",
+      "permission": "read",
+      "request_schema": "GetV1SkillsIdRequest",
+      "response_schema": "GetV1SkillsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/skills/:id/export",
+      "permission": "export",
+      "request_schema": "GetV1SkillsIdExportRequest",
+      "response_schema": "GetV1SkillsIdExportResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/skills/:id/publish",
+      "permission": "write",
+      "request_schema": "PostV1SkillsIdPublishRequest",
+      "response_schema": "PostV1SkillsIdPublishResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/skills/:id/retire",
+      "permission": "write",
+      "request_schema": "PostV1SkillsIdRetireRequest",
+      "response_schema": "PostV1SkillsIdRetireResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/skills/:id/versions",
+      "permission": "write",
+      "request_schema": "PostV1SkillsIdVersionsRequest",
+      "response_schema": "PostV1SkillsIdVersionsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/skills/generate",
+      "permission": "write",
+      "request_schema": "PostV1SkillsGenerateRequest",
+      "response_schema": "PostV1SkillsGenerateResponse",
+      "success_statuses": [
+        202
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks",
+      "permission": "read",
+      "request_schema": "GetV1TasksRequest",
+      "response_schema": "GetV1TasksResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "permission": "write",
+      "request_schema": "PostV1TasksRequest",
+      "response_schema": "PostV1TasksResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/:taskId",
+      "permission": "read",
+      "request_schema": "GetV1TasksTaskIdRequest",
+      "response_schema": "GetV1TasksTaskIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/:taskId/events",
+      "permission": "read",
+      "request_schema": "GetV1TasksTaskIdEventsRequest",
+      "response_schema": "GetV1TasksTaskIdEventsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/users",
+      "permission": "admin",
+      "request_schema": "GetV1UsersRequest",
+      "response_schema": "GetV1UsersResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/users",
+      "permission": "admin",
+      "request_schema": "PostV1UsersRequest",
+      "response_schema": "PostV1UsersResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/users/:principal{.+}",
+      "permission": "admin",
+      "request_schema": "PatchV1UsersPrincipalRequest",
+      "response_schema": "PatchV1UsersPrincipalResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    }
+  ]
+}

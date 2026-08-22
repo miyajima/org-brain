@@ -1,0 +1,28 @@
+{
+  "name": "@org-brain/server-core",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": ["dist", "fixtures"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+      "./fixtures/*": "./fixtures/*"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@org-brain/contracts": "workspace:*",
+    "@org-brain/core": "workspace:*",
+    "hono": "^4.7.2"
+  }
+}

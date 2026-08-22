@@ -863,7 +863,10 @@ projected automatically, while suppression and deletion remove their vectors.
 
 Cloud deployments accept API keys, Cloudflare Access JWTs, or generic RS256 OIDC
 JWTs. Generic OIDC uses `OIDC_ISSUER`, `OIDC_AUD`, optional
-`OIDC_JWKS_JSON`, and `OIDC_TENANT_POLICY_JSON`. Admins can issue short-lived
+`OIDC_JWKS_JSON`, and `OIDC_TENANT_POLICY_JSON`. Generic OIDC bearer authentication
+is deprecated in 0.4 and will be removed in the next major release; new OSS MCP
+deployments should use Cloudflare Access as the upstream identity and the OAuth
+provider mode below. Admins can issue short-lived
 `obp_` scoped tokens; only a SHA-256 token hash is stored and the clear token is
 returned once. Retention enforcement is dry-run by default, and matching legal
 holds block hard deletion.
@@ -872,7 +875,10 @@ Remote MCP uses a separate Access audience (`MCP_ACCESS_AUD`). Interactive
 clients resolve to the user's existing principal; service-token hooks resolve
 through `mcp_client_installations` and can call only
 `orgbrain_memories_capture_rationale`. `MCP_AUTH_MODE` defaults to fail-closed
-`access`; use explicit `dual` only during migration from legacy JSON secrets.
+`access`. MCP 2026-07-28 OAuth deployments require `OAUTH_KV` and a canonical HTTPS
+`MCP_OAUTH_RESOURCE` ending in `/mcp`. Use `dual` while Access/service-token clients
+and OAuth clients coexist, then switch to `oauth`; `legacy` exists only for bounded
+migration from the old JSON secret path.
 
 Cloud deployments may additionally bind `API_RATE_LIMITER` using a Workers
 Rate Limiting binding. Requests are keyed by authenticated tenant, principal,

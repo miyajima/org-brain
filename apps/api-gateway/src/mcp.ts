@@ -5,8 +5,10 @@ import {
   observeMemoryContractV2Event,
   observeMemoryLearningEvent,
   type OrgPermission,
+  type OrgBrainOAuthScope,
   type OrgRole
 } from "@org-brain/shared";
+import { permissionsForScopes } from "@org-brain/core";
 import type { Hono } from "hono";
 import {
   hostHeaderValidationResponse,
@@ -18,6 +20,12 @@ import {
 } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
+import {
+  captureMcpToolContract,
+  McpProtocolError,
+  validateMcpEnvelope,
+  validateMcpTransport
+} from "@org-brain/mcp-core";
 import {
   accessServiceSubject,
   authorizeMcpRequest,
@@ -99,6 +107,7 @@ type AgentProps = {
   clientPurpose?: string;
   ownerPrincipal?: string;
   allowedTools?: string[];
+  scopes?: OrgBrainOAuthScope[];
 };
 
 const sourceRefSchema = z.object({
@@ -171,6 +180,12 @@ function registerTool<Shape extends z.ZodRawShape>(
   inputShape: Shape,
   handler: ToolHandler<Shape>
 ) {
+  captureMcpToolContract({
+    name,
+    description: MCP_TOOL_DESCRIPTIONS[name] ?? null,
+    input_schema: z.toJSONSchema(z.object(inputShape)) as Record<string, unknown>,
+    output_schema: null
+  });
   return server.registerTool(
     name,
     { ...(MCP_TOOL_DESCRIPTIONS[name] ? { description: MCP_TOOL_DESCRIPTIONS[name] } : {}), inputSchema: z.object(inputShape) },
@@ -199,6 +214,9 @@ async function requireMcpPermission(
 ) {
   const principal = props.principal;
   if (!principal) throw new HttpError(500, "misconfigured", "missing MCP principal");
+  if (props.authSource === "oauth" && !permissionsForScopes(props.scopes ?? []).includes(permission)) {
+    throw new HttpError(403, "insufficient_scope", `OAuth token does not grant ${permission}`);
+  }
   try {
     return await assertPermission(env, {
       tenantId,
@@ -2186,9 +2204,17 @@ export function mountMcp(app: Hono<any>) {
     }
   });
 
-  app.mount("/mcp", async (request, env, ctx) => {
+  app.mount("/mcp", (request, env, ctx) => handleOrgBrainMcpRequest(request, env, ctx));
+}
+
+export async function handleOrgBrainMcpRequest(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  authOverride?: McpAuthResult
+): Promise<Response> {
     try {
-      const auth = await authorizeMcpRequest(request, env);
+      const auth = authOverride ?? await authorizeMcpRequest(request, env);
       await assertRequestRateLimit(env, {
         tenantId: auth.tenantId,
         principal: auth.principal,
@@ -2205,10 +2231,16 @@ export function mountMcp(app: Hono<any>) {
         clientType: auth.clientType,
         clientPurpose: auth.clientPurpose,
         ownerPrincipal: auth.ownerPrincipal,
-        allowedTools: auth.allowedTools
+        allowedTools: auth.allowedTools,
+        scopes: auth.scopes
       };
       const transportValidationResponse = mcpTransportValidationResponse(request);
       if (transportValidationResponse) return transportValidationResponse;
+      if (authOverride || request.headers.get("mcp-protocol-version") === "2026-07-28") {
+        const transport = validateMcpTransport(request);
+        const payload = await request.clone().json().catch(() => null);
+        validateMcpEnvelope(transport, payload);
+      }
       await assertMcpToolAllowed(request, props);
       const catalogResponse = await tryHandleModernCatalogFastPath(request, env, props);
       if (catalogResponse) return catalogResponse;
@@ -2240,7 +2272,9 @@ export function mountMcp(app: Hono<any>) {
       if (error instanceof HttpError) {
         return new Response(error.message, { status: error.status });
       }
+      if (error instanceof McpProtocolError) {
+        return Response.json({ error: error.code, message: error.message }, { status: error.status });
+      }
       return new Response(error instanceof Error ? error.message : String(error), { status: 500 });
     }
-  });
 }

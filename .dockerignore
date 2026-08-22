@@ -1,0 +1,12 @@
+.git
+.github
+.local
+.pnpm-store
+node_modules
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+artifacts
+benchmark-results

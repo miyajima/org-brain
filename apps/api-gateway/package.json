@@ -11,6 +11,9 @@
     "test:performance": "vitest run test/dashboard-performance.test.ts test/decision-console-performance.test.ts"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "0.10.2",
+    "@org-brain/server-core": "workspace:*",
+    "@org-brain/mcp-core": "workspace:*",
     "@modelcontextprotocol/server": "2.0.0",
     "@org-brain/contracts": "workspace:*",
     "@org-brain/core": "workspace:*",
