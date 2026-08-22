@@ -1,4 +1,5 @@
 import { HttpError, ulid } from "@org-brain/shared";
+import { parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
 import type { Env } from "./types";
 
 const GROUP_ROLES = ["owner", "admin", "member"] as const;
@@ -32,11 +33,6 @@ function parseString(value: unknown, field: string, maxLength = 256): string {
   const trimmed = value.trim();
   if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
   return trimmed.slice(0, maxLength);
-}
-
-function parseOptionalString(value: unknown, field: string, maxLength = 256): string | null {
-  if (value === undefined || value === null) return null;
-  return parseString(value, field, maxLength);
 }
 
 function parseRole(value: unknown): GroupRole {

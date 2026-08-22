@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { MEMORY_QUALITY_AXES, certifyMemoryQuality, evaluateMemoryIngestionAutonomousQualification } from "../src/memory-quality-certifier";
+import {
+  MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM,
+  MEMORY_INGESTION_CALIBRATION_MINIMUMS,
+  MEMORY_INGESTION_ORACLE_MINIMUMS,
+  MEMORY_QUALITY_AXES,
+  certifyMemoryQuality,
+  evaluateMemoryIngestionAutonomousQualification,
+  evaluateMemoryIngestionCalibrationQualification,
+  evaluateMemoryIngestionOracleQualification
+} from "../src/memory-quality-certifier";
 
 describe("memory quality certifier", () => {
+  it("exposes the ingestion qualification contract through the TypeScript facade", () => {
+    expect(MEMORY_INGESTION_ORACLE_MINIMUMS.total_cases).toBeGreaterThan(0);
+    expect(MEMORY_INGESTION_CALIBRATION_MINIMUMS.selected_case_count).toBeGreaterThan(0);
+    expect(MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM).toBeGreaterThan(0);
+    expect(evaluateMemoryIngestionOracleQualification({}).status).toBe("insufficient_evidence");
+    expect(evaluateMemoryIngestionCalibrationQualification({}).status).toBe("insufficient_evidence");
+  });
+
   it("reports every axis independently and never emits an aggregate score", () => {
     const axes = Object.fromEntries(MEMORY_QUALITY_AXES.map((axis) => [axis, [
       { name: `${axis}-metric`, successes: 999, total: 1_000 }

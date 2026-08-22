@@ -4,10 +4,20 @@ import {
   EMBEDDING_MODEL_V3,
   RERANKER_MODEL_V3,
   getGenerationSemanticRetrievalIndex,
-  rerankV3MemoryCandidates
+  rerankV3MemoryCandidates,
+  syncMemoryIdsToSemanticIndexes
 } from "../src/retrieval-index-service";
 
 describe("CloudflareVectorRetrievalIndex", () => {
+  it("returns the legacy, V3, and V4 projection contracts together", async () => {
+    const result = await syncMemoryIdsToSemanticIndexes({} as any, "tenant-a", ["memory-1"]);
+    expect(result).toEqual({
+      retrieval_projection: { available: false, provider: null, indexed: 0 },
+      retrieval_projection_v3: { available: false, provider: null, indexed: 0 },
+      retrieval_projection_v4: { available: false, provider: null, indexed: 0 }
+    });
+  });
+
   it("embeds and upserts documents in bounded high-throughput batches", async () => {
     const embeddingBatchSizes: number[] = [];
     const upsertBatchSizes: number[] = [];
