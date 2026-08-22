@@ -3,6 +3,7 @@ import {
   assignRetrievalGeneration,
   backfillRetrievalGeneration,
   createRetrievalRankingProfile,
+  loadRetrievalGenerationProfile,
   resolveRetrievalGenerationAssignment,
   transitionRetrievalGeneration
 } from "../src/retrieval-generation-service";
@@ -148,6 +149,31 @@ class SqliteD1 {
 }
 
 describe("retrieval generation assignment", () => {
+  it("loads the generation and active ranking profile through one query", async () => {
+    let sql = "";
+    const profile = {
+      id: "gen-a",
+      unit_schema_version: 2,
+      extractor_name: "retrieval-units",
+      extractor_version: "4",
+      embedding_profile_id: "embed-a",
+      ranking_profile_id: "rank-a",
+      ranking_algorithm: "reciprocal_rank_fusion",
+      ranking_config_json: "{}"
+    };
+    const testEnv = {
+      OPEN_BRAIN_DB: {
+        prepare(query: string) {
+          sql = query;
+          return { bind: () => ({ all: async () => ({ results: [profile] }) }) };
+        }
+      }
+    } as unknown as Env;
+
+    await expect(loadRetrievalGenerationProfile(testEnv, "gen-a")).resolves.toEqual(profile);
+    expect(sql).toContain("r.retired_at IS NULL");
+  });
+
   it("prefers project assignment and falls back to the tenant wildcard", async () => {
     const assignments: Assignment[] = [
       { tenant_id: "tenant-a", project_scope_key: "*", active_generation_id: "fallback", shadow_generation_id: null, shadow_sample_rate: 0, updated_at: 1 },

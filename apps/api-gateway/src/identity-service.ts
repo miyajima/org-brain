@@ -1,6 +1,7 @@
 import { HttpError } from "@org-brain/shared";
 import { listGroups } from "./group-service";
 import type { ApiAuthContext } from "./auth";
+import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import type { Env } from "./types";
 
 type ProfileRow = {
@@ -19,13 +20,6 @@ type ProfileRow = {
   created_at: number;
   updated_at: number;
 };
-
-function parseOptionalString(value: unknown, field: string, maxLength = 256): string | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, maxLength) : null;
-}
 
 function toProfile(row: ProfileRow | null, tenantId: string, auth: ApiAuthContext) {
   return {

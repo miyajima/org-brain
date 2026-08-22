@@ -102,13 +102,19 @@ if (!args.has("--check")) {
 
 const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
 const missing = {};
+const unexpected = {};
 for (const key of ["api_routes", "mcp_tools", "cli_commands", "console_routes", "capabilities", "feature_flags", "package_exports"]) {
   const current = new Set(surface[key]);
   const removed = golden[key].filter((value) => !current.has(value));
   if (removed.length > 0) missing[key] = removed;
+  if (key === "api_routes") {
+    const baseline = new Set(golden[key]);
+    const added = surface[key].filter((value) => !baseline.has(value));
+    if (added.length > 0) unexpected[key] = added;
+  }
 }
-if (Object.keys(missing).length > 0) {
-  console.error(JSON.stringify({ error: "feature_surface_regression", missing }, null, 2));
+if (Object.keys(missing).length > 0 || Object.keys(unexpected).length > 0) {
+  console.error(JSON.stringify({ error: "feature_surface_regression", missing, unexpected }, null, 2));
   process.exit(1);
 }
-console.log(JSON.stringify({ ok: true, baseline_preserved: true }, null, 2));
+console.log(JSON.stringify({ ok: true, baseline_preserved: true, api_routes_exact: true }, null, 2));

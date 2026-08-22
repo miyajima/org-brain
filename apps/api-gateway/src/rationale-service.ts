@@ -31,6 +31,7 @@ import {
 } from "./memory-screening-service";
 import { ensureProjectBusinessCategory, validateBusinessClassification } from "./business-category-service";
 import { upsertAutoDecisionMemory } from "./context-engine-service";
+import { parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
 
 const CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 const CAPTURE_V2_KINDS = ["decision", "constraint", "pitfall", "preference", "fact"] as const;
@@ -198,11 +199,6 @@ function parseString(value: unknown, field: string, maxLength = 256): string {
     throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
   }
   return trimmed.slice(0, maxLength);
-}
-
-function parseOptionalString(value: unknown, field: string, maxLength = 256): string | null {
-  if (value === undefined || value === null) return null;
-  return parseString(value, field, maxLength);
 }
 
 function parseOptionalBoolean(value: unknown, field: string): boolean | undefined {
