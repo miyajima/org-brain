@@ -137,15 +137,23 @@ const hold = await request("/v1/retention-policies", {
   body: JSON.stringify({ tenant_id: tenantId, project_id: projectId, retention_days: 30, legal_hold: true })
 });
 if (hold.status !== 200) throw new Error("legal hold creation failed");
+const trashed = await request(`/v1/memories/${memoryId}/trash`, {
+  method: "POST",
+  body: JSON.stringify({ tenant_id: tenantId, reason: "integration smoke retention check" })
+});
+if (trashed.status !== 200) throw new Error(`trash failed: ${trashed.status}`);
 const heldDelete = await request(`/v1/memories/${memoryId}?tenant_id=${encodeURIComponent(tenantId)}`, {
   method: "DELETE"
 });
-if (heldDelete.status !== 409) throw new Error(`legal hold did not block delete: ${heldDelete.status}`);
+if (heldDelete.status !== 409 || heldDelete.body.error?.code !== "legal_hold") {
+  throw new Error(`legal hold did not block permanent delete: ${heldDelete.status}`);
+}
 
-await request("/v1/retention-policies", {
+const releasedHold = await request("/v1/retention-policies", {
   method: "PUT",
   body: JSON.stringify({ tenant_id: tenantId, project_id: projectId, retention_days: 30, legal_hold: false })
 });
+if (releasedHold.status !== 200) throw new Error("legal hold release failed");
 const deleted = await request(`/v1/memories/${memoryId}?tenant_id=${encodeURIComponent(tenantId)}`, {
   method: "DELETE"
 });

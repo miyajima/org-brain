@@ -176,7 +176,7 @@ app.notFound((c) =>
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     if (shouldUseMcpOAuth(request, env)) {
-      const provider = createCloudflareMcpOAuthProvider(env, app.fetch);
+      const provider = await createCloudflareMcpOAuthProvider(env, app.fetch);
       const url = new URL(request.url);
       if (url.pathname === "/oauth/revoke") {
         url.pathname = "/oauth/token";
