@@ -18,7 +18,7 @@ function printHelp() {
   console.log(`Org Brain retrieval metrics replay
 
 Usage:
-  pnpm metrics:replay [-- --tenant <tenant_id>] [--limit <n>] [--task-id <id>]
+  pnpm cf:metrics:replay [-- --tenant <tenant_id>] [--limit <n>] [--task-id <id>]
   node ./scripts/retrieval-metrics-replay.mjs [options]
 
 Options:

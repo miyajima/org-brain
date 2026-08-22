@@ -28,8 +28,8 @@ function usage() {
   return `Read-only memory quality audit
 
 Usage:
-  pnpm memories:audit -- --remote --tenant default --report <private-report>
-  pnpm memories:audit -- --local --db-path <path> --json
+  pnpm cf:memory:audit -- --remote --tenant default --report <private-report>
+  node ./scripts/memory-quality-audit.mjs --local --db-path <path> --json
 
 Options:
   --local | --remote | --preview  Target adapter (default: remote)

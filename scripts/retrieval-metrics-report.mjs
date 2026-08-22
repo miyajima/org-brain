@@ -21,7 +21,7 @@ function printHelp() {
   console.log(`Org Brain retrieval metrics report
 
 Usage:
-  pnpm metrics:report [-- --tenant <tenant_id>] [--days <n>] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
+  pnpm cf:metrics:report [-- --tenant <tenant_id>] [--days <n>] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
   node ./scripts/retrieval-metrics-report.mjs [options]
 
 Options:

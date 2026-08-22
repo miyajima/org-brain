@@ -585,7 +585,7 @@ describe("hook-memory-bridge promotion", () => {
         session_id: `${source}-session`,
         cwd: "/private/work/org-brain",
         transcript_path: "/private/transcripts/full-session.jsonl",
-        last_assistant_message: "原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。"
+        last_assistant_message: "原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm cf:usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。"
       }));
       expect(prepared.action).toBe("promote");
       expect(JSON.stringify(prepared.record)).not.toContain("transcript_path");
@@ -610,7 +610,7 @@ describe("hook-memory-bridge promotion", () => {
       type: "agent-turn-complete",
       cwd: "/tmp/workspaces/org-brain",
       "last-assistant-message":
-        "原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。"
+        "原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm cf:usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。"
     });
 
     const prepared = prepareMemoryRecordForUpsert("codex", payload);
@@ -628,7 +628,7 @@ describe("hook-memory-bridge promotion", () => {
       type: "agent-turn-complete",
       cwd: "/tmp/workspaces/org-brain",
       "last-assistant-message":
-        "調査のため `wrangler d1 execute open-brain --remote --json` を実行し、その後 `pnpm usage:status` も再実行しました。どちらも成功し、remote D1 へ届くことを確認できました。次回も同じ症状ならこの順で確認します。"
+        "調査のため `wrangler d1 execute open-brain --remote --json` を実行し、その後 `pnpm cf:usage:status` も再実行しました。どちらも成功し、remote D1 へ届くことを確認できました。次回も同じ症状ならこの順で確認します。"
     });
 
     const prepared = prepareMemoryRecordForUpsert("codex", payload);

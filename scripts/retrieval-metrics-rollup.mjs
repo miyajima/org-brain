@@ -8,7 +8,7 @@ function printHelp() {
   console.log(`Org Brain retrieval metrics rollup
 
 Usage:
-  pnpm metrics:rollup [-- --day YYYY-MM-DD]
+  pnpm cf:metrics:rollup [-- --day YYYY-MM-DD]
   node ./scripts/retrieval-metrics-rollup.mjs [options]
 
 Options:
