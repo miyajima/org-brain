@@ -3,7 +3,7 @@ title: Org Brain System Design
 doc_type: system_design
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 ---
 
 # Org Brain System Design
@@ -213,6 +213,42 @@ feedback and proposed changes enter an outbox.
 - Agent messages do not use `MailboxDO` as their source of truth; D1 remains the durable inbox and polling surface.
 
 ## Memory and Retrieval
+
+### Local rationale backfill and grounding boundary
+
+The CF/D1 `memory-rationale-backfill` planner and the local SQLite adapter are
+deliberately separate persistence adapters. The CF/D1 planner writes
+`decision_rationales` and `decision_evidence` rows selected by CF-specific
+high-value tags. The local adapter reads `memories` through a read-only
+connection, requires schema version 24, and selects only active AIma rationale
+records with an existing stable `aima/...` artifact reference and SHA-256
+digest. Missing conclusion, rationale, reuse condition, or evidence is skipped;
+the planner never copies a transcript.
+
+An apply keeps the existing memory `id` and `external_key`, creates a new
+`memory_versions` snapshot through `LocalMemoryStore.revise`, and writes only
+the structured `reuse_rule`, `learning_json`, `verification_state`, and
+backfill provenance fields. The learning object is a review candidate
+(`schema_version=2`, `capture_intent=review`) with an explicit gap stating that
+the source artifact was not re-verified during backfill. Such rows are marked
+`partial` and never promoted to `verified`. Apply first creates a private
+`VACUUM INTO` backup, stops on a stale id/version or failed revision, rebuilds
+all retrieval projections, and runs `doctor`; the backup is the rollback input.
+Dry-run does not initialize the store, change permissions, rebuild indexes, or
+write a plan unless an explicit plan-output path is supplied. The implementation
+is `scripts/local-memory-rationale-backfill.mjs`; the reviewable command is
+`pnpm local:memory:rationale-backfill -- --project aima --dry-run --json`.
+Apply is a separate explicit invocation only after a human approves the emitted
+plan.
+
+Local grounding uses ordinary MemoryRecord retrieval plus declarative Pack and
+portable-archive projections. A local SQLite database does not emulate Cloud
+Named Agent Loadouts: it has no Cloud ACL/resource authority, published Skill
+version resolver, or revocation boundary. Pack manifests and portable archives
+therefore carry the reusable domain context; authority, ACL, version pinning,
+and loadout resolution remain Cloud-only until a separate local contract is
+approved.
+
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
 - Shared rationale inference heuristics live in `packages/shared/src/rationale-extraction.ts`.
 - Runtime-neutral memory quality assessment lives in `packages/shared/src/memory-quality-runtime.mjs`; the Cloud TypeScript facade and Node compatibility entry point both execute this single classifier.
@@ -311,15 +347,15 @@ feedback and proposed changes enter an outbox.
   discovery.
 
 ## Operator Workflows
-- `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
+- `pnpm -s cf:usage:status` reports memory/thread usage from D1 without querying task rows.
 - `pnpm agmsg` is the local CLI for sending, listing, reading, and acking agent messages through the API Gateway.
-- `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
+- `pnpm cf:memory:maintain` compacts old raw hook memories and collapses duplicates.
 - `orgbrain maintenance run` applies the same deterministic consolidation policy to personal local SQLite. On macOS, the opt-in `connector setup codex --mode minimal-hooks --maintenance daily --execute` path installs a user LaunchAgent; it never installs from package lifecycle scripts, makes no LLM or cloud calls, excludes manual-source memories from automatic compaction, and retains suppressed originals.
-- `pnpm memories:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
-- `pnpm memories:quality-backfill`, cleanup, hook ingestion, usage reporting, and Cloud maintenance share the same memory quality classifier; changing its policy requires parity tests for the Cloud and Node entry points.
-- `pnpm memories:backfill-rationales` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing memories, skipping memories that already have rationale rows.
-- `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
-- `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.
+- `pnpm cf:memory:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
+- `pnpm cf:memory:quality-backfill`, cleanup, hook ingestion, usage reporting, and Cloud maintenance share the same memory quality classifier; changing its policy requires parity tests for the Cloud and Node entry points.
+- `pnpm cf:memory:rationale-backfill -- --remote` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing D1 memories, skipping memories that already have rationale rows.
+- `pnpm cf:metrics:report`, `pnpm cf:metrics:replay`, and `pnpm cf:metrics:rollup` manage retrieval effectiveness and daily rollups.
+- `pnpm cf:measurement:report` reports opt-in measurement runs and their control/treatment deltas.
 - Agent final reports can include qualitative memory impact notes when memory avoided source search, web search, or past-context lookup; these notes do not replace D1 retrieval telemetry or measurement-mode comparisons.
 - `pnpm hook:bridge` and `pnpm sync:agents-memory` are the two memory ingress/egress bridges.
 
@@ -370,7 +406,7 @@ keeps the graph and trace inspector in view. Node selection remains synchronized
 with the URL, graph highlighting, active path stage, and localized live status.
 
 ## Current State
-- The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
+- The API gateway exposes operator utilities, including `pnpm -s cf:usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
 - The usage-status wrapper retries transient Wrangler/D1 failures before returning a fatal error, so operator snapshots are less sensitive to one-off remote blips.
 
 ## Autonomous quality control

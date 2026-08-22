@@ -380,7 +380,7 @@ export async function runCloudCommand(action, args) {
     if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
     return executeProvision(plan, { withVectorize });
   }
-  throw new Error(`unknown cloud command: ${action || "(missing)"}`);
+  throw new Error(`unknown cf command: ${action || "(missing)"}`);
 }
 
 async function main() {

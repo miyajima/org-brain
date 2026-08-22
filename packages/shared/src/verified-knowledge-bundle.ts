@@ -111,7 +111,7 @@ function safeText(value: string): string {
   return screenMemoryText(value).text.slice(0, 20_000);
 }
 
-export function canonicalJson(value: unknown): string {
+function canonicalVerifiedKnowledgeJson(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "number") {
@@ -119,20 +119,20 @@ export function canonicalJson(value: unknown): string {
     return Object.is(value, -0) ? "0" : JSON.stringify(value);
   }
   if (typeof value === "boolean") return value ? "true" : "false";
-  if (Array.isArray(value)) return "[" + value.map((item) => canonicalJson(item)).join(",") + "]";
+  if (Array.isArray(value)) return "[" + value.map((item) => canonicalVerifiedKnowledgeJson(item)).join(",") + "]";
   if (typeof value === "object") {
     const input = value as Record<string, unknown>;
     return "{" + Object.keys(input)
       .filter((key) => input[key] !== undefined)
       .sort()
-      .map((key) => JSON.stringify(key) + ":" + canonicalJson(input[key]))
+      .map((key) => JSON.stringify(key) + ":" + canonicalVerifiedKnowledgeJson(input[key]))
       .join(",") + "}";
   }
   throw new Error("canonical_json_unsupported_value");
 }
 
 export async function digestCanonical(value: unknown): Promise<string> {
-  return sha256(canonicalJson(value));
+  return sha256(canonicalVerifiedKnowledgeJson(value));
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -335,7 +335,7 @@ function evidenceType(event: LocalSessionEventV1): (typeof VERIFIED_EVIDENCE_TYP
 }
 
 async function eventDigest(event: LocalSessionEventV1): Promise<string> {
-  return sha256(canonicalJson({
+  return sha256(canonicalVerifiedKnowledgeJson({
     event_id: event.event_id,
     turn_id: event.turn_id ?? null,
     occurred_at: event.occurred_at,

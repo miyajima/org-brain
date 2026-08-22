@@ -62,7 +62,7 @@ memory at seven days.
    Confirm active memory and decision category/work-type coverage is 100%.
 4. Set `MEMORY_CLASSIFICATION_MODE=require` only after the unclassified count is
    zero. Invalid explicit classifications must still fail closed.
-5. Run `pnpm memories:repair -- --remote --tenant <id> --json`, review the full
+5. Run `pnpm cf:memory:repair -- --tenant <id> --json`, review the full
    dry-run, create the required D1 export and SHA-256 manifest, and complete a
    restore drill.
 6. Apply repair with

@@ -7,7 +7,7 @@ function printHelp() {
   console.log(`Org Brain measurement report
 
 Usage:
-  pnpm measurement:report [-- --tenant <tenant_id>] [--run-id <id>] [--session-id <id>] [--limit <n>]
+  pnpm cf:measurement:report [-- --tenant <tenant_id>] [--run-id <id>] [--session-id <id>] [--limit <n>]
   node ./scripts/measurement-report.mjs [options]
 
 Options:

@@ -52,11 +52,11 @@ function usage() {
   return `Org Brain safe memory repair
 
 Usage:
-  pnpm memories:repair -- --local [--db-path <path>] [--apply --output-dir <dir>]
-  pnpm memories:repair -- --remote [--tenant <id>] [--apply --output-dir <dir> --api-url <url> --api-key <key>]
+  pnpm local:memory:repair [-- --db-path <path>] [--apply --output-dir <dir>]
+  pnpm cf:memory:repair [-- --tenant <id>] [--apply --output-dir <dir> --api-url <url> --api-key <key>]
 
 Options:
-  --local | --remote | --preview  Target adapter (default: local)
+  --local | --remote | --preview  Target adapter for direct invocation (default: local)
   --db-path <path>                Local SQLite path (default: ~/.org-brain/memory.sqlite)
   --tenant <id>                   Tenant ID (default: default)
   --project <id>                  Limit scan/apply to one project ID
@@ -73,11 +73,27 @@ Options:
   --apply                         Apply the plan; omitted means dry-run
   --json                          Print the report as JSON
   --help                          Show this help
+
+The local:memory:repair and cf:memory:repair entrypoints lock the target to
+local SQLite and remote Cloudflare respectively; conflicting location flags fail.
 `;
 }
 
+function parseEntrypointLocation(argv) {
+  const values = argv
+    .filter((arg) => arg.startsWith("--entrypoint-location="))
+    .map((arg) => arg.slice("--entrypoint-location=".length));
+  if (values.length > 1) throw new Error("entrypoint_location_must_be_unique");
+  const location = values[0] ?? null;
+  if (location !== null && !["local", "remote"].includes(location)) {
+    throw new Error("entrypoint_location_must_be_local_or_remote");
+  }
+  return location;
+}
+
 function parseArgs(argv) {
-  const location = parseLocationArgs(argv, { location: "local" });
+  const entrypointLocation = parseEntrypointLocation(argv);
+  const location = parseLocationArgs(argv, { location: entrypointLocation ?? "local" });
   const options = {
     ...location,
     apply: false,
@@ -94,6 +110,7 @@ function parseArgs(argv) {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg.startsWith("--entrypoint-location=")) continue;
     if (["--", "--json", "--dry-run", "--help", "-h", "--local", "--remote", "--preview"].includes(arg)) continue;
     if (arg === "--project-null") { options.projectNull = true; continue; }
     if (["--tenant", "--database", "--env"].includes(arg) || /^(?:--tenant|--database|--env)=/u.test(arg)) {
@@ -119,6 +136,9 @@ function parseArgs(argv) {
         throw new Error("--page-size must be between 1 and 500");
       }
     }
+  }
+  if (entrypointLocation !== null && options.location !== entrypointLocation) {
+    throw new Error(`entrypoint_location_conflict:${entrypointLocation}:${options.location}`);
   }
   if (options.apply && !options.outputDir) throw new Error("--output-dir is required with --apply");
   if (options.project && options.projectNull) throw new Error("use either --project or --project-null");

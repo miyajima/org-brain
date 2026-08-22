@@ -1,8 +1,13 @@
+import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import test from "node:test";
 import { buildCloudProvisionPlan, runCloudCommand } from "../packages/orgbrain-cli/src/cloud-operations.mjs";
 
-test("cloud provision defaults to an inspectable non-mutating plan", async () => {
+const execFileAsync = promisify(execFile);
+
+test("cf provision defaults to an inspectable non-mutating plan", async () => {
   const plan = buildCloudProvisionPlan({ root: process.cwd(), withVectorize: true });
   assert.equal(plan.resources.d1, "open-brain");
   assert.deepEqual(plan.resources.queues, [
@@ -39,7 +44,7 @@ test("cloud provision defaults to an inspectable non-mutating plan", async () =>
   assert.equal(result.dry_run, true);
 });
 
-test("cloud doctor validates shared D1 bindings and migration sources locally", async () => {
+test("cf doctor validates shared D1 bindings and migration sources locally", async () => {
   const result = await runCloudCommand("doctor", {
     flags: new Set(),
     get: (name, fallback) => name === "--root" ? process.cwd() : fallback
@@ -50,4 +55,17 @@ test("cloud doctor validates shared D1 bindings and migration sources locally", 
     true
   );
   assert.equal(result.checks.find((check) => check.id === "migrations")?.ok, true);
+});
+
+test("cf CLI dispatches the Cloudflare doctor command", async () => {
+  const cli = fileURLToPath(new URL("../packages/orgbrain-cli/src/local-memory.mjs", import.meta.url));
+  const result = await execFileAsync(process.execPath, [
+    cli,
+    "cf",
+    "doctor",
+    "--root",
+    process.cwd()
+  ], { cwd: process.cwd() });
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true, JSON.stringify(payload, null, 2));
 });

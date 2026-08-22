@@ -19,6 +19,22 @@ async function runRepair(args) {
   return JSON.parse(stdout);
 }
 
+test("memory repair namespace entrypoints reject conflicting locations", async () => {
+  const script = resolve(import.meta.dirname, "memory-repair.mjs");
+  for (const args of [
+    ["--entrypoint-location=local", "--local", "--remote"],
+    ["--entrypoint-location=remote", "--remote", "--local"]
+  ]) {
+    await assert.rejects(
+      execFileAsync(process.execPath, [script, ...args, "--json"]),
+      (error) => {
+        assert.match(String(error.stderr), /entrypoint_location_conflict/u);
+        return true;
+      }
+    );
+  }
+});
+
 test("memory repair backs up, atomically derives/suppresses, and resumes idempotently", async () => {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-memory-repair-"));
   try {

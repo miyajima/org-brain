@@ -14,7 +14,7 @@ function usage() {
   return `Validate pending D1 migrations against a read-only schema snapshot
 
 Usage:
-  pnpm migrations:remote-validate -- --remote --output <private-report.json>
+  pnpm d1:migrations:validate -- --remote --output <private-report.json>
 
 The report contains schema metadata, migration hashes, and contract results;
 it never includes table rows or memory content.
@@ -39,6 +39,7 @@ function parseArgs(argv) {
     if (!value) throw new Error("--output requires a value");
     options.output = resolve(value);
   }
+  if (options.help) return options;
   if (!options.output) throw new Error("--output is required");
   return options;
 }

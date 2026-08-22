@@ -84,8 +84,8 @@ Usage:
   orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact|claude-context|claude-stop|cursor-context|cursor-stop|flush>
   orgbrain maintenance <run|status|install|uninstall> [--schedule daily] [--apply] [--execute]
   orgbrain autonomy <status|explain|configure|freeze|rollback|run> [--workspace <path>] [--scope workspace|tenant] [--profile <profile>] [--mode <mode>] [--run <run-id>] [--evidence <json>] [--state-dir <path>] [--state-file <path>] [--judge-runner <module>] [--quarantine-runner <module>] [--qualification-runner <module>] [--scan-sessions] [--sessions-root <path>] [--dry-run] [--execute]
-  orgbrain cloud doctor [--root <checkout>] [--live]
-  orgbrain cloud provision [--root <checkout>] [--with-vectorize] [--execute]
+  orgbrain cf doctor [--root <checkout>] [--live]
+  orgbrain cf provision [--root <checkout>] [--with-vectorize] [--execute]
   orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--url <https-url>] [--maintenance daily|off] [--cli-path <local-memory.mjs>] [--scope user|project] [--execute] [--approve-hooks]
 
 Compatibility aliases:
@@ -111,6 +111,7 @@ function parseArgs(argv) {
   const flags = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === "--") continue;
     if (!arg.startsWith("--")) {
       positional.push(arg);
       continue;
@@ -911,7 +912,7 @@ async function main() {
   } else if (command === "autonomy") {
     const { runAutonomyCommand } = await import("./autonomy.mjs");
     emit(await runAutonomyCommand(action, args));
-  } else if (command === "cloud") {
+  } else if (command === "cf") {
     const { runCloudCommand } = await import("./cloud-operations.mjs");
     const result = await runCloudCommand(action, args);
     emit(result);

@@ -145,7 +145,7 @@ the active Codex model catalog and record the harness routing decision.
 Difficulty: Low. Preferred route: the least expensive available Codex model
 that can reliably update scripts and focused tests.
 
-1. Fix `usage:status` so it runs the API Gateway workspace Wrangler with
+1. Fix `cf:usage:status` so it runs the API Gateway workspace Wrangler with
    `wrangler.remote-d1.toml`; do not depend on a root-level binary.
 2. Resolve the telemetry-outbox expected-count defect by identifying whether
    two or three events are contractually correct. Update implementation or test
@@ -274,7 +274,7 @@ rtk pnpm exec vitest run scripts/codex-session-hook-replay.test.mjs scripts/hook
 rtk pnpm exec vitest run apps/api-gateway/test/rationale-service.test.ts apps/api-gateway/test/retrieval-index-service.test.ts apps/api-gateway/test/context-engine-service.test.ts
 rtk pnpm exec vitest run apps/cap-runner/test/memory-maintenance.test.ts packages/shared/test/retrieval-projection-parity.test.ts packages/shared/test/retrieval-learning-fixture.test.ts
 rtk pnpm run test:local-qwen
-rtk pnpm memories:repair -- --remote --tenant default --dry-run --report <private-report>
+rtk pnpm cf:memory:repair -- --tenant default --dry-run --report <private-report>
 rtk pnpm memories:qualify-ingestion-oracle -- --output <private-oracle-report>
 rtk pnpm memories:calibrate-ingestion -- generate --seed-file <private-seed> --output-dir <private-calibration-dir>
 rtk pnpm memories:machine-reference -- generate --seed-file <private-seed> --output-dir <private-machine-reference-dir>

@@ -587,8 +587,8 @@ console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUC
    without changing Cloudflare or local configuration:
 
    ```bash
-   pnpm exec orgbrain cloud doctor --root .
-   pnpm exec orgbrain cloud provision --root . --with-vectorize
+   pnpm exec orgbrain cf doctor --root .
+   pnpm exec orgbrain cf provision --root . --with-vectorize
    ```
 
    After reviewing that JSON plan, provide a narrowly scoped Cloudflare token
@@ -597,14 +597,14 @@ console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUC
    ```bash
    export CLOUDFLARE_ACCOUNT_ID="<account-id>"
    export CLOUDFLARE_API_TOKEN="<provisioning-token>"
-   pnpm exec orgbrain cloud provision --root . --with-vectorize --execute
+   pnpm exec orgbrain cf provision --root . --with-vectorize --execute
    ```
 
 Execution creates missing D1, R2, Queue/DLQ, and optional Vectorize
    resources, synchronizes the resulting D1 UUID across the three Worker
    configurations, applies remote migrations, and deploys services in
    dependency order. It does not create application API keys, OIDC policy, or
-   production secrets. Run `cloud doctor --live` to verify Cloudflare
+   production secrets. Run `cf doctor --live` to verify Cloudflare
 authentication separately.
 
 `.github/workflows/cloud-restore-drill.yml` provides the staging recovery gate.
@@ -617,7 +617,7 @@ checks RPO ≤ 5 minutes and RTO ≤ 60 minutes, then deletes the drill database
 an `always()` cleanup step. Until that workflow has a successful staging
 artifact, the targets are configured but not production evidence.
 
-4. If you did not use `cloud provision --execute`, apply D1 migrations manually:
+4. If you did not use `cf provision --execute`, apply D1 migrations manually:
 
    ```bash
    pnpm -C apps/api-gateway wrangler d1 migrations apply open-brain --local -c wrangler.local.toml
@@ -656,6 +656,15 @@ do not write to the Cloudflare API.
 ORGBRAIN_ENABLE_CLOUD_MEMORY=false
 ORGBRAIN_ENABLE_ORG_SHARING=false
 ```
+
+CLI namespaces make the execution boundary explicit: `local:*` is standalone
+SQLite or a loopback development process, `cf:*` operates Cloudflare resources
+or D1-backed workflows, `d1:*` is D1 migration/schema work, and `sync:*` is a
+local-to-remote bridge. For example, use `pnpm local:memory:rationale-backfill`
+for the standalone SQLite adapter and `pnpm cf:memory:rationale-backfill` for
+the Cloudflare D1 adapter. D1 maintenance, cleanup, repair, quality,
+classification, docs seeding, metrics, usage, and measurement commands use the
+same `cf:` namespace; local SQLite repair and impact metrics use `local:`.
 
 Hook processes load `~/.config/org-brain/hooks.env` first. Keep only connection, authentication,
 and global fallback values there; workspace routing belongs in `workspaces.json`:
