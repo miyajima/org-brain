@@ -28,5 +28,30 @@ export * from "./retrieval-units";
 export * from "./schemas";
 export * from "./scheduled-jobs";
 export * from "./autonomy-policy";
-export * from "./verified-knowledge-bundle";
+export {
+  VERIFIED_BATCH_MAX_BACKGROUND_INPUTS,
+  VERIFIED_BATCH_MAX_BYTES,
+  VERIFIED_BATCH_MAX_NEW_INPUTS,
+  VERIFIED_EXTRACTOR_SCHEMA_VERSION,
+  VERIFIED_POLICY_VERSION,
+  buildSignedVerifiedKnowledgeBundle,
+  buildSignedVerifiedKnowledgeBundles,
+  buildVerifiedKnowledgeBundle,
+  buildVerifiedKnowledgeBundles,
+  clearVerifiedLocalModelCache,
+  createSignedVerifiedKnowledgeBundle,
+  digestCanonical,
+  evaluateVerifiedKnowledgeBundle,
+  extractVerifiedRuleCandidates,
+  resolveExtractionProfile,
+  splitVerifiedSessionIntoBatches,
+  verifySignedVerifiedKnowledgeBundle,
+  type ExtractionProfileResolver,
+  type LocalCandidateModel,
+  type LocalSessionEventV1,
+  type LocalSessionV1,
+  type SessionBatch,
+  type VerifiedBundleBuildOptions,
+  type VerifiedBundleEvaluation
+} from "./verified-knowledge-bundle";
 export * from "./types";

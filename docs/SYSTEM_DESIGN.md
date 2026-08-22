@@ -211,6 +211,10 @@ feedback and proposed changes enter an outbox.
 - `LeaseDO`: tenant and capability concurrency gate.
 - `MailboxDO`: short-lived operational mailbox for worker snapshots.
 - Agent messages do not use `MailboxDO` as their source of truth; D1 remains the durable inbox and polling surface.
+- `apps/api-gateway/src/index.ts` owns Hono construction, middleware ordering,
+  MCP mounting, error handling, and scheduled execution. Resource handlers are
+  registered by ordered `*-routes.ts` modules; their order is part of the HTTP
+  compatibility contract and is guarded by the exact API-route snapshot.
 
 ## Memory and Retrieval
 - Shared retrieval logic lives in `packages/shared/src/memory-retrieval.ts`.
@@ -218,6 +222,10 @@ feedback and proposed changes enter an outbox.
 - Runtime-neutral memory quality assessment lives in `packages/shared/src/memory-quality-runtime.mjs`; the Cloud TypeScript facade and Node compatibility entry point both execute this single classifier.
 - Realtime hook and initial import carry explicit `capture_route` and optional `capture_batch_id`. Candidate payloads stay route-neutral so formal observe hashes remain comparable.
 - Context Engine MVP logic lives in `apps/api-gateway/src/context-engine-service.ts`.
+- `apps/api-gateway/src/memory-service.ts` is the stable write/list facade.
+  Retrieval orchestration and shadow telemetry live in
+  `memory-search-service.ts`; evidence-bundle and profile assembly live in
+  `memory-context-service.ts`.
 - Lifecycle-aware write logic lives in `apps/api-gateway/src/memory-lifecycle-service.ts`.
 - Interactive rationale confirmation lives in `apps/api-gateway/src/rationale-service.ts`.
 - Non-interactive hook rationale capture is exposed as the stateless MCP tool `orgbrain_memories_capture_rationale`; its persistence logic lives in `apps/api-gateway/src/rationale-service.ts` and writes inferred rationale/evidence rows without a confirmation token. The REST route is retained only for bridge compatibility.
@@ -228,6 +236,10 @@ feedback and proposed changes enter an outbox.
 - Daily memory maintenance compacts old hook memories into digest rows and creates per-project canonical rows. `quality-v2` canonical summaries must expose representative reusable guidance instead of count-only labels.
 - Manual memory cleanup can physically remove low-signal memory rows after exporting a JSONL backup. Cleanup deletes associated FTS, lifecycle, edge, entity, and rationale rows, then lets maintenance rebuild `quality-v2` canonical rows from the remaining high-quality memories.
 - MemoryRecord v2 is the common logical source-of-truth contract for local SQLite and Cloud D1. FTS, embedding, graph, and cache layers are projections that must be rebuildable and must never receive an independent dual-write.
+- Shared `.ts` facade modules may re-export runtime-neutral `.mjs`
+  implementations with adjacent `.d.mts` declarations. The dependency remains
+  one-way from facade to runtime, and module-specific contract tests guard the
+  intended public names.
 - SQLite remains the local default and D1 remains the shared Cloudflare
   default. PostgreSQL with pgvector is a future opt-in backend for measured
   scale, concurrency, transaction, analytics, or private-network requirements;
