@@ -34,10 +34,14 @@ jobs:
       - run: pnpm --filter @org-brain/core build
       - run: pnpm --filter @org-brain/server-core build
       - run: pnpm --filter @org-brain/mcp-core build
-      - run: npm pack ./packages/contracts
-      - run: npm pack ./packages/core
-      - run: npm pack ./packages/server-core
-      - run: npm pack ./packages/mcp-core
+      - name: Pack shared packages
+        run: |
+          pnpm --dir ./packages/contracts pack --pack-destination "$GITHUB_WORKSPACE"
+          pnpm --dir ./packages/core pack --pack-destination "$GITHUB_WORKSPACE"
+          pnpm --dir ./packages/server-core pack --pack-destination "$GITHUB_WORKSPACE"
+          pnpm --dir ./packages/mcp-core pack --pack-destination "$GITHUB_WORKSPACE"
+      - name: Verify shared package tarballs
+        run: node ./scripts/shared-release-tarballs.mjs "$GITHUB_WORKSPACE"
       - uses: anchore/sbom-action@v0
         with:
           path: .
@@ -54,16 +58,16 @@ jobs:
             packages/server-core/fixtures/api-manifest.sha256
             packages/mcp-core/fixtures/tool-manifest.json
             packages/mcp-core/fixtures/tool-manifest.sha256
-      - run: npm publish ./packages/contracts --provenance --access public
+      - run: node ./scripts/publish-shared-tarball.mjs ./org-brain-contracts-0.4.0.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish ./packages/core --provenance --access public
+      - run: node ./scripts/publish-shared-tarball.mjs ./org-brain-core-0.4.0.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish ./packages/server-core --provenance --access public
+      - run: node ./scripts/publish-shared-tarball.mjs ./org-brain-server-core-0.1.0.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish ./packages/mcp-core --provenance --access public
+      - run: node ./scripts/publish-shared-tarball.mjs ./org-brain-mcp-core-0.1.0.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: docker/login-action@v3
