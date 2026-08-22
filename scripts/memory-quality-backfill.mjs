@@ -23,8 +23,8 @@ function printHelp() {
   console.log(`Org Brain memory quality backfill
 
 Usage:
-  pnpm memories:quality-backfill [-- --tenant <tenant_id>] [--export <path>]
-  pnpm memories:quality-backfill [-- --apply --export <path>]
+  pnpm cf:memory:quality-backfill [-- --tenant <tenant_id>] [--export <path>]
+  pnpm cf:memory:quality-backfill [-- --apply --export <path>]
 
 Options:
   --tenant <tenant_id>   Tenant to inspect (default: default)

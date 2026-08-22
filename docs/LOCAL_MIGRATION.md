@@ -104,7 +104,7 @@ references, effects, token estimates, and failure avoidance.
 
 Existing rows remain unclassified; initialization does not infer a category or
 work type from their content. Workspace config v2 can provide explicit defaults
-for future capture. Use `pnpm memories:backfill-classification` for a validated
+for future capture. Use `pnpm cf:memory:backfill-classification` for a validated
 JSON/CSV dry run before any operator-approved backfill.
 
 Legacy v3/v4 local projection tables coexist with stable tables during rollout.

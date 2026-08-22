@@ -26,7 +26,7 @@ function printHelp() {
   console.log(`Org Brain usage status
 
 Usage:
-  pnpm usage:status [-- --tenant <tenant_id>] [--json] [--local|--preview] [--recent <n>]
+  pnpm cf:usage:status [-- --tenant <tenant_id>] [--json] [--local|--preview] [--recent <n>]
   node ./skills/org-brain-usage-status/scripts/report-usage-status.mjs [options]
 
 Options:

@@ -68,7 +68,7 @@ and inactive category IDs are rejected.
 The operator backfill is dry-run by default and accepts JSON or CSV:
 
 ```bash
-pnpm memories:backfill-classification -- \
+pnpm cf:memory:backfill-classification -- \
   --input /secure/classification.csv --tenant tenant-a --export /secure/plan.json
 ```
 
@@ -197,7 +197,7 @@ normalized identifiers/hashes; prompts, query text, and commands are rejected
 from this telemetry model.
 
 Per-memory reports are available from `GET /v1/metrics/memory-impact`,
-`orgbrain_memory_impact_metrics`, and `pnpm metrics:memory-impact`. Run-level
+`orgbrain_memory_impact_metrics`, and `pnpm local:metrics:memory-impact`. Run-level
 completion is reported separately through `orgbrain_memory_impact_report`.
 Supported
 dimensions are memory, business category, work type, project, and day. A

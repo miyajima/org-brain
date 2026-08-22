@@ -24,7 +24,7 @@ function printHelp() {
   console.log(`Org Brain project current-state snapshot
 
 Usage:
-  pnpm memories:project-snapshot -- --tenant default --remote [--apply] [--projects a,b]
+  pnpm cf:memory:project-snapshot -- --tenant default --remote [--apply] [--projects a,b]
 
 Options:
   --tenant <tenant_id>   Tenant to inspect (default: default)

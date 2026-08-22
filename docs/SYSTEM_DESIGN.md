@@ -216,9 +216,9 @@ feedback and proposed changes enter an outbox.
 
 ### Local rationale backfill and grounding boundary
 
-The Cloud `memory-rationale-backfill` planner and the local SQLite adapter are
-deliberately separate persistence adapters. The Cloud planner writes
-`decision_rationales` and `decision_evidence` rows selected by Cloud-specific
+The CF/D1 `memory-rationale-backfill` planner and the local SQLite adapter are
+deliberately separate persistence adapters. The CF/D1 planner writes
+`decision_rationales` and `decision_evidence` rows selected by CF-specific
 high-value tags. The local adapter reads `memories` through a read-only
 connection, requires schema version 24, and selects only active AIma rationale
 records with an existing stable `aima/...` artifact reference and SHA-256
@@ -237,7 +237,7 @@ all retrieval projections, and runs `doctor`; the backup is the rollback input.
 Dry-run does not initialize the store, change permissions, rebuild indexes, or
 write a plan unless an explicit plan-output path is supplied. The implementation
 is `scripts/local-memory-rationale-backfill.mjs`; the reviewable command is
-`node ./scripts/local-memory-rationale-backfill.mjs --project aima --dry-run --json`.
+`pnpm local:memory:rationale-backfill -- --project aima --dry-run --json`.
 Apply is a separate explicit invocation only after a human approves the emitted
 plan.
 
@@ -347,15 +347,15 @@ approved.
   discovery.
 
 ## Operator Workflows
-- `pnpm -s usage:status` reports memory/thread usage from D1 without querying task rows.
+- `pnpm -s cf:usage:status` reports memory/thread usage from D1 without querying task rows.
 - `pnpm agmsg` is the local CLI for sending, listing, reading, and acking agent messages through the API Gateway.
-- `pnpm memories:maintain` compacts old raw hook memories and collapses duplicates.
+- `pnpm cf:memory:maintain` compacts old raw hook memories and collapses duplicates.
 - `orgbrain maintenance run` applies the same deterministic consolidation policy to personal local SQLite. On macOS, the opt-in `connector setup codex --mode minimal-hooks --maintenance daily --execute` path installs a user LaunchAgent; it never installs from package lifecycle scripts, makes no LLM or cloud calls, excludes manual-source memories from automatic compaction, and retains suppressed originals.
-- `pnpm memories:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
-- `pnpm memories:quality-backfill`, cleanup, hook ingestion, usage reporting, and Cloud maintenance share the same memory quality classifier; changing its policy requires parity tests for the Cloud and Node entry points.
-- `pnpm memories:backfill-rationales` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing memories, skipping memories that already have rationale rows.
-- `pnpm metrics:report`, `pnpm metrics:replay`, and `pnpm metrics:rollup` manage retrieval effectiveness and daily rollups.
-- `pnpm measurement:report` reports opt-in measurement runs and their control/treatment deltas.
+- `pnpm cf:memory:cleanup` reports or applies physical cleanup of low-signal memory rows; `--apply` requires `--export`.
+- `pnpm cf:memory:quality-backfill`, cleanup, hook ingestion, usage reporting, and Cloud maintenance share the same memory quality classifier; changing its policy requires parity tests for the Cloud and Node entry points.
+- `pnpm cf:memory:rationale-backfill -- --remote` reports or applies inferred unconfirmed rationale/evidence rows for high-value existing D1 memories, skipping memories that already have rationale rows.
+- `pnpm cf:metrics:report`, `pnpm cf:metrics:replay`, and `pnpm cf:metrics:rollup` manage retrieval effectiveness and daily rollups.
+- `pnpm cf:measurement:report` reports opt-in measurement runs and their control/treatment deltas.
 - Agent final reports can include qualitative memory impact notes when memory avoided source search, web search, or past-context lookup; these notes do not replace D1 retrieval telemetry or measurement-mode comparisons.
 - `pnpm hook:bridge` and `pnpm sync:agents-memory` are the two memory ingress/egress bridges.
 
@@ -406,7 +406,7 @@ keeps the graph and trace inspector in view. Node selection remains synchronized
 with the URL, graph highlighting, active path stage, and localized live status.
 
 ## Current State
-- The API gateway exposes operator utilities, including `pnpm -s usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
+- The API gateway exposes operator utilities, including `pnpm -s cf:usage:status`, which queries the `open-brain` D1 database through Wrangler without reading task rows.
 - The usage-status wrapper retries transient Wrangler/D1 failures before returning a fatal error, so operator snapshots are less sensitive to one-off remote blips.
 
 ## Autonomous quality control

@@ -18,8 +18,8 @@ function help() {
   console.log(`Org Brain business classification backfill
 
 Usage:
-  pnpm memories:backfill-classification -- --input <file.json|file.csv> --tenant <tenant>
-  pnpm memories:backfill-classification -- --input <file> --tenant <tenant> --export <report.json> --apply
+  pnpm cf:memory:backfill-classification -- --input <file.json|file.csv> --tenant <tenant>
+  pnpm cf:memory:backfill-classification -- --input <file> --tenant <tenant> --export <report.json> --apply
 
 Rows: tenant_id, source_type(memory|decision_memory), source_id,
       business_category_id, work_type

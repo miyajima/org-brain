@@ -13,7 +13,7 @@ function printHelp() {
   console.log(`Org Brain memory cleanup
 
 Usage:
-  pnpm memories:cleanup [-- --json] [--export <path>] [--apply --export <path>]
+  pnpm cf:memory:cleanup [-- --json] [--export <path>] [--apply --export <path>]
   node ./scripts/memory-cleanup.mjs [options]
 
 Options:

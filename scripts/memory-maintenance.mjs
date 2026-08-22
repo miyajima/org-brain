@@ -8,7 +8,7 @@ function printHelp() {
   console.log(`Org Brain memory maintenance
 
 Usage:
-  pnpm memories:maintain [-- --apply] [--tenant <tenant_id>] [--json]
+  pnpm cf:memory:maintain [-- --apply] [--tenant <tenant_id>] [--json]
   node ./scripts/memory-maintenance.mjs [options]
 
 Options:
