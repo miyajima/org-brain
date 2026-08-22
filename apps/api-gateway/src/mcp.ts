@@ -1,5 +1,6 @@
 import {
   HttpError,
+  sha256,
   validateMemoryContractV2Event,
   observeMemoryContractV2Event,
   observeMemoryLearningEvent,
@@ -862,8 +863,7 @@ class OrgBrainMcpTools {
           principal: this.props?.principal,
           recordUsage: false
         });
-        const queryHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(q))
-          .then((digest) => [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join(""));
+        const queryHash = await sha256(q);
         const governanceResults = governance.results as Array<Record<string, unknown>>;
         const usage = await recordMemoryUsage(this.env, {
           tenant_id: tenantId,

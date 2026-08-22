@@ -11,6 +11,7 @@ import {
 import { HttpError, normalizeLifecycleState, normalizeMemoryKind } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { stableResultReadable } from "./memory-service";
+import { compactText, finiteConfidence, normalizeTenantId } from "./request-value-utils";
 import type { Env } from "./types";
 
 const CANDIDATE_MULTIPLIER = 3;
@@ -235,27 +236,6 @@ function parseOptions(raw: KnowledgeGraphOptions): ParsedOptions {
     principal,
     now: Number.isSafeInteger(raw.now) && Number(raw.now) >= 0 ? Number(raw.now) : Date.now()
   };
-}
-
-function normalizeTenantId(value: string): string {
-  const tenantId = value.trim();
-  if (!tenantId || tenantId.length > 128) {
-    throw new HttpError(400, "invalid_tenant_id", "tenant_id must be between 1 and 128 characters");
-  }
-  return tenantId;
-}
-
-function compactText(value: unknown, limit: number): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.replace(/\s+/gu, " ").trim();
-  if (!normalized) return null;
-  return normalized.length <= limit ? normalized : `${normalized.slice(0, Math.max(0, limit - 1))}…`;
-}
-
-function finiteConfidence(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(0, Math.min(1, value))
-    : null;
 }
 
 function finiteWeight(value: unknown, fallback = 1): number {

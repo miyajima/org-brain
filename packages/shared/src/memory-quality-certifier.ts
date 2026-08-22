@@ -1,8 +1,14 @@
+// Runtime behavior lives in the ESM module; this TypeScript facade defines the
+// package-facing export surface while the adjacent .d.mts describes the ESM
+// module for direct JavaScript consumers. Keep these named exports in sync.
 export {
   MEMORY_CONTRACT_HARD_GUARDRAILS,
   MEMORY_CONTRACT_CORPUS_MINIMUMS,
   MEMORY_CONTRACT_KPIS,
   MEMORY_CONTRACT_OPERATION_GATES,
+  MEMORY_INGESTION_ORACLE_MINIMUMS,
+  MEMORY_INGESTION_CALIBRATION_MINIMUMS,
+  MEMORY_INGESTION_CALIBRATION_JUDGE_CLASS_MINIMUM,
   MEMORY_INGESTION_AUTONOMOUS_MINIMUMS,
   MEMORY_INGESTION_AUTONOMOUS_HARD_GUARDRAILS,
   MEMORY_INGESTION_AUTONOMOUS_JUDGE_PROFILES,
@@ -10,6 +16,8 @@ export {
   certifyMemoryContractQuality,
   certifyMemoryQuality,
   evaluateAiJudgeConsensus,
+  evaluateMemoryIngestionOracleQualification,
+  evaluateMemoryIngestionCalibrationQualification,
   evaluateMemoryIngestionAutonomousQualification,
   evaluateMemoryContractMeasurement,
   evaluateMemoryContractPerformance,

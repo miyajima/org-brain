@@ -4,9 +4,14 @@ import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-s
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
-import { resolveRetrievalGenerationAssignment } from "./retrieval-generation-service";
+import {
+  loadRetrievalGenerationProfile,
+  resolveRetrievalGenerationAssignment
+} from "./retrieval-generation-service";
 import { resolveAgentLoadoutContext } from "./agent-loadout-service";
 import { ensureAccessPolicy } from "./access-policy-service";
+import { fnv1a32 } from "./deterministic-sampling";
+import { parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INFERRED_DECISION_TTL_MS = 180 * DAY_MS;
@@ -314,11 +319,6 @@ function parseRequiredString(value: unknown, field: string, maxLength = 256): st
   const trimmed = value.trim();
   if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
   return trimmed.slice(0, maxLength);
-}
-
-function parseOptionalString(value: unknown, field: string, maxLength = 256): string | null {
-  if (value === undefined || value === null) return null;
-  return parseRequiredString(value, field, maxLength);
 }
 
 function parseOptionalBoolean(value: unknown, field: string, fallback = false): boolean {
@@ -802,12 +802,7 @@ function parseRankingConfig(raw: string): Record<string, number> {
 function shouldRunDecisionShadow(rate: number, sampleKey: string) {
   if (rate <= 0) return false;
   if (rate >= 1) return true;
-  let hash = 2166136261;
-  for (let index = 0; index < sampleKey.length; index += 1) {
-    hash ^= sampleKey.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 0x1_0000_0000 < rate;
+  return fnv1a32(sampleKey) / 0x1_0000_0000 < rate;
 }
 
 async function resolveDecisionRetrievalGeneration(
@@ -827,16 +822,7 @@ async function resolveDecisionRetrievalGeneration(
     if (generationId !== assignment.active_generation_id && generationId !== assignment.shadow_generation_id) {
       throw new HttpError(403, "generation_not_assigned", "requested generation is not assigned to tenant/project");
     }
-    const generationRow = await env.OPEN_BRAIN_DB.prepare(
-      `SELECT g.id, g.unit_schema_version, g.extractor_name, g.extractor_version,
-              g.embedding_profile_id, g.ranking_profile_id,
-              p.algorithm AS ranking_algorithm, p.config_json AS ranking_config_json
-       FROM retrieval_generations g
-       JOIN retrieval_ranking_profiles p ON p.id = g.ranking_profile_id AND p.retired_at IS NULL
-       WHERE g.id = ?`
-    ).bind(generationId).first<Omit<DecisionRetrievalGeneration, "ranking_config" | "shadow_generation_id" | "shadow_sample_rate"> & {
-      ranking_config_json: string;
-    }>();
+    const generationRow = await loadRetrievalGenerationProfile(env, generationId);
     if (!generationRow) throw new HttpError(404, "retrieval_generation_not_found", "generation or ranking profile not found");
     const generation: DecisionRetrievalGeneration = {
       ...generationRow,

@@ -512,6 +512,21 @@ export async function syncMemoryIdsToV4SemanticIndex(
   }
 }
 
+export async function syncMemoryIdsToSemanticIndexes(
+  env: Env,
+  tenantId: string,
+  memoryIds: string[]
+): Promise<{
+  retrieval_projection: RetrievalProjectionStatus;
+  retrieval_projection_v3: RetrievalProjectionStatus;
+  retrieval_projection_v4: RetrievalProjectionStatus;
+}> {
+  const retrieval_projection = await syncMemoryIdsToSemanticIndex(env, tenantId, memoryIds);
+  const retrieval_projection_v3 = await syncMemoryIdsToV3SemanticIndex(env, tenantId, memoryIds);
+  const retrieval_projection_v4 = await syncMemoryIdsToV4SemanticIndex(env, tenantId, memoryIds);
+  return { retrieval_projection, retrieval_projection_v3, retrieval_projection_v4 };
+}
+
 export async function searchV4SemanticIndex(
   env: Env,
   input: RetrievalIndexQuery

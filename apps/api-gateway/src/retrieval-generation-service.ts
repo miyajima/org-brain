@@ -11,6 +11,33 @@ export type RetrievalGenerationAssignment = {
   updated_at: number;
 };
 
+export type RetrievalGenerationProfile = {
+  id: string;
+  unit_schema_version: number;
+  extractor_name: string;
+  extractor_version: string;
+  embedding_profile_id: string | null;
+  ranking_profile_id: string;
+  ranking_algorithm: string;
+  ranking_config_json: string;
+};
+
+export async function loadRetrievalGenerationProfile(
+  env: Env,
+  generationId: string
+): Promise<RetrievalGenerationProfile | null> {
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT g.id, g.unit_schema_version, g.extractor_name, g.extractor_version,
+            g.embedding_profile_id, g.ranking_profile_id,
+            r.algorithm AS ranking_algorithm, r.config_json AS ranking_config_json
+     FROM retrieval_generations g
+     JOIN retrieval_ranking_profiles r
+       ON r.id = g.ranking_profile_id AND r.retired_at IS NULL
+     WHERE g.id = ?`
+  ).bind(generationId).all<RetrievalGenerationProfile>();
+  return rows.results[0] ?? null;
+}
+
 function objectBody(raw: unknown) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
