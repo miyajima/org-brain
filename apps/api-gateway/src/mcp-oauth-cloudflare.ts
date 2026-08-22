@@ -1,4 +1,4 @@
-import OAuthProvider, { type AuthRequest, type OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { ORGBRAIN_OAUTH_SCOPES, type OrgBrainOAuthScope } from "@org-brain/contracts";
 import { handleOrgBrainMcpRequest } from "./mcp";
 import { authorizeMcpRequest, type McpAuthResult } from "./mcp-security";
@@ -68,12 +68,13 @@ async function authorizationHandler(request: Request, env: OAuthEnv, baseFetch: 
   return Response.redirect(redirectTo, 302);
 }
 
-export function createCloudflareMcpOAuthProvider(env: Env, baseFetch: BaseFetch) {
+export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: BaseFetch) {
   if (!env.OAUTH_KV) throw new Error("OAUTH_KV binding is required for MCP_AUTH_MODE=oauth or dual OAuth requests");
   const resource = env.MCP_OAUTH_RESOURCE?.trim();
   if (!resource || new URL(resource).pathname !== "/mcp" || new URL(resource).protocol !== "https:") {
     throw new Error("MCP_OAUTH_RESOURCE must be the canonical HTTPS /mcp URL");
   }
+  const { default: OAuthProvider } = await import("@cloudflare/workers-oauth-provider");
   return new OAuthProvider<Env>({
     apiRoute: "/mcp",
     apiHandler: {
