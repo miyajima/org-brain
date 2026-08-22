@@ -430,7 +430,7 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
   surfaces. Existing URLs remain valid for at least one release.
 
 ## Operator Workflow
-- `pnpm -s usage:status` queries the D1 source of truth and reports a tenant usage snapshot for memory/thread counts. It intentionally does not query task rows.
+- `pnpm -s cf:usage:status` queries the D1 source of truth and reports a tenant usage snapshot for memory/thread counts. It intentionally does not query task rows.
 - `pnpm agmsg` sends, lists, reads, and acks agent messages through the API Gateway.
 - `pnpm hook:bridge <source>` normalizes hook payloads from coding agents and upserts them into `memories`.
 - `orgbrain connector setup <codex|claude|cursor> --mode remote-mcp --url <Access-protected-MCP-URL>`は各クライアントのuser-level remote MCP/OAuth設定を登録する。`--mode cloud-hooks`は一度きりの登録コードでservice tokenを導入へ結び付け、`~/.config/org-brain/clients/<installation-id>/credentials.env`へ`0600`で保存する。両方ともdry-runが既定で変更には`--execute`を要求する。hookファイルを書き換えるexecuteは対象file・eventを表示して対話的な`yes`を要求し、非対話実行は事前review済みの`--approve-hooks`がなければ失敗する。
@@ -438,15 +438,15 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - 認証失敗・offline時はクライアントを停止せず導入別`0600` JSONL outboxへ保持し、`SessionStart`／`Stop`／`SessionEnd`で最大100件を再送する。principalを確定できないデータは`identity_unresolved`としてserverへ送らない。
 - `pnpm hook:bridge` emits JSON with `memory_scope`, `cloud_memory_enabled`, `org_sharing_enabled`, and `shared_write`; `pnpm sync:agents-memory` prints the same mode before API import/export.
 - hook/bridge 由来の自動保存は非対話 path として扱い、propose/confirm を要求しない。MCP `2026-07-28` の既知tool `orgbrain_memories_capture_rationale` をdiscoveryなしで直接呼び、`decision_rationales` / `decision_evidence` を `inferred_unconfirmed` として保存する。旧REST endpointは移行互換のみとする。
-- `pnpm docs:seed` upserts the minimal stable knowledge-doc set via the Pages/API proxy.
-- `pnpm memories:maintain` compacts old raw hook memories into digest rows and collapses old duplicates.
+- `pnpm cf:docs:seed` upserts the minimal stable knowledge-doc set via the Pages/API proxy.
+- `pnpm cf:memory:maintain` compacts old raw hook memories into digest rows and collapses old duplicates.
 - 個人ローカルSQLiteでは `orgbrain maintenance run` が同じ決定的な整理方針を適用する。macOSの日次LaunchAgent登録は `connector setup codex --mode minimal-hooks --maintenance daily --execute` の明示指定時だけ行い、LLM・Cloud書き込み・manual sourceの自動抑制・物理削除は行わない。`status` とrecoverableな `uninstall --execute` を提供する。
-- `pnpm memories:cleanup` dry-runs by default, can export a JSONL backup, physically removes low-signal memory rows and related memory tables on `--apply`, and promotes structured `project-fact` rows to curated semantic memory.
-- `pnpm memories:backfill-rationales` dry-runs by default and can add inferred unconfirmed rationale/evidence rows for active high-value memories (`project-fact`, `curated-memory`, `promoted`, `canonical-memory`) with `--apply`.
-- `pnpm metrics:report` reports retrieval hit/fallback/latency plus service outcomes from D1 telemetry.
-- `pnpm metrics:replay` replays recent task inputs against `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` without persisting new rows.
-- `pnpm metrics:rollup` backfills or recomputes one UTC day into `retrieval_daily_metrics`.
-- `pnpm measurement:report` reports opt-in measurement runs comparing raw-context control tasks with compact-memory treatment tasks, with optional `--session-id` aggregation for multi-turn sessions.
+- `pnpm cf:memory:cleanup` dry-runs by default, can export a JSONL backup, physically removes low-signal memory rows and related memory tables on `--apply`, and promotes structured `project-fact` rows to curated semantic memory.
+- `pnpm cf:memory:rationale-backfill -- --remote` dry-runs by default and can add inferred unconfirmed rationale/evidence rows for active high-value D1 memories (`project-fact`, `curated-memory`, `promoted`, `canonical-memory`) with `--apply`.
+- `pnpm cf:metrics:report` reports retrieval hit/fallback/latency plus service outcomes from D1 telemetry.
+- `pnpm cf:metrics:replay` replays recent task inputs against `bm25_v1`, `bm25_rewrite_v1`, and `hybrid_memory_docs_v1` without persisting new rows.
+- `pnpm cf:metrics:rollup` backfills or recomputes one UTC day into `retrieval_daily_metrics`.
+- `pnpm cf:measurement:report` reports opt-in measurement runs comparing raw-context control tasks with compact-memory treatment tasks, with optional `--session-id` aggregation for multi-turn sessions.
 - Agent-facing memory impact notes are persisted as `memory_impact_events` when the integration reports every eligible run. `avoided_lookup` remains an agent self-report and a qualitative supplement; causal quantitative evaluation remains measurement mode plus business outcome metrics.
 
 ## Out of Scope (MVP)

@@ -11,7 +11,7 @@ function printHelp() {
   console.log(`Org Brain memory rationale backfill
 
 Usage:
-  pnpm memories:backfill-rationales [-- --json] [--apply]
+  pnpm cf:memory:rationale-backfill [-- --remote] [--json] [--apply]
   node ./scripts/memory-rationale-backfill.mjs [options]
 
 Options:
@@ -25,6 +25,7 @@ Options:
   --apply                Persist inferred rationale/evidence rows
   --json                 Emit machine-readable JSON
   --help                 Show this message
+
 `);
 }
 

@@ -4,6 +4,7 @@ import {
   buildVerifiedKnowledgeBundle,
   buildVerifiedKnowledgeBundles,
   clearVerifiedLocalModelCache,
+  digestCanonical,
   evaluateVerifiedKnowledgeBundle,
   splitVerifiedSessionIntoBatches,
   verifySignedVerifiedKnowledgeBundle,
@@ -32,6 +33,13 @@ const session: LocalSessionV1 = {
 };
 
 describe("verified knowledge bundle", () => {
+  it("keeps the verified-knowledge canonical digest contract stable", async () => {
+    await expect(digestCanonical({ z: undefined, b: 2, a: [undefined, -0] }))
+      .resolves.toBe("7e6dc43ac1e4ff63b468a7e2489d6d93b22ef1a3c1ea7e8566b31b1ec64fc8b0");
+    await expect(digestCanonical({ value: Number.POSITIVE_INFINITY }))
+      .rejects.toThrow("canonical_json_non_finite_number");
+  });
+
   it("keeps scene batches bounded and separates background events", () => {
     const events = Array.from({ length: 16 }, (_, index) => ({
       ...session.events[0],

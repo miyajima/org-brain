@@ -6,7 +6,7 @@ function printHelp() {
   console.log(`Org Brain knowledge docs seed
 
 Usage:
-  pnpm docs:seed [-- --tenant <tenant_id>] [--json]
+  pnpm cf:docs:seed [-- --tenant <tenant_id>] [--json]
   node ./scripts/seed-knowledge-docs.mjs [options]
 
 Options:
@@ -217,11 +217,11 @@ Org Brain runs as a self-hostable agent memory bus.
 
 ## Operator Commands
 
-- \`pnpm usage:status\`
-- \`pnpm metrics:report\`
-- \`pnpm metrics:replay\`
-- \`pnpm docs:seed\`
-- \`pnpm memories:maintain -- --apply --remote\`
+- \`pnpm cf:usage:status\`
+- \`pnpm cf:metrics:report\`
+- \`pnpm cf:metrics:replay\`
+- \`pnpm cf:docs:seed\`
+- \`pnpm cf:memory:maintain -- --apply --remote\`
 
 See also [[capabilities/memory-retrieval]] and [[policies/memory-operations]].`
       )
@@ -379,7 +379,7 @@ Operational policy is described in [[policies/memory-operations]].`
 
 ## Maintenance
 
-Run \`pnpm memories:maintain -- --apply --remote\` regularly to compact old raw hook memories and collapse exact duplicates.
+Run \`pnpm cf:memory:maintain -- --apply --remote\` regularly to compact old raw hook memories and collapse exact duplicates.
 
 Use [[capabilities/knowledge-docs]] for stable architecture and policy material instead of stuffing everything into memories.`
       )
