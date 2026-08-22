@@ -1,4 +1,5 @@
-import { HttpError, runRecordedScheduledJob, type OrgPermission } from "@org-brain/shared";
+import { HttpError, runRecordedScheduledJob } from "@org-brain/shared";
+import { permissionForOrgBrainRequest } from "@org-brain/server-core";
 import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { appendAuditEvent } from "./audit-service";
@@ -8,6 +9,7 @@ import { runScheduledRetentionSweep } from "./retention-queue-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, tenantFromBody, type ApiContextEnv } from "./auth";
 import { assertSessionCsrf } from "./email-auth-service";
 import { mountMcp } from "./mcp";
+import { createCloudflareMcpOAuthProvider, shouldUseMcpOAuth } from "./mcp-oauth-cloudflare";
 import { assertPermission } from "./rbac-service";
 import type { Env } from "./types";
 import { registerDomainRoutes } from "./domain-routes";
@@ -54,47 +56,6 @@ app.use(
 app.use("/v1/*", apiKeyAuth);
 app.use("/api/*", apiKeyAuth);
 
-function permissionForRequest(method: string, path: string): OrgPermission {
-  if (path.startsWith("/v1/auth/")) return method === "GET" ? "read" : "write";
-  if (path.startsWith("/v1/mcp-client-installations")) return "read";
-  if (
-    path === "/v1/organization" ||
-    path.startsWith("/v1/users") ||
-    path.startsWith("/v1/role-assignments") ||
-    path.startsWith("/v1/groups") ||
-    path.startsWith("/v1/scoped-tokens") ||
-    path.startsWith("/v1/retention-policies") ||
-    path.startsWith("/v1/retention-queue") ||
-    path.startsWith("/v1/ops/") ||
-    path.startsWith("/v1/retrieval-index") ||
-    path.startsWith("/v1/retrieval-ranking-profiles") ||
-    path.startsWith("/v1/retrieval-generations") ||
-    path.startsWith("/v1/retrieval-generation-assignments") ||
-    (path.startsWith("/v1/domain-packs/installations") && method !== "GET") ||
-    path.startsWith("/v1/portable-imports") ||
-    path.endsWith("/promotion") ||
-    path === "/v1/resources/backfill" ||
-    path.startsWith("/v1/memory-collectors/keys")
-  ) return "admin";
-  if (path.startsWith("/v1/business-categories")) return method === "GET" ? "read" : "admin";
-  if (path.startsWith("/v1/resource-shares")) return method === "GET" ? "read" : "share";
-  if (path.startsWith("/v1/access-policies")) return method === "GET" ? "read" : "share";
-  if (path.startsWith("/v1/audit-events")) return "export";
-  if (
-    path.endsWith("/search") ||
-    path.endsWith("/profile") ||
-    path.endsWith("/context") ||
-    path.endsWith("/context-preview") ||
-    path.endsWith("/review-queue") ||
-    path.startsWith("/v1/context/") ||
-    path === "/api/context/enrich"
-  ) return "read";
-  if (method === "DELETE") return "delete";
-  if (path.includes("/export")) return "export";
-  if (method === "GET") return "read";
-  return "write";
-}
-
 const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   if (c.req.method === "OPTIONS") {
     await next();
@@ -119,7 +80,7 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
     (typeof bodyRecord.project_id === "string" ? bodyRecord.project_id : null)
   )?.trim() || null;
   const auth = getApiAuthContext(c);
-  const permission = permissionForRequest(c.req.method, c.req.path);
+  const permission = permissionForOrgBrainRequest(c.req.method, c.req.path);
   const auditBase = {
     tenantId,
     projectId,
@@ -213,7 +174,24 @@ app.notFound((c) =>
 );
 
 export default {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    if (shouldUseMcpOAuth(request, env)) {
+      const provider = createCloudflareMcpOAuthProvider(env, app.fetch);
+      const url = new URL(request.url);
+      if (url.pathname === "/oauth/revoke") {
+        url.pathname = "/oauth/token";
+        return provider.fetch(new Request(url, request), env, ctx);
+      }
+      const response = await provider.fetch(request, env, ctx);
+      if (url.pathname === "/.well-known/oauth-authorization-server" && response.ok) {
+        const metadata = await response.json<Record<string, unknown>>();
+        metadata.revocation_endpoint = `${url.origin}/oauth/revoke`;
+        return Response.json(metadata, { headers: response.headers });
+      }
+      return response;
+    }
+    return app.fetch(request, env, ctx);
+  },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const scheduledFor = controller.scheduledTime ?? Date.now();
     await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {

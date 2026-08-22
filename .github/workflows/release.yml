@@ -42,12 +42,6 @@ jobs:
       - run: npm publish ./packages/orgbrain-cli --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish ./packages/contracts --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish ./packages/core --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: gh release create "${GITHUB_REF_NAME}" orgbrain-*.tgz orgbrain-*.cdx.json orgbrain-*-standalone.sha256 dist/orgbrain.mjs --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

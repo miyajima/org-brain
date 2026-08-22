@@ -16,6 +16,8 @@
   "packageManager": "pnpm@10.16.1",
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "api:manifest": "vitest run --cache=false ./packages/server-core/test/generate-manifest.test.ts",
+    "mcp:manifest": "vitest run --cache=false ./scripts/generate-mcp-tool-manifest.test.ts",
     "build:standalone": "node ./scripts/build-standalone.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm run test:node && pnpm run test:domain-recall && pnpm run test:scripts && pnpm run test:autonomy && pnpm -r --if-present test",

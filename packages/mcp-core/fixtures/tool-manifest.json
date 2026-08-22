@@ -1,0 +1,5019 @@
+{
+  "contract_version": "orgbrain-mcp-tool-manifest/v1",
+  "protocol_version": "2026-07-28",
+  "tools": [
+    {
+      "name": "orgbrain_business_categories_create",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "slug",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_business_categories_list",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "include_inactive": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_business_categories_update",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "category_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_context_enrich",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "agent_key": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "review",
+              "debug",
+              "proposal",
+              "support"
+            ]
+          },
+          "task": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 240
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "target_files": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              },
+              "related_issue_ids": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 32000
+          },
+          "include_sources": {
+            "type": "boolean"
+          },
+          "include_conflicts": {
+            "type": "boolean"
+          },
+          "debug_scores": {
+            "type": "boolean"
+          },
+          "include_domain_recall": {
+            "type": "boolean"
+          },
+          "domain_recall_max_tokens": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 8000
+          },
+          "object_type_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "object_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_context_pre_action_gate",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "implementation",
+              "review",
+              "debug",
+              "proposal",
+              "support"
+            ]
+          },
+          "task": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 240
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "target_files": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "minimum_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_decision_memories_create",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "engineering",
+              "sales",
+              "cs",
+              "ops",
+              "finance",
+              "general"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "decision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "rejected_alternatives": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "alternative": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "reasonRejected": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "alternative",
+                "reasonRejected"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "constraints": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "known_pitfalls": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "source_refs": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "id": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 240
+                },
+                "url": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "allowedPrincipals": {
+                  "maxItems": 64,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "owner_refs": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "id": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deprecated",
+              "superseded",
+              "uncertain"
+            ]
+          },
+          "superseded_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "tenant",
+              "project",
+              "restricted"
+            ]
+          },
+          "allowed_principals": {
+            "maxItems": 64,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "decision",
+          "rationale"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_decision_memories_search",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "user_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ranking_profile_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_decision_resources",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "decision_memory",
+              "decision_rationale"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_decision_review_queue",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "within_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_domain_context",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "object_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "metric_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "decision_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_domain_recall_feedback",
+      "description": "Record the user's correction without mutating the underlying Decision. Map 範囲が違う to wrong_scope, 古い to outdated, 関係ない to not_relevant, 関係が違う to incorrect_relation, and この会話では使わない to dismiss_for_session. Call this when the user corrects a recalled memory.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "recall_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedback": {
+            "type": "string",
+            "enum": [
+              "useful",
+              "not_relevant",
+              "wrong_scope",
+              "outdated",
+              "incorrect_relation",
+              "dismiss_for_session"
+            ]
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "recall_id",
+          "feedback"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_handoff_send",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "principal",
+              "agent",
+              "project",
+              "channel"
+            ]
+          },
+          "target_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "decisions": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "decision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "rationale": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "source_references": {
+                  "maxItems": 32,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "id": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 240
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "allowedPrincipals": {
+                        "maxItems": 64,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "decision"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unresolved": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          },
+          "next_actions": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "target_type",
+          "target_key",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_learning_batch_ingest",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "prompt_contract_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "prompt_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "contract_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "verifier_version": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "commitments": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "record_type": {
+                  "type": "string",
+                  "const": "task_commitment"
+                },
+                "schema_version": {
+                  "type": "number",
+                  "const": 1
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "task_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "decision_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "question_fingerprint": {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                },
+                "question": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "option_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "raw": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                },
+                "authority": {
+                  "type": "string",
+                  "const": "explicit_user"
+                },
+                "confirmation_state": {
+                  "type": "string",
+                  "enum": [
+                    "user_confirmed",
+                    "user_corrected"
+                  ]
+                },
+                "ask_policy": {
+                  "type": "string",
+                  "const": "reuse_until_superseded"
+                },
+                "evidence": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "request_user_input_result"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^sha256:[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "digest"
+                  ],
+                  "additionalProperties": false
+                },
+                "created_at": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "expires_at": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "task_key",
+                "decision_key",
+                "question_fingerprint",
+                "question",
+                "answer",
+                "evidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "verified_items": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "deterministically_verified_items": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "review_candidates": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "quarantine_candidates": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "semantic_aliases": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "task_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "decision_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "question": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "ai_certification": {
+                  "type": "string",
+                  "const": "ai_consensus_certified"
+                },
+                "judge_consensus": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "task_key",
+                "decision_key",
+                "question",
+                "ai_certification",
+                "judge_consensus"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_managed_object_search",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "type_key": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memories_capture_rationale",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "item": {
+            "type": "object",
+            "properties": {
+              "external_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 1000
+              },
+              "tags": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "created_at": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "project_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "business_category_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "work_type": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "implementation",
+                      "review",
+                      "debug",
+                      "proposal",
+                      "support",
+                      "research",
+                      "operations",
+                      "other"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "canonical_key": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "decision",
+                  "constraint",
+                  "pitfall",
+                  "preference",
+                  "fact"
+                ]
+              },
+              "rationale": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reuse_rule": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidence": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "evidence_type": {
+                      "type": "string",
+                      "enum": [
+                        "memory",
+                        "task_event",
+                        "artifact",
+                        "doc",
+                        "file",
+                        "command",
+                        "thread",
+                        "external"
+                      ]
+                    },
+                    "evidence_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "relation": {
+                      "type": "string",
+                      "enum": [
+                        "supports",
+                        "contradicts",
+                        "context_for"
+                      ]
+                    },
+                    "note": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "weight_score": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "content_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "diff_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "observed_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "attestation_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "evidence_ref"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "source_references": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "title": {
+                      "type": "string",
+                      "maxLength": 240
+                    },
+                    "captured_at": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "ref"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "source_refs": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "title": {
+                      "type": "string",
+                      "maxLength": 240
+                    },
+                    "captured_at": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "ref"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "valid_until": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "confidence_score": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "utility_score": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "tenant",
+                  "project",
+                  "restricted"
+                ]
+              },
+              "allowed_principals": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "capture_origin": {
+                "type": "string",
+                "enum": [
+                  "observed",
+                  "synthetic",
+                  "repair",
+                  "legacy"
+                ]
+              },
+              "capture_route": {
+                "type": "string",
+                "enum": [
+                  "realtime_hook",
+                  "initial_import",
+                  "manual",
+                  "repair",
+                  "legacy"
+                ]
+              },
+              "capture_batch_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "verification": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "verified",
+                      "partial",
+                      "unverified",
+                      "rejected"
+                    ]
+                  },
+                  "verified_at": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "attestation_ref": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "learning": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quality_dimensions": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "external_key",
+              "content"
+            ],
+            "additionalProperties": false
+          },
+          "items": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "external_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                },
+                "summary": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "tags": {
+                  "maxItems": 16,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "created_at": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "business_category_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "work_type": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "implementation",
+                        "review",
+                        "debug",
+                        "proposal",
+                        "support",
+                        "research",
+                        "operations",
+                        "other"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "canonical_key": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "decision",
+                    "constraint",
+                    "pitfall",
+                    "preference",
+                    "fact"
+                  ]
+                },
+                "rationale": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reuse_rule": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "evidence": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "evidence_type": {
+                        "type": "string",
+                        "enum": [
+                          "memory",
+                          "task_event",
+                          "artifact",
+                          "doc",
+                          "file",
+                          "command",
+                          "thread",
+                          "external"
+                        ]
+                      },
+                      "evidence_ref": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "relation": {
+                        "type": "string",
+                        "enum": [
+                          "supports",
+                          "contradicts",
+                          "context_for"
+                        ]
+                      },
+                      "note": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "weight_score": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "content_hash": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 128
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "diff_hash": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 128
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "observed_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "attestation_ref": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "evidence_ref"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "source_references": {
+                  "maxItems": 32,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "ref": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 240
+                      },
+                      "captured_at": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "source_refs": {
+                  "maxItems": 32,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "ref": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 240
+                      },
+                      "captured_at": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "valid_until": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "confidence_score": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "utility_score": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "visibility": {
+                  "type": "string",
+                  "enum": [
+                    "tenant",
+                    "project",
+                    "restricted"
+                  ]
+                },
+                "allowed_principals": {
+                  "maxItems": 64,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "capture_origin": {
+                  "type": "string",
+                  "enum": [
+                    "observed",
+                    "synthetic",
+                    "repair",
+                    "legacy"
+                  ]
+                },
+                "capture_route": {
+                  "type": "string",
+                  "enum": [
+                    "realtime_hook",
+                    "initial_import",
+                    "manual",
+                    "repair",
+                    "legacy"
+                  ]
+                },
+                "capture_batch_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "verification": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "partial",
+                        "unverified",
+                        "rejected"
+                      ]
+                    },
+                    "verified_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "attestation_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "learning": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "quality_dimensions": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "external_key",
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_confirm",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "confirmation_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "conclusion": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "reason_summary": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "decision_type": {
+            "type": "string",
+            "enum": [
+              "adopt",
+              "reject",
+              "prioritize",
+              "diagnose",
+              "workaround",
+              "policy"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "entities": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "entity_type": {
+                  "type": "string",
+                  "enum": [
+                    "person",
+                    "service",
+                    "project",
+                    "team",
+                    "org",
+                    "document",
+                    "unknown"
+                  ]
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "subject",
+                    "author",
+                    "decision_maker",
+                    "reviewer",
+                    "mentioned"
+                  ]
+                },
+                "confidence_score": {
+                  "type": "number"
+                },
+                "external_ref": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "evidence": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "evidence_type": {
+                  "type": "string",
+                  "enum": [
+                    "memory",
+                    "task_event",
+                    "artifact",
+                    "doc",
+                    "file",
+                    "command",
+                    "thread",
+                    "external"
+                  ]
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "relation": {
+                  "type": "string",
+                  "enum": [
+                    "supports",
+                    "contradicts",
+                    "context_for"
+                  ]
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "weight_score": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "evidence_ref"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "confirmation_token",
+          "approved"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_extract",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "occurred_at": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000
+          },
+          "source_references": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 240
+                },
+                "captured_at": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "type",
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "event_id",
+          "source",
+          "occurred_at",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_list",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "full",
+              "compact"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memories_profile",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "limit_durable": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          },
+          "limit_recent": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          },
+          "rewrite_query": {
+            "type": "boolean"
+          },
+          "search_mode": {
+            "type": "string",
+            "enum": [
+              "memories",
+              "hybrid",
+              "hybrid_v2",
+              "hybrid_v3",
+              "hybrid_v4"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memories_propose",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "actor_type": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "item": {
+            "type": "object",
+            "properties": {
+              "external_key": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 1000
+              },
+              "tags": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "created_at": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "project_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "business_category_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "work_type": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "implementation",
+                      "review",
+                      "debug",
+                      "proposal",
+                      "support",
+                      "research",
+                      "operations",
+                      "other"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "content"
+            ],
+            "additionalProperties": false
+          },
+          "entities": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "entity_type": {
+                  "type": "string",
+                  "enum": [
+                    "person",
+                    "service",
+                    "project",
+                    "team",
+                    "org",
+                    "document",
+                    "unknown"
+                  ]
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "subject",
+                    "author",
+                    "decision_maker",
+                    "reviewer",
+                    "mentioned"
+                  ]
+                },
+                "confidence_score": {
+                  "type": "number"
+                },
+                "external_ref": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "evidence": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "evidence_type": {
+                  "type": "string",
+                  "enum": [
+                    "memory",
+                    "task_event",
+                    "artifact",
+                    "doc",
+                    "file",
+                    "command",
+                    "thread",
+                    "external"
+                  ]
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "relation": {
+                  "type": "string",
+                  "enum": [
+                    "supports",
+                    "contradicts",
+                    "context_for"
+                  ]
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "weight_score": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "evidence_ref"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_refresh",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence_delta": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "memory_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_retrieve_context",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "token_budget": {
+            "type": "integer",
+            "minimum": 512,
+            "maximum": 16000
+          },
+          "search_mode": {
+            "type": "string",
+            "enum": [
+              "hybrid_v3",
+              "hybrid_v4"
+            ]
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memories_search",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "rewrite_query": {
+            "type": "boolean"
+          },
+          "search_mode": {
+            "type": "string",
+            "enum": [
+              "memories",
+              "hybrid",
+              "hybrid_v2",
+              "hybrid_v3",
+              "hybrid_v4"
+            ]
+          },
+          "retrieval_profile": {
+            "type": "string",
+            "enum": [
+              "default",
+              "lexical",
+              "hybrid",
+              "structured"
+            ]
+          },
+          "search_scope": {
+            "type": "string",
+            "enum": [
+              "evidence",
+              "governance",
+              "both"
+            ]
+          },
+          "include_history": {
+            "type": "boolean"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_role": {
+            "type": "string"
+          },
+          "decision_type": {
+            "type": "string"
+          },
+          "decision_status": {
+            "type": "string"
+          },
+          "confirmation_state": {
+            "type": "string"
+          },
+          "reason_text": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ranking_profile_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "external_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memories_suppress",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "memory_id",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_upsert",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "items": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "external_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000
+                },
+                "summary": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "tags": {
+                  "maxItems": 16,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "created_at": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "project_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "business_category_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "work_type": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "implementation",
+                        "review",
+                        "debug",
+                        "proposal",
+                        "support",
+                        "research",
+                        "operations",
+                        "other"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "external_key",
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_commit_verified",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "bundle": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "bundle"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_effect_record",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "usage_event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "evidence_level": {
+            "type": "string",
+            "enum": [
+              "reported",
+              "estimated",
+              "verified",
+              "unverifiable"
+            ]
+          },
+          "supersedes_effect_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effect_outcome": {
+            "type": "string",
+            "enum": [
+              "positive",
+              "neutral",
+              "negative",
+              "unknown"
+            ]
+          },
+          "avoided_lookup_categories": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "source_search",
+                "web_search",
+                "past_context",
+                "none"
+              ]
+            }
+          },
+          "gross_saved_tokens_estimate": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "token_estimation_candidates": {
+            "type": "object",
+            "properties": {
+              "paired_control_tokens": {
+                "type": "number"
+              },
+              "safe_replay_tokens": {
+                "type": "number"
+              },
+              "avoided_source_tokens": {
+                "type": "number"
+              },
+              "failure_pattern_median_tokens": {
+                "type": "number"
+              },
+              "category_median_tokens": {
+                "type": "number"
+              },
+              "text_size_heuristic_tokens": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          },
+          "injected_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "net_saved_tokens_estimate": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "estimate_lower_bound": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimate_upper_bound": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimation_method": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimator_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimate_confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_pattern_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_opportunity_state": {
+            "type": "string",
+            "enum": [
+              "applicable",
+              "not_applicable",
+              "unknown"
+            ]
+          },
+          "action_changed": {
+            "type": "boolean"
+          },
+          "alternative_executed": {
+            "type": "boolean"
+          },
+          "failure_avoided": {
+            "type": "boolean"
+          },
+          "failure_saved_tokens_estimate": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "verification_ref_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verification_ref_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimated_tool_calls_saved": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimated_seconds_saved": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attributions": {
+            "maxItems": 64,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "usage_item_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "attribution_weight": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "usage_item_id",
+                "attribution_weight"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "usage_event_id",
+          "idempotency_key",
+          "effect_outcome"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_failure_pattern_create",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pattern_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "action_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pattern_key",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_failure_pattern_update",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pattern_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "review",
+                  "debug",
+                  "proposal",
+                  "support",
+                  "research",
+                  "operations",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pattern_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "action_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pattern_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_failure_patterns_list",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memory_impact_metrics",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "business_category",
+              "work_type",
+              "project",
+              "day"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memory_impact_report",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "external_run_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "assessed",
+              "failed"
+            ]
+          },
+          "memory_used": {
+            "type": "boolean"
+          },
+          "avoided_lookup": {
+            "type": "string",
+            "enum": [
+              "source_search",
+              "web_search",
+              "past_context",
+              "none"
+            ]
+          },
+          "memory_basis_ids": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_category": {
+            "type": "string",
+            "enum": [
+              "agent_error",
+              "tool_error",
+              "cancelled",
+              "unknown"
+            ]
+          },
+          "occurred_at": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "external_run_id",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_impact_start",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "external_run_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "agent_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "occurred_at": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "external_run_id",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_observe",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 1
+              },
+              {
+                "type": "number",
+                "const": 2
+              }
+            ]
+          },
+          "lesson_type": {
+            "type": "string",
+            "enum": [
+              "success",
+              "decision",
+              "failure"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "decision",
+              "constraint",
+              "pitfall",
+              "preference",
+              "fact"
+            ]
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conclusion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reuse_rule": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "applicability": {
+            "type": "object",
+            "properties": {
+              "target_files": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                }
+              },
+              "components": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              }
+            },
+            "required": [
+              "target_files",
+              "components"
+            ],
+            "additionalProperties": false
+          },
+          "evidence_selectors": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "command",
+                    "file",
+                    "doc",
+                    "user_statement",
+                    "tool_result"
+                  ]
+                },
+                "ref": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "digest": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "supports": {
+                  "maxItems": 12,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "gaps": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "record_type": {
+            "type": "string",
+            "const": "learning_observation"
+          },
+          "capture_intent": {
+            "type": "string",
+            "enum": [
+              "verify",
+              "review"
+            ]
+          },
+          "procedure": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why_it_worked": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observed_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reuse_when": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision_type": {
+            "type": "string",
+            "enum": [
+              "user_choice",
+              "preference",
+              "implementation",
+              "governance"
+            ]
+          },
+          "decision_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selected_value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "constraints": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "alternatives": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "alternative": {
+                      "type": "string",
+                      "maxLength": 1000
+                    },
+                    "reason_rejected": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "alternative"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "symptom": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failed_approach": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root_cause": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verified_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "avoidance_rule": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "lesson_type"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_usage_state_update",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "usage_event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "items": {
+            "minItems": 1,
+            "maxItems": 128,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "usage_item_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "used_state": {
+                  "type": "string",
+                  "enum": [
+                    "used",
+                    "not_used",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "usage_item_id",
+                "used_state"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "usage_event_id",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_messages_ack",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "principal",
+              "agent",
+              "project",
+              "channel"
+            ]
+          },
+          "target_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "message_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_messages_get",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "principal",
+              "agent",
+              "project",
+              "channel"
+            ]
+          },
+          "target_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "message_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_messages_inbox",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "principal",
+              "agent",
+              "project",
+              "channel"
+            ]
+          },
+          "target_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unread",
+              "read",
+              "acked",
+              "archived",
+              "active"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "cursor": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_messages_read",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "principal",
+              "agent",
+              "project",
+              "channel"
+            ]
+          },
+          "target_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "message_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_messages_send",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "principal",
+              "agent",
+              "project",
+              "channel"
+            ]
+          },
+          "target_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "thread_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reply_to_message_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "target_type",
+          "target_key",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_metric_query",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "metric_keys": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_prompt_recall",
+      "description": "Use before answering an organization-specific question. Return the relevant Decision, rationale, rejected alternatives, constraints, success conditions, metrics, evidence metadata, follow-up, and trace URL. If the answer uses the memory, cite the trace and invite the user to say 範囲が違う, 古い, or 関係ない.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "object_type_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "object_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_resource_decisions",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resource_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "resource_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_resource_search",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_task_context_get",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "task_key"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_task_create",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "memory_measurement",
+              "skill_generation"
+            ]
+          },
+          "input_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "wait_event_type": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "input_ref"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_task_events",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "task_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_task_get",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "task_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+name: Release shared runtime
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "shared-v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm api:manifest
+      - run: pnpm mcp:manifest
+      - run: pnpm --filter @org-brain/contracts build
+      - run: pnpm --filter @org-brain/core build
+      - run: pnpm --filter @org-brain/server-core build
+      - run: pnpm --filter @org-brain/mcp-core build
+      - run: npm pack ./packages/contracts
+      - run: npm pack ./packages/core
+      - run: npm pack ./packages/server-core
+      - run: npm pack ./packages/mcp-core
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: orgbrain-shared-${{ github.ref_name }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            org-brain-*.tgz
+            orgbrain-shared-*.cdx.json
+            packages/server-core/fixtures/api-manifest.json
+            packages/server-core/fixtures/api-manifest.sha256
+            packages/mcp-core/fixtures/tool-manifest.json
+            packages/mcp-core/fixtures/tool-manifest.sha256
+      - run: npm publish ./packages/contracts --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish ./packages/core --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish ./packages/server-core --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish ./packages/mcp-core --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        id: console_image
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/org-brain-console:0.3.0
+            ghcr.io/${{ github.repository_owner }}/org-brain-console:${{ github.ref_name }}
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/org-brain-console
+          subject-digest: ${{ steps.console_image.outputs.digest }}
+          push-to-registry: true
+      - run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          org-brain-*.tgz
+          orgbrain-shared-*.cdx.json
+          packages/server-core/fixtures/api-manifest.json
+          packages/server-core/fixtures/api-manifest.sha256
+          packages/mcp-core/fixtures/tool-manifest.json
+          packages/mcp-core/fixtures/tool-manifest.sha256
+          --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
