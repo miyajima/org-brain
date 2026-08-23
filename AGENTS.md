@@ -9,8 +9,8 @@ Project-specific compatibility contract:
 Also read:
 - `/Users/miyajimakazuhiro/.codex/RTK.md`
 
-Do not use the obsolete `/Users/miya/.agents/harness` or
-`/Users/miya/.openclaw/harness` paths. They are not installed on this machine.
+Use only the canonical paths above. If an instruction contains a different
+home directory, treat it as stale and do not execute it.
 
 If instructions conflict, use this priority:
 1. Direct user request

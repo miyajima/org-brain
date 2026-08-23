@@ -2,6 +2,13 @@ import type { AvoidedLookup, DecisionResourceLink, DecisionResourceRole, MemoryI
 
 export * from "./domain-pack.js";
 export * from "./domain-recall.js";
+export * from "./auth.js";
+export {
+  canonicalJson as canonicalVerifiedBundleJson,
+  createSignedVerifiedKnowledgeBundle,
+  digestCanonical,
+  verifySignedVerifiedKnowledgeBundle
+} from "./verified-bundle-crypto.js";
 
 export type MemoryImpactObservation = {
   event_type: "eligible" | "assessed" | "failed";

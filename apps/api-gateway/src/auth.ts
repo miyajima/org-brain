@@ -399,6 +399,8 @@ export const apiKeyAuth: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   if (bearer && envHasOidc(c.env)) {
     const grant = await resolveAccessGrant(c.env, bearer);
     c.set("apiAuth", grant);
+    c.header("Deprecation", "true");
+    c.header("Warning", '299 OrgBrain "Generic OIDC bearer authentication is deprecated in 0.4 and will be removed in the next major release"');
     await next();
     return;
   }

@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "composite": true },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["test/generate-manifest.test.ts"]
+}

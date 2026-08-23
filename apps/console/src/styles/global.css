@@ -205,6 +205,10 @@
     font-size: max(0.75rem, 1em) !important;
   }
 
+  .console-main :where(.scene-nav-info) {
+    font-size: 0.75rem !important;
+  }
+
   .console-nav {
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(4, 10, 18, 0.78);

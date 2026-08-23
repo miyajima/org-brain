@@ -32,6 +32,9 @@ importers:
 
   apps/api-gateway:
     dependencies:
+      '@cloudflare/workers-oauth-provider':
+        specifier: 0.10.2
+        version: 0.10.2
       '@modelcontextprotocol/server':
         specifier: 2.0.0
         version: 2.0.0
@@ -41,6 +44,12 @@ importers:
       '@org-brain/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@org-brain/mcp-core':
+        specifier: workspace:*
+        version: link:../../packages/mcp-core
+      '@org-brain/server-core':
+        specifier: workspace:*
+        version: link:../../packages/server-core
       '@org-brain/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -174,7 +183,25 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/mcp-core:
+    dependencies:
+      '@org-brain/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/orgbrain-cli: {}
+
+  packages/server-core:
+    dependencies:
+      '@org-brain/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@org-brain/core':
+        specifier: workspace:*
+        version: link:../core
+      hono:
+        specifier: ^4.7.2
+        version: 4.12.3
 
   packages/shared:
     dependencies:
@@ -184,6 +211,9 @@ importers:
       '@org-brain/core':
         specifier: workspace:*
         version: link:../core
+      '@org-brain/server-core':
+        specifier: workspace:*
+        version: link:../server-core
       ajv:
         specifier: ^8.17.1
         version: 8.18.0
@@ -472,6 +502,9 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@cloudflare/workers-oauth-provider@0.10.2':
+    resolution: {integrity: sha512-3yWtnPaZyNaiLuv9tWkWfEyqbILFsvfG0Q5RwZGJ2jkSkrOMM8IxKYaGCFakSGbMXmatvyrhFDCDZ70S6TVnqQ==}
 
   '@cloudflare/workers-types@4.20260405.1':
     resolution: {integrity: sha512-PokTmySa+D6MY01R1UfYH48korsN462NK/fl3aw47Hg7XuLuSo/RTpjT0vtWaJhJoFY5tHGOBBIbDcIc8wltLg==}
@@ -4787,6 +4820,8 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20260401.1':
     optional: true
+
+  '@cloudflare/workers-oauth-provider@0.10.2': {}
 
   '@cloudflare/workers-types@4.20260405.1': {}
 

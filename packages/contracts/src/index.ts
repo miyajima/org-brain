@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export * from "./domain-pack.js";
 export * from "./domain-recall.js";
+export * from "./auth.js";
+export * from "./api-manifest.js";
 
 export const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
 
