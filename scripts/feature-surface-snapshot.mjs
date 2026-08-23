@@ -36,7 +36,10 @@ function readMany(files) {
 }
 
 function collectSurface() {
-  const apiSources = readMany(sourceFiles("apps/api-gateway/src"));
+  const apiSources = readMany([
+    ...sourceFiles("apps/api-gateway/src"),
+    ...sourceFiles("packages/server-core/src")
+  ]);
   const localSources = readMany(sourceFiles("packages/orgbrain-cli/src"));
   const packageSources = readMany([
     ...sourceFiles("packages/contracts/src"),
@@ -48,7 +51,7 @@ function collectSurface() {
   const allSources = [...apiSources, ...localSources, ...packageSources];
 
   const apiRoutes = apiSources.flatMap(({ text }) =>
-    [...text.matchAll(/\bapp\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gu)]
+    [...text.matchAll(/\b(?:app|routes)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gu)]
       .map((match) => `${match[1].toUpperCase()} ${match[2]}`)
   );
   const mcpTools = [...apiSources, ...localSources].flatMap(({ text }) =>

@@ -1,4 +1,5 @@
 import type { Queue } from "@cloudflare/workers-types";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import type {
   Envelope,
   RetrievalProjectionJob,
@@ -31,10 +32,13 @@ export type Env = {
   SESSION_ALLOWED_ORIGIN?: string;
   MCP_TENANT_POLICY_JSON?: string;
   MCP_ACCESS_AUD?: string;
-  MCP_AUTH_MODE?: "legacy" | "dual" | "access";
+  MCP_AUTH_MODE?: "legacy" | "dual" | "access" | "oauth";
   MCP_SERVICE_TOKENS_JSON?: string;
   MCP_SERVICE_TOKENS_ADDITIONAL_JSON?: string;
   MCP_SERVICE_TOKENS_MACHINE_JSON?: string;
+  MCP_OAUTH_RESOURCE?: string;
+  OAUTH_KV?: KVNamespace;
+  OAUTH_PROVIDER?: OAuthHelpers;
   AI?: Ai;
   MEMORY_VECTOR_INDEX?: Vectorize;
   MEMORY_VECTOR_INDEX_V3?: Vectorize;

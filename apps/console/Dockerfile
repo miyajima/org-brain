@@ -5,6 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/console/package.json apps/console/package.json
 RUN pnpm install --frozen-lockfile --filter @org-brain/console...
 COPY apps/console apps/console
+COPY assets/brand assets/brand
 RUN pnpm --filter @org-brain/console build:node
 
 FROM node:22.13-alpine

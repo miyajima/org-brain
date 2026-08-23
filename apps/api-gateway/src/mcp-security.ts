@@ -1,4 +1,4 @@
-import { HttpError, isOrgRole, type OrgRole } from "@org-brain/shared";
+import { HttpError, isOrgRole, type OrgBrainOAuthScope, type OrgRole } from "@org-brain/shared";
 import { verifyAccessJwt, type AccessClaims } from "./access-jwt";
 import { resolveVerifiedAccessUser } from "./auth";
 import {
@@ -36,7 +36,7 @@ export type McpAuthResult = {
   principal: string;
   tenantId: string;
   allowedTenants: string[];
-  source: "access-user" | "access-service" | "legacy-service-token";
+  source: "access-user" | "access-service" | "legacy-service-token" | "oauth";
   defaultRole: OrgRole;
   clientInstallationId?: string;
   clientType?: McpClientType;
@@ -44,6 +44,7 @@ export type McpAuthResult = {
   ownerPrincipal?: string;
   runtimeActor: string;
   allowedTools?: string[];
+  scopes?: OrgBrainOAuthScope[];
 };
 
 function normalizeTenantList(input: unknown): string[] {
@@ -86,10 +87,10 @@ function constantTimeEquals(left: string, right: string): boolean {
   return mismatch === 0;
 }
 
-function legacyAuthMode(env: Partial<Env>): "legacy" | "dual" | "access" {
+function legacyAuthMode(env: Partial<Env>): "legacy" | "dual" | "access" | "oauth" {
   const mode = env.MCP_AUTH_MODE?.trim() || "access";
-  if (mode !== "legacy" && mode !== "dual" && mode !== "access") {
-    throw new HttpError(500, "misconfigured", "MCP_AUTH_MODE must be legacy, dual, or access");
+  if (mode !== "legacy" && mode !== "dual" && mode !== "access" && mode !== "oauth") {
+    throw new HttpError(500, "misconfigured", "MCP_AUTH_MODE must be legacy, dual, access, or oauth");
   }
   return mode;
 }
@@ -233,6 +234,7 @@ async function authorizeAccessRequest(request: Request, env: Env): Promise<McpAu
 
 export async function authorizeMcpRequest(request: Request, env: Partial<Env>): Promise<McpAuthResult> {
   const mode = legacyAuthMode(env);
+  if (mode === "oauth") throw new HttpError(401, "unauthorized", "OAuth bearer authentication is handled by the MCP OAuth adapter");
   if (request.headers.get("cf-access-jwt-assertion")?.trim()) {
     if (mode === "legacy") throw new HttpError(401, "unauthorized", "Access assertion auth is disabled");
     if (!env.OPEN_BRAIN_DB) throw new HttpError(500, "misconfigured", "OPEN_BRAIN_DB is required for Access MCP auth");

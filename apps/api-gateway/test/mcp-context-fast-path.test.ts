@@ -273,8 +273,8 @@ describe("MCP context_enrich fast path", () => {
       task: { title: "Resume the existing chat" }
     }, 3, true, { headers }), testEnv(), {} as ExecutionContext);
 
-    expect(response.status).toBe(418);
-    expect(mocks.handlerFactoryCalls).toBe(1);
+    expect(response.status).toBe(400);
+    expect(mocks.handlerFactoryCalls).toBe(0);
     expect(mocks.enrichContext).not.toHaveBeenCalled();
   });
 
