@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { resolvePublishDecision } from "./publish-shared-tarball.mjs";
 import {
@@ -99,4 +100,13 @@ test("partial npm publish skips only an identical immutable version", () => {
     status: 503,
     localIntegrity: "sha512-local"
   }), /HTTP 503/u);
+});
+
+test("shared release recovery reuses the immutable tag and an attestation-capable builder", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/release-shared.yml", import.meta.url), "utf8");
+  const setupBuildx = workflow.indexOf("docker/setup-buildx-action@v3");
+  const buildAndPush = workflow.indexOf("docker/build-push-action@v6");
+  assert.match(workflow, /release_ref:/u);
+  assert.match(workflow, /RELEASE_NAME: \$\{\{ inputs\.release_name \|\| github\.ref_name \}\}/u);
+  assert.ok(setupBuildx >= 0 && setupBuildx < buildAndPush);
 });
