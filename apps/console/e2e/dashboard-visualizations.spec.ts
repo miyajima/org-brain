@@ -26,7 +26,7 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByText("Codex", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "過去24時間のイベント" })).toBeVisible();
     await expect(page.locator(".timeline-bucket")).toHaveCount(12);
-    await expect(page.locator(".timeline-recent").getByText("Task「Index parity check」が失敗しました。")).toBeVisible();
+    await expect(page.locator(".timeline-recent").getByText("タスク「Index parity check」が失敗しました。")).toBeVisible();
     await expect(page.locator("body")).not.toContainText("input_ref");
     await expect(page.locator("body")).not.toContainText("raw query");
   });
@@ -55,7 +55,7 @@ test.describe("dashboard visualizations", () => {
     await expect(page.locator(".activity-timeline > header > span")).toHaveText("理解する：1 / 2件");
     const filteredEvents = page.locator(".timeline-recent");
     await expect(filteredEvents.getByText("「Login principal group ACL design」を参照しました。")).toHaveCount(1);
-    await expect(filteredEvents.getByText("Task「Index parity check」が失敗しました。")).toHaveCount(0);
+    await expect(filteredEvents.getByText("タスク「Index parity check」が失敗しました。")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "すべての活動を表示" })).toHaveAttribute("aria-current", "true");
   });
 
@@ -631,12 +631,12 @@ test.describe("dashboard visualizations", () => {
     await page.clock.fastForward(30_000);
     await expect.poll(() => incrementalRequests).toBe(1);
     await expect(page.locator("intelligence-poller")).toHaveAttribute("data-poll-state", "backoff");
-    await expect(page.locator(".timeline-recent").getByText("Task「Index parity check」が失敗しました。")).toBeVisible();
+    await expect(page.locator(".timeline-recent").getByText("タスク「Index parity check」が失敗しました。")).toBeVisible();
 
     await page.clock.fastForward(59_999);
     expect(incrementalRequests).toBe(1);
     await page.clock.fastForward(1);
     await expect.poll(() => incrementalRequests).toBe(2);
-    await expect(page.locator(".timeline-recent").getByText("Task「Index parity check」が失敗しました。")).toBeVisible();
+    await expect(page.locator(".timeline-recent").getByText("タスク「Index parity check」が失敗しました。")).toBeVisible();
   });
 });
