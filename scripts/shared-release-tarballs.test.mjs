@@ -11,6 +11,11 @@ const validCoreManifest = {
   name: "@org-brain/core",
   version: "0.4.0",
   license: "Apache-2.0",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/miyajima/org-brain.git",
+    directory: "packages/core"
+  },
   dependencies: { "@org-brain/contracts": "0.4.0" },
   exports: {
     ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }
@@ -54,6 +59,14 @@ test("shared tarball validation rejects source exports and missing license files
       validCoreEntries.filter((entry) => entry !== "package/LICENSE")
     ),
     /missing package\/LICENSE/u
+  );
+});
+
+test("shared tarball validation rejects missing provenance repository metadata", () => {
+  const { repository: _repository, ...manifest } = validCoreManifest;
+  assert.throws(
+    () => validateTarballContents(coreSpec, manifest, validCoreEntries),
+    /repository metadata/u
   );
 });
 
