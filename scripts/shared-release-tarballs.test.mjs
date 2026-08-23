@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { resolvePublishDecision } from "./publish-shared-tarball.mjs";
 import {
@@ -11,6 +12,11 @@ const validCoreManifest = {
   name: "@org-brain/core",
   version: "0.4.0",
   license: "Apache-2.0",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/miyajima/org-brain.git",
+    directory: "packages/core"
+  },
   dependencies: { "@org-brain/contracts": "0.4.0" },
   exports: {
     ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }
@@ -57,6 +63,14 @@ test("shared tarball validation rejects source exports and missing license files
   );
 });
 
+test("shared tarball validation rejects missing provenance repository metadata", () => {
+  const { repository: _repository, ...manifest } = validCoreManifest;
+  assert.throws(
+    () => validateTarballContents(coreSpec, manifest, validCoreEntries),
+    /repository metadata/u
+  );
+});
+
 test("shared tarball validation rejects unexpected packaged files", () => {
   assert.throws(
     () => validateTarballContents(coreSpec, validCoreManifest, [
@@ -86,4 +100,18 @@ test("partial npm publish skips only an identical immutable version", () => {
     status: 503,
     localIntegrity: "sha512-local"
   }), /HTTP 503/u);
+});
+
+test("shared release recovery reuses the immutable tag and an attestation-capable builder", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/release-shared.yml", import.meta.url), "utf8");
+  const packShared = workflow.indexOf("name: Pack shared packages");
+  const reusePublished = workflow.indexOf("name: Reuse published immutable npm tarballs");
+  const verifyShared = workflow.indexOf("name: Verify shared package tarballs");
+  const setupBuildx = workflow.indexOf("docker/setup-buildx-action@v3");
+  const buildAndPush = workflow.indexOf("docker/build-push-action@v6");
+  assert.match(workflow, /release_ref:/u);
+  assert.match(workflow, /RELEASE_NAME: \$\{\{ inputs\.release_name \|\| github\.ref_name \}\}/u);
+  assert.match(workflow, /if: \$\{\{ inputs\.release_ref != '' \}\}/u);
+  assert.ok(packShared >= 0 && packShared < reusePublished && reusePublished < verifyShared);
+  assert.ok(setupBuildx >= 0 && setupBuildx < buildAndPush);
 });
