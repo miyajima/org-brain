@@ -2,6 +2,15 @@ name: Release shared runtime
 
 on:
   workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Existing release tag or commit to publish"
+        required: false
+        type: string
+      release_name:
+        description: "Release tag name used for OCI tags and GitHub Release"
+        required: false
+        type: string
   push:
     tags:
       - "shared-v*"
@@ -16,12 +25,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     environment: npm
+    env:
+      RELEASE_NAME: ${{ inputs.release_name || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref || github.ref }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.13"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
@@ -40,13 +53,25 @@ jobs:
           pnpm --dir ./packages/core pack --pack-destination "$GITHUB_WORKSPACE"
           pnpm --dir ./packages/server-core pack --pack-destination "$GITHUB_WORKSPACE"
           pnpm --dir ./packages/mcp-core pack --pack-destination "$GITHUB_WORKSPACE"
+      - name: Reuse published immutable npm tarballs
+        if: ${{ inputs.release_ref != '' }}
+        run: |
+          mkdir -p .shared-release-registry
+          npm pack @org-brain/contracts@0.4.0 --pack-destination .shared-release-registry
+          npm pack @org-brain/core@0.4.0 --pack-destination .shared-release-registry
+          npm pack @org-brain/server-core@0.1.0 --pack-destination .shared-release-registry
+          npm pack @org-brain/mcp-core@0.1.0 --pack-destination .shared-release-registry
+          mv .shared-release-registry/org-brain-contracts-0.4.0.tgz ./org-brain-contracts-0.4.0.tgz
+          mv .shared-release-registry/org-brain-core-0.4.0.tgz ./org-brain-core-0.4.0.tgz
+          mv .shared-release-registry/org-brain-server-core-0.1.0.tgz ./org-brain-server-core-0.1.0.tgz
+          mv .shared-release-registry/org-brain-mcp-core-0.1.0.tgz ./org-brain-mcp-core-0.1.0.tgz
       - name: Verify shared package tarballs
         run: node ./scripts/shared-release-tarballs.mjs "$GITHUB_WORKSPACE"
       - uses: anchore/sbom-action@v0
         with:
           path: .
           format: cyclonedx-json
-          output-file: orgbrain-shared-${{ github.ref_name }}.cdx.json
+          output-file: orgbrain-shared-${{ env.RELEASE_NAME }}.cdx.json
           upload-artifact: false
           upload-release-assets: false
       - uses: actions/attest-build-provenance@v2
@@ -75,6 +100,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         id: console_image
         with:
@@ -85,14 +111,14 @@ jobs:
           sbom: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/org-brain-console:0.3.0
-            ghcr.io/${{ github.repository_owner }}/org-brain-console:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/org-brain-console:${{ env.RELEASE_NAME }}
       - uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/org-brain-console
           subject-digest: ${{ steps.console_image.outputs.digest }}
           push-to-registry: true
       - run: >-
-          gh release create "${GITHUB_REF_NAME}"
+          gh release create "${RELEASE_NAME}"
           org-brain-*.tgz
           orgbrain-shared-*.cdx.json
           packages/server-core/fixtures/api-manifest.json

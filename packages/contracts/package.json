@@ -2,6 +2,11 @@
   "name": "@org-brain/contracts",
   "version": "0.4.0",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/miyajima/org-brain.git",
+    "directory": "packages/contracts"
+  },
   "type": "module",
   "files": ["dist", "fixtures"],
   "exports": {
