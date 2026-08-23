@@ -3,6 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 import AccessDrawer from "../components/decision/AccessDrawer.astro";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
+import { memoryExplorerCopy } from "../lib/console-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
@@ -260,11 +261,7 @@ const url = Astro.url;
 const params = url.searchParams;
 const requestedLocale = params.get("lang");
 const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale === "zh" ? requestedLocale : "en";
-const explorerCopy = {
-  en: { title: "Memory Explorer", eyebrow: "Memory workspace", map: "Knowledge connections", fallbackTitle: "The accessible list is active", fallbackBody: "3D rendering is unavailable in this environment. The same filtered memories remain available here.", errorTitle: "Some memory information is unavailable", search: "Search", profile: "Profile", maintenance: "Maintenance", quality: "Quality", mine: "My memories", org: "Organization memories", active: "Active", review: "Needs review", trash: "Trash", scope: "Memory scope", lifecycle: "Memory lifecycle" },
-  ja: { title: "メモリエクスプローラー", eyebrow: "メモリワークスペース", map: "知識のつながり", fallbackTitle: "検索・一覧表示に切り替えました", fallbackBody: "この環境では3D描画を利用できません。同じ条件のメモリをこの一覧で確認できます。", errorTitle: "一部のメモリ情報を取得できません", search: "検索", profile: "プロファイル", maintenance: "メンテナンス", quality: "品質", mine: "自分のメモリ", org: "組織のメモリ", active: "有効", review: "要確認", trash: "ゴミ箱", scope: "メモリの範囲", lifecycle: "メモリの状態" },
-  zh: { title: "记忆浏览器", eyebrow: "记忆工作区", map: "知识关联", fallbackTitle: "已切换到搜索与列表", fallbackBody: "此环境无法使用3D渲染，仍可在此查看相同筛选条件下的记忆。", errorTitle: "部分记忆信息不可用", search: "搜索", profile: "配置", maintenance: "维护", quality: "质量", mine: "我的记忆", org: "组织记忆", active: "有效", review: "需要检查", trash: "回收站", scope: "记忆范围", lifecycle: "记忆状态" }
-}[locale];
+const explorerCopy = memoryExplorerCopy(locale);
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
@@ -1095,25 +1092,25 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                       </a>
                     ))}
                     <div class="flex flex-col gap-3 border-t border-white/8 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                      <span class="surface-label">Page {page}</span>
+                      <span class="surface-label">{explorerCopy.page} {page}</span>
                       <div class="flex flex-wrap gap-2">
                         {prevPageHref ? (
-                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={prevPageHref}>Previous</a>
+                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={prevPageHref}>{explorerCopy.previous}</a>
                         ) : (
-                          <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">Previous</span>
+                          <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">{explorerCopy.previous}</span>
                         )}
                         {nextPageHref ? (
-                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={nextPageHref}>Next</a>
+                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={nextPageHref}>{explorerCopy.next}</a>
                         ) : (
-                          <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">Next</span>
+                          <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">{explorerCopy.next}</span>
                         )}
                       </div>
                     </div>
                   </div>
                 ) : (
                   <div class="surface-soft-card">
-                    <strong class="text-base font-semibold text-white">No memories found.</strong>
-                    <p class="mt-2 text-sm leading-7 text-zinc-400">この tenant / project 条件ではまだ memory がありません。recent lane と search suggestions は profile データから先に埋めています。</p>
+                    <strong class="text-base font-semibold text-white">{explorerCopy.emptyTitle}</strong>
+                    <p class="mt-2 text-sm leading-7 text-zinc-400">{explorerCopy.emptyBody}</p>
                   </div>
                 )}
               </section>

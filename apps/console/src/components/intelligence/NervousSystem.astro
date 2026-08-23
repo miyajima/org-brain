@@ -104,7 +104,7 @@ const compactSummary = (value: string) => Array.from(value).slice(0, 15).join(""
 const activityEventSummary = (event: ActivityEvent) => {
   if (locale !== "ja") return event.summary;
   const subject = event.subject.label || event.subject.id;
-  if (event.type === "task.failed") return `Task「${subject}」が失敗しました。`;
+  if (event.type === "task.failed") return `タスク「${subject}」が失敗しました。`;
   if (event.type === "memory.read") return `「${subject}」を参照しました。`;
   if (event.type === "memory.write") return `「${subject}」を更新しました。`;
   if (event.type === "memory.retrieval") return `「${subject}」を検索しました。`;

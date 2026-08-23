@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { access, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import process from "node:process";
+import { remoteUrl } from "./connector-setup.mjs";
 
 const D1_NAME = "open-brain";
 const R2_BUCKET = "open-brain-bucket";
@@ -27,8 +28,27 @@ function command(cwd, ...args) {
   return { cwd, executable: "pnpm", args };
 }
 
+function managedOAuthInputs(options) {
+  if (!options.withManagedOAuth) return null;
+  const host = String(options.mcpHost ?? "").trim().toLowerCase();
+  const accessPolicyId = String(options.accessPolicyId ?? "").trim();
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u.test(host)) {
+    throw new Error("--mcp-host must be a managed DNS hostname without a scheme or path");
+  }
+  if (!/^[a-f0-9-]{16,64}$/iu.test(accessPolicyId)) {
+    throw new Error("--access-policy-id must identify an existing explicit Cloudflare Access policy");
+  }
+  return {
+    host,
+    endpoint: `https://${host}/mcp`,
+    access_policy_id: accessPolicyId,
+    access_application_domain: `${host}/mcp*`
+  };
+}
+
 export function buildCloudProvisionPlan(options = {}) {
   const root = resolve(options.root || process.cwd());
+  const managedOAuth = managedOAuthInputs(options);
   const wrangler = (...args) =>
     command("apps/api-gateway", "exec", "wrangler", ...args);
   const steps = [
@@ -95,8 +115,19 @@ export function buildCloudProvisionPlan(options = {}) {
     {
       id: "deploy_mcp",
       mutate: true,
-      command: command("apps/mcp", "exec", "wrangler", "deploy")
+      command: managedOAuth
+        ? command("apps/mcp", "exec", "wrangler", "deploy", "--route", `${managedOAuth.host}/*`)
+        : command("apps/mcp", "exec", "wrangler", "deploy")
     },
+    ...(managedOAuth ? [{
+      id: "ensure_mcp_access_application",
+      mutate: true,
+      local_action: "create or update the self-hosted Access application with Managed OAuth and the supplied policy"
+    }, {
+      id: "configure_mcp_access_audience",
+      mutate: true,
+      local_action: "write the Access application audience to the API Gateway MCP_ACCESS_AUD secret"
+    }] : []),
     {
       id: "build_console",
       mutate: false,
@@ -115,7 +146,8 @@ export function buildCloudProvisionPlan(options = {}) {
       d1: D1_NAME,
       r2: R2_BUCKET,
       queues: QUEUES,
-      vectorize: options.withVectorize ? "orgbrain-memory-units-v3-1024" : null
+      vectorize: options.withVectorize ? "orgbrain-memory-units-v3-1024" : null,
+      managed_oauth: managedOAuth
     },
     steps
   };
@@ -129,10 +161,17 @@ function run(commandSpec, root, options = {}) {
         ...process.env,
         WRANGLER_LOG_PATH: resolve(root, ".wrangler", "logs")
       },
-      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit"
+      stdio: options.capture
+        ? ["ignore", "pipe", "pipe"]
+        : options.input !== undefined
+          ? ["pipe", "inherit", "inherit"]
+          : "inherit"
     });
     let stdout = "";
     let stderr = "";
+    if (options.input !== undefined) {
+      child.stdin?.end(String(options.input));
+    }
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
     child.stderr?.on("data", (chunk) => { stderr += chunk; });
     child.on("error", reject);
@@ -141,6 +180,215 @@ function run(commandSpec, root, options = {}) {
       else reject(new Error(`${commandSpec.executable} ${commandSpec.args.join(" ")} exited ${code}\n${stderr}`));
     });
   });
+}
+
+async function cloudflareApi(path, init = {}) {
+  const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  if (!token) throw new Error("CLOUDFLARE_API_TOKEN is required for Access provisioning");
+  const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      ...init.headers
+    }
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true) {
+    const detail = Array.isArray(payload?.errors)
+      ? payload.errors.map((item) => item?.message).filter(Boolean).join("; ")
+      : `HTTP ${response.status}`;
+    throw new Error(`Cloudflare API request failed: ${detail || `HTTP ${response.status}`}`);
+  }
+  return payload.result;
+}
+
+async function ensureManagedOAuth(root, config) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  if (!accountId) throw new Error("CLOUDFLARE_ACCOUNT_ID is required for Access provisioning");
+  const applications = await cloudflareApi(`/accounts/${accountId}/access/apps`);
+  const existing = Array.isArray(applications)
+    ? applications.find((item) => item?.domain === config.access_application_domain)
+    : null;
+  const body = {
+    name: "OrgBrain Remote MCP",
+    type: "self_hosted",
+    domain: config.access_application_domain,
+    session_duration: "24h",
+    policies: [config.access_policy_id],
+    oauth_configuration: { enabled: true }
+  };
+  const application = existing
+    ? await cloudflareApi(`/accounts/${accountId}/access/apps/${existing.id}`, {
+        method: "PUT",
+        body: JSON.stringify(body)
+      })
+    : await cloudflareApi(`/accounts/${accountId}/access/apps`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+  if (!application?.aud) throw new Error("Cloudflare Access application did not return an audience");
+  await run(
+    command("apps/api-gateway", "exec", "wrangler", "secret", "put", "MCP_ACCESS_AUD"),
+    root,
+    { input: `${application.aud}\n` }
+  );
+  return { id: application.id, aud: application.aud, domain: application.domain };
+}
+
+function resourceMetadataUrl(header) {
+  return header?.match(/resource_metadata="([^"]+)"/iu)?.[1] ?? null;
+}
+
+function authorizationMetadataUrl(issuer) {
+  const url = new URL(issuer);
+  if (url.pathname.includes("/.well-known/")) return url.toString();
+  const issuerPath = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/u, "");
+  url.pathname = `/.well-known/oauth-authorization-server${issuerPath}`;
+  return url.toString();
+}
+
+export async function diagnoseRemoteMcp(rawUrl, options = {}) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const endpoint = remoteUrl(rawUrl, null);
+  const checks = [];
+  let unauthenticated;
+  try {
+    unauthenticated = await fetchImpl(endpoint, { method: "GET", redirect: "manual" });
+    checks.push({ id: "mcp-endpoint", ok: true, value: `${endpoint} (HTTP ${unauthenticated.status})` });
+  } catch (error) {
+    return [{
+      id: "mcp-endpoint",
+      ok: false,
+      value: error instanceof Error ? error.message : String(error)
+    }];
+  }
+  const authenticate = unauthenticated.headers.get("www-authenticate");
+  const metadataUrl = resourceMetadataUrl(authenticate);
+  checks.push({
+    id: "mcp-managed-oauth-challenge",
+    ok: unauthenticated.status === 401 && Boolean(metadataUrl),
+    value: unauthenticated.status === 401
+      ? metadataUrl ?? "WWW-Authenticate is missing resource_metadata"
+      : `expected HTTP 401, received ${unauthenticated.status}`
+  });
+  let resourceMetadata = null;
+  if (metadataUrl) {
+    try {
+      const response = await fetchImpl(metadataUrl, { headers: { accept: "application/json" } });
+      resourceMetadata = await response.json();
+      checks.push({
+        id: "mcp-protected-resource-discovery",
+        ok: response.ok && Array.isArray(resourceMetadata?.authorization_servers) && resourceMetadata.authorization_servers.length > 0,
+        value: metadataUrl
+      });
+    } catch (error) {
+      checks.push({
+        id: "mcp-protected-resource-discovery",
+        ok: false,
+        value: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  const issuer = resourceMetadata?.authorization_servers?.[0];
+  if (issuer) {
+    const url = authorizationMetadataUrl(issuer);
+    try {
+      const response = await fetchImpl(url, { headers: { accept: "application/json" } });
+      const metadata = await response.json();
+      checks.push({
+        id: "mcp-authorization-server-discovery",
+        ok: response.ok && Boolean(metadata?.authorization_endpoint) && Boolean(metadata?.token_endpoint),
+        value: url
+      });
+    } catch (error) {
+      checks.push({
+        id: "mcp-authorization-server-discovery",
+        ok: false,
+        value: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  const clientId = process.env.ORGBRAIN_MCP_CLIENT_ID?.trim();
+  const clientSecret = process.env.ORGBRAIN_MCP_CLIENT_SECRET?.trim();
+  if (clientId && clientSecret) {
+    const statusUrl = new URL(endpoint);
+    statusUrl.pathname = `${statusUrl.pathname.replace(/\/+$/u, "")}/client-installations/status`;
+    const response = await fetchImpl(statusUrl, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        "cf-access-client-id": clientId,
+        "cf-access-client-secret": clientSecret
+      }
+    });
+    checks.push({
+      id: "mcp-service-token",
+      ok: response.status !== 401 && response.status !== 403,
+      value: `HTTP ${response.status}`
+    });
+    const deniedUrl = new URL(endpoint);
+    deniedUrl.searchParams.set("tenant_id", "orgbrain-doctor-forbidden-tenant");
+    const denied = await fetchImpl(deniedUrl, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        "cf-access-client-id": clientId,
+        "cf-access-client-secret": clientSecret
+      }
+    });
+    checks.push({ id: "mcp-tenant-denial", ok: denied.status === 403, value: `HTTP ${denied.status}` });
+    const tools = await fetchImpl(endpoint, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2026-07-28",
+        "cf-access-client-id": clientId,
+        "cf-access-client-secret": clientSecret
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "orgbrain-doctor", method: "tools/list", params: {} })
+    });
+    const toolsBody = await tools.text();
+    checks.push({
+      id: "mcp-tool-call",
+      ok: tools.ok && /(?:"tools"|event:\s*message)/u.test(toolsBody),
+      value: `HTTP ${tools.status}`
+    });
+  } else {
+    checks.push({
+      id: "mcp-service-token",
+      ok: false,
+      severity: "warning",
+      value: "not exercised; ORGBRAIN_MCP_CLIENT_ID/SECRET are unset"
+    });
+    checks.push({
+      id: "mcp-tenant-denial",
+      ok: false,
+      severity: "warning",
+      value: "not exercised without a service-token installation"
+    });
+    checks.push({
+      id: "mcp-tool-call",
+      ok: false,
+      severity: "warning",
+      value: "not exercised without a service-token installation"
+    });
+  }
+  checks.push({
+    id: "mcp-codex-user-oauth",
+    ok: false,
+    severity: "warning",
+    value: "run `codex mcp login orgbrain`, then verify the server with `codex mcp list`"
+  });
+  checks.push({
+    id: "mcp-expired-oauth-recovery",
+    ok: false,
+    severity: "warning",
+    value: "requires an interactive client credential expiry/relogin exercise"
+  });
+  return checks;
 }
 
 async function exists(path) {
@@ -214,6 +462,11 @@ async function inspectLocalConfig(root) {
   const routerConfig = configText.get("apps/org-router/wrangler.toml") ?? "";
   const runnerConfig = configText.get("apps/cap-runner/wrangler.toml") ?? "";
   const projectorConfig = configText.get("apps/retrieval-projector/wrangler.toml") ?? "";
+  checks.push({
+    id: "mcp-auth-rollout-mode",
+    ok: /MCP_AUTH_MODE\s*=\s*"(?:dual|access)"/u.test(apiConfig),
+    value: /MCP_AUTH_MODE\s*=\s*"access"/u.test(apiConfig) ? "access" : /MCP_AUTH_MODE\s*=\s*"dual"/u.test(apiConfig) ? "dual (one-release migration)" : "missing"
+  });
   checks.push({
     id: "queue-topology",
     ok:
@@ -309,6 +562,7 @@ async function executeProvision(plan, options = {}) {
   }
   const root = plan.root;
   await run(plan.steps[0].command, root);
+  let managedOAuth = null;
 
   const d1Exists = await resourceExists(
     command("apps/api-gateway", "exec", "wrangler", "d1", "info", D1_NAME, "--json"),
@@ -344,6 +598,10 @@ async function executeProvision(plan, options = {}) {
     await enableVectorizeBindings(root);
   }
 
+  if (options.withManagedOAuth) {
+    managedOAuth = await ensureManagedOAuth(root, plan.resources.managed_oauth);
+  }
+
   for (const step of plan.steps) {
     if (
       step.id === "verify_identity" ||
@@ -352,7 +610,7 @@ async function executeProvision(plan, options = {}) {
     ) continue;
     await run(step.command, root);
   }
-  return { ok: true, d1_database_id: d1Id, resources: plan.resources };
+  return { ok: true, d1_database_id: d1Id, resources: plan.resources, managed_oauth: managedOAuth };
 }
 
 export async function runCloudCommand(action, args) {
@@ -370,15 +628,57 @@ export async function runCloudCommand(action, args) {
           value: error instanceof Error ? error.message : String(error)
         });
       }
+      const mcpUrl = args.get("--mcp-url", process.env.ORGBRAIN_MCP_URL);
+      if (mcpUrl) {
+        checks.push(...await diagnoseRemoteMcp(mcpUrl));
+        const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+        const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
+        if (accountId && token) {
+          try {
+            const endpoint = remoteUrl(mcpUrl, null);
+            const expectedDomain = `${new URL(endpoint).host}/mcp*`;
+            const applications = await cloudflareApi(`/accounts/${accountId}/access/apps`);
+            const application = Array.isArray(applications) ? applications.find((item) => item?.domain === expectedDomain) : null;
+            checks.push({ id: "mcp-access-application", ok: Boolean(application), value: application?.id ?? expectedDomain });
+            checks.push({ id: "mcp-access-managed-oauth", ok: application?.oauth_configuration?.enabled === true, value: application?.oauth_configuration?.enabled === true ? "enabled" : "disabled or missing" });
+            checks.push({ id: "mcp-access-policy", ok: Array.isArray(application?.policies) && application.policies.length > 0, value: `${application?.policies?.length ?? 0} policies` });
+          } catch (error) {
+            checks.push({ id: "mcp-access-application", ok: false, value: error instanceof Error ? error.message : String(error) });
+          }
+          try {
+            const secrets = await run(command("apps/api-gateway", "exec", "wrangler", "secret", "list", "--json"), root, { capture: true });
+            const names = JSON.parse(secrets.stdout).map((item) => item.name);
+            checks.push({ id: "mcp-access-audience-secret", ok: names.includes("MCP_ACCESS_AUD"), value: names.includes("MCP_ACCESS_AUD") ? "configured" : "missing" });
+            checks.push({ id: "mcp-access-team-domain", ok: names.includes("ACCESS_TEAM_DOMAIN"), value: names.includes("ACCESS_TEAM_DOMAIN") ? "configured" : "missing" });
+          } catch (error) {
+            checks.push({ id: "mcp-worker-auth-settings", ok: false, value: error instanceof Error ? error.message : String(error) });
+          }
+        } else {
+          checks.push({ id: "mcp-access-application", ok: false, severity: "warning", value: "not inspected; Cloudflare account/token are unset" });
+          checks.push({ id: "mcp-worker-auth-settings", ok: false, severity: "warning", value: "not inspected; Cloudflare account/token are unset" });
+        }
+      }
+      else checks.push({
+        id: "mcp-endpoint",
+        ok: false,
+        value: "--mcp-url or ORGBRAIN_MCP_URL is required with --live"
+      });
     }
     const errors = checks.filter((check) => !check.ok && check.severity !== "warning");
     return { ok: errors.length === 0, root, checks };
   }
   if (action === "provision") {
     const withVectorize = args.flags.has("--with-vectorize");
-    const plan = buildCloudProvisionPlan({ root, withVectorize });
+    const withManagedOAuth = args.flags.has("--with-managed-oauth");
+    const plan = buildCloudProvisionPlan({
+      root,
+      withVectorize,
+      withManagedOAuth,
+      mcpHost: args.get("--mcp-host", null),
+      accessPolicyId: args.get("--access-policy-id", null)
+    });
     if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
-    return executeProvision(plan, { withVectorize });
+    return executeProvision(plan, { withVectorize, withManagedOAuth });
   }
   throw new Error(`unknown cf command: ${action || "(missing)"}`);
 }
@@ -392,7 +692,7 @@ async function main() {
     const item = raw[index];
     if (!item.startsWith("--")) continue;
     const [name, inline] = item.split("=", 2);
-    if (["--live", "--execute", "--with-vectorize"].includes(name)) flags.add(name);
+    if (["--live", "--execute", "--with-vectorize", "--with-managed-oauth"].includes(name)) flags.add(name);
     else values.set(name, inline ?? raw[++index]);
   }
   const result = await runCloudCommand(positional[0], {

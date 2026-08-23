@@ -71,9 +71,9 @@ export const userAdminCopy = (locale: AdminLocale) => ({
 }[locale]);
 
 const ROLE_LABELS: Record<AdminLocale, Record<string, string>> = {
-  en: { reader: "Reader", contributor: "Contributor", tenant_admin: "Tenant administrator", auditor: "Auditor" },
-  ja: { reader: "閲覧者", contributor: "編集者", tenant_admin: "テナント管理者", auditor: "監査担当者" },
-  zh: { reader: "查看者", contributor: "贡献者", tenant_admin: "租户管理员", auditor: "审计员" }
+  en: { tenant_admin: "Organization administrator", project_owner: "Project owner", contributor: "Editing member", reader: "Viewing member", auditor: "Auditor", service_agent: "AI / automation" },
+  ja: { tenant_admin: "組織管理者", project_owner: "プロジェクト責任者", contributor: "編集メンバー", reader: "閲覧メンバー", auditor: "監査担当", service_agent: "AI・自動処理" },
+  zh: { tenant_admin: "组织管理员", project_owner: "项目负责人", contributor: "编辑成员", reader: "查看成员", auditor: "审计员", service_agent: "AI / 自动处理" }
 };
 
 const USER_STATUS_LABELS: Record<AdminLocale, Record<string, string>> = {

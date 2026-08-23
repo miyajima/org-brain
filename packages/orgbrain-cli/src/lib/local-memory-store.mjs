@@ -15,6 +15,11 @@ import {
   encodeFloat32Vector,
   localDenseEmbeddingProviderFromEnvironment
 } from "./local-dense-embedding.mjs";
+import {
+  deriveEvidenceDisposition,
+  evidenceAnswerTemplate,
+  requiresMultipleEvidenceSources
+} from "../../../shared/src/evidence-disposition.mjs";
 
 import {
   analyzeRetrievalIntent,
@@ -2946,7 +2951,7 @@ function searchRetrievalUnitsV4(db, options) {
       left.memory.id.localeCompare(right.memory.id);
   });
 
-  const multiEvidence = /\b(?:and|compare|both|between|combined|together|how many)\b|(?:かつ|両方|比較|合計|複数)/iu.test(query);
+  const multiEvidence = requiresMultipleEvidenceSources(query);
   if (!multiEvidence) return ranked.slice(0, limit);
   const selected = [];
   const sources = new Set();
@@ -5497,25 +5502,23 @@ export class LocalMemoryStore {
           conflicts.push({ memory_id: memory.id, conflict });
         }
       }
-      const multiEvidence = /\b(?:and|compare|both|between|combined|together|how many)\b|(?:かつ|両方|比較|合計|複数)/iu.test(query);
-      const missingEvidence = [];
-      if (evidence.length === 0) missingEvidence.push("no_relevant_evidence");
-      if (multiEvidence && new Set(evidence.map((item) => item.source_reference?.ref ?? item.memory_id)).size < 2) {
-        missingEvidence.push("insufficient_independent_sessions");
-      }
-      if (evidence.some((item) => item.extraction_state === "degraded")) {
-        missingEvidence.push("structured_extractor_degraded");
-      }
-      const template =
-        missingEvidence.length > 0 || conflicts.length > 0
-          ? "abstention"
-          : timeline.length > 0
-            ? "timeline"
-            : state.length > 0
-              ? "profile"
-              : multiEvidence
-                ? "multi_session"
-                : "evidence";
+      const multiEvidence = requiresMultipleEvidenceSources(query);
+      const disposition = deriveEvidenceDisposition({
+        evidenceCount: evidence.length,
+        independentSourceCount: new Set(
+          evidence.map((item) => item.source_reference?.ref ?? item.memory_id)
+        ).size,
+        requiresMultipleSources: multiEvidence,
+        conflictCount: conflicts.length,
+        hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
+        hasLowConfidence: selected.some((item) => Number(item.memory.confidence_score ?? 0.5) < 0.5),
+        degradedReasons: ["onnx_embedding_not_configured", "cross_encoder_not_configured"]
+      });
+      const template = evidenceAnswerTemplate(disposition, {
+        hasTimeline: timeline.length > 0,
+        hasCurrentState: state.length > 0,
+        requiresMultipleSources: multiEvidence
+      });
       const usage = await this.recordUsage({
         tenant_id: tenantId,
         project_id: projectId,
@@ -5552,20 +5555,15 @@ export class LocalMemoryStore {
           query_at: at,
           token_budget: safeTokenBudget,
           estimated_tokens: Math.ceil(usedChars / 4),
+          evidence_status: disposition.evidence_status,
           answer_template: template,
           evidence,
           current_state: state,
           timeline,
           conflicts,
-          missing_evidence: missingEvidence,
-          abstention_recommended: missingEvidence.length > 0 || conflicts.length > 0,
-          degraded_reasons: [
-            "onnx_embedding_not_configured",
-            "cross_encoder_not_configured",
-            ...(evidence.some((item) => item.extraction_state === "degraded")
-              ? ["gemini_structured_extractor_not_configured"]
-              : [])
-          ]
+          missing_evidence: disposition.missing_evidence,
+          abstention_recommended: disposition.abstention_recommended,
+          degraded_reasons: disposition.degraded_reasons
         }
       };
     } finally {

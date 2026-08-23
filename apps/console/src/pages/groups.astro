@@ -3,6 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
 import LiveNotice from "../components/admin/LiveNotice.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
+import { groupsCopy } from "../lib/console-locale";
 
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error?: { code?: string; message?: string } };
@@ -19,11 +20,7 @@ type Group = {
 
 const url = Astro.url;
 const { tenantId, projectId, lang } = dashboardPageParams(url, Astro.request.headers.get("cookie"));
-const copy = {
-  en: { title: "Groups", create: "Create group", name: "Name", slug: "Slug", description: "Description", details: "Details", empty: "No groups yet.", created: "Created", createError: "Group could not be created", loadError: "Groups could not be loaded" },
-  ja: { title: "グループ", create: "グループを作成", name: "名前", slug: "識別子", description: "説明", details: "詳細", empty: "グループはまだありません。", created: "作成しました", createError: "グループを作成できませんでした", loadError: "グループを取得できませんでした" },
-  zh: { title: "群组", create: "创建群组", name: "名称", slug: "标识符", description: "说明", details: "详情", empty: "尚无群组。", created: "已创建", createError: "无法创建群组", loadError: "无法加载群组" }
-}[lang];
+const copy = groupsCopy(lang);
 const cookie = Astro.request.headers.get("cookie") ?? "";
 let message = "";
 let error = "";

@@ -87,8 +87,8 @@ const JAPANESE_LABELS: Record<DashboardLabelKind, Record<string, string>> = {
   permission: {
     "memory:read": "記憶の閲覧",
     "memory:write": "記憶の変更",
-    "task:read": "Taskの閲覧",
-    "task:replay": "Taskの再実行"
+    "task:read": "タスクの閲覧",
+    "task:replay": "タスクの再実行"
   },
   nodeKind: {
     semantic: "意味",
@@ -96,11 +96,11 @@ const JAPANESE_LABELS: Record<DashboardLabelKind, Record<string, string>> = {
     concept: "概念",
     project: "プロジェクト",
     document: "資料",
-    task: "Task"
+    task: "タスク"
   },
   signal: {
-    task_failed: "Taskの失敗",
-    task_stalled: "Taskの停滞",
+    task_failed: "タスクの失敗",
+    task_stalled: "タスクの停滞",
     handoff_unacked: "引き継ぎ未確認",
     impact_unreported: "影響未報告",
     retrieval_miss: "検索未ヒット",
@@ -110,7 +110,7 @@ const JAPANESE_LABELS: Record<DashboardLabelKind, Record<string, string>> = {
     memory_expired: "記憶の期限切れ"
   },
   event: {
-    "task.failed": "Taskの失敗",
+    "task.failed": "タスクの失敗",
     "memory.read": "メモリ参照",
     "memory.write": "メモリ更新",
     "memory.retrieval": "メモリ検索",

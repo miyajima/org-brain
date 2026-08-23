@@ -198,6 +198,7 @@ export type MemoryEvidenceBundle = {
   query_at: number;
   token_budget: number;
   estimated_tokens: number;
+  evidence_status: "sufficient" | "degraded" | "insufficient" | "conflicted";
   answer_template: "profile" | "timeline" | "multi_session" | "abstention" | "evidence";
   evidence: MemoryEvidenceBundleItem[];
   current_state: Array<Record<string, unknown>>;

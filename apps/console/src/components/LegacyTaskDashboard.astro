@@ -4,6 +4,7 @@ import {
   type DashboardTask
 } from "../lib/dashboard-page";
 import { dashboardLabel, dashboardStatusTone } from "../lib/dashboard-copy";
+import { taskDashboardCopy } from "../lib/console-locale";
 
 const {
   tasks,
@@ -27,80 +28,7 @@ const {
   hasMore?: boolean;
 };
 
-const copy = {
-  en: {
-    title: "Org Brain Tasks",
-    description: "Recent tasks and their current status.",
-    preview: "Task list",
-    search: "Search tasks",
-    searchPlaceholder: "ID, capability, or project",
-    status: "Status",
-    all: "All statuses",
-    apply: "Apply",
-    clear: "Clear",
-    currentPage: "Status on this page",
-    results: "Showing {count}{suffix} tasks · Page {page}",
-    empty: "No tasks match the current scope.",
-    unavailable: "Tasks could not be loaded",
-    retry: "Retry",
-    taskId: "Task ID",
-    capability: "Capability",
-    updated: "Updated",
-    previous: "Previous",
-    next: "Next",
-    more: "More tasks are available on the next page.",
-    tenant: "Tenant",
-    pagination: "Task pagination"
-  },
-  ja: {
-    title: "Org Brain Task一覧",
-    description: "最近のTaskと現在のステータスを確認します。",
-    preview: "Task一覧",
-    search: "Taskを検索",
-    searchPlaceholder: "ID・処理名・プロジェクト",
-    status: "ステータス",
-    all: "すべてのステータス",
-    apply: "適用",
-    clear: "クリア",
-    currentPage: "このページのステータス",
-    results: "{count}件{suffix}を表示 · {page}ページ目",
-    empty: "現在のスコープに一致するTaskはありません。",
-    unavailable: "Taskを取得できませんでした",
-    retry: "再試行",
-    taskId: "Task ID",
-    capability: "処理",
-    updated: "更新日時",
-    previous: "前へ",
-    next: "次へ",
-    more: "次のページに続きがあります。",
-    tenant: "テナント",
-    pagination: "Taskページ"
-  },
-  zh: {
-    title: "Org Brain 仪表盘",
-    description: "查看最近的任务及其当前状态。",
-    preview: "经典任务视图",
-    search: "搜索任务",
-    searchPlaceholder: "ID、能力或项目",
-    status: "状态",
-    all: "所有状态",
-    apply: "应用",
-    clear: "清除",
-    currentPage: "本页状态",
-    results: "显示 {count}{suffix} 个任务 · 第 {page} 页",
-    empty: "当前范围内没有匹配的任务。",
-    unavailable: "无法获取任务",
-    retry: "重试",
-    taskId: "任务 ID",
-    capability: "能力",
-    updated: "更新时间",
-    previous: "上一页",
-    next: "下一页",
-    more: "下一页还有更多任务。",
-    tenant: "Tenant",
-    pagination: "任务分页"
-  }
-}[lang];
+const copy = taskDashboardCopy(lang);
 
 const visibleTasks = tasks.slice(0, pageSize);
 const statuses = [...new Set([

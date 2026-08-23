@@ -1462,6 +1462,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/auth/me" && request.method === "GET") {
+    const personal = url.searchParams.get("tenant_id") === "personal-e2e";
     json(response, 200, ok({
       tenant_id: url.searchParams.get("tenant_id") || "default",
       auth: {
@@ -1479,7 +1480,19 @@ const server = http.createServer(async (request, response) => {
         organization_name: "Platform Lab",
         avatar_url: "https://example.com/avatar.png"
       },
-      groups: []
+      groups: [],
+      console_context: {
+        mode: personal ? "personal" : "team",
+        effective_permissions: ["read", "write", "share", "admin", "delete", "export", "memory:attest"],
+        can_manage_users: true,
+        can_manage_groups: true,
+        can_manage_clients: true,
+        tenant: { id: url.searchParams.get("tenant_id") || "default" },
+        project: url.searchParams.get("project_id") ? { id: url.searchParams.get("project_id") } : null,
+        counts: personal
+          ? { active_users: 1, active_groups: 0, active_projects: 0 }
+          : { active_users: 8, active_groups: 3, active_projects: 2 }
+      }
     }));
     return;
   }

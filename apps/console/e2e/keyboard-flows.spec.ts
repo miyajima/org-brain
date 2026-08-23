@@ -18,6 +18,9 @@ test.describe("keyboard-only administration flows", () => {
     await form.locator('select[name="role"]').selectOption("reader");
     await form.locator('button[type="submit"]').focus();
     await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Confirm this change" })).toBeVisible();
+    await page.getByRole("button", { name: "Apply change" }).focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByText("Invitation created.")).toBeVisible();
   });
 

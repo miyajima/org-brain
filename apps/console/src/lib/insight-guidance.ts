@@ -78,18 +78,18 @@ const COPY = {
       heading: "この画面の使い方",
       labels: ["この画面を使う場面", "ここでわかること", "最初に見る場所"],
       activity: ["日々の状況確認や、失敗・停滞の原因を調べるとき", "誰が何を行い、Org Brainを通じて活動がどう動いたか", "活動経路で全体を見てから、タイムラインで直近イベントを確認"],
-      connections: ["重要な知識を利用・変更する前", "関連する判断・資料・プロジェクト・Taskと影響範囲", "ノードを選び、根拠と確認候補を確認"],
+      connections: ["重要な知識を利用・変更する前", "関連する判断・資料・プロジェクト・タスクと影響範囲", "ノードを選び、根拠と確認候補を確認"],
       history: ["現在の知識が正しいか、なぜ変わったか確認するとき", "何がいつ変わり、どの根拠に支えられているか", "現在の要約を読んでから時間軸を探索"]
     },
     briefing: "いま見るべきこと",
     activityHealthy: ["現在、対応が必要なシグナルはありません", "直近の観測には警告・重大シグナルが記録されていません。"],
-    activity: { title: "確認が必要なシグナル", ctaTask: "Taskを確認", ctaSignal: "トレースを確認", evidence: "シグナル" },
+    activity: { title: "確認が必要なシグナル", ctaTask: "タスクを確認", ctaSignal: "トレースを確認", evidence: "シグナル" },
     knowledgeHealthy: ["この知識に確認候補はありません", "選択中の知識には、信頼度・利用・関連が記録されています。"],
     knowledgeEmpty: ["確認できる知識がありません", "対象範囲を変更するか、知識を追加すると信頼度と関連を確認できます。"],
     knowledge: {
       missingConfidence: ["信頼度が未設定です", "この知識を使う前に、根拠と現在の状態を確認してください。", "信頼度 未計測"],
       lowConfidence: ["信頼度を確認", "現在の確認基準である70%を下回っています。", "信頼度 {value}%"],
-      isolated: ["関連がまだ記録されていません", "関連する判断・資料・Taskを確認すると、影響範囲を理解できます。", "接続数 0"],
+      isolated: ["関連がまだ記録されていません", "関連する判断・資料・タスクを確認すると、影響範囲を理解できます。", "接続数 0"],
       unused: ["最近の利用が記録されていません", "過去30日間の利用がないため、内容の鮮度を確認できます。", "30日利用 0"],
       ctaContent: "内容を確認",
       ctaEvidence: "根拠を追加",
@@ -208,8 +208,8 @@ function activitySelectionHref(eventId: string, params: URLSearchParams, pathnam
 function activitySignalReason(kind: string, fallback: string, locale: Locale): string {
   if (locale !== "ja") return fallback;
   const reasons: Record<string, string> = {
-    task_failed: "Taskが失敗しており、確認が必要です。",
-    task_stalled: "Taskが停滞しています。状態と依存関係を確認してください。",
+    task_failed: "タスクが失敗しており、確認が必要です。",
+    task_stalled: "タスクが停滞しています。状態と依存関係を確認してください。",
     handoff_unacked: "引き継ぎが確認されていません。担当者と状態を確認してください。",
     impact_unreported: "影響範囲が未報告です。関連する記録を確認してください。",
     retrieval_miss: "検索で必要な知識が見つかっていません。根拠と検索条件を確認してください。",
@@ -260,7 +260,7 @@ export function activityRecommendedActions(
       tone: event.severity === "critical" ? "critical" : "warning",
       title: copy.title,
       reason: locale === "ja" && event.status === "failed"
-        ? `Task「${event.subject.label}」が失敗しています。原因を確認してください。`
+        ? `タスク「${event.subject.label}」が失敗しています。原因を確認してください。`
         : event.summary,
       evidence: `${dashboardLabel("event", event.type, locale)} · ${dashboardLabel("status", event.status ?? event.severity, locale)}`,
       cta: event.task_id ? copy.ctaTask : copy.ctaSignal,

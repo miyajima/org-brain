@@ -241,6 +241,29 @@
     box-shadow: 0 0 18px rgba(49, 153, 255, 0.2);
   }
 
+  .console-context-chip {
+    @apply hidden min-h-8 max-w-56 items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-3 text-xs text-zinc-300 xl:inline-flex;
+  }
+
+  .admin-confirm-dialog {
+    width: min(32rem, calc(100vw - 2rem));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 1.25rem;
+    background: #090d14;
+    color: #f4f4f5;
+    padding: 0;
+    box-shadow: 0 32px 100px rgba(0, 0, 0, 0.7);
+  }
+
+  .admin-confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(3px); }
+  .admin-confirm-card { @apply grid gap-5 p-6; }
+  .admin-confirm-card h2 { @apply text-xl font-semibold; }
+  .admin-confirm-card dl { @apply grid gap-3; }
+  .admin-confirm-card dl div { @apply rounded-xl border border-white/8 bg-white/[0.035] p-3; }
+  .admin-confirm-card dt { @apply text-xs font-medium uppercase tracking-wider text-zinc-500; }
+  .admin-confirm-card dd { @apply mt-1 text-sm leading-6 text-zinc-200; }
+  .admin-confirm-actions { @apply flex flex-wrap justify-end gap-3; }
+
   .console-nav-menu {
     @apply relative;
   }

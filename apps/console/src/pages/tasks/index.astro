@@ -2,6 +2,7 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import LegacyTaskDashboard from "../../components/LegacyTaskDashboard.astro";
 import { dashboardApiPath, dashboardTaskPageParams, fetchDashboardData, normalizeDashboardTasks } from "../../lib/dashboard-page";
+import { taskListTitle } from "../../lib/console-locale";
 
 const cookieHeader = Astro.request.headers.get("cookie");
 const taskView = dashboardTaskPageParams(Astro.url, cookieHeader);
@@ -10,7 +11,7 @@ const taskResult = await fetchDashboardData(
   normalizeDashboardTasks,
   []
 );
-const title = { en: "Tasks · Org Brain", ja: "Task一覧 · Org Brain", zh: "任务 · Org Brain" }[taskView.lang];
+const title = taskListTitle(taskView.lang);
 ---
 <BaseLayout title={title} lang={taskView.lang}>
   <LegacyTaskDashboard

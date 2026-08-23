@@ -1,15 +1,14 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import ConfirmationDialog from "../components/admin/ConfirmationDialog.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
+import { clientInstallationsCopy } from "../lib/console-locale";
 
 Astro.response.headers.set("Cache-Control", "no-store");
 
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
-const copy = {
-  en: { title: "Client installations", body: "Manage unattended hook credentials for Codex, Claude Code, and Cursor by machine and client. Interactive OAuth sessions remain managed by Cloudflare Access and each client.", revoked: "Client installation revoked.", revokeError: "Client installation could not be revoked.", pending: "Pending client installation created.", createError: "Client installation could not be created", oneTime: "This enrollment code is shown only once", expires: "Expires", secretNote: "Store it securely and separately from the service-token secret.", client: "Client", device: "Device label", devicePlaceholder: "Work Mac", create: "Create enrollment", created: "Created", lastUsed: "Last used", never: "Never used", revoke: "Revoke", empty: "No client installations yet." },
-  ja: { title: "クライアント導入", body: "Codex、Claude Code、Cursorの無人hook credentialをマシン・クライアント単位で管理します。対話型OAuth sessionはCloudflare Accessと各クライアントが管理します。", revoked: "クライアント導入を無効化しました。", revokeError: "クライアント導入を無効化できませんでした。", pending: "保留中のクライアント導入を作成しました。", createError: "クライアント導入を作成できませんでした", oneTime: "登録コードは今回だけ表示されます", expires: "有効期限", secretNote: "service tokenのsecretとは分けて安全に保管してください。", client: "クライアント", device: "端末名", devicePlaceholder: "業務用Mac", create: "登録を作成", created: "作成", lastUsed: "最終利用", never: "未使用", revoke: "無効化", empty: "クライアント導入はまだありません。" },
-  zh: { title: "客户端安装", body: "按设备和客户端管理 Codex、Claude Code 与 Cursor 的无人值守 hook 凭据。交互式 OAuth 会话仍由 Cloudflare Access 和各客户端管理。", revoked: "已撤销客户端安装。", revokeError: "无法撤销客户端安装。", pending: "已创建待处理的客户端安装。", createError: "无法创建客户端安装", oneTime: "此注册码仅显示一次", expires: "有效期至", secretNote: "请与 service token 密钥分开安全保存。", client: "客户端", device: "设备名称", devicePlaceholder: "工作 Mac", create: "创建注册", created: "创建于", lastUsed: "最后使用", never: "从未使用", revoke: "撤销", empty: "尚无客户端安装。" }
-}[lang];
+const copy = clientInstallationsCopy(lang);
+const enrollmentCopy = copy;
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const accessJwt = Astro.request.headers.get("cf-access-jwt-assertion")?.trim() || "";
 const api = async (path: string, init: RequestInit = {}) => {
@@ -24,7 +23,7 @@ const api = async (path: string, init: RequestInit = {}) => {
 
 let message = "";
 let error = "";
-let enrollment: { code: string; expiresAt: number } | null = null;
+let enrollment: { code: string; expiresAt: number; clientType: string; deviceLabel: string } | null = null;
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -52,7 +51,9 @@ if (Astro.request.method === "POST") {
     if (response.ok && payload?.data?.enrollment_code) {
       enrollment = {
         code: payload.data.enrollment_code,
-        expiresAt: Number(payload.data.enrollment_expires_at)
+        expiresAt: Number(payload.data.enrollment_expires_at),
+        clientType: String(form.get("client_type") ?? "codex"),
+        deviceLabel: String(form.get("device_label") ?? "")
       };
       message = copy.pending;
     } else {
@@ -73,6 +74,9 @@ const formatDate = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value)
     ? new Date(value).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")
     : copy.never;
+const setupCommand = enrollment
+  ? `ORGBRAIN_SETUP_ENROLLMENT_CODE='${enrollment.code}' orgbrain connector setup ${enrollment.clientType} --mode cloud-hooks --url "$ORGBRAIN_API_URL" --execute --approve-hooks`
+  : "";
 ---
 <BaseLayout title={copy.title} lang={lang}>
   <section class="admin-page">
@@ -89,9 +93,15 @@ const formatDate = (value: unknown) =>
       <aside class="rounded-[20px] border border-amber-300/30 bg-amber-300/[0.08] p-5">
         <p class="font-semibold text-amber-100">{copy.oneTime}</p>
         <code class="mt-3 block break-all rounded-xl bg-black/40 p-3 text-sm">{enrollment.code}</code>
+        <div class="mt-3 grid gap-2">
+          <code class="block break-all rounded-xl bg-black/40 p-3 text-sm" data-setup-command>{setupCommand}</code>
+          <button type="button" class="secondary-button justify-self-start" data-copy-command data-copied-label={enrollmentCopy.copied}>{enrollmentCopy.command}</button>
+        </div>
         <p class="mt-2 text-xs text-amber-100/70">
           {copy.expires}: {formatDate(enrollment.expiresAt)}。{copy.secretNote}
         </p>
+        <p class="mt-3 text-sm text-amber-50"><strong>{enrollmentCopy.verify}:</strong> {enrollmentCopy.verifyBody}</p>
+        <p class="mt-2 text-sm text-amber-100/80">{enrollmentCopy.recovery}</p>
       </aside>
     )}
 
@@ -127,7 +137,7 @@ const formatDate = (value: unknown) =>
             </p>
           </div>
           {installation.status !== "revoked" && (
-            <form method="post">
+            <form method="post" data-confirm="true" data-confirm-target={`${installation.device_label} (${installation.client_type})`} data-confirm-impact={lang === "ja" ? "この端末のcloud hook資格情報を直ちに無効化します。" : "Immediately revokes this device's cloud-hook credential."} data-confirm-recovery={lang === "ja" ? "元には戻せません。新しい登録コードを発行して再設定できます。" : "This cannot be undone. Issue a new enrollment code to reconnect."}>
               <input type="hidden" name="csrf_token" class="csrf-token" />
               <input type="hidden" name="action" value="revoke" />
               <input type="hidden" name="installation_id" value={installation.id} />
@@ -139,9 +149,17 @@ const formatDate = (value: unknown) =>
       {installations.length === 0 && <p class="admin-empty" role="status">{copy.empty}</p>}
     </div>
   </section>
+  <ConfirmationDialog lang={lang} />
 </BaseLayout>
 <script>
   document.querySelectorAll<HTMLInputElement>(".csrf-token").forEach((input) => {
     input.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  });
+  const copyButton = document.querySelector<HTMLButtonElement>("[data-copy-command]");
+  copyButton?.addEventListener("click", async () => {
+    const command = document.querySelector<HTMLElement>("[data-setup-command]")?.textContent ?? "";
+    if (!command) return;
+    await navigator.clipboard.writeText(command);
+    copyButton.textContent = copyButton.dataset.copiedLabel ?? copyButton.textContent;
   });
 </script>

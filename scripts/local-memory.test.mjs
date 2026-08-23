@@ -348,6 +348,10 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
     assert.ok(context.evidence_bundle.estimated_tokens <= 512);
     assert.ok(context.evidence_bundle.evidence.length >= 1);
     assert.ok(context.evidence_bundle.current_state.length >= 1);
+    assert.equal(context.evidence_bundle.evidence_status, "degraded");
+    assert.equal(context.evidence_bundle.abstention_recommended, false);
+    assert.equal(context.evidence_bundle.answer_template, "timeline");
+    assert.deepEqual(context.evidence_bundle.missing_evidence, []);
     assert.equal(context.evidence_bundle.degraded_reasons.includes(
       "gemini_structured_extractor_not_configured"
     ), true);

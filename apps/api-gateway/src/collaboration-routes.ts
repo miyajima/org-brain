@@ -9,7 +9,7 @@ import type { Hono } from "hono";
 export function registerCollaborationRoutes(app: Hono<ApiContextEnv>): void {
 app.get("/v1/auth/me", async (c) => {
   const tenantId = assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await getMyIdentity(c.env, tenantId, getApiAuthContext(c));
+  const result = await getMyIdentity(c.env, tenantId, getApiAuthContext(c), c.req.query("project_id")?.trim() || null);
   return jsonOk(c, result);
 });
 

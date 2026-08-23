@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
-import { buildCloudProvisionPlan, runCloudCommand } from "../packages/orgbrain-cli/src/cloud-operations.mjs";
+import {
+  buildCloudProvisionPlan,
+  diagnoseRemoteMcp,
+  runCloudCommand
+} from "../packages/orgbrain-cli/src/cloud-operations.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,6 +46,58 @@ test("cf provision defaults to an inspectable non-mutating plan", async () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.dry_run, true);
+});
+
+test("cf provision plans a dedicated MCP hostname and explicit Managed OAuth policy", () => {
+  const plan = buildCloudProvisionPlan({
+    root: process.cwd(),
+    withManagedOAuth: true,
+    mcpHost: "mcp.example.test",
+    accessPolicyId: "12345678-1234-1234-1234-123456789abc"
+  });
+  assert.deepEqual(plan.resources.managed_oauth, {
+    host: "mcp.example.test",
+    endpoint: "https://mcp.example.test/mcp",
+    access_policy_id: "12345678-1234-1234-1234-123456789abc",
+    access_application_domain: "mcp.example.test/mcp*"
+  });
+  const deploy = plan.steps.find((step) => step.id === "deploy_mcp");
+  assert.deepEqual(deploy.command.args.slice(-2), ["--route", "mcp.example.test/*"]);
+  assert.ok(plan.steps.some((step) => step.id === "ensure_mcp_access_application"));
+  assert.throws(
+    () => buildCloudProvisionPlan({ withManagedOAuth: true, mcpHost: "https://bad.test", accessPolicyId: "12345678-1234-1234-1234-123456789abc" }),
+    /managed DNS hostname/u
+  );
+});
+
+test("cf live doctor validates OAuth resource and authorization discovery", async () => {
+  const responses = new Map([
+    ["https://mcp.example.test/mcp", new Response("unauthorized", {
+      status: 401,
+      headers: {
+        "www-authenticate": "Bearer resource_metadata=\"https://mcp.example.test/.well-known/oauth-protected-resource\""
+      }
+    })],
+    ["https://mcp.example.test/.well-known/oauth-protected-resource", new Response(JSON.stringify({
+      resource: "https://mcp.example.test/mcp",
+      authorization_servers: ["https://auth.example.test"]
+    }), { status: 200, headers: { "content-type": "application/json" } })],
+    ["https://auth.example.test/.well-known/oauth-authorization-server", new Response(JSON.stringify({
+      issuer: "https://auth.example.test",
+      authorization_endpoint: "https://auth.example.test/authorize",
+      token_endpoint: "https://auth.example.test/token"
+    }), { status: 200, headers: { "content-type": "application/json" } })]
+  ]);
+  const checks = await diagnoseRemoteMcp("https://mcp.example.test", {
+    fetchImpl: async (url) => {
+      const response = responses.get(String(url));
+      if (!response) throw new Error(`unexpected URL: ${url}`);
+      return response.clone();
+    }
+  });
+  assert.equal(checks.find((check) => check.id === "mcp-managed-oauth-challenge")?.ok, true);
+  assert.equal(checks.find((check) => check.id === "mcp-protected-resource-discovery")?.ok, true);
+  assert.equal(checks.find((check) => check.id === "mcp-authorization-server-discovery")?.ok, true);
 });
 
 test("cf doctor validates shared D1 bindings and migration sources locally", async () => {

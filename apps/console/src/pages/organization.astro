@@ -3,12 +3,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
 import LiveNotice from "../components/admin/LiveNotice.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
+import { organizationCopy } from "../lib/console-locale";
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
-const copy = {
-  en: { title: "Organization", displayName: "Display name", slug: "Slug", domains: "Allowed email domains", selfRegistration: "Allow email self-registration", save: "Save", saved: "Saved", saveError: "Organization could not be saved", ownership: "Memory ownership", mappings: "Producer → owner mappings", mappingBody: "Connect memories recorded by a service or agent principal to the responsible business owner.", producer: "Producer principal", owner: "Owner principal", saveMapping: "Save mapping", mappingSaved: "Ownership mapping saved", mappingError: "Ownership mapping could not be saved", updated: "Updated", empty: "No producer-owner mappings yet." },
-  ja: { title: "組織設定", displayName: "表示名", slug: "識別子", domains: "許可するメールドメイン", selfRegistration: "メールでの自己登録を許可", save: "保存", saved: "保存しました", saveError: "組織設定を保存できませんでした", ownership: "メモリの所有者", mappings: "記録者 → 所有者の対応", mappingBody: "サービスやエージェントが記録したメモリを、業務上の所有者へ明示的に結び付けます。", producer: "記録者principal", owner: "所有者principal", saveMapping: "対応を保存", mappingSaved: "所有者の対応を保存しました", mappingError: "所有者の対応を保存できませんでした", updated: "更新日時", empty: "記録者と所有者の対応はまだありません。" },
-  zh: { title: "组织设置", displayName: "显示名称", slug: "标识符", domains: "允许的邮箱域名", selfRegistration: "允许邮箱自助注册", save: "保存", saved: "已保存", saveError: "无法保存组织设置", ownership: "记忆所有权", mappings: "记录者 → 所有者映射", mappingBody: "将服务或代理记录的记忆明确关联到业务负责人。", producer: "记录者 principal", owner: "所有者 principal", saveMapping: "保存映射", mappingSaved: "已保存所有权映射", mappingError: "无法保存所有权映射", updated: "更新时间", empty: "尚无记录者与所有者映射。" }
-}[lang];
+const copy = organizationCopy(lang);
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
   ...init, headers: { cookie, ...(init.headers ?? {}) }
@@ -69,6 +66,7 @@ const mappings = mappingsResponse.ok && Array.isArray(mappingsPayload?.data) ? m
         <p class="surface-label">{copy.ownership}</p>
         <h2 class="mt-2 text-xl font-semibold text-white">{copy.mappings}</h2>
         <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">{copy.mappingBody}</p>
+        <p class="mt-2 max-w-2xl text-xs leading-5 text-zinc-500">{copy.principalHelp}</p>
       </div>
       <form method="post" class="grid gap-4 md:grid-cols-2 md:items-end">
         <input type="hidden" name="action" value="mapping" />

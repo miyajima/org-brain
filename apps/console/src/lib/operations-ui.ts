@@ -34,9 +34,9 @@ export function buildOperationsActions(status: OperationsStatus, locale: Operati
       audit: ["Review audit events", (denied: number, failed: number) => `${denied} denied and ${failed} failed events were recorded in the last 24 hours.`]
     },
     ja: {
-      failed: ["失敗・隔離Task", (n: number) => `${n}件のTaskが失敗しています。原因を確認して再実行または修正してください。`],
+      failed: ["失敗・隔離タスク", (n: number) => `${n}件のタスクが失敗しています。原因を確認して再実行または修正してください。`],
       retention: ["保持期限の処理遅延", (n: number) => `${n}件の削除処理が失敗または期限超過です。`],
-      stuck: ["停滞中のTask", (n: number) => `${n}件のTaskが進行していません。キュー状態を確認してください。`],
+      stuck: ["停滞中のタスク", (n: number) => `${n}件のタスクが進行していません。キュー状態を確認してください。`],
       conflict: ["記憶の競合", (n: number) => `${n}件の記憶に競合があります。根拠と最新状態を確認してください。`],
       decision: ["判断の確認待ち", (n: number) => `${n}件の判断に未確認または低信頼の状態があります。`],
       stale: ["定期処理の遅延", (n: number) => `${n}件の定期処理が古い状態です。最終成功時刻を確認してください。`],
