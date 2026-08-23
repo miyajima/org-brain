@@ -1,17 +1,17 @@
 import { expect, test } from "@playwright/test";
 
 test("previews and batch-installs the four first-party Domain Packs without fixtures", async ({ page }) => {
-  await page.goto("/domain-packs?tenant_id=default");
+  await page.goto("/domain-packs?tenant_id=default&lang=ja");
   await expect(page.getByRole("heading", { name: "業務ドメインをひとまとまりで導入" })).toBeVisible();
   for (const name of ["Build Engineering", "SRE", "Sales", "PdM — B2C Marketplace"]) {
     await expect(page.getByRole("heading", { name })).toBeVisible();
   }
   await expect(page.getByRole("link", { name: "Enterprise Pack Builder" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Install diffをpreview" }).click();
+  await page.getByRole("button", { name: "導入差分を確認" }).click();
   await expect(page.locator("p.surface-label", { hasText: "INSTALL DIFF" })).toBeVisible();
   await expect(page.getByText("examples/story-v1.json", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "選択したPackを適用" }).click();
-  await expect(page.getByText("4 Packを適用しました。fixtureは投入されていません。")).toBeVisible();
+  await page.getByRole("button", { name: "選択したパックを適用" }).click();
+  await expect(page.getByText("4件のパックを適用しました。評価用データは投入していません。")).toBeVisible();
 });
 
 test("creates a Manifest-external metric and adds it to a Dashboard", async ({ page }) => {
