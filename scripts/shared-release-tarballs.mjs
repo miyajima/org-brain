@@ -7,6 +7,7 @@ export const sharedPackageSpecs = [
   {
     name: "@org-brain/contracts",
     version: "0.4.0",
+    directory: "packages/contracts",
     filename: "org-brain-contracts-0.4.0.tgz",
     internalDependencies: {},
     fixtures: ["package/fixtures/memory-impact-v1.json"]
@@ -14,6 +15,7 @@ export const sharedPackageSpecs = [
   {
     name: "@org-brain/core",
     version: "0.4.0",
+    directory: "packages/core",
     filename: "org-brain-core-0.4.0.tgz",
     internalDependencies: { "@org-brain/contracts": "0.4.0" },
     fixtures: []
@@ -21,6 +23,7 @@ export const sharedPackageSpecs = [
   {
     name: "@org-brain/server-core",
     version: "0.1.0",
+    directory: "packages/server-core",
     filename: "org-brain-server-core-0.1.0.tgz",
     internalDependencies: {
       "@org-brain/contracts": "0.4.0",
@@ -34,6 +37,7 @@ export const sharedPackageSpecs = [
   {
     name: "@org-brain/mcp-core",
     version: "0.1.0",
+    directory: "packages/mcp-core",
     filename: "org-brain-mcp-core-0.1.0.tgz",
     internalDependencies: { "@org-brain/contracts": "0.4.0" },
     fixtures: [
@@ -73,6 +77,12 @@ export function validateTarballContents(spec, manifest, entries) {
   invariant(manifest.name === spec.name, `${spec.filename}: unexpected package name`);
   invariant(manifest.version === spec.version, `${spec.filename}: unexpected package version`);
   invariant(manifest.license === "Apache-2.0", `${spec.filename}: Apache-2.0 license metadata required`);
+  invariant(
+    manifest.repository?.type === "git"
+      && manifest.repository?.url === "git+https://github.com/miyajima/org-brain.git"
+      && manifest.repository?.directory === spec.directory,
+    `${spec.filename}: repository metadata must match the OrgBrain monorepo package directory`
+  );
 
   for (const section of dependencySections) {
     for (const [name, version] of Object.entries(manifest[section] ?? {})) {
