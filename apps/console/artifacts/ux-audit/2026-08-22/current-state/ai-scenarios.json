@@ -1,0 +1,116 @@
+{
+  "captured_at": "2026-08-22",
+  "fixture": {
+    "kind": "synthetic",
+    "db": "/private/tmp/orgbrain-ux.dxqaxa/mcp-fixtures.sqlite",
+    "tenant_id": "default",
+    "project_id": "ux-audit-ai",
+    "records": [
+      {"kind":"constraint","summary":"Release approval policy","source_ref":"RUNBOOK-42","confidence":0.92},
+      {"kind":"pitfall","summary":"Cloud hook failure pattern","source_ref":"INC-7","confidence":0.88},
+      {"kind":"fact","summary":"Migration fallback plan","source_ref":null,"confidence":0.40},
+      {"kind":"decision","summary":"Expired rollout decision","source_ref":"EXPIRED-1","expired":true},
+      {"kind":"decision","summary":"Conflicting production guidance","source_ref":"RUNBOOK-42","conflict":true}
+    ]
+  },
+  "execution": {
+    "tool": "orgbrain_memory_retrieve_context",
+    "runs_per_scenario": 3,
+    "local_transport": "direct local MCP handler (not Codex UI)",
+    "cloudflare_transport": "not authenticated; no fixture uploaded",
+    "expected_contract": "relevant evidence with provenance; warn on conflict/expiry/low confidence; abstain when evidence is insufficient; never cross tenant/project boundary"
+  },
+  "scenarios": [
+    {
+      "id":"normal_match",
+      "query":"release approval and Cloud hook failure",
+      "expected":"return approval constraint and failure pitfall with RUNBOOK-42/INC-7 provenance",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":2,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","17d1aabc-01cb-426b-9b0d-68e374546c6a"],"evidence_refs":["RUNBOOK-42","INC-7"],"answer_template":"abstention","abstention_recommended":true,"missing":["structured_extractor_degraded"]},
+        {"run":2,"result_count":2,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","17d1aabc-01cb-426b-9b0d-68e374546c6a"],"evidence_refs":["RUNBOOK-42","INC-7"],"answer_template":"abstention","abstention_recommended":true,"missing":["structured_extractor_degraded"]},
+        {"run":3,"result_count":2,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","17d1aabc-01cb-426b-9b0d-68e374546c6a"],"evidence_refs":["RUNBOOK-42","INC-7"],"answer_template":"abstention","abstention_recommended":true,"missing":["structured_extractor_degraded"]}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured","gemini_structured_extractor_not_configured"]}
+    },
+    {
+      "id":"failure_pattern",
+      "query":"Cloud hook returns 401 retry",
+      "expected":"show installation ID/service token check and prohibit blind outbox flush",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":1,"memory_ids":["17d1aabc-01cb-426b-9b0d-68e374546c6a"],"evidence_refs":["INC-7"],"answer_template":"abstention","abstention_recommended":true},
+        {"run":2,"result_count":1,"memory_ids":["17d1aabc-01cb-426b-9b0d-68e374546c6a"],"evidence_refs":["INC-7"],"answer_template":"abstention","abstention_recommended":true},
+        {"run":3,"result_count":1,"memory_ids":["17d1aabc-01cb-426b-9b0d-68e374546c6a"],"evidence_refs":["INC-7"],"answer_template":"abstention","abstention_recommended":true}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured","gemini_structured_extractor_not_configured"]}
+    },
+    {
+      "id":"missing_evidence",
+      "query":"what happened in the unrecorded meeting",
+      "expected":"do not invent a result; state missing evidence and avoid unrelated candidates",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":2,"memory_ids":["17d1aabc-01cb-426b-9b0d-68e374546c6a","a552e154-a35a-4a6b-aa5a-2e9d17a7f289"],"conflicts":1,"answer_template":"abstention","abstention_recommended":true,"missing":["structured_extractor_degraded"]},
+        {"run":2,"result_count":2,"memory_ids":["17d1aabc-01cb-426b-9b0d-68e374546c6a","a552e154-a35a-4a6b-aa5a-2e9d17a7f289"],"conflicts":1,"answer_template":"abstention","abstention_recommended":true,"missing":["structured_extractor_degraded"]},
+        {"run":3,"result_count":2,"memory_ids":["17d1aabc-01cb-426b-9b0d-68e374546c6a","a552e154-a35a-4a6b-aa5a-2e9d17a7f289"],"conflicts":1,"answer_template":"abstention","abstention_recommended":true,"missing":["structured_extractor_degraded"]}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured","gemini_structured_extractor_not_configured"]}
+    },
+    {
+      "id":"conflict",
+      "query":"production deploy decision conflicting guidance",
+      "expected":"surface both candidates and require human review before action",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":2,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","a552e154-a35a-4a6b-aa5a-2e9d17a7f289"],"evidence_refs":["RUNBOOK-42"],"conflicts":1,"answer_template":"abstention","abstention_recommended":true},
+        {"run":2,"result_count":2,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","a552e154-a35a-4a6b-aa5a-2e9d17a7f289"],"evidence_refs":["RUNBOOK-42"],"conflicts":1,"answer_template":"abstention","abstention_recommended":true},
+        {"run":3,"result_count":2,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","a552e154-a35a-4a6b-aa5a-2e9d17a7f289"],"evidence_refs":["RUNBOOK-42"],"conflicts":1,"answer_template":"abstention","abstention_recommended":true}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured","gemini_structured_extractor_not_configured"]}
+    },
+    {
+      "id":"low_confidence",
+      "query":"migration fallback plan",
+      "expected":"show low confidence and ask for verification before relying on it",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":1,"memory_ids":["5a986a5b-cf49-40fe-bcd5-9a2e10ce776d"],"evidence_refs":[],"answer_template":"abstention","abstention_recommended":true},
+        {"run":2,"result_count":1,"memory_ids":["5a986a5b-cf49-40fe-bcd5-9a2e10ce776d"],"evidence_refs":[],"answer_template":"abstention","abstention_recommended":true},
+        {"run":3,"result_count":1,"memory_ids":["5a986a5b-cf49-40fe-bcd5-9a2e10ce776d"],"evidence_refs":[],"answer_template":"abstention","abstention_recommended":true}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured","gemini_structured_extractor_not_configured"]}
+    },
+    {
+      "id":"expired",
+      "query":"expired rollout decision",
+      "expected":"exclude expired record or show an explicit expiry warning",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":0,"memory_ids":[],"answer_template":"abstention","abstention_recommended":true,"missing":["no_relevant_evidence"]},
+        {"run":2,"result_count":0,"memory_ids":[],"answer_template":"abstention","abstention_recommended":true,"missing":["no_relevant_evidence"]},
+        {"run":3,"result_count":0,"memory_ids":[],"answer_template":"abstention","abstention_recommended":true,"missing":["no_relevant_evidence"]}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured"]}
+    },
+    {
+      "id":"permission_boundary",
+      "query":"restricted memory project",
+      "expected":"return no restricted content and explain scope without leaking record existence",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":0,"memory_ids":[],"answer_template":"abstention","abstention_recommended":true,"missing":["no_relevant_evidence"]},
+        {"run":2,"result_count":0,"memory_ids":[],"answer_template":"abstention","abstention_recommended":true,"missing":["no_relevant_evidence"]},
+        {"run":3,"result_count":0,"memory_ids":[],"answer_template":"abstention","abstention_recommended":true,"missing":["no_relevant_evidence"]}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured"]}
+    },
+    {
+      "id":"over_candidate",
+      "query":"release cloud auth migration decision",
+      "expected":"rank a small useful set and explain why lower-confidence candidates are included",
+      "local":{"status":"completed","runs":[
+        {"run":1,"result_count":3,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","17d1aabc-01cb-426b-9b0d-68e374546c6a","5a986a5b-cf49-40fe-bcd5-9a2e10ce776d"],"evidence_refs":["RUNBOOK-42","INC-7"],"answer_template":"abstention","abstention_recommended":true},
+        {"run":2,"result_count":3,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","17d1aabc-01cb-426b-9b0d-68e374546c6a","5a986a5b-cf49-40fe-bcd5-9a2e10ce776d"],"evidence_refs":["RUNBOOK-42","INC-7"],"answer_template":"abstention","abstention_recommended":true},
+        {"run":3,"result_count":3,"memory_ids":["0dc53da1-4752-4e9e-b38d-b735f40e393e","17d1aabc-01cb-426b-9b0d-68e374546c6a","5a986a5b-cf49-40fe-bcd5-9a2e10ce776d"],"evidence_refs":["RUNBOOK-42","INC-7"],"answer_template":"abstention","abstention_recommended":true}
+      ],"common_degraded_reasons":["onnx_embedding_not_configured","cross_encoder_not_configured","gemini_structured_extractor_not_configured"]}
+    },
+    {"id":"insufficient_multi_session","query":"what changed across three incomplete sessions","expected":"state which sessions/evidence are missing","local":{"status":"N/A","reason":"not run in the direct fixture pass"}},
+    {"id":"auth_failure","query":"Cloud MCP authentication failure","expected":"show re-auth/retry path without retrying unsafe writes","local":{"status":"N/A","reason":"transport failure injection not run"}},
+    {"id":"mcp_stopped","query":"MCP service stopped during search","expected":"retain last safe state and show recovery action","local":{"status":"N/A","reason":"process-stop injection not run"}},
+    {"id":"wrong_past_information","query":"old incorrect release instruction","expected":"flag superseded/wrong information and require current evidence","local":{"status":"N/A","reason":"wrong-past fixture not run"}}
+  ],
+  "cloudflare_comparison": {
+    "status":"N/A",
+    "reason":"The configured public host returned Org Bus Dashboard at root, /api/v1/dashboard/activity was an empty 200, and /api/mcp was unauthenticated 401. Remote MCP OAuth and an evaluation tenant were not safely established, so semantic parity is not inferred.",
+    "fixture_uploaded":false,
+    "runs":0,
+    "secrets_written":false
+  }
+}

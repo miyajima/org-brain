@@ -1,0 +1,20 @@
+OrgBrain UX audit Local MCP fixture evidence (synthetic, 2026-08-22)
+
+Tool: orgbrain_memory_retrieve_context
+Fixture: tenant=default, project=ux-audit-ai, 5 synthetic memories (constraint, pitfall, low-confidence fact, expired decision, conflict).
+Runs: 8 executed scenarios x 3 runs = 24 requests.
+
+Stable findings across all three runs per scenario:
+- normal_match: 2 relevant memories; RUNBOOK-42 and INC-7 provenance; abstention_recommended=true.
+- failure_pattern: 1 pitfall; INC-7; concrete installation-ID/service-token check; abstention_recommended=true.
+- missing_evidence: 2 candidates with one conflict; abstention_recommended=true.
+- conflict: 2 candidates with conflicts=1; abstention_recommended=true.
+- low_confidence: 1 candidate without evidence ref; abstention_recommended=true.
+- expired: 0 result; missing_evidence=no_relevant_evidence; abstention_recommended=true.
+- permission_boundary: 0 result; missing_evidence=no_relevant_evidence; abstention_recommended=true.
+- over_candidate: 3 candidates; RUNBOOK-42 and INC-7 provenance; abstention_recommended=true.
+
+Normal/failure/low-confidence/over-candidate paths expose:
+onnx_embedding_not_configured, cross_encoder_not_configured, gemini_structured_extractor_not_configured.
+
+This is direct local MCP evidence, not a Codex UI transcript. No raw session log or real-user content is stored.

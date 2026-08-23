@@ -1,0 +1,16 @@
+OrgBrain UX audit Cloudflare read-only evidence (2026-08-22)
+
+cf doctor: ok=true; all checked Wrangler configs present; D1 binding consistent as open-brain; queue topology and shared R2 binding present; canonical URL warning points to ORGBRAIN_API_URL.
+cf doctor --live: ok=true; cloudflare-authentication=verified.
+cf provision (dry-run): ok=true; dry_run=true; plan includes verify_identity, existing-resource ensure steps, migrations, worker deploy order, console build/deploy. No execute.
+
+Wrangler whoami: OAuth authentication succeeded. The token is broader than least privilege (multiple Workers/D1/Queues/write scopes). Account identity, email, IDs, and raw scope list are intentionally redacted.
+Wrangler d1/r2/queues list: read-only calls succeeded; existing open-brain resources are present. No list output is copied here to avoid unrelated resource metadata.
+
+Configured public host probes (no credentials, no body writes):
+GET /api/v1/dashboard/activity -> 200; body shape ok=true, events=0, observed_agents=0, attention=0.
+GET /api/mcp -> 401.
+GET /.well-known/oauth-authorization-server -> 404.
+GET / -> 200 Org Bus Dashboard, not expected OrgBrain Console.
+
+Remote-MCP/cloud-hooks connector dry-run: OAuth login or enrollment credentials, credential file, and hook approval are required. No apply, OAuth login, enrollment code, or hook credential was used.

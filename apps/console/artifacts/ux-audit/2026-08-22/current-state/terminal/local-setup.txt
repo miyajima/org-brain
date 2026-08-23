@@ -1,0 +1,30 @@
+OrgBrain UX audit local terminal evidence (2026-08-22)
+commit=4746fe70406656b4ec85fec485033dc4be5d4303
+node=v22.23.2
+pnpm=10.16.1
+
+$ node packages/orgbrain-cli/src/local-memory.mjs init --db /private/tmp/<audit>/memory.sqlite
+{"ok":true,"schema_version":24}
+observed real=0.05s
+
+$ node packages/orgbrain-cli/src/local-memory.mjs doctor --db /private/tmp/<audit>/memory.sqlite
+{"ok":true,"record_count":0,"version_count":0,"errors":[],"directory_mode":"700","database_mode":"600"}
+observed real=0.05s
+
+$ node packages/orgbrain-cli/src/local-memory.mjs memory capture ...
+{"memory_id":"<synthetic-id>","version":1,"operation":"capture","created":true}
+observed real=0.06s
+
+$ node packages/orgbrain-cli/src/local-memory.mjs memory search ...
+one matching synthetic memory; usage_id returned
+observed real=0.06s
+
+Connector MCP dry-run: codex mcp add orgbrain -- orgbrain mcp; verify with codex mcp get orgbrain --json.
+Connector minimal-hooks dry-run: no files written; --approve-hooks and trust are required.
+
+Installed CLI/source mismatch:
+- source: cf doctor / cf provision
+- installed global CLI: cloud doctor / cloud provision
+
+Local API first request before migration: 500 D1_ERROR no such table audit_events.
+After applying all current local migrations to the running API persist-to: 200 and explicit empty state.
