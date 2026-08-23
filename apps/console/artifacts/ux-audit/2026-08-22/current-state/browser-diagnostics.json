@@ -1,0 +1,57 @@
+{
+  "captured_at": "2026-08-22",
+  "commit": "4746fe70406656b4ec85fec485033dc4be5d4303",
+  "local_browser": {
+    "url": "http://127.0.0.1:4321/overview?tenant_id=default&project_id=org-brain&lang=ja",
+    "viewport_desktop": "1280x720",
+    "viewport_mobile": "390x844",
+    "devtools": {"console_errors": [], "console_warnings": [], "note": "Collected after migration; no browser console errors/warnings remained."},
+    "network": [
+      {"phase":"before_local_migration","request":"GET /v1/dashboard/activity","status":500,"display":"alert: D1_ERROR no such table audit_events; page did not treat it as healthy/empty"},
+      {"phase":"after_local_migration","request":"GET /v1/dashboard/activity","status":200,"display":"live timestamp, zero counters, explicit empty activity status"}
+    ],
+    "server_logs": [{"phase":"during_dev_hmr","status":"transient_error","message":"Vite reported Failed to load url astro:server-app.js during a full reload; subsequent /overview and API requests returned 200.","production_relevance":"development-server-only signal; not used as a production UX score"}],
+    "screenshots": [
+      "screenshots/01-home-ja.png",
+      "screenshots/02-home-ja-migrated.png",
+      "screenshots/03-overview-ja.png",
+      "screenshots/04-constellation-ja.png",
+      "screenshots/05-history-ja.png",
+      "screenshots/06-tasks-ja.png",
+      "screenshots/07-memories-ja.png",
+      "screenshots/08-organization-ja.png",
+      "screenshots/09-users-ja.png",
+      "screenshots/10-groups-ja.png",
+      "screenshots/11-client-installations-ja.png",
+      "screenshots/12-operations-ja.png",
+      "screenshots/13-profile-ja.png",
+      "screenshots/14-decisions-ja.png",
+      "screenshots/15-overview-mobile-ja.png",
+      "screenshots/16-memories-mobile-ja.png",
+      "screenshots/17-users-mobile-ja.png",
+      "screenshots/18-operations-mobile-ja.png",
+      "screenshots/19-decisions-mobile-ja.png"
+    ]
+  },
+  "automated_diagnostics": {
+    "accessibility_and_admin": {"passed":70,"failed":0,"scope":"mock API; axe A/AA, keyboard, horizontal overflow, 200% equivalent, forced colors"},
+    "dashboard_visualizations": {"passed":36,"failed":0,"scope":"mock API; activity, Strata, memory map, Task, Operations, mobile"},
+    "decision_console_v2": {"passed":25,"failed":0,"scope":"mock API; Decision map, trace, assets, mobile, axe"},
+    "total_passed":131,
+    "total_failed":0,
+    "voiceover": "not run",
+    "real_cloudflare_data": "not run"
+  },
+  "configured_public_endpoint": {
+    "host": "open-brain-console.pages.dev",
+    "request_body_or_credentials_sent": false,
+    "probes": [
+      {"path":"/api/v1/dashboard/activity","status":200,"body_shape":{"ok":true,"events":0,"observed_agents":0,"attention":0}},
+      {"path":"/api/mcp","status":401,"body":"not stored"},
+      {"path":"/.well-known/oauth-authorization-server","status":404},
+      {"path":"/api/mcp/.well-known/oauth-authorization-server","status":401},
+      {"path":"/","status":200,"display":"Org Bus Dashboard, not the expected OrgBrain Console"}
+    ],
+    "interpretation":"Status probes are not proof of Remote MCP OAuth or shared-memory readiness. No public response payload containing task/user data is stored."
+  }
+}

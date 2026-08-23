@@ -1,0 +1,24 @@
+domain,item,status,time_seconds,actions,retries,error_or_result,evidence,verification
+local,init,completed,0.05,1,0,schema_version=24,L-01,local_checked
+local,doctor,completed,0.05,1,0,directory_mode=700;database_mode=600;errors=0,L-01,local_checked
+local,memory_capture,completed,0.06,1,0,created=true;version=1,L-01,local_checked
+local,memory_search,completed,0.06,1,0,one matching memory;usage_id returned,L-01,local_checked
+local,connector_codex_mcp_dry_run,completed,0.05,1,0,codex mcp add plus verify command,L-02,local_checked
+local,connector_minimal_hooks_dry_run,partial,0.05,1,0,approval/trust required;no files written,L-02,local_checked
+local,api_start_before_migration,failed,1.20,1,0,D1_ERROR no such table audit_events,L-04,local_checked
+local,apply_local_d1_migrations,completed,8.80,1,0,40 migrations applied to API persist-to,L-04,local_checked
+local,console_reload_after_migration,completed,1.20,1,0,200 response;honest empty state,B-01,L-04
+local,desktop_route_capture,completed,12.30,12,0,12 routes;12 screenshots;DOM snapshots,B-01,local_checked
+local,mobile_route_capture,completed,4.70,5,0,390x844;5 screenshots;DOM snapshots,B-03,local_checked
+local,e2e_accessibility_keyboard_admin,completed,55.40,70,0,70 passed;0 failed;mock API,B-02,local_checked
+local,e2e_dashboard_visualizations,completed,24.40,36,0,36 passed;0 failed;mock API,B-02,local_checked
+local,e2e_decision_console_v2,completed,16.30,25,0,25 passed;0 failed;mock API,B-02,local_checked
+ai,local_mcp_fixture_8_scenarios_x3,completed,0.06,24,0,all requests returned;stable IDs/reasons;abstention path observed,AI-01,local_checked
+cloudflare,cf_doctor_local,completed,0.20,1,0,configs/bindings/topology OK,C-01,cloudflare_checked
+cloudflare,cf_doctor_live,completed,5.20,1,0,authentication verified;no mutation,C-01,cloudflare_checked
+cloudflare,cf_provision_dry_run,completed,0.10,1,0,resource plan and ordered steps;execute not run,C-02,cloudflare_checked
+cloudflare,wrangler_identity_and_resource_lists,completed,8.70,4,0,whoami+D1/R2/queues read-only;scope broad,C-03,cloudflare_checked
+cloudflare,configured_endpoint_probe,completed,3.40,8,0,activity=200;MCP=401;root target mismatch;no credentials,C-04,cloudflare_checked
+cloudflare,remote_mcp_connector_dry_run,partial,0.05,1,0,OAuth login required;no apply,C-05,cloudflare_checked
+cloudflare,cloud_hooks_connector_dry_run,partial,0.05,1,0,enrollment credentials and approval required;no apply,C-05,cloudflare_checked
+cloudflare,shared_memory_other_user,not_run,,0,0,requires team fixture and authenticated MCP,T-01,unverified
