@@ -55,23 +55,23 @@
 
 マイグレーション前は、画面が正常・空状態と誤認させず `D1_ERROR: no such table: audit_events` をalertに出した。これは復旧順序の案内が不足する一方、データがないことと障害を混同しない点は良い。
 
-![ローカルConsole初回のエラー状態](/Users/miyajimakazuhiro/.codex/worktrees/c445/org-brain/apps/console/artifacts/ux-audit/2026-08-22/current-state/screenshots/01-home-ja.png)
+![ローカルConsole初回のエラー状態](screenshots/01-home-ja.png)
 
 正しいpersist-toへmigrationを適用した後は、ライブ時刻、対応サマリー、0件の空状態、次の観測条件が表示された。
 
-![ローカルConsole migration後の空状態](/Users/miyajimakazuhiro/.codex/worktrees/c445/org-brain/apps/console/artifacts/ux-audit/2026-08-22/current-state/screenshots/02-home-ja-migrated.png)
+![ローカルConsole migration後の空状態](screenshots/02-home-ja-migrated.png)
 
 メモリエクスプローラーは範囲・状態・品質を同一画面で切り替えられるが、空状態に英語の `No memories found.` / `Pick a row` が残る。モバイルでは上部メニューに畳まれ、カードは縦積みになる。
 
-![メモリエクスプローラー Desktop](/Users/miyajimakazuhiro/.codex/worktrees/c445/org-brain/apps/console/artifacts/ux-audit/2026-08-22/current-state/screenshots/07-memories-ja.png)
+![メモリエクスプローラー Desktop](screenshots/07-memories-ja.png)
 
-![メモリエクスプローラー Mobile 390x844](/Users/miyajimakazuhiro/.codex/worktrees/c445/org-brain/apps/console/artifacts/ux-audit/2026-08-22/current-state/screenshots/16-memories-mobile-ja.png)
+![メモリエクスプローラー Mobile 390x844](screenshots/16-memories-mobile-ja.png)
 
 運用画面は「最初に確認」を上部に置き、判断確認待ちと定期処理遅延を2件として明示した。個人利用では情報量が多く、権限・検索品質・ガバナンスまで同一ページに並ぶ。
 
-![運用ステータス Desktop](/Users/miyajimakazuhiro/.codex/worktrees/c445/org-brain/apps/console/artifacts/ux-audit/2026-08-22/current-state/screenshots/12-operations-ja.png)
+![運用ステータス Desktop](screenshots/12-operations-ja.png)
 
-![運用ステータス Mobile 390x844](/Users/miyajimakazuhiro/.codex/worktrees/c445/org-brain/apps/console/artifacts/ux-audit/2026-08-22/current-state/screenshots/18-operations-mobile-ja.png)
+![運用ステータス Mobile 390x844](screenshots/18-operations-mobile-ja.png)
 
 ## 領域別評価
 
