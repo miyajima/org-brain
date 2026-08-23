@@ -104,9 +104,14 @@ test("partial npm publish skips only an identical immutable version", () => {
 
 test("shared release recovery reuses the immutable tag and an attestation-capable builder", async () => {
   const workflow = await readFile(new URL("../.github/workflows/release-shared.yml", import.meta.url), "utf8");
+  const packShared = workflow.indexOf("name: Pack shared packages");
+  const reusePublished = workflow.indexOf("name: Reuse published immutable npm tarballs");
+  const verifyShared = workflow.indexOf("name: Verify shared package tarballs");
   const setupBuildx = workflow.indexOf("docker/setup-buildx-action@v3");
   const buildAndPush = workflow.indexOf("docker/build-push-action@v6");
   assert.match(workflow, /release_ref:/u);
   assert.match(workflow, /RELEASE_NAME: \$\{\{ inputs\.release_name \|\| github\.ref_name \}\}/u);
+  assert.match(workflow, /if: \$\{\{ inputs\.release_ref != '' \}\}/u);
+  assert.ok(packShared >= 0 && packShared < reusePublished && reusePublished < verifyShared);
   assert.ok(setupBuildx >= 0 && setupBuildx < buildAndPush);
 });

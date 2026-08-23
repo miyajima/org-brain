@@ -53,6 +53,18 @@ jobs:
           pnpm --dir ./packages/core pack --pack-destination "$GITHUB_WORKSPACE"
           pnpm --dir ./packages/server-core pack --pack-destination "$GITHUB_WORKSPACE"
           pnpm --dir ./packages/mcp-core pack --pack-destination "$GITHUB_WORKSPACE"
+      - name: Reuse published immutable npm tarballs
+        if: ${{ inputs.release_ref != '' }}
+        run: |
+          mkdir -p .shared-release-registry
+          npm pack @org-brain/contracts@0.4.0 --pack-destination .shared-release-registry
+          npm pack @org-brain/core@0.4.0 --pack-destination .shared-release-registry
+          npm pack @org-brain/server-core@0.1.0 --pack-destination .shared-release-registry
+          npm pack @org-brain/mcp-core@0.1.0 --pack-destination .shared-release-registry
+          mv .shared-release-registry/org-brain-contracts-0.4.0.tgz ./org-brain-contracts-0.4.0.tgz
+          mv .shared-release-registry/org-brain-core-0.4.0.tgz ./org-brain-core-0.4.0.tgz
+          mv .shared-release-registry/org-brain-server-core-0.1.0.tgz ./org-brain-server-core-0.1.0.tgz
+          mv .shared-release-registry/org-brain-mcp-core-0.1.0.tgz ./org-brain-mcp-core-0.1.0.tgz
       - name: Verify shared package tarballs
         run: node ./scripts/shared-release-tarballs.mjs "$GITHUB_WORKSPACE"
       - uses: anchore/sbom-action@v0
