@@ -16,9 +16,20 @@ import {
   mergeCursorHooks,
   preflightCloudHooks,
   requireHookSetupApproval,
+  remoteUrl,
   remoteMcpPlan,
   runConnectorCommand
 } from "../packages/orgbrain-cli/src/connector-setup.mjs";
+
+test("remote MCP URLs normalize the host and reject Console proxy paths", () => {
+  assert.equal(remoteUrl("https://mcp.example.test", null), "https://mcp.example.test/mcp");
+  assert.equal(remoteUrl("https://mcp.example.test/mcp/", "team-a"), "https://mcp.example.test/mcp?tenant_id=team-a");
+  assert.throws(
+    () => remoteUrl("https://console.example.test/api", null),
+    /dedicated Remote MCP endpoint.*\/mcp/u
+  );
+  assert.throws(() => remoteUrl("https://mcp.example.test/custom", null), /must end in \/mcp/u);
+});
 
 test("activation binds the enrollment code to the selected client type", async () => {
   const originalFetch = globalThis.fetch;

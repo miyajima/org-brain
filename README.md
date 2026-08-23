@@ -176,16 +176,34 @@ parity gates.
 
 Use this when you want free personal memory without Cloudflare.
 
-Requires Node.js 22.13 or newer. The CLI uses the SQLite driver bundled with Node;
-the external `sqlite3` command is not required.
+Requires Node.js 22.13 or newer and pnpm. The CLI uses the SQLite driver bundled
+with Node; the external `sqlite3` command is not required. From a fresh checkout,
+use the following primary path:
 
 ```bash
 pnpm install
+cp apps/api-gateway/.dev.vars.example apps/api-gateway/.dev.vars
+pnpm local:doctor
+pnpm local:start
+```
+
+`local:start` applies the same D1 migrations and `--persist-to` directory used
+by the API, starts the API and Console, waits for both health checks, and prints
+the URLs and first capture/retrieval calls. Ctrl-C stops both child processes.
+The local state lives under `.local/production-dump/local-state` with a private
+directory mode. Stop the stack and back up that complete directory before a
+restore or migration.
+
+For private, dependency-free agent memory in the same checkout, initialize the
+SQLite CLI and verify capture/search before connecting Codex:
+
+```bash
 pnpm exec orgbrain init
 pnpm exec orgbrain doctor
 printf '{"summary":"Use UTC for backend validation","content":"In astronomy backend tests, run Maven with TZ=UTC to avoid timezone-sensitive failures.","project_id":"astronomy","kind":"constraint","tags":["testing","memory"]}' | pnpm exec orgbrain memory capture
 pnpm exec orgbrain memory search "timezone validation"
-pnpm exec orgbrain memory export --format markdown
+pnpm exec orgbrain connector setup codex
+pnpm exec orgbrain connector setup codex --execute
 ```
 
 By default the database is stored at `~/.org-brain/memory.sqlite`. Override it with:
@@ -240,7 +258,10 @@ surface. References: [Codex MCP](https://developers.openai.com/codex/mcp/),
 [OpenClaw MCP](https://docs.openclaw.ai/cli/mcp).
 
 For shared Remote MCP, interactive Codex, Claude Code, and Cursor connections
-use Cloudflare Access Managed OAuth through the Access-protected MCP URL:
+use Cloudflare Access Managed OAuth through the dedicated MCP Worker. The
+canonical environment variable is `ORGBRAIN_MCP_URL`; a host-only value is
+normalized to `/mcp`, while Console proxy paths such as `/api` and `/api/mcp`
+are rejected with a correction:
 
 ```bash
 orgbrain connector setup codex --mode remote-mcp --url https://mcp.example.com/mcp
@@ -588,7 +609,8 @@ console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUC
 
    ```bash
    pnpm exec orgbrain cf doctor --root .
-   pnpm exec orgbrain cf provision --root . --with-vectorize
+   pnpm exec orgbrain cf provision --root . --with-vectorize \
+     --with-managed-oauth --mcp-host mcp.example.com --access-policy-id <policy-id>
    ```
 
    After reviewing that JSON plan, provide a narrowly scoped Cloudflare token
@@ -597,15 +619,22 @@ console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUC
    ```bash
    export CLOUDFLARE_ACCOUNT_ID="<account-id>"
    export CLOUDFLARE_API_TOKEN="<provisioning-token>"
-   pnpm exec orgbrain cf provision --root . --with-vectorize --execute
+   pnpm exec orgbrain cf provision --root . --with-vectorize \
+     --with-managed-oauth --mcp-host mcp.example.com --access-policy-id <policy-id> --execute
    ```
 
 Execution creates missing D1, R2, Queue/DLQ, and optional Vectorize
    resources, synchronizes the resulting D1 UUID across the three Worker
    configurations, applies remote migrations, and deploys services in
    dependency order. It does not create application API keys, OIDC policy, or
-   production secrets. Run `cf doctor --live` to verify Cloudflare
-authentication separately.
+   production secrets. It never creates an allow-all Access policy: an existing,
+   explicitly reviewed policy ID is required. Run the following to verify the
+   MCP endpoint, 401 challenge, OAuth discovery, Access audience, interactive
+   OAuth, and service-token hook paths independently:
+
+   ```bash
+   pnpm exec orgbrain cf doctor --root . --live --mcp-url https://mcp.example.com/mcp
+   ```
 
 `.github/workflows/cloud-restore-drill.yml` provides the staging recovery gate.
 With the `cloud-staging` environment configured with
@@ -623,11 +652,10 @@ artifact, the targets are configured but not production evidence.
    pnpm -C apps/api-gateway wrangler d1 migrations apply open-brain --local -c wrangler.local.toml
    ```
 
-5. Run the local gateway and console in two terminals:
+5. Run the local gateway and console together:
 
    ```bash
-   pnpm -C apps/api-gateway wrangler dev --port 8787 -c wrangler.local.toml
-   pnpm -C apps/console dev
+   pnpm local:start
    ```
 
 6. For production self-hosting, deploy in dependency order:
@@ -639,9 +667,10 @@ artifact, the targets are configured but not production evidence.
    pnpm -C apps/console build
    ```
 
-   `apps/mcp` is a compatibility Worker for deployments that still require the
-   old service-binding proxy. New deployments use the API Gateway `/mcp`
-   endpoint and do not need to deploy it.
+   `apps/mcp` is the canonical public Remote MCP edge. Cloudflare Access guards
+   `/mcp*`; the Worker forwards only the signed Access assertion and bounded MCP
+   protocol headers to the API Gateway service binding. The Gateway remains the
+   authorization and tool-execution boundary.
 
 ## Agent Integrations
 

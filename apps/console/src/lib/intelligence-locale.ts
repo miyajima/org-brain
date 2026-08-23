@@ -583,7 +583,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       status: "状態",
       occurredAt: "発生時刻",
       openTrace: "トレースを開く",
-      openTask: "Taskを確認",
+      openTask: "タスクを確認",
       replayEyebrow: "リプレイ",
       replayTitle: "過去24時間のイベント",
       replayTitlePeriod: "過去{period}のイベント",
@@ -605,7 +605,7 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
     constellation: {
       eyebrow: "知識のつながり · ナレッジ・コンステレーション",
       title: "知識のつながり",
-      description: "知識を選び、関連する判断・資料・プロジェクト・Taskと影響範囲を探索します。",
+      description: "知識を選び、関連する判断・資料・プロジェクト・タスクと影響範囲を探索します。",
       area: "領域",
       search: "知識を検索",
       searchPlaceholder: "タイトル・要約・ID",

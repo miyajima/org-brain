@@ -7,9 +7,9 @@ describe("dashboard display copy", () => {
     expect(dashboardLabel("status", "ready", "ja")).toBe("利用可能");
     expect(dashboardLabel("capability", "memory_measurement", "ja")).toBe("記憶品質測定");
     expect(dashboardLabel("relation", "derived_from", "ja")).toBe("根拠");
-    expect(dashboardLabel("permission", "task:replay", "ja")).toBe("Taskの再実行");
-    expect(dashboardLabel("signal", "task_failed", "ja")).toBe("Taskの失敗");
-    expect(dashboardLabel("event", "task.failed", "ja")).toBe("Taskの失敗");
+    expect(dashboardLabel("permission", "task:replay", "ja")).toBe("タスクの再実行");
+    expect(dashboardLabel("signal", "task_failed", "ja")).toBe("タスクの失敗");
+    expect(dashboardLabel("event", "task.failed", "ja")).toBe("タスクの失敗");
   });
 
   it("keeps unknown values available as internal values", () => {

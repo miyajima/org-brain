@@ -198,10 +198,20 @@ export async function requireHookSetupApproval(plan, options = {}) {
   return { granted: true, method: "interactive", summary };
 }
 
-function remoteUrl(rawUrl, tenantId) {
+export function remoteUrl(rawUrl, tenantId) {
   const url = new URL(rawUrl);
   if (url.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(url.hostname)) {
     throw new Error("--url must use https outside localhost");
+  }
+  const path = url.pathname.replace(/\/+$/u, "") || "/";
+  if (path === "/") {
+    url.pathname = "/mcp";
+  } else if (path === "/api" || path === "/api/mcp") {
+    throw new Error(`--url must target the dedicated Remote MCP endpoint (${url.origin}/mcp), not ${path}`);
+  } else if (path !== "/mcp") {
+    throw new Error(`--url must end in /mcp (received ${path})`);
+  } else {
+    url.pathname = "/mcp";
   }
   if (tenantId) url.searchParams.set("tenant_id", tenantId);
   return url.toString();

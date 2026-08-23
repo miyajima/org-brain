@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { CLI_BUILD_INFO } from "./build-info.mjs";
 import {
   DEFAULT_LOCAL_DB,
   LocalMemoryStore,
@@ -26,8 +27,9 @@ function printHelp() {
   console.log(`OrgBrain local-first memory CLI
 
 Usage:
+  orgbrain version [--json]
   orgbrain init [--db <path>]
-  orgbrain doctor [--db <path>]
+  orgbrain doctor [--db <path>] [--root <checkout>]
   orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--tag <tag>]
   orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
@@ -84,8 +86,8 @@ Usage:
   orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact|claude-context|claude-stop|cursor-context|cursor-stop|flush>
   orgbrain maintenance <run|status|install|uninstall> [--schedule daily] [--apply] [--execute]
   orgbrain autonomy <status|explain|configure|freeze|rollback|run> [--workspace <path>] [--scope workspace|tenant] [--profile <profile>] [--mode <mode>] [--run <run-id>] [--evidence <json>] [--state-dir <path>] [--state-file <path>] [--judge-runner <module>] [--quarantine-runner <module>] [--qualification-runner <module>] [--scan-sessions] [--sessions-root <path>] [--dry-run] [--execute]
-  orgbrain cf doctor [--root <checkout>] [--live]
-  orgbrain cf provision [--root <checkout>] [--with-vectorize] [--execute]
+  orgbrain cf doctor [--root <checkout>] [--live] [--mcp-url <https-url>]
+  orgbrain cf provision [--root <checkout>] [--with-vectorize] [--with-managed-oauth --mcp-host <host> --access-policy-id <id>] [--execute]
   orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--url <https-url>] [--maintenance daily|off] [--cli-path <local-memory.mjs>] [--scope user|project] [--execute] [--approve-hooks]
 
 Compatibility aliases:
@@ -117,7 +119,7 @@ function parseArgs(argv) {
       continue;
     }
     const [name, inline] = arg.split("=", 2);
-    if (["--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
+    if (["--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
       flags.add(name);
       continue;
     }
@@ -146,6 +148,20 @@ async function readStdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8").trim();
+}
+
+function gitCommit(root) {
+  return new Promise((resolveCommit) => {
+    const child = spawn("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      shell: false,
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.on("error", () => resolveCommit(null));
+    child.on("exit", (code) => resolveCommit(code === 0 ? output.trim() || null : null));
+  });
 }
 
 function parseJsonOption(raw, fallback) {
@@ -671,6 +687,12 @@ async function main() {
   }
 
   let [command, action, ...rest] = args.positional;
+  const commandWarnings = [];
+  if (command === "cloud") {
+    command = "cf";
+    commandWarnings.push("orgbrain cloud is deprecated; use orgbrain cf (the alias will be removed after one release)");
+    process.stderr.write(`${commandWarnings[0]}\n`);
+  }
   const aliases = new Set(["upsert", "search", "list", "export-markdown"]);
   if (aliases.has(command)) {
     rest = action ? [action, ...rest] : rest;
@@ -679,12 +701,26 @@ async function main() {
   }
 
   const store = new LocalMemoryStore(args.get("--db", process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB));
-  if (command === "init") {
+  if (command === "version") {
+    emit({ ok: true, ...CLI_BUILD_INFO });
+  } else if (command === "init") {
     await store.init();
     emit({ ok: true, db: store.dbPath, schema_version: MEMORY_SCHEMA_VERSION });
   } else if (command === "doctor") {
     const result = await store.doctor();
-    emit(result);
+    const checkoutRoot = args.get("--root", null);
+    const checkoutCommit = checkoutRoot ? await gitCommit(resolve(checkoutRoot)) : null;
+    const cli = {
+      ...CLI_BUILD_INFO,
+      checkout_commit: checkoutCommit,
+      matches_checkout: CLI_BUILD_INFO.commit && checkoutCommit
+        ? CLI_BUILD_INFO.commit === checkoutCommit
+        : null,
+      reinstall_command: CLI_BUILD_INFO.commit && checkoutCommit && CLI_BUILD_INFO.commit !== checkoutCommit
+        ? `npm install --global ${JSON.stringify(resolve(checkoutRoot))}`
+        : null
+    };
+    emit({ ...result, cli });
     if (!result.ok) process.exitCode = 1;
   } else if (command === "memory") {
     await handleMemory(store, action, rest, args);
@@ -915,7 +951,7 @@ async function main() {
   } else if (command === "cf") {
     const { runCloudCommand } = await import("./cloud-operations.mjs");
     const result = await runCloudCommand(action, args);
-    emit(result);
+    emit(commandWarnings.length ? { ...result, warnings: commandWarnings } : result);
     if (!result.ok) process.exitCode = 1;
   } else if (command === "connector") {
     const { runConnectorCommand } = await import("./connector-setup.mjs");

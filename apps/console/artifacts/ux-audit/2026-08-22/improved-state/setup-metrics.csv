@@ -1,0 +1,7 @@
+flow,completion,elapsed_seconds,actions,retries,result,evidence
+local_doctor_before_env,partial,4.2,1,0,dev-vars-missing,"node/pnpm/migrations/state/permissions/ports passed; recovery command shown"
+local_doctor_after_env,yes,3.0,2,0,all-checks-passed,"40/40 migrations; state mode 0700; ports available"
+local_start_health,yes,6.0,1,0,api-and-console-ready,"API 8787 and Console 4321 health checks passed; next steps printed; Ctrl-C stopped both"
+local_ai_12x3,yes,0.5,36,0,all-applicable-scenarios-passed,"fresh temporary SQLite fixture; database removed after run"
+cloudflare_provision_dry_run,yes,N/A,1,0,non-mutating-plan-rendered,"custom hostname, Access application, Managed OAuth and audience operations shown"
+cloudflare_live_mcp,no,N/A,0,0,not-run,"managed MCP hostname and explicit Access policy ID unavailable"

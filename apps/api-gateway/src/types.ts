@@ -48,6 +48,7 @@ export type Env = {
   ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING?: "off" | "on";
   MEMORY_CLASSIFICATION_MODE?: "observe" | "require";
   RETRIEVAL_GENERATION_ROUTING?: "legacy" | "observe" | "enforce";
+  EVIDENCE_DISPOSITION_MODE?: "shadow" | "on";
   RETRIEVAL_OPERATOR_PRINCIPALS_JSON?: string;
   GEMINI_API_KEY?: string;
   OPENAI_API_KEY?: string;
@@ -61,6 +62,7 @@ export type Env = {
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;
   API_RATE_LIMITER?: RateLimit;
   API_RATE_LIMIT_FAIL_OPEN?: "true" | "false";
+  LOCAL_DEV_MODE?: "true" | "false";
   KNOWLEDGE_RESOURCE_INGESTION_ENABLED?: "true" | "false";
   DECISION_RESOURCE_LINKS_ENABLED?: "true" | "false";
   RESOURCE_RELATION_EXTRACTION_ENABLED?: "true" | "false";

@@ -3,6 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
 import AdminSection from "../components/admin/AdminSection.astro";
 import LiveNotice from "../components/admin/LiveNotice.astro";
+import ConfirmationDialog from "../components/admin/ConfirmationDialog.astro";
 import { adminRoleLabel, adminUserStatusLabel, userAdminCopy } from "../lib/admin-copy";
 import { dashboardPageParams } from "../lib/dashboard-page";
 
@@ -45,7 +46,7 @@ const statuses = ["invited", "active", "suspended", "deprovisioned"];
     {error && <LiveNotice tone="error" message={error} />}
 
     <AdminSection titleId="invite-user-title" title={copy.inviteTitle} description={copy.inviteDescription}>
-      <form method="post" class="admin-form-grid admin-form-grid-four">
+      <form method="post" class="admin-form-grid admin-form-grid-four" data-confirm="true" data-confirm-target-field="email" data-confirm-impact={lang === "ja" ? "このテナントへ選択したロールで招待します。" : "Invites this person to the tenant with the selected role."} data-confirm-recovery={lang === "ja" ? "招待後に利用状態やロールを変更できます。" : "Status and role can be changed after the invitation."}>
         <input type="hidden" name="csrf_token" id="csrf-token" />
         <label><span>{copy.email}</span><input type="email" name="email" required /></label>
         <label><span>{copy.displayName}</span><input name="display_name" required /></label>
@@ -59,7 +60,7 @@ const statuses = ["invited", "active", "suspended", "deprovisioned"];
       <span slot="actions" class="surface-chip">{users.length}</span>
       {users.length === 0 ? <p class="admin-empty" role="status">{copy.noUsers}</p> : (
         <div class="admin-record-list">{users.map((user: any) => (
-          <form method="post" class="admin-user-row">
+          <form method="post" class="admin-user-row" data-confirm="true" data-confirm-target={user.display_name || user.principal} data-confirm-impact={lang === "ja" ? "利用状態と実効権限が直ちに変わります。" : "Status and effective access change immediately."} data-confirm-recovery={lang === "ja" ? "同じ画面から状態とロールを再変更できます。" : "Status and role can be changed again from this page."}>
             <input type="hidden" name="csrf_token" class="csrf-token" />
             <input type="hidden" name="principal" value={user.principal} />
             <input type="hidden" name="full_name_locked" value={user.full_name_source === "scim" ? "true" : "false"} />
@@ -76,5 +77,6 @@ const statuses = ["invited", "active", "suspended", "deprovisioned"];
       )}
     </AdminSection>
   </section>
+  <ConfirmationDialog lang={lang} />
 </BaseLayout>
 <script>document.querySelectorAll<HTMLInputElement>("#csrf-token, .csrf-token").forEach((input) => { input.value=sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>

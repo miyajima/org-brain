@@ -1,4 +1,13 @@
-import { HttpError, buildTenantMemoryProfile, type MemoryProfileResponse, type MemorySearchMode, type MemoryWorkType } from "@org-brain/shared";
+import {
+  HttpError,
+  buildTenantMemoryProfile,
+  deriveEvidenceDisposition,
+  evidenceAnswerTemplate,
+  requiresMultipleEvidenceSources,
+  type MemoryProfileResponse,
+  type MemorySearchMode,
+  type MemoryWorkType
+} from "@org-brain/shared";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
@@ -159,6 +168,15 @@ export async function retrieveMemoryContext(
       // Version snapshots are canonical but may predate the current JSON shape.
     }
   }
+  const confidenceRows = ids.length === 0
+    ? { results: [] as Array<{ id: string; confidence_score: number | null }> }
+    : await env.OPEN_BRAIN_DB.prepare(
+        `SELECT id, confidence_score FROM memories
+         WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`
+      ).bind(tenantId, ...ids).all<{ id: string; confidence_score: number | null }>();
+  const confidenceById = new Map(
+    confidenceRows.results.map((row) => [row.id, Number(row.confidence_score ?? 0.5)])
+  );
   const charBudget = tokenBudget * 4;
   let usedChars = 0;
   const evidence: Array<Record<string, unknown>> = [];
@@ -218,30 +236,40 @@ export async function retrieveMemoryContext(
     for (const conflict of result.conflicts ?? []) conflicts.push({ memory_id: result.id, conflict });
   }
   const query = parseString(body.q, "q");
-  const multiSession = /\b(?:and|compare|both|between|combined|together|how many)\b|(?:かつ|両方|比較|合計|複数)/iu.test(query);
-  const missingEvidence: string[] = [];
-  if (evidence.length === 0) missingEvidence.push("no_relevant_evidence");
-  if (
-    multiSession &&
-    new Set(evidence.map((item) =>
+  const multiSession = requiresMultipleEvidenceSources(query);
+  const disposition = deriveEvidenceDisposition({
+    evidenceCount: evidence.length,
+    independentSourceCount: new Set(evidence.map((item) =>
       (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id)
-    )).size < 2
-  ) {
-    missingEvidence.push("insufficient_independent_sessions");
+    )).size,
+    requiresMultipleSources: multiSession,
+    conflictCount: conflicts.length,
+    hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
+    hasLowConfidence: selected.some((item) => (confidenceById.get(item.id) ?? 0.5) < 0.5),
+    degradedReasons: search.meta.retrieval?.degraded_reasons ?? []
+  });
+  const answerTemplate = evidenceAnswerTemplate(disposition, {
+    hasTimeline: timeline.length > 0,
+    hasCurrentState: currentState.length > 0,
+    requiresMultipleSources: multiSession
+  });
+  const legacyMissingEvidence = [
+    ...disposition.missing_evidence,
+    ...(evidence.some((item) => item.extraction_state !== "ready")
+      ? ["structured_extractor_degraded"]
+      : [])
+  ];
+  const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
+  const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
+  if (shadowMode && legacyAbstention !== disposition.abstention_recommended) {
+    console.warn(JSON.stringify({
+      event: "orgbrain.evidence_disposition.shadow_difference",
+      proposed_status: disposition.evidence_status,
+      legacy_abstention: legacyAbstention,
+      evidence_count: evidence.length,
+      conflict_count: conflicts.length
+    }));
   }
-  if (evidence.some((item) => item.extraction_state !== "ready")) {
-    missingEvidence.push("structured_extractor_degraded");
-  }
-  const answerTemplate =
-    missingEvidence.length > 0 || conflicts.length > 0
-      ? "abstention"
-      : timeline.length > 0
-        ? "timeline"
-        : currentState.length > 0
-          ? "profile"
-          : multiSession
-            ? "multi_session"
-            : "evidence";
   const contextUsage = await recordMemoryUsage(env, {
     tenant_id: tenantId,
     project_id: typeof body.project_id === "string" ? body.project_id : null,
@@ -278,19 +306,15 @@ export async function retrieveMemoryContext(
       query_at: queryAt,
       token_budget: tokenBudget,
       estimated_tokens: Math.ceil(usedChars / 4),
-      answer_template: answerTemplate,
+      evidence_status: disposition.evidence_status,
+      answer_template: shadowMode && legacyAbstention ? "abstention" : answerTemplate,
       evidence,
       current_state: currentState,
       timeline,
       conflicts,
-      missing_evidence: missingEvidence,
-      abstention_recommended: missingEvidence.length > 0 || conflicts.length > 0,
-      degraded_reasons: [
-        ...(search.meta.retrieval?.degraded_reasons ?? []),
-        ...(evidence.some((item) => item.extraction_state !== "ready")
-          ? ["gemini_structured_extractor_not_configured"]
-          : [])
-      ]
+      missing_evidence: shadowMode ? legacyMissingEvidence : disposition.missing_evidence,
+      abstention_recommended: shadowMode ? legacyAbstention : disposition.abstention_recommended,
+      degraded_reasons: disposition.degraded_reasons
     }
   };
 }

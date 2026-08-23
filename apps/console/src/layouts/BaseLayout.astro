@@ -5,6 +5,7 @@ import { dashboardTenantFromCookie } from "../lib/dashboard-page";
 import { adminCommonCopy } from "../lib/admin-ui";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
+import { layoutCopy, layoutNavLabels } from "../lib/console-locale";
 
 type LayoutLocale = "en" | "ja" | "zh";
 type ConsoleNavGroup = "primary" | "knowledge" | "organization" | "system";
@@ -15,22 +16,29 @@ type ConsoleNavItem = {
   labels: Record<LayoutLocale, string>;
   activeMatcher: (path: string) => boolean;
 };
+type ConsoleContext = {
+  mode: "personal" | "team";
+  effective_permissions: string[];
+  can_manage_users: boolean;
+  can_manage_groups: boolean;
+  can_manage_clients: boolean;
+  tenant: { id: string };
+  project: { id: string } | null;
+  counts: { active_users: number; active_groups: number; active_projects: number };
+};
 
 const { title = "Org Brain Console", lang = "en", wide = false } = Astro.props;
 const currentPath = Astro.url.pathname;
 const requestedLang = Astro.url.searchParams.get("lang")?.trim();
 const propLocale: LayoutLocale = lang === "ja" || lang === "zh" ? lang : "en";
 const locale: LayoutLocale = requestedLang === "ja" || requestedLang === "zh" || requestedLang === "en" ? requestedLang : propLocale;
-const groupLabels: Record<Exclude<ConsoleNavGroup, "primary">, Record<LayoutLocale, string>> = {
-  knowledge: { en: "Knowledge management", ja: "知識管理", zh: "知识管理" },
-  organization: { en: "People and organization", ja: "ユーザー・組織", zh: "用户与组织" },
-  system: { en: "System operations", ja: "システム運用", zh: "系统运维" }
+const localeCopy = layoutCopy(locale);
+const groupLabels: Record<Exclude<ConsoleNavGroup, "primary">, string> = {
+  knowledge: localeCopy.knowledge,
+  organization: localeCopy.organization,
+  system: localeCopy.system
 };
-const menuLabels = {
-  en: { menu: "Menu", management: "Manage" },
-  ja: { menu: "メニュー", management: "管理" },
-  zh: { menu: "菜单", management: "管理" }
-}[locale];
+const menuLabels = localeCopy;
 const commonCopy = adminCommonCopy[locale];
 const exact = (href: string) => (path: string) => path === href;
 const starts = (href: string) => (path: string) => path === href || path.startsWith(`${href}/`);
@@ -48,44 +56,77 @@ const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals
 const decisionBehavior = decisionConsoleBehavior(decisionConsoleMode);
 const homeHref = decisionBehavior.useDecisionNavigation ? "/" : insightsBehavior.useInsightsNavigation ? "/overview" : "/";
 const primaryItems: ConsoleNavItem[] = decisionBehavior.useDecisionNavigation ? [
-  item("decisions", "/", "primary", { en: "Decisions", ja: "決定", zh: "决策" }, (path) => path === "/" || (starts("/decisions")(path) && path !== "/decisions/new" && path !== "/decisions/history")),
-  item("map", "/map", "primary", { en: "Map", ja: "マップ", zh: "地图" }, starts("/map")),
-  item("skills", "/skills", "primary", { en: "Skills", ja: "Skills", zh: "Skills" }, starts("/skills")),
-  item("agents", "/agents", "primary", { en: "Agents", ja: "Agents", zh: "Agents" }, starts("/agents")),
-  item("reviews", "/reviews", "primary", { en: "Reviews", ja: "レビュー", zh: "审核" }, starts("/reviews"))
+  item("decisions", "/", "primary", layoutNavLabels("decisions"), (path) => path === "/" || (starts("/decisions")(path) && path !== "/decisions/new" && path !== "/decisions/history")),
+  item("map", "/map", "primary", layoutNavLabels("map"), starts("/map")),
+  item("skills", "/skills", "primary", layoutNavLabels("skills"), starts("/skills")),
+  item("agents", "/agents", "primary", layoutNavLabels("agents"), starts("/agents")),
+  item("reviews", "/reviews", "primary", layoutNavLabels("reviews"), starts("/reviews"))
 ] : insightsBehavior.useInsightsNavigation ? [
-  item("activity", "/overview", "primary", { en: "Activity", ja: "活動", zh: "活动" }, (path) => path === "/" || path === "/overview"),
-  item("connections", "/memories/constellation", "primary", { en: "Knowledge connections", ja: "知識のつながり", zh: "知识关联" }),
-  item("history", "/decisions/history", "primary", { en: "Knowledge history", ja: "知識の履歴", zh: "知识历史" }),
-  item("tasks", "/tasks", "primary", { en: "Tasks", ja: "Task一覧", zh: "任务" }, (path) => starts("/tasks")(path) && path !== "/tasks/new")
+  item("activity", "/overview", "primary", layoutNavLabels("activity"), (path) => path === "/" || path === "/overview"),
+  item("connections", "/memories/constellation", "primary", layoutNavLabels("connections")),
+  item("history", "/decisions/history", "primary", layoutNavLabels("history")),
+  item("tasks", "/tasks", "primary", layoutNavLabels("tasks"), (path) => starts("/tasks")(path) && path !== "/tasks/new")
 ] : [
-  item("dashboard", "/", "primary", { en: "Dashboard", ja: "ダッシュボード", zh: "仪表盘" }),
-  item("memories", "/memories", "primary", { en: "Memories", ja: "メモリ", zh: "记忆" }, starts("/memories")),
-  item("decisions", "/decisions", "primary", { en: "Decisions", ja: "判断", zh: "决策" }, starts("/decisions")),
-  item("tasks", "/tasks", "primary", { en: "Tasks", ja: "Task一覧", zh: "任务" }, (path) => starts("/tasks")(path) && path !== "/tasks/new")
+  item("dashboard", "/", "primary", layoutNavLabels("dashboard")),
+  item("memories", "/memories", "primary", layoutNavLabels("memories"), starts("/memories")),
+  item("decisions", "/decisions", "primary", layoutNavLabels("decisions"), starts("/decisions")),
+  item("tasks", "/tasks", "primary", layoutNavLabels("tasks"), (path) => starts("/tasks")(path) && path !== "/tasks/new")
 ];
 const managementItems: ConsoleNavItem[] = [
-  item("memory-explorer", "/memories", "knowledge", { en: "Memory Explorer", ja: "メモリエクスプローラー", zh: "记忆浏览器" }),
-  item("memory-impact", "/memory-impact", "knowledge", { en: "Memory impact", ja: "活用分析", zh: "记忆活用分析" }),
-  item("decision-editor", decisionBehavior.enabled ? "/decisions/new" : "/decisions", "knowledge", { en: "Decision Editor", ja: "決定の作成・編集", zh: "决策编辑器" }),
-  item("resources", "/resources", "knowledge", { en: "Storage & resources", ja: "保存先・資料・成果物", zh: "存储与资料" }),
-  item("domain-packs", "/domain-packs", "knowledge", { en: "Domain Packs", ja: "Domain Pack", zh: "Domain Packs" }, starts("/domain-packs")),
-  item("domain-workspaces", "/domain-workspaces", "knowledge", { en: "Pack Workspaces", ja: "Pack Workspace", zh: "Pack Workspaces" }, starts("/domain-workspaces")),
-  item("domain-metrics", "/domain-metrics", "knowledge", { en: "Domain Metrics", ja: "業務指標", zh: "业务指标" }, starts("/domain-metrics")),
+  item("memory-explorer", "/memories", "knowledge", layoutNavLabels("memory-explorer")),
+  item("memory-impact", "/memory-impact", "knowledge", layoutNavLabels("memory-impact")),
+  item("decision-editor", decisionBehavior.enabled ? "/decisions/new" : "/decisions", "knowledge", layoutNavLabels("decision-editor")),
+  item("resources", "/resources", "knowledge", layoutNavLabels("resources")),
+  item("domain-packs", "/domain-packs", "knowledge", layoutNavLabels("domain-packs"), starts("/domain-packs")),
+  item("domain-workspaces", "/domain-workspaces", "knowledge", layoutNavLabels("domain-workspaces"), starts("/domain-workspaces")),
+  item("domain-metrics", "/domain-metrics", "knowledge", layoutNavLabels("domain-metrics"), starts("/domain-metrics")),
   ...(decisionBehavior.enabled ? [
-    item("knowledge-history", "/decisions/history", "knowledge", { en: "Knowledge history", ja: "知識の履歴", zh: "知识历史" })
+    item("knowledge-history", "/decisions/history", "knowledge", layoutNavLabels("knowledge-history"))
   ] : []),
-  item("groups", "/groups", "organization", { en: "Groups", ja: "グループ", zh: "群组" }, starts("/groups")),
-  item("users", "/users", "organization", { en: "Users", ja: "ユーザー", zh: "用户" }),
-  item("organization", "/organization", "organization", { en: "Organization", ja: "組織", zh: "组织" }),
-  item("categories", "/business-categories", "organization", { en: "Business Categories", ja: "業務カテゴリ", zh: "业务类别" }),
-  item("clients", "/client-installations", "system", { en: "Client installations", ja: "クライアント接続", zh: "客户端连接" }),
-  item("operations", "/operations", "system", { en: "Operations", ja: "運用", zh: "运维" }),
-  item("profile", "/profile", "system", { en: "Profile", ja: "プロフィール", zh: "个人资料" }),
-  item("new-task", "/tasks/new", "system", { en: "New Task", ja: "Task作成", zh: "新建任务" })
+  item("groups", "/groups", "organization", layoutNavLabels("groups"), starts("/groups")),
+  item("users", "/users", "organization", layoutNavLabels("users")),
+  item("organization", "/organization", "organization", layoutNavLabels("organization")),
+  item("categories", "/business-categories", "organization", layoutNavLabels("categories")),
+  item("clients", "/client-installations", "system", layoutNavLabels("clients")),
+  item("operations", "/operations", "system", layoutNavLabels("operations")),
+  item("profile", "/profile", "system", layoutNavLabels("profile")),
+  item("new-task", "/tasks/new", "system", layoutNavLabels("new-task"))
 ];
-const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || dashboardTenantFromCookie(Astro.request.headers.get("cookie"));
+const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || dashboardTenantFromCookie(Astro.request.headers.get("cookie")) || "default";
 const projectId = Astro.url.searchParams.get("project_id")?.trim();
+let consoleContext: ConsoleContext | null = null;
+try {
+  const identityUrl = new URL("/api/v1/auth/me", Astro.url);
+  identityUrl.searchParams.set("tenant_id", tenantId);
+  if (projectId) identityUrl.searchParams.set("project_id", projectId);
+  const cookie = Astro.request.headers.get("cookie");
+  const accessJwt = Astro.request.headers.get("cf-access-jwt-assertion");
+  const response = await fetch(identityUrl, {
+    headers: {
+      ...(cookie ? { cookie } : {}),
+      ...(accessJwt ? { "cf-access-jwt-assertion": accessJwt } : {})
+    }
+  });
+  if (response.ok) {
+    const payload = await response.json() as { data?: { console_context?: ConsoleContext } };
+    consoleContext = payload.data?.console_context ?? null;
+  }
+} catch {
+  // Backward compatibility: an older API or unavailable identity endpoint keeps the existing navigation.
+}
+const teamSetupLabels = layoutNavLabels("team-setup");
+const hiddenForPersonal = new Set(["groups", "users", "organization", "categories"]);
+const visibleManagementItems = managementItems.filter((navItem) => {
+  if (!consoleContext) return true;
+  if (consoleContext.mode === "personal" && hiddenForPersonal.has(navItem.id)) return false;
+  if (navItem.id === "users" && !consoleContext.can_manage_users) return false;
+  if ((navItem.id === "groups" || navItem.id === "organization" || navItem.id === "categories") && !consoleContext.can_manage_groups) return false;
+  if (navItem.id === "clients" && !consoleContext.can_manage_clients) return false;
+  return true;
+});
+if (consoleContext?.mode === "personal") {
+  visibleManagementItems.push(item("team-setup", "/organization?setup=team", "organization", teamSetupLabels));
+}
 const contextParamsByPath: Record<string, readonly string[]> = {
   "/skills": ["decision_id", "source_hash"],
   "/agents": ["agent_id", "decision_id", "source_hash"],
@@ -105,8 +146,8 @@ const withScope = (href: string) => {
 };
 const groupedItems = (["knowledge", "organization", "system"] as const).map((group) => ({
   group,
-  label: groupLabels[group][locale],
-  items: managementItems.filter((navItem) => navItem.group === group)
+  label: groupLabels[group],
+  items: visibleManagementItems.filter((navItem) => navItem.group === group)
 }));
 ---
 <html lang={locale}>
@@ -128,6 +169,12 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
           <span>Org Brain</span>
           {decisionBehavior.showBetaLabel && <span class="console-beta-label">Beta</span>}
         </a>
+        {consoleContext && (
+          <span class="console-context-chip" title={consoleContext.effective_permissions.join(", ")}>
+            {consoleContext.mode === "personal" ? ({ en: "Personal", ja: "個人", zh: "个人" } as const)[locale] : ({ en: "Team", ja: "チーム", zh: "团队" } as const)[locale]}
+            {` · ${consoleContext.tenant.id}${consoleContext.project ? ` / ${consoleContext.project.id}` : ""}`}
+          </span>
+        )}
         <div class="console-primary-links">
           {primaryItems.map((navItem) => (
             <a class="console-nav-link" href={withScope(navItem.href)} aria-current={navItem.activeMatcher(currentPath) ? "page" : undefined}>{navItem.labels[locale]}</a>

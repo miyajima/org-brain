@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { InMemoryEmailSender, requestEmailCode, verifyEmailCode, authenticateSession } from "../src/email-auth-service";
 import { listDirectory, listUsers, updateOrganization } from "../src/organization-user-service";
 import { createGroup, listGroups, updateGroup } from "../src/group-service";
+import { getMyIdentity } from "../src/identity-service";
 import type { Env } from "../src/types";
 
 type SqliteStatement = {
@@ -54,6 +55,7 @@ function testEnv() {
     CREATE UNIQUE INDEX idx_principal_role_identity ON principal_role_assignments(
       tenant_id, COALESCE(project_id, ''), principal, role
     );
+    CREATE TABLE memories(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT);
   `);
   database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0024_identity_organization.sql`, "utf8"));
   const db = {
@@ -77,6 +79,38 @@ function testEnv() {
 }
 
 describe("email identity service", () => {
+  it("computes backward-compatible personal and team console contexts", async () => {
+    const { env, database } = testEnv();
+    const auth = {
+      principal: "user:owner",
+      allowedTenants: ["tenant-a"],
+      source: "session",
+      defaultRole: "tenant_admin"
+    } satisfies import("../src/auth").ApiAuthContext;
+    database.prepare(
+      `INSERT INTO user_profiles(tenant_id, principal, display_name, status, provision_source, full_name_source, email_verified, created_at, updated_at)
+       VALUES(?, ?, ?, 'active', 'legacy', 'legacy', 0, ?, ?)`
+    ).run("tenant-a", auth.principal, "Owner", 1, 1);
+    const personal = await getMyIdentity(env, "tenant-a", auth);
+    expect(personal.console_context).toMatchObject({
+      mode: "personal",
+      can_manage_users: true,
+      counts: { active_users: 1, active_groups: 0, active_projects: 0 }
+    });
+
+    database.prepare(
+      `INSERT INTO principal_role_assignments(id, tenant_id, project_id, principal, role, created_by_principal, created_at, updated_at)
+       VALUES('role-member', 'tenant-a', 'project-a', 'user:member', 'reader', 'user:owner', 1, 1)`
+    ).run();
+    const team = await getMyIdentity(env, "tenant-a", auth, "project-a");
+    expect(team.console_context).toMatchObject({
+      mode: "team",
+      tenant: { id: "tenant-a" },
+      project: { id: "project-a" },
+      counts: { active_projects: 1 }
+    });
+  });
+
   it("self-registers with an opaque principal and never exposes full_name in directory", async () => {
     const { env } = testEnv();
     await updateOrganization(env, "tenant-a", {

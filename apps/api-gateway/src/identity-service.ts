@@ -1,6 +1,7 @@
-import { HttpError } from "@org-brain/shared";
+import { HttpError, ROLE_PERMISSIONS, type OrgPermission, type OrgRole } from "@org-brain/shared";
 import { listGroups } from "./group-service";
 import type { ApiAuthContext } from "./auth";
+import { listRoleAssignments } from "./rbac-service";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import type { Env } from "./types";
 
@@ -102,9 +103,63 @@ export async function updateUserProfile(env: Env, tenantId: string, auth: ApiAut
   return getUserProfile(env, tenantId, auth);
 }
 
-export async function getMyIdentity(env: Env, tenantId: string, auth: ApiAuthContext) {
-  const profile = await getUserProfile(env, tenantId, auth);
-  const groups = await listGroups(env, tenantId, auth.principal);
+type CountRow = { count: number };
+
+async function getConsoleContext(env: Env, tenantId: string, auth: ApiAuthContext, projectId: string | null) {
+  const [assignments, activeUsers, activeGroups, activeProjects, otherProjectPrincipals] = await Promise.all([
+    listRoleAssignments(env, tenantId, { principal: auth.principal, projectId }),
+    env.OPEN_BRAIN_DB.prepare(
+      "SELECT COUNT(*) AS count FROM user_profiles WHERE tenant_id = ? AND status = 'active'"
+    ).bind(tenantId).first<CountRow>(),
+    env.OPEN_BRAIN_DB.prepare(
+      "SELECT COUNT(*) AS count FROM groups WHERE tenant_id = ? AND deleted_at IS NULL"
+    ).bind(tenantId).first<CountRow>(),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT COUNT(DISTINCT project_id) AS count FROM (
+         SELECT project_id FROM principal_role_assignments WHERE tenant_id = ? AND project_id IS NOT NULL
+         UNION ALL
+         SELECT project_id FROM memories WHERE tenant_id = ? AND project_id IS NOT NULL
+       )`
+    ).bind(tenantId, tenantId).first<CountRow>(),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT COUNT(*) AS count FROM principal_role_assignments
+       WHERE tenant_id = ? AND project_id IS NOT NULL AND principal <> ?`
+    ).bind(tenantId, auth.principal).first<CountRow>()
+  ]);
+  const matchedRoles = assignments
+    .filter((assignment) => assignment.project_id === null || assignment.project_id === projectId)
+    .map((assignment) => assignment.role)
+    .filter((role, index, roles) => roles.indexOf(role) === index);
+  const effectiveRoles: OrgRole[] = matchedRoles.length > 0 ? matchedRoles : [auth.defaultRole];
+  let permissions = [...new Set(effectiveRoles.flatMap((role) => ROLE_PERMISSIONS[role]))] as OrgPermission[];
+  if (auth.scopes?.length) permissions = permissions.filter((permission) => auth.scopes!.includes(permission));
+  const activeUserCount = Number(activeUsers?.count ?? 0);
+  const activeGroupCount = Number(activeGroups?.count ?? 0);
+  const activeProjectCount = Number(activeProjects?.count ?? 0);
+  const personal = activeUserCount <= 1 && activeGroupCount === 0 && Number(otherProjectPrincipals?.count ?? 0) === 0;
+  const canAdminister = permissions.includes("admin");
+  return {
+    mode: personal ? "personal" as const : "team" as const,
+    effective_permissions: permissions,
+    can_manage_users: canAdminister,
+    can_manage_groups: canAdminister,
+    can_manage_clients: canAdminister,
+    tenant: { id: tenantId },
+    project: projectId ? { id: projectId } : null,
+    counts: {
+      active_users: activeUserCount,
+      active_groups: activeGroupCount,
+      active_projects: activeProjectCount
+    }
+  };
+}
+
+export async function getMyIdentity(env: Env, tenantId: string, auth: ApiAuthContext, projectId: string | null = null) {
+  const [profile, groups, consoleContext] = await Promise.all([
+    getUserProfile(env, tenantId, auth),
+    listGroups(env, tenantId, auth.principal),
+    getConsoleContext(env, tenantId, auth, projectId)
+  ]);
   return {
     tenant_id: tenantId,
     auth: {
@@ -115,6 +170,7 @@ export async function getMyIdentity(env: Env, tenantId: string, auth: ApiAuthCon
       display_name: auth.displayName ?? null
     },
     profile,
-    groups: groups.groups
+    groups: groups.groups,
+    console_context: consoleContext
   };
 }

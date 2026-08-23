@@ -3,6 +3,7 @@ export * from "@org-brain/core";
 export * from "./ajv";
 export * from "./constants";
 export * from "./errors";
+export * from "./evidence-disposition";
 export * from "./hash";
 export * from "./ids";
 export * from "./knowledge-docs";

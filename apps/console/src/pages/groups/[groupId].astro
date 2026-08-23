@@ -2,6 +2,7 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
 import LiveNotice from "../../components/admin/LiveNotice.astro";
+import ConfirmationDialog from "../../components/admin/ConfirmationDialog.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { scopedAdminHref } from "../../lib/admin-ui";
 
@@ -72,7 +73,7 @@ const roleLabel = (value: string) => copy.roles[value as keyof typeof copy.roles
     </AdminPageHeader>
     {message && <LiveNotice message={message} />}{error && <LiveNotice tone="error" message={error} />}
 
-    {group?.source === "local" && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-[1fr_12rem_auto] md:items-end">
+    {group?.source === "local" && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-[1fr_12rem_auto] md:items-end" data-confirm="true" data-confirm-target-field="principal" data-confirm-impact={lang === "ja" ? `${group?.name ?? copy.fallback}の共有範囲へ、選択した役割で追加します。` : `Adds this identity to ${group?.name ?? copy.fallback} with the selected group role.`} data-confirm-recovery={lang === "ja" ? "所属はこの画面から削除できます。" : "Membership can be removed from this page."}>
       <input type="hidden" name="csrf_token" class="csrf-token" />
       <input type="hidden" name="action" value="member" />
       <label><span class="field-label">{copy.user}</span><input name="principal" list="directory-users" required /></label>
@@ -83,11 +84,12 @@ const roleLabel = (value: string) => copy.roles[value as keyof typeof copy.roles
 
     <div class="overflow-x-auto rounded-[22px] border border-white/8">
       <table><thead><tr><th>{copy.principal}</th><th>{copy.role}</th><th>{copy.source}</th><th></th></tr></thead><tbody>
-        {members.map((member: any) => <tr><td>{member.principal}</td><td title={member.role}>{roleLabel(member.role)}</td><td>{member.source}</td><td>{group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><button type="submit">{copy.remove}</button></form>}</td></tr>)}
+        {members.map((member: any) => <tr><td>{member.principal}</td><td title={member.role}>{roleLabel(member.role)}</td><td>{member.source}</td><td>{group?.source === "local" && <form method="post" data-confirm="true" data-confirm-target={member.principal} data-confirm-impact={lang === "ja" ? `${group?.name ?? copy.fallback}への所属と共有アクセスを削除します。` : `Removes membership and shared access to ${group?.name ?? copy.fallback}.`} data-confirm-recovery={lang === "ja" ? "必要な場合は同じユーザーを再追加できます。" : "The user can be added again if needed."}><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><button type="submit">{copy.remove}</button></form>}</td></tr>)}
       </tbody></table>
     </div>
-    {group?.source === "local" && <form method="post"><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">{copy.archive}</button></form>}
+    {group?.source === "local" && <form method="post" data-confirm="true" data-confirm-target={group?.name ?? copy.fallback} data-confirm-impact={lang === "ja" ? "グループを通常一覧から外し、所属による共有アクセスを停止します。" : "Removes the group from active lists and stops membership-based access."} data-confirm-recovery={lang === "ja" ? "現在のAPIでは画面から復元できません。再作成が必要です。" : "The current API cannot restore it from this screen; recreation is required."}><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">{copy.archive}</button></form>}
   </section>
+  <ConfirmationDialog lang={lang} />
 </BaseLayout>
 <script>
   document.querySelectorAll<HTMLInputElement>(".csrf-token").forEach((input) => {

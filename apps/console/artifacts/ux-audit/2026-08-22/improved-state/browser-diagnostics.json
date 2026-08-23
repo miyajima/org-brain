@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-08-22T21:59:00+09:00",
+  "environment": {
+    "browser": "Playwright Chromium",
+    "api": "fresh local mock server with synthetic data",
+    "secrets_persisted": false
+  },
+  "runs": [
+    {
+      "suite": "accessibility + keyboard + identity administration + login and memory",
+      "result": "passed",
+      "passed": 70,
+      "failed": 0,
+      "coverage": ["axe WCAG A/AA rules", "390x844", "768x1024", "1024x768", "1280x720", "200% equivalent", "400% equivalent", "forced colors", "keyboard flows"]
+    },
+    {
+      "suite": "improved-state screenshots",
+      "result": "passed",
+      "passed": 1,
+      "failed": 0,
+      "images": 5
+    }
+  ],
+  "console_errors": {
+    "status": "not_collected",
+    "reason": "The screenshot run did not attach a browser console listener; no claim is made from visual evidence alone."
+  },
+  "voiceover": {
+    "status": "not_verified",
+    "reason": "VoiceOver reading order, accessible names, state changes, and live error announcements require a fresh manual macOS session."
+  },
+  "wcag_statement": "Passing automated axe checks is evidence of no detected violations in the tested rules and routes; it is not a WCAG conformance claim."
+}

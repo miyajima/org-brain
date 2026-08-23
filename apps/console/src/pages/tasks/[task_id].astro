@@ -4,6 +4,7 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
 import AdminStatePanel from "../../components/admin/AdminStatePanel.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { dashboardLabel, dashboardStatusTone } from "../../lib/dashboard-copy";
+import { taskDetailCopy } from "../../lib/console-locale";
 
 type TaskDetailState = "ready" | "not_found" | "task_error" | "events_error";
 const taskId = Astro.params.task_id!;
@@ -25,32 +26,7 @@ const state: TaskDetailState = !taskResponse.ok
     : !eventResponse.ok || !eventPayload?.ok
       ? "events_error"
       : "ready";
-const copy = {
-  en: {
-    title: "Task detail", taskId: "Task ID", capability: "Process", status: "Status", project: "Project", updated: "Updated", priority: "Priority",
-    timeline: "Event timeline", kind: "Kind", at: "At", payload: "Details", empty: "No events have been recorded yet.",
-    notFoundTitle: "Task not found", notFoundBody: "It may have been removed or it may belong to a different tenant or project.",
-    taskErrorTitle: "Task details could not be loaded", taskErrorBody: "The service did not return a usable response. Retry before making an operational decision.",
-    eventsErrorTitle: "Some event history is unavailable", eventsErrorBody: "The Task was loaded, but its event timeline could not be retrieved.",
-    back: "Back to Tasks", retry: "Retry", operations: "Open Operations", replay: "Replay Task", replaying: "Creating a replay Task…", replayed: "Replay Task created", replayError: "The Task could not be replayed."
-  },
-  ja: {
-    title: "Task詳細", taskId: "Task ID", capability: "処理", status: "状態", project: "プロジェクト", updated: "更新日時", priority: "優先度",
-    timeline: "イベント履歴", kind: "種類", at: "発生日時", payload: "内容", empty: "イベントはまだ記録されていません。",
-    notFoundTitle: "Taskが見つかりません", notFoundBody: "削除されたか、別のテナントまたはプロジェクトに属している可能性があります。",
-    taskErrorTitle: "Task詳細を取得できませんでした", taskErrorBody: "サービスから利用可能な応答がありません。運用判断の前に再試行してください。",
-    eventsErrorTitle: "イベント履歴の一部を取得できませんでした", eventsErrorBody: "Task本体は取得できましたが、イベント履歴を読み込めませんでした。",
-    back: "Task一覧へ戻る", retry: "再試行", operations: "運用画面を開く", replay: "Taskを再実行", replaying: "再実行Taskを作成しています…", replayed: "再実行Taskを作成しました", replayError: "Taskを再実行できませんでした。"
-  },
-  zh: {
-    title: "任务详情", taskId: "任务 ID", capability: "处理", status: "状态", project: "项目", updated: "更新时间", priority: "优先级",
-    timeline: "事件记录", kind: "类型", at: "时间", payload: "内容", empty: "尚未记录事件。",
-    notFoundTitle: "未找到任务", notFoundBody: "该任务可能已被删除，或属于其他租户或项目。",
-    taskErrorTitle: "无法加载任务详情", taskErrorBody: "服务未返回可用响应，请在做出运维判断前重试。",
-    eventsErrorTitle: "部分事件记录不可用", eventsErrorBody: "任务已加载，但无法获取事件记录。",
-    back: "返回任务列表", retry: "重试", operations: "打开运维页面", replay: "重新运行任务", replaying: "正在创建重试任务…", replayed: "已创建重试任务", replayError: "无法重新运行任务。"
-  }
-}[lang];
+const copy = taskDetailCopy(lang);
 const scopedHref = (path: string) => `${path}?${taskParams.toString()}`;
 const eventKind = (value: unknown) => dashboardLabel("event", typeof value === "string" ? value : "", lang);
 const formatEventPayload = (value: unknown) => typeof value === "string" ? value : JSON.stringify(value, null, 2);

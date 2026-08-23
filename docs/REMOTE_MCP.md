@@ -1,19 +1,20 @@
 # OrgBrain Remote MCP
 
 ## Architecture
-- Endpoint: `https://<api-gateway-domain>/mcp`
-- Host Worker: `apps/api-gateway` (`/mcp` is mounted in the same Worker)
-- Compatibility Worker: `apps/mcp` is retained only for legacy deployments that need an `API` service binding proxy.
-- Auth: Worker-validated service tokens via `CF-Access-Client-Id` / `CF-Access-Client-Secret`
-- Tenant control: per-token `tenants` plus optional `MCP_TENANT_POLICY_JSON`
+- Endpoint: `ORGBRAIN_MCP_URL=https://mcp.<managed-domain>/mcp`
+- Public edge: `apps/mcp`, protected by a Cloudflare Access self-hosted application on `/mcp*`
+- Internal execution: `apps/api-gateway`, reached only through the `API` service binding
+- Interactive auth: Cloudflare Access Managed OAuth (CIMD/DCR and PKCE)
+- Unattended hooks: an explicit Access service token bound to a one-time OrgBrain client enrollment
+- Tenant control: the Gateway verifies the Access JWT audience, resolves an existing identity or installation, and then applies tenant/project RBAC
 - Protocol: MCP `2026-07-28` stateless Streamable HTTP, with stateless compatibility for ordinary 2025 clients
 
 ## Why this shape
-- No extra `mcp -> api-gateway` hop
-- No MCP protocol session, sticky routing, or session Durable Object
-- Access handles identity on every request
-- Worker enforces tenant-level authorization
-- `server/discover` and `tools/list` advertise a private five-minute cache hint
+- Access owns the OAuth challenge and discovery documents; OrgBrain stores no OAuth token.
+- The public MCP hostname is independent from Console and never uses `/api` or `/api/mcp`.
+- The edge forwards only the signed Access assertion and bounded MCP protocol headers.
+- The Gateway remains the single authorization, tenant isolation, audit, and tool-execution boundary.
+- No MCP protocol session or sticky routing is required for business state.
 
 ## MCP 2026-07-28
 
@@ -35,14 +36,21 @@ keep business state in D1 rather than MCP transport sessions.
 
 ## Required Worker Settings
 Set on `apps/api-gateway`:
-- `MCP_SERVICE_TOKENS_JSON` (JSON)
-- optional `MCP_SERVICE_TOKENS_ADDITIONAL_JSON` (JSON) for adding credentials
-  without replacing an existing write-only Cloudflare secret
-- optional `MCP_SERVICE_TOKENS_MACHINE_JSON` for machine credentials that can
-  be rotated without replacing the primary or integration token secrets.
-- optional `MCP_TENANT_POLICY_JSON` (JSON)
 
-Example service token config:
+- `MCP_AUTH_MODE=access`
+- `ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com`
+- `MCP_ACCESS_AUD=<Access application audience>`
+- the existing D1 and rate-limiter bindings
+
+`cf provision --with-managed-oauth` writes only the Access audience as a Worker
+secret after the Access application exists. It requires an existing
+`--access-policy-id`; it does not create an allow-all policy.
+
+For the one-release migration window only, `MCP_AUTH_MODE=dual` can retain the
+legacy static-token configuration below. New installations must use Access;
+after OAuth and hook migration is verified, set `MCP_AUTH_MODE=access` and
+remove these legacy secrets.
+
 ```json
 {
   "tokens": [
@@ -56,7 +64,7 @@ Example service token config:
 }
 ```
 
-Optional policy:
+Legacy tenant policy:
 ```json
 {
   "principals": {
@@ -68,25 +76,26 @@ Optional policy:
 }
 ```
 
-## Deploy
+## Provision and deploy
 ```bash
-cd <repo-root>
-pnpm install
+pnpm exec orgbrain cf provision --root . \
+  --with-managed-oauth \
+  --mcp-host mcp.example.com \
+  --access-policy-id <reviewed-policy-id>
 
-# set secrets/vars for api-gateway
-cd apps/api-gateway
-pnpm wrangler secret put MCP_SERVICE_TOKENS_JSON
-pnpm wrangler secret put MCP_TENANT_POLICY_JSON
-pnpm wrangler deploy
+# Review the plan, then repeat with --execute.
+pnpm exec orgbrain cf doctor --root . --live \
+  --mcp-url https://mcp.example.com/mcp
 ```
 
 ## Auth Configuration
-1. Generate a service token pair for your MCP client.
-2. Store it in `MCP_SERVICE_TOKENS_JSON`.
-   If the existing secret cannot be retrieved for a safe merge, store only the
-   new credential in `MCP_SERVICE_TOKENS_ADDITIONAL_JSON`.
-3. Configure the MCP client to send the same headers.
-4. If you later want interactive browser login, add Cloudflare Access in front of the MCP hostname and extend the Worker with Access JWT verification.
+1. Create a least-privilege Access policy and record its ID.
+2. Provision the `/mcp*` self-hosted application with Managed OAuth enabled.
+3. Run `codex mcp login orgbrain` for an existing OrgBrain user. Access handles
+   the 401 challenge, protected-resource discovery, authorization-server
+   discovery, DCR/CIMD, and PKCE.
+4. For a cloud hook, create one client enrollment in Console and use a separate
+   Access service token. Revoke the Access setup token after initial setup.
 
 ## API Key Principal Identity
 For `/v1/*` and `/api/*` HTTP APIs, `API_TENANT_POLICY_JSON` `principal` values are the canonical identity for API-key authenticated requests.
@@ -147,26 +156,22 @@ Initial group sharing applies to:
 Raw/episodic memories are not group-published in this phase.
 
 ## Client Configuration
-### Cursor (`.cursor/mcp.json`) with service token
+### Interactive client
 ```json
 {
   "mcpServers": {
     "orgbrain": {
-      "url": "https://open-brain-api-gateway.<account>.workers.dev/mcp",
-      "headers": {
-        "CF-Access-Client-Id": "<service-token-client-id>",
-        "CF-Access-Client-Secret": "<service-token-client-secret>",
-        "x-orgbrain-tenant": "default"
-      }
+      "url": "https://mcp.example.com/mcp"
     }
   }
 }
 ```
 
 ### Human user flow
-- This deployment defaults to service-token auth.
-- Optionally include `x-orgbrain-tenant` for explicit tenant selection.
-- Browser-based login can be added later by placing Cloudflare Access in front of the endpoint and wiring JWT verification.
+- Browser-based login through Cloudflare Access Managed OAuth is the default.
+- Optionally include `x-orgbrain-tenant` for explicit tenant selection; the
+  Gateway rejects tenants not present in the verified identity grant.
+- The user must already exist in OrgBrain; MCP login does not JIT-create an identity.
 
 ## Skill
 - `skills/org-brain-mcp/SKILL.md`
@@ -185,7 +190,7 @@ capture adds no model tokens.
 ```dotenv
 ORGBRAIN_ENABLE_CLOUD_MEMORY=true
 ORGBRAIN_ENABLE_ORG_SHARING=true
-ORGBRAIN_MCP_URL=https://<api-gateway-domain>/mcp
+ORGBRAIN_MCP_URL=https://mcp.<managed-domain>/mcp
 ORGBRAIN_MCP_CLIENT_ID=<service-token-client-id>
 ORGBRAIN_MCP_CLIENT_SECRET=<service-token-client-secret>
 ORGBRAIN_TENANT_ID=default

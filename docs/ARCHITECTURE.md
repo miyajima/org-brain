@@ -23,8 +23,9 @@ second authority for shared Skills or Agent Loadouts.
 ## Technology stack
 
 - Astro on Cloudflare Pages provides the Console and same-origin API proxy.
-- Hono on Cloudflare Workers provides the API Gateway and stateless MCP
-  endpoint.
+- Hono on Cloudflare Workers provides the API Gateway. A dedicated `apps/mcp`
+  Worker is the public Remote MCP edge and forwards Access-authenticated MCP
+  requests to the Gateway over a service binding.
 - D1 stores decisions, policies, immutable version metadata, named Agents,
   Loadouts, tasks, audit events, and usage facts.
 - R2 stores Skill file bodies. D1 stores each object's R2 key, SHA-256 hash,
@@ -39,8 +40,8 @@ second authority for shared Skills or Agent Loadouts.
 ```text
 Browser -> Console Pages -> API Gateway -> D1
                                   |       -> R2
+Agent -> Cloudflare Access -> MCP edge -> API Gateway
                                   |       -> Queue -> capability runner
-Agent/MCP client -----------------+                    -> generation provider
 ```
 
 The local evidence-chain collector is a parallel write plane:
@@ -59,6 +60,10 @@ available for rollback.
 
 The Console, MCP, and direct API surfaces converge on the same Gateway services
 and unified authorization decision. Provider credentials remain server-side.
+The MCP edge does not accept a Console `/api` proxy route, persist OAuth tokens,
+or create Access policies. Managed OAuth discovery and browser authorization
+are owned by Cloudflare Access; the Gateway verifies the signed Access JWT and
+its configured audience before tenant or project authorization.
 
 ## Major components
 

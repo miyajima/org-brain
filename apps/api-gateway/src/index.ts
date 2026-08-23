@@ -196,12 +196,27 @@ app.onError((err, c) => {
     );
   }
 
+  const message = err instanceof Error ? err.message : "Unexpected error";
+  if (c.env.LOCAL_DEV_MODE === "true" && /(?:D1_ERROR:.*)?no such table/iu.test(message)) {
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: "local_schema_not_ready",
+          message: "The local D1 schema has not been prepared.",
+          next_steps: ["Run pnpm local:start, or pnpm local:prepare before starting the API directly."]
+        }
+      },
+      { status: 503 }
+    );
+  }
+
   return c.json(
     {
       ok: false,
       error: {
         code: "internal_error",
-        message: err instanceof Error ? err.message : "Unexpected error"
+        message
       }
     },
     { status: 500 }

@@ -1,0 +1,56 @@
+---
+type Locale = "en" | "ja" | "zh";
+const { lang = "en" } = Astro.props as { lang?: Locale };
+const copy = {
+  en: { title: "Confirm this change", target: "Target", impact: "Impact", recovery: "Recovery", cancel: "Cancel", confirm: "Apply change" },
+  ja: { title: "変更内容を確認", target: "対象", impact: "影響範囲", recovery: "復旧方法", cancel: "キャンセル", confirm: "変更を実行" },
+  zh: { title: "确认此更改", target: "对象", impact: "影响范围", recovery: "恢复方式", cancel: "取消", confirm: "应用更改" }
+}[lang];
+---
+<dialog class="admin-confirm-dialog" data-confirm-dialog aria-labelledby="admin-confirm-title">
+  <form method="dialog" class="admin-confirm-card">
+    <h2 id="admin-confirm-title">{copy.title}</h2>
+    <dl>
+      <div><dt>{copy.target}</dt><dd data-confirm-value="target"></dd></div>
+      <div><dt>{copy.impact}</dt><dd data-confirm-value="impact"></dd></div>
+      <div><dt>{copy.recovery}</dt><dd data-confirm-value="recovery"></dd></div>
+    </dl>
+    <div class="admin-confirm-actions">
+      <button type="submit" value="cancel" class="secondary-button">{copy.cancel}</button>
+      <button type="button" data-confirm-apply>{copy.confirm}</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  const dialog = document.querySelector<HTMLDialogElement>("[data-confirm-dialog]");
+  if (dialog) {
+    let pendingForm: HTMLFormElement | null = null;
+    let pendingSubmitter: HTMLElement | null = null;
+    document.addEventListener("submit", (event) => {
+      const form = event.target instanceof HTMLFormElement ? event.target : null;
+      if (!form?.dataset.confirm || form.dataset.confirmed === "true") return;
+      event.preventDefault();
+      pendingForm = form;
+      pendingSubmitter = event.submitter instanceof HTMLElement ? event.submitter : null;
+      for (const key of ["target", "impact", "recovery"] as const) {
+        const value = dialog.querySelector<HTMLElement>(`[data-confirm-value="${key}"]`);
+        const fieldName = key === "target" ? form.dataset.confirmTargetField : undefined;
+        const field = fieldName ? form.elements.namedItem(fieldName) : null;
+        const fieldValue = field instanceof HTMLInputElement || field instanceof HTMLSelectElement ? field.value.trim() : "";
+        if (value) value.textContent = fieldValue || form.dataset[`confirm${key[0].toUpperCase()}${key.slice(1)}` as keyof DOMStringMap] || "—";
+      }
+      dialog.showModal();
+    });
+    dialog.querySelector<HTMLElement>("[data-confirm-apply]")?.addEventListener("click", () => {
+      if (!pendingForm) return;
+      pendingForm.dataset.confirmed = "true";
+      dialog.close();
+      pendingForm.requestSubmit(pendingSubmitter instanceof HTMLButtonElement ? pendingSubmitter : undefined);
+    });
+    dialog.addEventListener("close", () => {
+      if (pendingForm) delete pendingForm.dataset.confirmed;
+      pendingForm = null;
+      pendingSubmitter = null;
+    });
+  }
+</script>

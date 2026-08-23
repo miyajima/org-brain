@@ -421,7 +421,7 @@ test.describe("dashboard visualizations", () => {
     await expect(page.getByRole("link", { name: "活動", exact: true })).toHaveAttribute("aria-current", "page");
     await page.locator(".console-nav-menu summary").click();
     await expect(page.getByRole("link", { name: "従来のダッシュボード" })).toHaveCount(0);
-    const taskHref = await page.getByRole("link", { name: "Task一覧", exact: true }).getAttribute("href");
+    const taskHref = await page.getByRole("link", { name: "タスク", exact: true }).getAttribute("href");
     const taskUrl = new URL(taskHref ?? "", page.url());
     expect(taskUrl.pathname).toBe("/tasks");
     expect(taskUrl.searchParams.get("tenant_id")).toBe("default");
@@ -445,6 +445,17 @@ test.describe("dashboard visualizations", () => {
       expect(target.searchParams.get("project_id")).toBe("project-a");
       expect(target.searchParams.get("lang")).toBe(lang);
     }
+  });
+
+  test("reduces administration navigation for a personal workspace", async ({ page }) => {
+    await page.goto("/?tenant_id=personal-e2e&lang=ja");
+    await page.locator(".console-nav-menu summary").click();
+    const panel = page.locator(".console-nav-menu-panel");
+    await expect(panel.getByRole("link", { name: "チームで使う", exact: true })).toBeVisible();
+    for (const name of ["ユーザー", "グループ", "組織", "業務カテゴリ"]) {
+      await expect(panel.getByRole("link", { name, exact: true })).toHaveCount(0);
+    }
+    await expect(page.locator(".console-context-chip")).toContainText("個人 · personal-e2e");
   });
 
   test("disables visualization animation for reduced motion", async ({ page }) => {
@@ -483,38 +494,38 @@ test.describe("dashboard visualizations", () => {
 
   test("keeps the canonical Task dashboard honest and filterable", async ({ page }) => {
     await page.goto("/tasks?tenant_id=default&project_id=e2e-task-error&lang=ja");
-    await expect(page.getByRole("alert")).toContainText("Taskを取得できませんでした");
+    await expect(page.getByRole("alert")).toContainText("タスクを取得できませんでした");
     await expect(page.getByText("Task fixture unavailable")).toBeVisible();
-    await expect(page.getByText("現在のスコープに一致するTaskはありません。")).toHaveCount(0);
+    await expect(page.getByText("現在の範囲に一致するタスクはありません。")).toHaveCount(0);
 
     await page.goto("/tasks?tenant_id=default&project_id=e2e-task-dense&lang=ja&task_q=memory&task_status=succeeded");
-    await expect(page.getByRole("searchbox", { name: "Taskを検索" })).toHaveValue("memory");
+    await expect(page.getByRole("searchbox", { name: "タスクを検索" })).toHaveValue("memory");
     await expect(page.getByRole("combobox", { name: "ステータス" })).toHaveValue("succeeded");
     await expect(page.getByRole("table")).toContainText("記憶品質測定");
     await expect(page.getByText("1ページ目")).toBeVisible();
     await expect(page.getByLabel("このページのステータス").getByText("成功", { exact: true })).toBeVisible();
     await page.goto("/dashboard?tenant_id=default&project_id=e2e-task-dense&lang=ja&task_q=memory&task_status=succeeded");
     await expect(page).toHaveURL(/\/tasks\?/u);
-    await expect(page.getByRole("searchbox", { name: "Taskを検索" })).toHaveValue("memory");
+    await expect(page.getByRole("searchbox", { name: "タスクを検索" })).toHaveValue("memory");
   });
 
   test("always offers a next action for every Task detail state", async ({ page }) => {
     const states = [
       ["/tasks/task-e2e?tenant_id=default&project_id=org-brain&lang=ja", "イベント履歴"],
-      ["/tasks/missing?tenant_id=default&project_id=org-brain&lang=ja", "Taskが見つかりません"],
-      ["/tasks/task-e2e?tenant_id=default&project_id=e2e-task-detail-error&lang=ja", "Task詳細を取得できませんでした"],
+      ["/tasks/missing?tenant_id=default&project_id=org-brain&lang=ja", "タスクが見つかりません"],
+      ["/tasks/task-e2e?tenant_id=default&project_id=e2e-task-detail-error&lang=ja", "タスク詳細を取得できませんでした"],
       ["/tasks/task-e2e?tenant_id=default&project_id=e2e-task-events-error&lang=ja", "イベント履歴の一部を取得できませんでした"]
     ] as const;
     for (const [url, expected] of states) {
       await page.goto(url);
       await expect(page.getByText(expected, { exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Task一覧へ戻る" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "タスク一覧へ戻る" })).toBeVisible();
       await expect(page.getByRole("link", { name: "再試行" })).toBeVisible();
       await expect(page.getByRole("link", { name: "運用画面を開く" })).toBeVisible();
     }
 
     await page.goto("/tasks/task-failed?tenant_id=default&project_id=org-brain&lang=ja");
-    await expect(page.getByRole("button", { name: "Taskを再実行" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "タスクを再実行" })).toBeVisible();
   });
 
   test("keeps Operations tenant-scoped through status and replay", async ({ page }) => {
