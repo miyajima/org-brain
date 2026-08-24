@@ -42,7 +42,7 @@ const policy = access.data.policy && typeof access.data.policy === "object" ? ac
 const loadoutPolicy = loadoutAccess.data.policy && typeof loadoutAccess.data.policy === "object" ? loadoutAccess.data.policy as Record<string, unknown> : null;
 const copy = {
   en: { eyebrow: "Execution layer", title: "Agents", lead: "See each named Agent’s role, decision lineage, active Loadout, and the exact context it will receive.", inventory: "Agent inventory", create: "Create Agent", name: "Name", key: "Agent key", role: "Role", source: "Source decision", loadout: "Current Loadout", lastUse: "Last use", status: "Status", add: "Create", saving: "Saving…", saved: "Saved", loadoutEditor: "Loadout editor", loadoutName: "Loadout name", skill: "Skill", mode: "Mode", priority: "Priority", version: "Version", latest: "Latest published", pinned: "Pinned", saveLoadout: "Save Loadout", preview: "Effective context preview", previewTask: "Task to preview", previewRun: "Resolve context", previewing: "Resolving…", injected: "Injected", onDemand: "On demand handles", omitted: "Omitted", empty: "No named Agents yet.", noSkills: "Publish a Skill before adding it to a Loadout.", error: "Agent operation failed", retry: "Try again", back: "Back to decisions" },
-  ja: { eyebrow: "実行レイヤー", title: "Agents", lead: "Named Agentごとに、役割、参照元の決定、現在のLoadout、最終的に渡るコンテキストを確認できます。", inventory: "Agent一覧", create: "Agentを作成", name: "名前", key: "Agent key", role: "役割", source: "参照元の決定", loadout: "現在のLoadout", lastUse: "最終利用", status: "状態", add: "作成", saving: "保存中…", saved: "保存しました", loadoutEditor: "Loadout編集", loadoutName: "Loadout名", skill: "Skill", mode: "モード", priority: "優先度", version: "版", latest: "最新公開版", pinned: "固定版", saveLoadout: "Loadoutを保存", preview: "実効コンテキストの事前確認", previewTask: "確認するタスク", previewRun: "コンテキストを解決", previewing: "解決中…", injected: "注入されるSkill", onDemand: "オンデマンド参照", omitted: "除外", empty: "Named Agentはまだありません。", noSkills: "Loadoutへ追加する前にSkillをPublishしてください。", error: "Agent操作に失敗しました", retry: "再試行", back: "決定一覧へ戻る" },
+  ja: { eyebrow: "実行レイヤー", title: "エージェント", lead: "名前付きエージェントごとに、役割、参照元の決定、現在の利用構成、最終的に渡るコンテキストを確認できます。", inventory: "エージェント一覧", create: "エージェントを作成", name: "名前", key: "識別キー", role: "役割", source: "参照元の決定", loadout: "現在の利用構成", lastUse: "最終利用", status: "状態", add: "作成", saving: "保存中…", saved: "保存しました", loadoutEditor: "利用構成を編集", loadoutName: "利用構成名", skill: "スキル", mode: "使い方", priority: "優先度", version: "版", latest: "最新公開版", pinned: "固定版", saveLoadout: "利用構成を保存", preview: "渡されるコンテキストを確認", previewTask: "確認するタスク", previewRun: "コンテキストを確認", previewing: "確認中…", injected: "自動で渡されるスキル", onDemand: "必要時に参照するスキル", omitted: "除外", empty: "名前付きエージェントはまだありません。", noSkills: "利用構成へ追加する前にスキルを公開してください。", error: "エージェント操作に失敗しました", retry: "再試行", back: "決定一覧へ戻る", policy: "権限と優先度", accessFirst: "権限を先に確認", tokenBudget: "最大トークン数", always: "常に使用", automatic: "自動", onDemandMode: "必要時" },
   zh: { eyebrow: "执行层", title: "Agents", lead: "查看每个Named Agent的角色、决策来源、当前Loadout以及最终上下文。", inventory: "Agent列表", create: "创建Agent", name: "名称", key: "Agent key", role: "角色", source: "来源决策", loadout: "当前Loadout", lastUse: "最近使用", status: "状态", add: "创建", saving: "保存中…", saved: "已保存", loadoutEditor: "编辑Loadout", loadoutName: "Loadout名称", skill: "Skill", mode: "模式", priority: "优先级", version: "版本", latest: "最新发布版", pinned: "固定版", saveLoadout: "保存Loadout", preview: "预览有效上下文", previewTask: "预览任务", previewRun: "解析上下文", previewing: "解析中…", injected: "已注入", onDemand: "按需引用", omitted: "已排除", empty: "暂无Named Agent。", noSkills: "请先发布Skill，再添加到Loadout。", error: "Agent操作失败", retry: "重试", back: "返回决策列表" }
 }[lang];
 const previewJump = lang === "ja" ? "コンテキスト確認へ" : lang === "zh" ? "跳转到上下文预览" : "Jump to context preview";
@@ -96,7 +96,7 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
 
             <section class="agent-loadout-editor">
               <div class="decision-section-heading">
-                <div><p class="decision-eyebrow">Policy + priority</p><h2>{copy.loadoutEditor}</h2></div>
+                <div><p class="decision-eyebrow">{copy.policy ?? "Policy + priority"}</p><h2>{copy.loadoutEditor}</h2></div>
                 {loadoutId && <AccessDrawer resourceType="agent_loadout" resourceId={loadoutId} tenantId={tenantId} projectId={projectId} policy={loadoutPolicy} locale={lang} />}
               </div>
               <form data-loadout-form>
@@ -107,7 +107,7 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
                     const binding = bindingBySkill.get(skill.id);
                     return <div role="row" class="agent-binding-row" data-binding-row data-skill-id={skill.id} data-published-version={skill.published_version_id ?? ""}>
                       <label role="cell" class="agent-binding-skill"><input type="checkbox" name="enabled" checked={Boolean(binding)} /><span><strong>{skill.name}</strong><small>{skill.description}</small></span></label>
-                      <select role="cell" name="usage_mode" aria-label={`${skill.name} ${copy.mode}`}><option value="always" selected={binding?.usage_mode === "always"}>always</option><option value="auto" selected={!binding || binding.usage_mode === "auto"}>auto</option><option value="on_demand" selected={binding?.usage_mode === "on_demand"}>on_demand</option></select>
+                      <select role="cell" name="usage_mode" aria-label={`${skill.name} ${copy.mode}`}><option value="always" selected={binding?.usage_mode === "always"}>{copy.always ?? "always"}</option><option value="auto" selected={!binding || binding.usage_mode === "auto"}>{copy.automatic ?? "auto"}</option><option value="on_demand" selected={binding?.usage_mode === "on_demand"}>{copy.onDemandMode ?? "on_demand"}</option></select>
                       <input role="cell" name="priority" type="number" min="0" max="100" value={String(binding?.priority ?? 50)} aria-label={`${skill.name} ${copy.priority}`} />
                       <select role="cell" name="version_policy" aria-label={`${skill.name} ${copy.version}`}><option value="latest_published" selected={!binding || binding.version_policy === "latest_published"}>{copy.latest}</option><option value="pinned" selected={binding?.version_policy === "pinned"}>{copy.pinned}</option></select>
                     </div>;
@@ -119,10 +119,10 @@ const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lan
             </section>
 
             <section class="agent-context-preview" id="agent-context-preview">
-              <div class="decision-section-heading"><div><p class="decision-eyebrow">ACL-first</p><h2>{copy.preview}</h2></div></div>
+              <div class="decision-section-heading"><div><p class="decision-eyebrow">{copy.accessFirst ?? "ACL-first"}</p><h2>{copy.preview}</h2></div></div>
               <form id="context-preview-form" data-context-preview-form>
                 <label>{copy.previewTask}<textarea name="task_text" rows="4" maxlength="4000" required></textarea></label>
-                <label>Token budget<input name="max_tokens" type="number" inputmode="numeric" min="256" max="16000" value="4000" /></label>
+                <label>{copy.tokenBudget ?? "Token budget"}<input name="max_tokens" type="number" inputmode="numeric" min="256" max="16000" value="4000" /></label>
                 <footer><p data-preview-status role="alert" tabindex="-1"></p><button type="submit" data-context-preview-submit>{copy.previewRun}</button></footer>
               </form>
               <div class="agent-context-result" data-context-result hidden>

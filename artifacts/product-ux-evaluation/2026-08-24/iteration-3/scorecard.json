@@ -1,0 +1,1393 @@
+{
+  "schema_version": 1,
+  "method_version": "1.0.0",
+  "audit": {
+    "id": "orgbrain-product-ux-2026-08-24-improved-iteration-3",
+    "date": "2026-08-24",
+    "commit": "de5f9afa649ec3da1e144652a7e9958a0c55b10d+worktree",
+    "state": "iteration",
+    "basis": "iteration 2証拠に、Decision主要画面の日本語化、検索後の部分更新、中央modal、skip link focus、構成済みorganizationのteam scope維持、Console全体回帰、Local AI再実査を追加。Cloud liveは未実査。",
+    "consecutive_passes": 1,
+    "ai_repeat_consistent": false,
+    "cloud_live_verified": false,
+    "voiceover_manually_verified": false
+  },
+  "formula": {
+    "item": "min(raw_score, evidence_cap, severity_cap); unverified=0",
+    "axis": "sum(item.score * item.weight); no N/A renormalization",
+    "overall": "sum(axis.score * axis.weight)",
+    "coverage": "sum(verified item.weight * axis.weight)"
+  },
+  "axes": [
+    {
+      "id": "clarity",
+      "label": "わかりやすさ・メンタルモデル",
+      "weight": 0.12,
+      "focus": true,
+      "minimum": 96,
+      "score": 97.5,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "clarity.purpose",
+          "label": "画面の目的",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "clarity.current_state",
+          "label": "現在地と状態",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "clarity.terms",
+          "label": "用語の理解",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "low",
+          "severity_cap": 96,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "primary_decision_routes_reviewed": 6,
+            "all_japanese_routes_reviewed": false
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "clarity.outcome",
+          "label": "結果の意味",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "simplicity",
+      "label": "画面のシンプルさ",
+      "weight": 0.12,
+      "focus": true,
+      "minimum": 96,
+      "score": 97,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "simplicity.initial_choices",
+          "label": "初期表示の選択肢",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "simplicity.information_density",
+          "label": "情報密度",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "simplicity.progressive_disclosure",
+          "label": "段階的開示",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "simplicity.visual_hierarchy",
+          "label": "視覚的な優先順位",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "operability",
+      "label": "操作のしやすさ",
+      "weight": 0.11,
+      "focus": true,
+      "minimum": 96,
+      "score": 96.5,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "operability.action_count",
+          "label": "操作数と入力負荷",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "operability.affordance",
+          "label": "操作対象の分かりやすさ",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "operability.keyboard",
+          "label": "キーボード操作",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "skip_link_moves_focus_to_main": true
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "operability.scroll_distance",
+          "label": "スクロールと移動距離",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "decision_map_partial_update": true,
+            "page_reload": false,
+            "scroll_delta_px_max": 16
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "goal_reachability",
+      "label": "目的へのたどり着きやすさ",
+      "weight": 0.13,
+      "focus": true,
+      "minimum": 96,
+      "score": 98.3,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "goal_reachability.completion",
+          "label": "目的完遂率",
+          "weight": 0.35,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "goal_reachability.transitions",
+          "label": "遷移数",
+          "weight": 0.25,
+          "raw_score": 99,
+          "score": 99,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "goal_reachability.time_backtrack",
+          "label": "時間と後戻り",
+          "weight": 0.2,
+          "raw_score": 97,
+          "score": 97,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "goal_reachability.context_continuity",
+          "label": "文脈の継続",
+          "weight": 0.2,
+          "raw_score": 99,
+          "score": 99,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "decision_map_partial_update": true,
+            "page_marker_preserved": true
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "discoverability",
+      "label": "発見しやすさ・情報設計",
+      "weight": 0.07,
+      "focus": false,
+      "minimum": 90,
+      "score": 96.5,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "discoverability.navigation",
+          "label": "ナビゲーション",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "discoverability.search",
+          "label": "検索入口",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "discoverability.primary_cta",
+          "label": "主CTA",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "discoverability.persona_entry",
+          "label": "個人・チーム別の入口",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "recovery",
+      "label": "状態表示・エラー回復",
+      "weight": 0.07,
+      "focus": false,
+      "minimum": 90,
+      "score": 96,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "recovery.loading_empty",
+          "label": "読込中と空状態",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "recovery.error_truthfulness",
+          "label": "エラーの正直さ",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "recovery.direct_action",
+          "label": "直接復旧できる案内",
+          "weight": 0.25,
+          "raw_score": 94,
+          "score": 94,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "recovery.feedback",
+          "label": "操作結果の通知",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "trust",
+      "label": "信頼・根拠・安全性",
+      "weight": 0.07,
+      "focus": false,
+      "minimum": 90,
+      "score": 97,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "trust.decision_chain",
+          "label": "DecisionからArtifactの追跡",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "trust.provenance",
+          "label": "根拠と現在性",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "trust.access_scope",
+          "label": "権限と共有範囲",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "trust.destructive_boundary",
+          "label": "危険操作の境界",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "consistency",
+      "label": "一貫性・コピー・多言語",
+      "weight": 0.05,
+      "focus": false,
+      "minimum": 90,
+      "score": 96,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "consistency.patterns",
+          "label": "画面パターン",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "consistency.terminology",
+          "label": "用語統一",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "decision_ui_japanese_first": true,
+            "internal_values_changed": false
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "consistency.japanese",
+          "label": "日本語の自然さ",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "current_run_screenshots": 6,
+            "primary_decision_routes_reviewed": 6
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "consistency.multilingual",
+          "label": "英語・中国語の構造一致",
+          "weight": 0.25,
+          "raw_score": 94,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "accessibility",
+      "label": "アクセシビリティ・レスポンシブ",
+      "weight": 0.06,
+      "focus": false,
+      "minimum": 90,
+      "score": 92,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "accessibility.semantics",
+          "label": "意味構造と読み順",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "accessibility.focus_keyboard",
+          "label": "focusとkeyboard",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "skip_link_main_focus": true,
+            "voiceover_manually_verified": false
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "accessibility.target_contrast",
+          "label": "操作領域とcontrast",
+          "weight": 0.25,
+          "raw_score": 94,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "accessibility.reflow_motion",
+          "label": "reflowとmotion",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "local_setup",
+      "label": "Local初回導入",
+      "weight": 0.05,
+      "focus": false,
+      "minimum": 90,
+      "score": 97.1,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "local_setup.prerequisites",
+          "label": "前提条件",
+          "weight": 0.2,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-LOCAL",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "local_setup.doctor_start",
+          "label": "doctorとstart",
+          "weight": 0.3,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-LOCAL",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "local_setup.capture_search",
+          "label": "captureとsearch",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-LOCAL",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "local_setup.connector_recovery",
+          "label": "connectorと復旧",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "low",
+          "severity_cap": 96,
+          "evidence": [
+            "E-CONNECTOR-EXECUTION-PATH",
+            "E-LOCAL",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "cloudflare_setup",
+      "label": "Cloudflare初回導入",
+      "weight": 0.05,
+      "focus": false,
+      "minimum": 90,
+      "score": 40,
+      "coverage": 0.45,
+      "passed": false,
+      "items": [
+        {
+          "id": "cloudflare_setup.permissions",
+          "label": "権限準備",
+          "weight": 0.2,
+          "raw_score": 80,
+          "score": 80,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-CLOUD-LOCAL",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "cloudflare_setup.doctor_plan",
+          "label": "doctorとprovision plan",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-CLOUD-LOCAL",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "cloudflare_setup.oauth_hook",
+          "label": "OAuthとhook",
+          "weight": 0.3,
+          "raw_score": null,
+          "score": 0,
+          "verified": false,
+          "evidence_mode": "unverified",
+          "evidence_cap": 0,
+          "severity": "medium",
+          "severity_cap": 89,
+          "evidence": [],
+          "metrics": {},
+          "notes": "必須のlive実査前。N/Aへ再配分せず0点扱い。"
+        },
+        {
+          "id": "cloudflare_setup.parity_recovery",
+          "label": "parityと復旧",
+          "weight": 0.25,
+          "raw_score": null,
+          "score": 0,
+          "verified": false,
+          "evidence_mode": "unverified",
+          "evidence_cap": 0,
+          "severity": "medium",
+          "severity_cap": 89,
+          "evidence": [],
+          "metrics": {},
+          "notes": "必須のlive実査前。N/Aへ再配分せず0点扱い。"
+        }
+      ]
+    },
+    {
+      "id": "ai_safety",
+      "label": "AI提案・失敗回避",
+      "weight": 0.05,
+      "focus": false,
+      "minimum": 90,
+      "score": 82,
+      "coverage": 1,
+      "passed": false,
+      "items": [
+        {
+          "id": "ai_safety.relevance",
+          "label": "関連性",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-AI-LOCAL-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "ai_safety.conciseness",
+          "label": "簡潔さと行動性",
+          "weight": 0.2,
+          "raw_score": 96,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-AI-LOCAL-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "ai_safety.evidence_abstention",
+          "label": "根拠と回答抑制",
+          "weight": 0.3,
+          "raw_score": 98,
+          "score": 92,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-AI-LOCAL-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "ai_safety.consistency_parity",
+          "label": "反復一致とLocal・Cloud parity",
+          "weight": 0.25,
+          "raw_score": 52,
+          "score": 52,
+          "verified": true,
+          "evidence_mode": "automated",
+          "evidence_cap": 92,
+          "severity": "medium",
+          "severity_cap": 89,
+          "evidence": [
+            "E-AI-LOCAL-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "personal_fit",
+      "label": "個人利用への適合",
+      "weight": 0.02,
+      "focus": false,
+      "minimum": 90,
+      "score": 97,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "personal_fit.nav_reduction",
+          "label": "管理項目の抑制",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "personal_fit.next_action",
+          "label": "次の行動",
+          "weight": 0.25,
+          "raw_score": 98,
+          "score": 98,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "personal_fit.scope",
+          "label": "個人scope",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "personal_fit.maintenance",
+          "label": "保守の理解",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    },
+    {
+      "id": "team_fit",
+      "label": "チーム利用への適合",
+      "weight": 0.03,
+      "focus": false,
+      "minimum": 90,
+      "score": 92.5,
+      "coverage": 1,
+      "passed": true,
+      "items": [
+        {
+          "id": "team_fit.onboarding_roles",
+          "label": "招待と役割",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-TEAM-I3",
+            "E-TEAM-LOCAL-D1",
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "team_fit.sharing_scope",
+          "label": "共有とscope",
+          "weight": 0.25,
+          "raw_score": 96,
+          "score": 96,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "none",
+          "severity_cap": 100,
+          "evidence": [
+            "E-TEAM-I3",
+            "E-TEAM-LOCAL-D1",
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "team_fit.handoff_audit",
+          "label": "handoffとaudit",
+          "weight": 0.25,
+          "raw_score": 89,
+          "score": 89,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "medium",
+          "severity_cap": 89,
+          "evidence": [
+            "E-TEAM-I3",
+            "E-TEAM-LOCAL-D1",
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {},
+          "notes": "当日証拠に基づく固定rubric採点。"
+        },
+        {
+          "id": "team_fit.revoke_recovery",
+          "label": "取消と復旧",
+          "weight": 0.25,
+          "raw_score": 89,
+          "score": 89,
+          "verified": true,
+          "evidence_mode": "interactive-local",
+          "evidence_cap": 100,
+          "severity": "medium",
+          "severity_cap": 89,
+          "evidence": [
+            "E-TEAM-I3",
+            "E-TEAM-LOCAL-D1",
+            "E-BROWSER",
+            "E-PLAYWRIGHT-I3",
+            "E-STATIC"
+          ],
+          "metrics": {
+            "suspended_readback": true,
+            "restored_readback": true,
+            "archive_outcomes": 25,
+            "users_deprovisioned": 8,
+            "groups_remaining": 0,
+            "configured_org_scope_preserved": true,
+            "expired_invite_tested": false,
+            "denied_principal_tested": false
+          },
+          "notes": "当日証拠に基づく固定rubric採点。"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-I3-01",
+      "severity": "low",
+      "summary": "Decisionの主要導線は日本語優先へ統一したが、管理・技術詳細を含む全ja画面の用語監査は未完了",
+      "acceptance": "用語規約をja全画面へ適用し、英語を必要な固有名詞と初出補助だけにする",
+      "affected_axes": [
+        "clarity",
+        "consistency"
+      ],
+      "primary_item": "clarity.terms",
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT-I3",
+        "E-STATIC"
+      ]
+    },
+    {
+      "id": "F-I3-02",
+      "severity": "low",
+      "summary": "登録実行pathは検証したが、既存Codex設定を保護するため実設定への登録とreadbackは未実施",
+      "acceptance": "隔離可能なclient設定領域または明示承認で登録とreadbackを行う",
+      "affected_axes": [
+        "local_setup"
+      ],
+      "primary_item": "local_setup.connector_recovery",
+      "evidence": [
+        "E-CONNECTOR-EXECUTION-PATH",
+        "E-LOCAL",
+        "E-STATIC"
+      ]
+    },
+    {
+      "id": "F-I3-03",
+      "severity": "medium",
+      "summary": "OAuthとcloud hookは変更承認前で未実査",
+      "acceptance": "承認パケット確定後にsynthetic tenantで実査する",
+      "affected_axes": [
+        "cloudflare_setup"
+      ],
+      "primary_item": "cloudflare_setup.oauth_hook",
+      "evidence": []
+    },
+    {
+      "id": "F-I3-04",
+      "severity": "medium",
+      "summary": "Cloud否定系、rollback、Local parityが未実査",
+      "acceptance": "同一artifactを投入し2回連続で否定系とrollbackを確認する",
+      "affected_axes": [
+        "cloudflare_setup"
+      ],
+      "primary_item": "cloudflare_setup.parity_recovery",
+      "evidence": []
+    },
+    {
+      "id": "F-I3-05",
+      "severity": "medium",
+      "summary": "Localは各3回一致したがCloud parityは未検証",
+      "acceptance": "Cloud承認後に同一scenarioを各3回比較する",
+      "affected_axes": [
+        "ai_safety",
+        "cloudflare_setup"
+      ],
+      "primary_item": "ai_safety.consistency_parity",
+      "evidence": [
+        "E-AI-LOCAL-I3",
+        "E-STATIC"
+      ]
+    },
+    {
+      "id": "F-I3-06",
+      "severity": "medium",
+      "summary": "Local D1でowner/admin/memberの所属とroleを永続化したが、別principalとしての認証readbackは未実施",
+      "acceptance": "principalを分離し、許可された共有とauditを本人視点で確認する",
+      "affected_axes": [
+        "team_fit",
+        "trust"
+      ],
+      "primary_item": "team_fit.handoff_audit",
+      "evidence": [
+        "E-TEAM-I3",
+        "E-TEAM-LOCAL-D1",
+        "E-BROWSER",
+        "E-PLAYWRIGHT-I3",
+        "E-STATIC"
+      ]
+    },
+    {
+      "id": "F-I3-07",
+      "severity": "medium",
+      "summary": "Localの停止、復旧、利用解除、archiveとチームscope維持は完遂したが、期限切れ招待とdenied principalは未実査",
+      "acceptance": "期限切れと権限拒否を別fixtureで確認し、復旧後の本人readbackを保存する",
+      "affected_axes": [
+        "team_fit",
+        "recovery"
+      ],
+      "primary_item": "team_fit.revoke_recovery",
+      "evidence": [
+        "E-TEAM-I3",
+        "E-TEAM-LOCAL-D1",
+        "E-BROWSER",
+        "E-PLAYWRIGHT-I3",
+        "E-STATIC"
+      ]
+    }
+  ],
+  "overall": {
+    "score": 93,
+    "coverage": 0.9725,
+    "coverage_percent": 97.3,
+    "blocking_findings": 0,
+    "completion_accepted": false,
+    "provisional": true,
+    "reasons": [
+      "cloudflare_setup=40 is below 90",
+      "ai_safety=82 is below 90",
+      "overall=93 is below 96",
+      "1 consecutive passes is below 2",
+      "AI repeat consistency is not verified",
+      "Cloud live verification is not complete",
+      "VoiceOver manual verification is not complete"
+    ]
+  }
+}

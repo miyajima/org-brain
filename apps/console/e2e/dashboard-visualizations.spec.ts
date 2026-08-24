@@ -123,6 +123,17 @@ test.describe("dashboard visualizations", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("実装成果物");
     await expect(dialog).toContainText("確認済み");
+    const dialogGeometry = await dialog.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        centerX: bounds.left + bounds.width / 2,
+        centerY: bounds.top + bounds.height / 2,
+        viewportCenterX: window.innerWidth / 2,
+        viewportCenterY: window.innerHeight / 2
+      };
+    });
+    expect(Math.abs(dialogGeometry.centerX - dialogGeometry.viewportCenterX)).toBeLessThanOrEqual(1);
+    expect(Math.abs(dialogGeometry.centerY - dialogGeometry.viewportCenterY)).toBeLessThanOrEqual(1);
     const resourceLink = dialog.getByRole("link", { name: "資料詳細を別タブで開く" });
     await expect(resourceLink).toHaveAttribute("target", "_blank");
     const popupPromise = page.waitForEvent("popup");
@@ -269,11 +280,13 @@ test.describe("dashboard visualizations", () => {
     await expect(results).not.toContainText("failure_prevention:");
     await expect(results).toContainText("プロジェクト:");
     await expect(results).toContainText("確認状態:");
+    const scrollBeforeSelection = await page.evaluate(() => window.scrollY);
     await results.locator("button").last().click();
     await expect(results).toBeHidden();
     await expect(search).toBeFocused();
     await expect(page.locator("[data-map-selection-status]")).toContainText("選択したノード:");
     await expect(page).toHaveURL(/selected=/u);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeSelection);
   });
 
   test("keeps the four-step path and 3D map together in the first desktop viewport", async ({ page }) => {

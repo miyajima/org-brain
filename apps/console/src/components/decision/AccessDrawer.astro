@@ -20,10 +20,16 @@ const {
 };
 
 const copy = {
-  en: { open: "Access", title: "Access & storage", scope: "Visibility", project: "Project ID", owner: "Owner", agents: "Using agents", storage: "Storage", groups: "Group IDs", restricted: "Restricted subjects", save: "Save access", close: "Close", saving: "Saving…", saved: "Access updated", none: "None", help: "Use one subject per line: principal:name or group:id." },
-  ja: { open: "アクセス", title: "アクセスと保存先", scope: "共有範囲", project: "プロジェクトID", owner: "所有者", agents: "利用Agent", storage: "保存場所", groups: "グループID", restricted: "限定対象", save: "アクセスを保存", close: "閉じる", saving: "保存中…", saved: "アクセスを更新しました", none: "なし", help: "1行に1対象を principal:name または group:id で入力します。" },
-  zh: { open: "访问", title: "访问与存储", scope: "可见范围", project: "项目ID", owner: "所有者", agents: "使用中的Agent", storage: "存储位置", groups: "群组ID", restricted: "限定对象", save: "保存访问设置", close: "关闭", saving: "保存中…", saved: "访问设置已更新", none: "无", help: "每行一个对象：principal:name 或 group:id。" }
+  en: { open: "Access", title: "Access & storage", scope: "Visibility", project: "Project ID", owner: "Owner", agents: "Using agents", storage: "Storage", groups: "Group IDs", restricted: "Restricted subjects", save: "Save access", close: "Close", saving: "Saving…", saved: "Access updated", none: "None", help: "Use one subject per line: principal:name or group:id.", private: "Private", projectScope: "Project", group: "Group", tenant: "Tenant", restrictedScope: "Restricted" },
+  ja: { open: "アクセス", title: "アクセスと保存先", scope: "共有範囲", project: "プロジェクトID", owner: "所有者", agents: "利用するエージェント", storage: "保存場所", groups: "グループID", restricted: "限定対象", save: "アクセスを保存", close: "閉じる", saving: "保存中…", saved: "アクセスを更新しました", none: "なし", help: "1行に1対象を入力します。ユーザーは principal:name、グループは group:id の形式です。", private: "自分だけ", projectScope: "プロジェクト", group: "グループ", tenant: "チーム全体", restrictedScope: "指定した対象のみ" },
+  zh: { open: "访问", title: "访问与存储", scope: "可见范围", project: "项目ID", owner: "所有者", agents: "使用中的代理", storage: "存储位置", groups: "群组ID", restricted: "限定对象", save: "保存访问设置", close: "关闭", saving: "保存中…", saved: "访问设置已更新", none: "无", help: "每行一个对象：principal:name 或 group:id。", private: "仅自己", projectScope: "项目", group: "群组", tenant: "整个团队", restrictedScope: "仅指定对象" }
 }[locale];
+const resourceTypeLabel = ({
+  decision_memory: { en: "Decision", ja: "決定", zh: "决策" },
+  knowledge_resource: { en: "Material", ja: "資料", zh: "资料" },
+  skill_asset: { en: "Skill", ja: "スキル", zh: "技能" }
+} as const)[resourceType as "decision_memory" | "knowledge_resource" | "skill_asset"]?.[locale]
+  ?? resourceType.replaceAll("_", " ");
 const drawerId = `access-${resourceType}-${resourceId}`.replace(/[^a-zA-Z0-9_-]/gu, "-");
 const drawerTitleId = `${drawerId}-title`;
 const scope = typeof policy?.scope === "string" ? policy.scope : "private";
@@ -56,7 +62,7 @@ const restrictedSubjects = Array.isArray(policy?.restricted_subjects)
     <form class="access-drawer-panel" method="dialog" data-access-form>
       <header>
         <div>
-          <p class="decision-eyebrow">{resourceType.replaceAll("_", " ")}</p>
+          <p class="decision-eyebrow">{resourceTypeLabel}</p>
           <h2 id={drawerTitleId}>{copy.title}</h2>
         </div>
         <button type="button" class="access-drawer-close" data-access-close aria-label={copy.close}>×</button>
@@ -75,11 +81,11 @@ const restrictedSubjects = Array.isArray(policy?.restricted_subjects)
         {copy.scope}
         <select name="scope" data-access-scope>
           {[
-            ["private", "Private"],
-            ["project", "Project"],
-            ["group", "Group"],
-            ["tenant", "Tenant"],
-            ["restricted", "Restricted"]
+            ["private", copy.private],
+            ["project", copy.projectScope],
+            ["group", copy.group],
+            ["tenant", copy.tenant],
+            ["restricted", copy.restrictedScope]
           ].map(([value, label]) => <option value={value} selected={scope === value}>{label}</option>)}
         </select>
       </label>

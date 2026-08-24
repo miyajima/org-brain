@@ -1,0 +1,149 @@
+{
+  "routes": [
+    {
+      "slug": "home",
+      "url": "http://127.0.0.1:4321/?tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "Decision Briefing · Org Brain",
+      "headings": [
+        "決定一覧",
+        "Keep decision context visible"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    },
+    {
+      "slug": "decision",
+      "url": "http://127.0.0.1:4321/decisions/decision-console-e2e?tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "Keep decision context visible · Org Brain",
+      "headings": [
+        "Keep decision context visible",
+        "決定",
+        "理由",
+        "根拠",
+        "成果物",
+        "スキル",
+        "利用するエージェント",
+        "結果",
+        "Keep decision context visible"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    },
+    {
+      "slug": "map",
+      "url": "http://127.0.0.1:4321/map?decision_id=decision-console-e2e&tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "決定の道筋マップ · Org Brain",
+      "headings": [
+        "決定の道筋マップ",
+        "Keep decision context visible",
+        "接続ノード",
+        "2D関係リスト"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    },
+    {
+      "slug": "all-map",
+      "url": "http://127.0.0.1:4321/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "知識のつながり · Org Brain",
+      "headings": [
+        "3Dメモリマップ",
+        "ノードを検索・選択",
+        "判断の道筋",
+        "ノードを選択してください。",
+        "判断の道筋",
+        "決定"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    },
+    {
+      "slug": "skills",
+      "url": "http://127.0.0.1:4321/skills?decision_id=decision-console-e2e&source_hash=e2e-source-h&tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "スキル · Org Brain",
+      "headings": [
+        "スキル",
+        "1",
+        "決定からスキルを生成"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    },
+    {
+      "slug": "agents",
+      "url": "http://127.0.0.1:4321/agents?agent_id=agent-e2e&tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "エージェント · Org Brain",
+      "headings": [
+        "エージェント",
+        "1",
+        "Release reviewer",
+        "利用構成を編集",
+        "渡されるコンテキストを確認"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    },
+    {
+      "slug": "reviews",
+      "url": "http://127.0.0.1:4321/reviews?tenant_id=default&project_id=org-brain&lang=ja",
+      "title": "要確認の決定 · Org Brain",
+      "headings": [
+        "要確認の決定",
+        "有効期限切れ",
+        "確認が必要",
+        "成果物未接続",
+        "共有待ち"
+      ],
+      "navigation": [
+        "  Org Brain Beta ",
+        "決定",
+        "マップ",
+        "スキル",
+        "エージェント",
+        "レビュー"
+      ]
+    }
+  ],
+  "selectorChecks": {
+    "decisionCards": 7,
+    "skillAction": 1,
+    "mapAction": 1,
+    "previewButtons": 7
+  }
+}

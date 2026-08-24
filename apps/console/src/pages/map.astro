@@ -29,10 +29,21 @@ const trace = decisionId
   : { data: emptyDecisionTrace(), error: null as string | null };
 const selectedDecision = briefing.data.items.find((item) => item.id === decisionId);
 const copy = {
-  en: { eyebrow: "Decision trace", title: "Decision Trace Map", allKnowledge: "All knowledge", choose: "Choose a decision", search: "Find a decision", open: "Open map", list: "Jump to relationships / timeline", actions: "Map actions", retry: "Try again", empty: "No readable decisions are available in this scope.", error: "Map data is unavailable" },
-  ja: { eyebrow: "決定の道筋", title: "決定の道筋マップ", allKnowledge: "全知識を表示", choose: "中心にする決定を選択", search: "決定を検索", open: "マップを開く", list: "関係リスト/タイムラインへ移動", actions: "マップ操作", retry: "再試行", empty: "この範囲で閲覧できる決定はありません。", error: "マップデータを利用できません" },
-  zh: { eyebrow: "决策路径", title: "决策路径地图", allKnowledge: "查看全部知识", choose: "选择中心决策", search: "搜索决策", open: "打开地图", list: "跳转到关系列表/时间线", actions: "地图操作", retry: "重试", empty: "此范围内没有可读决策。", error: "地图数据不可用" }
+  en: { eyebrow: "Decision trace", title: "Decision Trace Map", allKnowledge: "All knowledge", choose: "Choose a decision", search: "Find a decision", open: "Open map", list: "Jump to relationships / timeline", actions: "Map actions", retry: "Try again", empty: "No readable decisions are available in this scope.", noMatch: "No decisions match this search.", result: "{count} decisions found", showing: "Showing the first {shown} of {count} decisions.", error: "Map data is unavailable" },
+  ja: { eyebrow: "決定の道筋", title: "決定の道筋マップ", allKnowledge: "全知識を表示", choose: "中心にする決定を選択", search: "決定を検索", open: "マップを開く", list: "関係リスト/タイムラインへ移動", actions: "マップ操作", retry: "再試行", empty: "この範囲で閲覧できる決定はありません。", noMatch: "検索に一致する決定はありません。", result: "{count}件の決定が見つかりました", showing: "{count}件中、先頭の{shown}件を表示しています。", error: "マップデータを利用できません" },
+  zh: { eyebrow: "决策路径", title: "决策路径地图", allKnowledge: "查看全部知识", choose: "选择中心决策", search: "搜索决策", open: "打开地图", list: "跳转到关系列表/时间线", actions: "地图操作", retry: "重试", empty: "此范围内没有可读决策。", noMatch: "没有符合搜索条件的决策。", result: "找到 {count} 个决策", showing: "显示 {count} 个决策中的前 {shown} 个。", error: "地图数据不可用" }
 }[lang];
+const pickerLimit = 6;
+const initialPickerMatches = briefing.data.items.filter((item) => !initialMapQuery || `${item.title} ${item.decision} ${item.reason_summary}`.toLocaleLowerCase(lang).includes(initialMapQuery.toLocaleLowerCase(lang)));
+const initialPickerVisible = new Set(initialPickerMatches.slice(0, pickerLimit).map((item) => item.id));
+if (!initialMapQuery && selectedDecision && !initialPickerVisible.has(selectedDecision.id)) {
+  const lastVisible = [...initialPickerVisible].at(-1);
+  if (lastVisible) initialPickerVisible.delete(lastVisible);
+  initialPickerVisible.add(selectedDecision.id);
+}
+const initialPickerResult = (initialPickerMatches.length > pickerLimit ? copy.showing : copy.result)
+  .replace("{count}", String(initialPickerMatches.length))
+  .replace("{shown}", String(Math.min(initialPickerMatches.length, pickerLimit)));
 const allKnowledgeParams = new URLSearchParams(params);
 allKnowledgeParams.set("view", "all");
 const allKnowledgeHrefUrl = new URL(scopedHref("/memories/constellation", allKnowledgeParams), "https://console.invalid");
@@ -47,33 +58,55 @@ const allKnowledgeHref = `${allKnowledgeHrefUrl.pathname}${allKnowledgeHrefUrl.s
         <h1>{copy.title}</h1>
       </div>
       <div class="decision-header-actions">
-        {selectedDecision && <a class="decision-action" href={scopedHref(`/decisions/${encodeURIComponent(selectedDecision.id)}`, params)}>{selectedDecision.title}</a>}
+        <a
+          class="decision-action"
+          data-selected-decision-link
+          href={selectedDecision ? scopedHref(`/decisions/${encodeURIComponent(selectedDecision.id)}`, params) : "/decisions"}
+          hidden={!selectedDecision}
+        >{selectedDecision?.title}</a>
       </div>
     </header>
     <nav class="decision-map-action-rail" aria-label={copy.actions}>
       <a class="decision-action decision-action-secondary" data-all-knowledge-map href={allKnowledgeHref}>{copy.allKnowledge}</a>
-      {decisionId && trace.data.nodes.length > 0 && <a class="decision-action decision-action-secondary" href="#decision-map-list-region">{copy.list}</a>}
+      <a class="decision-action decision-action-secondary" data-map-list-action href="#decision-map-list-region" hidden={!decisionId || trace.data.nodes.length === 0}>{copy.list}</a>
     </nav>
     {(briefing.error || trace.error) && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{trace.error ?? briefing.error}</span><a class="decision-action decision-action-secondary decision-alert-action" href={`${Astro.url.pathname}${Astro.url.search}`}>{copy.retry}</a></div>}
-    <details class="decision-map-picker">
-      <summary>{copy.choose}{selectedDecision ? ` · ${selectedDecision.title}` : ""}</summary>
-      <label>{copy.search}<input type="search" name="map_q" data-map-picker-search value={initialMapQuery} placeholder={copy.search} /></label>
-      <div data-map-picker-list>
+    <details class="decision-map-picker" data-map-picker-max={String(pickerLimit)} data-map-picker-result-template={copy.result} data-map-picker-showing-template={copy.showing}>
+      <summary><span>{copy.choose}</span><span data-map-picker-selection>{selectedDecision ? ` · ${selectedDecision.title}` : ""}</span></summary>
+      <label>{copy.search}<input type="search" name="map_q" data-map-picker-search value={initialMapQuery} placeholder={copy.search} aria-controls="decision-map-picker-list" /></label>
+      <p class="decision-map-picker-result" data-map-picker-result role="status" aria-live="polite" aria-atomic="true">{initialPickerResult}</p>
+      <div data-map-picker-list id="decision-map-picker-list">
         {briefing.data.items.map((item) => {
           const next = new URLSearchParams(params);
           next.set("decision_id", item.id);
-          return <a href={`/map?${next.toString()}`} data-map-picker-item data-search={`${item.title} ${item.decision} ${item.reason_summary}`.toLocaleLowerCase(lang)}>
+          return <a
+            href={`/map?${next.toString()}`}
+            data-map-picker-item
+            data-decision-id={item.id}
+            data-decision-title={item.title}
+            data-decision-href={scopedHref(`/decisions/${encodeURIComponent(item.id)}`, params)}
+            data-search={`${item.title} ${item.decision} ${item.reason_summary}`.toLocaleLowerCase(lang)}
+            aria-current={item.id === decisionId ? "true" : undefined}
+            hidden={!initialPickerVisible.has(item.id)}
+          >
             <strong>{item.title}</strong><span>{item.reason_summary}</span><small>{copy.open} →</small>
           </a>;
         })}
       </div>
+      <p class="decision-empty" data-map-picker-empty hidden={initialPickerMatches.length > 0}>{copy.noMatch}</p>
       {briefing.data.items.length === 0 && <p class="decision-empty">{copy.empty}</p>}
     </details>
-    {decisionId && <DecisionTraceMap trace={trace.data} decisionId={decisionId} tenantId={tenantId} projectId={projectId} locale={lang} />}
+    <DecisionTraceMap trace={trace.data} decisionId={decisionId} tenantId={tenantId} projectId={projectId} locale={lang} />
   </section>
   <script>
     const search = document.querySelector<HTMLInputElement>("[data-map-picker-search]");
-    const items = [...document.querySelectorAll<HTMLElement>("[data-map-picker-item]")];
+    const items = [...document.querySelectorAll<HTMLAnchorElement>("[data-map-picker-item]")];
+    const picker = document.querySelector<HTMLDetailsElement>(".decision-map-picker");
+    const pickerSelection = document.querySelector<HTMLElement>("[data-map-picker-selection]");
+    const selectedDecisionLink = document.querySelector<HTMLAnchorElement>("[data-selected-decision-link]");
+    const mapListAction = document.querySelector<HTMLAnchorElement>("[data-map-list-action]");
+    const pickerResult = document.querySelector<HTMLElement>("[data-map-picker-result]");
+    const pickerEmpty = document.querySelector<HTMLElement>("[data-map-picker-empty]");
     const syncMapLinks = (rawQuery: string) => {
       for (const item of items) {
         if (!(item instanceof HTMLAnchorElement)) continue;
@@ -86,7 +119,23 @@ const allKnowledgeHref = `${allKnowledgeHrefUrl.pathname}${allKnowledgeHrefUrl.s
     const filterMapItems = (updateUrl = true) => {
       const rawQuery = search?.value.trim() || "";
       const query = rawQuery.toLocaleLowerCase();
-      for (const item of items) item.hidden = Boolean(query) && !(item.dataset.search || "").includes(query);
+      const matches = items.filter((item) => !query || (item.dataset.search || "").includes(query));
+      const max = Math.max(1, Number(picker?.dataset.mapPickerMax || 6));
+      const visible = matches.slice(0, max);
+      const selected = items.find((item) => item.getAttribute("aria-current") === "true");
+      if (!query && selected && matches.includes(selected) && !visible.includes(selected)) {
+        visible.splice(Math.max(0, max - 1), 1, selected);
+      }
+      for (const item of items) item.hidden = !visible.includes(item);
+      if (pickerEmpty) pickerEmpty.hidden = matches.length > 0;
+      if (pickerResult) {
+        const template = matches.length > max
+          ? picker?.dataset.mapPickerShowingTemplate || "{shown} / {count}"
+          : picker?.dataset.mapPickerResultTemplate || "{count}";
+        pickerResult.textContent = template
+          .replace("{count}", String(matches.length))
+          .replace("{shown}", String(Math.min(matches.length, max)));
+      }
       syncMapLinks(rawQuery);
       if (updateUrl) {
         const url = new URL(window.location.href);
@@ -95,10 +144,39 @@ const allKnowledgeHref = `${allKnowledgeHrefUrl.pathname}${allKnowledgeHrefUrl.s
         window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
       }
     };
+    const selectDecision = (item: HTMLAnchorElement, updateHistory = true) => {
+      const decisionId = item.dataset.decisionId || "";
+      if (!decisionId) return;
+      const title = item.dataset.decisionTitle || item.querySelector("strong")?.textContent?.trim() || decisionId;
+      const href = new URL(item.href, window.location.href);
+      for (const candidate of items) candidate.setAttribute("aria-current", String(candidate === item));
+      if (pickerSelection) pickerSelection.textContent = ` · ${title}`;
+      if (selectedDecisionLink) {
+        selectedDecisionLink.hidden = false;
+        selectedDecisionLink.textContent = title;
+        selectedDecisionLink.href = item.dataset.decisionHref || `/decisions/${encodeURIComponent(decisionId)}`;
+      }
+      if (mapListAction) mapListAction.hidden = true;
+      if (picker) picker.open = false;
+      if (updateHistory) window.history.pushState({ decisionId }, "", `${href.pathname}${href.search}${href.hash}`);
+      window.dispatchEvent(new CustomEvent("orgbrain:decision-map-select", { detail: { decisionId } }));
+    };
+    for (const item of items) {
+      item.addEventListener("click", (event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        selectDecision(item);
+      });
+    }
     search?.addEventListener("input", () => filterMapItems());
     window.addEventListener("popstate", () => {
-      if (search) search.value = new URL(window.location.href).searchParams.get("map_q")?.trim().slice(0, 120) || "";
+      const url = new URL(window.location.href);
+      if (search) search.value = url.searchParams.get("map_q")?.trim().slice(0, 120) || "";
       filterMapItems(false);
+      const decisionId = url.searchParams.get("decision_id") || "";
+      const item = items.find((candidate) => candidate.dataset.decisionId === decisionId);
+      if (item) selectDecision(item, false);
+      else window.dispatchEvent(new CustomEvent("orgbrain:decision-map-select", { detail: { decisionId: "" } }));
     });
     filterMapItems(false);
   </script>

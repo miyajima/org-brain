@@ -1,0 +1,866 @@
+{
+  "audit": {
+    "id": "orgbrain-product-ux-2026-08-24-baseline",
+    "date": "2026-08-24",
+    "commit": "de5f9afa649ec3da1e144652a7e9958a0c55b10d",
+    "state": "baseline",
+    "basis": "fresh Local、current-run Browser、automated、static。Cloud liveは未実査。",
+    "consecutive_passes": 0,
+    "ai_repeat_consistent": false,
+    "cloud_live_verified": false,
+    "voiceover_manually_verified": false
+  },
+  "evidence": [
+    {
+      "id": "E-STATIC",
+      "mode": "static",
+      "description": "現行ソース、fixture、設定、差分の確認",
+      "source": "repository at de5f9afa plus current worktree diff"
+    },
+    {
+      "id": "E-PLAYWRIGHT",
+      "mode": "automated",
+      "description": "Decision Console v2 の主要導線、keyboard、responsive、fallback の25件",
+      "source": "apps/console/e2e/decision-console-v2.spec.ts"
+    },
+    {
+      "id": "E-AI-LOCAL",
+      "mode": "automated",
+      "description": "AI提案12シナリオを各3回実行したLocal検証",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/baseline/ai-local.json"
+    },
+    {
+      "id": "E-CLOUD-LOCAL",
+      "mode": "interactive-local",
+      "description": "cf:doctor と cf:provision dry-run。Cloudflare資源は変更していない",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/improved/test-results.md"
+    },
+    {
+      "id": "E-BROWSER",
+      "mode": "interactive-local",
+      "description": "in-app Browserで当日操作し、各ステップ直後に取得した画面証拠",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/baseline/screenshots/"
+    },
+    {
+      "id": "E-LOCAL",
+      "mode": "interactive-local",
+      "description": "fresh SQLiteでdoctor、start、capture、search、connector dry-runを実行",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/improved/test-results.md"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "clarity.purpose",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "clarity.current_state",
+      "raw_score": 88,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B01",
+          "severity": "medium",
+          "summary": "Map描画完了後も読み込み中の文言が残る",
+          "acceptance": "完了時にstatusを空にし、aria-busy=falseと一致させる",
+          "affected_axes": [
+            "clarity",
+            "recovery"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "clarity.terms",
+      "raw_score": 92,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B02",
+          "severity": "low",
+          "summary": "日本語画面にDecision等の英語プロダクト用語が混在する",
+          "acceptance": "初出時の日本語補助または用語規約を統一する",
+          "affected_axes": [
+            "clarity",
+            "consistency"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "clarity.outcome",
+      "raw_score": 82,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B03",
+          "severity": "medium",
+          "summary": "不正なwork-typeが通知なく破棄され、保存結果を誤認できる",
+          "acceptance": "許容値を表示し、不正値は非0終了にする",
+          "affected_axes": [
+            "clarity",
+            "trust",
+            "local_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.initial_choices",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.information_density",
+      "raw_score": 82,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B04",
+          "severity": "medium",
+          "summary": "local:prepare初回出力が3,544行あり、成功と次操作を見つけにくい",
+          "acceptance": "成功時は適用数と所要時間だけをJSONで返す",
+          "affected_axes": [
+            "simplicity",
+            "local_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.progressive_disclosure",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.visual_hierarchy",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.action_count",
+      "raw_score": 92,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.affordance",
+      "raw_score": 88,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B05",
+          "severity": "medium",
+          "summary": "Skill下書き生成後の完了位置と次操作が曖昧",
+          "acceptance": "結果へfocusを移し、非公開状態と確認CTAを明示する",
+          "affected_axes": [
+            "operability",
+            "clarity"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.keyboard",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.scroll_distance",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.completion",
+      "raw_score": 78,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B06",
+          "severity": "high",
+          "summary": "fresh Localでmigration適用前のpreflightがstartを停止する",
+          "acceptance": "prepare後にmigration状態を再検査して起動する",
+          "affected_axes": [
+            "goal_reachability",
+            "local_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.transitions",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.time_backtrack",
+      "raw_score": 84,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.context_continuity",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.navigation",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.search",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.primary_cta",
+      "raw_score": 92,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.persona_entry",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.loading_empty",
+      "raw_score": 84,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.error_truthfulness",
+      "raw_score": 82,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.direct_action",
+      "raw_score": 72,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B07",
+          "severity": "medium",
+          "summary": "SQLite権限エラーにcopy-paste可能な復旧操作がない",
+          "acceptance": "対象pathを含むchmod案内をdoctorへ返す",
+          "affected_axes": [
+            "recovery",
+            "local_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.feedback",
+      "raw_score": 80,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.decision_chain",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.provenance",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.access_scope",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.destructive_boundary",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.patterns",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.terminology",
+      "raw_score": 92,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.japanese",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.multilingual",
+      "raw_score": 94,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.semantics",
+      "raw_score": 94,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.focus_keyboard",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.target_contrast",
+      "raw_score": 92,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.reflow_motion",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.prerequisites",
+      "raw_score": 88,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.doctor_start",
+      "raw_score": 70,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B08",
+          "severity": "high",
+          "summary": "fresh環境のdoctor→startが自動完遂しない",
+          "acceptance": "migration不足だけはprepareで安全に解消し再検査する",
+          "affected_axes": [
+            "local_setup",
+            "goal_reachability"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.capture_search",
+      "raw_score": 78,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B09",
+          "severity": "medium",
+          "summary": "captureが不正なwork-typeを成功扱いする",
+          "acceptance": "入力を検証し許容値をhelpへ列挙する",
+          "affected_axes": [
+            "local_setup",
+            "trust"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.connector_recovery",
+      "raw_score": 62,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B10",
+          "severity": "high",
+          "summary": "connector dry-runの--cli-pathが無視され、存在しないorgbrainを登録し得る",
+          "acceptance": "Node実行パスと指定CLI絶対pathを登録計画へ反映する",
+          "affected_axes": [
+            "local_setup",
+            "goal_reachability"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "cloudflare_setup.permissions",
+      "raw_score": 80,
+      "evidence": [
+        "E-CLOUD-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "cloudflare_setup.doctor_plan",
+      "raw_score": 92,
+      "evidence": [
+        "E-CLOUD-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "cloudflare_setup.oauth_hook",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [
+        {
+          "id": "F-B11",
+          "severity": "medium",
+          "summary": "OAuthとcloud hookは承認前のため未実査",
+          "acceptance": "対象hostnameとpolicyを確定し承認後に同一artifactで実査する",
+          "affected_axes": [
+            "cloudflare_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "必須のlive実査前。N/Aへ再配分せず0点扱い。"
+    },
+    {
+      "id": "cloudflare_setup.parity_recovery",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [
+        {
+          "id": "F-B12",
+          "severity": "medium",
+          "summary": "Cloud権限拒否、期限切れ、rollback、Local parityが未実査",
+          "acceptance": "synthetic tenantで否定系とrollbackを2回連続確認する",
+          "affected_axes": [
+            "cloudflare_setup",
+            "ai_safety"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "必須のlive実査前。N/Aへ再配分せず0点扱い。"
+    },
+    {
+      "id": "ai_safety.relevance",
+      "raw_score": 96,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "ai_safety.conciseness",
+      "raw_score": 94,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "ai_safety.evidence_abstention",
+      "raw_score": 96,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "ai_safety.consistency_parity",
+      "raw_score": 48,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B13",
+          "severity": "medium",
+          "summary": "AI提案はLocal各3回一致したがCloud parityが未検証",
+          "acceptance": "承認後に同一seed/scenarioでCloudを3回比較する",
+          "affected_axes": [
+            "ai_safety",
+            "cloudflare_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.nav_reduction",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.next_action",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.scope",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.maintenance",
+      "raw_score": 92,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.onboarding_roles",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.sharing_scope",
+      "raw_score": 92,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.handoff_audit",
+      "raw_score": 76,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B14",
+          "severity": "medium",
+          "summary": "handoffとauditはfixture確認に留まり永続化証拠がない",
+          "acceptance": "synthetic tenantで別ユーザーreadbackを確認する",
+          "affected_axes": [
+            "team_fit",
+            "trust"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.revoke_recovery",
+      "raw_score": 68,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-B15",
+          "severity": "medium",
+          "summary": "招待取消と権限拒否からの復旧を実操作していない",
+          "acceptance": "期限切れ・拒否・取消を別fixtureで実査する",
+          "affected_axes": [
+            "team_fit",
+            "recovery"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    }
+  ]
+}

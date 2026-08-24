@@ -142,7 +142,7 @@ test("keeps the decision-first management UX score at 96 or higher", async ({ pa
   await expect(activity).not.toBeVisible();
   score += 10;
 
-  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: "http://127.0.0.1:4321" });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   await page.locator(".share-menu > summary").click();
   await page.getByRole("button", { name: "共有リンクをコピー" }).click();
   await expect(page.getByRole("status")).toHaveText("共有リンクをコピーしました");

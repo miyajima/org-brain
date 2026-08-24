@@ -106,8 +106,11 @@ export async function updateUserProfile(env: Env, tenantId: string, auth: ApiAut
 type CountRow = { count: number };
 
 async function getConsoleContext(env: Env, tenantId: string, auth: ApiAuthContext, projectId: string | null) {
-  const [assignments, activeUsers, activeGroups, activeProjects, otherProjectPrincipals] = await Promise.all([
+  const [assignments, organization, activeUsers, activeGroups, activeProjects, otherProjectPrincipals] = await Promise.all([
     listRoleAssignments(env, tenantId, { principal: auth.principal, projectId }),
+    env.OPEN_BRAIN_DB.prepare(
+      "SELECT tenant_id FROM organizations WHERE tenant_id = ?"
+    ).bind(tenantId).first<{ tenant_id: string }>(),
     env.OPEN_BRAIN_DB.prepare(
       "SELECT COUNT(*) AS count FROM user_profiles WHERE tenant_id = ? AND status = 'active'"
     ).bind(tenantId).first<CountRow>(),
@@ -136,7 +139,10 @@ async function getConsoleContext(env: Env, tenantId: string, auth: ApiAuthContex
   const activeUserCount = Number(activeUsers?.count ?? 0);
   const activeGroupCount = Number(activeGroups?.count ?? 0);
   const activeProjectCount = Number(activeProjects?.count ?? 0);
-  const personal = activeUserCount <= 1 && activeGroupCount === 0 && Number(otherProjectPrincipals?.count ?? 0) === 0;
+  const personal = !organization
+    && activeUserCount <= 1
+    && activeGroupCount === 0
+    && Number(otherProjectPrincipals?.count ?? 0) === 0;
   const canAdminister = permissions.includes("admin");
   return {
     mode: personal ? "personal" as const : "team" as const,

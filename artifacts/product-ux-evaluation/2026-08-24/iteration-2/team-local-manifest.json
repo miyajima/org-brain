@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "target": "local",
+  "tenant_id": "ux-audit-20260824-i2",
+  "applied_at": "2026-08-24T01:31:31.442Z",
+  "resources": {
+    "users": [
+      {
+        "principal": "user:01m0rp9srydpxt73vvwn5pwyq3",
+        "email": "owner@ux-audit-20260824-i2.invalid",
+        "role": "tenant_admin"
+      },
+      {
+        "principal": "user:01m0rp9ssetzcch30rbnb7qe3v",
+        "email": "admin@ux-audit-20260824-i2.invalid",
+        "role": "tenant_admin"
+      },
+      {
+        "principal": "user:01m0rp9ssm4ta1z4c3zyby3j1y",
+        "email": "member-1@ux-audit-20260824-i2.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0rp9sssa0f1ekj7g3c86w43",
+        "email": "member-2@ux-audit-20260824-i2.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0rp9ssygnyv8nzdha8dyvaq",
+        "email": "member-3@ux-audit-20260824-i2.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0rp9st3tv55247cdmbfqxm2",
+        "email": "member-4@ux-audit-20260824-i2.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0rp9st8cymcyd5ar2vaxzdk",
+        "email": "member-5@ux-audit-20260824-i2.invalid",
+        "role": "reader"
+      },
+      {
+        "principal": "user:01m0rp9stdhn3nadfv6xgerc2h",
+        "email": "member-6@ux-audit-20260824-i2.invalid",
+        "role": "reader"
+      }
+    ],
+    "groups": [
+      {
+        "id": "01M0RP9STPBAM7P5H13TZY51TE",
+        "slug": "ux-audit-platform",
+        "members": [
+          "user:01m0rp9srydpxt73vvwn5pwyq3",
+          "user:01m0rp9ssetzcch30rbnb7qe3v",
+          "user:01m0rp9sssa0f1ekj7g3c86w43",
+          "user:01m0rp9st8cymcyd5ar2vaxzdk"
+        ]
+      },
+      {
+        "id": "01M0RP9SVEHFJC8ZGKWZ634EMP",
+        "slug": "ux-audit-product",
+        "members": [
+          "user:01m0rp9srydpxt73vvwn5pwyq3",
+          "user:01m0rp9ssetzcch30rbnb7qe3v",
+          "user:01m0rp9ssygnyv8nzdha8dyvaq",
+          "user:01m0rp9stdhn3nadfv6xgerc2h"
+        ]
+      },
+      {
+        "id": "01M0RP9SW4M5GE2SPN1S7V7WF8",
+        "slug": "ux-audit-audit",
+        "members": [
+          "user:01m0rp9srydpxt73vvwn5pwyq3",
+          "user:01m0rp9ssetzcch30rbnb7qe3v",
+          "user:01m0rp9ssm4ta1z4c3zyby3j1y",
+          "user:01m0rp9st3tv55247cdmbfqxm2"
+        ]
+      }
+    ],
+    "role_assignments": [
+      {
+        "id": "01M0RP9SWSQ5RGZ54Z36Q8FV4T",
+        "project_id": "ux-audit-20260824-i2-project-a",
+        "principal": "user:01m0rp9srydpxt73vvwn5pwyq3",
+        "role": "project_owner"
+      },
+      {
+        "id": "01M0RP9SWXJGCMY712TXFHYEP5",
+        "project_id": "ux-audit-20260824-i2-project-a",
+        "principal": "user:01m0rp9ssm4ta1z4c3zyby3j1y",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0RP9SX1PC26N3TMXDC2NP01",
+        "project_id": "ux-audit-20260824-i2-project-a",
+        "principal": "user:01m0rp9ssygnyv8nzdha8dyvaq",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0RP9SX53TWG7DXCGNTXRBBH",
+        "project_id": "ux-audit-20260824-i2-project-a",
+        "principal": "user:01m0rp9st8cymcyd5ar2vaxzdk",
+        "role": "reader"
+      },
+      {
+        "id": "01M0RP9SX996N1VEBZR2QSM04B",
+        "project_id": "ux-audit-20260824-i2-project-b",
+        "principal": "user:01m0rp9ssetzcch30rbnb7qe3v",
+        "role": "tenant_admin"
+      },
+      {
+        "id": "01M0RP9SXC2B1MP7F3P07FDX1R",
+        "project_id": "ux-audit-20260824-i2-project-b",
+        "principal": "user:01m0rp9sssa0f1ekj7g3c86w43",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0RP9SXG84V3DHVC39Y4FSYH",
+        "project_id": "ux-audit-20260824-i2-project-b",
+        "principal": "user:01m0rp9st3tv55247cdmbfqxm2",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0RP9SXMQVRJD743Z2B15TKM",
+        "project_id": "ux-audit-20260824-i2-project-b",
+        "principal": "user:01m0rp9stdhn3nadfv6xgerc2h",
+        "role": "reader"
+      }
+    ],
+    "memories": [
+      {
+        "id": "01M0RP9SXW8C08PNNQHWJ2JJ8S",
+        "external_key": "ux-audit:shared"
+      },
+      {
+        "id": "01M0RP9SY843KXX116F62D4RMT",
+        "external_key": "ux-audit:restricted"
+      },
+      {
+        "id": "01M0RP9SYD1D9CHBG9Z7TSXF4X",
+        "external_key": "ux-audit:conflict-a"
+      },
+      {
+        "id": "01M0RP9SYGCNY8PHGV659HT2MN",
+        "external_key": "ux-audit:conflict-b"
+      },
+      {
+        "id": "01M0RP9SYMPMZPBY1AT53KPC48",
+        "external_key": "ux-audit:low-confidence"
+      },
+      {
+        "id": "01M0RP9SYQZ2B1EBE91WFGNGQ2",
+        "external_key": "ux-audit:expired"
+      }
+    ]
+  },
+  "archived_at": "2026-08-24T01:34:19.764Z",
+  "archive_outcomes": [
+    {
+      "type": "memory",
+      "id": "01M0RP9SXW8C08PNNQHWJ2JJ8S",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0RP9SY843KXX116F62D4RMT",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0RP9SYD1D9CHBG9Z7TSXF4X",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0RP9SYGCNY8PHGV659HT2MN",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0RP9SYMPMZPBY1AT53KPC48",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0RP9SYQZ2B1EBE91WFGNGQ2",
+      "outcome": "trashed"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SWSQ5RGZ54Z36Q8FV4T",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SWXJGCMY712TXFHYEP5",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SX1PC26N3TMXDC2NP01",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SX53TWG7DXCGNTXRBBH",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SX996N1VEBZR2QSM04B",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SXC2B1MP7F3P07FDX1R",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SXG84V3DHVC39Y4FSYH",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0RP9SXMQVRJD743Z2B15TKM",
+      "outcome": "deleted"
+    },
+    {
+      "type": "group",
+      "id": "01M0RP9STPBAM7P5H13TZY51TE",
+      "outcome": "archived"
+    },
+    {
+      "type": "group",
+      "id": "01M0RP9SVEHFJC8ZGKWZ634EMP",
+      "outcome": "archived"
+    },
+    {
+      "type": "group",
+      "id": "01M0RP9SW4M5GE2SPN1S7V7WF8",
+      "outcome": "archived"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9srydpxt73vvwn5pwyq3",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9ssetzcch30rbnb7qe3v",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9ssm4ta1z4c3zyby3j1y",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9sssa0f1ekj7g3c86w43",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9ssygnyv8nzdha8dyvaq",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9st3tv55247cdmbfqxm2",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9st8cymcyd5ar2vaxzdk",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0rp9stdhn3nadfv6xgerc2h",
+      "outcome": "deprovisioned"
+    }
+  ]
+}

@@ -111,6 +111,33 @@ describe("email identity service", () => {
     });
   });
 
+  it("keeps an explicitly configured organization in team mode after its users are deprovisioned", async () => {
+    const { env, database } = testEnv();
+    const auth = {
+      principal: "user:owner",
+      allowedTenants: ["tenant-a"],
+      source: "session",
+      defaultRole: "tenant_admin"
+    } satisfies import("../src/auth").ApiAuthContext;
+    await updateOrganization(env, "tenant-a", {
+      slug: "tenant-a",
+      display_name: "Tenant A",
+      allowed_email_domains: [],
+      email_self_registration_enabled: false
+    });
+    database.prepare(
+      `INSERT INTO user_profiles(tenant_id, principal, display_name, status, provision_source, full_name_source, email_verified, created_at, updated_at)
+       VALUES(?, ?, ?, 'deprovisioned', 'legacy', 'legacy', 0, ?, ?)`
+    ).run("tenant-a", auth.principal, "Owner", 1, 1);
+
+    const context = await getMyIdentity(env, "tenant-a", auth);
+    expect(context.console_context).toMatchObject({
+      mode: "team",
+      tenant: { id: "tenant-a" },
+      counts: { active_users: 0, active_groups: 0, active_projects: 0 }
+    });
+  });
+
   it("self-registers with an opaque principal and never exposes full_name in directory", async () => {
     const { env } = testEnv();
     await updateOrganization(env, "tenant-a", {

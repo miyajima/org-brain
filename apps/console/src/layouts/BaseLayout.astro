@@ -160,7 +160,7 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
     <title>{title}</title>
   </head>
   <body>
-    <a class="console-skip-link" href="#console-main">{commonCopy.skipToContent}</a>
+    <a class="console-skip-link" href="#console-main" data-console-skip-link>{commonCopy.skipToContent}</a>
     <div class="console-shell">
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(22,135,255,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_22%)]"></div>
       <nav class:list={["console-nav", (decisionBehavior.useDecisionNavigation || insightsBehavior.useInsightsNavigation) && "console-nav-insights"]} aria-label="Org Brain">
@@ -216,5 +216,12 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
         <slot />
       </main>
     </div>
+    <script>
+      const skipLink = document.querySelector<HTMLAnchorElement>("[data-console-skip-link]");
+      const main = document.querySelector<HTMLElement>("#console-main");
+      skipLink?.addEventListener("click", () => {
+        requestAnimationFrame(() => main?.focus({ preventScroll: true }));
+      });
+    </script>
   </body>
 </html>

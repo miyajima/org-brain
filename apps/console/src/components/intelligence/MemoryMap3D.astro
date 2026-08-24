@@ -84,7 +84,10 @@ else modeParams.set("view", "all");
 const modeHref = `/memories/constellation?${modeParams.toString()}`;
 const visibleNodeCount = data.visible_count ?? data.nodes.length;
 const totalMemoryCount = data.total_count ?? data.nodes.filter((node) => node.node_type === "memory").length;
-const mapModeLabel = allNodes ? mapText("allNodesMode", "All nodes") : mapText("topNodesMode", "Top nodes");
+const displayedMemoryCount = data.memory_visible_count ?? data.nodes.filter((node) => node.node_type === "memory").length;
+const mapModeLabel = allNodes
+  ? data.truncated ? mapText("limitedAllNodesMode", "Display limit reached") : mapText("allNodesMode", "All nodes")
+  : mapText("topNodesMode", "Top nodes");
 const mapModeAction = allNodes ? mapText("topNodesAction", "Show representative nodes") : mapText("allNodesAction", "Show all nodes");
 const projectOptionMap = new Map<string, string>();
 for (const node of data.nodes) {
@@ -118,7 +121,7 @@ const filterSummary = [
         <span>{mapText("visibleNodes", "visible nodes")}</span>
         <small><span data-map-total-count>{totalMemoryCount}</span> {mapText("sourceMemories", "memories in scope")}</small>
       </span>
-      {data.truncated && <span class="memory-map-truncation-note" data-map-truncated>{mapText("truncatedNodes", "Some nodes are omitted by the display ceiling")}</span>}
+      {data.truncated && <span class="memory-map-truncation-note" data-map-truncated>{mapText("truncatedNodes", "Some nodes are omitted by the display ceiling")} · <strong>{displayedMemoryCount}</strong> / <strong>{totalMemoryCount}</strong></span>}
     </div>
   </header>
 
@@ -1804,7 +1807,7 @@ const filterSummary = [
       }
       refreshAccessibleChoices();
       if (options.keyboard && node) window.requestAnimationFrame(() => {
-        accessibleSearch?.focus();
+        accessibleSearch?.focus({ preventScroll: true });
         closeSearchResults();
       });
     };
@@ -2494,8 +2497,10 @@ const filterSummary = [
   .memory-map-trace-resource-link { border-color: rgba(255,255,255,.1); background: transparent; color: rgba(216,235,246,.7); }
 
   .memory-map-resource-dialog {
+    inset: 0;
     width: min(42rem, calc(100vw - 2rem));
     max-height: min(44rem, calc(100vh - 2rem));
+    margin: auto;
     padding: 0;
     overflow: hidden;
     border: 1px solid rgba(99,189,255,.28);

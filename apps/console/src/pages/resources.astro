@@ -55,9 +55,9 @@ const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale =
 const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
 const decisionConsoleEnabled = decisionConsoleBehavior(decisionConsoleMode).enabled;
 const copy = {
-  en: { title: "Sources & artifacts", subtitle: "Start from a material to collect decisions and reasons, or start from a decision to inspect its outputs.", search: "Search material", empty: "Enter words from a material, URI, conclusion, or rationale.", decisions: "Related decisions and reasons", artifacts: "Decision artifacts", noResults: "No readable confirmed results.", open: "Open material", role: "Role", version: "Pinned version", back: "Back to the decision path", admin: "Administrator actions", localReference: "Local reference", browseManage: "Search and manage other materials", errorTitle: "Some resource information is unavailable" },
-  ja: { title: "資料・成果物", subtitle: "資料から判断と理由を収集し、判断から実装物・出力物・検証結果を探索します。", search: "資料を検索", empty: "資料、URI、結論、理由に含まれる語を入力してください。", decisions: "関連する判断と理由", artifacts: "判断の成果物", noResults: "閲覧可能なConfirmed結果はありません。", open: "資料を開く", role: "役割", version: "固定版", back: "判断の道筋に戻る", admin: "管理者向け操作", localReference: "ローカル参照", browseManage: "ほかの資料を検索・管理", errorTitle: "一部の資料情報を取得できません" },
-  zh: { title: "资料与成果", subtitle: "从资料收集决策与理由，或从决策探索实现、输出和验证成果。", search: "搜索资料", empty: "请输入资料、URI、结论或理由中的关键词。", decisions: "相关决策与理由", artifacts: "决策成果", noResults: "没有可读取的已确认结果。", open: "打开资料", role: "角色", version: "固定版本", back: "返回决策路径", admin: "管理员操作", localReference: "本地引用", browseManage: "搜索和管理其他资料", errorTitle: "部分资料信息不可用" }
+  en: { eyebrow: "Decision resources", title: "Sources & artifacts", subtitle: "Start from a material to collect decisions and reasons, or start from a decision to inspect its outputs.", search: "Search material", empty: "Enter words from a material, URI, conclusion, or rationale.", decisions: "Related decisions and reasons", artifacts: "Decision artifacts", noResults: "No readable confirmed results.", open: "Open material", role: "Role", version: "Pinned version", back: "Back to the decision path", admin: "Administrator actions", localReference: "Local reference", browseManage: "Search and manage other materials", errorTitle: "Some resource information is unavailable", tenant: "Tenant", project: "Project" },
+  ja: { eyebrow: "決定に関する資料", title: "資料・成果物", subtitle: "資料から判断と理由を収集し、判断から実装物・出力物・検証結果を探索します。", search: "資料を検索", empty: "資料、URI、結論、理由に含まれる語を入力してください。", decisions: "関連する判断と理由", artifacts: "判断の成果物", noResults: "閲覧できる確認済み結果はありません。", open: "資料を開く", role: "役割", version: "固定版", back: "判断の道筋に戻る", admin: "管理者向け操作", localReference: "ローカル参照", browseManage: "ほかの資料を検索・管理", errorTitle: "一部の資料情報を取得できません", tenant: "テナント", project: "プロジェクト" },
+  zh: { eyebrow: "决策资料", title: "资料与成果", subtitle: "从资料收集决策与理由，或从决策探索实现、输出和验证成果。", search: "搜索资料", empty: "请输入资料、URI、结论或理由中的关键词。", decisions: "相关决策与理由", artifacts: "决策成果", noResults: "没有可读取的已确认结果。", open: "打开资料", role: "角色", version: "固定版本", back: "返回决策路径", admin: "管理员操作", localReference: "本地引用", browseManage: "搜索和管理其他资料", errorTitle: "部分资料信息不可用", tenant: "租户", project: "项目" }
 }[locale];
 const decisionSourceId = decisionRef.includes(":") ? decisionRef.slice(decisionRef.indexOf(":") + 1) : decisionRef;
 const backToTraceHref = `/memories/constellation?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&scope=org&selected=${encodeURIComponent(decisionSourceId)}&trace_step=artifact&lang=${locale}`;
@@ -110,13 +110,13 @@ function isHttpUri(value: string): boolean {
 <BaseLayout title={copy.title} lang={locale}>
   <section class="space-y-5">
     {!decisionRef && <header class="card">
-      <p class="surface-label">Decision Resource Intelligence</p>
+      <p class="surface-label">{copy.eyebrow}</p>
       <h1 class="mt-2 text-3xl font-semibold text-white sm:text-5xl">{copy.title}</h1>
       <p class="mt-3 max-w-4xl text-sm leading-7 text-zinc-300">{copy.subtitle}</p>
       <form class="mt-5 grid gap-3 md:grid-cols-[1fr_12rem_12rem_auto]" method="get" action="/resources">
         <input name="q" value={q} placeholder={copy.search} />
-        <input name="tenant_id" value={tenantId} aria-label="Tenant" />
-        <input name="project_id" value={projectId} aria-label="Project" />
+        <input name="tenant_id" value={tenantId} aria-label={copy.tenant} />
+        <input name="project_id" value={projectId} aria-label={copy.project} />
         <input type="hidden" name="lang" value={locale} />
         <button type="submit">{copy.search}</button>
       </form>

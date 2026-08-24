@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orgbrain.dev/schemas/product-ux-scorecard-input-v1.json",
+  "title": "OrgBrain product UX scorecard input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["audit", "evidence", "measurements"],
+  "properties": {
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "date", "commit", "state", "basis", "consecutive_passes", "ai_repeat_consistent", "cloud_live_verified", "voiceover_manually_verified"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "date": {"type": "string", "format": "date"},
+        "commit": {"type": "string", "minLength": 7},
+        "state": {"type": "string", "enum": ["baseline", "iteration", "final"]},
+        "basis": {"type": "string", "minLength": 1},
+        "consecutive_passes": {"type": "integer", "minimum": 0},
+        "ai_repeat_consistent": {"type": "boolean"},
+        "cloud_live_verified": {"type": "boolean"},
+        "voiceover_manually_verified": {"type": "boolean"}
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "mode", "description", "source"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "mode": {"type": "string", "enum": ["interactive-live", "interactive-local", "automated", "rendered", "static", "unverified"]},
+          "description": {"type": "string", "minLength": 1},
+          "source": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "raw_score", "evidence", "findings", "notes"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "raw_score": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+          "evidence": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "severity", "summary", "acceptance", "affected_axes"],
+              "properties": {
+                "id": {"type": "string", "minLength": 1},
+                "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+                "summary": {"type": "string", "minLength": 1},
+                "acceptance": {"type": "string", "minLength": 1},
+                "affected_axes": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true}
+              }
+            }
+          },
+          "metrics": {"type": "object"},
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}

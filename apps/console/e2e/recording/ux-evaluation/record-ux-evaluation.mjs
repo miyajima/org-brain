@@ -6,17 +6,17 @@ import { chromium } from "@playwright/test";
 
 const execFileAsync = promisify(execFile);
 const baseUrl = process.env.RECORDING_BASE_URL ?? "http://127.0.0.1:4321";
-const outputDir = process.env.RECORDING_OUTPUT_DIR ?? path.resolve("artifacts/recordings/ux-evaluation-20260818-ja");
+const outputDir = process.env.RECORDING_OUTPUT_DIR ?? path.resolve("artifacts/recordings/major-screens-ja-20260824");
 const scope = "tenant_id=default&project_id=org-brain&lang=ja";
 const viewport = { width: 1440, height: 900 };
 const settleMs = 850;
 
 const steps = [
-  { action: "navigate", target: `/?${scope}`, subtitle: "ホームのDecision Briefingで、重要な決定と次の操作を一覧します。", pace: 1900 },
+  { action: "navigate", target: `/?${scope}`, subtitle: "ホームの決定一覧で、重要な決定と次の操作を確認します。", pace: 1900 },
   { action: "fill", target: "[data-briefing-search]", value: "context", subtitle: "決定文と理由の要約を検索し、対象を絞り込みます。", pace: 1500 },
   { action: "click", target: "[data-briefing-card] .decision-action", subtitle: "対象の決定を開き、判断の背景を確認します。", pace: 1800 },
   { action: "click", target: ".decision-trace-node:has-text(\"Verified usability note\")", subtitle: "根拠を選ぶと、右側の同じ画面で要約と参照先を確認できます。", pace: 1700 },
-  { action: "click", target: "[data-access-open]", subtitle: "Access Drawerで、所有者・共有範囲・保存場所を確認します。", pace: 1500 },
+  { action: "click", target: "[data-access-open]", subtitle: "アクセス設定で、所有者・共有範囲・保存場所を確認します。", pace: 1500 },
   { action: "assert", target: "[data-access-dialog][open]", subtitle: "資産種別が変わっても、アクセス情報の表示方法は統一されています。", pace: 1600 },
   { action: "click", target: "[data-access-close]", subtitle: "内容を変更せず、決定の道筋マップへ進みます。", pace: 1100 },
   { action: "click", target: ".decision-header-actions a:has-text(\"決定の道筋マップを開く\")", subtitle: "決定から理由・根拠・成果物までを、一つのマップで追跡します。", pace: 1900 },
@@ -27,16 +27,16 @@ const steps = [
   { action: "click", target: "[data-map-fit]", subtitle: "全ノード表示でも、全体を表示で62ノードの構造を見渡せます。", pace: 1600 },
   { action: "click", target: "[data-trace-step=reason]", subtitle: "判断の道筋は、決定・理由・根拠・成果物の4段階で確認します。", pace: 1700 },
   { action: "navigate", target: `/decisions/decision-console-e2e?${scope}`, subtitle: "決定詳細へ戻り、参照版をSkill化します。", pace: 1700 },
-  { action: "click", target: ".decision-header-actions a:has-text(\"この知識をSkill化\")", subtitle: "決定詳細からSkill生成を開始すると、参照版ハッシュも引き継がれます。", pace: 1800 },
+  { action: "click", target: ".decision-header-actions a:has-text(\"この知識からスキルを作成\")", subtitle: "決定詳細からスキル生成を開始すると、参照する版も引き継がれます。", pace: 1800 },
   { action: "fill", target: "[data-skill-generate-form] textarea[name=instructions]", value: "利用条件と完了条件を含める", subtitle: "追加指示を入力し、生成条件を明確にします。", pace: 1500 },
-  { action: "click", target: "[data-skill-generate-form] button[type=submit]", subtitle: "private draft生成を実行します。モバイルではフォーム上部の固定CTAからも実行できます。", pace: 2000 },
-  { action: "assert", target: "[data-generation-result]:not([hidden])", subtitle: "生成タスクとdraft IDを確認し、公開前に検証します。", pace: 1800 },
-  { action: "click", target: "nav[aria-label=\"Org Brain\"] a[href^=\"/agents\"]:visible", subtitle: "Agentsでは、SkillのLoadoutとAgentへ渡るコンテキストを確認します。", pace: 1700 },
-  { action: "click", target: ".decision-asset-card:has-text(\"Release reviewer\")", subtitle: "Agentを選ぶと、役割・参照元の決定・現在のLoadoutが表示されます。", pace: 1700 },
-  { action: "fill", target: "[data-context-preview-form] textarea[name=task_text]", value: "リリース判断をレビューする", subtitle: "タスク文を入力し、ACLを反映したeffective contextを事前確認します。", pace: 1600 },
+  { action: "click", target: "[data-skill-generate-form] button[type=submit]", subtitle: "非公開の下書きを生成します。途中の結果が公開されることはありません。", pace: 2000 },
+  { action: "assert", target: "[data-generation-result]:not([hidden])", subtitle: "生成タスクと下書きIDを確認し、公開前に内容を検証します。", pace: 1800 },
+  { action: "click", target: "nav[aria-label=\"Org Brain\"] a[href^=\"/agents\"]:visible", subtitle: "エージェントでは、スキルの利用構成と実際に渡るコンテキストを確認します。", pace: 1700 },
+  { action: "click", target: ".decision-asset-card:has-text(\"Release reviewer\")", subtitle: "エージェントを選ぶと、役割・参照元の決定・現在の利用構成が表示されます。", pace: 1700 },
+  { action: "fill", target: "[data-context-preview-form] textarea[name=task_text]", value: "リリース判断をレビューする", subtitle: "タスク文を入力し、権限を反映したコンテキストを事前確認します。", pace: 1600 },
   { action: "click", target: "[data-context-preview-form] button[type=submit]", subtitle: "コンテキストを解決します。モバイルではフォーム上部の固定CTAからも実行できます。", pace: 2000 },
-  { action: "assert", target: "[data-context-result]:not([hidden])", subtitle: "注入・on_demand・権限で除外されたSkillを分けて確認できます。", pace: 1800 },
-  { action: "click", target: "nav[aria-label=\"Org Brain\"] a[href^=\"/reviews\"]:visible", subtitle: "Reviewsで、期限・確認・成果物・共有待ちの不足を横断確認します。", pace: 1700 },
+  { action: "assert", target: "[data-context-result]:not([hidden])", subtitle: "自動で渡すスキル、必要時に参照するスキル、権限で除外した項目を分けて確認できます。", pace: 1800 },
+  { action: "click", target: "nav[aria-label=\"Org Brain\"] a[href^=\"/reviews\"]:visible", subtitle: "要確認の決定で、期限・確認・成果物・共有範囲の不足を横断確認します。", pace: 1700 },
   { action: "assert", target: ".decision-review-grid", subtitle: "決定を理解し、根拠を確認し、安全に配布する一連の流れが完了です。", pace: 2300 }
 ];
 

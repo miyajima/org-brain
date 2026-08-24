@@ -1,0 +1,33 @@
+{
+  "audit_id": "orgbrain-product-ux-2026-08-24-improved-iteration-1",
+  "commit": "de5f9afa649ec3da1e144652a7e9958a0c55b10d+worktree",
+  "score": { "before": 86.2, "after": 92.7, "delta": 6.5, "coverage_percent": 97.3 },
+  "ui_flows": {
+    "home_to_decision": { "completed": true, "transitions": 1, "actions": 1, "duration_ms": 235, "backtracks": 0 },
+    "decision_to_reason_evidence_artifact": { "completed": true, "maximum_transitions": 1, "maximum_actions_per_stage": 1, "backtracks": 0 },
+    "map_render": { "completed": true, "actions": 1, "aria_busy": false, "visible_status": "", "canvas_count": 1 },
+    "skill_private_draft": { "completed": true, "actions": 1, "duration_ms": 471, "result_focused": true, "private_state_explicit": true, "next_action": "下書きの内容を確認" },
+    "agent_loadout_preview": { "completed": true, "actions": 1, "duration_ms": 306, "backtracks": 0 },
+    "team_invite_fixture": { "completed": true, "actions": 2, "confirmation_shown": true, "impact_and_recovery_shown": true }
+  },
+  "responsive": {
+    "1440x900": { "verified": true },
+    "1280x720": { "verified": true, "horizontal_overflow": false },
+    "390x844": { "verified": true, "horizontal_overflow": false },
+    "320_css_px": { "verified": true, "horizontal_overflow": false },
+    "200_percent_equivalent": { "verified": true, "horizontal_overflow": false },
+    "400_percent_equivalent": { "verified": true, "horizontal_overflow": false },
+    "forced_colors": { "verified": true },
+    "reduced_motion": { "verified": true }
+  },
+  "local_fresh": {
+    "doctor_after_prepare": { "completed": true, "applied_migrations": 40, "expected_migrations": 40 },
+    "prepare_repeat": { "completed": true, "output": { "ok": true, "migrations": 40 }, "duration_ms": 582 },
+    "start": { "completed": true, "retries": 0, "next_steps_shown": true },
+    "capture": { "completed": true, "invalid_work_type_rejected": true },
+    "search": { "completed": true, "result_count": 1 },
+    "connector": { "completed": true, "dry_run": true, "cli_path_honored": true, "execute_skipped_to_protect_existing_remote_connector": true }
+  },
+  "ai_local": { "scenarios": 12, "applicable_scenarios": 11, "runs_per_scenario": 3, "validation_entries_passed": 12 },
+  "required_live": { "cloudflare_oauth_hook": false, "cross_user_share_revoke": false, "cloud_ai_parity": false, "manual_screen_reader": false }
+}

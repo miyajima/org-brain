@@ -16,7 +16,7 @@ const {
 };
 const copy = {
   en: { title: "Decision Trace Map", inferred: "Show inferred relationships", explicit: "Saved and confirmed relationships are shown by default.", list: "2D relationship list", timeline: "Decision timeline", preview: "Map selection", mapInstructions: "Use the relationship list or timeline to select a node.", fitAll: "Fit all nodes", fitAllAria: "Fit the complete decision trace in view", legend: "Stage and relationship legend", mapLegend: "Stage and relationship legend", selectedNode: "Selected node", empty: "Select a decision to explore its trace.", fallback: "The accessible 2D view is active.", loading: "Updating map…", rendering: "Rendering decision trace…", error: "The map could not be updated.", truncated: "Display limit reached", nodes: "nodes", edges: "edges", details: "Technical details", status: "Status", connections: "Connections", incoming: "Incoming", outgoing: "Outgoing", connectedNodes: "Connected nodes", noConnections: "No connected nodes", savedRelation: "Saved", inferredRelation: "Suggested", openSource: "Open source", stageLabels: { decision: "Decision", reason: "Reason", evidence: "Evidence", artifact: "Artifact", skill: "Skill", agent: "Agent", result: "Result" } },
-  ja: { title: "決定の道筋マップ", inferred: "推論関係を表示", explicit: "既定では保存済み・確認済みの関係だけを表示します。", list: "2D関係リスト", timeline: "決定タイムライン", preview: "マップで選択中", mapInstructions: "関係リストまたはタイムラインからノードを選択できます。", fitAll: "全体を表示", fitAllAria: "決定の道筋全体を表示", legend: "ステージと関係の凡例", mapLegend: "ステージと関係の凡例", selectedNode: "選択中", empty: "決定を選ぶと、その流れを確認できます。", fallback: "アクセシブルな2D表示を利用しています。", loading: "マップを更新中…", rendering: "決定の道筋を描画中…", error: "マップを更新できませんでした。", truncated: "表示上限に達しました", nodes: "ノード", edges: "エッジ", details: "技術的な詳細", status: "状態", connections: "接続", incoming: "入力", outgoing: "出力", connectedNodes: "接続ノード", noConnections: "接続ノードはありません", savedRelation: "保存済み", inferredRelation: "推論", openSource: "元の情報を開く", stageLabels: { decision: "決定", reason: "理由", evidence: "根拠", artifact: "成果物", skill: "Skill", agent: "利用Agent", result: "結果" } },
+  ja: { title: "決定の道筋マップ", inferred: "推論関係を表示", explicit: "既定では保存済み・確認済みの関係だけを表示します。", list: "2D関係リスト", timeline: "決定タイムライン", preview: "マップで選択中", mapInstructions: "関係リストまたはタイムラインからノードを選択できます。", fitAll: "全体を表示", fitAllAria: "決定の道筋全体を表示", legend: "ステージと関係の凡例", mapLegend: "ステージと関係の凡例", selectedNode: "選択中", empty: "決定を選ぶと、その流れを確認できます。", fallback: "アクセシブルな2D表示を利用しています。", loading: "マップを更新中…", rendering: "決定の道筋を描画中…", error: "マップを更新できませんでした。", truncated: "表示上限に達しました", nodes: "ノード", edges: "エッジ", details: "技術的な詳細", status: "状態", connections: "接続", incoming: "入力", outgoing: "出力", connectedNodes: "接続ノード", noConnections: "接続ノードはありません", savedRelation: "保存済み", inferredRelation: "推論", openSource: "元の情報を開く", stageLabels: { decision: "決定", reason: "理由", evidence: "根拠", artifact: "成果物", skill: "スキル", agent: "利用するエージェント", result: "結果" } },
   zh: { title: "决策路径地图", inferred: "显示推断关系", explicit: "默认仅显示已保存并确认的关系。", list: "二维关系列表", timeline: "决策时间线", preview: "地图选择", mapInstructions: "请使用关系列表或时间线选择节点。", fitAll: "显示全部", fitAllAria: "显示完整决策路径", legend: "阶段与关系图例", mapLegend: "阶段与关系图例", selectedNode: "当前选择", empty: "选择一个决策以查看其追踪链。", fallback: "正在使用无障碍二维视图。", loading: "正在更新地图…", rendering: "正在绘制决策路径…", error: "无法更新地图。", truncated: "已达到显示上限", nodes: "节点", edges: "边", details: "技术详情", status: "状态", connections: "连接", incoming: "流入", outgoing: "流出", connectedNodes: "连接节点", noConnections: "没有连接节点", savedRelation: "已保存", inferredRelation: "推断", openSource: "打开来源", stageLabels: { decision: "决策", reason: "理由", evidence: "依据", artifact: "成果物", skill: "Skill", agent: "使用Agent", result: "结果" } }
 }[locale];
 const stageOrder = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"] as const;
@@ -53,10 +53,9 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
   <p class="decision-map-instructions sr-only" id="decision-map-instructions">{copy.mapInstructions}</p>
   <div class="decision-map-status" data-map-status role="status" aria-live="polite" aria-atomic="true"></div>
   <p class="sr-only" data-map-selection-status role="status" aria-live="polite" aria-atomic="true"></p>
-  {trace.truncated && <div class="decision-truncation-note">{copy.truncated}: +{trace.omitted_node_count} / +{trace.omitted_edge_count}</div>}
+  <div class="decision-truncation-note" data-map-truncation hidden={!trace.truncated}>{copy.truncated}: <span data-map-omitted-nodes>+{trace.omitted_node_count}</span> / <span data-map-omitted-edges>+{trace.omitted_edge_count}</span></div>
 
-  {trace.nodes.length > 0 ? (
-    <div class="decision-map-layout">
+  <div class="decision-map-layout" data-map-content hidden={trace.nodes.length === 0}>
       <div class="decision-map-canvas-wrap" data-map-glow="ambient-selection">
         <div class="decision-map-canvas" id="decision-map-canvas" data-map-canvas role="img" aria-label={copy.title} aria-describedby="decision-map-instructions" aria-busy="true"></div>
         <div class="decision-map-fallback" data-map-fallback hidden>{copy.fallback}</div>
@@ -95,10 +94,10 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
           ))}
         </div>
       </section>
-    </div>
-  ) : <div class="decision-empty">{copy.empty}</div>}
+  </div>
+  <div class="decision-empty" data-map-empty hidden={trace.nodes.length > 0}>{copy.empty}</div>
 
-  <section class="decision-map-timeline" aria-labelledby="decision-map-timeline-title">
+  <section class="decision-map-timeline" data-map-timeline-section aria-labelledby="decision-map-timeline-title" hidden={trace.nodes.length === 0}>
     <h2 id="decision-map-timeline-title">{copy.timeline}</h2>
     <div data-map-timeline>
       {stageOrder.map((stage, index) => (
@@ -111,7 +110,7 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
       ))}
     </div>
   </section>
-  <section class="decision-map-legend" aria-label={copy.mapLegend}>
+  <section class="decision-map-legend" data-map-legend aria-label={copy.mapLegend} hidden={trace.nodes.length === 0}>
     <span class="decision-map-legend-title">{copy.mapLegend}</span>
     {stageOrder.map((stage) => <span class="decision-map-legend-item"><i class:list={["decision-stage-mark", `is-${stage}`]}></i>{stageLabel(stage)}</span>)}
     <span class="decision-map-legend-item"><i class="decision-map-legend-sample is-selected"></i>{copy.selectedNode}</span>
@@ -161,9 +160,18 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
     const status = root.querySelector<HTMLElement>("[data-map-status]");
     const selectionStatus = root.querySelector<HTMLElement>("[data-map-selection-status]");
     const fitButton = root.querySelector<HTMLButtonElement>("[data-map-fit]");
+    const mapContent = root.querySelector<HTMLElement>("[data-map-content]");
+    const emptyState = root.querySelector<HTMLElement>("[data-map-empty]");
+    const timelineSection = root.querySelector<HTMLElement>("[data-map-timeline-section]");
+    const legend = root.querySelector<HTMLElement>("[data-map-legend]");
+    const truncation = root.querySelector<HTMLElement>("[data-map-truncation]");
+    const omittedNodes = root.querySelector<HTMLElement>("[data-map-omitted-nodes]");
+    const omittedEdges = root.querySelector<HTMLElement>("[data-map-omitted-edges]");
+    const mapListAction = document.querySelector<HTMLAnchorElement>("[data-map-list-action]");
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     const glowColors: Record<string, string> = { ...colors };
     let selectedId = root.querySelector<HTMLButtonElement>('[data-map-node][aria-pressed="true"]')?.dataset.mapNode || data.nodes[0]?.id || "";
+    let refreshSequence = 0;
     let glowTexture: any = null;
     let glowPhase = 0;
     type GlowLayer = {
@@ -202,7 +210,7 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
       .join(" ");
     const setMapBusy = (busy: boolean, message = "") => {
       canvas?.setAttribute("aria-busy", String(busy));
-      if (message && status) status.textContent = message;
+      if (status) status.textContent = message;
     };
     const fitGraph = (announce = true) => {
       if (!graph) {
@@ -482,6 +490,7 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
         return;
       }
       try {
+        if (fallback) fallback.hidden = true;
         const [module, THREE] = await Promise.all([import("3d-force-graph"), import("three")]);
         const ForceGraph3D = module.default as unknown as new (element: HTMLElement) => GraphInstance;
         threeModule = THREE;
@@ -513,6 +522,7 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
     };
 
     const refresh = async (includeInferred: boolean) => {
+      const requestSequence = ++refreshSequence;
       if (status) status.textContent = copy.loading;
       try {
         const params = new URLSearchParams(root.dataset.apiParams || "");
@@ -523,21 +533,35 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
           error?: { message?: string };
         } | null;
         if (!response.ok || !payload?.data) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+        if (requestSequence !== refreshSequence) return;
         data = { nodes: payload.data.nodes || [], edges: payload.data.edges || [] };
+        selectedId = String(data.nodes.find((node) => node.stage === "decision")?.id || data.nodes[0]?.id || "");
         renderLists();
+        const hasNodes = data.nodes.length > 0;
+        if (mapContent) mapContent.hidden = !hasNodes;
+        if (emptyState) emptyState.hidden = hasNodes;
+        if (timelineSection) timelineSection.hidden = !hasNodes;
+        if (legend) legend.hidden = !hasNodes;
+        if (mapListAction) mapListAction.hidden = !hasNodes;
+        if (truncation) truncation.hidden = !payload.data.truncated;
+        if (omittedNodes) omittedNodes.textContent = `+${Number((payload.data as { omitted_node_count?: number }).omitted_node_count || 0)}`;
+        if (omittedEdges) omittedEdges.textContent = `+${Number((payload.data as { omitted_edge_count?: number }).omitted_edge_count || 0)}`;
         if (graph && threeModule) {
           glowLayers.clear();
           graph.nodeThreeObject((node) => createGlowNodeObject(node, threeModule as typeof import("three"))).nodeThreeObjectExtend(false);
         }
         graph?.graphData({ nodes: data.nodes, links: data.edges });
+        if (!graph && hasNodes) await initializeGraph();
+        if (requestSequence !== refreshSequence) return;
         const nodeCount = root.querySelector<HTMLElement>("[data-node-count]");
         const edgeCount = root.querySelector<HTMLElement>("[data-edge-count]");
         if (nodeCount) nodeCount.textContent = String(data.nodes.length);
         if (edgeCount) edgeCount.textContent = String(data.edges.length);
-        if (data.nodes[0]) selectNode(String(data.nodes[0].id));
+        if (selectedId) selectNode(selectedId);
         if (status) status.textContent = payload.data.truncated ? copy.truncated : "";
         fitGraph(false);
       } catch (error) {
+        if (requestSequence !== refreshSequence) return;
         if (status) status.textContent = `${copy.error} ${error instanceof Error ? error.message : String(error)}`;
       }
     };
@@ -546,6 +570,27 @@ const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
     fitButton?.addEventListener("click", () => fitGraph(true));
     root.querySelector<HTMLInputElement>("[data-inferred-toggle]")?.addEventListener("change", (event) => {
       void refresh((event.currentTarget as HTMLInputElement).checked);
+    });
+    window.addEventListener("orgbrain:decision-map-select", (event) => {
+      const decisionId = (event as CustomEvent<{ decisionId?: string }>).detail?.decisionId?.trim() || "";
+      if (!decisionId) {
+        refreshSequence += 1;
+        data = { nodes: [], edges: [] };
+        selectedId = "";
+        renderLists();
+        graph?.graphData({ nodes: [], links: [] });
+        if (mapContent) mapContent.hidden = true;
+        if (emptyState) emptyState.hidden = false;
+        if (timelineSection) timelineSection.hidden = true;
+        if (legend) legend.hidden = true;
+        if (mapListAction) mapListAction.hidden = true;
+        if (truncation) truncation.hidden = true;
+        setMapBusy(false, copy.empty);
+        return;
+      }
+      root.dataset.apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;
+      const inferred = root.querySelector<HTMLInputElement>("[data-inferred-toggle]")?.checked ?? false;
+      void refresh(inferred);
     });
   }
 </script>

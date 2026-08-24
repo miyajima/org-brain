@@ -10,27 +10,56 @@ const { params, apiParams, lang } = dashboardPageParams(Astro.url, Astro.request
 if (!behavior.enabled) return Astro.redirect(scopedHref("/decisions", params), 307);
 const briefing = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/decision-briefing", apiParams, { limit: 100 }), Astro.url), normalizeDecisionBriefing, emptyDecisionBriefing());
 const reviewKinds = ["expired", "unconfirmed", "artifact_missing", "share_pending"] as const;
+type ReviewKind = (typeof reviewKinds)[number];
 const copy = {
-  en: { eyebrow: "Decision governance", title: "Reviews", lead: "Resolve validity, confirmation, artifact, and sharing gaps before a decision is distributed through Skills and Agents.", expired: "Validity expired", unconfirmed: "Needs confirmation", artifact_missing: "Missing artifact", share_pending: "Waiting to share", none: "No decisions are waiting in this review lane.", open: "Review decision", error: "The review queue could not be refreshed" },
-  ja: { eyebrow: "Decision governance", title: "Reviews", lead: "決定をSkillやAgentへ配布する前に、有効期限、確認、成果物、共有範囲の不足を解消します。", expired: "有効期限切れ", unconfirmed: "確認が必要", artifact_missing: "成果物未接続", share_pending: "共有待ち", none: "このレビュー項目で待機中の決定はありません。", open: "決定をレビュー", error: "レビューキューを更新できませんでした" },
-  zh: { eyebrow: "Decision governance", title: "Reviews", lead: "在通过Skill和Agent分发决策前，解决有效期、确认、成果和共享问题。", expired: "有效期已过", unconfirmed: "需要确认", artifact_missing: "未连接成果", share_pending: "待共享", none: "此审核通道暂无待处理决策。", open: "审核决策", error: "无法刷新审核队列" }
+  en: { eyebrow: "Decision governance", title: "Reviews", lead: "Resolve the most important decision gaps before Skills and Agents use them.", expired: "Validity expired", unconfirmed: "Needs confirmation", artifact_missing: "Missing artifact", share_pending: "Waiting to share", queue: "Review queue", issues: "issues", allClear: "No decisions need review in this scope.", allClearBody: "You can continue from the decision list or record a new decision.", decisions: "Open decisions", open: "Review decision", updated: "Updated", error: "The review queue could not be refreshed" },
+  ja: { eyebrow: "決定の品質管理", title: "要確認の決定", lead: "スキルやエージェントで利用する前に、優先度が高い決定から不足を解消します。", expired: "有効期限切れ", unconfirmed: "確認が必要", artifact_missing: "成果物未接続", share_pending: "共有待ち", queue: "優先確認キュー", issues: "件の確認事項", allClear: "この範囲に要確認の決定はありません。", allClearBody: "決定一覧の確認や、新しい決定の記録へ進めます。", decisions: "決定一覧を開く", open: "この決定を確認", updated: "更新", error: "確認一覧を更新できませんでした" },
+  zh: { eyebrow: "Decision governance", title: "Reviews", lead: "在Skill和Agent使用前，按优先级解决决策缺口。", expired: "有效期已过", unconfirmed: "需要确认", artifact_missing: "未连接成果", share_pending: "待共享", queue: "审核队列", issues: "项问题", allClear: "此范围内没有需要审核的决策。", allClearBody: "可以返回决策列表或记录新决策。", decisions: "打开决策列表", open: "审核此决策", updated: "更新", error: "无法刷新审核队列" }
 }[lang];
+const reviewRank = (flags: string[]) => {
+  const rank = reviewKinds.findIndex((kind) => flags.includes(kind));
+  return rank === -1 ? reviewKinds.length : rank;
+};
+const reviewItems = briefing.data.items
+  .filter((item) => reviewKinds.some((kind) => item.flags.includes(kind)))
+  .sort((left, right) => reviewRank(left.flags) - reviewRank(right.flags) || right.updated_at - left.updated_at);
+const reviewIssueCount = reviewItems.reduce((total, item) => total + item.flags.filter((flag) => reviewKinds.includes(flag as ReviewKind)).length, 0);
+const dateLocale = lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US";
+const formatDate = (value: number) => value
+  ? new Intl.DateTimeFormat(dateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value))
+  : "—";
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
   <section class="decision-reviews-page">
     <header class="decision-page-header"><div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div></header>
     {briefing.error && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{briefing.error}</span></div>}
-    <div class="decision-review-grid">
-      {reviewKinds.map((kind, laneIndex) => {
-        const items = briefing.data.items.filter((item) => item.flags.includes(kind));
-        return <section class="decision-review-lane" style={`--decision-index:${laneIndex}`}>
-          <header><div><span>{String(laneIndex + 1).padStart(2, "0")}</span><h2>{copy[kind]}</h2></div><strong>{items.length}</strong></header>
-          <div>
-            {items.map((item) => <article><span class:list={["decision-status-dot", `is-${item.status}`]}></span><div><h3>{item.title}</h3><p>{item.reason_summary}</p><a href={scopedHref(`${item.next_action.href}`, params)}>{copy.open} →</a></div></article>)}
-            {items.length === 0 && <p class="decision-empty">{copy.none}</p>}
-          </div>
-        </section>;
-      })}
-    </div>
+    {reviewItems.length > 0 ? (
+      <section class="decision-review-queue" aria-labelledby="decision-review-queue-title">
+        <header>
+          <div><p class="decision-eyebrow">{copy.queue}</p><h2 id="decision-review-queue-title">{reviewItems.length} {lang === "ja" ? "件" : ""}</h2></div>
+          <strong>{reviewIssueCount} {copy.issues}</strong>
+        </header>
+        <div class="decision-review-list">
+          {reviewItems.map((item, index) => {
+            const flags = item.flags.filter((flag): flag is ReviewKind => reviewKinds.includes(flag as ReviewKind));
+            return <article data-review-decision={item.id} style={`--decision-index:${Math.min(index, 6)}`}>
+              <div class="decision-review-main">
+                <div class="decision-card-meta"><span class:list={["decision-status-dot", `is-${item.status}`]} aria-hidden="true"></span><span>{item.status}</span>{item.project_id && <span>{item.project_id}</span>}</div>
+                <h3>{item.title}</h3>
+                <p>{item.reason_summary}</p>
+                <div class="decision-flag-row">{flags.map((flag) => <span>{copy[flag]}</span>)}</div>
+              </div>
+              <aside><span>{copy.updated}<time datetime={new Date(item.updated_at).toISOString()}>{formatDate(item.updated_at)}</time></span><a class="decision-action" href={scopedHref(`${item.next_action.href}`, params)}>{copy.open}</a></aside>
+            </article>;
+          })}
+        </div>
+      </section>
+    ) : !briefing.error && (
+      <section class="decision-review-clear" role="status">
+        <span aria-hidden="true">✓</span>
+        <div><h2>{copy.allClear}</h2><p>{copy.allClearBody}</p></div>
+        <a class="decision-action decision-action-secondary" href={scopedHref("/", params)}>{copy.decisions}</a>
+      </section>
+    )}
   </section>
 </BaseLayout>
