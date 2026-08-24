@@ -1,0 +1,40 @@
+{
+  "audit_id": "orgbrain-product-ux-2026-08-24-improved-iteration-2",
+  "score": {
+    "baseline": 86.2,
+    "iteration_1": 92.7,
+    "iteration_2": 92.8,
+    "coverage_percent": 97.3
+  },
+  "terminology": {
+    "skills_japanese_first": true,
+    "agents_japanese_first": true,
+    "internal_values_changed": false,
+    "en_zh_regression_checked": true
+  },
+  "connector": {
+    "dry_run": true,
+    "execute_path_tested": true,
+    "cli_path_honored": true,
+    "real_client_settings_changed": false
+  },
+  "team_local_d1": {
+    "tenant": "ux-audit-20260824-i2",
+    "users_created": 8,
+    "groups_created": 3,
+    "role_assignments_created": 8,
+    "memories_created": 6,
+    "suspended_readback": true,
+    "restored_readback": true,
+    "archive_outcomes": 25,
+    "users_deprovisioned": 8,
+    "groups_remaining": 0,
+    "separate_principal_session": false,
+    "expired_invite_tested": false,
+    "denied_principal_tested": false
+  },
+  "external_changes": {
+    "cloudflare_resources_changed": 0,
+    "oauth_or_hooks_changed": false
+  }
+}

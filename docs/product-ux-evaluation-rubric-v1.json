@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "method_version": "1.0.0",
+  "evidence_caps": {
+    "unverified": 0,
+    "static": 80,
+    "rendered": 90,
+    "automated": 92,
+    "interactive-local": 100,
+    "interactive-live": 100
+  },
+  "severity_caps": {
+    "none": 100,
+    "low": 96,
+    "medium": 89,
+    "high": 79,
+    "critical": 79
+  },
+  "gates": {
+    "focus_axis_minimum": 96,
+    "other_axis_minimum": 90,
+    "overall_minimum": 96,
+    "coverage_minimum": 0.95,
+    "consecutive_passes": 2,
+    "ai_repeat_consistent": true,
+    "cloud_live_verified": true,
+    "voiceover_manually_verified": true,
+    "blocking_severities": ["critical", "high"]
+  },
+  "axes": [
+    {"id":"clarity","label":"わかりやすさ・メンタルモデル","weight":0.12,"focus":true,"items":[{"id":"clarity.purpose","label":"画面の目的","weight":0.25},{"id":"clarity.current_state","label":"現在地と状態","weight":0.25},{"id":"clarity.terms","label":"用語の理解","weight":0.25},{"id":"clarity.outcome","label":"結果の意味","weight":0.25}]},
+    {"id":"simplicity","label":"画面のシンプルさ","weight":0.12,"focus":true,"items":[{"id":"simplicity.initial_choices","label":"初期表示の選択肢","weight":0.25},{"id":"simplicity.information_density","label":"情報密度","weight":0.25},{"id":"simplicity.progressive_disclosure","label":"段階的開示","weight":0.25},{"id":"simplicity.visual_hierarchy","label":"視覚的な優先順位","weight":0.25}]},
+    {"id":"operability","label":"操作のしやすさ","weight":0.11,"focus":true,"items":[{"id":"operability.action_count","label":"操作数と入力負荷","weight":0.25},{"id":"operability.affordance","label":"操作対象の分かりやすさ","weight":0.25},{"id":"operability.keyboard","label":"キーボード操作","weight":0.25},{"id":"operability.scroll_distance","label":"スクロールと移動距離","weight":0.25}]},
+    {"id":"goal_reachability","label":"目的へのたどり着きやすさ","weight":0.13,"focus":true,"items":[{"id":"goal_reachability.completion","label":"目的完遂率","weight":0.35},{"id":"goal_reachability.transitions","label":"遷移数","weight":0.25},{"id":"goal_reachability.time_backtrack","label":"時間と後戻り","weight":0.20},{"id":"goal_reachability.context_continuity","label":"文脈の継続","weight":0.20}]},
+    {"id":"discoverability","label":"発見しやすさ・情報設計","weight":0.07,"focus":false,"items":[{"id":"discoverability.navigation","label":"ナビゲーション","weight":0.25},{"id":"discoverability.search","label":"検索入口","weight":0.25},{"id":"discoverability.primary_cta","label":"主CTA","weight":0.25},{"id":"discoverability.persona_entry","label":"個人・チーム別の入口","weight":0.25}]},
+    {"id":"recovery","label":"状態表示・エラー回復","weight":0.07,"focus":false,"items":[{"id":"recovery.loading_empty","label":"読込中と空状態","weight":0.25},{"id":"recovery.error_truthfulness","label":"エラーの正直さ","weight":0.25},{"id":"recovery.direct_action","label":"直接復旧できる案内","weight":0.25},{"id":"recovery.feedback","label":"操作結果の通知","weight":0.25}]},
+    {"id":"trust","label":"信頼・根拠・安全性","weight":0.07,"focus":false,"items":[{"id":"trust.decision_chain","label":"DecisionからArtifactの追跡","weight":0.25},{"id":"trust.provenance","label":"根拠と現在性","weight":0.25},{"id":"trust.access_scope","label":"権限と共有範囲","weight":0.25},{"id":"trust.destructive_boundary","label":"危険操作の境界","weight":0.25}]},
+    {"id":"consistency","label":"一貫性・コピー・多言語","weight":0.05,"focus":false,"items":[{"id":"consistency.patterns","label":"画面パターン","weight":0.25},{"id":"consistency.terminology","label":"用語統一","weight":0.25},{"id":"consistency.japanese","label":"日本語の自然さ","weight":0.25},{"id":"consistency.multilingual","label":"英語・中国語の構造一致","weight":0.25}]},
+    {"id":"accessibility","label":"アクセシビリティ・レスポンシブ","weight":0.06,"focus":false,"items":[{"id":"accessibility.semantics","label":"意味構造と読み順","weight":0.25},{"id":"accessibility.focus_keyboard","label":"focusとkeyboard","weight":0.25},{"id":"accessibility.target_contrast","label":"操作領域とcontrast","weight":0.25},{"id":"accessibility.reflow_motion","label":"reflowとmotion","weight":0.25}]},
+    {"id":"local_setup","label":"Local初回導入","weight":0.05,"focus":false,"items":[{"id":"local_setup.prerequisites","label":"前提条件","weight":0.20},{"id":"local_setup.doctor_start","label":"doctorとstart","weight":0.30},{"id":"local_setup.capture_search","label":"captureとsearch","weight":0.25},{"id":"local_setup.connector_recovery","label":"connectorと復旧","weight":0.25}]},
+    {"id":"cloudflare_setup","label":"Cloudflare初回導入","weight":0.05,"focus":false,"items":[{"id":"cloudflare_setup.permissions","label":"権限準備","weight":0.20},{"id":"cloudflare_setup.doctor_plan","label":"doctorとprovision plan","weight":0.25},{"id":"cloudflare_setup.oauth_hook","label":"OAuthとhook","weight":0.30},{"id":"cloudflare_setup.parity_recovery","label":"parityと復旧","weight":0.25}]},
+    {"id":"ai_safety","label":"AI提案・失敗回避","weight":0.05,"focus":false,"items":[{"id":"ai_safety.relevance","label":"関連性","weight":0.25},{"id":"ai_safety.conciseness","label":"簡潔さと行動性","weight":0.20},{"id":"ai_safety.evidence_abstention","label":"根拠と回答抑制","weight":0.30},{"id":"ai_safety.consistency_parity","label":"反復一致とLocal・Cloud parity","weight":0.25}]},
+    {"id":"personal_fit","label":"個人利用への適合","weight":0.02,"focus":false,"items":[{"id":"personal_fit.nav_reduction","label":"管理項目の抑制","weight":0.25},{"id":"personal_fit.next_action","label":"次の行動","weight":0.25},{"id":"personal_fit.scope","label":"個人scope","weight":0.25},{"id":"personal_fit.maintenance","label":"保守の理解","weight":0.25}]},
+    {"id":"team_fit","label":"チーム利用への適合","weight":0.03,"focus":false,"items":[{"id":"team_fit.onboarding_roles","label":"招待と役割","weight":0.25},{"id":"team_fit.sharing_scope","label":"共有とscope","weight":0.25},{"id":"team_fit.handoff_audit","label":"handoffとaudit","weight":0.25},{"id":"team_fit.revoke_recovery","label":"取消と復旧","weight":0.25}]}
+  ]
+}

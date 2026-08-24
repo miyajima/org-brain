@@ -30,7 +30,7 @@ Usage:
   orgbrain version [--json]
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>] [--root <checkout>]
-  orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--tag <tag>]
+  orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type implementation|review|debug|proposal|support|research|operations|other] [--tag <tag>]
   orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>

@@ -205,7 +205,8 @@ function knowledgeMapNode(id, nodeType, projectId, values = {}) {
 }
 
 function allKnowledgeMapFor(projectId) {
-  if (projectId && projectId !== "org-brain") return traceMapFor(projectId);
+  const truncatedFixture = projectId === "e2e-map-truncated";
+  if (projectId && projectId !== "org-brain" && !truncatedFixture) return traceMapFor(projectId);
   const project = "org-brain";
   const sharedProject = "delivery-ops";
   const nodes = [
@@ -333,7 +334,7 @@ function allKnowledgeMapFor(projectId) {
     contract_version: "dashboard/v1",
     scope: "org",
     cluster_mode: false,
-    total_count: nodes.length,
+    total_count: truncatedFixture ? 2_400 : nodes.length,
     visible_count: nodes.length,
     memory_visible_count: nodes.filter((node) => node.node_type === "memory").length,
     project_count: nodes.filter((node) => node.node_type === "project").length,
@@ -342,7 +343,7 @@ function allKnowledgeMapFor(projectId) {
     related_count: nodes.length - 1,
     relationship_count: links.length,
     cross_project_link_count: links.filter((item) => item.cross_project).length,
-    truncated: false,
+    truncated: truncatedFixture,
     nodes,
     links,
     clusters: projectIds.map((projectId) => ({
@@ -803,11 +804,7 @@ const consolePolicy = (resourceType, resourceId, storageLocation = "d1") => ({
   created_at: now,
   updated_at: now
 });
-const consoleBriefing = {
-  contract_version: "decision-console/v1",
-  generated_at: now,
-  counts: { new: 1, changed: 1, expired: 0, unconfirmed: 0, artifact_missing: 0, share_pending: 0 },
-  items: [{
+const primaryConsoleDecision = {
     id: consoleDecisionId,
     project_id: "org-brain",
     title: "Keep decision context visible",
@@ -821,14 +818,80 @@ const consoleBriefing = {
     artifact_count: 1,
     flags: ["new", "changed"],
     next_action: { label: "Open trace", action: "open", href: `/decisions/${consoleDecisionId}` }
-  }],
-  truncated: false
 };
 
-function consoleTrace(includeInferred = false) {
+const scaleDecisionTitles = [
+  "期限切れのリリース判断を再確認する",
+  "検証結果を成果物として接続する",
+  "共有前にアクセス範囲を確定する",
+  "ロールバック条件を更新する",
+  "運用担当への引き継ぎ方針を記録する",
+  "未確認の移行判断に根拠を追加する",
+  "監査ログの保存期間を決定する",
+  "エージェントへ渡す情報量を制限する",
+  "障害時の復旧責任者を明確にする"
+];
+const scaleFlagPatterns = [
+  ["expired", "unconfirmed"],
+  ["artifact_missing"],
+  ["share_pending"],
+  ["changed"],
+  ["new"],
+  ["unconfirmed", "artifact_missing"],
+  ["expired"],
+  ["share_pending", "changed"],
+  ["new", "artifact_missing"]
+];
+const consoleNextAction = (flags, id) => {
+  if (flags.includes("expired")) return { label: "Review validity", action: "review", href: `/decisions/${id}#review` };
+  if (flags.includes("unconfirmed")) return { label: "Confirm decision", action: "confirm", href: `/decisions/${id}#review` };
+  if (flags.includes("artifact_missing")) return { label: "Connect an artifact", action: "connect_artifact", href: `/decisions/${id}#artifacts` };
+  if (flags.includes("share_pending")) return { label: "Review access", action: "share", href: `/decisions/${id}#access` };
+  return { label: "Open trace", action: "open", href: `/decisions/${id}` };
+};
+const consoleBriefingFor = (requestedCount, reviewEmpty = false, limit = requestedCount) => {
+  const count = Math.max(1, requestedCount);
+  const allItems = [primaryConsoleDecision];
+  for (let index = 1; index < count; index += 1) {
+    const id = `decision-scale-${String(index + 1).padStart(2, "0")}`;
+    const flags = reviewEmpty
+      ? index % 2 === 0 ? ["new"] : ["changed"]
+      : [...scaleFlagPatterns[(index - 1) % scaleFlagPatterns.length]];
+    allItems.push({
+      id,
+      project_id: index % 3 === 0 ? "delivery-ops" : index % 3 === 1 ? "org-brain" : "product-research",
+      title: scaleDecisionTitles[(index - 1) % scaleDecisionTitles.length] + (index > scaleDecisionTitles.length ? ` ${index + 1}` : ""),
+      decision: `判断 ${index + 1} の適用範囲と完了条件を、実行前に共有できる状態にする。`,
+      reason_summary: `関係者が判断 ${index + 1} の背景と次の操作を一覧から比較でき、確認漏れや手戻りを防げるため。`,
+      status: flags.includes("unconfirmed") ? "draft" : "active",
+      confidence: Math.max(0.62, 0.94 - index * 0.006),
+      confirmation_state: flags.includes("unconfirmed") ? "unconfirmed" : "user_confirmed",
+      valid_until: flags.includes("expired") ? now - index * 60_000 : null,
+      updated_at: now - index * 3_600_000,
+      artifact_count: flags.includes("artifact_missing") ? 0 : 1,
+      flags,
+      next_action: consoleNextAction(flags, id)
+    });
+  }
+  const counts = { new: 0, changed: 0, expired: 0, unconfirmed: 0, artifact_missing: 0, share_pending: 0 };
+  for (const item of allItems) {
+    for (const flag of item.flags) {
+      if (Object.hasOwn(counts, flag)) counts[flag] += 1;
+    }
+  }
+  return {
+    contract_version: "decision-console/v1",
+    generated_at: now,
+    counts,
+    items: allItems.slice(0, Math.max(1, limit)),
+    truncated: allItems.length > limit
+  };
+};
+
+function consoleTrace(includeInferred = false, item = primaryConsoleDecision) {
   const nodes = [
-    { id: `decision:${consoleDecisionId}`, type: "decision", stage: "decision", label: "Keep decision context visible", summary: "Keep the active decision visible while people inspect evidence and apply it.", status: "active", deep_link: `/decisions/${consoleDecisionId}`, metadata: { version_hash: "e2e-source-hash" } },
-    { id: `reason:${consoleDecisionId}`, type: "reason", stage: "reason", label: "Reason", summary: "This makes the decision and its rationale understandable before implementation details.", status: "user_confirmed", deep_link: null, metadata: {} },
+    { id: `decision:${item.id}`, type: "decision", stage: "decision", label: item.title, summary: item.decision, status: item.status, deep_link: `/decisions/${item.id}`, metadata: { version_hash: "e2e-source-hash" } },
+    { id: `reason:${item.id}`, type: "reason", stage: "reason", label: "Reason", summary: item.reason_summary, status: item.confirmation_state, deep_link: null, metadata: {} },
     { id: "evidence:e2e", type: "evidence", stage: "evidence", label: "Verified usability note", summary: "Observed in moderated review", status: "active", deep_link: "/resources?selected=evidence-e2e", metadata: { version_hash: "evidence-hash" } },
     { id: "artifact:e2e", type: "artifact", stage: "artifact", label: "Console release checklist", summary: "Implementation artifact", status: "active", deep_link: "/resources?selected=artifact-e2e", metadata: {} },
     { id: "skill:skill-e2e", type: "skill", stage: "skill", label: "Decision rollout checklist", summary: "Apply the verified rollout safely", status: "published", deep_link: "/skills?skill_id=skill-e2e", metadata: {} },
@@ -837,34 +900,34 @@ function consoleTrace(includeInferred = false) {
     ...(includeInferred ? [{ id: "inferred:e2e", type: "evidence", stage: "evidence", label: "Suggested follow-up", summary: "Proposed relationship", status: "proposal", deep_link: null, metadata: { confidence: 0.72 } }] : [])
   ];
   const edges = [
-    { id: "decision-reason", source: `decision:${consoleDecisionId}`, target: `reason:${consoleDecisionId}`, relation: "explained_by", inferred: false },
-    { id: "reason-evidence", source: `reason:${consoleDecisionId}`, target: "evidence:e2e", relation: "rationale_source", inferred: false },
-    { id: "reason-artifact", source: `reason:${consoleDecisionId}`, target: "artifact:e2e", relation: "output_artifact", inferred: false },
-    { id: "decision-skill", source: `decision:${consoleDecisionId}`, target: "skill:skill-e2e", relation: "generated_skill", inferred: false },
+    { id: "decision-reason", source: `decision:${item.id}`, target: `reason:${item.id}`, relation: "explained_by", inferred: false },
+    { id: "reason-evidence", source: `reason:${item.id}`, target: "evidence:e2e", relation: "rationale_source", inferred: false },
+    { id: "reason-artifact", source: `reason:${item.id}`, target: "artifact:e2e", relation: "output_artifact", inferred: false },
+    { id: "decision-skill", source: `decision:${item.id}`, target: "skill:skill-e2e", relation: "generated_skill", inferred: false },
     { id: "skill-agent", source: "skill:skill-e2e", target: "agent:agent-e2e", relation: "bound:always", inferred: false },
     { id: "agent-result", source: "agent:agent-e2e", target: "result:result-e2e", relation: "usage_result", inferred: false },
-    ...(includeInferred ? [{ id: "reason-inferred", source: `reason:${consoleDecisionId}`, target: "inferred:e2e", relation: "rationale_source", inferred: true }] : [])
+    ...(includeInferred ? [{ id: "reason-inferred", source: `reason:${item.id}`, target: "inferred:e2e", relation: "rationale_source", inferred: true }] : [])
   ];
   const stageNames = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"];
   return {
     contract_version: "decision-console/v1",
     generated_at: now,
     decision: {
-      id: consoleDecisionId,
-      project_id: "org-brain",
-      title: "Keep decision context visible",
-      decision: "Keep the active decision visible while people inspect evidence and apply it.",
-      rationale: "This makes the decision and its rationale understandable before implementation details.",
-      status: "active",
-      confirmation_state: "user_confirmed",
-      confidence: 0.94,
+      id: item.id,
+      project_id: item.project_id,
+      title: item.title,
+      decision: item.decision,
+      rationale: item.reason_summary,
+      status: item.status,
+      confirmation_state: item.confirmation_state,
+      confidence: item.confidence,
       valid_from: now - 86_400_000,
-      valid_until: null,
+      valid_until: item.valid_until,
       owner_refs: [{ type: "principal", id: "user:e2e-login-sub" }],
       reviewer_refs: [],
       version_hash: "e2e-source-hash"
     },
-    access_policy: consolePolicy("decision_memory", consoleDecisionId),
+    access_policy: consolePolicy("decision_memory", item.id),
     stages: Object.fromEntries(stageNames.map((stage) => [stage, nodes.filter((node) => node.stage === stage)])),
     nodes,
     edges,
@@ -1098,17 +1161,22 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/decision-briefing" && request.method === "GET") {
-    json(response, 200, ok(consoleBriefing));
+    const tenantId = url.searchParams.get("tenant_id") || "default";
+    const requestedCount = tenantId === "scale-40-e2e" ? 40 : 10;
+    const limit = Math.max(1, Number(url.searchParams.get("limit") || requestedCount));
+    json(response, 200, ok(consoleBriefingFor(requestedCount, tenantId === "empty-review-e2e", limit)));
     return;
   }
 
-  if (path === `/v1/decisions/${consoleDecisionId}/trace` && request.method === "GET") {
-    json(response, 200, ok(consoleTrace(url.searchParams.get("include_inferred") === "true")));
-    return;
-  }
-
-  if (path === `/v1/decisions/${consoleDecisionId}/map` && request.method === "GET") {
-    json(response, 200, ok(consoleTrace(url.searchParams.get("include_inferred") === "true")));
+  const consoleDecisionTraceMatch = path.match(/^\/v1\/decisions\/([^/]+)\/(trace|map)$/u);
+  if (consoleDecisionTraceMatch && request.method === "GET") {
+    const requestedId = decodeURIComponent(consoleDecisionTraceMatch[1]);
+    const item = consoleBriefingFor(40).items.find((candidate) => candidate.id === requestedId);
+    if (!item) {
+      json(response, 404, { ok: false, error: { code: "decision_not_found", message: "Decision fixture not found" } });
+      return;
+    }
+    json(response, 200, ok(consoleTrace(url.searchParams.get("include_inferred") === "true", item)));
     return;
   }
 
@@ -1462,9 +1530,11 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/auth/me" && request.method === "GET") {
-    const personal = url.searchParams.get("tenant_id") === "personal-e2e";
+    const tenantId = url.searchParams.get("tenant_id") || "default";
+    const personal = tenantId === "personal-e2e";
+    const archivedTeam = tenantId === "archived-team-e2e";
     json(response, 200, ok({
-      tenant_id: url.searchParams.get("tenant_id") || "default",
+      tenant_id: tenantId,
       auth: {
         principal: "user:e2e-login-sub",
         source: "access-jwt",
@@ -1487,11 +1557,13 @@ const server = http.createServer(async (request, response) => {
         can_manage_users: true,
         can_manage_groups: true,
         can_manage_clients: true,
-        tenant: { id: url.searchParams.get("tenant_id") || "default" },
+        tenant: { id: tenantId },
         project: url.searchParams.get("project_id") ? { id: url.searchParams.get("project_id") } : null,
         counts: personal
           ? { active_users: 1, active_groups: 0, active_projects: 0 }
-          : { active_users: 8, active_groups: 3, active_projects: 2 }
+          : archivedTeam
+            ? { active_users: 0, active_groups: 0, active_projects: 0 }
+            : { active_users: 8, active_groups: 3, active_projects: 2 }
       }
     }));
     return;

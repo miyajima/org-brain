@@ -815,6 +815,25 @@ test("restore verifies backups and reapplies later deletion tombstones", async (
   }
 });
 
+test("doctor provides copy-paste recovery commands for unsafe permissions", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.init();
+    await chmod(ctx.directory, 0o755);
+    await chmod(ctx.dbPath, 0o644);
+
+    const doctor = await store.doctor();
+    assert.equal(doctor.ok, false);
+    assert.deepEqual(doctor.recoveries, [
+      { id: "directory-permissions", command: `chmod 700 ${JSON.stringify(ctx.directory)}` },
+      { id: "database-permissions", command: `chmod 600 ${JSON.stringify(ctx.dbPath)}` }
+    ]);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("local MCP exposes capture and search over the same MemoryStore", async () => {
   const ctx = await fixture();
   try {
@@ -876,6 +895,10 @@ test("v18 classification is explicit, tenant-scoped, filterable, and snapshotted
       query: "authoritative contract",
       work_type: "review"
     })).length, 0);
+    await assert.rejects(
+      store.capture(captureInput({ external_key: "classification:invalid", work_type: "verification" })),
+      /invalid_work_type/u
+    );
     await assert.rejects(
       store.capture(captureInput({
         external_key: "classification:cross-tenant",

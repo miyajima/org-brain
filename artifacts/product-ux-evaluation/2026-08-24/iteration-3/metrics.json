@@ -1,0 +1,51 @@
+{
+  "audit_id": "orgbrain-product-ux-2026-08-24-improved-iteration-3",
+  "score": {
+    "previous": 92.8,
+    "current": 93.0,
+    "delta": 0.2,
+    "coverage_percent": 97.3,
+    "completion_accepted": false
+  },
+  "axes": {
+    "clarity": 97.5,
+    "simplicity": 97.0,
+    "operability": 96.5,
+    "goal_reachability": 98.3,
+    "discoverability": 96.5,
+    "recovery": 96.0,
+    "trust": 97.0,
+    "consistency": 96.0,
+    "accessibility": 92.0,
+    "local_setup": 97.1,
+    "cloudflare_setup": 40.0,
+    "ai_safety": 82.0,
+    "personal_fit": 97.0,
+    "team_fit": 92.5
+  },
+  "interaction": {
+    "decision_detail_transitions": 1,
+    "decision_target_max_transitions": 2,
+    "map_search_partial_update": true,
+    "map_search_page_reload": false,
+    "map_search_scroll_delta_px_max": 16,
+    "skip_link_moves_focus_to_main": true,
+    "mobile_390_horizontal_overflow": false,
+    "mobile_320_horizontal_overflow": false,
+    "configured_organization_keeps_team_scope": true
+  },
+  "verification": {
+    "console_unit": "98/98",
+    "api_gateway": "274/274",
+    "decision_e2e": "28/28",
+    "console_e2e": "120 passed, 2 screenshot-only tests skipped",
+    "local_ai": "12/12 scenarios, 3 runs each",
+    "cloud_live": false,
+    "voiceover_manual": false,
+    "critical_or_high_findings": 0
+  },
+  "external_changes": {
+    "cloudflare_resources_changed": 0,
+    "oauth_or_hooks_changed": false
+  }
+}

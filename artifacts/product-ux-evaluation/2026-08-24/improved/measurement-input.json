@@ -1,0 +1,775 @@
+{
+  "audit": {
+    "id": "orgbrain-product-ux-2026-08-24-improved-iteration-1",
+    "date": "2026-08-24",
+    "commit": "de5f9afa649ec3da1e144652a7e9958a0c55b10d+worktree",
+    "state": "iteration",
+    "basis": "修正後のfresh Local、current-run Browser、25 Playwright、Local AI各3回、Cloud dry-run。Cloud liveは未実査。",
+    "consecutive_passes": 1,
+    "ai_repeat_consistent": false,
+    "cloud_live_verified": false,
+    "voiceover_manually_verified": false
+  },
+  "evidence": [
+    {
+      "id": "E-STATIC",
+      "mode": "static",
+      "description": "現行ソース、fixture、設定、差分の確認",
+      "source": "repository at de5f9afa plus current worktree diff"
+    },
+    {
+      "id": "E-PLAYWRIGHT",
+      "mode": "automated",
+      "description": "Decision Console v2 の主要導線、keyboard、responsive、fallback の25件",
+      "source": "apps/console/e2e/decision-console-v2.spec.ts"
+    },
+    {
+      "id": "E-AI-LOCAL",
+      "mode": "automated",
+      "description": "AI提案12シナリオを各3回実行したLocal検証",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/baseline/ai-local.json"
+    },
+    {
+      "id": "E-CLOUD-LOCAL",
+      "mode": "interactive-local",
+      "description": "cf:doctor と cf:provision dry-run。Cloudflare資源は変更していない",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/improved/test-results.md"
+    },
+    {
+      "id": "E-BROWSER",
+      "mode": "interactive-local",
+      "description": "in-app Browserで当日操作し、各ステップ直後に取得した画面証拠",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/improved/screenshots/"
+    },
+    {
+      "id": "E-LOCAL",
+      "mode": "interactive-local",
+      "description": "fresh SQLiteでdoctor、start、capture、search、connector dry-runを実行",
+      "source": "artifacts/product-ux-evaluation/2026-08-24/improved/test-results.md"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "clarity.purpose",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "clarity.current_state",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "clarity.terms",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-I01",
+          "severity": "low",
+          "summary": "日本語画面に英語プロダクト用語が一部残る",
+          "acceptance": "用語規約を決め、初出の補助表記をja全画面へ適用する",
+          "affected_axes": [
+            "clarity",
+            "consistency"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "clarity.outcome",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.initial_choices",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.information_density",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.progressive_disclosure",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "simplicity.visual_hierarchy",
+      "raw_score": 97,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.action_count",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.affordance",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.keyboard",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "operability.scroll_distance",
+      "raw_score": 97,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.completion",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.transitions",
+      "raw_score": 99,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.time_backtrack",
+      "raw_score": 97,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "goal_reachability.context_continuity",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.navigation",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.search",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.primary_cta",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "discoverability.persona_entry",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.loading_empty",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.error_truthfulness",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.direct_action",
+      "raw_score": 94,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "recovery.feedback",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.decision_chain",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.provenance",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.access_scope",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "trust.destructive_boundary",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.patterns",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.terminology",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.japanese",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "consistency.multilingual",
+      "raw_score": 94,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.semantics",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.focus_keyboard",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.target_contrast",
+      "raw_score": 94,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "accessibility.reflow_motion",
+      "raw_score": 96,
+      "evidence": [
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.prerequisites",
+      "raw_score": 96,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.doctor_start",
+      "raw_score": 98,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.capture_search",
+      "raw_score": 98,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "local_setup.connector_recovery",
+      "raw_score": 92,
+      "evidence": [
+        "E-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-I02",
+          "severity": "low",
+          "summary": "既存Remote MCPを保護するためconnector --executeは実行していない",
+          "acceptance": "隔離したCODEX_HOMEまたは利用者承認後に登録・readbackする",
+          "affected_axes": [
+            "local_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "cloudflare_setup.permissions",
+      "raw_score": 80,
+      "evidence": [
+        "E-CLOUD-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "cloudflare_setup.doctor_plan",
+      "raw_score": 96,
+      "evidence": [
+        "E-CLOUD-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "cloudflare_setup.oauth_hook",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [
+        {
+          "id": "F-I03",
+          "severity": "medium",
+          "summary": "OAuthとcloud hookは変更承認前で未実査",
+          "acceptance": "承認パケット確定後にsynthetic tenantで実査する",
+          "affected_axes": [
+            "cloudflare_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "必須のlive実査前。N/Aへ再配分せず0点扱い。"
+    },
+    {
+      "id": "cloudflare_setup.parity_recovery",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [
+        {
+          "id": "F-I04",
+          "severity": "medium",
+          "summary": "Cloud否定系、rollback、Local parityが未実査",
+          "acceptance": "同一artifactを投入し2回連続で否定系とrollbackを確認する",
+          "affected_axes": [
+            "cloudflare_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "必須のlive実査前。N/Aへ再配分せず0点扱い。"
+    },
+    {
+      "id": "ai_safety.relevance",
+      "raw_score": 98,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "ai_safety.conciseness",
+      "raw_score": 96,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "ai_safety.evidence_abstention",
+      "raw_score": 98,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "ai_safety.consistency_parity",
+      "raw_score": 52,
+      "evidence": [
+        "E-AI-LOCAL",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-I05",
+          "severity": "medium",
+          "summary": "Localは各3回一致したがCloud parityは未検証",
+          "acceptance": "Cloud承認後に同一scenarioを各3回比較する",
+          "affected_axes": [
+            "ai_safety",
+            "cloudflare_setup"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.nav_reduction",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.next_action",
+      "raw_score": 98,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.scope",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "personal_fit.maintenance",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.onboarding_roles",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.sharing_scope",
+      "raw_score": 96,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.handoff_audit",
+      "raw_score": 84,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-I06",
+          "severity": "medium",
+          "summary": "別ユーザーへのhandoffと監査readbackはfixture止まり",
+          "acceptance": "synthetic tenantでowner/admin/memberを分離して実査する",
+          "affected_axes": [
+            "team_fit",
+            "trust"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    },
+    {
+      "id": "team_fit.revoke_recovery",
+      "raw_score": 78,
+      "evidence": [
+        "E-BROWSER",
+        "E-PLAYWRIGHT",
+        "E-STATIC"
+      ],
+      "findings": [
+        {
+          "id": "F-I07",
+          "severity": "medium",
+          "summary": "招待取消、期限切れ、権限拒否の永続化実査がない",
+          "acceptance": "Cloud承認後に作成と削除資源を記録して実査する",
+          "affected_axes": [
+            "team_fit",
+            "recovery"
+          ]
+        }
+      ],
+      "metrics": {},
+      "notes": "当日証拠に基づく固定rubric採点。"
+    }
+  ]
+}

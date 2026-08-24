@@ -59,6 +59,9 @@ test("connector plans use one local stdio MemoryStore server across supported ag
   const codex = connectorPlan("codex");
   assert.deepEqual(codex.args, ["mcp", "add", "orgbrain", "--", "orgbrain", "mcp"]);
 
+  const checkoutCodex = connectorPlan("codex", { command: process.execPath, commandArgs: ["/checkout/local-memory.mjs"] });
+  assert.deepEqual(checkoutCodex.args, ["mcp", "add", "orgbrain", "--", process.execPath, "/checkout/local-memory.mjs", "mcp"]);
+
   const claude = connectorPlan("claude", { scope: "project" });
   assert.deepEqual(claude.args, [
     "mcp",
@@ -276,6 +279,41 @@ test("connector setup is non-mutating unless execute is explicit", async () => {
   assert.equal(result.ok, true);
   assert.equal(result.dry_run, true);
   assert.equal(result.plan.transport, "stdio");
+});
+
+test("connector execute honors the selected checkout CLI without changing real client settings", async () => {
+  const calls = [];
+  const result = await runConnectorCommand("setup", ["codex"], {
+    flags: new Set(["--execute"]),
+    get: (name, fallback) => name === "--cli-path" ? "packages/orgbrain-cli/src/local-memory.mjs" : fallback
+  }, {
+    runCommand: async (executable, args) => calls.push({ executable, args })
+  });
+
+  assert.equal(result.installed, true);
+  assert.deepEqual(calls, [{
+    executable: "codex",
+    args: [
+      "mcp", "add", "orgbrain", "--", process.execPath,
+      path.resolve("packages/orgbrain-cli/src/local-memory.mjs"), "mcp"
+    ]
+  }]);
+  assert.deepEqual(result.verify, ["codex", "mcp", "get", "orgbrain", "--json"]);
+});
+
+test("connector setup rejects an unreadable checkout CLI before invoking the client", async () => {
+  const calls = [];
+  const missing = path.resolve("does-not-exist-orgbrain-cli.mjs");
+  await assert.rejects(
+    runConnectorCommand("setup", ["codex"], {
+      flags: new Set(["--execute"]),
+      get: (name, fallback) => name === "--cli-path" ? missing : fallback
+    }, {
+      runCommand: async (executable, args) => calls.push({ executable, args })
+    }),
+    /--cli-path is not a readable file/u
+  );
+  assert.deepEqual(calls, []);
 });
 
 test("hook-writing execute is blocked when the user has not approved it", async () => {

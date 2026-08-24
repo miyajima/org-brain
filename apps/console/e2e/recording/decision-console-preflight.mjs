@@ -39,13 +39,13 @@ const scoped = (pathname) => {
 };
 
 const routes = [
-  { slug: "home", path: "/", heading: "Decision Briefing" },
+  { slug: "home", path: "/", heading: "決定一覧" },
   { slug: "decision", path: "/decisions/decision-console-e2e", heading: "Keep decision context visible" },
-  { slug: "map", path: "/map?decision_id=decision-console-e2e", heading: "Decision Trace Map" },
+  { slug: "map", path: "/map?decision_id=decision-console-e2e", heading: "決定の道筋マップ" },
   { slug: "all-map", path: "/memories/constellation", heading: "3Dメモリマップ" },
-  { slug: "skills", path: "/skills?decision_id=decision-console-e2e&source_version_hash=e2e-source-hash", heading: "Skills" },
-  { slug: "agents", path: "/agents?agent_id=agent-e2e", heading: "Agents" },
-  { slug: "reviews", path: "/reviews", heading: "Reviews" }
+  { slug: "skills", path: "/skills?decision_id=decision-console-e2e&source_hash=e2e-source-h", heading: "スキル" },
+  { slug: "agents", path: "/agents?agent_id=agent-e2e", heading: "エージェント" },
+  { slug: "reviews", path: "/reviews", heading: "要確認の決定" }
 ];
 
 const routeSummary = [];
@@ -73,9 +73,9 @@ try {
 
   const selectorChecks = {
     decisionCards: await page.locator(".decision-trace-rail [data-trace-node]").count(),
-    skillAction: await page.getByRole("link", { name: "この知識をSkill化" }).count(),
-    mapAction: await page.getByRole("link", { name: /Map/ }).count(),
-    previewButtons: await page.locator("[data-preview-target]").count()
+    skillAction: await page.getByRole("link", { name: "この知識からスキルを作成" }).count(),
+    mapAction: await page.getByRole("link", { name: "決定の道筋マップを開く" }).count(),
+    previewButtons: await page.locator("[data-trace-node]").count()
   };
 
   await fs.writeFile(

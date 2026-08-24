@@ -1,0 +1,28 @@
+{
+  "audit_id": "orgbrain-product-ux-2026-08-24-baseline",
+  "commit": "de5f9afa649ec3da1e144652a7e9958a0c55b10d",
+  "ui_flows": {
+    "home_to_decision": { "completed": true, "transitions": 1, "actions": 1, "duration_ms": 235, "backtracks": 0 },
+    "decision_to_reason": { "completed": true, "transitions": 0, "actions": 1, "duration_ms": 280, "backtracks": 0 },
+    "decision_to_evidence": { "completed": true, "transitions": 0, "actions": 1, "duration_ms": 289, "backtracks": 0 },
+    "decision_to_artifact": { "completed": true, "transitions": 0, "actions": 1, "duration_ms": 284, "backtracks": 0 },
+    "map_render": { "completed": false, "actions": 1, "observed_after_ms": 3000, "aria_busy": false, "visible_status": "決定の道筋を描画中…" },
+    "skill_private_draft": { "completed": true, "actions": 1, "duration_ms": 303, "result_focused": false, "next_action_explicit": false },
+    "agent_loadout_preview": { "completed": true, "actions": 1, "duration_ms": 306, "backtracks": 0 },
+    "team_invite_fixture": { "completed": true, "actions": 2, "duration_ms": 234, "confirmation_shown": true }
+  },
+  "responsive": {
+    "390x844": { "horizontal_overflow": false, "page_scroll_height": 1220, "primary_card_cta_bottom_px": 852.3 },
+    "320x844": { "horizontal_overflow": false },
+    "390x844_forced_colors": { "forced_colors": true, "reduced_motion": true, "horizontal_overflow": false }
+  },
+  "local_fresh": {
+    "doctor_before_prepare": { "completed": false, "applied_migrations": 0, "expected_migrations": 40 },
+    "prepare": { "completed": true, "output_lines": 3544, "duration_ms": 12000 },
+    "start": { "completed": false, "retries": 1, "reason": "preflight rejected unapplied migrations before prepare" },
+    "capture": { "completed": true, "invalid_work_type_silently_dropped": true },
+    "search": { "completed": true, "result_count": 1 },
+    "connector": { "completed": false, "dry_run": true, "cli_path_honored": false }
+  },
+  "required_live": { "cloudflare_oauth_hook": false, "cross_user_share_revoke": false, "cloud_ai_parity": false, "manual_screen_reader": false }
+}

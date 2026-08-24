@@ -91,14 +91,21 @@ async function checks() {
 }
 
 async function prepare() {
+  const startedAt = Date.now();
   await mkdir(stateDir, { recursive: true, mode: 0o700 });
   await chmod(stateDir, 0o700);
+  const migrationFiles = await readdir(path.join(root, "migrations"));
   await run(wrangler, [
     "d1", "migrations", "apply", "open-brain", "--local",
     "--persist-to", stateDir,
     "--config", config
-  ]);
-  return { ok: true, state_dir: stateDir };
+  ], { capture: true });
+  return {
+    ok: true,
+    state_dir: stateDir,
+    migrations: migrationFiles.filter((name) => /^\d{4}_.+\.sql$/u.test(name)).length,
+    duration_ms: Date.now() - startedAt
+  };
 }
 
 async function waitFor(url, init = {}, timeoutMs = 30_000) {
@@ -119,9 +126,12 @@ async function waitFor(url, init = {}, timeoutMs = 30_000) {
 
 async function start() {
   const preflight = await checks();
-  const errors = preflight.filter((item) => !item.ok && item.severity !== "warning");
+  const errors = preflight.filter((item) => !item.ok && item.severity !== "warning" && item.id !== "migration-state");
   if (errors.length) throw new Error(`local preflight failed: ${errors.map((item) => `${item.id}=${item.value}`).join(", ")}`);
-  await prepare();
+  const prepared = await prepare();
+  const postflight = await checks();
+  const postflightErrors = postflight.filter((item) => !item.ok && item.severity !== "warning");
+  if (postflightErrors.length) throw new Error(`local prepare failed: ${postflightErrors.map((item) => `${item.id}=${item.value}`).join(", ")}`);
   const children = [
     spawn("pnpm", ["run", "local:api"], { cwd: root, env: process.env, stdio: "inherit", shell: false }),
     spawn("pnpm", ["run", "local:console"], { cwd: root, env: process.env, stdio: "inherit", shell: false })
@@ -141,6 +151,7 @@ async function start() {
       api_url: "http://127.0.0.1:8787",
       console_url: "http://127.0.0.1:4321",
       state_dir: stateDir,
+      migrations: prepared.migrations,
       next_steps: [
         "Open http://127.0.0.1:4321/?tenant_id=default&lang=ja",
         "Capture through POST /v1/memories/capture with x-api-key: dev-org-brain-api-key",

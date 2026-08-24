@@ -39,11 +39,17 @@ const copy = {
     noItems: "No decisions need attention in this scope.",
     noMatch: "No decisions match this filter.",
     errorTitle: "The briefing could not be refreshed",
-    truncated: "Showing the highest-priority decisions. Narrow the project scope to see more."
+    truncated: "Showing the highest-priority decisions. Narrow the project scope to see more.",
+    overlap: "A decision can match more than one condition, so these counts may overlap.",
+    sort: "Sort",
+    sortPriority: "Needs attention",
+    sortUpdated: "Recently updated",
+    sortProject: "Project",
+    result: "{visible} shown · {total} loaded"
   },
   ja: {
-    eyebrow: "Decision intelligence",
-    title: "Decision Briefing",
+    eyebrow: "決定と次の行動",
+    title: "決定一覧",
     lead: "何が変わり、なぜ重要で、次に何をすべきかを、決定の流れから離れずに確認できます。",
     beta: "ステージングプレビュー",
     search: "決定と理由を検索",
@@ -62,8 +68,14 @@ const copy = {
     retry: "再試行",
     noItems: "この範囲で対応が必要な決定はありません。",
     noMatch: "条件に一致する決定はありません。",
-    errorTitle: "Briefingを更新できませんでした",
-    truncated: "優先度の高い決定を表示しています。プロジェクト範囲を絞ると続きを確認できます。"
+    errorTitle: "決定一覧を更新できませんでした",
+    truncated: "優先度の高い決定を表示しています。プロジェクト範囲を絞ると続きを確認できます。",
+    overlap: "1つの決定に複数の条件が付くため、各件数の合計は総数と一致しない場合があります。",
+    sort: "並び順",
+    sortPriority: "要対応度が高い順",
+    sortUpdated: "更新が新しい順",
+    sortProject: "プロジェクト順",
+    result: "{visible}件を表示・{total}件を取得"
   },
   zh: {
     eyebrow: "Decision intelligence",
@@ -87,7 +99,13 @@ const copy = {
     noItems: "此范围内没有需要处理的决策。",
     noMatch: "没有符合筛选条件的决策。",
     errorTitle: "无法刷新简报",
-    truncated: "正在显示优先级最高的决策。缩小项目范围可查看更多。"
+    truncated: "正在显示优先级最高的决策。缩小项目范围可查看更多。",
+    overlap: "一个决策可以符合多个条件，因此各项数量可能重叠。",
+    sort: "排序",
+    sortPriority: "优先处理",
+    sortUpdated: "最近更新",
+    sortProject: "项目",
+    result: "显示 {visible} 项 · 已加载 {total} 项"
   }
 }[locale];
 
@@ -97,7 +115,17 @@ const initialFilter = filters.includes(requestedFilter as (typeof filters)[numbe
   ? requestedFilter
   : "all";
 const initialQuery = params.get("briefing_q")?.trim().slice(0, 120) ?? "";
+const sorts = ["priority", "updated", "project"] as const;
+const requestedSort = params.get("briefing_sort")?.trim() ?? "";
+const initialSort = sorts.includes(requestedSort as (typeof sorts)[number]) ? requestedSort : "priority";
 const flagLabels = Object.fromEntries(filters.map((key) => [key, copy[key]]));
+const priorityFor = (flags: string[]) => {
+  const order = ["expired", "unconfirmed", "artifact_missing", "share_pending", "changed", "new"];
+  const rank = order.findIndex((flag) => flags.includes(flag));
+  return rank === -1 ? order.length : rank;
+};
+const loadedTotal = data.truncated ? `${data.items.length}+` : String(data.items.length);
+const initialResult = copy.result.replace("{visible}", String(data.items.length)).replace("{total}", loadedTotal);
 const dateLocale = locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
 const formatDate = (value: number) => value
   ? new Intl.DateTimeFormat(dateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value))
@@ -110,7 +138,15 @@ const actionLabel = (action: string, fallback: string) => ({
   share: locale === "ja" ? "共有範囲を確認" : locale === "zh" ? "检查共享范围" : "Review access"
 }[action] ?? fallback);
 ---
-<section class="decision-briefing" data-decision-briefing data-briefing-filter={initialFilter} data-briefing-query={initialQuery}>
+<section
+  class="decision-briefing"
+  data-decision-briefing
+  data-briefing-filter={initialFilter}
+  data-briefing-query={initialQuery}
+  data-briefing-sort={initialSort}
+  data-briefing-truncated={String(data.truncated)}
+  data-briefing-result-template={copy.result}
+>
   <header class="decision-page-header">
     <div>
       <p class="decision-eyebrow">{copy.eyebrow}</p>
@@ -134,25 +170,33 @@ const actionLabel = (action: string, fallback: string) => ({
     </div>
   )}
 
-  <div class="decision-stat-grid" aria-label={copy.title}>
-    {filters.slice(1).map((filter) => (
-      <button class="decision-stat" type="button" data-briefing-filter={filter} aria-pressed={initialFilter === filter}>
-        <span>{copy[filter]}</span>
-        <strong>{data.counts[filter] ?? 0}</strong>
-      </button>
-    ))}
-  </div>
-
   <div class="decision-briefing-toolbar">
-    <div class="decision-filter-tabs" role="group" aria-label={copy.title}>
-      {filters.map((filter) => (
-        <button type="button" data-briefing-filter={filter} aria-pressed={initialFilter === filter}>{copy[filter]}</button>
-      ))}
+    <div class="decision-briefing-query-row">
+      <label class="decision-search-field">
+        <span>{copy.search}</span>
+        <input type="search" name="briefing_q" value={initialQuery} placeholder={copy.search} data-briefing-search />
+      </label>
+      <label class="decision-sort-field">
+        <span>{copy.sort}</span>
+        <select name="briefing_sort" data-briefing-sort>
+          <option value="priority" selected={initialSort === "priority"}>{copy.sortPriority}</option>
+          <option value="updated" selected={initialSort === "updated"}>{copy.sortUpdated}</option>
+          <option value="project" selected={initialSort === "project"}>{copy.sortProject}</option>
+        </select>
+      </label>
     </div>
-    <label class="decision-search-field">
-      <span>{copy.search}</span>
-      <input type="search" name="briefing_q" value={initialQuery} placeholder={copy.search} data-briefing-search />
-    </label>
+    <div class="decision-filter-tabs" role="group" aria-label={copy.title}>
+      {filters.map((filter) => {
+        const count = filter === "all" ? loadedTotal : String(data.counts[filter] ?? 0);
+        return <button type="button" data-briefing-filter={filter} aria-pressed={initialFilter === filter} aria-label={`${copy[filter]} ${count}`}>
+          <span>{copy[filter]}</span><strong>{count}</strong>
+        </button>;
+      })}
+    </div>
+    <div class="decision-briefing-summary">
+      <p data-briefing-result-count role="status" aria-live="polite" aria-atomic="true">{initialResult}</p>
+      <p>{copy.overlap}</p>
+    </div>
   </div>
 
   <div class="decision-card-list" data-briefing-list>
@@ -162,22 +206,26 @@ const actionLabel = (action: string, fallback: string) => ({
         data-briefing-card
         data-flags={item.flags.join(" ")}
         data-search={`${item.title} ${item.decision} ${item.reason_summary}`.toLocaleLowerCase(locale)}
-        style={`--decision-index:${index}`}
+        data-priority={String(priorityFor(item.flags))}
+        data-updated={String(item.updated_at)}
+        data-project={item.project_id ?? ""}
+        data-original-order={String(index)}
+        style={`--decision-index:${Math.min(index, 6)}`}
       >
         <div class="decision-brief-main">
           <div class="decision-card-meta">
-            <span class:list={["decision-status-dot", `is-${item.status}`]}></span>
+            <span class:list={["decision-status-dot", `is-${item.status}`]} aria-hidden="true"></span>
             <span>{item.status}</span>
             {item.project_id && <span>{item.project_id}</span>}
+            <span class="decision-flag-row">
+              {item.flags.map((flag) => <span>{flagLabels[flag] ?? flag}</span>)}
+            </span>
           </div>
           <h2><a href={scopedHref(`/decisions/${encodeURIComponent(item.id)}`, params)}>{item.title}</a></h2>
           <p class="decision-statement">{item.decision}</p>
           <div class="decision-reason-row">
             <span>{copy.reason}</span>
             <p>{item.reason_summary || "—"}</p>
-          </div>
-          <div class="decision-flag-row">
-            {item.flags.map((flag) => <span>{flagLabels[flag] ?? flag}</span>)}
           </div>
         </div>
         <aside class="decision-brief-aside">
@@ -202,9 +250,29 @@ const actionLabel = (action: string, fallback: string) => ({
     const cards = [...root.querySelectorAll<HTMLElement>("[data-briefing-card]")];
     const controls = [...root.querySelectorAll<HTMLButtonElement>("[data-briefing-filter]")];
     const search = root.querySelector<HTMLInputElement>("[data-briefing-search]");
+    const sortControl = root.querySelector("[data-briefing-sort]");
+    const list = root.querySelector<HTMLElement>("[data-briefing-list]");
     const empty = root.querySelector<HTMLElement>("[data-briefing-empty]");
+    const resultCount = root.querySelector<HTMLElement>("[data-briefing-result-count]");
     const allowedFilters = new Set(controls.map((control) => control.dataset.briefingFilter || "all"));
     let active = allowedFilters.has(root.dataset.briefingFilter || "") ? root.dataset.briefingFilter || "all" : "all";
+    let activeSort = ["priority", "updated", "project"].includes(root.dataset.briefingSort || "") ? root.dataset.briefingSort || "priority" : "priority";
+    const sortCards = () => {
+      if (!list) return;
+      const sorted = [...cards].sort((left, right) => {
+        if (activeSort === "updated") return Number(right.dataset.updated || 0) - Number(left.dataset.updated || 0);
+        if (activeSort === "project") {
+          const projectOrder = (left.dataset.project || "").localeCompare(right.dataset.project || "");
+          if (projectOrder !== 0) return projectOrder;
+        }
+        if (activeSort === "priority") {
+          const priorityOrder = Number(left.dataset.priority || 99) - Number(right.dataset.priority || 99);
+          if (priorityOrder !== 0) return priorityOrder;
+        }
+        return Number(left.dataset.originalOrder || 0) - Number(right.dataset.originalOrder || 0);
+      });
+      for (const card of sorted) list.appendChild(card);
+    };
     const syncUrl = () => {
       const url = new URL(window.location.href);
       const query = search?.value.trim() ?? "";
@@ -212,11 +280,14 @@ const actionLabel = (action: string, fallback: string) => ({
       else url.searchParams.set("briefing_filter", active);
       if (query) url.searchParams.set("briefing_q", query);
       else url.searchParams.delete("briefing_q");
+      if (activeSort === "priority") url.searchParams.delete("briefing_sort");
+      else url.searchParams.set("briefing_sort", activeSort);
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     };
     const refresh = (updateUrl = true) => {
       const query = search?.value.trim().toLocaleLowerCase() ?? "";
       let visible = 0;
+      sortCards();
       for (const card of cards) {
         const matchesFilter = active === "all" || (card.dataset.flags ?? "").split(" ").includes(active);
         const matchesQuery = !query || (card.dataset.search ?? "").includes(query);
@@ -224,6 +295,12 @@ const actionLabel = (action: string, fallback: string) => ({
         if (!card.hidden) visible += 1;
       }
       if (empty) empty.hidden = visible > 0;
+      if (resultCount) {
+        const total = root.dataset.briefingTruncated === "true" ? `${cards.length}+` : String(cards.length);
+        resultCount.textContent = (root.dataset.briefingResultTemplate || "{visible} / {total}")
+          .replace("{visible}", String(visible))
+          .replace("{total}", total);
+      }
       for (const control of controls) control.setAttribute("aria-pressed", String(control.dataset.briefingFilter === active));
       if (updateUrl) syncUrl();
     };
@@ -232,11 +309,19 @@ const actionLabel = (action: string, fallback: string) => ({
       refresh();
     });
     search?.addEventListener("input", () => refresh());
+    sortControl?.addEventListener("change", () => {
+      if (!(sortControl instanceof HTMLSelectElement)) return;
+      activeSort = sortControl.value;
+      refresh();
+    });
     const syncFromUrl = () => {
       const url = new URL(window.location.href);
       const requested = url.searchParams.get("briefing_filter") || "all";
       active = allowedFilters.has(requested) ? requested : "all";
       if (search) search.value = url.searchParams.get("briefing_q")?.trim().slice(0, 120) || "";
+      const requestedSort = url.searchParams.get("briefing_sort") || "priority";
+      activeSort = ["priority", "updated", "project"].includes(requestedSort) ? requestedSort : "priority";
+      if (sortControl instanceof HTMLSelectElement) sortControl.value = activeSort;
       refresh(false);
     };
     window.addEventListener("popstate", syncFromUrl);

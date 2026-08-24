@@ -4924,6 +4924,9 @@ export class LocalMemoryStore {
     const tenantId = nullableString(input.tenant_id, 128) || "default";
     const projectId = nullableString(input.project_id, 128);
     const businessCategoryId = nullableString(input.business_category_id, 128) ?? fallback?.business_category_id ?? null;
+    if (input.work_type !== undefined && input.work_type !== null && !WORK_TYPES.has(input.work_type)) {
+      throw new Error("invalid_work_type");
+    }
     const workType = WORK_TYPES.has(input.work_type)
       ? input.work_type
       : fallback?.work_type ?? null;
@@ -5976,15 +5979,29 @@ export class LocalMemoryStore {
     const directoryMode = await readMode(dirname(this.dbPath));
     const dbMode = await readMode(this.dbPath);
     const errors = [...verification.errors];
-    if (directoryMode !== 0o700) errors.push(`directory mode is ${directoryMode.toString(8)}, expected 700`);
-    if (dbMode !== 0o600) errors.push(`database mode is ${dbMode.toString(8)}, expected 600`);
+    const recoveries = [];
+    if (directoryMode !== 0o700) {
+      errors.push(`directory mode is ${directoryMode.toString(8)}, expected 700`);
+      recoveries.push({
+        id: "directory-permissions",
+        command: `chmod 700 ${JSON.stringify(dirname(this.dbPath))}`
+      });
+    }
+    if (dbMode !== 0o600) {
+      errors.push(`database mode is ${dbMode.toString(8)}, expected 600`);
+      recoveries.push({
+        id: "database-permissions",
+        command: `chmod 600 ${JSON.stringify(this.dbPath)}`
+      });
+    }
     return {
       ...verification,
       ok: errors.length === 0,
       db_path: this.dbPath,
       directory_mode: directoryMode.toString(8).padStart(3, "0"),
       database_mode: dbMode.toString(8).padStart(3, "0"),
-      errors
+      errors,
+      recoveries
     };
   }
 

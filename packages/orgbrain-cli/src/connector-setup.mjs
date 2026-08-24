@@ -2,8 +2,8 @@
 
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
-import { chmod, copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { constants as fsConstants, createReadStream, createWriteStream } from "node:fs";
+import { access, chmod, copyFile, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -47,6 +47,18 @@ function expandHome(value, home) {
   if (value === "~") return home;
   if (value.startsWith("~/")) return path.join(home, value.slice(2));
   return path.resolve(value);
+}
+
+async function requireReadableCliPath(value) {
+  const cliPath = path.resolve(value);
+  try {
+    await access(cliPath, fsConstants.R_OK);
+    const details = await stat(cliPath);
+    if (!details.isFile()) throw new Error("not a file");
+  } catch {
+    throw new Error(`--cli-path is not a readable file: ${cliPath}`);
+  }
+  return cliPath;
 }
 
 function parseEnv(raw) {
@@ -655,18 +667,20 @@ export async function installCloudHooks(plan, credentials) {
 export function connectorPlan(agent, options = {}) {
   if (!SUPPORTED.has(agent)) throw new Error(`connector must be one of ${[...SUPPORTED].join(", ")}`);
   const serverCommand = options.command?.trim() || "orgbrain";
+  const serverArgs = Array.isArray(options.commandArgs) ? options.commandArgs : [];
+  const stdioArgs = [...serverArgs, "mcp"];
   const scope = options.scope === "project" ? "project" : "user";
   if (agent === "codex") {
-    return { agent, transport: "stdio", executable: "codex", args: ["mcp", "add", "orgbrain", "--", serverCommand, "mcp"], verify: ["codex", "mcp", "get", "orgbrain", "--json"], documentation: "https://developers.openai.com/codex/mcp/" };
+    return { agent, transport: "stdio", executable: "codex", args: ["mcp", "add", "orgbrain", "--", serverCommand, ...stdioArgs], verify: ["codex", "mcp", "get", "orgbrain", "--json"], documentation: "https://developers.openai.com/codex/mcp/" };
   }
   if (agent === "claude") {
-    return { agent, transport: "stdio", executable: "claude", args: ["mcp", "add", "orgbrain", "--scope", scope, "--", serverCommand, "mcp"], verify: ["claude", "mcp", "get", "orgbrain"], documentation: "https://docs.anthropic.com/en/docs/claude-code/mcp" };
+    return { agent, transport: "stdio", executable: "claude", args: ["mcp", "add", "orgbrain", "--scope", scope, "--", serverCommand, ...stdioArgs], verify: ["claude", "mcp", "get", "orgbrain"], documentation: "https://docs.anthropic.com/en/docs/claude-code/mcp" };
   }
   if (agent === "cursor") {
     const definition = JSON.stringify({
       name: "orgbrain",
       command: serverCommand,
-      args: ["mcp"]
+      args: stdioArgs
     });
     return {
       agent,
@@ -678,9 +692,9 @@ export function connectorPlan(agent, options = {}) {
     };
   }
   if (agent === "opencode") {
-    return { agent, transport: "stdio", executable: "opencode2", args: ["mcp", "add", "orgbrain", ...(scope === "user" ? ["--global"] : []), "--", serverCommand, "mcp"], verify: ["opencode2", "mcp", "list"], documentation: "https://opencode.ai/v2/docs/mcp-servers" };
+    return { agent, transport: "stdio", executable: "opencode2", args: ["mcp", "add", "orgbrain", ...(scope === "user" ? ["--global"] : []), "--", serverCommand, ...stdioArgs], verify: ["opencode2", "mcp", "list"], documentation: "https://opencode.ai/v2/docs/mcp-servers" };
   }
-  return { agent, transport: "stdio", executable: null, args: null, verify: ["openclaw", "config", "validate"], config_merge: { mcp: { servers: { orgbrain: { transport: "stdio", command: serverCommand, args: ["mcp"] } } } }, documentation: "https://docs.openclaw.ai/cli/mcp" };
+  return { agent, transport: "stdio", executable: null, args: null, verify: ["openclaw", "config", "validate"], config_merge: { mcp: { servers: { orgbrain: { transport: "stdio", command: serverCommand, args: stdioArgs } } } }, documentation: "https://docs.openclaw.ai/cli/mcp" };
 }
 
 function run(executable, args) {
@@ -723,6 +737,11 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
   if (action !== "setup") throw new Error(`unknown connector command: ${action || "(missing)"}`);
   const agent = rest[0]?.toLowerCase();
   const mode = args.get("--mode", "mcp");
+  const requestedCliPath = args.get("--cli-path", null);
+  const validatedCliPath = requestedCliPath && ["mcp", "cloud-hooks", "minimal-hooks"].includes(mode)
+    ? await requireReadableCliPath(requestedCliPath)
+    : requestedCliPath;
+  const runCommand = runtime.runCommand ?? run;
   if (mode === "remote-mcp") {
     const plan = remoteMcpPlan(agent, {
       url: args.get("--url", null),
@@ -730,8 +749,8 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
       scope: args.get("--scope", "user")
     });
     if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
-    await run(plan.executable, plan.args);
-    if (plan.post_install) await run(plan.post_install.executable, plan.post_install.args);
+    await runCommand(plan.executable, plan.args);
+    if (plan.post_install) await runCommand(plan.post_install.executable, plan.post_install.args);
     return { ok: true, installed: true, agent, mode, verify: plan.verify };
   }
   if (mode === "cloud-hooks") {
@@ -748,7 +767,7 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
         projectId: args.get("--project-id", null),
         dbPath: args.get("--db", null),
         command: args.get("--command", null),
-        cliPath: args.get("--cli-path", null)
+        cliPath: validatedCliPath
       });
       return {
         ok: true,
@@ -786,7 +805,7 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
       projectId: args.get("--project-id", null),
       dbPath: args.get("--db", null),
       command: args.get("--command", null),
-      cliPath: args.get("--cli-path", null)
+      cliPath: validatedCliPath
     });
     await preflightCloudHooks(preflightPlan);
     const approval = await requireHookSetupApproval(preflightPlan, {
@@ -812,7 +831,7 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
       projectId: args.get("--project-id", null),
       dbPath: args.get("--db", null),
       command: args.get("--command", null),
-      cliPath: args.get("--cli-path", null)
+      cliPath: validatedCliPath
     });
     try {
       const installed = await installCloudHooks(plan, { url: mcpUrl, clientId, clientSecret });
@@ -831,7 +850,7 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     if (!["daily", "off"].includes(maintenance)) throw new Error("--maintenance must be daily or off");
     const plan = codexMinimalHooksPlan({
       command: args.get("--command", null),
-      cliPath: args.get("--cli-path", null),
+      cliPath: validatedCliPath,
       workspace: args.get("--workspace", process.cwd()),
       projectId: args.get("--project-id", null),
       tenantId: args.get("--tenant-id", null),
@@ -861,9 +880,14 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     return { ...installed, hook_approval: approval };
   }
   if (mode !== "mcp") throw new Error("--mode must be mcp, remote-mcp, cloud-hooks, or minimal-hooks");
-  const plan = connectorPlan(agent, { command: args.get("--command", "orgbrain"), scope: args.get("--scope", "user") });
+  const cliPath = validatedCliPath;
+  const plan = connectorPlan(agent, {
+    command: cliPath ? process.execPath : args.get("--command", "orgbrain"),
+    commandArgs: cliPath ? [path.resolve(cliPath)] : [],
+    scope: args.get("--scope", "user")
+  });
   if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
   if (!plan.executable) throw new Error("OpenClaw setup requires merging plan.config_merge into its config, then running the verify command");
-  await run(plan.executable, plan.args);
+  await runCommand(plan.executable, plan.args);
   return { ok: true, installed: true, agent, verify: plan.verify };
 }
