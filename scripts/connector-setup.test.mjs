@@ -58,6 +58,8 @@ test("activation binds the enrollment code to the selected client type", async (
 test("connector plans use one local stdio MemoryStore server across supported agents", () => {
   const codex = connectorPlan("codex");
   assert.deepEqual(codex.args, ["mcp", "add", "orgbrain", "--", "orgbrain", "mcp"]);
+  assert.equal(codex.protocol_version, "2026-07-28");
+  assert.deepEqual(codex.pre_install.args, ["features", "enable", "mcp_2026_07_28"]);
 
   const checkoutCodex = connectorPlan("codex", { command: process.execPath, commandArgs: ["/checkout/local-memory.mjs"] });
   assert.deepEqual(checkoutCodex.args, ["mcp", "add", "orgbrain", "--", process.execPath, "/checkout/local-memory.mjs", "mcp"]);
@@ -84,6 +86,17 @@ test("connector plans use one local stdio MemoryStore server across supported ag
     command: "/opt/orgbrain",
     args: ["mcp"]
   });
+
+  const legacy = connectorPlan("cursor", { mcpProtocol: "legacy", now: 0 });
+  const legacyDefinition = JSON.parse(legacy.args[1]);
+  assert.deepEqual(legacyDefinition.args, [
+    "mcp", "--compat", "2025-11-25", "--legacy-until", "1970-04-01T00:00:00.000Z"
+  ]);
+  assert.equal(legacy.compatibility.protocol_version, "2025-11-25");
+  assert.throws(
+    () => connectorPlan("cursor", { mcpProtocol: "legacy", now: 0, legacyUntil: "1970-05-01T00:00:00.000Z" }),
+    /cannot exceed 90 days/u
+  );
 });
 
 test("remote MCP plans use OAuth-capable client-native HTTP registration", () => {
@@ -105,6 +118,10 @@ test("remote MCP plans use OAuth-capable client-native HTTP registration", () =>
   const cursor = remoteMcpPlan("cursor", { url: "https://mcp.example.test/mcp" });
   assert.equal(cursor.executable, "cursor");
   assert.match(cursor.args[1], /"url":"https:\/\/mcp\.example\.test\/mcp\?tenant_id=default"/u);
+  assert.throws(
+    () => remoteMcpPlan("cursor", { url: "https://mcp.example.test/mcp", mcpProtocol: "legacy" }),
+    /legacy compatibility is local-only/u
+  );
 });
 
 test("cloud hook dry-run never reads or displays setup secrets", async () => {
@@ -291,13 +308,16 @@ test("connector execute honors the selected checkout CLI without changing real c
   });
 
   assert.equal(result.installed, true);
-  assert.deepEqual(calls, [{
-    executable: "codex",
-    args: [
-      "mcp", "add", "orgbrain", "--", process.execPath,
-      path.resolve("packages/orgbrain-cli/src/local-memory.mjs"), "mcp"
-    ]
-  }]);
+  assert.deepEqual(calls, [
+    { executable: "codex", args: ["features", "enable", "mcp_2026_07_28"] },
+    {
+      executable: "codex",
+      args: [
+        "mcp", "add", "orgbrain", "--", process.execPath,
+        path.resolve("packages/orgbrain-cli/src/local-memory.mjs"), "mcp"
+      ]
+    }
+  ]);
   assert.deepEqual(result.verify, ["codex", "mcp", "get", "orgbrain", "--json"]);
 });
 

@@ -53,6 +53,139 @@ function captureInput(overrides = {}) {
   };
 }
 
+async function callLocalMcpTool(store, name, input) {
+  const response = await handleLocalMcpRequest(store, {
+    method: "tools/call",
+    params: { name, arguments: input }
+  });
+  const payload = JSON.parse(response.content[0].text);
+  if (response.isError) throw new Error(payload.error);
+  return payload;
+}
+
+test("local MCP discovers confirmation tools and persists only after approval", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.init();
+    const discovery = await handleLocalMcpRequest(store, { method: "server/discover", params: {} });
+    assert.ok(discovery.supportedVersions.includes("2026-07-28"));
+
+    const catalog = await handleLocalMcpRequest(store, { method: "tools/list", params: {} });
+    assert.ok(catalog.tools.some((tool) => tool.name === "orgbrain_memories_propose"));
+    assert.ok(catalog.tools.some((tool) => tool.name === "orgbrain_memories_confirm"));
+
+    const proposal = await callLocalMcpTool(store, "orgbrain_memories_propose", {
+      tenant_id: "default",
+      source: "codex",
+      item: {
+        external_key: "operations:local-confirmation-test",
+        content: "結論: 操作時は対象を明示する。\n理由: 暗黙の既定値では誤った対象を選ぶため。",
+        summary: "操作時は対象を明示する",
+        tags: ["operations", "safety"],
+        project_id: "orgbrain",
+        work_type: "operations"
+      }
+    });
+    assert.match(proposal.confirmation_token, /^[0-9a-f-]{36}$/u);
+    assert.equal(proposal.proposed_rationale.conclusion, "操作時は対象を明示する");
+    assert.equal(proposal.proposed_rationale.reason_summary, "暗黙の既定値では誤った対象を選ぶため。");
+    assert.equal((await store.verify()).record_count, 0);
+
+    const confirmed = await callLocalMcpTool(store, "orgbrain_memories_confirm", {
+      tenant_id: "default",
+      confirmation_token: proposal.confirmation_token,
+      approved: true
+    });
+    assert.equal(confirmed.saved, true);
+    assert.equal(confirmed.confirmation_state, "user_confirmed");
+    assert.match(confirmed.rationale_id, /^[0-9a-f-]{36}$/u);
+    const memory = await store.get("default", confirmed.memory_id);
+    assert.equal(memory.summary, "操作時は対象を明示する");
+    assert.equal(memory.rationale, "暗黙の既定値では誤った対象を選ぶため。");
+    assert.ok(memory.evidence.some((entry) => entry.evidence_ref === `local-rationale:${confirmed.rationale_id}`));
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("local MCP rejects sensitive proposals and records explicit corrections", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const sensitive = await handleLocalMcpRequest(store, {
+      method: "tools/call",
+      params: {
+        name: "orgbrain_memories_propose",
+        arguments: { item: { content: "連絡先は user@example.com" } }
+      }
+    });
+    assert.equal(sensitive.isError, true);
+    assert.match(JSON.parse(sensitive.content[0].text).error, /sensitive_data/u);
+
+    const proposal = await callLocalMcpTool(store, "orgbrain_memories_propose", {
+      item: {
+        content: "結論: 旧手順を使う。\n理由: 過去に動作したため。",
+        summary: "旧手順を使う"
+      }
+    });
+    const confirmed = await callLocalMcpTool(store, "orgbrain_memories_confirm", {
+      confirmation_token: proposal.confirmation_token,
+      approved: true,
+      conclusion: "現行手順を使う",
+      reason_summary: "現在の構成で検証済みのため。"
+    });
+    assert.equal(confirmed.confirmation_state, "user_corrected");
+    const memory = await store.get("default", confirmed.memory_id);
+    assert.equal(memory.summary, "現行手順を使う");
+    assert.equal(memory.rationale, "現在の構成で検証済みのため。");
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("local MCP confirmation survives a store restart and never persists the raw token", async () => {
+  const ctx = await fixture();
+  try {
+    const firstStore = new LocalMemoryStore(ctx.dbPath);
+    const proposal = await callLocalMcpTool(firstStore, "orgbrain_memories_propose", {
+      tenant_id: "default",
+      item: {
+        external_key: "operations:restart-confirmation-test",
+        content: "結論: 保留提案を再起動後も確認できるようにする。\n理由: MCPプロセスの寿命と確認操作を分離するため。",
+        summary: "保留提案を再起動後も確認できるようにする"
+      }
+    });
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      const row = db.prepare("SELECT token_hash, payload_json FROM local_mcp_confirmations").get();
+      assert.match(row.token_hash, /^[a-f0-9]{64}$/u);
+      assert.doesNotMatch(row.token_hash, new RegExp(proposal.confirmation_token, "u"));
+      assert.doesNotMatch(row.payload_json, new RegExp(proposal.confirmation_token, "u"));
+    } finally {
+      db.close();
+    }
+
+    const restartedStore = new LocalMemoryStore(ctx.dbPath);
+    const confirmed = await callLocalMcpTool(restartedStore, "orgbrain_memories_confirm", {
+      tenant_id: "default",
+      confirmation_token: proposal.confirmation_token,
+      approved: true
+    });
+    assert.equal(confirmed.saved, true);
+    await assert.rejects(
+      callLocalMcpTool(restartedStore, "orgbrain_memories_confirm", {
+        tenant_id: "default",
+        confirmation_token: proposal.confirmation_token,
+        approved: true
+      }),
+      /confirmation_not_found/u
+    );
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("capture, revise, search, suppress, verify and delete share one record contract", async () => {
   const ctx = await fixture();
   try {

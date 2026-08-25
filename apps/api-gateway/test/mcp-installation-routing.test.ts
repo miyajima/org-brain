@@ -100,4 +100,22 @@ describe("MCP client installation routes", () => {
       }
     });
   });
+
+  it("validates hook-edge assertions against the separate hook audience", async () => {
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+    const response = await app.fetch(
+      new Request("https://example.test/mcp/client-installations/status", {
+        headers: { "x-orgbrain-hook-edge": "service-binding-v1" }
+      }),
+      { MCP_ACCESS_AUD: "interactive-aud", MCP_HOOK_ACCESS_AUD: "hook-aud" } as Env,
+      {} as ExecutionContext
+    );
+
+    expect(response.status).toBe(200);
+    expect(authorizeMcpRequestMock).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({ MCP_ACCESS_AUD: "hook-aud", MCP_HOOK_ACCESS_AUD: "hook-aud" })
+    );
+  });
 });

@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { loadEnvFallbacks, redactHookMemoryText, resolveMcpConfig } from "./hook-memory-bridge.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
+import { modernMcpHeaders, modernMcpRequest } from "./lib/mcp-modern-request.mjs";
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { hasTaskIdentity, TaskCommitmentStore, taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
 import { MEMORY_CONTRACT_V2_PROMPT } from "../../shared/src/memory-contract-v2-runtime.mjs";
@@ -123,43 +124,53 @@ function boundedContext(parts, limit = 7_168) {
   return selected.join("\n\n");
 }
 
-async function fetchRemoteTaskContext(env, scope, payload) {
+async function fetchRemoteTaskContext(env, scope, payload, fetchImpl = fetch) {
   const mcp = resolveMcpConfig(env);
-  if (!mcp.complete) return [];
+  if (!mcp.configured) return { commitments: [], warning: null };
+  if (!mcp.complete) {
+    return {
+      commitments: [],
+      warning: `configuration_incomplete:${mcp.missing.join(",")}`
+    };
+  }
   const taskKey = taskKeyFromHookPayload(payload);
-  const response = await fetch(mcp.url, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "CF-Access-Client-Id": mcp.clientId,
-      "CF-Access-Client-Secret": mcp.clientSecret,
-      "x-orgbrain-tenant": scope.tenantId,
-      "MCP-Protocol-Version": "2026-07-28",
-      "Mcp-Method": "tools/call",
-      "Mcp-Name": "orgbrain_task_context_get"
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: `hook-context:${taskKey}`,
-      method: "tools/call",
-      params: {
+  let response;
+  try {
+    response = await fetchImpl(mcp.url, {
+      method: "POST",
+      headers: {
+        ...modernMcpHeaders("tools/call", "orgbrain_task_context_get"),
+        "CF-Access-Client-Id": mcp.clientId,
+        "CF-Access-Client-Secret": mcp.clientSecret,
+        "x-orgbrain-tenant": scope.tenantId
+      },
+      body: JSON.stringify(modernMcpRequest({
+        id: `hook-context:${taskKey}`,
+        method: "tools/call",
         name: "orgbrain_task_context_get",
-        arguments: {
-          tenant_id: scope.tenantId,
-          project_id: projectIdFromPayload(payload, scope),
-          task_key: taskKey,
-          query: compact(payload?.prompt, 1_000)
+        clientName: "orgbrain-codex-memory-context",
+        params: {
+          arguments: {
+            tenant_id: scope.tenantId,
+            project_id: projectIdFromPayload(payload, scope),
+            task_key: taskKey,
+            query: compact(payload?.prompt, 1_000)
+          }
         }
-      }
-    }),
-    signal: AbortSignal.timeout(1_500)
-  }).catch(() => null);
-  if (!response?.ok) return [];
+      })),
+      signal: AbortSignal.timeout(1_500)
+    });
+  } catch {
+    return { commitments: [], warning: "network_or_timeout" };
+  }
+  if (!response.ok) return { commitments: [], warning: `http_${response.status}` };
   const body = await response.json().catch(() => null);
   const resultText = body?.result?.content?.find?.((entry) => entry?.type === "text")?.text;
   const result = parsePayload(resultText);
-  return Array.isArray(result?.commitments) ? result.commitments : [];
+  if (!result || !Array.isArray(result.commitments)) {
+    return { commitments: [], warning: "invalid_response" };
+  }
+  return { commitments: result.commitments, warning: null };
 }
 
 export async function buildCodexMemoryContext(payloadInput, options = {}) {
@@ -192,12 +203,18 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   }
   let commitments = localCommitments;
   if (!scope.localMemoryEnabled && taskIdentityPresent) {
-    const remoteCommitments = await fetchRemoteTaskContext(env, scope, payload);
+    const remote = await fetchRemoteTaskContext(env, scope, payload, options.fetchImpl);
     const localKeys = new Set(localCommitments.map((item) => `${item.decision_key}\0${item.question_fingerprint}`));
     commitments = [
       ...localCommitments,
-      ...remoteCommitments.filter((item) => !localKeys.has(`${item.decision_key}\0${item.question_fingerprint}`))
+      ...remote.commitments.filter((item) => !localKeys.has(`${item.decision_key}\0${item.question_fingerprint}`))
     ];
+    if (remote.warning) {
+      contextParts.push(
+        `OrgBrain remote task context status: unavailable (${remote.warning}). ` +
+        "Only local confirmed checkpoints are shown; remote commitments may be missing."
+      );
+    }
   }
   const commitmentContext = formatCommitmentContext(commitments);
   contextParts.push(...commitmentContext);

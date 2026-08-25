@@ -237,6 +237,33 @@ MemoryStore, so Codex, Claude, and OpenCode can use local capture and search
 without a second daemon or cloud account. See [Local migration and recovery](docs/LOCAL_MIGRATION.md) and
 the [threat model](docs/THREAT_MODEL.md).
 
+The local stdio server is modern-only by default: it negotiates MCP
+`2026-07-28` through `server/discover`, exposes `tools/list`, and uses the same
+interactive confirmation boundary as Remote MCP. Interactive clients call
+`orgbrain_memories_propose`, show the inferred conclusion and reason to the
+user, and call `orgbrain_memories_confirm` only after explicit approval. The
+confirmation token is valid for 24 hours and survives an MCP process restart.
+Only its SHA-256 hash is stored, and an approved confirmation consumes the
+token atomically with the memory write. Sensitive proposals containing
+credential material, email addresses, or phone numbers are rejected before a
+token is issued.
+
+Clients without MCP `2026-07-28` support use one explicit, local-only
+compatibility command. The deadline is required, must be in the future, and is
+limited to 90 days; the main server never silently downgrades:
+
+```bash
+orgbrain connector setup <client> --mcp-protocol legacy --legacy-until 2026-11-23T00:00:00Z
+orgbrain mcp --compat 2025-11-25 --legacy-until 2026-11-23T00:00:00Z
+```
+
+Run the application-profile checks from the official MCP conformance runner
+with `pnpm mcp:conformance`. They cover the published tools surface and local
+DNS-rebinding protection. `pnpm mcp:conformance -- --full` intentionally runs
+the entire referee suite as an audit; scenarios that require conformance-only
+prompt, resource, media, and multi-round-trip fixtures are not claimed as
+OrgBrain product capabilities.
+
 Generate a reviewable MCP registration plan for any supported agent, then add
 `--execute` only when you want the CLI to change that agent's configuration:
 
@@ -257,9 +284,9 @@ surface. References: [Codex MCP](https://developers.openai.com/codex/mcp/),
 [OpenCode MCP](https://opencode.ai/v2/docs/mcp-servers), and
 [OpenClaw MCP](https://docs.openclaw.ai/cli/mcp).
 
-For shared Remote MCP, interactive Codex, Claude Code, and Cursor connections
-use Cloudflare Access Managed OAuth through the dedicated MCP Worker. The
-canonical environment variable is `ORGBRAIN_MCP_URL`; a host-only value is
+For shared Remote MCP, interactive clients that support MCP `2026-07-28` use
+the API Gateway's MCP OAuth flow; Cloudflare Access protects only its upstream
+user-login step. The canonical environment variable is `ORGBRAIN_MCP_URL`; a host-only value is
 normalized to `/mcp`, while Console proxy paths such as `/api` and `/api/mcp`
 are rejected with a correction:
 
@@ -280,7 +307,7 @@ masked TTY prompt or setup-only environment variables and stored at
 
 ```bash
 orgbrain connector setup codex --mode cloud-hooks \
-  --url https://mcp.example.com/mcp --workspace "$PWD"
+  --url https://hooks.example.com/mcp --workspace "$PWD"
 ```
 
 The cloud hook calls no LLM and reads no full transcript. It sends only memory
@@ -610,7 +637,8 @@ console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUC
    ```bash
    pnpm exec orgbrain cf doctor --root .
    pnpm exec orgbrain cf provision --root . --with-vectorize \
-     --with-managed-oauth --mcp-host mcp.example.com --access-policy-id <policy-id>
+     --with-managed-oauth --mcp-host mcp.example.com --hook-host hooks.example.com \
+     --access-policy-id <user-policy-id> --hook-access-policy-id <service-auth-policy-id>
    ```
 
    After reviewing that JSON plan, provide a narrowly scoped Cloudflare token
@@ -620,7 +648,8 @@ console development, see [`docs/LOCAL_PRODUCTION_SNAPSHOT.md`](docs/LOCAL_PRODUC
    export CLOUDFLARE_ACCOUNT_ID="<account-id>"
    export CLOUDFLARE_API_TOKEN="<provisioning-token>"
    pnpm exec orgbrain cf provision --root . --with-vectorize \
-     --with-managed-oauth --mcp-host mcp.example.com --access-policy-id <policy-id> --execute
+     --with-managed-oauth --mcp-host mcp.example.com --hook-host hooks.example.com \
+     --access-policy-id <user-policy-id> --hook-access-policy-id <service-auth-policy-id> --execute
    ```
 
 Execution creates missing D1, R2, Queue/DLQ, and optional Vectorize
@@ -667,10 +696,12 @@ artifact, the targets are configured but not production evidence.
    pnpm -C apps/console build
    ```
 
-   `apps/mcp` is the canonical public Remote MCP edge. Cloudflare Access guards
-   `/mcp*`; the Worker forwards only the signed Access assertion and bounded MCP
-   protocol headers to the API Gateway service binding. The Gateway remains the
-   authorization and tool-execution boundary.
+   For interactive OAuth, `apps/api-gateway` is routed directly on the canonical
+   MCP hostname. Only `/oauth/authorize*` is protected by Cloudflare Access for
+   upstream user login; discovery, registration, token exchange, and `/mcp`
+   remain reachable by standards-compliant OAuth clients and are validated by
+   the OAuth provider. `apps/mcp` remains a separate, Access-protected thin edge
+   only for bounded migration of existing service-token hooks.
 
 ## Agent Integrations
 
@@ -900,14 +931,18 @@ provider mode below. Admins can issue short-lived
 returned once. Retention enforcement is dry-run by default, and matching legal
 holds block hard deletion.
 
-Remote MCP uses a separate Access audience (`MCP_ACCESS_AUD`). Interactive
+Remote MCP uses separate Access audiences for interactive OAuth login
+(`MCP_ACCESS_AUD`) and the hook Service Auth edge (`MCP_HOOK_ACCESS_AUD`). Interactive
 clients resolve to the user's existing principal; service-token hooks resolve
 through `mcp_client_installations` and can call only
 `orgbrain_memories_capture_rationale`. `MCP_AUTH_MODE` defaults to fail-closed
 `access`. MCP 2026-07-28 OAuth deployments require `OAUTH_KV` and a canonical HTTPS
 `MCP_OAUTH_RESOURCE` ending in `/mcp`. Use `dual` while Access/service-token clients
-and OAuth clients coexist, then switch to `oauth`; `legacy` exists only for bounded
-migration from the old JSON secret path.
+and OAuth clients coexist, then switch to `oauth`. Protocol-era compatibility
+is not exposed on the Remote endpoint; MCP `2025-11-25` clients must use the
+bounded local compatibility command above. The `legacy` auth mode exists only
+for bounded migration from the old JSON secret path and is unrelated to MCP
+protocol negotiation.
 
 Cloud deployments may additionally bind `API_RATE_LIMITER` using a Workers
 Rate Limiting binding. Requests are keyed by authenticated tenant, principal,
@@ -1104,7 +1139,7 @@ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` before running LLM judging.
 - `apps/api-gateway`: Hono API Worker for memory, docs, tasks, measurement, and Remote MCP.
 - `apps/org-router`: queue router for the organization bus.
 - `apps/cap-runner`: capability workers, maintenance jobs, and Durable Objects.
-- `apps/mcp`: compatibility Remote MCP Worker.
+- `apps/mcp`: thin Cloudflare Access Remote MCP proxy; protocol handling lives in API Gateway.
 - `apps/console`: Astro console for browsing and operating memory.
 - `packages/shared`: shared schemas plus the deterministic retrieval-unit, intent, and lexical-scoring core used by both SQLite and D1 adapters.
 - `migrations`: D1 SQL migrations for the self-hosted Cloudflare stack.

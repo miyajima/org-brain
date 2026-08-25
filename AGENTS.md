@@ -1,7 +1,7 @@
-# Graph Engineering Harness Bridge
+# Adaptive Outcome Harness Bridge
 
-Use the graph engineering harness installed on this machine:
-- `/Users/miyajimakazuhiro/.agents/graph-engineering-harness/SKILL.md`
+Use the Adaptive Outcome Harness router installed on this machine:
+- `/Users/miyajimakazuhiro/projects/adaptive-outcome-harness/ROUTER.md`
 
 Project-specific compatibility contract:
 - `docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md`
@@ -16,7 +16,7 @@ If instructions conflict, use this priority:
 1. Direct user request
 2. Safety or platform policy
 3. Tool adapter file in this workspace
-4. Graph engineering harness instructions
+4. Adaptive Outcome Harness Router instructions
 5. Private or project skill instructions
 6. Project notes below
 
@@ -35,10 +35,11 @@ discovery instructions into the `Skills` section instead.
 
 - Do not use `claude -p`.
 - Use the current agent for ordinary implementation work.
-- Use the graph engineering harness for harness-backed task DAGs, artifacts,
-  quality gates, provenance, and budget tracking, following its `SKILL.md`.
-- Do not start Docker services or mutate harness state unless the user request
-  requires a harness run.
+- Use the Adaptive Outcome Harness Router for code-search preflight,
+  autonomous first-pass execution, terminal quality checks, and cost-aware
+  delegation.
+- Load the full Adaptive Outcome Harness skill only when the Router's
+  delegation admission conditions require it.
 - Use Codex App sub-agents only for explicitly delegable parallel or supporting
   work.
 - Mention the execution route in the final report only when work was delegated
@@ -47,7 +48,7 @@ discovery instructions into the `Skills` section instead.
 ## Project Notes
 
 - For Context Engine or harness preflight changes, check bootstrap and contract
-  compatibility with the graph engineering harness.
+  compatibility with the Adaptive Outcome Harness Router.
 - `ORGBRAIN_API_URL` is the canonical environment variable.
   `ORGBRAIN_API_BASE` is a compatibility alias.
 - When asked to deploy to Cloudflare, run local validation and a live API smoke

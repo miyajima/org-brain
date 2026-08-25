@@ -18,6 +18,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.3.6"
+  },
   "scripts": {
     "prepack": "node ../../scripts/build-standalone.mjs packages/orgbrain-cli/dist/orgbrain.mjs"
   }

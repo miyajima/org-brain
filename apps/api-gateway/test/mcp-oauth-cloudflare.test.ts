@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { oauthProviderSubject } from "../src/mcp-oauth-cloudflare";
 import { shouldUseMcpOAuth } from "../src/mcp-oauth-routing";
 import type { Env } from "../src/types";
 
 const env = (mode: Env["MCP_AUTH_MODE"]) => ({ MCP_AUTH_MODE: mode }) as Env;
 
 describe("Cloudflare MCP OAuth routing", () => {
+  it("maps colon-bearing canonical principals to stable provider-safe subjects", async () => {
+    const subject = await oauthProviderSubject("user:alice@example.test");
+    expect(subject).toMatch(/^usr_[a-f0-9]{64}$/u);
+    expect(subject).not.toContain(":");
+    expect(await oauthProviderSubject("user:alice@example.test")).toBe(subject);
+    expect(await oauthProviderSubject("user:bob@example.test")).not.toBe(subject);
+  });
   it("routes all OAuth surfaces through the provider in oauth mode", () => {
     expect(shouldUseMcpOAuth(new Request("https://example.com/.well-known/oauth-protected-resource/mcp"), env("oauth"))).toBe(true);
     expect(shouldUseMcpOAuth(new Request("https://example.com/oauth/token"), env("oauth"))).toBe(true);

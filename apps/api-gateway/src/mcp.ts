@@ -20,12 +20,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
-import {
-  captureMcpToolContract,
-  McpProtocolError,
-  validateMcpEnvelope,
-  validateMcpTransport
-} from "@org-brain/mcp-core";
+import { captureMcpToolContract, requirementForMcpTool } from "@org-brain/mcp-core";
 import {
   accessServiceSubject,
   authorizeMcpRequest,
@@ -110,6 +105,13 @@ type AgentProps = {
   scopes?: OrgBrainOAuthScope[];
 };
 
+class McpInsufficientScopeError extends Error {
+  constructor(readonly scope: OrgBrainOAuthScope) {
+    super(`OAuth token does not grant ${scope}`);
+    this.name = "McpInsufficientScopeError";
+  }
+}
+
 const sourceRefSchema = z.object({
   type: z.string().max(64).optional(),
   id: z.string().max(128).optional(),
@@ -151,9 +153,6 @@ const contextEnrichInputShape = {
   object_id: z.string().max(128).nullable().optional(),
   scope: z.record(z.string(), z.string().max(256)).optional()
 };
-const contextEnrichInputSchema = z.object(contextEnrichInputShape);
-type ContextEnrichInput = z.infer<typeof contextEnrichInputSchema>;
-
 function toContent(data: unknown) {
   return {
     content: [
@@ -251,6 +250,7 @@ class OrgBrainMcpTools {
     {
       instructions:
         "Search OrgBrain before repeating source discovery. Use propose then confirm for interactive memory writes.",
+      supportedProtocolVersions: ["2026-07-28"],
       cacheHints: {
         "server/discover": { ttlMs: 300_000, cacheScope: "private" },
         "tools/list": { ttlMs: 300_000, cacheScope: "private" }
@@ -1818,105 +1818,6 @@ export async function createOrgBrainMcpServer(env: Env, props: AgentProps) {
   return tools.server;
 }
 
-type ContextEnrichJsonRpcRequest = {
-  jsonrpc?: unknown;
-  id?: unknown;
-  method?: unknown;
-  params?: {
-    name?: unknown;
-    arguments?: unknown;
-  };
-};
-
-function isContextEnrichJsonRpcRequest(value: unknown): value is ContextEnrichJsonRpcRequest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const body = value as ContextEnrichJsonRpcRequest;
-  return body.jsonrpc === "2.0" &&
-    Object.prototype.hasOwnProperty.call(body, "id") &&
-    body.method === "tools/call" &&
-    body.params?.name === "orgbrain_context_enrich";
-}
-
-async function tryHandleModernCatalogFastPath(
-  request: Request,
-  env: Env,
-  props: AgentProps
-): Promise<Response | null> {
-  if (request.method !== "POST" || request.headers.get("mcp-protocol-version") !== "2026-07-28") return null;
-  const body = await request.clone().json<ContextEnrichJsonRpcRequest>().catch(() => null);
-  if (!body || body.jsonrpc !== "2.0" || !Object.prototype.hasOwnProperty.call(body, "id")) return null;
-  if (body.method === "server/discover") {
-    return jsonRpcResult(body.id, {
-      supportedVersions: ["2026-07-28"],
-      ttlMs: 300_000,
-      cacheScope: "private"
-    });
-  }
-  if (body.method !== "tools/list") return null;
-
-  const server = await createOrgBrainMcpServer(env, props);
-  const registry = server as unknown as {
-    _registeredTools: Record<string, {
-      title?: string;
-      description?: string;
-      outputSchemaJson?: unknown;
-      annotations?: unknown;
-      icons?: unknown;
-      _meta?: unknown;
-      enabled?: boolean;
-    }>;
-    _toolInputSchemaJson: Record<string, unknown>;
-  };
-  const tools = Object.entries(registry._registeredTools)
-    .filter(([name, tool]) => tool.enabled !== false && (!props.allowedTools || props.allowedTools.includes(name)))
-    .map(([name, tool]) => ({
-      name,
-      ...(tool.title ? { title: tool.title } : {}),
-      ...(tool.description ? { description: tool.description } : {}),
-      inputSchema: registry._toolInputSchemaJson[name] ?? { type: "object", properties: {} },
-      ...(tool.outputSchemaJson ? { outputSchema: tool.outputSchemaJson } : {}),
-      ...(tool.annotations ? { annotations: tool.annotations } : {}),
-      ...(tool.icons ? { icons: tool.icons } : {}),
-      ...(tool._meta ? { _meta: tool._meta } : {})
-    }));
-  return jsonRpcResult(body.id, { tools, ttlMs: 300_000, cacheScope: "private" });
-}
-
-function jsonRpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
-    status: 200,
-    headers: { "content-type": "application/json" }
-  });
-}
-
-function degradedContextResponse(input: ContextEnrichInput, tenantId: string) {
-  return {
-    summary: "OrgBrain context is temporarily unavailable; continue without decision memory context.",
-    decisionContext: [],
-    constraints: [],
-    knownPitfalls: [],
-    conflicts: [],
-    recommendedNextActions: ["関連する既存方針を手動で確認する"],
-    confidence: 0,
-    requiresHumanReview: true,
-    meta: {
-      tenant_id: tenantId,
-      project_id: input.project_id ?? null,
-      task_type: input.task_type ?? "implementation",
-      selectedMemoryCount: 0,
-      conflictCount: 0,
-      featureFlags: {
-        includeProvenance: false,
-        authorityScoring: false,
-        verificationView: false
-      },
-      estimatedTokens: 0,
-      degraded: true,
-      degraded_reason: "context_unavailable"
-    }
-  };
-}
-
 function mcpTransportValidationResponse(request: Request): Response | undefined {
   const requestUrl = new URL(request.url);
   const localEndpoint = localhostAllowedHostnames().includes(requestUrl.hostname);
@@ -1949,177 +1850,8 @@ function mcpTransportValidationResponse(request: Request): Response | undefined 
   return originValidationResponse(request, [...acceptedOriginHostnames]);
 }
 
-async function tryHandleContextEnrichFastPath(
-  request: Request,
-  env: Env,
-  props: AgentProps
-): Promise<Response | null> {
-  if (request.method !== "POST") return null;
-
-  let body: unknown;
-  try {
-    body = await request.clone().json();
-  } catch {
-    return null;
-  }
-  if (!isContextEnrichJsonRpcRequest(body)) return null;
-  if (request.headers.get("mcp-name") !== "orgbrain_context_enrich") return null;
-
-  const parsed = contextEnrichInputSchema.safeParse(body.params?.arguments);
-  if (!parsed.success) return null;
-
-  const input = parsed.data;
-  const tenantId = normalizeTenant(input.tenant_id, props);
-  await requireMcpPermission(env, props, tenantId, "read", input.project_id);
-  const principal = props.principal || "mcp";
-  const { tenant_id: _tenantId, user_id, agent_id, ...payload } = input;
-
-  try {
-    const result = await enrichContext(env, {
-      tenant_id: tenantId,
-      user_id: user_id ?? principal,
-      agent_id: agent_id ?? principal,
-      ...payload
-    }, { principal, bestEffortUsage: true });
-    if (payload.include_domain_recall !== true) return jsonRpcResult(body.id, toContent(result));
-    const recall = await getDomainRecall(env, {
-      tenant_id: tenantId,
-      project_id: payload.project_id,
-      query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
-      object_type_key: payload.object_type_key,
-      object_id: payload.object_id,
-      scope: payload.scope
-    }, {
-      ownerPrincipal: props.ownerPrincipal ?? principal,
-      runtimeActor: props.runtimeActor,
-      clientInstallationId: props.clientInstallationId,
-      clientName: props.clientType ?? "mcp-fast-path"
-    });
-    return jsonRpcResult(body.id, toContent({ ...result, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } }));
-  } catch (error) {
-    if (error instanceof HttpError && error.status < 500) throw error;
-    console.warn({
-      event: "orgbrain.mcp.context_enrich.degraded",
-      tenant_id: tenantId,
-      project_id: input.project_id ?? null,
-      error_code: error instanceof HttpError ? error.code : "unknown"
-    });
-    return jsonRpcResult(body.id, toContent(degradedContextResponse(input, tenantId)));
-  }
-}
-
-async function tryHandleHookCaptureFastPath(
-  request: Request,
-  env: Env,
-  props: AgentProps
-): Promise<Response | null> {
-  if (props.authSource !== "access-service" || request.method !== "POST") return null;
-
-  let body: ContextEnrichJsonRpcRequest;
-  try {
-    body = await request.clone().json<ContextEnrichJsonRpcRequest>();
-  } catch {
-    return null;
-  }
-  if (
-    body.jsonrpc !== "2.0" ||
-    !Object.prototype.hasOwnProperty.call(body, "id") ||
-    body.method !== "tools/call" ||
-    body.params?.name !== "orgbrain_memories_capture_rationale" ||
-    request.headers.get("mcp-name") !== "orgbrain_memories_capture_rationale"
-  ) return null;
-
-  const args = body.params.arguments;
-  if (!args || typeof args !== "object" || Array.isArray(args)) {
-    throw new HttpError(400, "invalid_payload", "capture arguments must be an object");
-  }
-  const payload = args as Record<string, unknown>;
-  const tenantId = normalizeTenant(
-    typeof payload.tenant_id === "string" ? payload.tenant_id : undefined,
-    props
-  );
-  const item = payload.item && typeof payload.item === "object" && !Array.isArray(payload.item)
-    ? payload.item as Record<string, unknown>
-    : null;
-  const items = Array.isArray(payload.items)
-    ? payload.items.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
-    : [];
-  if (Boolean(item) === Boolean(items.length)) {
-    throw new HttpError(400, "invalid_payload", "exactly one of item or items is required");
-  }
-  const captureItems = item ? [item] : items;
-  for (const projectId of new Set(captureItems.map((entry) =>
-    typeof entry.project_id === "string" ? entry.project_id : null
-  ))) {
-    await requireMcpPermission(env, props, tenantId, "write", projectId);
-    if (captureItems.some((entry) =>
-      (typeof entry.project_id === "string" ? entry.project_id : null) === projectId &&
-      entry.verification && typeof entry.verification === "object" &&
-      !Array.isArray(entry.verification) &&
-      (entry.verification as Record<string, unknown>).state === "verified"
-    )) {
-      await requireMcpPermission(env, props, tenantId, "memory:attest", projectId);
-    }
-  }
-
-  const principal = props.principal || props.runtimeActor || "mcp-hook";
-  try {
-    const result = await captureMemoryWithInferredRationale(env, {
-      ...payload,
-      tenant_id: tenantId,
-      source: typeof payload.source === "string" && payload.source.trim() ? payload.source.trim() : "hook",
-      actor_type: "principal",
-      actor_id: principal
-    }, {
-      canAttest: captureItems.some((entry) =>
-        entry.verification && typeof entry.verification === "object" &&
-        !Array.isArray(entry.verification) &&
-        (entry.verification as Record<string, unknown>).state === "verified"
-      )
-    });
-    await appendAuditEvent(env, {
-      tenantId,
-      projectId: null,
-      principal,
-      action: "mcp.orgbrain_memories_capture_rationale",
-      resourceType: "memory",
-      resourceId: null,
-      requestId: null,
-      outcome: "succeeded",
-      metadata: {
-        transport: "mcp-fast-path",
-        auth_source: props.authSource,
-        runtime_actor: props.runtimeActor ?? principal,
-        client_installation_id: props.clientInstallationId ?? null,
-        client_type: props.clientType ?? null
-      }
-    }).catch(() => undefined);
-    return jsonRpcResult(body.id, toContent(result));
-  } catch (error) {
-    await appendAuditEvent(env, {
-      tenantId,
-      projectId: null,
-      principal,
-      action: "mcp.orgbrain_memories_capture_rationale",
-      resourceType: "memory",
-      resourceId: null,
-      requestId: null,
-      outcome: "failed",
-      metadata: {
-        transport: "mcp-fast-path",
-        auth_source: props.authSource,
-        runtime_actor: props.runtimeActor ?? principal,
-        client_installation_id: props.clientInstallationId ?? null,
-        client_type: props.clientType ?? null,
-        error_code: error instanceof HttpError ? error.code : "capture_failed"
-      }
-    }).catch(() => undefined);
-    throw error;
-  }
-}
-
 export async function assertMcpToolAllowed(request: Request, props: AgentProps): Promise<void> {
-  if (!props.allowedTools) return;
+  if (!props.allowedTools && props.authSource !== "oauth") return;
   if (request.method !== "POST") {
     throw new HttpError(403, "forbidden", "This MCP client installation can only call its allowed hook tool");
   }
@@ -2127,19 +1859,32 @@ export async function assertMcpToolAllowed(request: Request, props: AgentProps):
     method?: unknown;
     params?: { name?: unknown };
   }>().catch(() => null);
-  if (
-    body?.method !== "tools/call" ||
-    typeof body.params?.name !== "string" ||
-    !props.allowedTools.includes(body.params.name)
-  ) {
+  if (body?.method !== "tools/call" || typeof body.params?.name !== "string") {
+    if (props.authSource === "oauth" && body?.method === "server/discover") return;
+    if (props.authSource === "oauth" && body?.method === "tools/list") return;
     throw new HttpError(403, "forbidden", "This MCP client installation cannot call that MCP method or tool");
   }
+  if (props.allowedTools && !props.allowedTools.includes(body.params.name)) {
+    throw new HttpError(403, "forbidden", "This MCP client installation cannot call that MCP method or tool");
+  }
+  if (props.authSource === "oauth") {
+    const requirement = requirementForMcpTool(body.params.name);
+    if (!props.scopes?.includes(requirement.scope)) throw new McpInsufficientScopeError(requirement.scope);
+  }
+}
+
+function hookAuthEnv(request: Request, env: Env): Env {
+  if (request.headers.get("x-orgbrain-hook-edge") !== "service-binding-v1") return env;
+  if (!env.MCP_HOOK_ACCESS_AUD?.trim()) {
+    throw new HttpError(503, "misconfigured", "MCP_HOOK_ACCESS_AUD is required for the hook edge");
+  }
+  return { ...env, MCP_ACCESS_AUD: env.MCP_HOOK_ACCESS_AUD };
 }
 
 export function mountMcp(app: Hono<any>) {
   app.post("/mcp/client-installations/activate", async (c) => {
     try {
-      const claims = await verifyMcpAccessAssertion(c.req.raw, c.env);
+      const claims = await verifyMcpAccessAssertion(c.req.raw, hookAuthEnv(c.req.raw, c.env));
       const accessSubject = accessServiceSubject(claims);
       if (!accessSubject) throw new HttpError(401, "unauthorized", "A Cloudflare Access service token is required");
       const body = await c.req.json<{ enrollment_code?: unknown; client_type?: unknown }>();
@@ -2184,7 +1929,7 @@ export function mountMcp(app: Hono<any>) {
 
   app.get("/mcp/client-installations/status", async (c) => {
     try {
-      const auth = await authorizeMcpRequest(c.req.raw, c.env);
+      const auth = await authorizeMcpRequest(c.req.raw, hookAuthEnv(c.req.raw, c.env));
       if (auth.source !== "access-service" || !auth.clientInstallationId || !auth.clientType) {
         throw new HttpError(401, "unauthorized", "A registered Cloudflare Access service token is required");
       }
@@ -2214,7 +1959,11 @@ export async function handleOrgBrainMcpRequest(
   authOverride?: McpAuthResult
 ): Promise<Response> {
     try {
-      const auth = authOverride ?? await authorizeMcpRequest(request, env);
+      const hookEdge = request.headers.get("x-orgbrain-hook-edge") === "service-binding-v1";
+      const auth = authOverride ?? await authorizeMcpRequest(request, hookAuthEnv(request, env));
+      if (hookEdge && auth.source !== "access-service") {
+        throw new HttpError(401, "unauthorized", "The hook edge accepts only registered Access service-token installations");
+      }
       await assertRequestRateLimit(env, {
         tenantId: auth.tenantId,
         principal: auth.principal,
@@ -2236,28 +1985,17 @@ export async function handleOrgBrainMcpRequest(
       };
       const transportValidationResponse = mcpTransportValidationResponse(request);
       if (transportValidationResponse) return transportValidationResponse;
-      if (authOverride || request.headers.get("mcp-protocol-version") === "2026-07-28") {
-        const transport = validateMcpTransport(request);
-        const payload = await request.clone().json().catch(() => null);
-        validateMcpEnvelope(transport, payload);
-      }
       await assertMcpToolAllowed(request, props);
-      const catalogResponse = await tryHandleModernCatalogFastPath(request, env, props);
-      if (catalogResponse) return catalogResponse;
-      const fastPathResponse = await tryHandleContextEnrichFastPath(request, env, props);
-      if (fastPathResponse) return fastPathResponse;
-      const hookCaptureResponse = await tryHandleHookCaptureFastPath(request, env, props);
-      if (hookCaptureResponse) return hookCaptureResponse;
       const handler = createMcpHandler(
         () => createOrgBrainMcpServer(env, props),
         {
           route: "/",
-          legacy: "stateless",
+          legacy: "reject",
           corsOptions: false,
           authContext: { props }
         }
       );
-      return handler(request, env, ctx);
+      return await handler.fetch(request);
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error));
       console.error(JSON.stringify({
@@ -2272,8 +2010,21 @@ export async function handleOrgBrainMcpRequest(
       if (error instanceof HttpError) {
         return new Response(error.message, { status: error.status });
       }
-      if (error instanceof McpProtocolError) {
-        return Response.json({ error: error.code, message: error.message }, { status: error.status });
+      if (error instanceof McpInsufficientScopeError) {
+        const resource = new URL(request.url);
+        resource.search = "";
+        resource.hash = "";
+        const metadata = new URL("/.well-known/oauth-protected-resource/mcp", resource.origin);
+        const challenge = [
+          'Bearer error="insufficient_scope"',
+          `scope="${error.scope}"`,
+          `resource="${resource.toString()}"`,
+          `resource_metadata="${metadata.toString()}"`
+        ].join(", ");
+        return new Response(error.message, {
+          status: 403,
+          headers: { "WWW-Authenticate": challenge }
+        });
       }
       return new Response(error instanceof Error ? error.message : String(error), { status: 500 });
     }

@@ -1,7 +1,7 @@
 # Memory Capture / Graph Harness Compatibility
 
 This repository owns all memory extraction and quality decisions. The global
-graph engineering harness remains unchanged.
+Adaptive Outcome Harness Router remains unchanged.
 
 ## Contract
 

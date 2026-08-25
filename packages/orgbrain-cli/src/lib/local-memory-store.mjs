@@ -34,7 +34,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 24;
+export const MEMORY_SCHEMA_VERSION = 25;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -51,6 +51,10 @@ function cloudTelemetryEnabled() {
   return ["1", "true", "yes", "on"].includes(
     String(process.env.ORGBRAIN_ENABLE_CLOUD_MEMORY ?? "").trim().toLowerCase()
   );
+}
+
+function confirmationTokenHash(token) {
+  return createHash("sha256").update(String(token)).digest("hex");
 }
 
 const TOKEN_ESTIMATION_PRIORITY = [
@@ -674,6 +678,15 @@ function createCanonicalTables(db) {
       version INTEGER PRIMARY KEY,
       applied_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS local_mcp_confirmations (
+      token_hash TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_local_mcp_confirmations_expiry
+      ON local_mcp_confirmations(expires_at);
   `);
 }
 
@@ -3287,6 +3300,7 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_impact_daily_metrics") ||
         !hasTable(db, "memory_usage_events") ||
         !hasTable(db, "memory_effect_events") ||
+        !hasTable(db, "local_mcp_confirmations") ||
         !hasTable(db, "retrieval_generations") ||
         !hasTable(db, "retrieval_units") ||
         !hasTable(db, "retrieval_units_fts")
@@ -4646,6 +4660,80 @@ export class LocalMemoryStore {
       await enforcePrivatePermissions(this.dbPath);
     }
     return this.attachDenseProjection(result, nullableString(input.tenant_id, 128) || "default");
+  }
+
+  async saveMcpConfirmation({ token, tenant_id: tenantId = "default", payload, created_at: createdAt, expires_at: expiresAt }) {
+    await this.init();
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.prepare("DELETE FROM local_mcp_confirmations WHERE expires_at <= ?").run(createdAt);
+        db.prepare(
+          `INSERT INTO local_mcp_confirmations(token_hash, tenant_id, payload_json, created_at, expires_at)
+           VALUES(?,?,?,?,?)`
+        ).run(
+          confirmationTokenHash(token),
+          tenantId,
+          JSON.stringify(payload),
+          createdAt,
+          expiresAt
+        );
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.close();
+      await enforcePrivatePermissions(this.dbPath);
+    }
+  }
+
+  async consumeMcpConfirmation({ token, tenant_id: tenantId = "default", approved, buildCaptureInput }) {
+    await this.init();
+    const db = this.open();
+    let transactionOpen = false;
+    let expired = false;
+    let payload;
+    let saved = null;
+    let captureInput = null;
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      transactionOpen = true;
+      const tokenHash = confirmationTokenHash(token);
+      const row = db.prepare(
+        `SELECT payload_json, expires_at
+         FROM local_mcp_confirmations
+         WHERE token_hash = ? AND tenant_id = ?`
+      ).get(tokenHash, tenantId);
+      if (!row) throw new Error("confirmation_not_found");
+      payload = JSON.parse(row.payload_json);
+      if (Number(row.expires_at) <= Date.now()) {
+        db.prepare("DELETE FROM local_mcp_confirmations WHERE token_hash = ?").run(tokenHash);
+        expired = true;
+      } else if (approved !== true) {
+        db.prepare("DELETE FROM local_mcp_confirmations WHERE token_hash = ?").run(tokenHash);
+      } else {
+        if (typeof buildCaptureInput !== "function") throw new Error("confirmation_capture_builder_required");
+        captureInput = buildCaptureInput(payload);
+        saved = this.captureIntoDatabase(db, captureInput);
+        db.prepare("DELETE FROM local_mcp_confirmations WHERE token_hash = ?").run(tokenHash);
+      }
+      db.exec("COMMIT");
+      transactionOpen = false;
+    } catch (error) {
+      if (transactionOpen) db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      db.close();
+      await enforcePrivatePermissions(this.dbPath);
+    }
+    if (expired) throw new Error("confirmation_expired");
+    if (saved && captureInput) {
+      saved = await this.attachDenseProjection(saved, nullableString(captureInput.tenant_id, 128) || "default");
+    }
+    return { payload, saved };
   }
 
   async captureBatch(inputs) {

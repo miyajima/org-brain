@@ -9,6 +9,7 @@ import readline from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { memoryModeFields, resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
+import { MCP_PROTOCOL_VERSION, modernMcpHeaders, modernMcpRequest } from "./lib/mcp-modern-request.mjs";
 import {
   buildMemoryCaptureCandidateJson,
   buildProjectCategoryIdentity,
@@ -50,7 +51,6 @@ const DEFAULT_ENV_FILES = [
   path.join(ROOT, ".env.local"),
   path.join(ROOT, ".env")
 ];
-const MCP_PROTOCOL_VERSION = "2026-07-28";
 const MCP_CAPTURE_TOOL = "orgbrain_memories_capture_rationale";
 const MCP_LEARNING_BATCH_TOOL = "orgbrain_learning_batch_ingest";
 const CAPTURE_TIMEOUT_MS = 5_000;
@@ -1462,27 +1462,19 @@ export function buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords) {
   const argumentsPayload = Array.isArray(recordOrRecords)
     ? { items: records.map(captureItemPayload) }
     : { item: captureItemPayload(records[0]) };
-  return {
-    jsonrpc: "2.0",
+  return modernMcpRequest({
     id: `hook:${records[0]?.externalKey ?? sha256(JSON.stringify(argumentsPayload)).slice(0, 24)}`,
     method: "tools/call",
+    name: MCP_CAPTURE_TOOL,
+    clientName: "orgbrain-hook-memory-bridge",
     params: {
-      name: MCP_CAPTURE_TOOL,
       arguments: {
         tenant_id: tenantId,
         source: sourceName,
         ...argumentsPayload
-      },
-      _meta: {
-        "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": {
-          name: "orgbrain-hook-memory-bridge",
-          version: "0.1.0"
-        }
       }
     }
-  };
+  });
 }
 
 export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
@@ -1513,12 +1505,12 @@ export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
     }))
     : [];
   const semanticAliases = Array.isArray(input.semanticAliases) ? input.semanticAliases.slice(0, 16) : [];
-  return {
-    jsonrpc: "2.0",
+  return modernMcpRequest({
     id: `learning:${sha256(JSON.stringify({ tenantId, sourceName, verifiedItems, reviewCandidates, semanticAliases })).slice(0, 40)}`,
     method: "tools/call",
+    name: MCP_LEARNING_BATCH_TOOL,
+    clientName: "orgbrain-hook-memory-bridge",
     params: {
-      name: MCP_LEARNING_BATCH_TOOL,
       arguments: {
         tenant_id: tenantId,
         source: sourceName,
@@ -1534,17 +1526,9 @@ export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
         review_candidates: reviewCandidates,
         quarantine_candidates: quarantineCandidates,
         semantic_aliases: semanticAliases
-      },
-      _meta: {
-        "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": {
-          name: "orgbrain-hook-memory-bridge",
-          version: "0.1.0"
-        }
       }
     }
-  };
+  });
 }
 
 export function hookCaptureLogFields(captureV2Mode, records, report, memoryIds = []) {
@@ -1565,14 +1549,10 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, recordOrRec
   const response = await fetch(config.url, {
     method: "POST",
     headers: {
-      accept: "application/json",
-      "content-type": "application/json",
+      ...modernMcpHeaders("tools/call", MCP_CAPTURE_TOOL),
       "CF-Access-Client-Id": config.clientId,
       "CF-Access-Client-Secret": config.clientSecret,
-      "x-orgbrain-tenant": tenantId,
-      "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
-      "Mcp-Method": "tools/call",
-      "Mcp-Name": MCP_CAPTURE_TOOL
+      "x-orgbrain-tenant": tenantId
     },
     body: JSON.stringify(buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords)),
     signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
@@ -1599,14 +1579,10 @@ export async function postLearningBatchViaMcp(config, tenantId, sourceName, inpu
   const response = await fetch(config.url, {
     method: "POST",
     headers: {
-      accept: "application/json",
-      "content-type": "application/json",
+      ...modernMcpHeaders("tools/call", MCP_LEARNING_BATCH_TOOL),
       "CF-Access-Client-Id": config.clientId,
       "CF-Access-Client-Secret": config.clientSecret,
-      "x-orgbrain-tenant": tenantId,
-      "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
-      "Mcp-Method": "tools/call",
-      "Mcp-Name": MCP_LEARNING_BATCH_TOOL
+      "x-orgbrain-tenant": tenantId
     },
     body: JSON.stringify(buildMcpLearningBatchRequest(tenantId, sourceName, input)),
     signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)

@@ -198,7 +198,7 @@ test("readLocalMemories refuses a non-current schema before any initialization",
     try { database.exec("PRAGMA user_version = 23"); } finally { database.close(); }
     assert.throws(
       () => readLocalMemories({ dbPath: ctx.dbPath, tenantId: "default", projectId: "aima" }),
-      /schema version 23 != 24/u
+      /schema version 23 != 25/u
     );
   } finally {
     await ctx.cleanup();

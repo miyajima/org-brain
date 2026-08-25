@@ -10,10 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.26.0",
-    "agents": "^0.7.4",
-    "hono": "^4.12.3",
-    "zod": "^3.25.76"
+    "hono": "^4.12.3"
   },
   "devDependencies": {
     "wrangler": "^4.80.0"

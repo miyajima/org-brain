@@ -17,6 +17,9 @@ import {
 import { DEFAULT_AUTONOMY_POLICY, normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
 
 const SUPPORTED = new Set(["codex", "claude", "cursor", "opencode", "openclaw"]);
+const MODERN_MCP_PROTOCOL = "2026-07-28";
+const LEGACY_MCP_PROTOCOL = "2025-11-25";
+const LEGACY_COMPATIBILITY_MS = 90 * 24 * 60 * 60 * 1000;
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const LOCAL_CLI_PATH = path.basename(MODULE_PATH) === "orgbrain.mjs"
   ? MODULE_PATH
@@ -462,6 +465,9 @@ export function remoteMcpPlan(agent, options = {}) {
     throw new Error("remote-mcp is supported only for codex, claude, or cursor");
   }
   if (!options.url?.trim()) throw new Error("--url is required for remote-mcp");
+  if ((options.mcpProtocol ?? "modern") !== "modern") {
+    throw new Error("Remote MCP requires protocol 2026-07-28; legacy compatibility is local-only");
+  }
   const scope = options.scope === "project" ? "project" : "user";
   const url = remoteUrl(options.url.trim(), options.tenantId?.trim() || "default");
   if (agent === "codex") {
@@ -470,8 +476,10 @@ export function remoteMcpPlan(agent, options = {}) {
       mode: "remote-mcp",
       transport: "streamable-http",
       auth: "oauth",
+      protocol_version: MODERN_MCP_PROTOCOL,
       executable: "codex",
       args: ["mcp", "add", "orgbrain", "--url", url],
+      pre_install: { executable: "codex", args: ["features", "enable", "mcp_2026_07_28"] },
       post_install: { executable: "codex", args: ["mcp", "login", "orgbrain"] },
       verify: ["codex", "mcp", "get", "orgbrain", "--json"]
     };
@@ -482,10 +490,12 @@ export function remoteMcpPlan(agent, options = {}) {
       mode: "remote-mcp",
       transport: "http",
       auth: "oauth",
+      protocol_version: MODERN_MCP_PROTOCOL,
       executable: "claude",
       args: ["mcp", "add", "--transport", "http", "--scope", scope, "orgbrain", url],
       verify: ["claude", "mcp", "get", "orgbrain"],
-      first_connection_auth: true
+      first_connection_auth: true,
+      client_environment: { MCP_PROTOCOL_NEGOTIATION: "auto" }
     };
   }
   const definition = JSON.stringify({ name: "orgbrain", url });
@@ -494,6 +504,8 @@ export function remoteMcpPlan(agent, options = {}) {
     mode: "remote-mcp",
     transport: "http",
     auth: "oauth",
+    protocol_version: MODERN_MCP_PROTOCOL,
+    requires_protocol_support: MODERN_MCP_PROTOCOL,
     executable: "cursor",
     args: ["--add-mcp", definition, ...(scope === "project" ? ["--mcp-workspace"] : [])],
     verify: ["cursor", "--version"],
@@ -668,13 +680,57 @@ export function connectorPlan(agent, options = {}) {
   if (!SUPPORTED.has(agent)) throw new Error(`connector must be one of ${[...SUPPORTED].join(", ")}`);
   const serverCommand = options.command?.trim() || "orgbrain";
   const serverArgs = Array.isArray(options.commandArgs) ? options.commandArgs : [];
-  const stdioArgs = [...serverArgs, "mcp"];
+  const mcpProtocol = options.mcpProtocol ?? "modern";
+  if (mcpProtocol !== "modern" && mcpProtocol !== "legacy") {
+    throw new Error("--mcp-protocol must be modern or legacy");
+  }
+  let compatibility = null;
+  if (mcpProtocol === "legacy") {
+    const now = Number(options.now ?? Date.now());
+    const deadline = options.legacyUntil
+      ? Date.parse(options.legacyUntil)
+      : now + LEGACY_COMPATIBILITY_MS;
+    if (!Number.isFinite(deadline) || deadline <= now) {
+      throw new Error("legacy MCP compatibility deadline must be a future ISO-8601 timestamp");
+    }
+    if (deadline > now + LEGACY_COMPATIBILITY_MS) {
+      throw new Error("legacy MCP compatibility cannot exceed 90 days");
+    }
+    compatibility = {
+      protocol_version: LEGACY_MCP_PROTOCOL,
+      legacy_until: new Date(deadline).toISOString()
+    };
+  }
+  const stdioArgs = compatibility
+    ? [...serverArgs, "mcp", "--compat", compatibility.protocol_version, "--legacy-until", compatibility.legacy_until]
+    : [...serverArgs, "mcp"];
+  const protocolVersion = compatibility?.protocol_version ?? MODERN_MCP_PROTOCOL;
   const scope = options.scope === "project" ? "project" : "user";
   if (agent === "codex") {
-    return { agent, transport: "stdio", executable: "codex", args: ["mcp", "add", "orgbrain", "--", serverCommand, ...stdioArgs], verify: ["codex", "mcp", "get", "orgbrain", "--json"], documentation: "https://developers.openai.com/codex/mcp/" };
+    return {
+      agent,
+      transport: "stdio",
+      protocol_version: protocolVersion,
+      compatibility,
+      executable: "codex",
+      args: ["mcp", "add", "orgbrain", "--", serverCommand, ...stdioArgs],
+      ...(compatibility ? {} : { pre_install: { executable: "codex", args: ["features", "enable", "mcp_2026_07_28"] } }),
+      verify: ["codex", "mcp", "get", "orgbrain", "--json"],
+      documentation: "https://developers.openai.com/codex/mcp/"
+    };
   }
   if (agent === "claude") {
-    return { agent, transport: "stdio", executable: "claude", args: ["mcp", "add", "orgbrain", "--scope", scope, "--", serverCommand, ...stdioArgs], verify: ["claude", "mcp", "get", "orgbrain"], documentation: "https://docs.anthropic.com/en/docs/claude-code/mcp" };
+    return {
+      agent,
+      transport: "stdio",
+      protocol_version: protocolVersion,
+      compatibility,
+      executable: "claude",
+      args: ["mcp", "add", "orgbrain", "--scope", scope, "--", serverCommand, ...stdioArgs],
+      ...(compatibility ? {} : { client_environment: { MCP_PROTOCOL_NEGOTIATION: "auto" } }),
+      verify: ["claude", "mcp", "get", "orgbrain"],
+      documentation: "https://docs.anthropic.com/en/docs/claude-code/mcp"
+    };
   }
   if (agent === "cursor") {
     const definition = JSON.stringify({
@@ -685,6 +741,8 @@ export function connectorPlan(agent, options = {}) {
     return {
       agent,
       transport: "stdio",
+      protocol_version: protocolVersion,
+      compatibility,
       executable: "cursor",
       args: ["--add-mcp", definition, ...(scope === "project" ? ["--mcp-workspace"] : [])],
       verify: ["cursor", "--version"],
@@ -692,9 +750,9 @@ export function connectorPlan(agent, options = {}) {
     };
   }
   if (agent === "opencode") {
-    return { agent, transport: "stdio", executable: "opencode2", args: ["mcp", "add", "orgbrain", ...(scope === "user" ? ["--global"] : []), "--", serverCommand, ...stdioArgs], verify: ["opencode2", "mcp", "list"], documentation: "https://opencode.ai/v2/docs/mcp-servers" };
+    return { agent, transport: "stdio", protocol_version: protocolVersion, compatibility, executable: "opencode2", args: ["mcp", "add", "orgbrain", ...(scope === "user" ? ["--global"] : []), "--", serverCommand, ...stdioArgs], verify: ["opencode2", "mcp", "list"], documentation: "https://opencode.ai/v2/docs/mcp-servers" };
   }
-  return { agent, transport: "stdio", executable: null, args: null, verify: ["openclaw", "config", "validate"], config_merge: { mcp: { servers: { orgbrain: { transport: "stdio", command: serverCommand, args: stdioArgs } } } }, documentation: "https://docs.openclaw.ai/cli/mcp" };
+  return { agent, transport: "stdio", protocol_version: protocolVersion, compatibility, executable: null, args: null, verify: ["openclaw", "config", "validate"], config_merge: { mcp: { servers: { orgbrain: { transport: "stdio", command: serverCommand, args: stdioArgs } } } }, documentation: "https://docs.openclaw.ai/cli/mcp" };
 }
 
 function run(executable, args) {
@@ -746,9 +804,11 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     const plan = remoteMcpPlan(agent, {
       url: args.get("--url", null),
       tenantId: args.get("--tenant-id", "default"),
-      scope: args.get("--scope", "user")
+      scope: args.get("--scope", "user"),
+      mcpProtocol: args.get("--mcp-protocol", "modern")
     });
     if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
+    if (plan.pre_install) await runCommand(plan.pre_install.executable, plan.pre_install.args);
     await runCommand(plan.executable, plan.args);
     if (plan.post_install) await runCommand(plan.post_install.executable, plan.post_install.args);
     return { ok: true, installed: true, agent, mode, verify: plan.verify };
@@ -884,10 +944,13 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
   const plan = connectorPlan(agent, {
     command: cliPath ? process.execPath : args.get("--command", "orgbrain"),
     commandArgs: cliPath ? [path.resolve(cliPath)] : [],
-    scope: args.get("--scope", "user")
+    scope: args.get("--scope", "user"),
+    mcpProtocol: args.get("--mcp-protocol", "modern"),
+    legacyUntil: args.get("--legacy-until", null)
   });
   if (!args.flags.has("--execute")) return { ok: true, dry_run: true, plan };
   if (!plan.executable) throw new Error("OpenClaw setup requires merging plan.config_merge into its config, then running the verify command");
+  if (plan.pre_install) await runCommand(plan.pre_install.executable, plan.pre_install.args);
   await runCommand(plan.executable, plan.args);
   return { ok: true, installed: true, agent, verify: plan.verify };
 }

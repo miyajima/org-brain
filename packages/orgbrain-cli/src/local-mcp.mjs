@@ -1,4 +1,14 @@
-import { createInterface } from "node:readline";
+import { randomUUID } from "node:crypto";
+import {
+  createMcpHandler,
+  fromJsonSchema,
+  hostHeaderValidationResponse,
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  McpServer,
+  originValidationResponse
+} from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { observeMemoryLearningEvent } from "../../shared/src/memory-learning-runtime.mjs";
 import {
   MEMORY_CONTRACT_V2_PROMPT_ID,
@@ -19,7 +29,60 @@ import {
   searchLocalManagedObjects
 } from "./lib/local-domain-recall.mjs";
 
+const LOCAL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
+export const LOCAL_MCP_PROTOCOL_VERSION = "2026-07-28";
+export const LOCAL_MCP_COMPAT_PROTOCOL_VERSION = "2025-11-25";
+
 const TOOL_DEFINITIONS = [
+  {
+    name: "orgbrain_memories_propose",
+    description: "Propose one local memory and inferred rationale without persisting it. Show the conclusion and reason to the user before confirming.",
+    inputSchema: {
+      type: "object",
+      required: ["item"],
+      properties: {
+        tenant_id: { type: "string" },
+        source: { type: "string" },
+        actor_type: { type: "string" },
+        actor_id: { type: "string" },
+        item: {
+          type: "object",
+          required: ["content"],
+          properties: {
+            external_key: { type: "string", maxLength: 256 },
+            content: { type: "string", minLength: 1, maxLength: 20000 },
+            summary: { type: "string", maxLength: 1000 },
+            tags: { type: "array", maxItems: 16, items: { type: "string", maxLength: 64 } },
+            created_at: { type: "integer" },
+            project_id: { type: ["string", "null"], maxLength: 128 },
+            business_category_id: { type: ["string", "null"], maxLength: 128 },
+            work_type: { type: ["string", "null"] }
+          }
+        },
+        entities: { type: "array", maxItems: 8, items: { type: "object" } },
+        evidence: { type: "array", maxItems: 8, items: { type: "object" } }
+      }
+    }
+  },
+  {
+    name: "orgbrain_memories_confirm",
+    description: "Persist a previously proposed local memory only after explicit user confirmation.",
+    inputSchema: {
+      type: "object",
+      required: ["confirmation_token", "approved"],
+      properties: {
+        tenant_id: { type: "string" },
+        confirmation_token: { type: "string", minLength: 1, maxLength: 64 },
+        approved: { type: "boolean" },
+        conclusion: { type: "string", maxLength: 240 },
+        reason_summary: { type: "string", maxLength: 500 },
+        decision_type: { type: "string", enum: ["adopt", "reject", "prioritize", "diagnose", "workaround", "policy"] },
+        status: { type: "string", maxLength: 64 },
+        entities: { type: "array", maxItems: 8, items: { type: "object" } },
+        evidence: { type: "array", maxItems: 8, items: { type: "object" } }
+      }
+    }
+  },
   {
     name: "orgbrain_context_enrich",
     description: "Retrieve local memory context and optional Domain Recall without network access.",
@@ -441,6 +504,176 @@ function content(value) {
   return [{ type: "text", text: JSON.stringify(value, null, 2) }];
 }
 
+function boundedString(value, limit, fallback = null) {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, limit) : fallback;
+}
+
+function screenInteractiveMemory(value, field) {
+  const text = boundedString(value, 20_000);
+  if (!text) throw new Error(`${field}_required`);
+  const sensitivePatterns = [
+    /\b(?:api[_-]?key|client[_-]?secret|password|passwd|token)\s*[:=]\s*[^\s,;]+/iu,
+    /\bBearer\s+[A-Za-z0-9._~+/-]+=*/iu,
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu,
+    /(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/u
+  ];
+  if (sensitivePatterns.some((pattern) => pattern.test(text))) {
+    throw new Error(`${field}_contains_sensitive_data`);
+  }
+  return text;
+}
+
+function rationaleProposal(item) {
+  const sentences = item.content.split(/(?<=[。.!?])\s+|\n+/u).map((value) => value.trim()).filter(Boolean);
+  const reason = sentences.find((sentence) => /^(?:理由|原因)\s*[:：]/u.test(sentence))
+    ?? sentences.find((sentence) => /(?:理由|原因|because|root cause)/iu.test(sentence))
+    ?? sentences.slice(0, 3).join(" ");
+  return {
+    decision_type: /(?:原則|必ず|使わず|毎回|再利用せず)/u.test(item.content) ? "policy" : "workaround",
+    conclusion: boundedString(item.summary, 240) ?? boundedString(sentences[0], 240, "No conclusion extracted"),
+    reason_summary: boundedString(reason?.replace(/^(?:理由|原因)\s*[:：]\s*/u, ""), 500, item.content),
+    status: "accepted",
+    confidence_score: 0.55
+  };
+}
+
+function normalizedEntities(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).flatMap((entity) => {
+    const name = boundedString(entity?.name, 128);
+    return name ? [{
+      name,
+      entity_type: boundedString(entity?.entity_type, 32, "unknown"),
+      role: boundedString(entity?.role, 32, "subject"),
+      confidence_score: Number.isFinite(entity?.confidence_score) ? entity.confidence_score : null,
+      external_ref: boundedString(entity?.external_ref, 256)
+    }] : [];
+  });
+}
+
+function normalizedEvidence(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).flatMap((entry) => {
+    const reference = boundedString(entry?.evidence_ref, 512);
+    return reference ? [{
+      evidence_type: boundedString(entry?.evidence_type, 32, "external"),
+      evidence_ref: reference,
+      relation: boundedString(entry?.relation, 32, "supports"),
+      note: boundedString(entry?.note, 500),
+      weight_score: Number.isFinite(entry?.weight_score) ? entry.weight_score : null
+    }] : [];
+  });
+}
+
+async function proposeLocalMemory(store, input) {
+  if (!input?.item || typeof input.item !== "object") throw new Error("item_required");
+  const tenantId = boundedString(input.tenant_id, 128, "default");
+  const item = {
+    external_key: boundedString(input.item.external_key, 256),
+    content: screenInteractiveMemory(input.item.content, "item.content"),
+    summary: input.item.summary == null ? null : screenInteractiveMemory(input.item.summary, "item.summary").slice(0, 1000),
+    tags: Array.isArray(input.item.tags)
+      ? [...new Set(input.item.tags.map((tag) => boundedString(tag, 64)).filter(Boolean))].slice(0, 16)
+      : [],
+    created_at: Number.isInteger(input.item.created_at) ? input.item.created_at : Date.now(),
+    project_id: boundedString(input.item.project_id, 128),
+    business_category_id: boundedString(input.item.business_category_id, 128),
+    work_type: boundedString(input.item.work_type, 32)
+  };
+  const proposedRationale = rationaleProposal(item);
+  const now = Date.now();
+  const token = randomUUID();
+  const payload = {
+    tenant_id: tenantId,
+    source: boundedString(input.source, 64, "local-mcp"),
+    actor_type: boundedString(input.actor_type, 64, "principal"),
+    actor_id: boundedString(input.actor_id, 128, process.env.USER || "local-user"),
+    proposed_memory: item,
+    proposed_rationale: proposedRationale,
+    proposed_entities: normalizedEntities(input.entities),
+    proposed_evidence: normalizedEvidence(input.evidence),
+    expires_at: now + LOCAL_CONFIRMATION_TTL_MS
+  };
+  await store.saveMcpConfirmation({
+    token,
+    tenant_id: tenantId,
+    payload,
+    created_at: now,
+    expires_at: payload.expires_at
+  });
+  return {
+    tenant_id: tenantId,
+    source: payload.source,
+    confirmation_token: token,
+    proposed_memory: item,
+    proposed_rationale: { ...proposedRationale, confirmation_state: "inferred_unconfirmed" },
+    proposed_entities: payload.proposed_entities,
+    proposed_evidence: payload.proposed_evidence
+  };
+}
+
+async function confirmLocalMemory(store, input) {
+  const tenantId = boundedString(input?.tenant_id, 128, "default");
+  const token = boundedString(input?.confirmation_token, 64);
+  if (!token) throw new Error("confirmation_token_required");
+  let rationaleId = null;
+  let confirmationState = null;
+  const consumed = await store.consumeMcpConfirmation({
+    token,
+    tenant_id: tenantId,
+    approved: input.approved,
+    buildCaptureInput(payload) {
+      const conclusion = boundedString(input.conclusion, 240, payload.proposed_rationale.conclusion);
+      const reason = boundedString(input.reason_summary, 500, payload.proposed_rationale.reason_summary);
+      screenInteractiveMemory(conclusion, "conclusion");
+      screenInteractiveMemory(reason, "reason_summary");
+      const corrected = conclusion !== payload.proposed_rationale.conclusion ||
+        reason !== payload.proposed_rationale.reason_summary ||
+        (input.decision_type && input.decision_type !== payload.proposed_rationale.decision_type) ||
+        (Array.isArray(input.entities) && input.entities.length > 0) ||
+        (Array.isArray(input.evidence) && input.evidence.length > 0);
+      const entities = Array.isArray(input.entities) && input.entities.length > 0
+        ? normalizedEntities(input.entities)
+        : payload.proposed_entities;
+      const evidence = Array.isArray(input.evidence) && input.evidence.length > 0
+        ? normalizedEvidence(input.evidence)
+        : payload.proposed_evidence;
+      rationaleId = randomUUID();
+      confirmationState = corrected ? "user_corrected" : "user_confirmed";
+      return captureDefaults({
+        ...payload.proposed_memory,
+        tenant_id: tenantId,
+        source: payload.source,
+        actor_type: payload.actor_type,
+        actor_id: payload.actor_id,
+        kind: "semantic",
+        summary: conclusion,
+        rationale: reason,
+        entities: entities.map((entity) => entity.name),
+        evidence: [...evidence, {
+          evidence_type: "memory",
+          evidence_ref: `local-rationale:${rationaleId}`,
+          relation: "context_for",
+          confirmation_state: confirmationState
+        }]
+      });
+    }
+  });
+  if (input.approved !== true) {
+    return { tenant_id: tenantId, approved: false, saved: false };
+  }
+  return {
+    tenant_id: tenantId,
+    approved: true,
+    saved: true,
+    memory_id: consumed.saved.memory_id,
+    rationale_id: rationaleId,
+    confirmation_state: confirmationState
+  };
+}
+
 function captureDefaults(input) {
   const tenantId = input.tenant_id || "default";
   const projectId = input.project_id || null;
@@ -474,6 +707,8 @@ function captureDefaults(input) {
 
 async function callTool(store, name, input) {
   const tenantId = input.tenant_id || "default";
+  if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
+  if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
     const memory = await store.retrieveContext({ tenant_id: tenantId, project_id: input.project_id ?? null, query: input.query, top_k: 5, token_budget: 6_000, principal_id: input.principal_id ?? null, search_mode: "hybrid_v4" });
     const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
@@ -737,13 +972,12 @@ function normalizeSearchMode(mode) {
 
 export async function handleLocalMcpRequest(store, request) {
   if (request.method === "initialize") {
-    return {
-      protocolVersion: request.params?.protocolVersion || "2025-03-26",
-      capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "OrgBrain Local", version: "0.1.0" }
-    };
+    throw Object.assign(new Error(`unsupported protocol version; use ${LOCAL_MCP_PROTOCOL_VERSION}`), { code: -32001 });
   }
   if (request.method === "ping") return {};
+  if (request.method === "server/discover") {
+    return { supportedVersions: [LOCAL_MCP_PROTOCOL_VERSION], ttlMs: 300_000, cacheScope: "private" };
+  }
   if (request.method === "tools/list") return { tools: TOOL_DEFINITIONS };
   if (request.method === "tools/call") {
     const name = request.params?.name;
@@ -760,35 +994,76 @@ export async function handleLocalMcpRequest(store, request) {
   throw Object.assign(new Error(`method not found: ${request.method}`), { code: -32601 });
 }
 
-export async function startLocalMcp(store) {
-  await store.init();
-  const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  for await (const line of lines) {
-    if (!line.trim()) continue;
-    let request;
-    try {
-      request = JSON.parse(line);
-    } catch {
-      process.stdout.write(`${JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32700, message: "Parse error" }
-      })}\n`);
-      continue;
+export function createLocalMcpServer(store, { protocolVersion = LOCAL_MCP_PROTOCOL_VERSION } = {}) {
+  const server = new McpServer(
+    { name: "OrgBrain Local", version: "0.1.0" },
+    {
+      instructions: "Search OrgBrain before repeating source discovery. Use propose then confirm for interactive memory writes.",
+      supportedProtocolVersions: [protocolVersion],
+      cacheHints: {
+        "server/discover": { ttlMs: 300_000, cacheScope: "private" },
+        "tools/list": { ttlMs: 300_000, cacheScope: "private" }
+      }
     }
-    if (request.id === undefined) continue;
-    try {
-      const result = await handleLocalMcpRequest(store, request);
-      process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: request.id, result })}\n`);
-    } catch (error) {
-      process.stdout.write(`${JSON.stringify({
-        jsonrpc: "2.0",
-        id: request.id,
-        error: {
-          code: typeof error?.code === "number" ? error.code : -32603,
-          message: error instanceof Error ? error.message : String(error)
+  );
+  for (const definition of TOOL_DEFINITIONS) {
+    server.registerTool(
+      definition.name,
+      {
+        description: definition.description,
+        inputSchema: fromJsonSchema(definition.inputSchema)
+      },
+      async (input) => {
+        try {
+          return { content: content(await callTool(store, definition.name, input)), isError: false };
+        } catch (error) {
+          return {
+            content: content({ error: error instanceof Error ? error.message : String(error) }),
+            isError: true
+          };
         }
-      })}\n`);
-    }
+      }
+    );
   }
+  return server;
+}
+
+export function createLocalMcpHttpHandler(store, options = {}) {
+  const protocolVersion = options.protocolVersion ?? LOCAL_MCP_PROTOCOL_VERSION;
+  const allowedHostnames = options.allowedHostnames ?? localhostAllowedHostnames();
+  const allowedOriginHostnames = options.allowedOriginHostnames ?? localhostAllowedOrigins();
+  const handler = createMcpHandler(
+    () => createLocalMcpServer(store, { protocolVersion }),
+    {
+      legacy: options.legacy ?? "reject",
+      route: options.route ?? "/mcp"
+    }
+  );
+  return {
+    ...handler,
+    async fetch(request) {
+      const rejected = hostHeaderValidationResponse(request, allowedHostnames)
+        ?? originValidationResponse(request, allowedOriginHostnames);
+      return rejected ?? handler.fetch(request);
+    }
+  };
+}
+
+export async function startLocalMcp(store, options = {}) {
+  await store.init();
+  const compatibility = options.compatibility === true;
+  if (compatibility) {
+    const deadline = Date.parse(String(options.legacyUntil ?? ""));
+    if (!Number.isFinite(deadline)) throw new Error("--legacy-until must be a valid ISO-8601 timestamp");
+    if (deadline <= Date.now()) throw new Error("local MCP compatibility deadline has expired");
+  }
+  return serveStdio(
+    () => createLocalMcpServer(store, {
+      protocolVersion: compatibility ? LOCAL_MCP_COMPAT_PROTOCOL_VERSION : LOCAL_MCP_PROTOCOL_VERSION
+    }),
+    {
+      legacy: compatibility ? "serve" : "reject",
+      onerror: (error) => process.stderr.write(`orgbrain mcp: ${error.message}\n`)
+    }
+  );
 }
