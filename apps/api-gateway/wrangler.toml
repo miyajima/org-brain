@@ -4,8 +4,10 @@ compatibility_date = "2026-03-03"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 [vars]
-# MCP OAuth rollout also requires an OAUTH_KV namespace binding and the
-# MCP_OAUTH_RESOURCE variable set to the canonical HTTPS /mcp URL.
+# MCP OAuth rollout also requires an OAUTH_KV namespace binding, the
+# MCP_OAUTH_RESOURCE variable set to the canonical HTTPS /mcp URL, and
+# MCP_ACCESS_AUD / MCP_HOOK_ACCESS_AUD secrets for the separate user and hook
+# Access applications.
 HYBRID_V3_MODE = "off"
 HYBRID_V4_MODE = "shadow"
 HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"

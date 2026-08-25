@@ -28,7 +28,7 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
    - `memory_basis: <memory_id or brief memory summary>`
    - `confidence: low|medium|high`
 9. If memory was consulted but did not replace another lookup, report `memory_used: yes` and `avoided_lookup: none` only when the detail is relevant to the user-visible outcome.
-10. Interactive Codex, Claude Code, and Cursor access must use the client's Cloudflare Access Managed OAuth flow. Automatic hooks use one Access Service Token per client installation; never reuse it across clients or machines.
+10. Interactive clients that support MCP `2026-07-28` must use the client's MCP OAuth flow. The API Gateway terminates OAuth; Cloudflare Access protects only the upstream user-login step. Automatic hooks use one Access Service Token per client installation on the separate hook edge; never reuse it across clients or machines.
 11. Treat hook, MCP, and skill as separate layers: hook selects when to run, MCP is the only preferred cloud transport, and this skill defines usage policy.
 12. For automatic hook capture, call the known capture tool directly without `server/discover` or `tools/list`; this path must not invoke an LLM.
 
@@ -49,10 +49,10 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 
 ## Initial setup
 
-1. Confirm the endpoint is the Access-protected `open-brain-mcp` `/mcp` URL, not the Console or direct API Gateway URL.
+1. Confirm the interactive endpoint is the canonical API Gateway OAuth `/mcp` URL, not the Console path or the separate Access-protected hook edge.
 2. For an interactive client, run `orgbrain connector setup <codex|claude|cursor> --mode remote-mcp --url <url>` as a dry run, then repeat with `--execute`. Codex additionally runs `codex mcp login orgbrain`; Claude Code and Cursor start OAuth on first connection. Leave OAuth credentials in the client credential store.
 3. For an automatic hook, create a pending installation in the Console and copy its one-time, ten-minute enrollment code. Create a dedicated Cloudflare Access Service Token for this installation.
-4. Review `orgbrain connector setup <client> --mode cloud-hooks --url <url> --workspace <path>` first. On `--execute`, enter the service-token Client ID, secret, and enrollment code through the masked TTY prompt or setup-only environment variables.
+4. Review `orgbrain connector setup <client> --mode cloud-hooks --url https://<hook-host>/mcp --workspace <path>` first. The hook hostname must be distinct from the interactive OAuth hostname. On `--execute`, enter the service-token Client ID, secret, and enrollment code through the masked TTY prompt or setup-only environment variables.
 5. The installer writes a private installation-specific file, never a shared hook credential file:
 
 ```dotenv
@@ -73,7 +73,8 @@ ORGBRAIN_TENANT_ID=default
 
 ## Operational Notes
 - OrgBrain master memory is Cloudflare D1.
-- The primary remote endpoint implements MCP `2026-07-28` as stateless Streamable HTTP and keeps an ordinary legacy-tool compatibility lane.
+- The primary remote endpoint implements only MCP `2026-07-28` as stateless Streamable HTTP; it does not silently downgrade or expose a legacy protocol lane.
+- A client without MCP `2026-07-28` support must use the explicit local `2025-11-25` compatibility command with a required deadline of at most 90 days. This is capability-based, not client-name-specific.
 - OpenClaw local memory remains cache/index.
 - Retrieval impact should be measured primarily with D1 `retrieval_events` and opt-in measurement mode; the final-report impact note is a lightweight self-report for cases where memory avoided another lookup.
 - For an eligible measured run, call `orgbrain_memory_impact_start` before retrieval and always call `orgbrain_memory_impact_report` at completion, including `memory_used=false`, `avoided_lookup=none`, or a failed outcome. Reuse stable `external_run_id` and idempotency keys across retries.

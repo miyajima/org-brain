@@ -2,17 +2,17 @@
 
 ## Architecture
 - Endpoint: `ORGBRAIN_MCP_URL=https://mcp.<managed-domain>/mcp`
-- Public edge: `apps/mcp`, protected by a Cloudflare Access self-hosted application on `/mcp*`
-- Internal execution: `apps/api-gateway`, reached only through the `API` service binding
-- Interactive auth: Cloudflare Access Managed OAuth (CIMD/DCR and PKCE)
-- Unattended hooks: an explicit Access service token bound to a one-time OrgBrain client enrollment
-- Tenant control: the Gateway verifies the Access JWT audience, resolves an existing identity or installation, and then applies tenant/project RBAC
-- Protocol: MCP `2026-07-28` stateless Streamable HTTP, with stateless compatibility for ordinary 2025 clients
+- Interactive public edge and execution: `apps/api-gateway`, routed directly on the canonical MCP hostname
+- Hook migration edge: `apps/mcp`, a separate Access-protected proxy to the API service binding
+- Interactive auth: OrgBrain's MCP OAuth provider (CIMD/DCR, authorization code, PKCE), with Cloudflare Access as the upstream user login
+- Unattended hooks during migration: an explicit Access service token bound to a one-time OrgBrain client enrollment on the separate hook edge
+- Tenant control: OAuth authorization stores the Access-authenticated principal and granted scopes; each tool call then applies tenant/project RBAC. Hook calls resolve their existing installation identity separately.
+- Protocol: MCP `2026-07-28` stateless Streamable HTTP; the Remote endpoint rejects older protocol eras
 
 ## Why this shape
-- Access owns the OAuth challenge and discovery documents; OrgBrain stores no OAuth token.
+- The MCP OAuth provider owns resource/authorization discovery and keeps OAuth state in the dedicated `OAUTH_KV`; OrgBrain's business database stores no OAuth token.
 - The public MCP hostname is independent from Console and never uses `/api` or `/api/mcp`.
-- The edge forwards only the signed Access assertion and bounded MCP protocol headers.
+- OAuth bearer tokens terminate at API Gateway; they are not forwarded through the Access hook proxy.
 - The Gateway remains the single authorization, tenant isolation, audit, and tool-execution boundary.
 - No MCP protocol session or sticky routing is required for business state.
 
@@ -29,27 +29,38 @@ Required modern HTTP headers are preserved end-to-end:
 - `Mcp-Method`
 - `Mcp-Name` for named tool operations
 
-The handler also accepts ordinary legacy tool calls through its stateless
-compatibility lane. Legacy session replay, standalone GET streams, and pushed
-server-to-client requests are intentionally unsupported because OrgBrain tools
-keep business state in D1 rather than MCP transport sessions.
+The handler is configured with `legacy: "reject"`; it does not silently
+downgrade. A client without MCP `2026-07-28` support must use the explicit
+local `2025-11-25` compatibility command with a required deadline of at most
+90 days. Legacy session replay, standalone GET streams, and pushed
+server-to-client requests are not part of the Remote product profile because
+OrgBrain tools keep business state in D1 rather than MCP transport sessions.
 
 ## Required Worker Settings
-Set on `apps/api-gateway`:
+Set on `apps/api-gateway` for the OAuth-only target:
 
-- `MCP_AUTH_MODE=access`
+- `MCP_AUTH_MODE=oauth`
 - `ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com`
-- `MCP_ACCESS_AUD=<Access application audience>`
+- `MCP_ACCESS_AUD=<Access application audience used for upstream user login>`
+- `MCP_HOOK_ACCESS_AUD=<separate hook Service Auth application audience>`
+- `MCP_OAUTH_RESOURCE=https://mcp.<managed-domain>/mcp`
+- `OAUTH_KV=<dedicated KV namespace binding>`
 - the existing D1 and rate-limiter bindings
 
-`cf provision --with-managed-oauth` writes only the Access audience as a Worker
-secret after the Access application exists. It requires an existing
-`--access-policy-id`; it does not create an allow-all policy.
+`cf provision --with-managed-oauth` routes API Gateway on the canonical hostname,
+routes the thin hook worker on a distinct hook hostname, and uses one
+user Access application for `/oauth/authorize*` plus a separate Service Auth
+application for that hook hostname. Before
+`--execute`, `apps/api-gateway/wrangler.toml` must already contain the dedicated
+`OAUTH_KV` binding and the exact `MCP_OAUTH_RESOURCE`; otherwise provisioning
+stops before any Cloudflare mutation. It does not create an allow-all policy.
 
-For the one-release migration window only, `MCP_AUTH_MODE=dual` can retain the
-legacy static-token configuration below. New installations must use Access;
-after OAuth and hook migration is verified, set `MCP_AUTH_MODE=access` and
-remove these legacy secrets.
+During migration, `MCP_AUTH_MODE=dual` keeps existing Access service-token hooks
+working while interactive clients move to OAuth. Do not switch to `oauth` until
+every unattended hook has an approved OAuth-capable replacement or has been
+retired; OAuth-only mode intentionally rejects the old hook credential path.
+The older static-token configuration below is a separate auth migration path,
+not MCP protocol compatibility.
 
 ```json
 {
@@ -81,21 +92,31 @@ Legacy tenant policy:
 pnpm exec orgbrain cf provision --root . \
   --with-managed-oauth \
   --mcp-host mcp.example.com \
-  --access-policy-id <reviewed-policy-id>
+  --hook-host hooks.example.com \
+  --access-policy-id <reviewed-user-policy-id> \
+  --hook-access-policy-id <reviewed-service-auth-policy-id>
 
 # Review the plan, then repeat with --execute.
 pnpm exec orgbrain cf doctor --root . --live \
-  --mcp-url https://mcp.example.com/mcp
+  --mcp-url https://mcp.example.com/mcp \
+  --hook-url https://hooks.example.com/mcp
 ```
 
 ## Auth Configuration
 1. Create a least-privilege Access policy and record its ID.
-2. Provision the `/mcp*` self-hosted application with Managed OAuth enabled.
-3. Run `codex mcp login orgbrain` for an existing OrgBrain user. Access handles
-   the 401 challenge, protected-resource discovery, authorization-server
-   discovery, DCR/CIMD, and PKCE.
-4. For a cloud hook, create one client enrollment in Console and use a separate
-   Access service token. Revoke the Access setup token after initial setup.
+2. Provision a user Access application covering only
+   `mcp.example.com/oauth/authorize*` and a distinct Service Auth application
+   covering `hooks.example.com/*`. They use separate audiences and policies.
+   The provisioner detects and migrates the legacy `mcp.example.com/mcp*`
+   application to the hook hostname rather than leaving overlapping Access
+   protection on the OAuth resource endpoint.
+3. Run `codex mcp login orgbrain` for an existing OrgBrain user. The MCP OAuth
+   provider handles the 401 challenge, protected-resource discovery,
+   authorization-server discovery, DCR/CIMD, and PKCE; Access authenticates the
+   browser only at the authorization endpoint.
+4. For a cloud hook, create one client enrollment in Console and configure
+   `https://hooks.example.com/mcp` with a separate Access service token. Revoke
+   the Access setup token after initial setup.
 
 ## API Key Principal Identity
 For `/v1/*` and `/api/*` HTTP APIs, `API_TENANT_POLICY_JSON` `principal` values are the canonical identity for API-key authenticated requests.
@@ -168,7 +189,10 @@ Raw/episodic memories are not group-published in this phase.
 ```
 
 ### Human user flow
-- Browser-based login through Cloudflare Access Managed OAuth is the default.
+- The client's MCP OAuth flow is the default. The API Gateway owns OAuth
+  discovery, registration, authorization-code/PKCE exchange, and bearer-token
+  validation; Cloudflare Access protects only the upstream browser login at
+  `/oauth/authorize*`.
 - Optionally include `x-orgbrain-tenant` for explicit tenant selection; the
   Gateway rejects tenants not present in the verified identity grant.
 - The user must already exist in OrgBrain; MCP login does not JIT-create an identity.

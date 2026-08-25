@@ -1,41 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const registeredTools = vi.hoisted(() => [] as string[]);
-
-vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => {
-  class MockMcpServer {
-    tool(name: string) {
-      registeredTools.push(name);
-    }
-  }
-  return { McpServer: MockMcpServer };
-});
-
-vi.mock("agents/mcp", () => {
-  class MockMcpAgent {
-    env = {};
-    props = { tenantId: "default" };
-  }
-  return { McpAgent: MockMcpAgent };
-});
-
-describe("legacy OrgBrain MCP tool surface", () => {
-  beforeEach(() => {
-    registeredTools.length = 0;
-  });
-
-  it("registers agent message tools", async () => {
-    const { OrgBrainMCP } = await import("../src/index");
-    const agent = new (OrgBrainMCP as any)();
-    await agent.init();
-
-    expect(registeredTools).toContain("orgbrain_messages_send");
-    expect(registeredTools).toContain("orgbrain_messages_inbox");
-    expect(registeredTools).toContain("orgbrain_messages_get");
-    expect(registeredTools).toContain("orgbrain_messages_read");
-    expect(registeredTools).toContain("orgbrain_messages_ack");
-  });
-});
+import { describe, expect, it } from "vitest";
 
 describe("Access MCP proxy", () => {
   it("forwards only signed Access and MCP protocol headers", async () => {
@@ -49,6 +12,7 @@ describe("Access MCP proxy", () => {
         "cf-access-jwt-assertion": "signed.assertion.jwt",
         "content-type": "application/json",
         "mcp-protocol-version": "2026-07-28",
+        "mcp-session-id": "legacy-session-must-not-forward",
         "x-orgbrain-tenant": "default",
         "x-untrusted": "drop-me"
       },
@@ -58,6 +22,8 @@ describe("Access MCP proxy", () => {
     expect(request.url).toBe("https://internal/mcp");
     expect(request.headers.get("cf-access-jwt-assertion")).toBe("signed.assertion.jwt");
     expect(request.headers.get("mcp-protocol-version")).toBe("2026-07-28");
+    expect(request.headers.get("mcp-session-id")).toBeNull();
+    expect(request.headers.get("x-orgbrain-hook-edge")).toBe("service-binding-v1");
     expect(request.headers.get("x-orgbrain-tenant")).toBe("default");
     expect(request.headers.get("authorization")).toBeNull();
     expect(request.headers.get("cf-access-client-id")).toBeNull();

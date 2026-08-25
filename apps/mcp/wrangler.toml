@@ -7,11 +7,10 @@ compatibility_flags = ["nodejs_compat"]
 binding = "API"
 service = "open-brain-api-gateway"
 
-[durable_objects]
-bindings = [
-  { name = "MCP_OBJECT", class_name = "OrgBrainMCP" }
-]
-
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["OrgBrainMCP"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["OrgBrainMCP"]

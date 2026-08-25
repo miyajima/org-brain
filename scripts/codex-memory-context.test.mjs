@@ -146,6 +146,57 @@ test("Codex prompt hook returns no context for acknowledgements, unrelated promp
   }
 });
 
+test("Codex prompt hook makes every configured remote-context failure observable", async () => {
+  const ctx = await fixture();
+  const payload = {
+    hook_event_name: "UserPromptSubmit",
+    session_id: "remote-context-failure",
+    cwd: ctx.workspace,
+    prompt: "Continue the current implementation using confirmed decisions"
+  };
+  const baseEnv = {
+    ...ctx.env,
+    ORGBRAIN_ENABLE_CLOUD_MEMORY: "true",
+    ORGBRAIN_LOCAL_CONTEXT_ENABLED: "true",
+    ORGBRAIN_MCP_URL: "https://hooks.example.test/mcp"
+  };
+  try {
+    const incomplete = await buildCodexMemoryContext(payload, { ...ctx, env: baseEnv });
+    assert.match(incomplete.hookSpecificOutput.additionalContext, /configuration_incomplete/u);
+
+    const completeEnv = {
+      ...baseEnv,
+      ORGBRAIN_MCP_CLIENT_ID: "test-id",
+      ORGBRAIN_MCP_CLIENT_SECRET: "test-secret",
+      ORGBRAIN_CLIENT_INSTALLATION_ID: "test-installation"
+    };
+    const network = await buildCodexMemoryContext(payload, {
+      ...ctx,
+      env: completeEnv,
+      fetchImpl: async () => { throw new Error("private detail must not leak"); }
+    });
+    assert.match(network.hookSpecificOutput.additionalContext, /network_or_timeout/u);
+    assert.doesNotMatch(network.hookSpecificOutput.additionalContext, /private detail/u);
+
+    const unavailable = await buildCodexMemoryContext(payload, {
+      ...ctx,
+      env: completeEnv,
+      fetchImpl: async () => new Response("hidden upstream body", { status: 503 })
+    });
+    assert.match(unavailable.hookSpecificOutput.additionalContext, /http_503/u);
+    assert.doesNotMatch(unavailable.hookSpecificOutput.additionalContext, /hidden upstream body/u);
+
+    const malformed = await buildCodexMemoryContext(payload, {
+      ...ctx,
+      env: completeEnv,
+      fetchImpl: async () => Response.json({ jsonrpc: "2.0", result: {} })
+    });
+    assert.match(malformed.hookSpecificOutput.additionalContext, /invalid_response/u);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("Codex restores all explicit answers after compaction and blocks the same questions", async () => {
   const ctx = await fixture();
   try {

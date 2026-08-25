@@ -10,10 +10,12 @@ const handlerCalls = vi.hoisted(() => [] as Array<{
 vi.mock("agents/mcp/server", () => {
   return {
     createMcpHandler: (_factory: unknown, options: Record<string, unknown>) =>
-      async (request: Request) => {
-        handlerCalls.push({ request, options });
-        return new Response("mcp handler reached", { status: 418 });
-      }
+      ({
+        fetch: async (request: Request) => {
+          handlerCalls.push({ request, options });
+          return new Response("mcp handler reached", { status: 418 });
+        }
+      })
   };
 });
 
@@ -96,7 +98,7 @@ describe("MCP routing under Hono mount path stripping", () => {
     expect(text).toContain("mcp handler reached");
     expect(handlerCalls.at(-1)?.options).toMatchObject({
       route: "/",
-      legacy: "stateless",
+      legacy: "reject",
       corsOptions: false,
       authContext: {
         props: {
@@ -134,5 +136,32 @@ describe("MCP routing under Hono mount path stripping", () => {
     const res = await app.fetch(req, env, {} as ExecutionContext);
     expect(res.status).toBe(503);
     expect(await res.text()).toContain("rate limiter is not configured");
+  });
+
+  it("rejects non-installation identities on the dedicated hook edge", async () => {
+    const app = new Hono<{ Bindings: Env }>();
+    mountMcp(app);
+    const req = new Request("https://example.com/mcp", {
+      headers: {
+        "x-orgbrain-hook-edge": "service-binding-v1",
+        "cf-access-client-id": "legacy-id",
+        "cf-access-client-secret": "legacy-secret"
+      }
+    });
+    const env = {
+      MCP_AUTH_MODE: "dual",
+      MCP_HOOK_ACCESS_AUD: "hook-audience",
+      MCP_SERVICE_TOKENS_JSON: JSON.stringify({
+        tokens: [{
+          client_id: "legacy-id",
+          client_secret: "legacy-secret",
+          principal: "service:test",
+          tenants: ["default"]
+        }]
+      })
+    } as Env;
+    const response = await app.fetch(req, env, {} as ExecutionContext);
+    expect(response.status).toBe(401);
+    expect(await response.text()).toContain("registered Access service-token installations");
   });
 });

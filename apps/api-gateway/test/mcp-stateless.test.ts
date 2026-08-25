@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { mountMcp } from "../src/mcp";
+import { handleOrgBrainMcpRequest, mountMcp } from "../src/mcp";
 import type { Env } from "../src/types";
 
 const MODERN_META = {
@@ -74,6 +74,8 @@ describe("MCP 2026-07-28 stateless transport", () => {
         supportedVersions?: string[];
         ttlMs?: number;
         cacheScope?: string;
+        resultType?: string;
+        _meta?: Record<string, unknown>;
       };
     };
 
@@ -82,8 +84,10 @@ describe("MCP 2026-07-28 stateless transport", () => {
     expect(discoveryBody.result?.supportedVersions).toContain("2026-07-28");
     expect(discoveryBody.result).toMatchObject({
       ttlMs: 300_000,
-      cacheScope: "private"
+      cacheScope: "private",
+      resultType: "complete"
     });
+    expect(discoveryBody.result?._meta).toHaveProperty("io.modelcontextprotocol/serverInfo");
 
     const tools = await app.fetch(modernRequest("tools/list", 2), env, ctx);
     const toolsBody = await tools.json() as {
@@ -91,6 +95,8 @@ describe("MCP 2026-07-28 stateless transport", () => {
         tools?: Array<{ name: string; description?: string }>;
         ttlMs?: number;
         cacheScope?: string;
+        resultType?: string;
+        _meta?: Record<string, unknown>;
       };
     };
 
@@ -102,11 +108,13 @@ describe("MCP 2026-07-28 stateless transport", () => {
     expect(toolsBody.result?.tools?.find((tool) => tool.name === "orgbrain_domain_recall_feedback")?.description).toContain("範囲が違う");
     expect(toolsBody.result).toMatchObject({
       ttlMs: 300_000,
-      cacheScope: "private"
+      cacheScope: "private",
+      resultType: "complete"
     });
+    expect(toolsBody.result?._meta).toHaveProperty("io.modelcontextprotocol/serverInfo");
   });
 
-  it("keeps ordinary 2025 clients on the stateless compatibility lane", async () => {
+  it("rejects ordinary 2025 clients instead of exposing a Remote compatibility lane", async () => {
     const app = new Hono<{ Bindings: Env }>();
     mountMcp(app);
     const env = testEnv();
@@ -132,23 +140,46 @@ describe("MCP 2026-07-28 stateless transport", () => {
         }
       })
     }), env, ctx);
-    const initializeBody = await readJsonRpc(initialize) as {
-      result?: { protocolVersion?: string };
-    };
+    const initializeBody = await readJsonRpc(initialize) as { error?: { code?: number; message?: string } };
 
-    expect(initialize.status).toBe(200);
+    expect(initialize.status).toBe(400);
     expect(initialize.headers.get("mcp-session-id")).toBeNull();
-    expect(initializeBody.result?.protocolVersion).toBe("2025-11-25");
+    expect(initializeBody.error?.message).toMatch(/unsupported protocol version/i);
+  });
 
-    const tools = await app.fetch(new Request("https://example.com/mcp", {
+  it("returns an OAuth insufficient-scope challenge before a disallowed write call", async () => {
+    const request = new Request("https://example.com/mcp", {
       method: "POST",
-      headers: { ...headers, "mcp-protocol-version": "2025-11-25" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
-    }), env, ctx);
-    const toolsBody = await readJsonRpc(tools) as { result?: { tools?: Array<{ name: string }> } };
-
-    expect(tools.status).toBe(200);
-    expect(tools.headers.get("mcp-session-id")).toBeNull();
-    expect(toolsBody.result?.tools?.some((tool) => tool.name === "orgbrain_context_enrich")).toBe(true);
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2026-07-28",
+        "mcp-method": "tools/call",
+        "mcp-name": "orgbrain_memories_propose"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "orgbrain_memories_propose",
+          arguments: { item: { content: "safe test" } },
+          _meta: MODERN_META
+        }
+      })
+    });
+    const response = await handleOrgBrainMcpRequest(request, testEnv(), {} as ExecutionContext, {
+      principal: "user:test",
+      tenantId: "default",
+      allowedTenants: ["default"],
+      source: "oauth",
+      defaultRole: "reader",
+      runtimeActor: "principal:user:test",
+      scopes: ["orgbrain:read"]
+    });
+    expect(response.status).toBe(403);
+    expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
+    expect(response.headers.get("www-authenticate")).toContain('scope="orgbrain:write"');
+    expect(response.headers.get("www-authenticate")).toContain('resource="https://example.com/mcp"');
   });
 });

@@ -15,6 +15,11 @@ type OAuthProps = {
 type OAuthEnv = Env & { OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers };
 type BaseFetch = (request: Request, env: Env, ctx: ExecutionContext) => Response | Promise<Response>;
 
+export async function oauthProviderSubject(principal: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(principal));
+  return `usr_${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 const html = (value: unknown) => String(value ?? "").replace(/[&<>"']/gu, (char) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
 })[char]!);
@@ -48,6 +53,9 @@ async function authorizationHandler(request: Request, env: OAuthEnv, baseFetch: 
   const client = await env.OAUTH_PROVIDER.lookupClient(oauthRequest.clientId);
   if (!client) return new Response("Unknown OAuth client", { status: 400 });
   const access = await resolveAccessUser(request, env);
+  if (access.source !== "access-user") {
+    return new Response("Interactive user authentication is required", { status: 403 });
+  }
   if (request.method === "GET") return consentPage(request, oauthRequest, client.clientName ?? oauthRequest.clientId);
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   const form = await request.formData();
@@ -60,7 +68,10 @@ async function authorizationHandler(request: Request, env: OAuthEnv, baseFetch: 
   if (scopes.length !== oauthRequest.scope.length) return new Response("Unsupported scope", { status: 400 });
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
     request: oauthRequest,
-    userId: access.principal,
+    // The provider serializes userId with colon delimiters. OrgBrain canonical
+    // principals intentionally contain colons, so use a stable opaque subject
+    // there and retain the canonical principal only inside encrypted props.
+    userId: await oauthProviderSubject(access.principal),
     metadata: { tenant_id: access.tenantId, client_name: client.clientName ?? oauthRequest.clientId },
     scope: scopes,
     props: { tenantId: access.tenantId, principal: access.principal, defaultRole: access.defaultRole, scopes } satisfies OAuthProps

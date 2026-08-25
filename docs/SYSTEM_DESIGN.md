@@ -334,8 +334,8 @@ approved.
   hash-only stored scoped bearer tokens.
 - Browser preflight requests for `/v1/*` and `/api/*` are handled before API-key auth, while non-OPTIONS requests still require `x-api-key`.
 - Browser traffic uses the Pages proxy; the service API key never reaches the client.
-- Remote MCPの対話クライアントはAccess Managed OAuth、無人hookは導入単位のAccess Service Tokenを使う。Gatewayはsigned assertionだけを検証し、本文や任意headerのprincipalを信用しない。
-- MCP JWTは必須の`MCP_ACCESS_AUD`と`ACCESS_TEAM_DOMAIN`由来issuer/JWKSでAPI用OIDCから独立して検証する。`MCP_AUTH_MODE`未設定は`access`、明示した移行期間だけ`dual`を許可する。
+- Remote MCPの対話クライアントはAPI Gatewayが終端するMCP OAuthを使い、Accessは`/oauth/authorize*`の上流ログインだけを保護する。無人hookは別のhook migration edgeで導入単位のAccess Service Tokenを使う。Gatewayは検証済みOAuth grantまたはsigned Access assertionだけを信頼し、本文や任意headerのprincipalを信用しない。
+- 上流ログインとhookのAccess JWTは別々の`MCP_ACCESS_AUD`／`MCP_HOOK_ACCESS_AUD`と`ACCESS_TEAM_DOMAIN`由来issuer/JWKSでAPI用OIDCから独立して検証する。`MCP_AUTH_MODE`未設定は`access`、移行期間は`dual`、hook移行後は`oauth`とする。
 - Service-token assertionはactive installationへhash lookupし、owner principalが現在もactiveであることを各認証時に確認する。owner principalと`client:<installation-id>` runtime actorを監査上分離し、hook capabilityは`orgbrain_memories_capture_rationale`だけに限定する。
 - HTTP and mutating MCP calls append hash-chained outcome audit events.
 - Fixed-role RBAC, record ACLs, scoped tokens, retention, and legal holds are

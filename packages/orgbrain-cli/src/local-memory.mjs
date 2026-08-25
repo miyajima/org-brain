@@ -81,14 +81,14 @@ Usage:
   orgbrain backup restore --from <path>
   orgbrain migrate --from <legacy-sqlite>
   orgbrain serve [--host 127.0.0.1] [--port 8788]
-  orgbrain mcp
+  orgbrain mcp [--compat 2025-11-25 --legacy-until <ISO-8601>]
   orgbrain event ingest <codex|claude|opencode|openclaw> [json-payload]
   orgbrain hook <codex-context|codex-stop|codex-pre-tool|codex-post-tool|codex-pre-compact|claude-context|claude-stop|cursor-context|cursor-stop|flush>
   orgbrain maintenance <run|status|install|uninstall> [--schedule daily] [--apply] [--execute]
   orgbrain autonomy <status|explain|configure|freeze|rollback|run> [--workspace <path>] [--scope workspace|tenant] [--profile <profile>] [--mode <mode>] [--run <run-id>] [--evidence <json>] [--state-dir <path>] [--state-file <path>] [--judge-runner <module>] [--quarantine-runner <module>] [--qualification-runner <module>] [--scan-sessions] [--sessions-root <path>] [--dry-run] [--execute]
-  orgbrain cf doctor [--root <checkout>] [--live] [--mcp-url <https-url>]
-  orgbrain cf provision [--root <checkout>] [--with-vectorize] [--with-managed-oauth --mcp-host <host> --access-policy-id <id>] [--execute]
-  orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--url <https-url>] [--maintenance daily|off] [--cli-path <local-memory.mjs>] [--scope user|project] [--execute] [--approve-hooks]
+  orgbrain cf doctor [--root <checkout>] [--live] [--mcp-url <https-url>] [--hook-url <https-url>]
+  orgbrain cf provision [--root <checkout>] [--with-vectorize] [--with-managed-oauth --mcp-host <host> --hook-host <host> --access-policy-id <id> --hook-access-policy-id <id>] [--execute]
+  orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--mcp-protocol modern|legacy] [--legacy-until <ISO-8601>] [--url <https-url>] [--maintenance daily|off] [--cli-path <local-memory.mjs>] [--scope user|project] [--execute] [--approve-hooks]
 
 Compatibility aliases:
   orgbrain upsert | search | list | export-markdown
@@ -845,8 +845,19 @@ async function main() {
   } else if (command === "serve") {
     await serve(store, args);
   } else if (command === "mcp") {
-    const { startLocalMcp } = await import("./local-mcp.mjs");
-    await startLocalMcp(store);
+    const {
+      LOCAL_MCP_COMPAT_PROTOCOL_VERSION,
+      startLocalMcp
+    } = await import("./local-mcp.mjs");
+    const compat = args.get("--compat", null);
+    const legacyUntil = args.get("--legacy-until", null);
+    if (compat && compat !== LOCAL_MCP_COMPAT_PROTOCOL_VERSION) {
+      throw new Error(`--compat must be ${LOCAL_MCP_COMPAT_PROTOCOL_VERSION}`);
+    }
+    if (Boolean(compat) !== Boolean(legacyUntil)) {
+      throw new Error("--compat and --legacy-until must be provided together");
+    }
+    await startLocalMcp(store, { compatibility: Boolean(compat), legacyUntil });
   } else if (command === "event" && action === "ingest") {
     const source = rest[0];
     if (!source) throw new Error("event ingest requires an agent source");
