@@ -49,7 +49,13 @@ export interface IdentityPort<TEnv extends RouteAppEnv> extends CommonHttpPort<T
   revokeAllSessions(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
   getOrganization(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
   updateOrganization(env: TEnv["Bindings"], tenantId: string, body: unknown): Promise<unknown>;
-  listUsers(env: TEnv["Bindings"], tenantId: string, query?: string): Promise<unknown>;
+  listUsers(env: TEnv["Bindings"], tenantId: string, options?: {
+    query?: string;
+    status?: "invited" | "active" | "suspended" | "deprovisioned" | null;
+    role?: "tenant_admin" | "project_owner" | "contributor" | "reader" | "auditor" | "service_agent" | null;
+    limit?: number;
+    offset?: number;
+  }): Promise<unknown>;
   createUser(env: TEnv["Bindings"], tenantId: string, body: unknown, principal: string): Promise<unknown>;
   updateUser(env: TEnv["Bindings"], tenantId: string, principal: string, body: unknown, actor: string): Promise<unknown>;
   listDirectory(env: TEnv["Bindings"], tenantId: string, query?: string): Promise<unknown>;
@@ -85,7 +91,8 @@ export interface CollaborationPort<TEnv extends RouteAppEnv> extends CommonHttpP
   getGroup(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, includeMembers: boolean): Promise<unknown>;
   updateGroup(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, body: unknown, includeMembers: boolean): Promise<unknown>;
   addGroupMember(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, body: unknown, includeMembers: boolean): Promise<unknown>;
-  removeGroupMember(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, member: string, includeMembers: boolean): Promise<unknown>;
+  getGroupMemberImpact(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, member: string, includeMembers: boolean): Promise<unknown>;
+  removeGroupMember(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, member: string, expectedImpactDigest: string | null, includeMembers: boolean): Promise<unknown>;
   archiveGroup(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, includeMembers: boolean): Promise<unknown>;
   updateResourceShare(env: TEnv["Bindings"], body: unknown, principal: string): Promise<unknown>;
   getResourceShare(env: TEnv["Bindings"], tenantId: string, resourceType: string, resourceId: string): Promise<unknown>;

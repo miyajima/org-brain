@@ -97,7 +97,7 @@ export function buildOperationsActions(status: OperationsStatus, locale: Operati
     count: conflictingMemories,
     title: copy.conflict[0] as string,
     reason: (copy.conflict[1] as (count: number) => string)(conflictingMemories),
-    href: "#memory-health"
+    href: "/memories?attention=critical&sort=attention&lifecycle=all&scope=org"
   });
   if (lowConfidence > 0 || unconfirmed > 0) actions.push({
     id: "decision-review",

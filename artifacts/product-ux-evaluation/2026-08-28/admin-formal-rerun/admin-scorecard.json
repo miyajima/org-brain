@@ -1,0 +1,181 @@
+{
+  "schema_version": "1.0",
+  "method_version": "1.0.0",
+  "generated_at": "2026-08-28T16:49:10+09:00",
+  "commit": "629490eb6922bfa2213cb21cff7c409d5a65af11",
+  "working_tree": "dirty",
+  "scope": "admin_console_10_axes",
+  "official_full_run": false,
+  "normalization": "The official rubric weights are normalized across the ten admin-relevant axes only (weight 0.83). This is the formal admin-console rescore comparable with the 2026-08-27 81.3 score, not the official 14-axis product score.",
+  "score": 92.4,
+  "previous_score": 81.3,
+  "delta": 11.1,
+  "scoped_evidence_coverage": 1.0,
+  "full_rubric_weight_covered": 0.83,
+  "measurement_input": "measurement-input.json",
+  "completion_accepted": false,
+  "completion_reasons": [
+    "The scoped score is below the 96-point completion threshold.",
+    "The four priority axes are below 96: clarity 91.0, simplicity 92.5, operability 88.5, goal reachability 93.5.",
+    "The Operations-to-memory attention journey is inconsistent in the current local fixture.",
+    "Several main-memory controls remain below the required 44px target size.",
+    "Manual VoiceOver verification and two consecutive fresh runs were not completed in this rescore.",
+    "Local setup, Cloudflare setup, AI safety, and personal-fit axes were outside this admin-only run."
+  ],
+  "axes": {
+    "clarity": {
+      "score": 91.0,
+      "previous": 82.0,
+      "items": {
+        "purpose": 96,
+        "current_state": 90,
+        "terms": 86,
+        "outcome": 92
+      }
+    },
+    "simplicity": {
+      "score": 92.5,
+      "previous": 80.8,
+      "items": {
+        "initial_choices": 92,
+        "information_density": 86,
+        "progressive_disclosure": 96,
+        "visual_hierarchy": 96
+      }
+    },
+    "operability": {
+      "score": 88.5,
+      "previous": 77.5,
+      "items": {
+        "action_count": 90,
+        "affordance": 96,
+        "keyboard": 88,
+        "scroll_distance": 80
+      }
+    },
+    "goal_reachability": {
+      "score": 93.5,
+      "previous": 87.1,
+      "items": {
+        "completion": 98,
+        "transitions": 92,
+        "time_backtrack": 92,
+        "context_continuity": 89
+      }
+    },
+    "discoverability": {
+      "score": 94.0,
+      "previous": 81.5,
+      "items": {
+        "navigation": 96,
+        "search": 96,
+        "primary_cta": 94,
+        "persona_entry": 90
+      }
+    },
+    "recovery": {
+      "score": 93.0,
+      "previous": 81.5,
+      "items": {
+        "loading_empty": 90,
+        "error_truthfulness": 92,
+        "direct_action": 92,
+        "feedback": 98
+      }
+    },
+    "trust": {
+      "score": 94.5,
+      "previous": 89.3,
+      "items": {
+        "decision_chain": 92,
+        "provenance": 88,
+        "access_scope": 98,
+        "destructive_boundary": 100
+      }
+    },
+    "consistency": {
+      "score": 95.5,
+      "previous": 58.0,
+      "items": {
+        "patterns": 96,
+        "terminology": 90,
+        "japanese": 96,
+        "multilingual": 100
+      }
+    },
+    "accessibility": {
+      "score": 90.0,
+      "previous": 81.8,
+      "items": {
+        "semantics": 96,
+        "focus_keyboard": 88,
+        "target_contrast": 78,
+        "reflow_motion": 98
+      }
+    },
+    "team_fit": {
+      "score": 97.0,
+      "previous": 87.5,
+      "items": {
+        "onboarding_roles": 96,
+        "sharing_scope": 96,
+        "handoff_audit": 96,
+        "revoke_recovery": 100
+      }
+    }
+  },
+  "findings": [
+    {
+      "id": "ADM-2026-08-28-01",
+      "severity": "medium",
+      "area": "attention journey",
+      "primary_item": "goal_reachability.context_continuity",
+      "affected_axes": ["clarity", "goal_reachability", "discoverability", "recovery"],
+      "summary": "The Operations conflict CTA opens an attention-filtered memory view, but the current local fixture shows no attention lane and labels the only row as available."
+    },
+    {
+      "id": "ADM-2026-08-28-02",
+      "severity": "medium",
+      "area": "touch targets",
+      "primary_item": "accessibility.target_contrast",
+      "affected_axes": ["operability", "accessibility"],
+      "summary": "Memory tabs, lifecycle links, and suggestion links are 36px high; its search input is 42px high. The top navigation links are 40px high."
+    },
+    {
+      "id": "ADM-2026-08-28-03",
+      "severity": "medium",
+      "area": "human-readable details",
+      "primary_item": "clarity.terms",
+      "affected_axes": ["clarity", "trust", "consistency"],
+      "summary": "The selected-memory panel still presents Project, Owner, Lifecycle, the raw active enum, and a principal value in the primary detail surface."
+    },
+    {
+      "id": "ADM-2026-08-28-04",
+      "severity": "medium",
+      "area": "manual accessibility",
+      "primary_item": "accessibility.focus_keyboard",
+      "affected_axes": ["operability", "accessibility"],
+      "summary": "Semantic structure and visible focus were checked, but VoiceOver and a complete keyboard traversal were not verified in this run."
+    },
+    {
+      "id": "ADM-2026-08-28-05",
+      "severity": "low",
+      "area": "information density",
+      "primary_item": "simplicity.information_density",
+      "affected_axes": ["simplicity", "operability"],
+      "summary": "The Operations page measured 2,659px of document height at a 720px viewport, and the memory view exposed 64 visible interactive targets."
+    }
+  ],
+  "evidence_ids": [
+    "E-OPS-INTERACTIVE",
+    "E-MEMORY-INTERACTIVE",
+    "E-USERS-INTERACTIVE",
+    "E-GROUP-INTERACTIVE",
+    "E-RESPONSIVE-320-640",
+    "E-I18N-JA-EN-ZH",
+    "E-REAL-ADMIN-SMOKE",
+    "E-CONSOLE-UNIT",
+    "E-CONSOLE-TYPECHECK",
+    "E-RUNTIME-LOG"
+  ]
+}

@@ -138,8 +138,57 @@ type ListMemoriesOptions = {
   includeTrashed?: boolean;
   from?: number | null;
   to?: number | null;
-  sort?: "created" | "updated" | "usage";
+  sort?: "created" | "updated" | "usage" | "attention";
+  attention?: "critical" | "warning" | "blocked" | "healthy" | "all";
+  evaluatedAt?: number;
 };
+
+export type MemoryAttentionSeverity = "critical" | "warning" | "blocked" | "healthy";
+export type MemoryAnswerEligibility = "blocked" | "caution" | "eligible";
+
+const parseStringArray = (raw: string | null | undefined): string[] => {
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw) as unknown;
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  } catch { return []; }
+};
+
+export function classifyMemoryAttention(row: Pick<MemoryRow,
+  "deleted_at" | "lifecycle_state" | "verification_state" | "valid_until" | "conflicts_json" | "confidence_score"
+>, evaluatedAt: number): {
+  answer_eligibility: MemoryAnswerEligibility;
+  attention_severity: MemoryAttentionSeverity;
+  attention_reasons: string[];
+  evaluated_at: number;
+} {
+  const blockedReasons = [
+    row.deleted_at !== null && row.deleted_at !== undefined ? "deleted" : null,
+    row.lifecycle_state === "suppressed" ? "suppressed" : null,
+    row.verification_state === "rejected" ? "rejected" : null
+  ].filter((value): value is string => value !== null);
+  if (blockedReasons.length > 0) return {
+    answer_eligibility: "blocked", attention_severity: "blocked",
+    attention_reasons: blockedReasons, evaluated_at: evaluatedAt
+  };
+  const criticalReasons = [
+    parseStringArray(row.conflicts_json).length > 0 ? "conflicted" : null,
+    row.valid_until !== null && row.valid_until !== undefined && row.valid_until <= evaluatedAt ? "expired" : null
+  ].filter((value): value is string => value !== null);
+  if (criticalReasons.length > 0) return {
+    answer_eligibility: "caution", attention_severity: "critical",
+    attention_reasons: criticalReasons, evaluated_at: evaluatedAt
+  };
+  const warningReasons = [
+    row.verification_state === "unverified" || row.verification_state === null || row.verification_state === undefined ? "unverified" : null,
+    row.verification_state === "partial" ? "partial" : null,
+    row.confidence_score === null || row.confidence_score === undefined ? "confidence_missing" : null,
+    row.confidence_score !== null && row.confidence_score !== undefined && row.confidence_score < 0.6 ? "low_confidence" : null
+  ].filter((value): value is string => value !== null);
+  return warningReasons.length > 0
+    ? { answer_eligibility: "caution", attention_severity: "warning", attention_reasons: warningReasons, evaluated_at: evaluatedAt }
+    : { answer_eligibility: "eligible", attention_severity: "healthy", attention_reasons: [], evaluated_at: evaluatedAt };
+}
 
 type MemoryListView = "full" | "compact";
 
@@ -180,6 +229,11 @@ export type MemoryListPage = {
     consumer_count: number;
     net_saved_tokens: number;
     injected_tokens: number;
+    verification_state: string;
+    answer_eligibility: MemoryAnswerEligibility;
+    attention_severity: MemoryAttentionSeverity;
+    attention_reasons: string[];
+    evaluated_at: number;
   }>;
   meta: {
     limit: number;
@@ -531,6 +585,8 @@ function buildMemoryListFilterSql(options: {
   includeTrashed?: boolean;
   from?: number | null;
   to?: number | null;
+  attention?: "critical" | "warning" | "blocked" | "healthy" | "all";
+  evaluatedAt?: number;
 }) {
   const clauses: string[] = [];
   const bindings: unknown[] = [];
@@ -568,6 +624,17 @@ function buildMemoryListFilterSql(options: {
   if (options.to !== undefined && options.to !== null) {
     clauses.push("COALESCE(updated_at, created_at) <= ?");
     bindings.push(options.to);
+  }
+
+  const evaluatedAt = options.evaluatedAt ?? Date.now();
+  const blockedSql = "(deleted_at IS NOT NULL OR lifecycle_state = 'suppressed' OR verification_state = 'rejected')";
+  const criticalSql = `(NOT ${blockedSql} AND (COALESCE(conflicts_json, '[]') NOT IN ('', '[]') OR (valid_until IS NOT NULL AND valid_until <= ${Math.floor(evaluatedAt)})))`;
+  const warningSql = `(NOT ${blockedSql} AND NOT ${criticalSql} AND (verification_state IS NULL OR verification_state IN ('unverified', 'partial') OR confidence_score IS NULL OR confidence_score < 0.6))`;
+  if (options.attention && options.attention !== "all") {
+    clauses.push(options.attention === "blocked" ? blockedSql
+      : options.attention === "critical" ? criticalSql
+        : options.attention === "warning" ? warningSql
+          : `(NOT ${blockedSql} AND NOT ${criticalSql} AND NOT ${warningSql})`);
   }
 
   if (options.lifecycle === "trash") {
@@ -663,12 +730,18 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
   );
   const safeLimit = Math.max(1, Math.min(500, options.limit ?? 100));
   const safeOffset = Math.max(0, options.offset ?? 0);
-  const filter = buildMemoryListFilterSql(options);
-  const orderBy = options.sort === "usage"
+  const evaluatedAt = options.evaluatedAt ?? Date.now();
+  const filter = buildMemoryListFilterSql({ ...options, evaluatedAt });
+  const requestedOrder = options.sort === "usage"
     ? "reference_count DESC, COALESCE(updated_at, created_at) DESC"
     : options.sort === "updated"
       ? "COALESCE(updated_at, created_at) DESC"
       : "created_at DESC";
+  const blockedSql = "(deleted_at IS NOT NULL OR lifecycle_state = 'suppressed' OR verification_state = 'rejected')";
+  const criticalSql = `(NOT ${blockedSql} AND (COALESCE(conflicts_json, '[]') NOT IN ('', '[]') OR (valid_until IS NOT NULL AND valid_until <= ${Math.floor(evaluatedAt)})))`;
+  const warningSql = `(NOT ${blockedSql} AND NOT ${criticalSql} AND (verification_state IS NULL OR verification_state IN ('unverified', 'partial') OR confidence_score IS NULL OR confidence_score < 0.6))`;
+  const attentionOrder = `CASE WHEN ${criticalSql} THEN 0 WHEN ${warningSql} THEN 1 WHEN ${blockedSql} THEN 2 ELSE 3 END`;
+  const orderBy = options.sort === "attention" ? `${attentionOrder}, COALESCE(updated_at, created_at) DESC, id ASC` : `${requestedOrder}, id ASC`;
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, project_id, content, summary, tags_json, source, external_key, created_at,
             kind, lifecycle_state, current_version, last_accessed_at,
@@ -690,7 +763,8 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
             (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
              JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
-            reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state
+            reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state,
+            valid_until, conflicts_json
      FROM memories
      WHERE tenant_id = ?${filter.sql}
      ORDER BY ${orderBy}
@@ -732,6 +806,7 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
       , capture_route: row.capture_route ?? "legacy"
       , capture_batch_id: row.capture_batch_id ?? null
       , verification_state: row.verification_state ?? "unverified"
+      , ...classifyMemoryAttention(row, evaluatedAt)
   }));
 }
 
@@ -831,7 +906,8 @@ export async function listMemoriesCursorPage(
 export async function listMemoriesPage(env: Env, tenantId: string, options: ListMemoriesOptions = {}): Promise<MemoryListPage> {
   const safeLimit = Math.max(1, Math.min(100, options.limit ?? 24));
   const safeOffset = Math.max(0, options.offset ?? 0);
-  const filter = buildMemoryListFilterSql(options);
+  const evaluatedAt = options.evaluatedAt ?? Date.now();
+  const filter = buildMemoryListFilterSql({ ...options, evaluatedAt });
   const items = await listMemories(env, tenantId, {
     limit: safeLimit,
     offset: safeOffset,
@@ -846,6 +922,8 @@ export async function listMemoriesPage(env: Env, tenantId: string, options: List
     from: options.from,
     to: options.to,
     sort: options.sort
+    , attention: options.attention
+    , evaluatedAt
   });
 
   const countRows = await env.OPEN_BRAIN_DB.prepare(

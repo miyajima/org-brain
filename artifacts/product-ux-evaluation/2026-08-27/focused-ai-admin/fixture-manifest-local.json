@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "target": "local",
+  "tenant_id": "default",
+  "applied_at": "2026-08-26T16:33:55.761Z",
+  "resources": {
+    "users": [
+      {
+        "principal": "user:01m0zeqk2d3h3dpcs332n9z99p",
+        "email": "owner@default.invalid",
+        "role": "tenant_admin"
+      },
+      {
+        "principal": "user:01m0zeqk2vhnvme4fnj18xcbf4",
+        "email": "admin@default.invalid",
+        "role": "tenant_admin"
+      },
+      {
+        "principal": "user:01m0zeqk32prk12ebdbtskp6fp",
+        "email": "member-1@default.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0zeqk396gnrp0q5sv17qsta",
+        "email": "member-2@default.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0zeqk3g53vy88mj5261qk5c",
+        "email": "member-3@default.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0zeqk3p0qteyvtd1x17etsp",
+        "email": "member-4@default.invalid",
+        "role": "contributor"
+      },
+      {
+        "principal": "user:01m0zeqk3xvmy7vkprnavabzfq",
+        "email": "member-5@default.invalid",
+        "role": "reader"
+      },
+      {
+        "principal": "user:01m0zeqk431x9qtee2m595jkrv",
+        "email": "member-6@default.invalid",
+        "role": "reader"
+      }
+    ],
+    "groups": [
+      {
+        "id": "01M0ZEQK4EXDR9YVT6D07ZT5FR",
+        "slug": "ux-audit-platform",
+        "members": [
+          "user:01m0zeqk2d3h3dpcs332n9z99p",
+          "user:01m0zeqk2vhnvme4fnj18xcbf4",
+          "user:01m0zeqk396gnrp0q5sv17qsta",
+          "user:01m0zeqk3xvmy7vkprnavabzfq"
+        ]
+      },
+      {
+        "id": "01M0ZEQK5DTCPJ4FY3H1NAVCP3",
+        "slug": "ux-audit-product",
+        "members": [
+          "user:01m0zeqk2d3h3dpcs332n9z99p",
+          "user:01m0zeqk2vhnvme4fnj18xcbf4",
+          "user:01m0zeqk3g53vy88mj5261qk5c",
+          "user:01m0zeqk431x9qtee2m595jkrv"
+        ]
+      },
+      {
+        "id": "01M0ZEQK68281BJET613XVRJEW",
+        "slug": "ux-audit-audit",
+        "members": [
+          "user:01m0zeqk2d3h3dpcs332n9z99p",
+          "user:01m0zeqk2vhnvme4fnj18xcbf4",
+          "user:01m0zeqk32prk12ebdbtskp6fp",
+          "user:01m0zeqk3p0qteyvtd1x17etsp"
+        ]
+      }
+    ],
+    "role_assignments": [
+      {
+        "id": "01M0ZEQK77S17ANHZDX8NSHHXZ",
+        "project_id": "default-project-a",
+        "principal": "user:01m0zeqk2d3h3dpcs332n9z99p",
+        "role": "project_owner"
+      },
+      {
+        "id": "01M0ZEQK7BR4M0P6FPN1ZYQTJT",
+        "project_id": "default-project-a",
+        "principal": "user:01m0zeqk32prk12ebdbtskp6fp",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0ZEQK7FM0MPH2MCHRME2GTA",
+        "project_id": "default-project-a",
+        "principal": "user:01m0zeqk3g53vy88mj5261qk5c",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0ZEQK7KT7YBC8DEH7D8D7SX",
+        "project_id": "default-project-a",
+        "principal": "user:01m0zeqk3xvmy7vkprnavabzfq",
+        "role": "reader"
+      },
+      {
+        "id": "01M0ZEQK7RQ0YJ1N44XD1FSF25",
+        "project_id": "default-project-b",
+        "principal": "user:01m0zeqk2vhnvme4fnj18xcbf4",
+        "role": "tenant_admin"
+      },
+      {
+        "id": "01M0ZEQK7WA8BBYRQGEDMWW5Z2",
+        "project_id": "default-project-b",
+        "principal": "user:01m0zeqk396gnrp0q5sv17qsta",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0ZEQK8120XYR6BDN7PPMCTH",
+        "project_id": "default-project-b",
+        "principal": "user:01m0zeqk3p0qteyvtd1x17etsp",
+        "role": "contributor"
+      },
+      {
+        "id": "01M0ZEQK87023WQJB1W9TVJ82G",
+        "project_id": "default-project-b",
+        "principal": "user:01m0zeqk431x9qtee2m595jkrv",
+        "role": "reader"
+      }
+    ],
+    "memories": [
+      {
+        "id": "01M0ZEQK8EW428V6M81CK885HZ",
+        "external_key": "ux-audit:shared"
+      },
+      {
+        "id": "01M0ZEQK8TMSDQ2D74B80BA5BE",
+        "external_key": "ux-audit:restricted"
+      },
+      {
+        "id": "01M0ZEQK8ZS655ND82WWBJ57Z5",
+        "external_key": "ux-audit:conflict-a"
+      },
+      {
+        "id": "01M0ZEQK99NGEMZP4THJCQJSAA",
+        "external_key": "ux-audit:conflict-b"
+      },
+      {
+        "id": "01M0ZEQK9EW50KQCWQP3XXZ0VE",
+        "external_key": "ux-audit:low-confidence"
+      },
+      {
+        "id": "01M0ZEQK9KECWF9XSJHF4S1XFP",
+        "external_key": "ux-audit:expired"
+      }
+    ]
+  },
+  "archived_at": "2026-08-26T16:39:20.543Z",
+  "archive_outcomes": [
+    {
+      "type": "memory",
+      "id": "01M0ZEQK8EW428V6M81CK885HZ",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0ZEQK8TMSDQ2D74B80BA5BE",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0ZEQK8ZS655ND82WWBJ57Z5",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0ZEQK99NGEMZP4THJCQJSAA",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0ZEQK9EW50KQCWQP3XXZ0VE",
+      "outcome": "trashed"
+    },
+    {
+      "type": "memory",
+      "id": "01M0ZEQK9KECWF9XSJHF4S1XFP",
+      "outcome": "trashed"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK77S17ANHZDX8NSHHXZ",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK7BR4M0P6FPN1ZYQTJT",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK7FM0MPH2MCHRME2GTA",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK7KT7YBC8DEH7D8D7SX",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK7RQ0YJ1N44XD1FSF25",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK7WA8BBYRQGEDMWW5Z2",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK8120XYR6BDN7PPMCTH",
+      "outcome": "deleted"
+    },
+    {
+      "type": "role_assignment",
+      "id": "01M0ZEQK87023WQJB1W9TVJ82G",
+      "outcome": "deleted"
+    },
+    {
+      "type": "group",
+      "id": "01M0ZEQK4EXDR9YVT6D07ZT5FR",
+      "outcome": "archived"
+    },
+    {
+      "type": "group",
+      "id": "01M0ZEQK5DTCPJ4FY3H1NAVCP3",
+      "outcome": "archived"
+    },
+    {
+      "type": "group",
+      "id": "01M0ZEQK68281BJET613XVRJEW",
+      "outcome": "archived"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk2d3h3dpcs332n9z99p",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk2vhnvme4fnj18xcbf4",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk32prk12ebdbtskp6fp",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk396gnrp0q5sv17qsta",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk3g53vy88mj5261qk5c",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk3p0qteyvtd1x17etsp",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk3xvmy7vkprnavabzfq",
+      "outcome": "deprovisioned"
+    },
+    {
+      "type": "user",
+      "id": "user:01m0zeqk431x9qtee2m595jkrv",
+      "outcome": "deprovisioned"
+    }
+  ]
+}

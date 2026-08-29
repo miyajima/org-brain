@@ -207,6 +207,14 @@ export type MemoryEvidenceBundle = {
   missing_evidence: string[];
   abstention_recommended: boolean;
   degraded_reasons: string[];
+  answer_guidance: {
+    response_mode: "answer" | "answer_with_warning" | "abstain";
+    evidence_status: "sufficient" | "degraded" | "insufficient" | "conflicted";
+    required_elements: Array<"conclusion" | "status" | "evidence" | "next_action">;
+    prohibited_elements: Array<"internal_ids" | "raw_memory" | "unsupported_claims">;
+    source_refs: string[];
+    instructions: string;
+  };
 };
 
 export type MemoryRetrieveContextResult = {

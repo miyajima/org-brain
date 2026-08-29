@@ -1,0 +1,770 @@
+{
+  "audit": {
+    "id": "admin-formal-rerun-2026-08-28",
+    "date": "2026-08-28",
+    "commit": "629490eb6922bfa2213cb21cff7c409d5a65af11",
+    "state": "iteration",
+    "basis": "Current-run in-app Browser audit plus disposable-D1 admin smoke; admin-console scope only.",
+    "consecutive_passes": 1,
+    "ai_repeat_consistent": false,
+    "cloud_live_verified": false,
+    "voiceover_manually_verified": false
+  },
+  "evidence": [
+    {
+      "id": "E-OPS-INTERACTIVE",
+      "mode": "interactive-local",
+      "description": "screenshots/01-operations-attention.jpg and current Browser DOM snapshot",
+      "source": "resources.md"
+    },
+    {
+      "id": "E-MEMORY-INTERACTIVE",
+      "mode": "interactive-local",
+      "description": "screenshots/07-memory-critical-filter.jpg, screenshots/08-memory-critical-selected.jpg, and current Browser DOM snapshot",
+      "source": "resources.md"
+    },
+    {
+      "id": "E-USERS-INTERACTIVE",
+      "mode": "interactive-local",
+      "description": "screenshots/02-users-summary.jpg, screenshots/03-user-edit-details.jpg, and current Browser DOM snapshot",
+      "source": "resources.md"
+    },
+    {
+      "id": "E-GROUP-INTERACTIVE",
+      "mode": "interactive-local",
+      "description": "screenshots/04-group-impact-confirmation.jpg and current Browser DOM snapshot",
+      "source": "resources.md"
+    },
+    {
+      "id": "E-RESPONSIVE-320-640",
+      "mode": "interactive-local",
+      "description": "metrics.json responsive measurements at 320, 390, 640, and 1280px; screenshots/05-users-mobile-390.jpg",
+      "source": "metrics.json"
+    },
+    {
+      "id": "E-I18N-JA-EN-ZH",
+      "mode": "interactive-local",
+      "description": "metrics.json locale measurements and screenshots/06-users-mobile-zh.jpg",
+      "source": "metrics.json"
+    },
+    {
+      "id": "E-REAL-ADMIN-SMOKE",
+      "mode": "interactive-local",
+      "description": "Current run of pnpm ux:smoke:admin-real recorded in test-results.md",
+      "source": "test-results.md"
+    },
+    {
+      "id": "E-CONSOLE-UNIT",
+      "mode": "automated",
+      "description": "Current run of pnpm --filter @org-brain/console test: 100/100 passed",
+      "source": "test-results.md"
+    },
+    {
+      "id": "E-CONSOLE-TYPECHECK",
+      "mode": "automated",
+      "description": "Current run of pnpm --filter @org-brain/console typecheck: 0 errors, 4 hints",
+      "source": "test-results.md"
+    },
+    {
+      "id": "E-RUNTIME-LOG",
+      "mode": "interactive-local",
+      "description": "Current Browser runtime log query: 0 errors, 0 warnings",
+      "source": "resources.md"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "clarity.purpose",
+      "raw_score": 96,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Each page states its tenant-scoped purpose and the task it supports."
+    },
+    {
+      "id": "clarity.current_state",
+      "raw_score": 90,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 90
+      },
+      "notes": "Operations summarizes attention state, but the linked local memory fixture labels the critical-filtered row as available."
+    },
+    {
+      "id": "clarity.terms",
+      "raw_score": 86,
+      "evidence": [
+        "E-MEMORY-INTERACTIVE",
+        "E-I18N-JA-EN-ZH"
+      ],
+      "findings": [
+        {
+          "id": "ADM-2026-08-28-03",
+          "severity": "medium",
+          "summary": "The selected-memory panel still presents Project, Owner, Lifecycle, the raw active enum, and a principal value in the primary detail surface.",
+          "acceptance": "Resolve the finding and rerun this item with current interactive evidence.",
+          "affected_axes": [
+            "clarity",
+            "trust",
+            "consistency"
+          ]
+        }
+      ],
+      "metrics": {
+        "final_score_ledger": 86
+      },
+      "notes": "Admin copy is localized, but selected memory details still expose English labels, a raw lifecycle enum, and principal data in the primary surface."
+    },
+    {
+      "id": "clarity.outcome",
+      "raw_score": 92,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Attention cards and destructive confirmation state the outcome and next action; the memory follow-through remains inconsistent."
+    },
+    {
+      "id": "simplicity.initial_choices",
+      "raw_score": 92,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Users and groups present one main task per surface with bounded choices."
+    },
+    {
+      "id": "simplicity.information_density",
+      "raw_score": 86,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [
+        {
+          "id": "ADM-2026-08-28-05",
+          "severity": "low",
+          "summary": "The Operations page measured 2,659px of document height at a 720px viewport, and the memory view exposed 64 visible interactive targets.",
+          "acceptance": "Resolve the finding and rerun this item with current interactive evidence.",
+          "affected_axes": [
+            "simplicity",
+            "operability"
+          ]
+        }
+      ],
+      "metrics": {
+        "final_score_ledger": 86
+      },
+      "notes": "Operations is 2,659px high at 720px and memory exposes 64 visible interactive targets."
+    },
+    {
+      "id": "simplicity.progressive_disclosure",
+      "raw_score": 96,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "User editing and technical identity details use disclosure controls; removal impact is deferred to an explicit dialog."
+    },
+    {
+      "id": "simplicity.visual_hierarchy",
+      "raw_score": 96,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Hierarchy was inspected while navigating and interacting with the current local pages."
+    },
+    {
+      "id": "operability.action_count",
+      "raw_score": 90,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 90
+      },
+      "notes": "Core user and group flows are short; the memory workspace still exposes many simultaneous actions."
+    },
+    {
+      "id": "operability.affordance",
+      "raw_score": 96,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Buttons, summary rows, focus ring, and confirmation actions communicate interactivity clearly."
+    },
+    {
+      "id": "operability.keyboard",
+      "raw_score": 88,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 88
+      },
+      "notes": "Visible focus and semantic native controls were observed; complete keyboard traversal and VoiceOver were not verified."
+    },
+    {
+      "id": "operability.scroll_distance",
+      "raw_score": 80,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 80
+      },
+      "notes": "Operations requires about 3.7 viewport heights at 1280x720."
+    },
+    {
+      "id": "goal_reachability.completion",
+      "raw_score": 98,
+      "evidence": [
+        "E-REAL-ADMIN-SMOKE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 98
+      },
+      "notes": "Disposable-D1 smoke completed impact preview, removal, membership readback, and cleanup."
+    },
+    {
+      "id": "goal_reachability.transitions",
+      "raw_score": 92,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Primary transitions are direct, with one inconsistent Operations-to-memory attention transition."
+    },
+    {
+      "id": "goal_reachability.time_backtrack",
+      "raw_score": 92,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Summary rows and in-context confirmation avoid leaving and returning to the task."
+    },
+    {
+      "id": "goal_reachability.context_continuity",
+      "raw_score": 92,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [
+        {
+          "id": "ADM-2026-08-28-01",
+          "severity": "medium",
+          "summary": "The Operations conflict CTA opens an attention-filtered memory view, but the current local fixture shows no attention lane and labels the only row as available.",
+          "acceptance": "Resolve the finding and rerun this item with current interactive evidence.",
+          "affected_axes": [
+            "clarity",
+            "goal_reachability",
+            "discoverability",
+            "recovery"
+          ]
+        }
+      ],
+      "metrics": {
+        "final_score_ledger": 89
+      },
+      "notes": "Tenant and language persist, but the current fixture loses the critical-state meaning after following the attention CTA."
+    },
+    {
+      "id": "discoverability.navigation",
+      "raw_score": 96,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Top-level admin navigation and return paths are visible and semantically labeled."
+    },
+    {
+      "id": "discoverability.search",
+      "raw_score": 96,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Users expose text, state, and role filters; memory exposes search and scoped filters."
+    },
+    {
+      "id": "discoverability.primary_cta",
+      "raw_score": 94,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 94
+      },
+      "notes": "Primary CTAs are visible; the memory attention CTA destination is not state-consistent in the current fixture."
+    },
+    {
+      "id": "discoverability.persona_entry",
+      "raw_score": 90,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 90
+      },
+      "notes": "Administration entry is grouped, though role-specific task shortcuts remain limited."
+    },
+    {
+      "id": "recovery.loading_empty",
+      "raw_score": 90,
+      "evidence": [
+        "E-CONSOLE-UNIT"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 90
+      },
+      "notes": "Admin state helpers are unit-covered; an interactive empty/error fixture was not captured."
+    },
+    {
+      "id": "recovery.error_truthfulness",
+      "raw_score": 92,
+      "evidence": [
+        "E-CONSOLE-UNIT",
+        "E-CONSOLE-TYPECHECK"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Automated coverage verifies fail-closed admin copy and state handling."
+    },
+    {
+      "id": "recovery.direct_action",
+      "raw_score": 92,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Attention cards and owner-recovery copy include direct actions; the memory fixture weakens one route."
+    },
+    {
+      "id": "recovery.feedback",
+      "raw_score": 98,
+      "evidence": [
+        "E-GROUP-INTERACTIVE",
+        "E-REAL-ADMIN-SMOKE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 98
+      },
+      "notes": "Impact, retained access, recovery, and post-removal readback are explicit."
+    },
+    {
+      "id": "trust.decision_chain",
+      "raw_score": 92,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Attention and removal surfaces expose the decision sequence and consequence."
+    },
+    {
+      "id": "trust.provenance",
+      "raw_score": 88,
+      "evidence": [
+        "E-MEMORY-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 88
+      },
+      "notes": "Provenance is available but some raw technical identity remains in the primary memory panel."
+    },
+    {
+      "id": "trust.access_scope",
+      "raw_score": 98,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 98
+      },
+      "notes": "Tenant, role, user status, and group membership scope are visible throughout admin flows."
+    },
+    {
+      "id": "trust.destructive_boundary",
+      "raw_score": 100,
+      "evidence": [
+        "E-GROUP-INTERACTIVE",
+        "E-REAL-ADMIN-SMOKE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 100
+      },
+      "notes": "Removal is blocked without impact preview, requires explicit apply, exposes recovery, and was verified against disposable D1."
+    },
+    {
+      "id": "consistency.patterns",
+      "raw_score": 96,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Cards, summaries, technical disclosure, statuses, and confirmation reuse shared patterns."
+    },
+    {
+      "id": "consistency.terminology",
+      "raw_score": 90,
+      "evidence": [
+        "E-I18N-JA-EN-ZH",
+        "E-MEMORY-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 90
+      },
+      "notes": "Admin terminology is shared across three languages; the memory detail still mixes English/raw terms."
+    },
+    {
+      "id": "consistency.japanese",
+      "raw_score": 96,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Core admin actions, status, impact, and recovery use concise Japanese."
+    },
+    {
+      "id": "consistency.multilingual",
+      "raw_score": 100,
+      "evidence": [
+        "E-I18N-JA-EN-ZH"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 100
+      },
+      "notes": "Users rendered with matching ja/en/zh document language, headings, field count, regions, and actions."
+    },
+    {
+      "id": "accessibility.semantics",
+      "raw_score": 96,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Current DOM snapshots expose headings, navigation, main, regions, search, tables, details, status, and dialog semantics."
+    },
+    {
+      "id": "accessibility.focus_keyboard",
+      "raw_score": 88,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [
+        {
+          "id": "ADM-2026-08-28-04",
+          "severity": "medium",
+          "summary": "Semantic structure and visible focus were checked, but VoiceOver and a complete keyboard traversal were not verified in this run.",
+          "acceptance": "Resolve the finding and rerun this item with current interactive evidence.",
+          "affected_axes": [
+            "operability",
+            "accessibility"
+          ]
+        }
+      ],
+      "metrics": {
+        "final_score_ledger": 88
+      },
+      "notes": "Visible focus was captured, but full keyboard traversal and VoiceOver were not completed."
+    },
+    {
+      "id": "accessibility.target_contrast",
+      "raw_score": 78,
+      "evidence": [
+        "E-RESPONSIVE-320-640"
+      ],
+      "findings": [
+        {
+          "id": "ADM-2026-08-28-02",
+          "severity": "medium",
+          "summary": "Memory tabs, lifecycle links, and suggestion links are 36px high; its search input is 42px high. The top navigation links are 40px high.",
+          "acceptance": "Resolve the finding and rerun this item with current interactive evidence.",
+          "affected_axes": [
+            "operability",
+            "accessibility"
+          ]
+        }
+      ],
+      "metrics": {
+        "final_score_ledger": 78
+      },
+      "notes": "Users and groups meet target sizing in main content, but memory action links are 36px, its search input 42px, and top navigation 40px; contrast was not independently measured."
+    },
+    {
+      "id": "accessibility.reflow_motion",
+      "raw_score": 98,
+      "evidence": [
+        "E-RESPONSIVE-320-640"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 98
+      },
+      "notes": "No page-level horizontal overflow occurred at 320, 390, 640, or 1280px; no motion-dependent admin task was observed."
+    },
+    {
+      "id": "local_setup.prerequisites",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "local_setup.doctor_start",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "local_setup.capture_search",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "local_setup.connector_recovery",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "cloudflare_setup.permissions",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "cloudflare_setup.doctor_plan",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "cloudflare_setup.oauth_hook",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "cloudflare_setup.parity_recovery",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "ai_safety.relevance",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "ai_safety.conciseness",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "ai_safety.evidence_abstention",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "ai_safety.consistency_parity",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "personal_fit.nav_reduction",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "personal_fit.next_action",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "personal_fit.scope",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "personal_fit.maintenance",
+      "raw_score": null,
+      "evidence": [],
+      "findings": [],
+      "notes": "Outside the admin-console rescore scope."
+    },
+    {
+      "id": "team_fit.onboarding_roles",
+      "raw_score": 96,
+      "evidence": [
+        "E-USERS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Human-readable role labels and least-privilege guidance are visible at invite and membership entry."
+    },
+    {
+      "id": "team_fit.sharing_scope",
+      "raw_score": 96,
+      "evidence": [
+        "E-OPS-INTERACTIVE",
+        "E-GROUP-INTERACTIVE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 96
+      },
+      "notes": "Tenant and group scope are visible with member state and role."
+    },
+    {
+      "id": "team_fit.handoff_audit",
+      "raw_score": 96,
+      "evidence": [
+        "E-CONSOLE-UNIT",
+        "E-REAL-ADMIN-SMOKE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 92
+      },
+      "notes": "Automated evidence verifies impact/digest handoff behavior; no live audit-log UI walkthrough was performed."
+    },
+    {
+      "id": "team_fit.revoke_recovery",
+      "raw_score": 100,
+      "evidence": [
+        "E-GROUP-INTERACTIVE",
+        "E-REAL-ADMIN-SMOKE"
+      ],
+      "findings": [],
+      "metrics": {
+        "final_score_ledger": 100
+      },
+      "notes": "The UI states lost and retained access plus re-add recovery, and the disposable-D1 removal completed with cleanup."
+    }
+  ]
+}

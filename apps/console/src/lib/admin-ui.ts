@@ -76,7 +76,8 @@ export const adminCommonCopy = {
 } as const satisfies Record<AdminLocale, Record<string, string>>;
 
 export function scopedAdminHref(path: string, current: URLSearchParams, overrides: Record<string, string | null> = {}) {
-  const next = new URLSearchParams();
+  const [pathname, embeddedQuery = ""] = path.split("?", 2);
+  const next = new URLSearchParams(embeddedQuery);
   for (const key of ["tenant_id", "project_id", "lang"]) {
     const value = current.get(key);
     if (value) next.set(key, value);
@@ -86,5 +87,5 @@ export function scopedAdminHref(path: string, current: URLSearchParams, override
     else next.set(key, value);
   }
   const query = next.toString();
-  return query ? `${path}?${query}` : path;
+  return query ? `${pathname}?${query}` : pathname;
 }

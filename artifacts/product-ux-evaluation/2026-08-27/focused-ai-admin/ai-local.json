@@ -1,0 +1,904 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-26T16:34:00.339Z",
+  "target": "local",
+  "fixture": {
+    "kind": "fresh_synthetic",
+    "tenant_id": "ux-audit-ai",
+    "principal_id": "auditor",
+    "run_count_per_scenario": 3,
+    "database_path_persisted": false
+  },
+  "summary": {
+    "scenario_count": 12,
+    "applicable_scenario_count": 11,
+    "passed_count": 12,
+    "failed_count": 0,
+    "all_applicable_passed": true
+  },
+  "scenarios": [
+    {
+      "id": "normal_match",
+      "query": "release approval and Cloud hook failure",
+      "expected_evidence_status": "degraded",
+      "expected_abstention": false,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 9,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "b2a63544-b81a-43e6-9daa-a2aa8c5f2bd2",
+            "bf50ede2-8784-4cb4-8f4a-7db8cd1dd631"
+          ],
+          "source_refs": [
+            "RUNBOOK-42",
+            "INC-7"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 2
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "b2a63544-b81a-43e6-9daa-a2aa8c5f2bd2",
+            "bf50ede2-8784-4cb4-8f4a-7db8cd1dd631"
+          ],
+          "source_refs": [
+            "RUNBOOK-42",
+            "INC-7"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 2
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "b2a63544-b81a-43e6-9daa-a2aa8c5f2bd2",
+            "bf50ede2-8784-4cb4-8f4a-7db8cd1dd631"
+          ],
+          "source_refs": [
+            "RUNBOOK-42",
+            "INC-7"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 2
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "failure_pattern",
+      "query": "Cloud hook returns 401 retry",
+      "expected_evidence_status": "degraded",
+      "expected_abstention": false,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "fb01f7ed-03f8-44e1-8c5a-cd3e1a5c69f7"
+          ],
+          "source_refs": [
+            "INC-7"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "fb01f7ed-03f8-44e1-8c5a-cd3e1a5c69f7"
+          ],
+          "source_refs": [
+            "INC-7"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "fb01f7ed-03f8-44e1-8c5a-cd3e1a5c69f7"
+          ],
+          "source_refs": [
+            "INC-7"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "missing_evidence",
+      "query": "what happened in the unrecorded meeting",
+      "expected_evidence_status": "insufficient",
+      "expected_abstention": true,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "conflict",
+      "query": "production deploy decision conflicting guidance",
+      "expected_evidence_status": "conflicted",
+      "expected_abstention": true,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "conflicted",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [
+            "6f2d4452-6b80-4c84-b90f-8282b8d8353e"
+          ],
+          "source_refs": [
+            "UX-DEPLOY"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 1,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "conflicted",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [
+            "6f2d4452-6b80-4c84-b90f-8282b8d8353e"
+          ],
+          "source_refs": [
+            "UX-DEPLOY"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 1,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "conflicted",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [
+            "6f2d4452-6b80-4c84-b90f-8282b8d8353e"
+          ],
+          "source_refs": [
+            "UX-DEPLOY"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 1,
+          "candidate_count": 1
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "low_confidence",
+      "query": "migration fallback plan",
+      "expected_evidence_status": "degraded",
+      "expected_abstention": false,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "timeline",
+          "memory_ids": [
+            "46d5a049-0cee-4f13-b144-f1c6f83d808a"
+          ],
+          "source_refs": [
+            null
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured",
+            "low_confidence_evidence"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 3,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "timeline",
+          "memory_ids": [
+            "46d5a049-0cee-4f13-b144-f1c6f83d808a"
+          ],
+          "source_refs": [
+            null
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured",
+            "low_confidence_evidence"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "timeline",
+          "memory_ids": [
+            "46d5a049-0cee-4f13-b144-f1c6f83d808a"
+          ],
+          "source_refs": [
+            null
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured",
+            "low_confidence_evidence"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "expired",
+      "query": "expired rollout decision",
+      "expected_evidence_status": "insufficient",
+      "expected_abstention": true,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 3,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "permission_boundary",
+      "query": "restricted memory project",
+      "expected_evidence_status": "insufficient",
+      "expected_abstention": true,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 3,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 3,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [],
+          "source_refs": [],
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 0
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "over_candidate",
+      "query": "release cloud auth migration decision",
+      "expected_evidence_status": "degraded",
+      "expected_abstention": false,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "41570a9e-8a51-4f40-9930-4d3ae1814d3b",
+            "9e1916b2-a66f-4ec2-a987-d8edf0353428",
+            "0cb0ad7a-9c80-4f6e-a142-98b6c2d8bb23",
+            "6dfe5590-31d4-4214-bf66-ddc5c8bfb501",
+            "696c2636-dc3f-4fa7-b440-5151294dd672"
+          ],
+          "source_refs": [
+            "UX-CANDIDATE-0",
+            "UX-CANDIDATE-8",
+            "UX-CANDIDATE-10",
+            "UX-CANDIDATE-9",
+            "UX-CANDIDATE-3"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured",
+            "low_confidence_evidence"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 12
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "41570a9e-8a51-4f40-9930-4d3ae1814d3b",
+            "9e1916b2-a66f-4ec2-a987-d8edf0353428",
+            "0cb0ad7a-9c80-4f6e-a142-98b6c2d8bb23",
+            "6dfe5590-31d4-4214-bf66-ddc5c8bfb501",
+            "696c2636-dc3f-4fa7-b440-5151294dd672"
+          ],
+          "source_refs": [
+            "UX-CANDIDATE-0",
+            "UX-CANDIDATE-8",
+            "UX-CANDIDATE-10",
+            "UX-CANDIDATE-9",
+            "UX-CANDIDATE-3"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured",
+            "low_confidence_evidence"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 12
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "41570a9e-8a51-4f40-9930-4d3ae1814d3b",
+            "9e1916b2-a66f-4ec2-a987-d8edf0353428",
+            "0cb0ad7a-9c80-4f6e-a142-98b6c2d8bb23",
+            "6dfe5590-31d4-4214-bf66-ddc5c8bfb501",
+            "696c2636-dc3f-4fa7-b440-5151294dd672"
+          ],
+          "source_refs": [
+            "UX-CANDIDATE-0",
+            "UX-CANDIDATE-8",
+            "UX-CANDIDATE-10",
+            "UX-CANDIDATE-9",
+            "UX-CANDIDATE-3"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured",
+            "low_confidence_evidence"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 12
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "insufficient_multi_session",
+      "query": "what changed across three incomplete sessions",
+      "expected_evidence_status": "insufficient",
+      "expected_abstention": true,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 5,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [
+            "b20d3547-b809-49fa-abca-b7c0d14e5a19"
+          ],
+          "source_refs": [
+            "SESSION-1"
+          ],
+          "missing_evidence": [
+            "insufficient_independent_sessions"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [
+            "b20d3547-b809-49fa-abca-b7c0d14e5a19"
+          ],
+          "source_refs": [
+            "SESSION-1"
+          ],
+          "missing_evidence": [
+            "insufficient_independent_sessions"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "insufficient",
+          "abstention_recommended": true,
+          "answer_template": "abstention",
+          "memory_ids": [
+            "b20d3547-b809-49fa-abca-b7c0d14e5a19"
+          ],
+          "source_refs": [
+            "SESSION-1"
+          ],
+          "missing_evidence": [
+            "insufficient_independent_sessions"
+          ],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    },
+    {
+      "id": "auth_failure",
+      "query": "Cloud MCP authentication failure",
+      "expected_evidence_status": null,
+      "expected_abstention": null,
+      "runs": [
+        {
+          "outcome": "not_applicable",
+          "reason": "Local MCP does not have a user OAuth boundary"
+        },
+        {
+          "outcome": "not_applicable",
+          "reason": "Local MCP does not have a user OAuth boundary"
+        },
+        {
+          "outcome": "not_applicable",
+          "reason": "Local MCP does not have a user OAuth boundary"
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "note": "Localは認証境界がないためN/A"
+      }
+    },
+    {
+      "id": "mcp_stopped",
+      "query": "MCP service stopped during search",
+      "expected_evidence_status": null,
+      "expected_abstention": null,
+      "runs": [
+        {
+          "outcome": "connection_refused",
+          "error_code": "fetch_failed",
+          "duration_ms": 8,
+          "recovery_action": "MCPを再起動し、doctorで到達性を確認してから安全な読取操作を再試行する"
+        },
+        {
+          "outcome": "connection_refused",
+          "error_code": "fetch_failed",
+          "duration_ms": 0,
+          "recovery_action": "MCPを再起動し、doctorで到達性を確認してから安全な読取操作を再試行する"
+        },
+        {
+          "outcome": "connection_refused",
+          "error_code": "fetch_failed",
+          "duration_ms": 0,
+          "recovery_action": "MCPを再起動し、doctorで到達性を確認してから安全な読取操作を再試行する"
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "note": "closed-port transport probe"
+      }
+    },
+    {
+      "id": "wrong_past_information",
+      "query": "old incorrect release instruction",
+      "expected_evidence_status": "degraded",
+      "expected_abstention": false,
+      "runs": [
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "4aad0e92-c986-4e03-843b-a3d2689d5970"
+          ],
+          "source_refs": [
+            "RUNBOOK-CURRENT"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "4aad0e92-c986-4e03-843b-a3d2689d5970"
+          ],
+          "source_refs": [
+            "RUNBOOK-CURRENT"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        },
+        {
+          "outcome": "completed",
+          "duration_ms": 4,
+          "evidence_status": "degraded",
+          "abstention_recommended": false,
+          "answer_template": "profile",
+          "memory_ids": [
+            "4aad0e92-c986-4e03-843b-a3d2689d5970"
+          ],
+          "source_refs": [
+            "RUNBOOK-CURRENT"
+          ],
+          "missing_evidence": [],
+          "degraded_reasons": [
+            "onnx_embedding_not_configured",
+            "cross_encoder_not_configured",
+            "gemini_structured_extractor_not_configured"
+          ],
+          "conflict_count": 0,
+          "candidate_count": 1
+        }
+      ],
+      "validation": {
+        "passed": true,
+        "checks": {
+          "statusMatches": true,
+          "abstentionMatches": true,
+          "bounded": true,
+          "isolated": true,
+          "currentOnly": true
+        }
+      }
+    }
+  ],
+  "cloudflare": {
+    "status": "not_run",
+    "reason": "ORGBRAIN_MCP_URL, managed MCP hostname, and explicit Access policy ID were not available"
+  }
+}

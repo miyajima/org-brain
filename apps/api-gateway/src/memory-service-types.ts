@@ -38,6 +38,7 @@ export type MemoryRow = {
   capture_route?: string | null;
   capture_batch_id?: string | null;
   verification_state?: string | null;
+  valid_until?: number | null;
   verified_at?: number | null;
   learning_json?: string | null;
   quality_dimensions_json?: string | null;

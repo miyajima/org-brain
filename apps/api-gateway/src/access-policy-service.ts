@@ -64,6 +64,42 @@ function toPolicy(row: PolicyRow): ResourceAccessPolicy {
   };
 }
 
+export const ACCESS_POLICY_RESOLVER_VERSION = "resource-access-resolver/v2";
+
+export async function loadPoliciesReferencingGroup(env: Env, tenantId: string, groupId: string): Promise<ResourceAccessPolicy[]> {
+  const rows = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, tenant_id, resource_type, resource_id, scope, owner_principal, project_id,
+            group_ids_json, restricted_subjects_json, storage_location, policy_version,
+            created_at, updated_at
+     FROM resource_access_policies p
+     WHERE tenant_id = ? AND (
+       EXISTS (SELECT 1 FROM json_each(p.group_ids_json) WHERE value = ?)
+       OR EXISTS (SELECT 1 FROM json_each(p.restricted_subjects_json)
+         WHERE json_extract(value, '$.subject_type') = 'group'
+           AND json_extract(value, '$.subject_id') = ?)
+     )
+     ORDER BY resource_type, resource_id, id`
+  ).bind(tenantId, groupId, groupId).all<PolicyRow>();
+  return rows.results.map(toPolicy);
+}
+
+export function evaluateResourceRead(
+  policy: ResourceAccessPolicy | null,
+  options: { tenantId: string; principal: string; projectId?: string | null; isAdmin?: boolean },
+  groupIds: Set<string>
+): boolean {
+  if (!policy || policy.tenant_id !== options.tenantId) return false;
+  if (options.isAdmin || policy.owner_principal === options.principal || policy.scope === "tenant") return true;
+  if (policy.scope === "project") return Boolean(policy.project_id && options.projectId && policy.project_id === options.projectId);
+  if (policy.scope === "group") return policy.group_ids.some((groupId) => groupIds.has(groupId));
+  if (policy.scope === "restricted") {
+    return policy.restricted_subjects.some((subject) =>
+      subject.subject_type === "principal" ? subject.subject_id === options.principal : groupIds.has(subject.subject_id)
+    ) || policy.group_ids.some((groupId) => groupIds.has(groupId));
+  }
+  return false;
+}
+
 export async function loadAccessPolicy(
   env: Env,
   tenantId: string,
@@ -262,20 +298,7 @@ export async function canReadResourceWithGroups(
   groupIds: Set<string>
 ): Promise<boolean> {
   if (!policy || policy.tenant_id !== options.tenantId) return false;
-  let readable = false;
-  if (options.isAdmin || policy.owner_principal === options.principal || policy.scope === "tenant") {
-    readable = true;
-  } else if (policy.scope === "project") {
-    readable = Boolean(policy.project_id && options.projectId && policy.project_id === options.projectId);
-  } else if (policy.scope === "group") {
-    readable = policy.group_ids.some((groupId) => groupIds.has(groupId));
-  } else if (policy.scope === "restricted") {
-    readable = policy.restricted_subjects.some((subject) =>
-      subject.subject_type === "principal"
-        ? subject.subject_id === options.principal
-        : groupIds.has(subject.subject_id)
-    ) || policy.group_ids.some((groupId) => groupIds.has(groupId));
-  }
+  const readable = evaluateResourceRead(policy, options, groupIds);
   await recordShadowComparison(env, policy, options, groupIds, readable);
   return readable;
 }

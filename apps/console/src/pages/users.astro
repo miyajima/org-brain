@@ -10,6 +10,11 @@ import { dashboardPageParams } from "../lib/dashboard-page";
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = userAdminCopy(lang);
 const cookie = Astro.request.headers.get("cookie") ?? "";
+const query = Astro.url.searchParams.get("q")?.trim() ?? "";
+const statusFilter = Astro.url.searchParams.get("status") ?? "";
+const roleFilter = Astro.url.searchParams.get("role") ?? "";
+const page = Math.max(1, Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10) || 1);
+const pageSize = 25;
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
 let message = "";
 let error = "";
@@ -32,11 +37,21 @@ if (Astro.request.method === "POST") {
   if (response.ok) message = principal ? copy.updated : copy.invited;
   else error = copy.saveError;
 }
-const response = await api(`/api/v1/users?tenant_id=${encodeURIComponent(tenantId)}`);
+const listParams = new URLSearchParams({ tenant_id: tenantId, limit: String(pageSize), offset: String((page - 1) * pageSize) });
+if (query) listParams.set("q", query);
+if (statusFilter) listParams.set("status", statusFilter);
+if (roleFilter) listParams.set("role", roleFilter);
+const response = await api(`/api/v1/users?${listParams}`);
 const payload: any = await response.json().catch(() => null);
 const users = payload?.data?.users ?? [];
+const meta = payload?.data?.meta ?? { total: users.length, has_next: false, has_prev: page > 1 };
 const roles = ["reader", "contributor", "tenant_admin", "auditor"];
 const statuses = ["invited", "active", "suspended", "deprovisioned"];
+const pageHref = (nextPage: number) => {
+  const url = new URL(Astro.url);
+  url.searchParams.set("page", String(nextPage));
+  return `${url.pathname}${url.search}`;
+};
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang}>
   <section class="admin-page">
@@ -46,7 +61,7 @@ const statuses = ["invited", "active", "suspended", "deprovisioned"];
     {error && <LiveNotice tone="error" message={error} />}
 
     <AdminSection titleId="invite-user-title" title={copy.inviteTitle} description={copy.inviteDescription}>
-      <form method="post" class="admin-form-grid admin-form-grid-four" data-confirm="true" data-confirm-target-field="email" data-confirm-impact={lang === "ja" ? "このテナントへ選択したロールで招待します。" : "Invites this person to the tenant with the selected role."} data-confirm-recovery={lang === "ja" ? "招待後に利用状態やロールを変更できます。" : "Status and role can be changed after the invitation."}>
+      <form method="post" class="admin-form-grid admin-form-grid-four" data-confirm="true" data-confirm-target-field="email" data-confirm-impact={copy.inviteImpact} data-confirm-recovery={copy.inviteRecovery}>
         <input type="hidden" name="csrf_token" id="csrf-token" />
         <label><span>{copy.email}</span><input type="email" name="email" required /></label>
         <label><span>{copy.displayName}</span><input name="display_name" required /></label>
@@ -57,24 +72,43 @@ const statuses = ["invited", "active", "suspended", "deprovisioned"];
     </AdminSection>
 
     <AdminSection titleId="existing-users-title" title={copy.existingTitle} description={copy.existingDescription}>
-      <span slot="actions" class="surface-chip">{users.length}</span>
+      <span slot="actions" class="surface-chip">{meta.total} {copy.resultCount}</span>
+      <form method="get" action={Astro.url.pathname} class="admin-form-grid admin-form-grid-four" role="search" aria-label={copy.search}>
+        <label><span>{copy.search}</span><input name="q" value={query} placeholder={copy.searchPlaceholder} /></label>
+        <label><span>{copy.status}</span><select name="status"><option value="">{copy.allStatuses}</option>{statuses.map((status) => <option value={status} selected={statusFilter === status}>{adminUserStatusLabel(status, lang)}</option>)}</select></label>
+        <label><span>{copy.role}</span><select name="role"><option value="">{copy.allRoles}</option>{roles.map((role) => <option value={role} selected={roleFilter === role}>{adminRoleLabel(role, lang)}</option>)}</select></label>
+        <div class="admin-form-actions"><button type="submit">{copy.filter}</button><a class="admin-secondary-link" href={Astro.url.pathname}>{copy.clear}</a></div>
+      </form>
       {users.length === 0 ? <p class="admin-empty" role="status">{copy.noUsers}</p> : (
         <div class="admin-record-list">{users.map((user: any) => (
-          <form method="post" class="admin-user-row" data-confirm="true" data-confirm-target={user.display_name || user.principal} data-confirm-impact={lang === "ja" ? "利用状態と実効権限が直ちに変わります。" : "Status and effective access change immediately."} data-confirm-recovery={lang === "ja" ? "同じ画面から状態とロールを再変更できます。" : "Status and role can be changed again from this page."}>
-            <input type="hidden" name="csrf_token" class="csrf-token" />
-            <input type="hidden" name="principal" value={user.principal} />
-            <input type="hidden" name="full_name_locked" value={user.full_name_source === "scim" ? "true" : "false"} />
-            <label><span>{copy.displayName}</span><input name="display_name" value={user.display_name} required /></label>
-            <label><span>{copy.fullName}</span><input name="full_name" value={user.full_name ?? ""} disabled={user.full_name_source === "scim"} aria-describedby={user.full_name_source === "scim" ? `managed-${user.principal}` : undefined} /></label>
-            <label><span>{copy.email}</span><input value={user.email ?? ""} disabled /></label>
-            <label><span>{copy.status}</span><select name="status">{statuses.map((status) => <option value={status} selected={user.status === status}>{adminUserStatusLabel(status, lang)}</option>)}</select></label>
-            <label><span>{copy.role}</span><select name="role">{roles.map((role) => <option value={role} selected={user.role === role}>{adminRoleLabel(role, lang)}</option>)}</select></label>
-            <button type="submit">{copy.save}</button>
-            <p class="admin-record-meta"><span>{copy.userMeta}:</span> {user.principal} · {user.provision_source}</p>
-            {user.full_name_source === "scim" && <p id={`managed-${user.principal}`} class="admin-record-meta">{copy.managedName}</p>}
-          </form>
+          <details class="admin-user-row">
+            <summary>
+              <span><strong>{user.full_name || user.display_name}</strong><small>{user.email ?? ""}</small></span>
+              <span class="surface-chip">{adminUserStatusLabel(user.status, lang)}</span>
+              <span class="surface-chip">{adminRoleLabel(user.role, lang)}</span>
+              <span class="admin-summary-action">{copy.edit}</span>
+            </summary>
+            <form method="post" class="admin-form-grid admin-form-grid-four" data-confirm="true" data-confirm-target={user.display_name || user.principal} data-confirm-impact={copy.updateImpact} data-confirm-recovery={copy.updateRecovery}>
+              <input type="hidden" name="csrf_token" class="csrf-token" />
+              <input type="hidden" name="principal" value={user.principal} />
+              <input type="hidden" name="full_name_locked" value={user.full_name_source === "scim" ? "true" : "false"} />
+              <label><span>{copy.displayName}</span><input name="display_name" value={user.display_name} required /></label>
+              <label><span>{copy.fullName}</span><input name="full_name" value={user.full_name ?? ""} disabled={user.full_name_source === "scim"} aria-describedby={user.full_name_source === "scim" ? `managed-${user.principal}` : undefined} /></label>
+              <label><span>{copy.email}</span><input value={user.email ?? ""} disabled /></label>
+              <label><span>{copy.status}</span><select name="status">{statuses.map((status) => <option value={status} selected={user.status === status}>{adminUserStatusLabel(status, lang)}</option>)}</select></label>
+              <label><span>{copy.role}</span><select name="role">{roles.map((role) => <option value={role} selected={user.role === role}>{adminRoleLabel(role, lang)}</option>)}</select></label>
+              <div class="admin-form-actions"><button type="submit">{copy.save}</button></div>
+              <details class="admin-technical-details"><summary>{copy.technical}</summary><p class="admin-record-meta">{user.principal} · {user.provision_source}</p></details>
+              {user.full_name_source === "scim" && <p id={`managed-${user.principal}`} class="admin-record-meta">{copy.managedName}</p>}
+            </form>
+          </details>
         ))}</div>
       )}
+      {(meta.has_prev || meta.has_next) && <nav class="admin-pagination" aria-label={copy.existingTitle}>
+        {meta.has_prev ? <a href={pageHref(page - 1)}>{copy.previous}</a> : <span aria-disabled="true">{copy.previous}</span>}
+        <span>{page}</span>
+        {meta.has_next ? <a href={pageHref(page + 1)}>{copy.next}</a> : <span aria-disabled="true">{copy.next}</span>}
+      </nav>}
     </AdminSection>
   </section>
   <ConfirmationDialog lang={lang} />

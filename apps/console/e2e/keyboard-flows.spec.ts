@@ -33,6 +33,26 @@ test.describe("keyboard-only administration flows", () => {
     await expect(page.locator("#replay-result")).toContainText(/replayed|task/i);
   });
 
+  test("secondary operations stay compact and remain keyboard reachable", async ({ page }) => {
+    await page.goto(auditUrl("/operations", "en"));
+    const details = page.locator("[data-operations-secondary]");
+    const summary = details.locator(":scope > summary");
+    await expect(details).not.toHaveAttribute("open", "");
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(1900);
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(details).toHaveAttribute("open", "");
+    await expect(page.getByRole("heading", { name: "Scheduled jobs", exact: true })).toBeVisible();
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    const staleAction = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Scheduled jobs delayed" }) }).getByRole("link", { name: "Review details" });
+    await staleAction.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/#scheduled-jobs$/);
+    await expect(details).toHaveAttribute("open", "");
+    await expect(page.getByRole("heading", { name: "Scheduled jobs", exact: true })).toBeVisible();
+  });
+
   test("history exposes current content, evidence, and comparison before analysis", async ({ page }) => {
     await page.goto(auditUrl("/decisions/history", "en"));
     const actions = page.locator(".history-primary-actions");

@@ -857,7 +857,11 @@ async function main() {
     if (Boolean(compat) !== Boolean(legacyUntil)) {
       throw new Error("--compat and --legacy-until must be provided together");
     }
-    await startLocalMcp(store, { compatibility: Boolean(compat), legacyUntil });
+    await startLocalMcp(store, {
+      compatibility: Boolean(compat),
+      legacyUntil,
+      toolProfile: args.get("--tool-profile", "default")
+    });
   } else if (command === "event" && action === "ingest") {
     const source = rest[0];
     if (!source) throw new Error("event ingest requires an agent source");

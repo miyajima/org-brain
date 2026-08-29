@@ -5,13 +5,10 @@ import LiveNotice from "../../components/admin/LiveNotice.astro";
 import ConfirmationDialog from "../../components/admin/ConfirmationDialog.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { scopedAdminHref } from "../../lib/admin-ui";
+import { adminUserStatusLabel, groupAdminCopy } from "../../lib/admin-copy";
 
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
-const copy = {
-  en: { title: "Group details", fallback: "Group", back: "Back to groups", user: "User", groupRole: "Group role", add: "Add or update", principal: "Identity", role: "Role", source: "Source", remove: "Remove", archive: "Archive group", archived: "Group archived", updated: "Membership updated", updateError: "The group could not be updated", loadError: "The group could not be loaded", roles: { member: "Member", admin: "Group administrator", owner: "Owner" } },
-  ja: { title: "グループ詳細", fallback: "グループ", back: "グループ一覧へ戻る", user: "ユーザー", groupRole: "グループ内の役割", add: "追加・更新", principal: "ID", role: "役割", source: "登録元", remove: "削除", archive: "グループをアーカイブ", archived: "グループをアーカイブしました", updated: "所属を更新しました", updateError: "グループを更新できませんでした", loadError: "グループを読み込めませんでした", roles: { member: "メンバー", admin: "グループ管理者", owner: "所有者" } },
-  zh: { title: "群组详情", fallback: "群组", back: "返回群组列表", user: "用户", groupRole: "群组角色", add: "添加或更新", principal: "身份", role: "角色", source: "来源", remove: "移除", archive: "归档群组", archived: "群组已归档", updated: "成员关系已更新", updateError: "无法更新群组", loadError: "无法加载群组", roles: { member: "成员", admin: "群组管理员", owner: "所有者" } }
-}[lang];
+const copy = groupAdminCopy(lang);
 const groupId = Astro.params.groupId ?? "";
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
@@ -43,7 +40,8 @@ if (Astro.request.method === "POST") {
   }
   const response = await api(path, {
     method,
-    headers: { "content-type": "application/json", "x-csrf-token": csrf },
+    headers: { "content-type": "application/json", "x-csrf-token": csrf,
+      ...(action === "remove" ? { "if-match": String(form.get("impact_digest") ?? "") } : {}) },
     body
   });
   if (response.ok) message = action === "archive" ? copy.archived : copy.updated;
@@ -73,7 +71,7 @@ const roleLabel = (value: string) => copy.roles[value as keyof typeof copy.roles
     </AdminPageHeader>
     {message && <LiveNotice message={message} />}{error && <LiveNotice tone="error" message={error} />}
 
-    {group?.source === "local" && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-[1fr_12rem_auto] md:items-end" data-confirm="true" data-confirm-target-field="principal" data-confirm-impact={lang === "ja" ? `${group?.name ?? copy.fallback}の共有範囲へ、選択した役割で追加します。` : `Adds this identity to ${group?.name ?? copy.fallback} with the selected group role.`} data-confirm-recovery={lang === "ja" ? "所属はこの画面から削除できます。" : "Membership can be removed from this page."}>
+    {group?.source === "local" && <form id="add-group-member" method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-[1fr_12rem_auto] md:items-end" data-confirm="true" data-confirm-target-field="principal" data-confirm-impact={copy.addImpact(group?.name ?? copy.fallback)} data-confirm-recovery={copy.addRecovery}>
       <input type="hidden" name="csrf_token" class="csrf-token" />
       <input type="hidden" name="action" value="member" />
       <label><span class="field-label">{copy.user}</span><input name="principal" list="directory-users" required /></label>
@@ -83,16 +81,40 @@ const roleLabel = (value: string) => copy.roles[value as keyof typeof copy.roles
     </form>}
 
     <div class="overflow-x-auto rounded-[22px] border border-white/8">
-      <table><thead><tr><th>{copy.principal}</th><th>{copy.role}</th><th>{copy.source}</th><th></th></tr></thead><tbody>
-        {members.map((member: any) => <tr><td>{member.principal}</td><td title={member.role}>{roleLabel(member.role)}</td><td>{member.source}</td><td>{group?.source === "local" && <form method="post" data-confirm="true" data-confirm-target={member.principal} data-confirm-impact={lang === "ja" ? `${group?.name ?? copy.fallback}への所属と共有アクセスを削除します。` : `Removes membership and shared access to ${group?.name ?? copy.fallback}.`} data-confirm-recovery={lang === "ja" ? "必要な場合は同じユーザーを再追加できます。" : "The user can be added again if needed."}><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><button type="submit" aria-label={lang === "ja" ? `${member.principal}をグループから削除` : lang === "zh" ? `从群组移除${member.principal}` : `Remove ${member.principal} from group`}>{copy.remove}</button></form>}</td></tr>)}
+      <table><thead><tr><th>{copy.user}</th><th>{copy.role}</th><th>{copy.status}</th><th></th></tr></thead><tbody>
+        {members.map((member: any) => <tr><td><div class="admin-person-cell">{member.avatar_url && <img src={member.avatar_url} alt="" loading="lazy" />}<span><strong>{member.display_name || member.principal}</strong><details class="admin-technical-details"><summary>{copy.technical}</summary><small>{member.principal} · {member.source}</small></details></span></div></td><td>{roleLabel(member.role)}</td><td>{adminUserStatusLabel(member.status ?? "active", lang)}</td><td>{group?.source === "local" && (member.can_remove !== false ? <form method="post" class="impact-removal-form" data-impact-endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(member.principal)}/impact?tenant_id=${encodeURIComponent(tenantId)}`} data-confirm="true" data-confirm-target={member.display_name || member.principal} data-confirm-impact={copy.previewLoading} data-confirm-recovery={copy.removeRecovery}><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="remove" /><input type="hidden" name="principal" value={member.principal} /><input type="hidden" name="impact_digest" value="" /><button type="submit" disabled aria-describedby={`impact-${member.principal}`} aria-label={copy.removeAria(member.display_name || member.principal)}>{copy.remove}</button><small id={`impact-${member.principal}`} class="impact-preview-status" role="status">{copy.previewLoading}</small></form> : <p class="admin-recovery-hint">{copy.ownerRemovalHelp} <a href="#add-group-member">{copy.ownerRemovalAction}</a></p>)}</td></tr>)}
       </tbody></table>
     </div>
-    {group?.source === "local" && <form method="post" data-confirm="true" data-confirm-target={group?.name ?? copy.fallback} data-confirm-impact={lang === "ja" ? "グループを通常一覧から外し、所属による共有アクセスを停止します。" : "Removes the group from active lists and stops membership-based access."} data-confirm-recovery={lang === "ja" ? "現在のAPIでは画面から復元できません。再作成が必要です。" : "The current API cannot restore it from this screen; recreation is required."}><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">{copy.archive}</button></form>}
+    {group?.source === "local" && <form method="post" data-confirm="true" data-confirm-target={group?.name ?? copy.fallback} data-confirm-impact={copy.archiveImpact} data-confirm-recovery={copy.archiveRecovery}><input type="hidden" name="csrf_token" class="csrf-token" /><input type="hidden" name="action" value="archive" /><button type="submit">{copy.archive}</button></form>}
   </section>
   <ConfirmationDialog lang={lang} />
 </BaseLayout>
 <script>
   document.querySelectorAll<HTMLInputElement>(".csrf-token").forEach((input) => {
     input.value = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  });
+  const localizedImpact = {
+    en: (lost: number, retained: number) => `This person will lose access to ${lost} items and retain access to ${retained} items.`,
+    ja: (lost: number, retained: number) => `${lost}件へのアクセスを失い、${retained}件へのアクセスは維持されます。`,
+    zh: (lost: number, retained: number) => `将失去 ${lost} 项访问权限，并保留 ${retained} 项访问权限。`
+  };
+  const previewError = { en: "Impact preview is unavailable. Removal is disabled.", ja: "影響を確認できないため、解除できません。", zh: "无法获取影响预览，已禁用移除操作。" };
+  const pageLang = document.documentElement.lang === "ja" || document.documentElement.lang === "zh" ? document.documentElement.lang : "en";
+  document.querySelectorAll<HTMLFormElement>(".impact-removal-form").forEach(async (form) => {
+    const button = form.querySelector<HTMLButtonElement>("button[type=submit]");
+    const digest = form.querySelector<HTMLInputElement>("input[name=impact_digest]");
+    const status = form.querySelector<HTMLElement>(".impact-preview-status");
+    try {
+      const response = await fetch(form.dataset.impactEndpoint ?? "", { headers: { accept: "application/json" } });
+      const payload = await response.json() as { data?: { impact_digest?: string; impact?: { lost_count?: number; retained_count?: number } } };
+      if (!response.ok || !payload?.data?.impact_digest) throw new Error("impact unavailable");
+      digest!.value = payload.data.impact_digest;
+      const text = localizedImpact[pageLang](Number(payload.data.impact?.lost_count ?? 0), Number(payload.data.impact?.retained_count ?? 0));
+      form.dataset.confirmImpact = text;
+      if (status) status.textContent = text;
+      if (button) button.disabled = false;
+    } catch {
+      if (status) status.textContent = previewError[pageLang];
+    }
   });
 </script>

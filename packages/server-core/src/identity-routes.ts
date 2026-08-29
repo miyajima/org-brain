@@ -61,7 +61,17 @@ routes.patch("/v1/organization", async (c) => {
 
 routes.get("/v1/users", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  return ports.jsonOk(c, { users: await ports.listUsers(c.env, tenantId, c.req.query("q")) });
+  const rawLimit = Number.parseInt(c.req.query("limit") ?? "200", 10);
+  const rawOffset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const status = ["invited", "active", "suspended", "deprovisioned"].includes(c.req.query("status") ?? "")
+    ? c.req.query("status") as "invited" | "active" | "suspended" | "deprovisioned" : null;
+  const role = ["tenant_admin", "project_owner", "contributor", "reader", "auditor", "service_agent"].includes(c.req.query("role") ?? "")
+    ? c.req.query("role") as "tenant_admin" | "project_owner" | "contributor" | "reader" | "auditor" | "service_agent" : null;
+  return ports.jsonOk(c, await ports.listUsers(c.env, tenantId, {
+    query: c.req.query("q"), status, role,
+    limit: Number.isNaN(rawLimit) ? 200 : rawLimit,
+    offset: Number.isNaN(rawOffset) ? 0 : rawOffset
+  }));
 });
 
 routes.post("/v1/users", async (c) => {

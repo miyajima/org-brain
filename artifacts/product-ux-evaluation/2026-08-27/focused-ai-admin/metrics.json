@@ -1,0 +1,30 @@
+{
+  "commit": "629490eb6922bfa2213cb21cff7c409d5a65af11",
+  "viewports": [
+    {"width": 1440, "height": 900, "inspected": true},
+    {"width": 390, "height": 844, "inspected": true}
+  ],
+  "mobile_reflow": {
+    "users": {"document_width": 390, "viewport_width": 390, "horizontal_overflow": false},
+    "memories": {"document_width": 390, "viewport_width": 390, "horizontal_overflow": false}
+  },
+  "dom_checks": {
+    "users": {"visible_and_hidden_control_count": 120, "unlabeled_visible_controls": 0, "language": "ja", "skip_link_target": "#console-main"},
+    "memory_quality": {"visible_control_count": 68, "unlabeled_visible_controls": 0}
+  },
+  "target_sizes": {
+    "observed_below_44_css_px": true,
+    "examples": ["top navigation 40px", "memory view tabs 36px", "memory scope and lifecycle chips 36px"]
+  },
+  "ai": {
+    "scenarios": 12,
+    "applicable_scenarios": 11,
+    "not_applicable_scenarios": 1,
+    "not_applicable_reason": "auth_failure has no authentication boundary in Local",
+    "runs_per_scenario": 3,
+    "failed_applicable_scenarios": 0,
+    "domain_packs": 4,
+    "domain_recall_score_each": 100,
+    "generated_answer_context_contract_score_each": 97
+  }
+}
