@@ -66,4 +66,35 @@ test.describe("console accessibility", () => {
     await expect(page.locator(".console-skip-link")).toBeFocused();
     await expect(page.locator(".console-skip-link")).toBeVisible();
   });
+
+  test("primary administration controls provide at least 44px touch targets", async ({ page }) => {
+    for (const path of ["/users", "/groups/group-e2e", "/memories", "/operations"]) {
+      await page.goto(auditUrl(path));
+      await page.locator("main").waitFor({ state: "visible" });
+      const undersized = await page.locator("main a[href], main button, main input:not([type=hidden]):not([type=checkbox]), main select, main summary, nav a[href], nav summary").evaluateAll((elements) =>
+        elements.filter((element) => {
+          const box = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0 && (box.height < 44 || box.width < 44);
+        }).map((element) => ({ tag: element.tagName, text: element.textContent?.trim().slice(0, 60), box: element.getBoundingClientRect().toJSON() }))
+      );
+      expect(undersized, path).toEqual([]);
+    }
+  });
+
+  test("expanded memory technical controls keep 44px targets", async ({ page }) => {
+    await page.goto(auditUrl("/memories?selected=mem_auth_group_acl", "en"));
+    const panel = page.locator(".memory-detail-panel");
+    for (const summary of await panel.locator("details:not([open]) > summary").all()) {
+      if (await summary.isVisible()) await summary.click();
+    }
+    const undersized = await panel.locator("a[href], button, input:not([type=hidden]):not([type=checkbox]), select, summary").evaluateAll((elements) =>
+      elements.filter((element) => {
+        const box = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0 && (box.height < 44 || box.width < 44);
+      }).map((element) => ({ tag: element.tagName, text: element.textContent?.trim().slice(0, 60), box: element.getBoundingClientRect().toJSON() }))
+    );
+    expect(undersized).toEqual([]);
+  });
 });

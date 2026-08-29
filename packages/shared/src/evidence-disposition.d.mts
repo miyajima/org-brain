@@ -28,3 +28,20 @@ export function evidenceAnswerTemplate(
 
 export const EVIDENCE_STATUSES: readonly EvidenceStatus[];
 export function requiresMultipleEvidenceSources(query: unknown): boolean;
+
+export type AnswerGuidance = {
+  response_mode: "answer" | "answer_with_warning" | "abstain";
+  evidence_status: EvidenceStatus;
+  required_elements: Array<"conclusion" | "status" | "evidence" | "next_action">;
+  prohibited_elements: Array<"internal_ids" | "raw_memory" | "unsupported_claims">;
+  source_refs: string[];
+  instructions: string;
+};
+
+export const ANSWER_GUIDANCE_REQUIRED_ELEMENTS: readonly ["conclusion", "status", "evidence", "next_action"];
+export const ANSWER_GUIDANCE_PROHIBITED_ELEMENTS: readonly ["internal_ids", "raw_memory", "unsupported_claims"];
+export function answerGuidanceForDisposition(
+  disposition: EvidenceDisposition,
+  sourceRefs?: Array<string | { ref?: string | null } | null>
+): AnswerGuidance;
+export function renderAnswerGuidanceMarkdown(guidance: Omit<AnswerGuidance, "instructions"> | AnswerGuidance): string;

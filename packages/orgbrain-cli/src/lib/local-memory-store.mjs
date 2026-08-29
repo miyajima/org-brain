@@ -16,6 +16,7 @@ import {
   localDenseEmbeddingProviderFromEnvironment
 } from "./local-dense-embedding.mjs";
 import {
+  answerGuidanceForDisposition,
   deriveEvidenceDisposition,
   evidenceAnswerTemplate,
   requiresMultipleEvidenceSources
@@ -5610,6 +5611,10 @@ export class LocalMemoryStore {
         hasCurrentState: state.length > 0,
         requiresMultipleSources: multiEvidence
       });
+      const answerGuidance = answerGuidanceForDisposition(
+        disposition,
+        evidence.map((item) => item.source_reference)
+      );
       const usage = await this.recordUsage({
         tenant_id: tenantId,
         project_id: projectId,
@@ -5654,7 +5659,8 @@ export class LocalMemoryStore {
           conflicts,
           missing_evidence: disposition.missing_evidence,
           abstention_recommended: disposition.abstention_recommended,
-          degraded_reasons: disposition.degraded_reasons
+          degraded_reasons: disposition.degraded_reasons,
+          answer_guidance: answerGuidance
         }
       };
     } finally {

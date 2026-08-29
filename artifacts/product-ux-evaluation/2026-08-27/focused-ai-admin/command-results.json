@@ -1,0 +1,11 @@
+{
+  "recorded_at": "2026-08-27T01:44:00+09:00",
+  "results": [
+    {"command":"node scripts/ai-evidence-audit.mjs --output .../ai-local.json","exit_code":0,"summary":"11 applicable scenarios matched expectations in 3/3 runs; auth_failure N/A in Local; 0 failed validations","artifact":"ai-local.json"},
+    {"command":"pnpm score:domain-recall","exit_code":0,"summary":"4 packs: recall 100, generated answer-context contract 97, critical 0","artifact":"domain-recall-current.json"},
+    {"command":"node --test scripts/ai-evidence-audit.test.mjs scripts/product-ux-scorecard.test.mjs scripts/domain-recall-scorecard.test.mjs","exit_code":0,"summary":"9 passed, 0 failed"},
+    {"command":"playwright focused admin and accessibility suite","exit_code":1,"summary":"Mock-proxy path repeatedly returned Network connection lost and injected a Vite overlay; product result indeterminate. Completed checks included 390x844 reflow, 400% equivalent reflow and forced-colors focus visibility."},
+    {"command":"pnpm ux:fixture -- --target local --archive ...","exit_code":0,"summary":"Manifest recorded 6 memories trashed, 8 role assignments deleted, 3 groups archived and 8 users deprovisioned","artifact":"fixture-manifest-local.json"},
+    {"command":"lsof ports 4321, 8787, 4322, 19088","exit_code":0,"summary":"No listeners at final readback"}
+  ]
+}

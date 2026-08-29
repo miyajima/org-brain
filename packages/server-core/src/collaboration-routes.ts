@@ -57,14 +57,25 @@ routes.post("/v1/groups/:groupId/members", async (c) => {
   return ports.jsonOk(c, result);
 });
 
+routes.get("/v1/groups/:groupId/members/:principal/impact", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const result = await ports.getGroupMemberImpact(
+    c.env, tenantId, c.req.param("groupId"), ports.getApiPrincipal(c),
+    decodeURIComponent(c.req.param("principal")), true
+  );
+  return ports.jsonOk(c, result);
+});
+
 routes.delete("/v1/groups/:groupId/members/:principal", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const ifMatch = c.req.header("if-match")?.trim().replace(/^W\//u, "").replace(/^"|"$/gu, "") || null;
   const result = await ports.removeGroupMember(
     c.env,
     tenantId,
     c.req.param("groupId"),
     ports.getApiPrincipal(c),
     decodeURIComponent(c.req.param("principal")),
+    ifMatch,
     true
   );
   return ports.jsonOk(c, result);

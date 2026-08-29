@@ -1,0 +1,48 @@
+{
+  "captured_at": "2026-08-28T16:49:10+09:00",
+  "environment": {
+    "console_runtime": "node",
+    "console_url": "http://127.0.0.1:4338",
+    "api": "synthetic local mock for interactive screenshots; disposable Wrangler D1 for real smoke",
+    "browser": "Codex in-app Browser",
+    "commit": "629490eb6922bfa2213cb21cff7c409d5a65af11",
+    "working_tree": "dirty"
+  },
+  "routes": {
+    "operations": { "h1": "運用ステータス", "document_height_at_1280x720": 2659, "visible_targets": 27, "overflow_x": false },
+    "memories": { "h1": "メモリエクスプローラー", "document_height_at_1280x720": 1125, "visible_targets": 64, "overflow_x": false },
+    "users": { "h1": "ユーザー", "document_height_at_1280x720": 977, "visible_targets": 40, "overflow_x": false },
+    "group": { "h1": "Reviewers", "document_height_at_1280x720": 839, "visible_targets": 31, "overflow_x": false }
+  },
+  "responsive": {
+    "widths_checked": [320, 390, 640, 1280],
+    "page_overflow_failures": 0,
+    "memory_target_failures": {
+      "tabs_and_action_links_height": 36,
+      "search_input_height": 42
+    },
+    "top_navigation_height": 40,
+    "users_small_main_targets_at_320": 0,
+    "group_small_main_targets_at_320": 0
+  },
+  "localization": {
+    "languages": ["ja", "en", "zh"],
+    "document_lang_matches": true,
+    "users_page_field_count_each": 16,
+    "users_page_region_count_each": 2,
+    "structure_matches": true
+  },
+  "runtime": {
+    "browser_console_errors": 0,
+    "browser_console_warnings": 0,
+    "console_unit_tests": { "passed": 100, "failed": 0 },
+    "console_typecheck": { "errors": 0, "hints": 4 },
+    "admin_real_smoke": {
+      "status": "passed",
+      "impact_lost_count": 1,
+      "membership_count_after": 0,
+      "ports_released": true,
+      "temporary_d1_removed": true
+    }
+  }
+}

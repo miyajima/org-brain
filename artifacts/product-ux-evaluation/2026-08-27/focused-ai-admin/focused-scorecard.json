@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "method_version": "1.0.0",
+  "generated_at": "2026-08-27T01:44:00+09:00",
+  "commit": "629490eb6922bfa2213cb21cff7c409d5a65af11",
+  "environment": "fresh local D1 fixture and in-app Browser",
+  "scope": {
+    "requested": [
+      "AI-delivered answer UX",
+      "admin console UX"
+    ],
+    "skipped": [
+      "performance benchmarks",
+      "Cloudflare live parity",
+      "manual VoiceOver",
+      "native client rendering and live model A/B",
+      "full Local and Cloudflare setup journeys"
+    ],
+    "official_full_14_axis_score": null,
+    "reason": "The user requested a focused rerun and allowed benchmark-dependent checks to be skipped. Fixed-rubric missing items were not silently renormalized into an official overall score."
+  },
+  "ai_experience": {
+    "local_retrieval_safety_contract": 92.0,
+    "official_ai_safety_axis": 50.6,
+    "item_scores": {
+      "ai_safety.relevance": 92,
+      "ai_safety.conciseness": 0,
+      "ai_safety.evidence_abstention": 92,
+      "ai_safety.consistency_parity": 0
+    },
+    "evidence": {
+      "scenario_summary": "11/11 applicable scenarios matched expectations in 3 repeated runs; local auth failure was N/A",
+      "domain_recall": "4/4 packs scored 100; generated answer-context contract scored 97",
+      "cap": "automated evidence cap 92",
+      "conciseness": "No native AI-client answer was rendered; conciseness and actionability remain unverified at 0",
+      "parity": "Local/Cloud parity unverified, therefore the combined rubric item is 0"
+    }
+  },
+  "admin_console": {
+    "scoped_weighted_score": 81.3,
+    "normalization": "Weights were normalized only across the ten explicitly inspected admin-relevant axes. This is a scoped diagnostic score, not the official 14-axis overall score.",
+    "axes": {
+      "clarity": {
+        "score": 82.0,
+        "items": {
+          "purpose": 94,
+          "current_state": 90,
+          "terms": 70,
+          "outcome": 74
+        }
+      },
+      "simplicity": {
+        "score": 80.8,
+        "items": {
+          "initial_choices": 82,
+          "information_density": 65,
+          "progressive_disclosure": 86,
+          "visual_hierarchy": 90
+        }
+      },
+      "operability": {
+        "score": 77.5,
+        "items": {
+          "action_count": 84,
+          "affordance": 88,
+          "keyboard": 78,
+          "scroll_distance": 60
+        }
+      },
+      "goal_reachability": {
+        "score": 87.1,
+        "items": {
+          "completion": 90,
+          "transitions": 88,
+          "time_backtrack": 80,
+          "context_continuity": 88
+        }
+      },
+      "discoverability": {
+        "score": 81.5,
+        "items": {
+          "navigation": 82,
+          "search": 72,
+          "primary_cta": 90,
+          "persona_entry": 82
+        }
+      },
+      "recovery": {
+        "score": 81.5,
+        "items": {
+          "loading_empty": 80,
+          "error_truthfulness": 88,
+          "direct_action": 78,
+          "feedback": 80
+        }
+      },
+      "trust": {
+        "score": 89.3,
+        "items": {
+          "decision_chain": 92,
+          "provenance": 89,
+          "access_scope": 86,
+          "destructive_boundary": 90
+        }
+      },
+      "consistency": {
+        "score": 58.0,
+        "items": {
+          "patterns": 88,
+          "terminology": 68,
+          "japanese": 76,
+          "multilingual": 0
+        },
+        "note": "Japanese UI was inspected. English and Chinese structural parity was not successfully verified in this run, so the required multilingual item remains 0."
+      },
+      "accessibility": {
+        "score": 81.8,
+        "items": {
+          "semantics": 85,
+          "focus_keyboard": 80,
+          "target_contrast": 70,
+          "reflow_motion": 92
+        }
+      },
+      "team_fit": {
+        "score": 87.5,
+        "items": {
+          "onboarding_roles": 90,
+          "sharing_scope": 88,
+          "handoff_audit": 90,
+          "revoke_recovery": 82
+        }
+      }
+    }
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "medium",
+      "primary_axis": "trust",
+      "title": "Low-confidence, conflicting, and expired memories are not prominent enough in the primary memory list",
+      "evidence": ["screenshots/06-memory-detail-desktop.png", "screenshots/08-operations-desktop.png"]
+    },
+    {
+      "id": "F2",
+      "severity": "medium",
+      "primary_axis": "consistency",
+      "title": "Japanese pages mix Japanese, English headings, raw route values, and internal terminology",
+      "evidence": ["screenshots/06-memory-detail-desktop.png", "screenshots/07-memory-quality-desktop.png"]
+    },
+    {
+      "id": "F3",
+      "severity": "medium",
+      "primary_axis": "operability",
+      "title": "User administration becomes a long repeated form without search, filtering, pagination, or bulk operations",
+      "evidence": ["screenshots/02-users-desktop.png", "screenshots/10-users-mobile.png"]
+    },
+    {
+      "id": "F4",
+      "severity": "medium",
+      "primary_axis": "clarity",
+      "title": "Group membership exposes raw principal IDs and source labels instead of a human-first identity model",
+      "evidence": ["screenshots/04-group-detail-desktop.png"]
+    },
+    {
+      "id": "F5",
+      "severity": "low",
+      "primary_axis": "accessibility",
+      "title": "Several navigation and filter targets render at 36-40 CSS px; automated axe was inconclusive because the mock API disconnected",
+      "evidence": ["screenshots/07-memory-quality-desktop.png", "screenshots/11-memories-mobile.png"]
+    }
+  ],
+  "gate": {
+    "status": "not_evaluated_as_full_run",
+    "high_or_critical_findings": 0,
+    "cloud_live_verified": false,
+    "voiceover_manually_verified": false,
+    "full_coverage": false
+  },
+  "evidence_ids": [
+    "E-AI-SCENARIOS",
+    "E-DOMAIN-CONTRACT",
+    "E-BROWSER-DESKTOP",
+    "E-BROWSER-MOBILE",
+    "E-DOM-ACCESSIBILITY",
+    "E-UNIT-SCORECARD",
+    "E-E2E-MOCK-PROXY",
+    "E-FIXTURE-MANIFEST"
+  ],
+  "measurement_input": "measurement-input-focused.json"
+}

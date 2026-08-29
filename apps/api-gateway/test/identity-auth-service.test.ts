@@ -15,7 +15,7 @@ const runtime = (globalThis as unknown as {
   process: { cwd: () => string; getBuiltinModule: (name: string) => unknown };
 }).process;
 const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as { DatabaseSync: new (path: string) => SqliteDatabase };
-const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: (path: string, encoding: string) => string };
+const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: (path: string | URL, encoding: string) => string };
 
 class D1StatementAdapter {
   private args: unknown[] = [];
@@ -57,7 +57,7 @@ function testEnv() {
     );
     CREATE TABLE memories(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT);
   `);
-  database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0024_identity_organization.sql`, "utf8"));
+  database.exec(readFileSync(new URL("../../../migrations/0024_identity_organization.sql", import.meta.url), "utf8"));
   const db = {
     prepare: (sql: string) => new D1StatementAdapter(database, sql),
     batch: async (statements: D1StatementAdapter[]) => {
@@ -172,7 +172,10 @@ describe("email identity service", () => {
       "UPDATE user_profiles SET full_name='Private Person' WHERE tenant_id='tenant-a'"
     ).run();
     expect(await listDirectory(env, "tenant-a")).not.toContainEqual(expect.objectContaining({ full_name: expect.anything() }));
-    expect((await listUsers(env, "tenant-a"))[0]?.full_name).toBe("Private Person");
+    expect((await listUsers(env, "tenant-a")).users[0]?.full_name).toBe("Private Person");
+    const page = await listUsers(env, "tenant-a", { query: "person@example.com", status: "active", limit: 1, offset: 0 });
+    expect(page.users).toHaveLength(1);
+    expect(page.meta).toEqual({ limit: 1, offset: 0, total: 1, has_next: false, has_prev: false });
     expect(await listDirectory(env, "tenant-b")).toEqual([]);
   });
 

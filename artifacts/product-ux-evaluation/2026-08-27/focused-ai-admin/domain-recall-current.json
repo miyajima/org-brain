@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-08-26T16:38:54.402Z",
+  "command": "pnpm score:domain-recall",
+  "threshold": 95,
+  "answer_context_threshold": 96,
+  "critical_threshold": 0,
+  "result_count": 4,
+  "results": [
+    {"pack_id":"function.build-engineering","version":"1.1.0","score":100,"answer_context_contract_score":97,"dimensions":{"decision_and_reason":20,"scope_and_relevance":15,"complete_decision_context":15,"metrics_and_evidence":20,"transparency_and_client_delivery":12,"correction_and_control":10,"readability_and_safety":5},"critical":0,"failures":[]},
+    {"pack_id":"function.sre","version":"1.1.0","score":100,"answer_context_contract_score":97,"dimensions":{"decision_and_reason":20,"scope_and_relevance":15,"complete_decision_context":15,"metrics_and_evidence":20,"transparency_and_client_delivery":12,"correction_and_control":10,"readability_and_safety":5},"critical":0,"failures":[]},
+    {"pack_id":"function.sales","version":"1.1.0","score":100,"answer_context_contract_score":97,"dimensions":{"decision_and_reason":20,"scope_and_relevance":15,"complete_decision_context":15,"metrics_and_evidence":20,"transparency_and_client_delivery":12,"correction_and_control":10,"readability_and_safety":5},"critical":0,"failures":[]},
+    {"pack_id":"function.pdm-b2c-marketplace","version":"1.1.0","score":100,"answer_context_contract_score":97,"dimensions":{"decision_and_reason":20,"scope_and_relevance":15,"complete_decision_context":15,"metrics_and_evidence":20,"transparency_and_client_delivery":12,"correction_and_control":10,"readability_and_safety":5},"critical":0,"failures":[]}
+  ],
+  "limitation": "The scorer evaluates generated OrgBrain answer-context Markdown, including a 6 KiB readability/safety budget. It does not render a native AI-client answer and is not a live-model A/B test."
+}

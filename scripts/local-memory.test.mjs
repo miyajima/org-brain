@@ -485,6 +485,11 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
     assert.equal(context.evidence_bundle.abstention_recommended, false);
     assert.equal(context.evidence_bundle.answer_template, "timeline");
     assert.deepEqual(context.evidence_bundle.missing_evidence, []);
+    assert.equal(context.evidence_bundle.answer_guidance.response_mode, "answer_with_warning");
+    assert.deepEqual(context.evidence_bundle.answer_guidance.required_elements, [
+      "conclusion", "status", "evidence", "next_action"
+    ]);
+    assert.match(context.evidence_bundle.answer_guidance.instructions, /結論を最初の2文以内/u);
     assert.equal(context.evidence_bundle.degraded_reasons.includes(
       "gemini_structured_extractor_not_configured"
     ), true);

@@ -55,7 +55,10 @@ test("Codex prompt hook injects only a bounded local summary for a relevant prom
     assert.match(result.hookSpecificOutput.additionalContext, /\[REDACTED_EMAIL\]/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /user@example\.com/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /Use the Codex notify and prompt hooks/u);
-    assert.ok(result.hookSpecificOutput.additionalContext.length < 1_000);
+    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /memory_id=/u);
+    assert.match(result.hookSpecificOutput.additionalContext, /### 回答契約/u);
+    assert.match(result.hookSpecificOutput.additionalContext, /結論を最初の2文以内/u);
+    assert.ok(result.hookSpecificOutput.additionalContext.length < 2_000);
   } finally {
     await ctx.cleanup();
   }
@@ -91,7 +94,12 @@ test("Codex prompt hook injects a business-readable Recall contract and visible 
     assert.match(context, /Decision: runnerを2台増やしintegration testを4 shardへ分割する/u);
     assert.match(context, /採用しなかった案[\s\S]*testを削除 — 品質ガードを失う/u);
     assert.match(context, /参照した記憶:/u);
+    assert.match(context, /### 回答契約/u);
+    assert.match(context, /結論を最初の2文以内/u);
+    assert.match(context, /内部のmemory ID/u);
     assert.match(context, /orgbrain_domain_recall_feedback/u);
+    assert.doesNotMatch(context, /recall_id=|candidate_id=/u);
+    assert.doesNotMatch(context, /DEC-BUILD-HOOK|\/domain-recalls\//u);
     assert.doesNotMatch(context, /object_match|scope_match|Feedback: useful|build_duration_p95/u);
     assert.ok(context.length < 8_192);
   } finally {

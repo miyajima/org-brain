@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { answerGuidanceForDisposition } from "../../../shared/src/evidence-disposition.mjs";
 
 export const PORTABLE_ARCHIVE_VERSION = "orgbrain-portable-archive/v1";
 
@@ -490,7 +491,19 @@ export function recallBundleMarkdown(bundle) {
     const state = item.verification_state === "verified" ? "検証済み" : item.verification_state === "stale" ? "期限切れ" : "未検証";
     return `- ${recallText(item.title, 200)}（${recallText(item.source, 160)}・${state}${observed ? `・${observed}` : ""}）`;
   });
-  const traceLabel = `${recallText(decision.id, 120)} のDecisionと根拠`;
+  const sourceRefs = (candidate.evidence ?? []).slice(0, 3).map((item) =>
+    `${recallText(item.title, 200)}（${recallText(item.source, 160)}）`
+  );
+  const traceLabel = sourceRefs.length > 0 ? sourceRefs.join(" / ") : "OrgBrainで確認したDecisionと根拠";
+  const hasConflicts = (bundle.conflicts ?? []).length > 0;
+  const degraded = candidate.evidence_verified !== true || candidate.metric_fresh === false;
+  const evidenceStatus = hasConflicts ? "conflicted" : degraded ? "degraded" : "sufficient";
+  const answerGuidance = answerGuidanceForDisposition({
+    evidence_status: evidenceStatus,
+    missing_evidence: [],
+    degraded_reasons: degraded ? ["unverified_or_stale_recall"] : [],
+    abstention_recommended: hasConflicts
+  }, sourceRefs);
   return [
     "### OrgBrainの記憶（回答用コンテキスト）",
     "<orgbrain_memory_data>",
@@ -512,15 +525,13 @@ export function recallBundleMarkdown(bundle) {
     ...evidence,
     candidate.workflow ? `- 実行方法: ${recallText(candidate.workflow, 220)}` : null,
     candidate.follow_up ? `- 次に決めたこと: ${recallText(candidate.follow_up, 320)}` : null,
-    (bundle.conflicts ?? []).length ? `- 注意: 矛盾する候補が${bundle.conflicts.length}件あります。断定せずTraceを確認してください。` : null,
-    `- Decisionと根拠: [${traceLabel}](${bundle.trace_url})`,
+    (bundle.conflicts ?? []).length ? `- 注意: 矛盾する候補が${bundle.conflicts.length}件あります。断定せず根拠を確認してください。` : null,
+    `- Decisionと根拠: ${traceLabel}`,
     "</orgbrain_memory_data>",
     "",
-    "### AIの回答ルール（OrgBrainが生成した制御情報）",
-    "- 最初に利用者の質問へ直接答え、その後にDecision、理由、必要な根拠・制約を自然な日本語で簡潔に説明してください。",
-    "- 記憶の内容と一般知識を混同せず、保存されていない推測は推測だと明示してください。",
-    `- この記憶を回答に使った場合、末尾に「参照した記憶: [${traceLabel}](${bundle.trace_url}) · 修正は『範囲が違う』『古い』『関係ない』」と表示してください。`,
-    `- 利用者から修正を受けた場合、利用可能ならorgbrain_domain_recall_feedbackを呼びます。内部参照: recall_id=${bundle.id}; candidate_id=${candidate.recall_unit_id}。`
+    answerGuidance.instructions,
+    `- この記憶を回答に使った場合、末尾に「参照した記憶: ${traceLabel} · 修正は『範囲が違う』『古い』『関係ない』」と表示してください。`,
+    "- 利用者から修正を受けた場合、利用可能ならorgbrain_domain_recall_feedbackを呼んでください。内部参照値は表示しないでください。"
   ].filter((line) => line !== null && line !== undefined).join("\n");
 }
 

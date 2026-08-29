@@ -53,6 +53,8 @@
     "local:start": "node ./scripts/local-stack.mjs start",
     "ux:fixture": "node ./scripts/ux-fixture.mjs",
     "ux:ai-audit": "node ./scripts/ai-evidence-audit.mjs",
+    "ux:ai-answer": "node ./scripts/codex-answer-ux-audit.mjs",
+    "ux:smoke:admin-real": "node ./scripts/admin-real-local-smoke.mjs",
     "cf:doctor": "node ./packages/orgbrain-cli/src/local-memory.mjs cf doctor",
     "cf:provision": "node ./packages/orgbrain-cli/src/local-memory.mjs cf provision",
     "cf:memory:rationale-backfill": "node ./scripts/memory-rationale-backfill.mjs",

@@ -19,10 +19,38 @@ const NAV_LABELS = {
 export const layoutNavLabels = (id: keyof typeof NAV_LABELS): LocaleTable<string> => NAV_LABELS[id];
 
 export const memoryExplorerCopy = (locale: ConsoleLocale) => select({
-  en: { title: "Memory Explorer", eyebrow: "Memory workspace", map: "Knowledge connections", fallbackTitle: "The accessible list is active", fallbackBody: "3D rendering is unavailable in this environment. The same filtered memories remain available here.", errorTitle: "Some memory information is unavailable", search: "Search", profile: "Profile", maintenance: "Maintenance", quality: "Quality", mine: "My memories", org: "Organization memories", active: "Active", review: "Needs review", trash: "Trash", scope: "Memory scope", lifecycle: "Memory lifecycle", page: "Page", previous: "Previous", next: "Next", emptyTitle: "No memories found", emptyBody: "No memories match this tenant and project. Adjust the filters or capture the first memory." },
-  ja: { title: "メモリエクスプローラー", eyebrow: "メモリワークスペース", map: "知識のつながり", fallbackTitle: "検索・一覧表示に切り替えました", fallbackBody: "この環境では3D描画を利用できません。同じ条件のメモリをこの一覧で確認できます。", errorTitle: "一部のメモリ情報を取得できません", search: "検索", profile: "プロファイル", maintenance: "メンテナンス", quality: "品質", mine: "自分のメモリ", org: "組織のメモリ", active: "有効", review: "要確認", trash: "ゴミ箱", scope: "メモリの範囲", lifecycle: "メモリの状態", page: "ページ", previous: "前へ", next: "次へ", emptyTitle: "メモリが見つかりません", emptyBody: "このテナントとプロジェクトに一致するメモリはありません。条件を変更するか、最初のメモリを登録してください。" },
-  zh: { title: "记忆浏览器", eyebrow: "记忆工作区", map: "知识关联", fallbackTitle: "已切换到搜索与列表", fallbackBody: "此环境无法使用3D渲染，仍可在此查看相同筛选条件下的记忆。", errorTitle: "部分记忆信息不可用", search: "搜索", profile: "配置", maintenance: "维护", quality: "质量", mine: "我的记忆", org: "组织记忆", active: "有效", review: "需要检查", trash: "回收站", scope: "记忆范围", lifecycle: "记忆状态", page: "页", previous: "上一页", next: "下一页", emptyTitle: "未找到记忆", emptyBody: "此租户和项目没有匹配的记忆。请调整筛选条件或记录第一条记忆。" }
+  en: { title: "Memory Explorer", eyebrow: "Memory workspace", map: "Knowledge connections", fallbackTitle: "The accessible list is active", fallbackBody: "3D rendering is unavailable in this environment. The same filtered memories remain available here.", errorTitle: "Some memory information is unavailable", search: "Search", profile: "Profile", maintenance: "Maintenance", quality: "Quality", mine: "My memories", org: "Organization memories", active: "Active", review: "Needs review", trash: "Trash", scope: "Memory scope", lifecycle: "Memory lifecycle", page: "Page", previous: "Previous", next: "Next", emptyTitle: "No memories found", emptyBody: "No memories match this tenant and project. Adjust the filters or capture the first memory.", attentionTitle: "Needs attention", attentionBody: "Review the answer impact, then verify, resolve, or exclude the memory.", attentionCta: "Review", attentionLabels: { critical: "Answer blocked pending review", warning: "Use with caution", blocked: "Excluded", healthy: "Ready" }, attentionReasons: { conflicted: "Conflicting evidence", expired: "Expired", unverified: "Not verified", partial: "Partially verified", confidence_missing: "Confidence not set", low_confidence: "Low confidence", deleted: "In trash", suppressed: "Suppressed", rejected: "Rejected" } },
+  ja: { title: "メモリエクスプローラー", eyebrow: "メモリワークスペース", map: "知識のつながり", fallbackTitle: "検索・一覧表示に切り替えました", fallbackBody: "この環境では3D描画を利用できません。同じ条件のメモリをこの一覧で確認できます。", errorTitle: "一部のメモリ情報を取得できません", search: "検索", profile: "プロファイル", maintenance: "メンテナンス", quality: "品質", mine: "自分のメモリ", org: "組織のメモリ", active: "有効", review: "要確認", trash: "ゴミ箱", scope: "メモリの範囲", lifecycle: "メモリの状態", page: "ページ", previous: "前へ", next: "次へ", emptyTitle: "メモリが見つかりません", emptyBody: "このテナントとプロジェクトに一致するメモリはありません。条件を変更するか、最初のメモリを登録してください。", attentionTitle: "要確認", attentionBody: "回答への影響を確認し、検証・競合解消・除外のいずれかを完了してください。", attentionCta: "確認する", attentionLabels: { critical: "確認まで回答を保留", warning: "注意して利用", blocked: "回答対象外", healthy: "利用可能" }, attentionReasons: { conflicted: "根拠が競合", expired: "期限切れ", unverified: "未検証", partial: "一部のみ検証", confidence_missing: "信頼度未設定", low_confidence: "信頼度が低い", deleted: "ゴミ箱", suppressed: "利用停止", rejected: "不採用" } },
+  zh: { title: "记忆浏览器", eyebrow: "记忆工作区", map: "知识关联", fallbackTitle: "已切换到搜索与列表", fallbackBody: "此环境无法使用3D渲染，仍可在此查看相同筛选条件下的记忆。", errorTitle: "部分记忆信息不可用", search: "搜索", profile: "配置", maintenance: "维护", quality: "质量", mine: "我的记忆", org: "组织记忆", active: "有效", review: "需要检查", trash: "回收站", scope: "记忆范围", lifecycle: "记忆状态", page: "页", previous: "上一页", next: "下一页", emptyTitle: "未找到记忆", emptyBody: "此租户和项目没有匹配的记忆。请调整筛选条件或记录第一条记忆。", attentionTitle: "需要检查", attentionBody: "请检查对回答的影响，然后完成验证、解决冲突或排除。", attentionCta: "检查", attentionLabels: { critical: "检查前暂停回答", warning: "谨慎使用", blocked: "已排除", healthy: "可使用" }, attentionReasons: { conflicted: "依据冲突", expired: "已过期", unverified: "未验证", partial: "部分验证", confidence_missing: "未设置信心", low_confidence: "信心较低", deleted: "回收站", suppressed: "已停用", rejected: "已拒绝" } }
 }, locale);
+
+export const memoryDetailCopy = (locale: ConsoleLocale) => select({
+  en: { selected: "Selected memory", pick: "Pick a row", project: "Project", noProject: "No project", created: "Created", answerImpact: "Answer impact", reason: "Reason", noReason: "No review reason", technical: "Technical information", internalId: "Internal ID", source: "Source", owner: "Owner ID", creator: "Creator ID", lifecycle: "Internal lifecycle", kind: "Internal type", version: "Version", externalKey: "External key", lastAccessed: "Last accessed", confidence: "Confidence", utility: "Utility", unassigned: "Unassigned", unavailable: "Not available", ownerHint: "Owner ID is available under Technical information." },
+  ja: { selected: "選択中のメモリ", pick: "一覧から選択", project: "プロジェクト", noProject: "プロジェクト未設定", created: "作成日時", answerImpact: "回答への影響", reason: "確認理由", noReason: "確認理由なし", technical: "技術情報", internalId: "内部ID", source: "取得元", owner: "所有者ID", creator: "作成者ID", lifecycle: "内部ライフサイクル", kind: "内部種別", version: "バージョン", externalKey: "外部キー", lastAccessed: "最終参照", confidence: "信頼度", utility: "有用度", unassigned: "未割り当て", unavailable: "未設定", ownerHint: "所有者IDは「技術情報」で確認できます。" },
+  zh: { selected: "已选记忆", pick: "请从列表中选择", project: "项目", noProject: "未设置项目", created: "创建时间", answerImpact: "对回答的影响", reason: "检查原因", noReason: "无需检查", technical: "技术信息", internalId: "内部 ID", source: "来源", owner: "所有者 ID", creator: "创建者 ID", lifecycle: "内部生命周期", kind: "内部类型", version: "版本", externalKey: "外部键", lastAccessed: "最后访问", confidence: "置信度", utility: "实用度", unassigned: "未分配", unavailable: "未设置", ownerHint: "可在“技术信息”中查看所有者 ID。" }
+}, locale);
+
+export const memoryTechnicalHistoryCopy = (locale: ConsoleLocale) => select({
+  en: "Technical information · History and provenance",
+  ja: "技術情報 · 履歴と来歴",
+  zh: "技术信息 · 历史与来源"
+}, locale);
+
+export const memoryUnknownReasonCopy = (locale: ConsoleLocale) => select({
+  en: { display: "Other review reason", technical: "Raw review reason" },
+  ja: { display: "その他の確認理由", technical: "確認理由の内部値" },
+  zh: { display: "其他检查原因", technical: "检查原因内部值" }
+}, locale);
+
+export const isKnownMemoryAttentionReason = (locale: ConsoleLocale, reason: string): boolean =>
+  Object.hasOwn(memoryExplorerCopy(locale).attentionReasons, reason);
+
+export const memoryAttentionReasonLabel = (locale: ConsoleLocale, reason: string): string => {
+  const reasons = memoryExplorerCopy(locale).attentionReasons;
+  return isKnownMemoryAttentionReason(locale, reason)
+    ? reasons[reason as keyof typeof reasons]
+    : memoryUnknownReasonCopy(locale).display;
+};
 
 export const groupsCopy = (locale: ConsoleLocale) => select({
   en: { title: "Groups", create: "Create group", name: "Name", slug: "Slug", description: "Description", details: "Details", empty: "No groups yet.", created: "Created", createError: "Group could not be created", loadError: "Groups could not be loaded" },

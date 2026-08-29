@@ -204,21 +204,45 @@ export async function listDirectory(env: Env, tenantId: string, query = "") {
   return rows.results.map(publicUser);
 }
 
-export async function listUsers(env: Env, tenantId: string, query = "") {
-  const normalized = `%${query.trim().toLowerCase().slice(0, 120)}%`;
+export type ListUsersOptions = {
+  query?: string;
+  status?: UserStatus | null;
+  role?: OrgRole | null;
+  limit?: number;
+  offset?: number;
+};
+
+export async function listUsers(env: Env, tenantId: string, options: ListUsersOptions = {}) {
+  const normalized = `%${String(options.query ?? "").trim().toLowerCase().slice(0, 120)}%`;
+  const status = options.status && ["invited", "active", "suspended", "deprovisioned"].includes(options.status)
+    ? options.status : null;
+  const role = options.role && isOrgRole(options.role) ? options.role : null;
+  const limit = Math.max(1, Math.min(200, options.limit ?? 200));
+  const offset = Math.max(0, options.offset ?? 0);
+  const roleSql = `(SELECT role FROM principal_role_assignments pra
+             WHERE pra.tenant_id=user_profiles.tenant_id AND pra.principal=user_profiles.principal
+               AND pra.project_id IS NULL ORDER BY pra.updated_at DESC LIMIT 1)`;
+  const filterSql = `tenant_id = ?
+       AND (? = '%%' OR lower(display_name) LIKE ? OR lower(email) LIKE ? OR lower(principal) LIKE ?)
+       AND (? IS NULL OR status = ?)
+       AND (? IS NULL OR ${roleSql} = ?)`;
   const rows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT tenant_id, principal, display_name, full_name, email, email_verified,
             company_name, organization_name, avatar_url, status, provision_source,
             full_name_source, created_at, updated_at,
-            (SELECT role FROM principal_role_assignments pra
-             WHERE pra.tenant_id=user_profiles.tenant_id AND pra.principal=user_profiles.principal
-               AND pra.project_id IS NULL ORDER BY pra.updated_at DESC LIMIT 1) AS role
+            ${roleSql} AS role
      FROM user_profiles
-     WHERE tenant_id = ?
-       AND (? = '%%' OR lower(display_name) LIKE ? OR lower(email) LIKE ? OR lower(principal) LIKE ?)
-     ORDER BY status, display_name, principal LIMIT 200`
-  ).bind(tenantId, normalized, normalized, normalized, normalized).all<UserRow>();
-  return rows.results.map(privateUser);
+     WHERE ${filterSql}
+     ORDER BY status, display_name, principal LIMIT ? OFFSET ?`
+  ).bind(tenantId, normalized, normalized, normalized, normalized, status, status, role, role, limit, offset).all<UserRow>();
+  const count = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT COUNT(*) AS total FROM user_profiles WHERE ${filterSql}`
+  ).bind(tenantId, normalized, normalized, normalized, normalized, status, status, role, role).first<{ total: number }>();
+  const total = Number(count?.total ?? 0);
+  return {
+    users: rows.results.map(privateUser),
+    meta: { limit, offset, total, has_next: offset + rows.results.length < total, has_prev: offset > 0 }
+  };
 }
 
 export async function createUser(env: Env, tenantId: string, raw: unknown, actorPrincipal: string) {

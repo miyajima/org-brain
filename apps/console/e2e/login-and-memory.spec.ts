@@ -23,10 +23,12 @@ test.describe("authenticated console flows", () => {
 
     await expect(page.getByRole("heading", { name: "Memory Explorer" })).toBeVisible();
     await expect(page.getByRole("navigation").getByRole("link", { name: "Knowledge connections" })).toBeVisible();
-    await expect(page.locator(".memory-map-link")).toBeVisible();
+    await expect(page.locator('.memory-map-link[href^="/memories/constellation"]')).toBeVisible();
     await expect(page.getByText("記憶を探す前から最近の流れが見えるようにして")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "最近のメモリ" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Login principal group ACL design" }).first()).toBeVisible();
+    await expect(page.getByText("Answer blocked pending review").first()).toBeVisible();
+    await expect(page.getByText("Conflicting evidence").first()).toBeVisible();
     await expect(page.locator("[data-memory-metrics]")).toBeVisible();
     await expect(page.locator("[data-memory-metrics]")).toContainText("1");
     const searchPanel = page.locator("[data-memory-search-panel]");
@@ -69,10 +71,17 @@ test.describe("authenticated console flows", () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollAtClick);
     const selectedPanel = page.locator(".memory-detail-panel");
     await expect(selectedPanel.getByRole("heading", { name: "Login principal group ACL design" })).toBeVisible();
-    await expect(selectedPanel.locator(".memory-detail-more")).not.toHaveAttribute("open", "");
+    await expect(selectedPanel.locator(".memory-detail-primary")).not.toContainText("org-brain");
+    await expect(selectedPanel.locator(".memory-detail-primary")).not.toContainText("user:e2e-login-sub");
+    await expect(selectedPanel.locator(".memory-detail-primary")).not.toContainText("active");
+    await expect(selectedPanel.getByText("Answer blocked pending review", { exact: true })).toBeVisible();
+    await expect(selectedPanel.getByText("Conflicting evidence", { exact: true })).toBeVisible();
+    const technicalInformation = selectedPanel.locator(".memory-detail-more").first();
+    await expect(technicalInformation).not.toHaveAttribute("open", "");
+    await technicalInformation.locator(":scope > summary").click();
+    await expect(technicalInformation.getByText("user:e2e-login-sub").first()).toBeVisible();
     expect(await selectedPanel.evaluate((panel) => panel.scrollWidth <= panel.clientWidth)).toBe(true);
     await expect(page.getByText("Lifecycle actions")).toBeVisible();
-    await expect(page.getByText("user:e2e-login-sub")).toBeVisible();
 
     const refreshResponse = page.waitForResponse((response) =>
       response.url().includes("/api/v1/memories/refresh") && response.status() === 200
@@ -81,6 +90,18 @@ test.describe("authenticated console flows", () => {
     await refreshResponse;
 
     await expect(page.getByRole("heading", { name: "Memory Explorer" })).toBeVisible();
+  });
+
+  test("preserves a memory conflict from Operations through review", async ({ page }) => {
+    await page.goto("/operations");
+    const conflict = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Memory conflicts" }) });
+    await expect(conflict).toContainText("1 memories conflict");
+    await conflict.getByRole("link", { name: "Review details" }).click();
+
+    await expect(page).toHaveURL(/attention=critical/);
+    await expect(page.getByText("Needs attention", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Answer blocked pending review").first()).toBeVisible();
+    await expect(page.getByText("Conflicting evidence").first()).toBeVisible();
   });
 
   test("opens and revises an existing decision without dashboard regressions", async ({ page }) => {

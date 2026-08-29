@@ -22,6 +22,7 @@ import {
   archiveGroup,
   createGroup,
   getGroup,
+  getGroupMemberImpact,
   listGroups,
   removeGroupMember,
   updateGroup
@@ -46,6 +47,7 @@ const collaborationPort = {
   archiveGroup,
   createGroup,
   getGroup,
+  getGroupMemberImpact,
   listGroups,
   removeGroupMember,
   updateGroup,

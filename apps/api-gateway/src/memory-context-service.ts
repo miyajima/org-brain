@@ -1,9 +1,11 @@
 import {
   HttpError,
+  answerGuidanceForDisposition,
   buildTenantMemoryProfile,
   deriveEvidenceDisposition,
   evidenceAnswerTemplate,
   requiresMultipleEvidenceSources,
+  type MemoryEvidenceBundle,
   type MemoryProfileResponse,
   type MemorySearchMode,
   type MemoryWorkType
@@ -15,6 +17,17 @@ import { parseOptionalNullableString as parseOptionalString } from "./request-va
 import { parseMemorySearchMode, parseOptionalBoolean, parseOptionalInteger, parseString } from "./memory-service-utils";
 import type { MemoryProfileRequest, PrincipalActorOptions } from "./memory-service-types";
 import { bestEffortMarkMemoryResultsAccessed, searchMemories } from "./memory-search-service";
+
+type RetrieveMemoryContextResponse = {
+  results: Awaited<ReturnType<typeof searchMemories>>["results"];
+  meta: Awaited<ReturnType<typeof searchMemories>>["meta"] & {
+    usage_id: string;
+    verification_sampled: boolean;
+  };
+  evidence_bundle: Omit<MemoryEvidenceBundle, "evidence"> & {
+    evidence: Array<Record<string, unknown>>;
+  };
+};
 
 function parseProfileRequest(raw: unknown): {
   tenantId: string;
@@ -49,7 +62,7 @@ export async function retrieveMemoryContext(
   env: Env,
   rawBody: unknown,
   options: PrincipalActorOptions = {}
-) {
+): Promise<RetrieveMemoryContextResponse> {
   if (!rawBody || typeof rawBody !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
@@ -261,6 +274,18 @@ export async function retrieveMemoryContext(
   ];
   const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
   const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
+  const effectiveAbstention = shadowMode ? legacyAbstention : disposition.abstention_recommended;
+  const answerGuidance = answerGuidanceForDisposition(
+    effectiveAbstention && !["insufficient", "conflicted"].includes(disposition.evidence_status)
+      ? { ...disposition, evidence_status: "insufficient", abstention_recommended: true }
+      : disposition,
+    evidence.map((item) => {
+      const reference = item.source_reference;
+      if (!reference || typeof reference !== "object") return null;
+      const ref = (reference as { ref?: unknown }).ref;
+      return typeof ref === "string" ? { ref } : null;
+    })
+  );
   if (shadowMode && legacyAbstention !== disposition.abstention_recommended) {
     console.warn(JSON.stringify({
       event: "orgbrain.evidence_disposition.shadow_difference",
@@ -313,8 +338,9 @@ export async function retrieveMemoryContext(
       timeline,
       conflicts,
       missing_evidence: shadowMode ? legacyMissingEvidence : disposition.missing_evidence,
-      abstention_recommended: shadowMode ? legacyAbstention : disposition.abstention_recommended,
-      degraded_reasons: disposition.degraded_reasons
+      abstention_recommended: effectiveAbstention,
+      degraded_reasons: disposition.degraded_reasons,
+      answer_guidance: answerGuidance
     }
   };
 }

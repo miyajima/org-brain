@@ -3,7 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 import AccessDrawer from "../components/decision/AccessDrawer.astro";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
-import { memoryExplorerCopy } from "../lib/console-locale";
+import { isKnownMemoryAttentionReason, memoryAttentionReasonLabel, memoryDetailCopy, memoryExplorerCopy, memoryTechnicalHistoryCopy, memoryUnknownReasonCopy } from "../lib/console-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
@@ -40,6 +40,10 @@ type MemoryRow = {
   capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
   capture_batch_id: string | null;
   verification_state: "verified" | "partial" | "unverified" | "rejected";
+  answer_eligibility: "blocked" | "caution" | "eligible";
+  attention_severity: "critical" | "warning" | "blocked" | "healthy";
+  attention_reasons: string[];
+  evaluated_at: number;
 };
 
 type QualityRun = {
@@ -242,6 +246,10 @@ type DetailRecord = {
   consumer_count: number;
   net_saved_tokens: number;
   injected_tokens: number;
+  answer_eligibility: "blocked" | "caution" | "eligible" | null;
+  attention_severity: "critical" | "warning" | "blocked" | "healthy" | null;
+  attention_reasons: string[];
+  evaluated_at: number | null;
 };
 
 type AnalyticsSummary = {
@@ -262,6 +270,9 @@ const params = url.searchParams;
 const requestedLocale = params.get("lang");
 const locale: "en" | "ja" | "zh" = requestedLocale === "ja" || requestedLocale === "zh" ? requestedLocale : "en";
 const explorerCopy = memoryExplorerCopy(locale);
+const detailCopy = memoryDetailCopy(locale);
+const technicalHistoryCopy = memoryTechnicalHistoryCopy(locale);
+const unknownReasonCopy = memoryUnknownReasonCopy(locale);
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
 const insightsRoutesEnabled = insightsUiBehavior(insightsMode).enableInsightsRoutes;
 const decisionConsoleMode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
@@ -277,9 +288,11 @@ const lifecycle = ["active", "review", "trash", "all"].includes(params.get("life
   : "active";
 const ownerPrincipal = params.get("owner_principal")?.trim() || "";
 const createdByPrincipal = params.get("created_by_principal")?.trim() || "";
-const sort = ["created", "updated", "usage"].includes(params.get("sort") ?? "")
-  ? (params.get("sort") as "created" | "updated" | "usage")
+const sort = ["created", "updated", "usage", "attention"].includes(params.get("sort") ?? "")
+  ? (params.get("sort") as "created" | "updated" | "usage" | "attention")
   : "created";
+const attention = ["critical", "warning", "blocked", "healthy", "all"].includes(params.get("attention") ?? "")
+  ? params.get("attention") as "critical" | "warning" | "blocked" | "healthy" | "all" : "";
 const dateValue = (raw: string | null, endOfDay = false): number | null => {
   if (!raw) return null;
   const numericValue = Number(raw);
@@ -396,7 +409,11 @@ function buildDetailRecord(
       used_count: row.used_count ?? 0,
       consumer_count: row.consumer_count ?? 0,
       net_saved_tokens: row.net_saved_tokens ?? 0,
-      injected_tokens: row.injected_tokens ?? 0
+      injected_tokens: row.injected_tokens ?? 0,
+      answer_eligibility: row.answer_eligibility,
+      attention_severity: row.attention_severity,
+      attention_reasons: row.attention_reasons ?? [],
+      evaluated_at: row.evaluated_at
     };
   }
 
@@ -429,7 +446,11 @@ function buildDetailRecord(
       used_count: 0,
       consumer_count: 0,
       net_saved_tokens: 0,
-      injected_tokens: 0
+      injected_tokens: 0,
+      answer_eligibility: null,
+      attention_severity: null,
+      attention_reasons: [],
+      evaluated_at: null
     };
   }
 
@@ -461,7 +482,11 @@ function buildDetailRecord(
       used_count: 0,
       consumer_count: 0,
       net_saved_tokens: 0,
-      injected_tokens: 0
+      injected_tokens: 0,
+      answer_eligibility: null,
+      attention_severity: null,
+      attention_reasons: [],
+      evaluated_at: null
     };
   }
 
@@ -497,7 +522,11 @@ function buildDetailRecordFromMemoryDetail(payload: MemoryDetailResponse | null)
     used_count: memory.used_count ?? 0,
     consumer_count: memory.consumer_count ?? 0,
     net_saved_tokens: memory.net_saved_tokens ?? 0,
-    injected_tokens: memory.injected_tokens ?? 0
+    injected_tokens: memory.injected_tokens ?? 0,
+    answer_eligibility: null,
+    attention_severity: null,
+    attention_reasons: [],
+    evaluated_at: null
   };
 }
 
@@ -539,7 +568,7 @@ function rowCardClass(selected: boolean): string {
 
 function tabClass(active: boolean): string {
   return [
-    "inline-flex min-h-9 items-center justify-center rounded-[10px] border px-3 text-xs font-semibold transition duration-200",
+    "inline-flex min-h-11 items-center justify-center rounded-[10px] border px-3 text-xs font-semibold transition duration-200",
     active
       ? "border-sky-300/40 bg-sky-300/15 text-sky-50"
       : "border-white/8 bg-white/[0.04] text-zinc-300 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
@@ -547,7 +576,11 @@ function tabClass(active: boolean): string {
 }
 
 const listPayload = await fetchApi<MemoryListPage>(
-  `/api/v1/memories?tenant_id=${encodeURIComponent(tenantId)}&scope=${scope}&project_id=${encodeURIComponent(projectId)}&owner_principal=${encodeURIComponent(ownerPrincipal)}&created_by_principal=${encodeURIComponent(createdByPrincipal)}&lifecycle=${lifecycle}&include_trashed=1&from=${fromTimestamp ?? ""}&to=${toTimestamp ?? ""}&sort=${sort}&limit=${pageSize}&offset=${offset}&paginated=1`
+  `/api/v1/memories?tenant_id=${encodeURIComponent(tenantId)}&scope=${scope}&project_id=${encodeURIComponent(projectId)}&owner_principal=${encodeURIComponent(ownerPrincipal)}&created_by_principal=${encodeURIComponent(createdByPrincipal)}&lifecycle=${lifecycle}&include_trashed=1&attention=${attention}&from=${fromTimestamp ?? ""}&to=${toTimestamp ?? ""}&sort=${sort}&limit=${pageSize}&offset=${offset}&paginated=1`
+);
+
+const attentionPayload = await fetchApi<MemoryListPage>(
+  `/api/v1/memories?tenant_id=${encodeURIComponent(tenantId)}&scope=org&project_id=${encodeURIComponent(projectId)}&lifecycle=all&include_trashed=1&attention=all&sort=attention&limit=6&offset=0&paginated=1`
 );
 
 const analyticsPayload = await fetchApi<AnalyticsSummary>(
@@ -602,6 +635,10 @@ const qualityDetail = qualityRunPayload?.ok ? qualityRunPayload.data : null;
 
 const listPage = listPayload?.ok ? listPayload.data : null;
 const corpusItems = listPage?.items ?? [];
+const attentionItems = attentionPayload?.ok
+  ? attentionPayload.data.items.filter((item) => item.attention_severity !== "healthy") : [];
+const attentionReasonLabel = (reason: string) =>
+  memoryAttentionReasonLabel(locale, reason);
 const searchResults = searchPayload?.ok ? searchPayload.data.results : [];
 const profile = profilePayload?.ok ? profilePayload.data : null;
 const durableRows = profile?.durable ?? [];
@@ -676,6 +713,7 @@ const accessPayload = decisionConsoleEnabled && detail?.kind === "memory"
   : null;
 const loadErrors = [...new Set([
   listPayload?.ok === false ? listPayload.error?.message ?? "Memory list could not be loaded" : null,
+  attentionPayload?.ok === false ? attentionPayload.error?.message ?? "Memory attention list could not be loaded" : null,
   searchPayload?.ok === false ? searchPayload.error?.message ?? "Memory search could not be loaded" : null,
   profilePayload?.ok === false ? profilePayload.error?.message ?? "Memory profile could not be loaded" : null,
   detailPayload?.ok === false ? detailPayload.error?.message ?? "Memory detail could not be loaded" : null
@@ -720,6 +758,21 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     </header>
 
     {loadErrors.length > 0 && <AdminStatePanel state="partial" title={explorerCopy.errorTitle} description={loadErrors.join(" · ")} />}
+
+    {attentionItems.length > 0 && <section class="memory-command-surface" aria-labelledby="memory-attention-title">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div><p class="surface-label">{explorerCopy.attentionTitle}</p><h2 id="memory-attention-title" class="text-2xl font-semibold text-white">{explorerCopy.attentionBody}</h2></div>
+        <a class="memory-map-link" href={makeHref({ attention: "all", sort: "attention", lifecycle: "all", scope: "org", page: "1", selected: "" })}>{explorerCopy.attentionCta}</a>
+      </div>
+      <div class="mt-4 grid gap-3 lg:grid-cols-3">
+        {attentionItems.slice(0, 3).map((item) => <a class={rowCardClass(selectedId === item.id)} href={makeHref({ selected: item.id, attention: "all", sort: "attention", lifecycle: "all", scope: "org" })}>
+          <p class="surface-label">{explorerCopy.attentionLabels[item.attention_severity]}</p>
+          <h3 class="mt-2 font-semibold text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
+          <p class="mt-2 text-sm text-zinc-300">{item.attention_reasons.map(attentionReasonLabel).join(" · ")}</p>
+          <p class="mt-3 text-sm text-sky-200">{explorerCopy.attentionCta} →</p>
+        </a>)}
+      </div>
+    </section>}
 
     <section class="memory-command-surface">
       <div class="memory-command-nav">
@@ -800,14 +853,14 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             <p class="surface-label mr-2">Popular searches</p>
             {searchSuggestions.map((term) => (
               <a
-                class="inline-flex min-h-9 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-zinc-200 transition duration-200 hover:-translate-y-0.5 hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-white"
+                class="inline-flex min-h-11 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-zinc-200 transition duration-200 hover:-translate-y-0.5 hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-white"
                 href={makeHref({ q: term, selected: "", page: "1" })}
               >
                 {term}
               </a>
             ))}
             {query && (
-              <a class="inline-flex min-h-9 items-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-sm text-zinc-300 transition duration-200 hover:border-white/20 hover:text-white" href={clearQueryHref}>
+              <a class="inline-flex min-h-11 items-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-sm text-zinc-300 transition duration-200 hover:border-white/20 hover:text-white" href={clearQueryHref}>
                 Clear search
               </a>
             )}
@@ -845,7 +898,12 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 <option value="created" selected={sort === "created"}>新しい順</option>
                 <option value="updated" selected={sort === "updated"}>更新順</option>
                 <option value="usage" selected={sort === "usage"}>参照数順</option>
+                <option value="attention" selected={sort === "attention"}>{explorerCopy.attentionTitle}</option>
               </select>
+            </label>
+            <label>
+              <span class="surface-label">{explorerCopy.attentionTitle}</span>
+              <select name="attention"><option value="" selected={!attention}>—</option>{["critical", "warning", "blocked", "healthy"].map((value) => <option value={value} selected={attention === value}>{explorerCopy.attentionLabels[value as keyof typeof explorerCopy.attentionLabels]}</option>)}</select>
             </label>
             <label>
               <span class="surface-label">From</span>
@@ -907,7 +965,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             </label>
             <input type="hidden" name="entity_role" value={entityRole} />
             <input type="hidden" name="decision_status" value={decisionStatus} />
-            <button class="md:col-span-2 xl:col-span-5" type="submit">Apply filters</button>
+            <button class="md:col-span-2 xl:col-span-5" style="min-height:46px" type="submit">Apply filters</button>
           </form>
 
           <div class="memory-search-behavior">
@@ -1050,7 +1108,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                       <div class="mt-4 flex flex-wrap gap-2">
                         {searchSuggestions.slice(0, 4).map((term) => (
                           <a
-                            class="inline-flex min-h-9 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-sm text-zinc-200 transition duration-200 hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-white"
+                            class="inline-flex min-h-11 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-sm text-zinc-200 transition duration-200 hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-white"
                             href={makeHref({ q: term, selected: "", page: "1" })}
                           >
                             {term}
@@ -1070,12 +1128,8 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                             </div>
                             <div class="min-w-0 space-y-1.5 overflow-hidden">
                               <div class="memory-row-meta">
-                                <span>{item.source}</span>
-                                <span>{item.project_id || "no-project"}</span>
-                                <span>{item.owner_principal || "owner-unassigned"}</span>
-                                <span>{item.capture_origin}</span>
-                                <span>{item.capture_route}</span>
-                                <span>{item.verification_state}</span>
+                                <span>{explorerCopy.attentionLabels[item.attention_severity]}</span>
+                                {item.attention_reasons.slice(0, 2).map((reason) => <span>{attentionReasonLabel(reason)}</span>)}
                                 <span>{formatDate(item.created_at)}</span>
                               </div>
                               <h3 class="memory-row-title text-lg font-semibold tracking-[-0.03em] text-white">{memoryCardCopy(item.summary, item.content).title}</h3>
@@ -1095,12 +1149,12 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                       <span class="surface-label">{explorerCopy.page} {page}</span>
                       <div class="flex flex-wrap gap-2">
                         {prevPageHref ? (
-                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={prevPageHref}>{explorerCopy.previous}</a>
+                          <a class="inline-flex min-h-11 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={prevPageHref}>{explorerCopy.previous}</a>
                         ) : (
                           <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">{explorerCopy.previous}</span>
                         )}
                         {nextPageHref ? (
-                          <a class="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={nextPageHref}>{explorerCopy.next}</a>
+                          <a class="inline-flex min-h-11 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-200 transition duration-200 hover:border-white/20 hover:bg-white/[0.07]" href={nextPageHref}>{explorerCopy.next}</a>
                         ) : (
                           <span class="inline-flex min-h-10 items-center rounded-full border border-white/6 bg-white/[0.03] px-4 text-sm text-zinc-500">{explorerCopy.next}</span>
                         )}
@@ -1249,8 +1303,8 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
         <div class="memory-detail-panel">
           <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="surface-label">Selected memory</p>
-              <h2 class="memory-detail-title mt-1.5 text-xl font-semibold tracking-[-0.04em] text-white">{detail ? detail.title : "Pick a row"}</h2>
+              <p class="surface-label">{detailCopy.selected}</p>
+              <h2 class="memory-detail-title mt-1.5 text-xl font-semibold tracking-[-0.04em] text-white">{detail ? detail.title : detailCopy.pick}</h2>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               {detail?.score !== null && detail?.score !== undefined && <span class="surface-chip">{detail.score.toFixed(3)}</span>}
@@ -1262,35 +1316,37 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             <div class="mt-4 space-y-3">
               <dl class="memory-detail-primary">
                 <div>
-                  <dt class="surface-label">Project</dt>
-                  <dd>{detail.project_id || "no-project"}</dd>
+                  <dt class="surface-label">{detailCopy.answerImpact}</dt>
+                  <dd>{detail.attention_severity ? explorerCopy.attentionLabels[detail.attention_severity] : detailCopy.unavailable}</dd>
                 </div>
                 <div>
-                  <dt class="surface-label">Owner</dt>
-                  <dd>{memoryDetail?.memory?.owner_principal || detail.owner_principal || "unassigned"}</dd>
-                </div>
-                <div>
-                  <dt class="surface-label">Created</dt>
+                  <dt class="surface-label">{detailCopy.created}</dt>
                   <dd>{formatDate(detail.created_at)}</dd>
                 </div>
                 <div>
-                  <dt class="surface-label">Lifecycle</dt>
-                  <dd>{detail.lifecycle_state}</dd>
+                  <dt class="surface-label">{detailCopy.reason}</dt>
+                  <dd>{detail.attention_reasons.length > 0 ? detail.attention_reasons.map(attentionReasonLabel).join(" · ") : detailCopy.noReason}</dd>
                 </div>
               </dl>
 
               <details class="memory-detail-more">
-                <summary>その他のメタデータ</summary>
+                <summary>{detailCopy.technical}</summary>
                 <dl>
-                  <div><dt>ID</dt><dd>{detail.id}</dd></div>
-                  <div><dt>Source</dt><dd>{detail.source}</dd></div>
-                  <div><dt>Creator</dt><dd>{memoryDetail?.memory?.created_by_principal || detail.created_by_principal || "unassigned"}</dd></div>
-                  <div><dt>Kind</dt><dd>{detail.kind} / {detail.memory_kind}</dd></div>
-                  <div><dt>Version</dt><dd>v{detail.current_version}</dd></div>
-                  <div><dt>External key</dt><dd>{detail.external_key || "n/a"}</dd></div>
-                  <div><dt>Last accessed</dt><dd>{detail.last_accessed_at ? formatDate(detail.last_accessed_at) : "n/a"}</dd></div>
-                  <div><dt>Confidence</dt><dd>{detail.confidence_score ?? "n/a"}</dd></div>
-                  <div><dt>Utility</dt><dd>{detail.utility_score ?? "n/a"}</dd></div>
+                  <div><dt>{detailCopy.internalId}</dt><dd>{detail.id}</dd></div>
+                  <div><dt>{detailCopy.project}</dt><dd>{detail.project_id || detailCopy.noProject}</dd></div>
+                  <div><dt>{detailCopy.source}</dt><dd>{detail.source}</dd></div>
+                  <div><dt>{detailCopy.owner}</dt><dd>{memoryDetail?.memory?.owner_principal || detail.owner_principal || detailCopy.unassigned}</dd></div>
+                  <div><dt>{detailCopy.creator}</dt><dd>{memoryDetail?.memory?.created_by_principal || detail.created_by_principal || detailCopy.unassigned}</dd></div>
+                  <div><dt>{detailCopy.lifecycle}</dt><dd>{detail.lifecycle_state}</dd></div>
+                  <div><dt>{detailCopy.kind}</dt><dd>{detail.kind} / {detail.memory_kind}</dd></div>
+                  <div><dt>{detailCopy.version}</dt><dd>v{detail.current_version}</dd></div>
+                  <div><dt>{detailCopy.externalKey}</dt><dd>{detail.external_key || detailCopy.unavailable}</dd></div>
+                  <div><dt>{detailCopy.lastAccessed}</dt><dd>{detail.last_accessed_at ? formatDate(detail.last_accessed_at) : detailCopy.unavailable}</dd></div>
+                  <div><dt>{detailCopy.confidence}</dt><dd>{detail.confidence_score ?? detailCopy.unavailable}</dd></div>
+                  <div><dt>{detailCopy.utility}</dt><dd>{detail.utility_score ?? detailCopy.unavailable}</dd></div>
+                  {detail.attention_reasons.filter((reason) => !isKnownMemoryAttentionReason(locale, reason)).length > 0 && (
+                    <div><dt>{unknownReasonCopy.technical}</dt><dd>{detail.attention_reasons.filter((reason) => !isKnownMemoryAttentionReason(locale, reason)).join(" · ")}</dd></div>
+                  )}
                 </dl>
               </details>
 
@@ -1317,15 +1373,20 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                   <div class="flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <p class="surface-label">Memory editor</p>
-                      <h3 class="mt-2 text-base font-semibold text-white">本文・要約・タグ・プロジェクト</h3>
+                      <h3 class="mt-2 text-base font-semibold text-white">本文・要約・タグ</h3>
                     </div>
-                    <span class="text-xs text-zinc-500">owner: {memoryDetail?.memory?.owner_principal || detail.owner_principal || "unassigned"}</span>
+                    <span class="text-xs text-zinc-500">{detailCopy.ownerHint}</span>
                   </div>
                   <form class="mt-4 space-y-3" data-memory-edit-form>
                     <input type="hidden" name="memory_id" value={detail.id} />
                     <input type="hidden" name="tenant_id" value={tenantId} />
                     <label><span class="surface-label">Summary</span><input name="summary" value={memoryDetail?.memory?.summary ?? detail.summary} /></label>
-                    <label><span class="surface-label">Project</span><input name="project_id" value={memoryDetail?.memory?.project_id ?? detail.project_id ?? ""} /></label>
+                    <details class="memory-detail-more">
+                      <summary>{detailCopy.technical}</summary>
+                      <div class="p-3">
+                        <label><span class="surface-label">{detailCopy.project}</span><input name="project_id" value={memoryDetail?.memory?.project_id ?? detail.project_id ?? ""} /></label>
+                      </div>
+                    </details>
                     <label><span class="surface-label">Tags (comma separated)</span><input name="tags" value={(memoryDetail?.memory?.tags ?? detail.tags).join(", ")} /></label>
                     <label><span class="surface-label">Content</span><textarea name="content" rows="7">{memoryDetail?.memory?.content ?? detail.content}</textarea></label>
                     <button type="submit" data-memory-save>Save changes</button>
@@ -1377,7 +1438,9 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
               )}
 
               {memoryDetail && (
-                <section class="space-y-3">
+                <details class="memory-detail-more memory-technical-history">
+                  <summary>{technicalHistoryCopy}</summary>
+                  <section class="space-y-3 p-3">
                   {memoryDetail.memory && (
                     <div class="surface-soft-card !rounded-[24px] !p-4">
                       <p class="surface-label">Learning provenance</p>
@@ -1462,7 +1525,8 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                       )) : <p class="text-sm leading-7 text-zinc-400">No version history available.</p>}
                     </div>
                   </div>
-                </section>
+                  </section>
+                </details>
               )}
 
               {detail.content && detail.content !== detail.preview && (
@@ -1504,7 +1568,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
   }
   .memory-map-link {
     display: inline-flex;
-    min-height: 40px;
+    min-height: 44px;
     align-items: center;
     justify-content: center;
     gap: .65rem;
@@ -1631,6 +1695,10 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     padding: .7rem;
   }
   .memory-explorer input,
+  .memory-explorer select {
+    min-height: 44px;
+  }
+  .memory-explorer input,
   .memory-explorer select,
   .memory-explorer textarea {
     border-radius: 11px;
@@ -1653,7 +1721,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     padding-left: 2.35rem;
   }
   .memory-search-body button {
-    min-height: 40px;
+    min-height: 44px;
     padding: .55rem .8rem;
     font-size: .75rem;
   }
@@ -1667,7 +1735,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     background: rgba(0, 0, 0, .14);
   }
   .memory-advanced-panel > summary {
-    min-height: 40px;
+    min-height: 44px;
     cursor: pointer;
     list-style: none;
     padding: .65rem .75rem;
@@ -1829,7 +1897,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     border-radius: 11px;
   }
   .memory-detail-more > summary {
-    min-height: 38px;
+    min-height: 44px;
     cursor: pointer;
     list-style: none;
     padding: .6rem;

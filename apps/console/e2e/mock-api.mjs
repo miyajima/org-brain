@@ -62,6 +62,23 @@ const memory = {
   last_accessed_at: now,
   confidence_score: 0.93,
   utility_score: 0.88
+  , owner_principal: "user:e2e-login-sub"
+  , created_by_principal: "user:e2e-login-sub"
+  , deleted_at: null
+  , updated_at: now
+  , reference_count: 3
+  , used_count: 2
+  , consumer_count: 1
+  , net_saved_tokens: 120
+  , injected_tokens: 20
+  , capture_origin: "observed"
+  , capture_route: "manual"
+  , capture_batch_id: null
+  , verification_state: "verified"
+  , answer_eligibility: "blocked"
+  , attention_severity: "critical"
+  , attention_reasons: ["conflicted"]
+  , evaluated_at: now
 };
 
 const profileItem = {
@@ -1024,7 +1041,7 @@ function operationsStatus(tenantId) {
   return {
     tenant_id: tenantId,
     generated_at: now,
-    scheduled_jobs: [{ job_name: "memory_measurement", latest_status: "succeeded", stale: false, last_success_at: now, success_age_ms: 3_600_000, next_expected_at: now + 3_600_000 }],
+    scheduled_jobs: [{ job_name: "memory_measurement", latest_status: "succeeded", stale: true, last_success_at: now - 40 * 3_600_000, success_age_ms: 40 * 3_600_000, next_expected_at: now - 4 * 3_600_000 }],
     retention_queue: { pending: 2, overdue: 0, failed: 0, manual_review: 0 },
     memories: { total: 12, conflicting: 1, expired: 0 },
     decision_review: { unconfirmed: 2, low_confidence: 1 },
@@ -1594,7 +1611,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/users" && request.method === "GET") {
-    json(response, 200, ok({ users: [{ principal: "user:e2e-login-sub", display_name: "E2E Login User", full_name: "E2E Full Name", email: "e2e@example.com", status: "active", provision_source: "legacy", full_name_source: "legacy", role: "tenant_admin" }] }));
+    json(response, 200, ok({ users: [{ principal: "user:e2e-login-sub", display_name: "E2E Login User", full_name: "E2E Full Name", email: "e2e@example.com", status: "active", provision_source: "legacy", full_name_source: "legacy", role: "tenant_admin" }], meta: { limit: 25, offset: 0, total: 1, has_next: false, has_prev: false } }));
     return;
   }
   if (path === "/v1/users" && request.method === "POST") {
@@ -1618,7 +1635,11 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/groups/group-e2e" && request.method === "GET") {
-    json(response, 200, ok({ group: { id: "group-e2e", slug: "reviewers", name: "Reviewers", description: "Local review group", source: "local", role: "owner" }, members: [{ principal: "user:e2e-login-sub", role: "owner", source: "local" }] }));
+    json(response, 200, ok({ group: { id: "group-e2e", slug: "reviewers", name: "Reviewers", description: "Local review group", source: "local", role: "owner" }, members: [{ principal: "user:e2e-login-sub", display_name: "E2E Login User", avatar_url: null, status: "active", role: "owner", source: "local", can_remove: false, removal_block_reason: "self_owner" }, { principal: "user:member", display_name: "E2E Member", avatar_url: null, status: "active", role: "member", source: "local", can_remove: true, removal_block_reason: null }] }));
+    return;
+  }
+  if (path.startsWith("/v1/groups/group-e2e/members/") && path.endsWith("/impact") && request.method === "GET") {
+    json(response, 200, ok({ group_id: "group-e2e", membership: { principal: "user:e2e-login-sub", role: "owner", updated_at: now, source: "local" }, impact: { lost_count: 2, retained_count: 1, lost_by_resource_type: { memory: 2 }, retained_by_resource_type: { memory: 1 } }, policy_versions: [], resolver_version: "resource-access-resolver/v2", impact_digest: "e2e-impact-digest" }));
     return;
   }
   if (path.startsWith("/v1/groups/group-e2e") && ["POST", "PATCH", "DELETE"].includes(request.method)) {

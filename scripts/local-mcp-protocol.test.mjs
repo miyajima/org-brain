@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 
 const CLI = resolve("packages/orgbrain-cli/src/local-memory.mjs");
 
@@ -17,8 +18,9 @@ async function fixture() {
   };
 }
 
-async function connect(dbPath, { legacy = false } = {}) {
+async function connect(dbPath, { legacy = false, toolProfile = null } = {}) {
   const args = [CLI, "mcp"];
+  if (toolProfile) args.push("--tool-profile", toolProfile);
   if (legacy) {
     args.push(
       "--compat",
@@ -123,6 +125,45 @@ test("strict local MCP rejects an implicit legacy handshake", async () => {
   } finally {
     await client.close().catch(() => undefined);
     await transport.close().catch(() => undefined);
+    await ctx.cleanup();
+  }
+});
+
+test("answer UX MCP profile exposes only the exact read-only context surface", async () => {
+  const ctx = await fixture();
+  let connection;
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    await store.capture({
+      tenant_id: "default", project_id: "answer-ux", kind: "decision", lifecycle_state: "active",
+      scope_type: "project", scope_key: "answer-ux",
+      content: "The internal raw memory body must not be returned by the answer UX profile.",
+      summary: "Two reviewers are required before the read-only smoke check.",
+      tags: ["approval"], source: "test", source_references: [{ type: "document", ref: "RUNBOOK-SAFE" }],
+      external_key: "answer-ux:safe", actor_type: "principal", actor_id: "test", confidence_score: 0.9
+    });
+    connection = await connect(ctx.dbPath, { toolProfile: "answer-ux-readonly" });
+    const catalog = await connection.client.listTools();
+    assert.deepEqual(catalog.tools.map((tool) => tool.name), [
+      "orgbrain_context_enrich",
+      "orgbrain_domain_context"
+    ]);
+    await assert.rejects(connection.client.callTool({
+      name: "orgbrain_memories_propose",
+      arguments: { item: { content: "must not be accepted" } }
+    }));
+    const enriched = await connection.client.callTool({
+      name: "orgbrain_context_enrich",
+      arguments: { tenant_id: "default", project_id: "answer-ux", query: "reviewers and read-only smoke" }
+    });
+    const text = enriched.content[0].text;
+    const payload = JSON.parse(text);
+    assert.doesNotMatch(text, /memory_id|usage_id|recall_id|candidate_id|\/domain-recalls\//u);
+    assert.doesNotMatch(text, /internal raw memory body/u);
+    assert.equal(payload.evidence_bundle.evidence[0].summary, "Two reviewers are required before the read-only smoke check.");
+    assert.equal(payload.evidence_bundle.evidence[0].source_ref, "RUNBOOK-SAFE");
+  } finally {
+    if (connection) await close(connection);
     await ctx.cleanup();
   }
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyMemoryAttention,
   deleteMemoryById,
   getMemoryProfile,
   listMemories,
@@ -392,6 +393,18 @@ class FakeD1 {
 }
 
 describe("memory-service", () => {
+  it("classifies blocked before critical and warning at one fixed evaluation time", () => {
+    const evaluatedAt = 10_000;
+    expect(classifyMemoryAttention({ deleted_at: 9_000, lifecycle_state: "active", verification_state: "unverified", valid_until: 1, conflicts_json: '["conflict"]', confidence_score: 0.1 }, evaluatedAt)).toMatchObject({
+      answer_eligibility: "blocked", attention_severity: "blocked", evaluated_at: evaluatedAt
+    });
+    expect(classifyMemoryAttention({ deleted_at: null, lifecycle_state: "active", verification_state: "verified", valid_until: 9_999, conflicts_json: "[]", confidence_score: 0.9 }, evaluatedAt)).toMatchObject({
+      answer_eligibility: "caution", attention_severity: "critical", attention_reasons: ["expired"]
+    });
+    expect(classifyMemoryAttention({ deleted_at: null, lifecycle_state: "active", verification_state: "partial", valid_until: null, conflicts_json: "[]", confidence_score: 0.5 }, evaluatedAt)).toMatchObject({
+      answer_eligibility: "caution", attention_severity: "warning"
+    });
+  });
   it("applies at and include_suppressed to the regular lexical search", async () => {
     const db = new FakeD1();
     const at = Date.parse("2026-01-02T03:04:05.000Z");

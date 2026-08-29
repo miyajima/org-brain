@@ -92,18 +92,21 @@ routes.get("/v1/memories", async (c) => {
   const projectId = c.req.query("project_id");
   const businessCategoryId = c.req.query("business_category_id");
   const workType = c.req.query("work_type") as MemoryWorkType | undefined;
+  const attention = ["critical", "warning", "blocked", "healthy", "all"].includes(c.req.query("attention") ?? "")
+    ? c.req.query("attention") as "critical" | "warning" | "blocked" | "healthy" | "all"
+    : undefined;
   const lifecycle = ["active", "review", "trash", "all"].includes(c.req.query("lifecycle") ?? "")
     ? c.req.query("lifecycle") as "active" | "review" | "trash" | "all"
-    : "active";
+    : attention ? "all" : "active";
   const ownerPrincipal = scope === "mine" ? ports.getApiPrincipal(c) : c.req.query("owner_principal");
   const createdByPrincipal = c.req.query("created_by_principal");
-  const includeTrashed = c.req.query("include_trashed") === "true" || c.req.query("include_trashed") === "1";
+  const includeTrashed = attention !== undefined || c.req.query("include_trashed") === "true" || c.req.query("include_trashed") === "1";
   const rawFrom = c.req.query("from")?.trim();
   const rawTo = c.req.query("to")?.trim();
   const fromValue = rawFrom ? Number(rawFrom) : Number.NaN;
   const toValue = rawTo ? Number(rawTo) : Number.NaN;
-  const sort = ["created", "updated", "usage"].includes(c.req.query("sort") ?? "")
-    ? c.req.query("sort") as "created" | "updated" | "usage"
+  const sort = ["created", "updated", "usage", "attention"].includes(c.req.query("sort") ?? "")
+    ? c.req.query("sort") as "created" | "updated" | "usage" | "attention"
     : "created";
   const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
   const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
@@ -137,6 +140,7 @@ routes.get("/v1/memories", async (c) => {
       from: Number.isFinite(fromValue) ? fromValue : null,
       to: Number.isFinite(toValue) ? toValue : null,
       sort
+      , attention
     });
     return ports.jsonOk(c, page);
   }
@@ -155,6 +159,7 @@ routes.get("/v1/memories", async (c) => {
     from: Number.isFinite(fromValue) ? fromValue : null,
     to: Number.isFinite(toValue) ? toValue : null,
     sort
+    , attention
   });
   return ports.jsonOk(c, memories);
 });
