@@ -1058,6 +1058,7 @@ function operationsStatus(tenantId) {
 const domainPacks = domainPackCatalog(false);
 const domainMetrics = [];
 const domainDashboards = [];
+const knowledgePackSessions = new Map();
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
@@ -1099,11 +1100,202 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/capabilities" && request.method === "GET") {
-    json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
+    json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, knowledge_pack_onboarding: { enabled: true, mode: "on" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
     return;
   }
   if (path === "/v1/domain-packs" && request.method === "GET") {
     json(response, 200, ok((url.searchParams.get("tenant_id") || "").startsWith("workspace-") ? domainPackCatalog(true) : domainPacks));
+    return;
+  }
+
+  if (path === "/v1/dashboard/organization" && request.method === "GET") {
+    json(response, 200, ok({
+      contract_version: "knowledge-measurement-loop/v1",
+      generated_at: now,
+      knowledge: { decisions: 12, rules: 7, rationales: 9 },
+      goals: [{
+        link: { id: "goal-link-e2e", tenant_id: "default", onboarding_id: "onboarding-e2e", knowledge_pack_installation_id: "installation-e2e", template_pack_id: "function.build-engineering", metric_definition_id: "metric-e2e", metric_binding_id: "binding-e2e", metric_target_id: "target-e2e", metric_source_binding_id: null, metric_key: "build_success_rate", scope_type: "project", scope_id: "org-brain", created_at: now },
+        pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent",
+        target: { direction: "increase", value: 98, min: null, max: null, due_at: now + 86400000 },
+        current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 },
+        source: { binding_id: null, adapter_id: null, status: null, last_success_at: null }
+      }]
+    }));
+    return;
+  }
+  if (path.startsWith("/v1/dashboard/organization/knowledge-packs/") && request.method === "POST") {
+    json(response, 201, ok({ id: "snapshot-new", value: (await readJson(request)).value, state: "measured" }));
+    return;
+  }
+  if (path === "/v1/retrospectives" && request.method === "GET") {
+    json(response, 200, ok([{ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, item_count: 1 }]));
+    return;
+  }
+  if (path === "/v1/retrospectives" && request.method === "POST") {
+    json(response, 201, ok({ id: "retro-e2e" }));
+    return;
+  }
+  if (path === "/v1/retrospective-schedules" && request.method === "GET") {
+    json(response, 200, ok([{ id: "retro-schedule-e2e", cadence_days: 14, status: "active", next_run_at: now + 1209600000 }]));
+    return;
+  }
+  if (path === "/v1/retrospective-schedules" && request.method === "POST") {
+    json(response, 201, ok({ id: "retro-schedule-new", ...(await readJson(request)), status: "active" }));
+    return;
+  }
+  if (path === "/v1/retrospectives/retro-e2e" && request.method === "GET") {
+    json(response, 200, ok({ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, items: [{ id: "retro-item-e2e", ordinal: 0, source_type: "decision_memory", source_id: "decision-e2e", source_version: String(now), source_digest: "a".repeat(64), title: "CI retry rule", statement: "Retry only infrastructure failures", rationale: "Product failures must remain visible", evidence: [], response: null }] }));
+    return;
+  }
+  if (/^\/v1\/retrospectives\/retro-e2e\/items\/[^/]+\/response$/u.test(path) && request.method === "PUT") {
+    json(response, 200, ok({ saved: true }));
+    return;
+  }
+  if (path === "/v1/retrospectives/retro-e2e/close" && request.method === "POST") {
+    json(response, 200, ok({ session_id: "retro-e2e", status: "closed", results: [] }));
+    return;
+  }
+  if (path === "/v1/improvement-actions" && request.method === "GET") {
+    json(response, 200, ok([{ id: "action-e2e", tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now }]));
+    return;
+  }
+  if (path === "/v1/improvement-actions" && request.method === "POST") {
+    json(response, 201, ok({ id: "action-new", ...(await readJson(request)), status: "open" }));
+    return;
+  }
+  if (path.startsWith("/v1/improvement-actions/") && ["PATCH", "POST"].includes(request.method)) {
+    json(response, 200, ok({ id: "action-e2e", status: request.method === "POST" ? "completed" : "awaiting_verification", verification_outcome: request.method === "POST" ? "improved" : null }));
+    return;
+  }
+  if (path === "/v1/knowledge-pack-onboardings" && request.method === "POST") {
+    const body = await readJson(request);
+    const tenantId = body.tenant_id || "default";
+    if (tenantId.startsWith("knowledge-pack-start-error")) {
+      json(response, 500, { ok: false, error: { code: "knowledge_pack_start_failed", message: "Simulated onboarding start failure" } });
+      return;
+    }
+    const existing = [...knowledgePackSessions.values()].find((item) => item.tenant_id === tenantId && item.state !== "completed");
+    if (existing) {
+      json(response, 201, ok(existing));
+      return;
+    }
+    const session = {
+      contract_version: "knowledge-pack-onboarding/v1",
+      id: `kp-session-${knowledgePackSessions.size + 1}`,
+      tenant_id: tenantId,
+      project_id: body.project_id || null,
+      state: "in_progress",
+      current_step: "purpose",
+      revision: 0,
+      answers: {},
+      plan_digest: null,
+      plan: null,
+      completion: null,
+      created_by_principal: "user:e2e-login-sub",
+      completed_at: null,
+      created_at: now,
+      updated_at: now
+    };
+    knowledgePackSessions.set(session.id, session);
+    json(response, 201, ok(session));
+    return;
+  }
+  const onboardingMatch = path.match(/^\/v1\/knowledge-pack-onboardings\/([^/]+)$/);
+  if (onboardingMatch && request.method === "GET") {
+    const session = knowledgePackSessions.get(decodeURIComponent(onboardingMatch[1]));
+    if (!session || session.tenant_id !== url.searchParams.get("tenant_id")) {
+      json(response, 404, { ok: false, error: { code: "knowledge_pack_onboarding_not_found", message: "Knowledge Pack onboarding session not found" } });
+      return;
+    }
+    json(response, 200, ok(session));
+    return;
+  }
+  const onboardingStepMatch = path.match(/^\/v1\/knowledge-pack-onboardings\/([^/]+)\/steps\/([^/]+)$/);
+  if (onboardingStepMatch && request.method === "PATCH") {
+    const session = knowledgePackSessions.get(decodeURIComponent(onboardingStepMatch[1]));
+    const step = decodeURIComponent(onboardingStepMatch[2]);
+    const body = await readJson(request);
+    if (!session) {
+      json(response, 404, { ok: false, error: { code: "knowledge_pack_onboarding_not_found", message: "Knowledge Pack onboarding session not found" } });
+      return;
+    }
+    const order = ["purpose", "template", "scope", "goals", "data_sources", "review"];
+    session.answers[step] = body.answer;
+    session.project_id = step === "scope" ? body.answer.project_id : session.project_id;
+    session.current_step = order[order.indexOf(step) + 1] || "review";
+    session.state = "in_progress";
+    session.revision += 1;
+    session.plan_digest = null;
+    session.plan = null;
+    session.updated_at = now;
+    json(response, 200, ok(session));
+    return;
+  }
+  const onboardingPlanMatch = path.match(/^\/v1\/knowledge-pack-onboardings\/([^/]+)\/plan$/);
+  if (onboardingPlanMatch && request.method === "POST") {
+    const session = knowledgePackSessions.get(decodeURIComponent(onboardingPlanMatch[1]));
+    if (!session) {
+      json(response, 404, { ok: false, error: { code: "knowledge_pack_onboarding_not_found", message: "Knowledge Pack onboarding session not found" } });
+      return;
+    }
+    const selectedIds = session.answers.template.pack_ids;
+    const selected = domainPacks.filter((entry) => selectedIds.includes(entry.manifest.pack_id));
+    const sources = session.answers.data_sources.sources;
+    const overlayId = `knowledge.${session.id.replace(/[^a-z0-9]/g, "")}`;
+    const plan = {
+      plan_digest: "b".repeat(64),
+      knowledge_pack: {
+        manifest: {
+          contract_version: "domain-pack/v1",
+          pack_id: overlayId,
+          version: "1.0.0",
+          classification: "organization_overlay",
+          title: session.answers.purpose.name,
+          description: session.answers.purpose.objective,
+          language: "ja",
+          min_orgbrain_version: "0.2.0",
+          dependencies: selected.map((entry) => ({ pack_id: entry.manifest.pack_id, version: entry.manifest.version })),
+          object_types: [], metrics: [], dashboards: [], connectors: [], assets: [], loadout_templates: [], example_refs: []
+        },
+        digest: "c".repeat(64)
+      },
+      installation: {
+        plan_digest: "a".repeat(64), examples_loaded: false, warnings: [],
+        packs: selected.map((entry) => ({ pack_id: entry.manifest.pack_id, version: entry.manifest.version, action: "install", creates: { managed_object_types: 1, metric_definitions: entry.manifest.metrics.length, dashboards: 1, asset_references: 1, loadout_references: 0 }, preserved_custom_conflicts: { managed_object_types: [], metric_definitions: [], dashboards: [] }, connector_permissions: [] }))
+      },
+      goals: session.answers.goals.goals,
+      data_sources: sources,
+      warnings: sources.filter((source) => source.mode === "unknown").map((source) => `metric_unknown:${source.metric_key}`)
+    };
+    session.state = "planned";
+    session.current_step = "review";
+    session.revision += 1;
+    session.plan_digest = plan.plan_digest;
+    session.plan = plan;
+    session.updated_at = now;
+    json(response, 200, ok({ onboarding: session, plan }));
+    return;
+  }
+  const onboardingCompleteMatch = path.match(/^\/v1\/knowledge-pack-onboardings\/([^/]+)\/complete$/);
+  if (onboardingCompleteMatch && request.method === "POST") {
+    const session = knowledgePackSessions.get(decodeURIComponent(onboardingCompleteMatch[1]));
+    if (!session) {
+      json(response, 404, { ok: false, error: { code: "knowledge_pack_onboarding_not_found", message: "Knowledge Pack onboarding session not found" } });
+      return;
+    }
+    session.state = "completed";
+    session.current_step = "completed";
+    session.revision += 1;
+    session.completed_at = now;
+    session.completion = {
+      knowledge_pack: { pack_id: session.plan.knowledge_pack.manifest.pack_id, release_id: "release-kp-e2e", installation_id: "installation-kp-e2e" },
+      installations: [{ installation_id: "installation-template-e2e", pack_id: session.answers.template.pack_ids[0], version: "1.1.0", action: "installed" }, { installation_id: "installation-kp-e2e", pack_id: session.plan.knowledge_pack.manifest.pack_id, version: "1.0.0", action: "installed" }],
+      targets: session.answers.goals.goals.map((goal, index) => ({ metric_key: goal.metric_key, target_id: `target-${index + 1}` })),
+      snapshots: session.answers.data_sources.sources.filter((source) => source.mode === "manual").map((source, index) => ({ metric_key: source.metric_key, snapshot_id: `snapshot-${index + 1}` })),
+      sources: session.answers.data_sources.sources.map((source) => ({ metric_key: source.metric_key, source_binding_id: source.mode === "connector" ? "source-e2e" : null, state: source.mode === "connector" ? "configured" : source.mode === "manual" ? "measured" : "unknown" })),
+      workspace_href: `/domain-workspaces/${session.answers.template.pack_ids[0]}`
+    };
+    json(response, 200, ok(session));
     return;
   }
   const workspaceMatch = path.match(/^\/v1\/domain-packs\/(.+)\/workspace$/);

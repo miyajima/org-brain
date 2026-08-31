@@ -1,7 +1,7 @@
 {
   "contract_version": "orgbrain-api-manifest/v1",
-  "oss_ref": "e824ae0c829d93cd372bf022b06319cd0cbe4df5",
-  "generated_at": "2026-09-12T09:12:48.000Z",
+  "oss_ref": "96e070c446b68f0c229976cf745ed226541aa7e6",
+  "generated_at": "2026-09-12T11:38:26.000Z",
   "routes": [
     {
       "method": "GET",
@@ -491,6 +491,39 @@
     },
     {
       "method": "GET",
+      "path": "/v1/dashboard/organization",
+      "permission": "read",
+      "request_schema": "GetV1DashboardOrganizationRequest",
+      "response_schema": "GetV1DashboardOrganizationResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/dashboard/organization/knowledge-packs/:installationId/goals/:goalLinkId/snapshots",
+      "permission": "admin",
+      "request_schema": "PostV1DashboardOrganizationKnowledgePacksInstallationIdGoalsGoalLinkIdSnapshotsRequest",
+      "response_schema": "PostV1DashboardOrganizationKnowledgePacksInstallationIdGoalsGoalLinkIdSnapshotsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/organization/metrics",
+      "permission": "read",
+      "request_schema": "GetV1DashboardOrganizationMetricsRequest",
+      "response_schema": "GetV1DashboardOrganizationMetricsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/dashboard/strata",
       "permission": "read",
       "request_schema": "GetV1DashboardStrataRequest",
@@ -928,6 +961,105 @@
         200
       ],
       "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/improvement-actions",
+      "permission": "read",
+      "request_schema": "GetV1ImprovementActionsRequest",
+      "response_schema": "GetV1ImprovementActionsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/improvement-actions",
+      "permission": "admin",
+      "request_schema": "PostV1ImprovementActionsRequest",
+      "response_schema": "PostV1ImprovementActionsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/improvement-actions/:id",
+      "permission": "write",
+      "request_schema": "PatchV1ImprovementActionsIdRequest",
+      "response_schema": "PatchV1ImprovementActionsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/improvement-actions/:id/verify",
+      "permission": "write",
+      "request_schema": "PostV1ImprovementActionsIdVerifyRequest",
+      "response_schema": "PostV1ImprovementActionsIdVerifyResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge-pack-onboardings",
+      "permission": "admin",
+      "request_schema": "PostV1KnowledgePackOnboardingsRequest",
+      "response_schema": "PostV1KnowledgePackOnboardingsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge-pack-onboardings/:id",
+      "permission": "admin",
+      "request_schema": "GetV1KnowledgePackOnboardingsIdRequest",
+      "response_schema": "GetV1KnowledgePackOnboardingsIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge-pack-onboardings/:id/complete",
+      "permission": "admin",
+      "request_schema": "PostV1KnowledgePackOnboardingsIdCompleteRequest",
+      "response_schema": "PostV1KnowledgePackOnboardingsIdCompleteResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge-pack-onboardings/:id/plan",
+      "permission": "admin",
+      "request_schema": "PostV1KnowledgePackOnboardingsIdPlanRequest",
+      "response_schema": "PostV1KnowledgePackOnboardingsIdPlanResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/knowledge-pack-onboardings/:id/steps/:step",
+      "permission": "admin",
+      "request_schema": "PatchV1KnowledgePackOnboardingsIdStepsStepRequest",
+      "response_schema": "PatchV1KnowledgePackOnboardingsIdStepsStepResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
     },
     {
       "method": "POST",
@@ -1469,6 +1601,17 @@
       "idempotent": false
     },
     {
+      "method": "GET",
+      "path": "/v1/metric-connections",
+      "permission": "admin",
+      "request_schema": "GetV1MetricConnectionsRequest",
+      "response_schema": "GetV1MetricConnectionsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
       "method": "POST",
       "path": "/v1/metric-definitions",
       "permission": "write",
@@ -1524,6 +1667,17 @@
       "idempotent": false
     },
     {
+      "method": "GET",
+      "path": "/v1/metric-import-runs/:runId",
+      "permission": "read",
+      "request_schema": "GetV1MetricImportRunsRunIdRequest",
+      "response_schema": "GetV1MetricImportRunsRunIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
       "method": "POST",
       "path": "/v1/metric-snapshots",
       "permission": "write",
@@ -1553,6 +1707,17 @@
       "response_schema": "GetV1MetricSourceBindingsResponse",
       "success_statuses": [
         200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/metric-source-bindings/:bindingId/import",
+      "permission": "admin",
+      "request_schema": "PostV1MetricSourceBindingsBindingIdImportRequest",
+      "response_schema": "PostV1MetricSourceBindingsBindingIdImportResponse",
+      "success_statuses": [
+        202
       ],
       "idempotent": true
     },
@@ -1995,6 +2160,116 @@
         201
       ],
       "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retrospective-schedules",
+      "permission": "admin",
+      "request_schema": "GetV1RetrospectiveSchedulesRequest",
+      "response_schema": "GetV1RetrospectiveSchedulesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrospective-schedules",
+      "permission": "admin",
+      "request_schema": "PostV1RetrospectiveSchedulesRequest",
+      "response_schema": "PostV1RetrospectiveSchedulesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/retrospective-schedules/:id",
+      "permission": "admin",
+      "request_schema": "PatchV1RetrospectiveSchedulesIdRequest",
+      "response_schema": "PatchV1RetrospectiveSchedulesIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retrospectives",
+      "permission": "read",
+      "request_schema": "GetV1RetrospectivesRequest",
+      "response_schema": "GetV1RetrospectivesResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrospectives",
+      "permission": "admin",
+      "request_schema": "PostV1RetrospectivesRequest",
+      "response_schema": "PostV1RetrospectivesResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retrospectives/:id",
+      "permission": "read",
+      "request_schema": "GetV1RetrospectivesIdRequest",
+      "response_schema": "GetV1RetrospectivesIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrospectives/:id/cancel",
+      "permission": "admin",
+      "request_schema": "PostV1RetrospectivesIdCancelRequest",
+      "response_schema": "PostV1RetrospectivesIdCancelResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/retrospectives/:id/close",
+      "permission": "admin",
+      "request_schema": "PostV1RetrospectivesIdCloseRequest",
+      "response_schema": "PostV1RetrospectivesIdCloseResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/retrospectives/:id/items/:itemId/response",
+      "permission": "write",
+      "request_schema": "PutV1RetrospectivesIdItemsItemIdResponseRequest",
+      "response_schema": "PutV1RetrospectivesIdItemsItemIdResponseResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/retrospectives/:id/results",
+      "permission": "read",
+      "request_schema": "GetV1RetrospectivesIdResultsRequest",
+      "response_schema": "GetV1RetrospectivesIdResultsResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
     },
     {
       "method": "GET",

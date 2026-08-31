@@ -20,6 +20,11 @@ RESOURCE_RELATION_EXTRACTION_ENABLED = "true"
 DOMAIN_PACKS_MODE = "install"
 DOMAIN_METRICS_MODE = "on"
 DOMAIN_WORKSPACES_MODE = "on"
+KNOWLEDGE_PACK_ONBOARDING_MODE = "on"
+ORGANIZATION_DASHBOARD_MODE = "on"
+METRIC_IMPORT_MODE = "on"
+RETROSPECTIVE_MODE = "on"
+IMPROVEMENT_ACTIONS_MODE = "on"
 DOMAIN_RECALL_MODE = "on"
 DOMAIN_RECALL_HOOK_MODE = "personal"
 PORTABLE_ARCHIVE_MODE = "on"
@@ -56,6 +61,10 @@ queue = "org-bus"
 [[queues.producers]]
 binding = "RETRIEVAL_PROJECTION_QUEUE"
 queue = "orgbrain-retrieval-projection-v3"
+
+[[queues.producers]]
+binding = "METRIC_IMPORT_QUEUE"
+queue = "orgbrain-metric-import-v1"
 
 [[migrations]]
 tag = "v1"

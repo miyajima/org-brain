@@ -1,0 +1,43 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../../lib/dashboard-page";
+const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const id = String(Astro.params.id ?? "");
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+let error = "";
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const csrf = String(form.get("csrf_token") ?? "");
+  const action = String(form.get("action") ?? "response");
+  const path = action === "close" ? `/api/v1/retrospectives/${encodeURIComponent(id)}/close` : `/api/v1/retrospectives/${encodeURIComponent(id)}/items/${encodeURIComponent(String(form.get("item_id")))}/response`;
+  const closeItemIds = form.getAll("result_item_id").map(String);
+  const closeDecisions = form.getAll("result_decision").map(String);
+  const response = await api(path, {
+    method: action === "close" ? "POST" : "PUT",
+    headers: {
+      "content-type": "application/json",
+      "x-csrf-token": csrf,
+      ...(action === "close" ? { "idempotency-key": `retrospective-close:${id}` } : {})
+    },
+    body: JSON.stringify(action === "close"
+      ? { tenant_id: tenantId, items: closeItemIds.map((item_id, index) => ({ item_id, decision: closeDecisions[index] })) }
+      : { tenant_id: tenantId, decision: String(form.get("decision")), note: String(form.get("note") ?? "").trim() || null })
+  });
+  const payload: any = await response.json().catch(() => null);
+  if (response.ok) return Astro.redirect(`/retrospectives/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`, 303);
+  error = payload?.error?.message ?? "保存できませんでした。";
+}
+const response = await api(`/api/v1/retrospectives/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(tenantId)}`);
+const payload: any = await response.json().catch(() => null);
+const session = payload?.data;
+if (!response.ok && !error) error = payload?.error?.message ?? "ふりかえりを読み込めませんでした。";
+---
+<BaseLayout title={session?.title ?? "ふりかえり"} lang={lang} wide>
+  <section class="space-y-5"><header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6"><a class="text-sm text-zinc-400" href={`/retrospectives?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`}>← 実施履歴</a><div class="mt-3 flex flex-wrap items-end justify-between gap-4"><div><p class="surface-label">RETROSPECTIVE</p><h1 class="mt-1 text-3xl font-semibold">{session?.title ?? "ふりかえり"}</h1><p class="surface-muted mt-2">判断と理由を読み、あなたの判断を選択してください。</p></div><span class="rounded-full bg-white/8 px-3 py-1 text-sm">{session?.status}</span></div></header>
+    {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
+    <div class="space-y-4">{session?.items?.map((item: any, index: number) => <article class="rounded-[22px] border border-white/8 bg-zinc-950/55 p-5"><p class="text-xs text-zinc-500">{index + 1} / {session.items.length} · {item.source_type}</p><h2 class="mt-2 text-xl font-semibold">{item.title}</h2><p class="mt-4 text-lg leading-8 text-zinc-100">{item.statement}</p><div class="mt-4 rounded-xl bg-white/[0.035] p-4"><p class="text-xs font-medium text-zinc-500">判断理由</p><p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-300">{item.rationale || "理由は記録されていません"}</p></div>{session.status === 'open' ? <form method="post" class="mt-5 grid gap-3"><input type="hidden" name="csrf_token" class="retro-detail-csrf"/><input type="hidden" name="action" value="response"/><input type="hidden" name="item_id" value={item.id}/><fieldset><legend class="field-label">採用可否</legend><div class="mt-2 flex flex-wrap gap-2">{[['adopt','採用'],['do_not_adopt','見送る'],['defer','保留']].map(([value,label]) => <label class="cursor-pointer rounded-xl border border-white/10 px-4 py-3"><input type="radio" name="decision" value={value} checked={item.response?.decision === value} required/> <span class="ml-2">{label}</span></label>)}</div></fieldset><label><span class="field-label">補足（任意）</span><input name="note" value={item.response?.note ?? ''}/></label><div><button type="submit">この判断を保存</button></div></form> : <p class="mt-5 text-sm text-zinc-400">確定済みです。</p>}</article>)}</div>
+    {session?.status === 'open' && <form method="post" class="rounded-[22px] border border-emerald-400/20 bg-emerald-400/[0.06] p-5"><input type="hidden" name="csrf_token" class="retro-detail-csrf"/><input type="hidden" name="action" value="close"/><h2 class="font-semibold">管理者として結果を確定</h2><p class="surface-muted mt-2">回答は参考情報です。管理者が各項目の最終結果を明示し、元データと参加者の閲覧権限を再確認して一括確定します。</p><div class="mt-4 grid gap-3">{session.items.map((item: any) => <label class="grid gap-1 rounded-xl border border-white/10 p-3"><input type="hidden" name="result_item_id" value={item.id}/><span class="text-sm font-medium">{item.title}</span><select name="result_decision"><option value="adopted" selected={item.response?.decision === 'adopt'}>採用</option><option value="not_adopted" selected={item.response?.decision === 'do_not_adopt'}>見送る</option><option value="deferred" selected={!item.response || item.response?.decision === 'defer'}>保留</option></select></label>)}</div><button class="mt-4" type="submit">明示した結果を確定して閉じる</button></form>}
+  </section>
+</BaseLayout>
+<script>document.querySelectorAll<HTMLInputElement>(".retro-detail-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>

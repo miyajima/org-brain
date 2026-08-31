@@ -46,6 +46,211 @@ routes.get("/v1/domain-packs/:packId/workspace", async (c) => {
   }));
 });
 
+routes.post("/v1/knowledge-pack-onboardings", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.createKnowledgePackOnboarding(
+    c.env,
+    tenantId,
+    ports.getApiPrincipal(c),
+    ports.requireIdempotencyKey(c),
+    body
+  ), 201);
+});
+
+routes.get("/v1/knowledge-pack-onboardings/:id", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.getKnowledgePackOnboarding(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    c.req.query("project_id") ?? null
+  ));
+});
+
+routes.patch("/v1/knowledge-pack-onboardings/:id/steps/:step", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.updateKnowledgePackOnboardingStep(
+    c.env,
+    tenantId,
+    c.req.param("id"),
+    c.req.param("step"),
+    body
+  ));
+});
+
+routes.post("/v1/knowledge-pack-onboardings/:id/plan", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  ports.requireIdempotencyKey(c);
+  return ports.jsonOk(c, await ports.planKnowledgePackOnboarding(c.env, tenantId, c.req.param("id"), body));
+});
+
+routes.post("/v1/knowledge-pack-onboardings/:id/complete", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.completeKnowledgePackOnboarding(
+    c.env,
+    tenantId,
+    ports.getApiPrincipal(c),
+    c.req.param("id"),
+    ports.requireIdempotencyKey(c),
+    body
+  ));
+});
+
+routes.get("/v1/dashboard/organization", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.getOrganizationDashboard(c.env, tenantId, {
+    principal: ports.getApiPrincipal(c), projectId: c.req.query("project_id") ?? null,
+    includeAll: await ports.isTenantAdmin(c, tenantId)
+  }));
+});
+
+routes.get("/v1/dashboard/organization/metrics", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const dashboard = await ports.getOrganizationDashboard(c.env, tenantId, {
+    principal: ports.getApiPrincipal(c), projectId: c.req.query("project_id") ?? null,
+    includeAll: await ports.isTenantAdmin(c, tenantId)
+  }) as { goals?: unknown[] };
+  return ports.jsonOk(c, dashboard.goals ?? []);
+});
+
+routes.post("/v1/dashboard/organization/knowledge-packs/:installationId/goals/:goalLinkId/snapshots", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.recordKnowledgePackGoalSnapshot(
+    c.env, tenantId, ports.getApiPrincipal(c), c.req.param("installationId"), c.req.param("goalLinkId"),
+    ports.requireIdempotencyKey(c), body
+  ), 201);
+});
+
+routes.get("/v1/metric-connections", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.listMetricConnections(c.env, tenantId, c.req.query("adapter_id")));
+});
+
+routes.post("/v1/metric-source-bindings/:bindingId/import", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.enqueueMetricImport(
+    c.env, tenantId, ports.getApiPrincipal(c), c.req.param("bindingId"), ports.requireIdempotencyKey(c)
+  ), 202);
+});
+
+routes.get("/v1/metric-import-runs/:runId", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.getMetricImportRun(c.env, tenantId, c.req.param("runId")));
+});
+
+routes.post("/v1/retrospective-schedules", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.createRetrospectiveSchedule(c.env, tenantId, ports.getApiPrincipal(c), body), 201);
+});
+
+routes.get("/v1/retrospective-schedules", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.listRetrospectiveSchedules(c.env, tenantId));
+});
+
+routes.patch("/v1/retrospective-schedules/:id", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.updateRetrospectiveSchedule(c.env, tenantId, c.req.param("id"), body));
+});
+
+routes.post("/v1/retrospectives", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.createRetrospective(c.env, tenantId, ports.getApiPrincipal(c), body), 201);
+});
+
+routes.get("/v1/retrospectives", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.listRetrospectives(
+    c.env, tenantId, ports.getApiPrincipal(c), await ports.isTenantAdmin(c, tenantId)
+  ));
+});
+
+routes.get("/v1/retrospectives/:id", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.getRetrospective(
+    c.env, tenantId, c.req.param("id"), ports.getApiPrincipal(c), await ports.isTenantAdmin(c, tenantId)
+  ));
+});
+
+routes.put("/v1/retrospectives/:id/items/:itemId/response", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.putRetrospectiveResponse(
+    c.env, tenantId, c.req.param("id"), c.req.param("itemId"), ports.getApiPrincipal(c), body
+  ));
+});
+
+routes.post("/v1/retrospectives/:id/close", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.closeRetrospective(
+    c.env, tenantId, c.req.param("id"), ports.getApiPrincipal(c), ports.requireIdempotencyKey(c), body
+  ));
+});
+
+routes.post("/v1/retrospectives/:id/cancel", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.cancelRetrospective(c.env, tenantId, c.req.param("id")));
+});
+
+routes.get("/v1/retrospectives/:id/results", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.getRetrospectiveResults(
+    c.env, tenantId, c.req.param("id"), ports.getApiPrincipal(c), await ports.isTenantAdmin(c, tenantId)
+  ));
+});
+
+routes.post("/v1/improvement-actions", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!await ports.isTenantAdmin(c, tenantId)) throw new HttpError(403, "admin_required", "Tenant administrator access is required");
+  return ports.jsonOk(c, await ports.createImprovementAction(c.env, tenantId, ports.getApiPrincipal(c), body), 201);
+});
+
+routes.get("/v1/improvement-actions", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.listImprovementActions(c.env, tenantId, {
+    status: c.req.query("status"), owner: c.req.query("owner"),
+    principal: ports.getApiPrincipal(c), includeAll: await ports.isTenantAdmin(c, tenantId)
+  }));
+});
+
+routes.patch("/v1/improvement-actions/:id", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.updateImprovementAction(
+    c.env, tenantId, c.req.param("id"), ports.getApiPrincipal(c), await ports.isTenantAdmin(c, tenantId), body
+  ));
+});
+
+routes.post("/v1/improvement-actions/:id/verify", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.verifyImprovementAction(
+    c.env, tenantId, c.req.param("id"), ports.getApiPrincipal(c), await ports.isTenantAdmin(c, tenantId)
+  ));
+});
+
 routes.post("/v1/metric-definitions", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));

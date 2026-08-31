@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 SKILL_GENERATION_PROVIDERS_JSON = "[]"
+METRIC_IMPORT_MODE = "off"
 
 [[d1_databases]]
 binding = "OPEN_BRAIN_DB"
@@ -18,12 +19,23 @@ bucket_name = "open-brain-bucket"
 binding = "ORG_BUS_OUT"
 queue = "org-bus"
 
+[[queues.producers]]
+binding = "METRIC_IMPORT_QUEUE"
+queue = "orgbrain-metric-import-v1"
+
 [[queues.consumers]]
 queue = "cap-plan"
 max_batch_size = 5
 max_batch_timeout = 5
 dead_letter_queue = "cap-plan-dlq"
 max_retries = 5
+
+[[queues.consumers]]
+queue = "orgbrain-metric-import-v1"
+max_batch_size = 5
+max_batch_timeout = 5
+dead_letter_queue = "orgbrain-metric-import-v1-dlq"
+max_retries = 3
 
 [durable_objects]
 bindings = [
@@ -36,4 +48,4 @@ tag = "v1"
 new_sqlite_classes = ["LeaseDO", "MailboxDO"]
 
 [triggers]
-crons = ["5 0 * * *", "30 18 * * *"]
+crons = ["*/5 * * * *", "5 0 * * *", "30 18 * * *"]

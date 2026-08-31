@@ -267,7 +267,7 @@ describe("Domain Pack Platform", () => {
     const now = Date.now();
     await createMetricSnapshot(env, "tenant-a", "user:pdm", {
       metric_key: "quality_adjusted_activation_rate", binding_id: binding.id,
-      scope_type: "managed_object", value: 42, state: "measured",
+      scope_type: "managed_object", scope_id: "EXP-QUALITY-ACTIVATION", value: 42, state: "measured",
       observed_at: now, expires_at: now + 86_400_000, idempotency_key: "quality-activation-after"
     });
 

@@ -77,6 +77,10 @@ const managementItems: ConsoleNavItem[] = [
   item("memory-impact", "/memory-impact", "knowledge", layoutNavLabels("memory-impact")),
   item("decision-editor", decisionBehavior.enabled ? "/decisions/new" : "/decisions", "knowledge", layoutNavLabels("decision-editor")),
   item("resources", "/resources", "knowledge", layoutNavLabels("resources")),
+  item("knowledge-dashboard", "/knowledge-dashboard", "knowledge", layoutNavLabels("knowledge-dashboard"), starts("/knowledge-dashboard")),
+  item("retrospectives", "/retrospectives", "knowledge", layoutNavLabels("retrospectives"), starts("/retrospectives")),
+  item("improvement-actions", "/improvement-actions", "knowledge", layoutNavLabels("improvement-actions"), starts("/improvement-actions")),
+  item("knowledge-pack-onboarding", "/knowledge-packs/onboarding", "knowledge", layoutNavLabels("knowledge-pack-onboarding"), starts("/knowledge-packs")),
   item("domain-packs", "/domain-packs", "knowledge", layoutNavLabels("domain-packs"), starts("/domain-packs")),
   item("domain-workspaces", "/domain-workspaces", "knowledge", layoutNavLabels("domain-workspaces"), starts("/domain-workspaces")),
   item("domain-metrics", "/domain-metrics", "knowledge", layoutNavLabels("domain-metrics"), starts("/domain-metrics")),
@@ -153,7 +157,7 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
 <html lang={locale}>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#050910" />
     <link rel="icon" href="data:," />

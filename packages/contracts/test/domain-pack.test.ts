@@ -3,9 +3,17 @@ import { domainRecallBundleSchema, domainRecallFeedbackSchema } from "../src/dom
 import {
   domainPackManifestSchema,
   domainPackWorkspaceSchema,
+  knowledgePackDataSourcesSchema,
+  knowledgePackGoalsSchema,
+  knowledgePackOnboardingSchema,
+  knowledgePackScopeSchema,
+  improvementActionSchema,
+  metricImportJobSchema,
   metricDefinitionSchema,
   metricSnapshotSchema,
-  metricSourceBindingSchema
+  metricSourceBindingSchema,
+  organizationDashboardSchema,
+  retrospectiveSessionSchema
 } from "../src/domain-pack";
 
 describe("Domain Pack contracts", () => {
@@ -120,6 +128,64 @@ describe("Domain Pack contracts", () => {
     expect(binding.status).toBe("unconfigured");
   });
 
+  it("validates a resumable Knowledge Pack onboarding without storing connector secrets", () => {
+    const goals = knowledgePackGoalsSchema.parse({
+      goals: [{ metric_key: "build_success_rate", direction: "increase", target_value: 98, due_at: 2_000 }]
+    });
+    const sources = knowledgePackDataSourcesSchema.parse({
+      sources: [{ metric_key: "build_success_rate", mode: "connector", connection_ref: "connection:github-actions:primary" }]
+    });
+    const onboarding = knowledgePackOnboardingSchema.parse({
+      id: "onboarding-1",
+      tenant_id: "tenant-a",
+      project_id: "project-a",
+      state: "in_progress",
+      current_step: "data_sources",
+      revision: 4,
+      answers: {
+        purpose: { name: "Build reliability", objective: "Reduce failed builds" },
+        template: { pack_ids: ["function.build-engineering"] },
+        scope: { project_id: "project-a", scope_type: "project" },
+        goals,
+        data_sources: sources
+      },
+      plan_digest: null,
+      plan: null,
+      completion: null,
+      created_by_principal: "user:admin",
+      completed_at: null,
+      created_at: 1,
+      updated_at: 2
+    });
+    expect(onboarding.answers.data_sources?.sources[0]?.connection_ref).toBe("connection:github-actions:primary");
+    expect(JSON.stringify(onboarding)).not.toContain("secret");
+    expect(() => knowledgePackScopeSchema.parse({
+      project_id: "project-a",
+      scope_type: "tenant"
+    })).toThrow("tenant scope must not include project_id");
+  });
+
+  it("rejects incomplete goals and connector credentials in onboarding answers", () => {
+    expect(() => knowledgePackGoalsSchema.parse({
+      goals: [{ metric_key: "availability", direction: "range", target_min: 99.9 }]
+    })).toThrow();
+    expect(() => knowledgePackDataSourcesSchema.parse({
+      sources: [{
+        metric_key: "availability",
+        mode: "connector",
+        connection_ref: "connection:datadog:primary",
+        api_key: "must-not-be-accepted"
+      }]
+    })).toThrow();
+    expect(() => knowledgePackDataSourcesSchema.parse({
+      sources: [{
+        metric_key: "availability",
+        mode: "connector",
+        connection_ref: "raw-secret-value"
+      }]
+    })).toThrow();
+  });
+
   it("keeps unknown Workspace metrics numeric-free and source-readable", () => {
     const workspace = domainPackWorkspaceSchema.parse({
       generated_at: 10,
@@ -159,5 +225,30 @@ describe("Domain Pack contracts", () => {
     });
     expect(workspace.metric_groups[0]?.metrics[0]?.current).toBeNull();
     expect(workspace.metric_groups[0]?.metrics[0]?.status).toBe("waiting");
+  });
+
+  it("validates the post-onboarding measurement loop contracts", () => {
+    const dashboard = organizationDashboardSchema.parse({
+      generated_at: 10,
+      knowledge: { decisions: 2, rules: 3, rationales: 2 },
+      goals: []
+    });
+    expect(dashboard.goals).toEqual([]);
+    expect(metricImportJobSchema.parse({
+      contract_version: "metric-import-job/v1",
+      run_id: "run-1", tenant_id: "tenant-a", source_binding_id: "source-1", requested_at: 10, attempt: 0
+    }).attempt).toBe(0);
+    expect(retrospectiveSessionSchema.parse({
+      id: "retro-1", tenant_id: "tenant-a", project_id: null, schedule_id: null,
+      status: "open", title: "Weekly review", created_by: "user:admin", opened_at: 10,
+      closed_at: null, cancelled_at: null, items: [], created_at: 10, updated_at: 10
+    }).status).toBe("open");
+    expect(improvementActionSchema.parse({
+      id: "action-1", tenant_id: "tenant-a", project_id: null, retrospective_session_id: null,
+      retrospective_item_id: null, goal_link_id: null, title: "Document the rule", description: "",
+      owner_principal: null, due_at: null, status: "open", external_issue_url: null,
+      implementation_completed_at: null, baseline_snapshot_id: null, verification_snapshot_id: null,
+      comparator_version: null, verification_outcome: null, created_by: "user:admin", created_at: 10, updated_at: 10
+    }).status).toBe("open");
   });
 });

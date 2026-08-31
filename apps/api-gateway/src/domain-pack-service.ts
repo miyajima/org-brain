@@ -144,6 +144,82 @@ export async function planDomainPackInstallation(env: Env, tenantId: string, raw
   };
 }
 
+export async function publishTenantOrganizationOverlay(
+  env: Env,
+  tenantId: string,
+  principal: string,
+  rawManifest: unknown
+) {
+  assertPackInstall(env);
+  const manifest = domainPackManifestSchema.parse(rawManifest);
+  if (manifest.classification !== "organization_overlay") {
+    throw new HttpError(400, "organization_overlay_required", "Knowledge Packs must publish an organization overlay");
+  }
+  const digest = await domainPackManifestDigest(manifest);
+  const existing = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, manifest_digest, status FROM domain_pack_releases
+     WHERE owner_tenant_id = ? AND pack_id = ? AND version = ?`
+  ).bind(tenantId, manifest.pack_id, manifest.version).first<{
+    id: string;
+    manifest_digest: string;
+    status: string;
+  }>();
+  if (existing) {
+    if (existing.status === "revoked") {
+      throw new HttpError(409, "domain_pack_revoked", `Knowledge Pack release is revoked: ${manifest.pack_id}@${manifest.version}`);
+    }
+    if (existing.manifest_digest !== digest) {
+      throw new HttpError(409, "knowledge_pack_version_conflict", "Knowledge Pack content changed without a version change");
+    }
+    return { release_id: existing.id, manifest, digest, action: "unchanged" as const };
+  }
+  const now = Date.now();
+  const releaseId = `domain:${manifest.pack_id}:${manifest.version}:${digest.slice(0, 12)}`;
+  const inserted = await env.OPEN_BRAIN_DB.prepare(
+    `INSERT OR IGNORE INTO domain_pack_releases(
+       id, owner_tenant_id, pack_id, version, classification, visibility,
+       manifest_digest, manifest_json, publisher_id, license_id, archive_json,
+       signature_json, status, created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    releaseId,
+    tenantId,
+    manifest.pack_id,
+    manifest.version,
+    manifest.classification,
+    "private",
+    digest,
+    canonicalJson(manifest),
+    principal,
+    "tenant-private",
+    null,
+    null,
+    "active",
+    now
+  ).run();
+  if (!inserted.meta.changes) {
+    const concurrent = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, manifest_digest, status FROM domain_pack_releases
+       WHERE owner_tenant_id = ? AND pack_id = ? AND version = ?`
+    ).bind(tenantId, manifest.pack_id, manifest.version).first<{
+      id: string;
+      manifest_digest: string;
+      status: string;
+    }>();
+    if (!concurrent) {
+      throw new HttpError(409, "knowledge_pack_publish_conflict", "Knowledge Pack release could not be published");
+    }
+    if (concurrent.status === "revoked") {
+      throw new HttpError(409, "domain_pack_revoked", `Knowledge Pack release is revoked: ${manifest.pack_id}@${manifest.version}`);
+    }
+    if (concurrent.manifest_digest !== digest) {
+      throw new HttpError(409, "knowledge_pack_version_conflict", "Knowledge Pack content changed without a version change");
+    }
+    return { release_id: concurrent.id, manifest, digest, action: "unchanged" as const };
+  }
+  return { release_id: releaseId, manifest, digest, action: "published" as const };
+}
+
 async function ensureRelease(env: Env, manifest: DomainPackManifestV1, tenantId: string, digest: string, now: number) {
   const firstParty = FIRST_PARTY_DOMAIN_PACKS.some((pack) => pack.pack_id === manifest.pack_id && pack.version === manifest.version);
   const releaseId = `domain:${manifest.pack_id}:${manifest.version}:${digest.slice(0, 12)}`;
