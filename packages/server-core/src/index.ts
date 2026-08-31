@@ -91,6 +91,13 @@ export function permissionForOrgBrainRequest(method: string, path: string): OrgP
     path.startsWith("/v1/retrieval-generations") ||
     path.startsWith("/v1/retrieval-generation-assignments") ||
     (path.startsWith("/v1/domain-packs/installations") && method !== "GET") ||
+    path.startsWith("/v1/knowledge-pack-onboardings") ||
+    (path.startsWith("/v1/dashboard/organization") && method !== "GET") ||
+    path.startsWith("/v1/metric-connections") ||
+    path.startsWith("/v1/metric-source-bindings/") && path.endsWith("/import") ||
+    path.startsWith("/v1/retrospective-schedules") ||
+    (path.startsWith("/v1/retrospectives") && method === "POST") ||
+    (path === "/v1/improvement-actions" && method === "POST") ||
     path.startsWith("/v1/portable-imports") ||
     path.endsWith("/promotion") ||
     path === "/v1/resources/backfill" ||

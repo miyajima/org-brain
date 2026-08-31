@@ -1,0 +1,897 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../../lib/dashboard-page";
+import { knowledgePackOnboardingCopy } from "../../lib/console-locale";
+
+const { tenantId, projectId, lang } = dashboardPageParams(
+  Astro.url,
+  Astro.request.headers.get("cookie")
+);
+const copy = knowledgePackOnboardingCopy(lang);
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+  ...init,
+  headers: { cookie, ...(init.headers ?? {}) }
+});
+const jsonMutation = async (
+  path: string,
+  method: "POST" | "PATCH",
+  body: Record<string, unknown>,
+  csrf: string,
+  idempotencyKey?: string
+) => api(path, {
+  method,
+  headers: {
+    "content-type": "application/json",
+    "x-csrf-token": csrf,
+    ...(idempotencyKey ? { "x-idempotency-key": idempotencyKey } : {})
+  },
+  body: JSON.stringify(body)
+});
+const scopedUrl = (sessionId?: string | null, scopedProjectId: string | null = projectId, viewStep?: string | null) => {
+  const url = new URL("/knowledge-packs/onboarding", Astro.url);
+  url.searchParams.set("tenant_id", tenantId);
+  url.searchParams.set("lang", lang);
+  if (scopedProjectId) url.searchParams.set("project_id", scopedProjectId);
+  if (sessionId) url.searchParams.set("session_id", sessionId);
+  if (viewStep) url.searchParams.set("view_step", viewStep);
+  return `${url.pathname}${url.search}`;
+};
+const numberOrNull = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+};
+const timestampOrNull = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const timestamp = Date.parse(text.length === 10 ? `${text}T23:59:59.999+09:00` : text);
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+let error = "";
+let requestedSessionId = Astro.url.searchParams.get("session_id")?.trim() || null;
+let requestKey: string = crypto.randomUUID();
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = String(form.get("action") ?? "");
+  const csrf = String(form.get("csrf_token") ?? "");
+  const idempotencyKey = String(form.get("idempotency_key") ?? crypto.randomUUID());
+  requestKey = idempotencyKey;
+  const formSessionId = String(form.get("session_id") ?? requestedSessionId ?? "").trim();
+  const revision = Number(form.get("revision") ?? 0);
+  let response: Response | null = null;
+
+  if (action === "start") {
+    response = await jsonMutation(
+      "/api/v1/knowledge-pack-onboardings",
+      "POST",
+      { tenant_id: tenantId, project_id: projectId },
+      csrf,
+      idempotencyKey
+    );
+  } else if (action === "save_step" && formSessionId) {
+    const step = String(form.get("step") ?? "");
+    let answer: Record<string, unknown> = {};
+    if (step === "purpose") {
+      answer = {
+        name: String(form.get("name") ?? ""),
+        objective: String(form.get("objective") ?? "")
+      };
+    } else if (step === "template") {
+      answer = { pack_ids: form.getAll("pack_ids").map(String).filter(Boolean) };
+    } else if (step === "scope") {
+      answer = {
+        project_id: String(form.get("scope_project_id") ?? "").trim() || null,
+        scope_type: String(form.get("scope_type") ?? "tenant")
+      };
+    } else if (step === "goals") {
+      const metricKeys = form.getAll("metric_key").map(String);
+      const directions = form.getAll("direction").map(String);
+      const targetValues = form.getAll("target_value");
+      const targetMins = form.getAll("target_min");
+      const targetMaxes = form.getAll("target_max");
+      const dueDates = form.getAll("due_at");
+      const reasons = form.getAll("reason").map(String);
+      answer = {
+        goals: metricKeys.flatMap((metricKey, index) => {
+          if (!metricKey) return [];
+          const direction = directions[index] || "increase";
+          return [{
+            metric_key: metricKey,
+            direction,
+            target_value: direction === "range" ? null : numberOrNull(targetValues[index] ?? null),
+            target_min: direction === "range" ? numberOrNull(targetMins[index] ?? null) : null,
+            target_max: direction === "range" ? numberOrNull(targetMaxes[index] ?? null) : null,
+            due_at: timestampOrNull(dueDates[index] ?? null),
+            reason: reasons[index]?.trim() || null
+          }];
+        })
+      };
+    } else if (step === "data_sources") {
+      const metricKeys = form.getAll("source_metric_key").map(String);
+      const modes = form.getAll("source_mode").map(String);
+      const values = form.getAll("initial_value");
+      const observed = form.getAll("observed_at");
+      const connections = form.getAll("connection_ref").map(String);
+      const evidence = form.getAll("evidence_ref").map(String);
+      answer = {
+        sources: metricKeys.map((metricKey, index) => {
+          const mode = modes[index] || "unknown";
+          return {
+            metric_key: metricKey,
+            mode,
+            initial_value: mode === "manual" ? numberOrNull(values[index] ?? null) : null,
+            observed_at: mode === "manual" ? timestampOrNull(observed[index] ?? null) : null,
+            connection_ref: mode === "connector" ? connections[index]?.trim() || null : null,
+            evidence_ref: mode === "manual" ? evidence[index]?.trim() || null : null
+          };
+        })
+      };
+    }
+    response = await jsonMutation(
+      `/api/v1/knowledge-pack-onboardings/${encodeURIComponent(formSessionId)}/steps/${encodeURIComponent(step)}`,
+      "PATCH",
+      { tenant_id: tenantId, project_id: projectId, revision, answer },
+      csrf
+    );
+  } else if (action === "plan" && formSessionId) {
+    response = await jsonMutation(
+      `/api/v1/knowledge-pack-onboardings/${encodeURIComponent(formSessionId)}/plan`,
+      "POST",
+      { tenant_id: tenantId, project_id: projectId, revision },
+      csrf,
+      idempotencyKey
+    );
+  } else if (action === "complete" && formSessionId) {
+    response = await jsonMutation(
+      `/api/v1/knowledge-pack-onboardings/${encodeURIComponent(formSessionId)}/complete`,
+      "POST",
+      {
+        tenant_id: tenantId,
+        project_id: projectId,
+        plan_digest: String(form.get("plan_digest") ?? "")
+      },
+      csrf,
+      idempotencyKey
+    );
+  }
+
+  if (response) {
+    const payload: any = await response.json().catch(() => null);
+    if (!response.ok) {
+      error = payload?.error?.message ?? copy.mutationError;
+      requestedSessionId = formSessionId || requestedSessionId;
+    } else {
+      const session = payload?.data?.onboarding ?? payload?.data;
+      const sessionId = session?.id ?? formSessionId;
+      if (action === "save_step" && session?.current_step === "review" && sessionId) {
+        const planResponse = await jsonMutation(
+          `/api/v1/knowledge-pack-onboardings/${encodeURIComponent(sessionId)}/plan`,
+          "POST",
+          {
+            tenant_id: tenantId,
+            project_id: session.project_id,
+            revision: session.revision
+          },
+          csrf,
+          `${idempotencyKey}-plan`
+        );
+        const planPayload: any = await planResponse.json().catch(() => null);
+        if (!planResponse.ok) {
+          error = planPayload?.error?.message ?? copy.mutationError;
+          requestedSessionId = sessionId;
+        } else {
+          return Astro.redirect(scopedUrl(
+            sessionId,
+            planPayload?.data?.onboarding?.project_id ?? session.project_id
+          ), 303);
+        }
+      } else {
+        return Astro.redirect(scopedUrl(sessionId, session?.project_id ?? projectId), 303);
+      }
+    }
+  }
+}
+
+const catalogUrl = `/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`;
+const capabilityUrl = `/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`;
+const [catalogResponse, capabilityResponse, sessionResponse] = await Promise.all([
+  api(catalogUrl),
+  api(capabilityUrl),
+  requestedSessionId
+    ? api(`/api/v1/knowledge-pack-onboardings/${encodeURIComponent(requestedSessionId)}?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`)
+    : Promise.resolve(null)
+]);
+const catalogPayload: any = await catalogResponse.json().catch(() => null);
+const capabilityPayload: any = await capabilityResponse.json().catch(() => null);
+const sessionPayload: any = sessionResponse ? await sessionResponse.json().catch(() => null) : null;
+const packs: any[] = Array.isArray(catalogPayload?.data) ? catalogPayload.data : [];
+const capability = capabilityPayload?.data?.knowledge_pack_onboarding;
+const session: any = sessionPayload?.data ?? null;
+if (requestedSessionId && sessionResponse && !sessionResponse.ok && !error) {
+  error = sessionPayload?.error?.message ?? copy.loadError;
+}
+
+const stepKeys = ["purpose", "template", "scope", "goals", "data_sources", "review", "completed"];
+const currentStepIndex = session ? Math.max(0, stepKeys.indexOf(session.current_step)) : 0;
+const requestedViewStep = Astro.url.searchParams.get("view_step");
+const requestedViewIndex = requestedViewStep ? stepKeys.indexOf(requestedViewStep) : -1;
+const displayStep = session?.state === "completed"
+  ? "completed"
+  : requestedViewIndex >= 0 && requestedViewIndex <= currentStepIndex
+    ? requestedViewStep
+    : session?.current_step ?? "purpose";
+const displayStepIndex = Math.max(0, stepKeys.indexOf(displayStep));
+const previousStep = displayStepIndex > 0 ? stepKeys[displayStepIndex - 1] : null;
+const stepStates = stepKeys.map((step, index) => ({
+  step,
+  index,
+  available: index <= currentStepIndex,
+  active: displayStep === step,
+  complete: index < currentStepIndex || session?.state === "completed"
+}));
+const statusLabel = session?.state === "completed"
+  ? copy.statusCompleted
+  : session?.state === "planned"
+    ? copy.statusPlanned
+    : copy.statusInProgress;
+const selectedPackIds: string[] = session?.answers?.template?.pack_ids ?? [];
+const selectedPacks = packs.filter((entry) => selectedPackIds.includes(entry.manifest?.pack_id));
+const metricMap = new Map<string, any>();
+for (const entry of selectedPacks) {
+  for (const metric of entry.manifest?.metrics ?? []) metricMap.set(metric.key, metric);
+}
+const availableMetrics = [...metricMap.values()];
+const defaultDueAt = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+const goals: any[] = session?.answers?.goals?.goals ?? [];
+const goalRows = Array.from({ length: 3 }, (_, index) => goals[index] ?? {
+  metric_key: "",
+  direction: "increase",
+  target_value: null,
+  target_min: null,
+  target_max: null,
+  due_at: null,
+  reason: null
+});
+const sourceByMetric = new Map<string, any>((session?.answers?.data_sources?.sources ?? []).map((source: any) => [source.metric_key, source]));
+const stepHref = (step: string) => scopedUrl(session?.id, session?.project_id ?? projectId, step);
+const conflictCount = (value: unknown) => Object.values((value ?? {}) as Record<string, unknown[]>)
+  .reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0);
+const dateValue = (timestamp: number | null | undefined) => timestamp ? new Date(timestamp).toISOString().slice(0, 10) : "";
+const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new Date(timestamp).toISOString().slice(0, 16) : "";
+---
+<BaseLayout title={copy.title} lang={lang} wide>
+  <section
+    class="kp-page space-y-5"
+    data-validation-title={copy.validationTitle}
+    data-required-error={copy.requiredError}
+    data-invalid-error={copy.invalidError}
+  >
+    <header class="kp-header">
+      <div>
+        <p class="surface-label">{copy.eyebrow} · {tenantId}</p>
+        <h1>{copy.heading}</h1>
+        <p class="surface-muted">{copy.body}</p>
+      </div>
+      {session && <span class:list={["kp-status", `is-${session.state}`]}>{statusLabel}</span>}
+    </header>
+
+    {error && <div class="kp-error" role="alert" tabindex="-1" data-server-error>
+      <strong>{copy.mutationError}</strong>
+      <span>{error}</span>
+      {session || capability?.enabled
+        ? <a href="#knowledge-pack-form">{copy.retryForm}</a>
+        : <a href={scopedUrl()}>{copy.retryLoad}</a>}
+    </div>}
+
+    {!session ? <section class="kp-intro">
+      <div class="kp-intro-mark" aria-hidden="true">K</div>
+      <div>
+        <h2>{copy.purposeTitle}</h2>
+        <p class="surface-muted">{copy.purposeBody}</p>
+        {capability?.enabled ? <form id="knowledge-pack-form" method="post" class="mt-5" data-guided-form>
+          <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+          <input type="hidden" name="action" value="start" />
+          <input type="hidden" name="idempotency_key" value={requestKey} />
+          <button type="submit" data-saving-label={copy.saving}>{copy.start}</button>
+        </form> : <p class="kp-disabled">{copy.disabled}</p>}
+      </div>
+    </section> : <div class="kp-shell">
+      <nav class="kp-rail" aria-label={copy.progressLabel}>
+        <p class="surface-label">{session.id}</p>
+        <div class="kp-mobile-progress">
+          <span>{copy.stepLabel} {displayStepIndex + 1} / {stepKeys.length}</span>
+          <strong>{copy.steps[displayStepIndex]}</strong>
+          {previousStep && session.state !== "completed" && <a href={stepHref(previousStep)} data-focus-step-link>{copy.back}</a>}
+        </div>
+        <ol>
+          {stepStates.map(({ step, index, available, active, complete }) => <li class:list={[active && "is-active", complete && "is-complete"]}>
+              {available && step !== "completed" && session.state !== "completed"
+                ? <a href={stepHref(step)} aria-current={active ? "step" : undefined} data-focus-step-link>
+                    <span>{complete ? "✓" : index + 1}</span><strong>{copy.steps[index]}</strong>
+                  </a>
+                : <div aria-current={active ? "step" : undefined}>
+                    <span>{complete ? "✓" : index + 1}</span><strong>{copy.steps[index]}</strong>
+                  </div>}
+            </li>)}
+        </ol>
+        <p class="kp-resume-note">{copy.body}</p>
+      </nav>
+
+      <section class="kp-stage" data-knowledge-pack-step={displayStep} aria-labelledby="knowledge-pack-step-title">
+        {displayStep === "purpose" && <>
+          <div class="kp-stage-heading" tabindex="-1"><p>01 / 07</p><h2 id="knowledge-pack-step-title">{copy.purposeTitle}</h2><span>{copy.purposeBody}</span></div>
+          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
+            <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+            <input type="hidden" name="session_id" value={session.id} />
+            <input type="hidden" name="revision" value={session.revision} />
+            <input type="hidden" name="idempotency_key" value={requestKey} />
+            <input type="hidden" name="action" value="save_step" />
+            <input type="hidden" name="step" value="purpose" />
+            <label><span>{copy.name} <em class="kp-required">{copy.required}</em></span><input name="name" required maxlength="160" value={session.answers?.purpose?.name ?? ""} /></label>
+            <label><span>{copy.objective} <em class="kp-required">{copy.required}</em></span><textarea name="objective" required maxlength="2000" rows="5">{session.answers?.purpose?.objective ?? ""}</textarea></label>
+            <button type="submit" data-saving-label={copy.saving}>{copy.saveNext}</button>
+          </form>
+        </>}
+
+        {displayStep === "template" && <>
+          <div class="kp-stage-heading" tabindex="-1"><p>02 / 07</p><h2 id="knowledge-pack-step-title">{copy.templateTitle}</h2><span>{copy.templateBody}</span></div>
+          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form data-auto-advance="selection">
+            <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+            <input type="hidden" name="session_id" value={session.id} />
+            <input type="hidden" name="revision" value={session.revision} />
+            <input type="hidden" name="idempotency_key" value={requestKey} />
+            <input type="hidden" name="action" value="save_step" />
+            <input type="hidden" name="step" value="template" />
+            <fieldset class="kp-template-fieldset">
+              <legend>{copy.templateTitle} <em class="kp-required">{copy.required}</em></legend>
+              <div class="kp-template-grid">
+                {packs.filter((entry) => entry.manifest?.classification !== "organization_overlay").map((entry) => <label class="kp-template-card">
+                  <input type="radio" name="pack_ids" value={entry.manifest.pack_id} checked={selectedPackIds.includes(entry.manifest.pack_id)} required />
+                  <span class="kp-template-indicator" aria-hidden="true"></span>
+                  <span><strong>{entry.manifest.title}</strong><small>{entry.manifest.description}</small></span>
+                  <em>{entry.manifest.metrics?.length ?? 0} {copy.metric}</em>
+                </label>)}
+              </div>
+            </fieldset>
+            <button type="submit" data-saving-label={copy.saving}>{copy.saveNext}</button>
+          </form>
+        </>}
+
+        {displayStep === "scope" && <>
+          <div class="kp-stage-heading" tabindex="-1"><p>03 / 07</p><h2 id="knowledge-pack-step-title">{copy.scopeTitle}</h2><span>{copy.scopeBody}</span></div>
+          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form data-auto-advance="selection" data-scope-form>
+            <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+            <input type="hidden" name="session_id" value={session.id} />
+            <input type="hidden" name="revision" value={session.revision} />
+            <input type="hidden" name="idempotency_key" value={requestKey} />
+            <input type="hidden" name="action" value="save_step" />
+            <input type="hidden" name="step" value="scope" />
+            <label><span>{copy.visibility}</span><select name="scope_type" data-scope-visibility>
+              <option value="tenant" selected={(session.answers?.scope?.scope_type ?? (session.project_id ? "project" : "tenant")) === "tenant"}>{copy.tenantScope}</option>
+              <option value="project" selected={(session.answers?.scope?.scope_type ?? (session.project_id ? "project" : "tenant")) === "project"}>{copy.projectScope}</option>
+            </select></label>
+            <label><span>{copy.project} <em class="kp-required" data-project-required hidden>{copy.required}</em></span><input name="scope_project_id" data-scope-project maxlength="128" value={session.answers?.scope?.project_id ?? session.project_id ?? ""} /></label>
+            <button type="submit" data-saving-label={copy.saving}>{copy.saveNext}</button>
+          </form>
+        </>}
+
+        {displayStep === "goals" && <>
+          <div class="kp-stage-heading" tabindex="-1"><p>04 / 07</p><h2 id="knowledge-pack-step-title">{copy.goalsTitle}</h2><span>{copy.goalsBody}</span></div>
+          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
+            <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+            <input type="hidden" name="session_id" value={session.id} />
+            <input type="hidden" name="revision" value={session.revision} />
+            <input type="hidden" name="idempotency_key" value={requestKey} />
+            <input type="hidden" name="action" value="save_step" />
+            <input type="hidden" name="step" value="goals" />
+            <div class="kp-goal-list">
+              {goalRows.map((goal, index) => <fieldset class="kp-goal" data-goal-row>
+                <legend>{index === 0 ? copy.goalsTitle : `${copy.addOptional} ${index + 1}`}</legend>
+                <div class="kp-fields-2">
+                  <label><span>{copy.metric} {index === 0 && <em class="kp-required">{copy.required}</em>}</span><select name="metric_key" required={index === 0}>
+                    <option value="">—</option>
+                    {availableMetrics.map((metric) => <option value={metric.key} selected={goal.metric_key === metric.key}>{metric.label}</option>)}
+                  </select></label>
+                  <label><span>{copy.direction}</span><select name="direction" data-goal-direction>
+                    {[["increase", "↑"], ["decrease", "↓"], ["maintain", "="], ["range", "↔"]].map(([value, mark]) => <option value={value} selected={goal.direction === value}>{mark} {value}</option>)}
+                  </select></label>
+                </div>
+                <div class="kp-fields-3">
+                  <label data-target-single><span>{copy.target} <em class="kp-required" data-target-required hidden>{copy.required}</em></span><input type="number" inputmode="decimal" step="any" name="target_value" value={goal.target_value ?? ""} /></label>
+                  <label data-target-range><span>{copy.minimum} <em class="kp-required" data-target-required hidden>{copy.required}</em></span><input type="number" inputmode="decimal" step="any" name="target_min" value={goal.target_min ?? ""} /></label>
+                  <label data-target-range><span>{copy.maximum} <em class="kp-required" data-target-required hidden>{copy.required}</em></span><input type="number" inputmode="decimal" step="any" name="target_max" value={goal.target_max ?? ""} /></label>
+                </div>
+                <div class="kp-fields-2">
+                  <label><span>{copy.deadline}</span><input type="date" name="due_at" min={new Date().toISOString().slice(0, 10)} value={dateValue(goal.due_at) || (index === 0 ? defaultDueAt : "")} /></label>
+                  <label><span>{copy.reason}</span><input name="reason" maxlength="2000" value={goal.reason ?? ""} /></label>
+                </div>
+              </fieldset>)}
+            </div>
+            <button type="submit" data-saving-label={copy.saving}>{copy.saveNext}</button>
+          </form>
+        </>}
+
+        {displayStep === "data_sources" && <>
+          <div class="kp-stage-heading" tabindex="-1"><p>05 / 07</p><h2 id="knowledge-pack-step-title">{copy.sourcesTitle}</h2><span>{copy.sourcesBody}</span></div>
+          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
+            <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+            <input type="hidden" name="session_id" value={session.id} />
+            <input type="hidden" name="revision" value={session.revision} />
+            <input type="hidden" name="idempotency_key" value={requestKey} />
+            <input type="hidden" name="action" value="save_step" />
+            <input type="hidden" name="step" value="data_sources" />
+            <div class="kp-goal-list">
+              {goals.map((goal) => {
+                const metric = metricMap.get(goal.metric_key);
+                const source = sourceByMetric.get(goal.metric_key) ?? { mode: "unknown" };
+                return <fieldset class="kp-goal" data-source-row>
+                  <legend>{metric?.label ?? goal.metric_key}</legend>
+                  <input type="hidden" name="source_metric_key" value={goal.metric_key} />
+                  <label><span>{copy.sourceMode}</span><select name="source_mode" data-source-mode>
+                    <option value="unknown" selected={source.mode === "unknown"}>{copy.unknown}</option>
+                    <option value="manual" selected={source.mode === "manual"}>{copy.manual}</option>
+                    {metric?.source_type === "connector" && <option value="connector" selected={source.mode === "connector"}>{copy.connector}</option>}
+                  </select></label>
+                  <p class="kp-unknown-note" data-source-unknown>{copy.unknownWarning}</p>
+                  <div class="kp-fields-2" data-source-manual>
+                    <label><span>{copy.currentValue} <em class="kp-required" data-manual-required hidden>{copy.required}</em></span><input type="number" inputmode="decimal" step="any" name="initial_value" value={source.initial_value ?? ""} /></label>
+                    <label><span>{copy.observedAt}</span><input type="datetime-local" name="observed_at" value={dateTimeValue(source.observed_at)} /></label>
+                    <label class="kp-span-2"><span>{copy.evidenceRef}</span><input name="evidence_ref" maxlength="2048" value={source.evidence_ref ?? ""} placeholder="https://… / resource:…" /></label>
+                  </div>
+                  <div data-source-connector>
+                    <label><span>{copy.connectionRef} <em class="kp-required" data-connector-required hidden>{copy.required}</em></span><input name="connection_ref" maxlength="512" value={source.connection_ref ?? ""} placeholder="connection:github-actions:primary" /></label>
+                  </div>
+                </fieldset>;
+              })}
+            </div>
+            <button type="submit" data-saving-label={copy.saving}>{copy.saveNext}</button>
+          </form>
+        </>}
+
+        {displayStep === "review" && <>
+          <div class="kp-stage-heading" tabindex="-1"><p>06 / 07</p><h2 id="knowledge-pack-step-title">{copy.reviewTitle}</h2><span>{copy.reviewBody}</span></div>
+          {session.plan ? <div class="kp-review">
+            <div class="kp-digest"><span>PLAN DIGEST</span><code>{session.plan.plan_digest}</code></div>
+            <article class="kp-review-pack">
+              <span>Knowledge Pack</span><h3>{session.plan.knowledge_pack.manifest.title}</h3>
+              <p>{session.plan.knowledge_pack.manifest.description}</p>
+              <code>{session.plan.knowledge_pack.manifest.pack_id}</code>
+            </article>
+            <div class="kp-review-grid">
+              {session.plan.installation.packs.map((pack: any) => <article>
+                <span>{pack.action}</span><strong>{pack.pack_id}</strong><small>v{pack.version}</small>
+                {conflictCount(pack.preserved_custom_conflicts) > 0 && <em>{conflictCount(pack.preserved_custom_conflicts)} custom definitions preserved</em>}
+              </article>)}
+            </div>
+            <div class="kp-review-grid">
+              <article>
+                <span>{copy.visibility}</span>
+                <strong>{session.answers?.scope?.scope_type === "project" ? copy.projectScope : copy.tenantScope}</strong>
+                {session.answers?.scope?.project_id && <small>{session.answers.scope.project_id}</small>}
+              </article>
+              {session.plan.goals.map((goal: any) => <article><span>{copy.metric}</span><strong>{goal.metric_key}</strong><small>{goal.direction} · {goal.direction === "range" ? `${goal.target_min}–${goal.target_max}` : goal.target_value}</small></article>)}
+              {session.plan.data_sources.map((source: any) => <article><span>{copy.sourceMode}</span><strong>{source.metric_key}</strong><small>{source.mode}</small></article>)}
+            </div>
+            <p class="kp-fixture-note">✓ {copy.fixtureNote}</p>
+            <form method="post" class="kp-complete-form" data-guided-form>
+              <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+              <input type="hidden" name="session_id" value={session.id} />
+              <input type="hidden" name="revision" value={session.revision} />
+              <input type="hidden" name="idempotency_key" value={requestKey} />
+              <input type="hidden" name="action" value="complete" />
+              <input type="hidden" name="plan_digest" value={session.plan.plan_digest} />
+              <button type="submit" data-saving-label={copy.saving}>{copy.install}</button>
+            </form>
+          </div> : <form method="post" class="kp-form" data-guided-form>
+            <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
+            <input type="hidden" name="session_id" value={session.id} />
+            <input type="hidden" name="revision" value={session.revision} />
+            <input type="hidden" name="idempotency_key" value={requestKey} />
+            <input type="hidden" name="action" value="plan" />
+            <button type="submit" data-saving-label={copy.saving}>{copy.createPlan}</button>
+          </form>}
+        </>}
+
+        {displayStep === "completed" && <div class="kp-completed" tabindex="-1">
+          <div class="kp-complete-mark" aria-hidden="true">✓</div>
+          <p>07 / 07</p><h2 id="knowledge-pack-step-title">{copy.completedTitle}</h2><span>{copy.completedBody}</span>
+          <dl>
+            <div><dt>Knowledge Pack</dt><dd>{session.completion?.knowledge_pack?.pack_id}</dd></div>
+            <div><dt>{copy.target}</dt><dd>{session.completion?.targets?.length ?? 0}</dd></div>
+            <div><dt>{copy.currentValue}</dt><dd>{session.completion?.snapshots?.length ?? 0}</dd></div>
+          </dl>
+          <div class="kp-complete-actions">
+            <a class="button-primary" href={`${session.completion?.workspace_href}?tenant_id=${encodeURIComponent(tenantId)}${session.project_id ? `&project_id=${encodeURIComponent(session.project_id)}` : ""}&lang=${lang}`}>{copy.openWorkspace}</a>
+            <a class="button-secondary" href={`/domain-packs?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`}>{copy.managePacks}</a>
+          </div>
+        </div>}
+      </section>
+    </div>}
+  </section>
+</BaseLayout>
+
+<style>
+  .kp-page {
+    --kp-ink: #f4f7fb;
+    --kp-muted: #9ca6b7;
+    --kp-label: #d7dee9;
+    --kp-line: rgba(148, 163, 184, .18);
+    --kp-blue: #7dd3fc;
+    --kp-green: #6ee7b7;
+    --kp-surface-strong: #080b10;
+    --kp-surface: #090c11;
+    --kp-surface-field: #0c1017;
+    --kp-surface-raised: rgba(255, 255, 255, .035);
+    --kp-surface-subtle: rgba(255, 255, 255, .025);
+    --kp-on-accent: #071018;
+    --kp-text-strong: #fff;
+    --kp-border-field: #313846;
+    --kp-border-control: #303744;
+    --kp-border-choice: #64748b;
+    --kp-error: #fb7185;
+    --kp-error-label: #fda4af;
+    --kp-error-text: #fecdd3;
+    --kp-warning: #fde68a;
+    --kp-warning-accent: #fbbf24;
+    --kp-code: #dbeafe;
+    --kp-code-muted: #9ca6b7;
+    --kp-action-text: #e8f6ff;
+    --kp-accent-border: rgba(125, 211, 252, .4);
+    --kp-accent-surface: rgba(125, 211, 252, .055);
+    --kp-success-border: rgba(110, 231, 183, .42);
+    --kp-error-border: rgba(251, 113, 133, .42);
+    --kp-error-surface: rgba(190, 24, 93, .12);
+    --kp-warning-surface: rgba(251, 191, 36, .06);
+    --kp-action-surface: rgba(14, 116, 201, .38);
+  }
+  .kp-page :where(h1, h2, h3, p, span, strong, small, code, dt, dd) { overflow-wrap: anywhere; }
+  .kp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; padding: 1.5rem; border: 1px solid var(--kp-line); border-radius: 22px; background: var(--kp-surface-raised); }
+  .kp-header h1 { margin-top: .55rem; max-width: 48rem; font-size: clamp(1.8rem, 3vw, 2.8rem); line-height: 1.08; font-weight: 650; letter-spacing: -.035em; text-wrap: balance; }
+  .kp-header .surface-muted { margin-top: .75rem; max-width: 50rem; }
+  .kp-status { flex: none; padding: .45rem .75rem; border: 1px solid var(--kp-line); border-radius: 999px; color: var(--kp-blue); font-size: .78rem; font-weight: 700; }
+  .kp-status.is-completed { color: var(--kp-green); border-color: var(--kp-success-border); }
+  .kp-error { display: grid; gap: .35rem; padding: 1rem 1.1rem; border: 1px solid var(--kp-error-border); border-radius: 14px; background: var(--kp-error-surface); color: var(--kp-error-text); scroll-margin-top: 1rem; }
+  .kp-error:focus-visible { outline: 2px solid var(--kp-blue); outline-offset: 4px; }
+  .kp-error a { justify-self: start; color: var(--kp-text-strong); font-weight: 700; }
+  .kp-intro { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.5rem; align-items: center; min-height: 24rem; padding: clamp(1.5rem, 5vw, 4rem); border: 1px solid var(--kp-line); border-radius: 22px; background: var(--kp-surface-strong); }
+  .kp-intro-mark { display: grid; place-items: center; width: 7rem; aspect-ratio: 1; border: 1px solid var(--kp-accent-border); border-radius: 50%; color: var(--kp-blue); font-size: 3rem; font-weight: 300; box-shadow: inset 0 0 0 12px var(--kp-surface-raised); }
+  .kp-intro h2, .kp-stage h2 { color: var(--kp-ink); font-size: clamp(1.5rem, 2.5vw, 2.15rem); font-weight: 650; letter-spacing: -.025em; }
+  .kp-disabled { margin-top: 1.25rem; color: var(--kp-warning); }
+  .kp-shell { display: grid; grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  .kp-rail { position: sticky; top: 1rem; padding: 1.2rem; border: 1px solid var(--kp-line); border-radius: 20px; background: var(--kp-surface); }
+  .kp-mobile-progress { display: none; }
+  .kp-rail ol { position: relative; margin-top: 1.2rem; }
+  .kp-rail ol::before { content: ""; position: absolute; top: 1rem; bottom: 1rem; left: 1rem; width: 1px; background: var(--kp-line); }
+  .kp-rail li { position: relative; }
+  .kp-rail a, .kp-rail li > div { display: flex; align-items: center; gap: .75rem; min-height: 3rem; color: var(--kp-muted); text-decoration: none; }
+  .kp-rail a:hover strong { color: var(--kp-ink); }
+  .kp-rail li span { z-index: 1; display: grid; place-items: center; width: 2rem; height: 2rem; flex: none; border: 1px solid var(--kp-border-control); border-radius: 50%; background: var(--kp-surface); font-size: .75rem; }
+  .kp-rail li.is-active strong { color: var(--kp-ink); }
+  .kp-rail li.is-active span { color: var(--kp-on-accent); border-color: var(--kp-blue); background: var(--kp-blue); box-shadow: 0 0 0 5px var(--kp-accent-surface); }
+  .kp-rail li.is-complete span { color: var(--kp-green); border-color: var(--kp-success-border); }
+  .kp-resume-note { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--kp-line); color: var(--kp-muted); font-size: .78rem; line-height: 1.55; }
+  .kp-stage { min-width: 0; min-height: 36rem; padding: clamp(1.25rem, 3vw, 2.2rem); border: 1px solid var(--kp-line); border-radius: 20px; background: color-mix(in srgb, var(--kp-surface-strong) 90%, transparent); }
+  .kp-stage-heading { padding-bottom: 1.35rem; border-bottom: 1px solid var(--kp-line); }
+  .kp-stage-heading > p, .kp-completed > p { color: var(--kp-blue); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; letter-spacing: .12em; }
+  .kp-stage-heading { scroll-margin-top: 1rem; }
+  .kp-stage-heading:focus, .kp-completed:focus { outline: none; }
+  .kp-stage-heading h2 { margin-top: .5rem; text-wrap: balance; }
+  .kp-stage-heading > span, .kp-completed > span { display: block; margin-top: .6rem; max-width: 48rem; color: var(--kp-muted); line-height: 1.65; }
+  .kp-form { display: grid; gap: 1.15rem; margin-top: 1.5rem; }
+  .kp-form label { display: grid; gap: .45rem; }
+  .kp-form label > span, .kp-goal legend { color: var(--kp-label); font-size: .82rem; font-weight: 700; }
+  .kp-form input, .kp-form textarea, .kp-form select { width: 100%; border: 1px solid var(--kp-border-field); border-radius: 11px; background: var(--kp-surface-field); color: var(--kp-ink); padding: .75rem .85rem; }
+  .kp-form input:focus-visible, .kp-form textarea:focus-visible, .kp-form select:focus-visible { outline: 2px solid var(--kp-blue); outline-offset: 2px; border-color: transparent; }
+  .kp-form button, .kp-complete-form button { justify-self: start; min-height: 2.8rem; }
+  .kp-form button:disabled, .kp-complete-form button:disabled { cursor: wait; opacity: .58; }
+  .kp-required { margin-left: .35rem; color: var(--kp-error-label); font-size: .75rem; font-style: normal; letter-spacing: .04em; }
+  :global(.kp-form-errors) { display: grid; gap: .45rem; padding: .9rem 1rem; border: 1px solid var(--kp-error-border); border-radius: 12px; background: var(--kp-error-surface); color: var(--kp-error-text); scroll-margin-top: 1rem; }
+  :global(.kp-form-errors[hidden]) { display: none; }
+  :global(.kp-form-errors:focus-visible) { outline: 2px solid var(--kp-error-label); outline-offset: 3px; }
+  :global(.kp-form-errors ul) { display: grid; gap: .25rem; padding-left: 1.15rem; list-style: disc; }
+  :global(.kp-form-errors a) { color: var(--kp-text-strong); font-weight: 700; }
+  :global(.kp-inline-error) { color: var(--kp-error-text); font-size: .78rem; font-weight: 650; letter-spacing: 0; line-height: 1.45; text-transform: none; }
+  .kp-form [aria-invalid="true"] { border-color: var(--kp-error); }
+  .kp-fields-2, .kp-fields-3 { display: grid; gap: .8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kp-fields-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kp-span-2 { grid-column: 1 / -1; }
+  .kp-template-fieldset { display: grid; gap: .65rem; }
+  .kp-template-fieldset > legend { color: var(--kp-label); font-size: .82rem; font-weight: 700; }
+  .kp-template-grid { display: grid; gap: .8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kp-template-card { position: relative; display: grid !important; grid-template-columns: auto minmax(0,1fr) auto; align-items: start; gap: .8rem !important; padding: 1rem; border: 1px solid var(--kp-line); border-radius: 14px; cursor: pointer; }
+  .kp-template-card:has(input:checked) { border-color: var(--kp-accent-border); background: var(--kp-accent-surface); }
+  .kp-template-card input { position: absolute; opacity: 0; pointer-events: none; }
+  .kp-template-card:has(input:focus-visible) { outline: 2px solid var(--kp-blue); outline-offset: 2px; }
+  .kp-template-card:active { border-color: var(--kp-blue); background: var(--kp-accent-surface); }
+  .kp-template-indicator { width: 1rem; height: 1rem; margin-top: .2rem; border: 1px solid var(--kp-border-choice); border-radius: 50%; }
+  .kp-template-card:has(input:checked) .kp-template-indicator { border: 4px solid var(--kp-blue); }
+  .kp-template-card strong, .kp-template-card small { display: block; }
+  .kp-template-card small { margin-top: .35rem; color: var(--kp-muted); line-height: 1.5; }
+  .kp-template-card em { color: var(--kp-blue); font-size: .75rem; font-style: normal; white-space: nowrap; }
+  .kp-goal-list { display: grid; gap: 1rem; }
+  .kp-goal { display: grid; gap: .85rem; padding: 1rem; border: 1px solid var(--kp-line); border-radius: 14px; }
+  .kp-goal legend { padding: 0 .35rem; }
+  .kp-unknown-note { padding: .75rem; border-left: 2px solid var(--kp-warning-accent); background: var(--kp-warning-surface); color: var(--kp-warning); font-size: .82rem; }
+  .kp-review { display: grid; gap: 1rem; margin-top: 1.5rem; }
+  .kp-digest { display: grid; gap: .35rem; padding: .9rem; border: 1px solid var(--kp-accent-border); background: var(--kp-accent-surface); }
+  .kp-digest span, .kp-review-pack > span, .kp-review-grid article > span { color: var(--kp-blue); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .kp-digest code { overflow-wrap: anywhere; color: var(--kp-code); font-size: .75rem; }
+  .kp-review-pack { padding: 1.1rem; border-left: 3px solid var(--kp-blue); background: var(--kp-surface-subtle); }
+  .kp-review-pack h3 { margin-top: .35rem; font-size: 1.25rem; font-weight: 700; }
+  .kp-review-pack p { margin-top: .3rem; color: var(--kp-muted); }
+  .kp-review-pack code { display: block; margin-top: .65rem; color: var(--kp-code-muted); font-size: .75rem; }
+  .kp-review-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kp-review-grid article { display: grid; gap: .25rem; padding: .9rem; border: 1px solid var(--kp-line); }
+  .kp-review-grid small { color: var(--kp-muted); }
+  .kp-review-grid em { color: var(--kp-warning); font-size: .75rem; font-style: normal; }
+  .kp-fixture-note { color: var(--kp-green); font-size: .85rem; }
+  .kp-completed { display: grid; justify-items: start; align-content: center; min-height: 30rem; }
+  .kp-complete-mark { display: grid; place-items: center; width: 4rem; height: 4rem; margin-bottom: 1rem; border: 1px solid var(--kp-success-border); border-radius: 50%; color: var(--kp-green); font-size: 1.6rem; }
+  .kp-completed h2 { margin-top: .55rem; }
+  .kp-completed dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; width: 100%; margin-top: 1.5rem; }
+  .kp-completed dl > div { padding: .9rem; border: 1px solid var(--kp-line); }
+  .kp-completed dt { color: var(--kp-muted); font-size: .75rem; }
+  .kp-completed dd { margin-top: .3rem; overflow-wrap: anywhere; color: var(--kp-ink); font-weight: 700; }
+  .kp-complete-actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.3rem; }
+  .kp-complete-actions a { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; padding: .65rem 1rem; border: 1px solid var(--kp-accent-border); border-radius: 14px; color: var(--kp-action-text); font-size: .86rem; font-weight: 700; text-decoration: none; }
+  .kp-complete-actions .button-primary { background: var(--kp-action-surface); }
+  .kp-complete-actions .button-secondary { border-color: var(--kp-line); background: var(--kp-surface-raised); }
+  .kp-complete-actions a:hover { border-color: var(--kp-blue); }
+  .kp-page :where(button, a, .kp-template-card) { touch-action: manipulation; }
+  @media (max-width: 860px) {
+    .kp-shell { grid-template-columns: 1fr; }
+    .kp-rail { position: static; }
+    .kp-rail > .surface-label, .kp-rail ol { display: none; }
+    .kp-mobile-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem .8rem; align-items: center; }
+    .kp-mobile-progress span { color: var(--kp-blue); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; letter-spacing: .08em; }
+    .kp-mobile-progress strong { grid-column: 1; color: var(--kp-ink); font-size: 1rem; }
+    .kp-mobile-progress a { grid-column: 2; grid-row: 1 / span 2; display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid var(--kp-line); border-radius: 12px; padding: .55rem .85rem; color: var(--kp-action-text); font-weight: 700; text-decoration: none; }
+    .kp-resume-note { display: none; }
+  }
+  @media (max-width: 640px) {
+    .kp-header { display: grid; }
+    .kp-intro { grid-template-columns: 1fr; }
+    .kp-intro-mark { width: 5rem; }
+    .kp-template-grid, .kp-fields-2, .kp-fields-3, .kp-review-grid, .kp-completed dl { grid-template-columns: 1fr; }
+    .kp-stage { padding: 1rem; }
+  }
+  @media (forced-colors: active) {
+    .kp-page {
+      --kp-ink: CanvasText;
+      --kp-muted: CanvasText;
+      --kp-label: CanvasText;
+      --kp-line: CanvasText;
+      --kp-blue: LinkText;
+      --kp-green: CanvasText;
+      --kp-text-strong: CanvasText;
+      --kp-error-text: CanvasText;
+      --kp-warning: CanvasText;
+      --kp-code: CanvasText;
+      --kp-code-muted: CanvasText;
+      --kp-action-text: LinkText;
+    }
+    .kp-page :global(.surface-label), .kp-page :global(.surface-muted) { color: CanvasText; }
+    .kp-header, .kp-intro, .kp-rail, .kp-stage, .kp-error, :global(.kp-form-errors), .kp-goal, .kp-review-grid article { background: Canvas; border-color: CanvasText; }
+    .kp-rail li.is-active span { color: HighlightText; background: Highlight; outline: 2px solid Highlight; outline-offset: 2px; }
+    .kp-template-card input { position: static; width: 1rem; height: 1rem; opacity: 1; pointer-events: auto; }
+    .kp-template-indicator { display: none; }
+    .kp-template-card:has(input:checked) { border: 3px solid Highlight; background: Canvas; }
+    .kp-form [aria-invalid="true"] { border: 3px solid Highlight; }
+    .kp-required, :global(.kp-inline-error), .kp-unknown-note, .kp-fixture-note { color: CanvasText; }
+    .kp-complete-mark { border: 3px solid CanvasText; }
+  }
+  @media (prefers-contrast: more) {
+    .kp-page { --kp-line: rgba(226, 232, 240, .55); --kp-border-field: #94a3b8; --kp-border-control: #94a3b8; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.kp-page), :global(.kp-page *) { scroll-behavior: auto !important; transition: none !important; }
+  }
+</style>
+
+<script>
+  const csrf = sessionStorage.getItem("orgbrain_csrf") ?? "";
+  document.querySelectorAll<HTMLInputElement>(".knowledge-pack-csrf").forEach((input) => { input.value = csrf; });
+
+  const pageRoot = document.querySelector<HTMLElement>(".kp-page");
+  const validationTitle = pageRoot?.dataset.validationTitle ?? "Review the required fields";
+  const requiredError = pageRoot?.dataset.requiredError ?? "This field is required.";
+  const invalidError = pageRoot?.dataset.invalidError ?? "Enter a valid value.";
+  const focusAfterSubmitKey = "orgbrain_knowledge_pack_focus_after_submit";
+  type FormField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
+  const formFields = (form: HTMLFormElement): FormField[] => Array.from(
+    form.querySelectorAll("input:not([type=hidden]), textarea, select")
+  ) as unknown as FormField[];
+  const fieldLabel = (field: FormField) => {
+    if (field instanceof HTMLInputElement && field.type === "radio") {
+      return field.closest("fieldset")?.querySelector("legend")?.textContent?.trim() || field.name;
+    }
+    return field.closest("label")?.querySelector(":scope > span")?.textContent?.trim() || field.name;
+  };
+  const removeGeneratedErrors = (form: HTMLFormElement) => {
+    form.querySelectorAll("[data-inline-error]").forEach((node) => node.parentNode?.removeChild(node));
+    formFields(form).forEach((field) => {
+      field.removeAttribute("aria-invalid");
+      const describedBy = (field.getAttribute("aria-describedby") ?? "")
+        .split(/\s+/)
+        .filter((id) => id && !id.startsWith("knowledge-pack-error-"));
+      if (describedBy.length) field.setAttribute("aria-describedby", describedBy.join(" "));
+      else field.removeAttribute("aria-describedby");
+    });
+  };
+  const ensureErrorSummary = (form: HTMLFormElement) => {
+    let summary = form.querySelector<HTMLElement>("[data-form-errors]");
+    if (summary) return summary;
+    summary = document.createElement("div");
+    summary.className = "kp-form-errors";
+    summary.dataset.formErrors = "";
+    summary.setAttribute("role", "alert");
+    summary.tabIndex = -1;
+    summary.hidden = true;
+    const title = document.createElement("strong");
+    title.textContent = validationTitle;
+    summary.appendChild(title);
+    summary.appendChild(document.createElement("ul"));
+    form.insertBefore(summary, form.firstChild);
+    return summary;
+  };
+  const renderValidation = (form: HTMLFormElement, focusSummary: boolean) => {
+    const summary = ensureErrorSummary(form);
+    const list = summary.querySelector("ul");
+    if (!list) return;
+    removeGeneratedErrors(form);
+    while (list.firstChild) list.removeChild(list.firstChild);
+
+    const seenRadioGroups = new Set<string>();
+    const invalidFields = formFields(form).filter((field) => !field.disabled && !field.validity.valid).filter((field) => {
+      if (!(field instanceof HTMLInputElement) || field.type !== "radio") return true;
+      if (seenRadioGroups.has(field.name)) return false;
+      seenRadioGroups.add(field.name);
+      return true;
+    });
+
+    invalidFields.forEach((field, index) => {
+      const isRadio = field instanceof HTMLInputElement && field.type === "radio";
+      const group = isRadio
+        ? formFields(form).filter((candidate) => candidate instanceof HTMLInputElement && candidate.type === "radio" && candidate.name === field.name)
+        : [field];
+      if (!field.id) field.id = `knowledge-pack-field-${field.name || "value"}-${index + 1}`;
+      const errorId = `knowledge-pack-error-${field.id}`;
+      const message = field.validity.valueMissing ? requiredError : invalidError;
+      const inline = document.createElement("span");
+      inline.id = errorId;
+      inline.className = "kp-inline-error";
+      inline.dataset.inlineError = "";
+      inline.textContent = message;
+      const inlineTarget = isRadio ? field.closest("fieldset") : field.closest("label");
+      inlineTarget?.appendChild(inline);
+      group.forEach((candidate) => {
+        candidate.setAttribute("aria-invalid", "true");
+        const describedBy = new Set((candidate.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean));
+        describedBy.add(errorId);
+        candidate.setAttribute("aria-describedby", [...describedBy].join(" "));
+      });
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = `#${field.id}`;
+      link.textContent = `${fieldLabel(field)}: ${message}`;
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        field.focus();
+      });
+      item.appendChild(link);
+      list.appendChild(item);
+    });
+
+    summary.hidden = invalidFields.length === 0;
+    if (invalidFields.length > 0) {
+      form.dataset.validationShown = "true";
+      if (focusSummary) summary.focus();
+    } else {
+      delete form.dataset.validationShown;
+    }
+  };
+
+  document.querySelectorAll<HTMLFormElement>("[data-validation-form]").forEach((form) => {
+    ensureErrorSummary(form);
+    let validationScheduled = false;
+    form.addEventListener("invalid", (event) => {
+      event.preventDefault();
+      if (validationScheduled) return;
+      validationScheduled = true;
+      queueMicrotask(() => {
+        validationScheduled = false;
+        renderValidation(form, true);
+      });
+    }, true);
+    formFields(form).forEach((field) => {
+      const refresh = () => { if (form.dataset.validationShown) renderValidation(form, false); };
+      field.addEventListener("input", refresh);
+      field.addEventListener("change", refresh);
+    });
+  });
+
+  document.querySelectorAll<HTMLFormElement>("[data-guided-form]").forEach((form) => {
+    form.addEventListener("submit", () => {
+      sessionStorage.setItem(focusAfterSubmitKey, "true");
+      form.setAttribute("aria-busy", "true");
+      const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (button) { button.disabled = true; button.textContent = button.dataset.savingLabel ?? "Saving…"; }
+    });
+  });
+
+  document.querySelectorAll<HTMLAnchorElement>("[data-focus-step-link]").forEach((link) => {
+    link.addEventListener("click", () => sessionStorage.setItem(focusAfterSubmitKey, "true"));
+  });
+
+  const updateScopeRequirements = (form: HTMLFormElement) => {
+    const visibility = (form.querySelector("[data-scope-visibility]") as HTMLInputElement | null)?.value;
+    const project = form.querySelector<HTMLInputElement>("[data-scope-project]");
+    if (project) {
+      project.required = visibility === "project";
+      project.disabled = visibility !== "project";
+    }
+    form.querySelectorAll<HTMLElement>("[data-project-required]").forEach((mark) => { mark.hidden = visibility !== "project"; });
+  };
+  document.querySelectorAll<HTMLFormElement>("[data-scope-form]").forEach((form) => {
+    updateScopeRequirements(form);
+    form.addEventListener("change", () => updateScopeRequirements(form));
+  });
+
+  document.querySelectorAll<HTMLElement>("[data-goal-row]").forEach((row) => {
+    const direction = row.querySelector("[data-goal-direction]") as HTMLInputElement | null;
+    const update = () => {
+      const range = direction?.value === "range";
+      row.querySelectorAll<HTMLElement>("[data-target-single]").forEach((field) => { field.hidden = range; });
+      row.querySelectorAll<HTMLElement>("[data-target-range]").forEach((field) => { field.hidden = !range; });
+      row.querySelectorAll<HTMLInputElement>('[name="target_value"]').forEach((input) => { input.required = !range && Boolean((row.querySelector('[name="metric_key"]') as HTMLInputElement | null)?.value); });
+      row.querySelectorAll<HTMLInputElement>('[name="target_min"], [name="target_max"]').forEach((input) => { input.required = range; });
+      row.querySelectorAll<HTMLElement>("[data-target-single] [data-target-required]").forEach((mark) => { mark.hidden = range || !(row.querySelector('[name="metric_key"]') as HTMLInputElement | null)?.value; });
+      row.querySelectorAll<HTMLElement>("[data-target-range] [data-target-required]").forEach((mark) => { mark.hidden = !range; });
+    };
+    direction?.addEventListener("change", update);
+    row.querySelector('[name="metric_key"]')?.addEventListener("change", update);
+    update();
+  });
+
+  document.querySelectorAll<HTMLElement>("[data-source-row]").forEach((row) => {
+    const mode = row.querySelector("[data-source-mode]") as HTMLInputElement | null;
+    const update = () => {
+      const value = mode?.value ?? "unknown";
+      const manual = row.querySelector<HTMLElement>("[data-source-manual]");
+      const connector = row.querySelector<HTMLElement>("[data-source-connector]");
+      const unknown = row.querySelector<HTMLElement>("[data-source-unknown]");
+      if (manual) manual.hidden = value !== "manual";
+      if (connector) connector.hidden = value !== "connector";
+      if (unknown) unknown.hidden = value !== "unknown";
+      const initial = row.querySelector<HTMLInputElement>('[name="initial_value"]');
+      const connection = row.querySelector<HTMLInputElement>('[name="connection_ref"]');
+      if (initial) initial.required = value === "manual";
+      if (connection) connection.required = value === "connector";
+      row.querySelectorAll<HTMLElement>("[data-manual-required]").forEach((mark) => { mark.hidden = value !== "manual"; });
+      row.querySelectorAll<HTMLElement>("[data-connector-required]").forEach((mark) => { mark.hidden = value !== "connector"; });
+    };
+    mode?.addEventListener("change", update);
+    update();
+  });
+
+  document.querySelectorAll<HTMLFormElement>("[data-auto-advance]").forEach((form) => {
+    const mode = form.dataset.autoAdvance;
+    form.addEventListener("change", (event) => {
+      if (formFields(form).some((field) => !field.disabled && !field.validity.valid)) return;
+      if (mode === "selection" && event.target instanceof HTMLInputElement && event.target.type === "radio") form.requestSubmit();
+      if (mode === "selection" && event.target instanceof HTMLSelectElement && form.matches("[data-scope-form]")) form.requestSubmit();
+    });
+  });
+
+  const serverError = document.querySelector<HTMLElement>("[data-server-error]");
+  const shouldFocusStep = sessionStorage.getItem(focusAfterSubmitKey) === "true";
+  sessionStorage.removeItem(focusAfterSubmitKey);
+  requestAnimationFrame(() => {
+    if (serverError) serverError.focus();
+    else if (shouldFocusStep) document.querySelector<HTMLElement>(".kp-stage-heading, .kp-completed")?.focus({ preventScroll: true });
+  });
+</script>

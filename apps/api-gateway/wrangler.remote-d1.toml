@@ -18,6 +18,11 @@ RETRIEVAL_GENERATION_ROUTING = "legacy"
 DOMAIN_PACKS_MODE = "catalog"
 DOMAIN_METRICS_MODE = "shadow"
 DOMAIN_WORKSPACES_MODE = "preview"
+KNOWLEDGE_PACK_ONBOARDING_MODE = "off"
+ORGANIZATION_DASHBOARD_MODE = "off"
+METRIC_IMPORT_MODE = "off"
+RETROSPECTIVE_MODE = "off"
+IMPROVEMENT_ACTIONS_MODE = "off"
 DOMAIN_RECALL_MODE = "shadow"
 DOMAIN_RECALL_HOOK_MODE = "off"
 PORTABLE_ARCHIVE_MODE = "plan"
@@ -48,6 +53,10 @@ queue = "org-bus"
 [[queues.producers]]
 binding = "RETRIEVAL_PROJECTION_QUEUE"
 queue = "orgbrain-retrieval-projection-v3"
+
+[[queues.producers]]
+binding = "METRIC_IMPORT_QUEUE"
+queue = "orgbrain-metric-import-v1"
 
 [[migrations]]
 tag = "v1"

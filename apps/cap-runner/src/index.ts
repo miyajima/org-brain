@@ -24,6 +24,7 @@ import {
   rebuildMemoryImpactMetricsForDay
 } from "./memory-impact-metrics";
 import type { CapabilityContext, Env } from "./types";
+import { isMetricImportJob, processMetricImportJob, queueMetricImportRetry, recoverExpiredMetricImports } from "./metric-import";
 import {
   assertWithinCapabilityCostLimit,
   loadCapabilityPolicy,
@@ -34,6 +35,7 @@ export { LeaseDO, MailboxDO };
 
 const METRICS_CRON = "5 0 * * *";
 const MEMORY_MAINTENANCE_CRON = "30 18 * * *";
+const METRIC_IMPORT_RECOVERY_CRON = "*/5 * * * *";
 
 type ManagedAutonomyPolicy = {
   mode: string;
@@ -426,10 +428,12 @@ export default {
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     for (const msg of batch.messages) {
       try {
-        await processMessage(env, msg.body);
+        if (isMetricImportJob(msg.body)) await processMetricImportJob(env, msg.body);
+        else await processMessage(env, msg.body);
         msg.ack();
       } catch (error) {
         if (shouldRetry(error) && msg.attempts < 3) {
+          if (isMetricImportJob(msg.body)) await queueMetricImportRetry(env, msg.body);
           msg.retry({ delaySeconds: Math.min(30 * (2 ** msg.attempts), 300) });
           continue;
         }
@@ -456,6 +460,15 @@ export default {
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const now = controller.scheduledTime ?? Date.now();
     const cron = controller.cron ?? METRICS_CRON;
+
+    if (cron === METRIC_IMPORT_RECOVERY_CRON) {
+      await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
+        jobName: "metric-import-recovery",
+        scheduledFor: now,
+        now
+      }, () => recoverExpiredMetricImports(env, now));
+      return;
+    }
 
     if (cron === METRICS_CRON) {
       await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {

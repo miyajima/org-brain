@@ -6,6 +6,7 @@ import { appendAuditEvent } from "./audit-service";
 import { runOpsWatchdog } from "./ops-watchdog-service";
 import { assertRequestRateLimit } from "./rate-limit-service";
 import { runScheduledRetentionSweep } from "./retention-queue-service";
+import { materializeDueRetrospectives } from "./knowledge-measurement-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, tenantFromBody, type ApiContextEnv } from "./auth";
 import { assertSessionCsrf } from "./email-auth-service";
 import { mountMcp } from "./mcp";
@@ -223,10 +224,17 @@ export default {
       // Keep pre-migration retention jobs healthy while extraction remains off.
       if (!/no such table:\s*memory_extraction_/iu.test(error instanceof Error ? error.message : String(error))) throw error;
     }
-    await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
-      jobName: "retention-sweep",
-      scheduledFor,
-      now: scheduledFor
-    }, async () => runScheduledRetentionSweep(env, scheduledFor));
+    await Promise.all([
+      runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
+        jobName: "retention-sweep",
+        scheduledFor,
+        now: scheduledFor
+      }, async () => runScheduledRetentionSweep(env, scheduledFor)),
+      runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
+        jobName: "retrospective-materialize",
+        scheduledFor,
+        now: scheduledFor
+      }, async () => materializeDueRetrospectives(env, scheduledFor))
+    ]);
   }
 };

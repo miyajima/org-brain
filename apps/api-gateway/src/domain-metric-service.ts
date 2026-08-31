@@ -305,6 +305,19 @@ export async function createMetricSnapshot(env: Env, tenantId: string, principal
     ...body,
     scope_type: body.scope_type ?? definition.scope_type
   });
+  if (bindingId) {
+    const metricBinding = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT scope_type, scope_id, dimensions_json FROM metric_bindings
+       WHERE tenant_id=? AND id=? AND metric_definition_id=?`
+    ).bind(tenantId, bindingId, row.id).first<{ scope_type: string; scope_id: string | null; dimensions_json: string }>();
+    if (!metricBinding) throw new HttpError(400, "metric_binding_not_found", "binding must belong to the tenant and metric");
+    if (metricBinding.scope_type !== snapshot.scope_type || metricBinding.scope_id !== snapshot.scope_id ||
+      metricBinding.dimensions_json !== canonicalJson(snapshot.dimensions)) {
+      throw new HttpError(400, "metric_snapshot_series_mismatch", "snapshot scope and dimensions must exactly match the metric binding");
+    }
+  } else if (snapshot.scope_type !== "tenant" || snapshot.scope_id !== null || Object.keys(snapshot.dimensions).length > 0) {
+    throw new HttpError(400, "metric_binding_required", "project, managed-object, and dimensioned snapshots require an exact metric binding");
+  }
   if (snapshot.source_binding_id) {
     const sourceBinding = await env.OPEN_BRAIN_DB.prepare(
       `SELECT id FROM metric_source_bindings

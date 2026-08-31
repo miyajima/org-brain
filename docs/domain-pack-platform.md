@@ -3,7 +3,7 @@ title: Domain Pack Platform
 doc_type: reference
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-20
+last_updated: 2026-08-29
 ---
 
 # Domain Pack Platform
@@ -52,6 +52,43 @@ Domain Pack releases can be first-party or tenant-owned `private`/`unlisted`.
 The initial platform has no public Domain Pack listing. Revoked releases cannot
 be newly installed. Uninstall disables the installation record but preserves
 metric snapshots, Decision links, audit history, and provenance.
+
+## Knowledge Pack onboarding
+
+`/knowledge-packs/onboarding` guides an administrator through purpose,
+template, scope, one to three metric goals, data-source readiness, an exact
+installation preview, and completion. `migrations/0038_knowledge_pack_onboarding.sql`
+stores only the resumable session, validated answers, plan digest, and result
+references. Connector credentials and raw provider responses are never stored;
+the only accepted Connector value is a non-secret `connection:...` reference.
+Onboarding records that binding but does not contact the provider or prove that
+the referenced connection is live.
+The scope step applies metric targets and observations to either the tenant or
+one project; it does not claim to configure Group-level read ACLs. The generated
+Knowledge Pack overlay itself remains private to the tenant.
+
+The API surface is:
+
+- `POST /v1/knowledge-pack-onboardings`
+- `GET /v1/knowledge-pack-onboardings/:id`
+- `PATCH /v1/knowledge-pack-onboardings/:id/steps/:step`
+- `POST /v1/knowledge-pack-onboardings/:id/plan`
+- `POST /v1/knowledge-pack-onboardings/:id/complete`
+
+Create, plan, and complete require `x-idempotency-key`; step updates use an
+optimistic revision and return the existing result when the same answer is
+replayed. Completion recomputes the canonical plan digest, publishes one
+tenant-private `organization_overlay`, invokes the existing Domain Pack
+installer, and writes targets plus only the explicitly allowed initial
+Snapshots or Connector references. A metric may deliberately remain
+`unknown`. Replaying completion returns the same overlay, installations,
+targets, Snapshots, and source bindings instead of creating duplicates.
+
+`KNOWLEDGE_PACK_ONBOARDING_MODE=preview` permits resumable setup and planning
+but blocks installation. `on` enables completion and still requires
+`DOMAIN_PACKS_MODE=install` and `DOMAIN_METRICS_MODE=on`; `off` returns the
+feature-disabled boundary. Production and remote-D1 profiles remain `off`,
+while the local profile is `on` for end-to-end verification.
 
 ## Custom metrics
 
@@ -200,6 +237,7 @@ Portable imports require a successful digest/conflict plan before apply.
 - `DOMAIN_PACKS_MODE=off|catalog|install`
 - `DOMAIN_METRICS_MODE=off|shadow|on`
 - `DOMAIN_WORKSPACES_MODE=off|preview|on`
+- `KNOWLEDGE_PACK_ONBOARDING_MODE=off|preview|on`
 - `DOMAIN_RECALL_MODE=off|shadow|on`
 - `DOMAIN_RECALL_HOOK_MODE=off|personal|team`
 - `PORTABLE_ARCHIVE_MODE=off|plan|on`

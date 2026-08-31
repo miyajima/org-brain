@@ -6,6 +6,7 @@ import type {
   TaskCreatedPayload,
   TaskResultPayload
 } from "@org-brain/shared";
+import type { MetricImportJobV1 } from "@org-brain/contracts";
 
 type TaskEnvelope = Envelope<TaskCreatedPayload | TaskResultPayload>;
 
@@ -14,6 +15,7 @@ export type Env = {
   OPEN_BRAIN_BUCKET: R2Bucket;
   ORG_BUS_OUT: Queue<TaskEnvelope>;
   RETRIEVAL_PROJECTION_QUEUE?: Queue<RetrievalProjectionJob>;
+  METRIC_IMPORT_QUEUE?: Queue<MetricImportJobV1>;
   API_KEY: string;
   CONSOLE_API_KEY?: string;
   API_TENANT_POLICY_JSON?: string;
@@ -88,6 +90,12 @@ export type Env = {
   DOMAIN_PACKS_MODE?: "off" | "catalog" | "install";
   DOMAIN_METRICS_MODE?: "off" | "shadow" | "on";
   DOMAIN_WORKSPACES_MODE?: "off" | "preview" | "on";
+  KNOWLEDGE_PACK_ONBOARDING_MODE?: "off" | "preview" | "on";
+  ORGANIZATION_DASHBOARD_MODE?: "off" | "preview" | "on";
+  METRIC_IMPORT_MODE?: "off" | "preview" | "on";
+  RETROSPECTIVE_MODE?: "off" | "preview" | "on";
+  IMPROVEMENT_ACTIONS_MODE?: "off" | "preview" | "on";
+  GITHUB_METRIC_CONNECTIONS_JSON?: string;
   DOMAIN_RECALL_MODE?: "off" | "shadow" | "on";
   DOMAIN_RECALL_HOOK_MODE?: "off" | "personal" | "team";
   PORTABLE_ARCHIVE_MODE?: "off" | "plan" | "on";

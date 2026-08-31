@@ -12,6 +12,7 @@ export type Env = {
   OPEN_BRAIN_DB: D1Database;
   OPEN_BRAIN_BUCKET: R2Bucket;
   ORG_BUS_OUT: Queue<TaskEnvelope>;
+  METRIC_IMPORT_QUEUE?: Queue<unknown>;
   LEASES: DurableObjectNamespace;
   MAILBOX: DurableObjectNamespace;
   /** Optional versioned autonomy policy injected by the deployment. */
@@ -32,6 +33,9 @@ export type Env = {
   /** Defaults to 500000 for Tier 2 and zero for Tier 3. */
   MEMORY_EXTRACTION_TIER2_MONTHLY_TOKENS?: string;
   MEMORY_EXTRACTION_TIER3_MONTHLY_TOKENS?: string;
+  METRIC_IMPORT_MODE?: "off" | "preview" | "on";
+  /** JSON map configured as a Worker secret; values contain GitHub credentials. */
+  GITHUB_METRIC_CONNECTIONS_JSON?: string;
 };
 
 export type CapabilityContext = {
