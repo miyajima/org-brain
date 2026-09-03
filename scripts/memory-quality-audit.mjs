@@ -12,6 +12,7 @@ import {
   planMemoryRepairRows
 } from "../packages/shared/src/memory-repair-core.mjs";
 import { screenSensitiveMemory } from "../packages/shared/src/memory-capture-v2-runtime.mjs";
+import { evaluateMemoryQualityAuditV1 } from "../packages/shared/src/memory-quality-audit-core.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -209,7 +210,9 @@ const BASE_MEMORY_COLUMNS = [
 ];
 const OPTIONAL_MEMORY_COLUMNS = [
   "deleted_at", "content_hash", "canonical_key", "capture_origin", "verification_state",
-  "verified_at", "source_hash", "ttl_days", "origin", "provenance_json"
+  "verified_at", "source_hash", "ttl_days", "origin", "provenance_json", "capture_route",
+  "learning_json", "quality_dimensions_json", "owner_principal", "created_by_principal",
+  "actor_id", "permissions_json"
 ];
 
 function memorySelectSql(tenantId, cursor, limit, columns) {
@@ -233,7 +236,7 @@ async function scanRemote(options, schema) {
   }
   const categoryRows = await runD1Query(options, `SELECT id FROM business_categories WHERE tenant_id=${sqlString(options.tenant)} AND is_active=1;`);
   const decisionRows = schema.tables.includes("decision_memories")
-    ? await runD1Query(options, `SELECT id, project_id, business_category_id, work_type, status FROM decision_memories WHERE tenant_id=${sqlString(options.tenant)} ORDER BY id;`)
+    ? await runD1Query(options, `SELECT id, project_id, business_category_id, work_type, status, rationale, source_refs_json, confirmation_state, confirmed_at, valid_until FROM decision_memories WHERE tenant_id=${sqlString(options.tenant)} ORDER BY id;`)
     : [];
   return { memoryRows, decisionRows, categoryRows, pages };
 }
@@ -257,7 +260,7 @@ function scanLocal(options, schema) {
     }
     const categoryRows = db.prepare("SELECT id FROM business_categories WHERE tenant_id=? AND is_active=1").all(options.tenant);
     const decisionRows = schema.tables.includes("decision_memories")
-      ? db.prepare("SELECT id, project_id, business_category_id, work_type, status FROM decision_memories WHERE tenant_id=? ORDER BY id").all(options.tenant)
+      ? db.prepare("SELECT id, project_id, business_category_id, work_type, status, rationale, source_refs_json, confirmation_state, confirmed_at, valid_until FROM decision_memories WHERE tenant_id=? ORDER BY id").all(options.tenant)
       : [];
     return { memoryRows, decisionRows, categoryRows, pages };
   } finally {
@@ -434,7 +437,22 @@ export async function runAudit(argv = process.argv.slice(2)) {
     sensitive_policy: { mode: "deny", allowed_principals: [] }
   });
   const decisionPlan = await planDecisionClassificationRepairRows(scan.decisionRows, { tenant_id: options.tenant });
-  const report = buildAudit(options, schema, scan, plan, decisionPlan, now);
+  const legacyReport = buildAudit(options, schema, scan, plan, decisionPlan, now);
+  const sharedAudit = await evaluateMemoryQualityAuditV1({
+    tenant_id: options.tenant,
+    scope: "tenant",
+    memory_rows: scan.memoryRows,
+    decision_rows: scan.decisionRows,
+    workspace_root: options.workspaceRoot,
+    now
+  });
+  const report = {
+    ...legacyReport,
+    ...sharedAudit,
+    scope: { ...sharedAudit.scope, database: options.database, location: options.location, env: options.env },
+    counts: { ...legacyReport.counts, ...sharedAudit.counts },
+    integrity: { ...legacyReport.integrity, ...sharedAudit.integrity }
+  };
   report.report_sha256 = sha256(JSON.stringify(report));
   if (options.report) {
     await writePrivateJson(options.report, report);

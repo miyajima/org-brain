@@ -143,7 +143,7 @@ describe("authorizeMcpRequest", () => {
         defaultRole: "contributor",
         clientInstallationId: "install-1",
         runtimeActor: "client:install-1",
-        allowedTools: ["orgbrain_memories_capture_rationale"]
+        allowedTools: ["orgbrain_memories_capture_rationale", "orgbrain_memory_extraction_enqueue"]
       });
   });
 

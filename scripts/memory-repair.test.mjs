@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -35,7 +35,7 @@ test("memory repair namespace entrypoints reject conflicting locations", async (
   }
 });
 
-test("memory repair backs up, atomically derives/suppresses, and resumes idempotently", async () => {
+test("strict memory repair remains dry-run only and never derives active rows", async () => {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-memory-repair-"));
   try {
     const dbPath = join(directory, "memory.sqlite");
@@ -86,52 +86,25 @@ test("memory repair backs up, atomically derives/suppresses, and resumes idempot
     const dryRun = await runRepair(["--local", "--db-path", dbPath]);
     assert.equal(dryRun.mode, "dry-run");
     assert.equal(dryRun.physical_delete_count, 0);
-    assert.equal(dryRun.stats.derive_count, 2);
-    assert.equal(dryRun.stats.suppress_count, 1);
+    assert.equal(dryRun.stats.derive_count, 0);
+    assert.equal(dryRun.stats.update_count, 0);
+    assert.equal(dryRun.stats.quarantine_count, 1);
 
-    const applied = await runRepair([
-      "--local", "--db-path", dbPath,
-      "--apply", "--output-dir", outputDirectory
-    ]);
-    assert.equal(applied.mode, "apply");
-    assert.match(applied.backup_path, /\.backup\.sqlite$/u);
+    await assert.rejects(
+      runRepair(["--local", "--db-path", dbPath, "--apply", "--output-dir", outputDirectory]),
+      (error) => {
+        assert.match(String(error.stderr), /strict_repair_apply_requires_certified_pipeline/u);
+        return true;
+      }
+    );
 
     const db = new DatabaseSync(dbPath, { readOnly: true });
-    let versionCount;
     try {
-      assert.equal(db.prepare("SELECT lifecycle_state FROM memories WHERE id=?").get("legacy-hook-memory").lifecycle_state, "suppressed");
-      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memories WHERE source='memory-repair' AND lifecycle_state='active'").get().count, 2);
-      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memories WHERE lifecycle_state='active' AND (business_category_id IS NULL OR work_type IS NULL)").get().count, 0);
+      assert.equal(db.prepare("SELECT lifecycle_state FROM memories WHERE id=?").get("legacy-hook-memory").lifecycle_state, "active");
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memories WHERE source='memory-repair'").get().count, 0);
       assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memory_deletions").get().count, 0);
-      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memory_edges WHERE relation='derived_from'").get().count, 2);
-      assert.ok(db.prepare("SELECT COUNT(*) AS count FROM retrieval_units WHERE source_id IN (SELECT id FROM memories WHERE source='memory-repair')").get().count > 0);
-      versionCount = db.prepare("SELECT COUNT(*) AS count FROM memory_versions").get().count;
     } finally {
       db.close();
-    }
-
-    for (const artifact of [
-      applied.backup_path,
-      join(outputDirectory, "memory-repair.manifest.json"),
-      join(outputDirectory, "memory-repair.plan.json"),
-      join(outputDirectory, "memory-repair.checkpoint.json"),
-      join(outputDirectory, "memory-repair.report.json")
-    ]) {
-      assert.equal((await stat(artifact)).mode & 0o077, 0);
-    }
-    const manifest = JSON.parse(await readFile(join(outputDirectory, "memory-repair.manifest.json"), "utf8"));
-    assert.match(manifest.backup_sha256, /^[a-f0-9]{64}$/u);
-
-    const resumed = await runRepair([
-      "--local", "--db-path", dbPath,
-      "--apply", "--resume", "--output-dir", outputDirectory
-    ]);
-    assert.equal(resumed.backup_path, applied.backup_path);
-    const resumedDb = new DatabaseSync(dbPath, { readOnly: true });
-    try {
-      assert.equal(resumedDb.prepare("SELECT COUNT(*) AS count FROM memory_versions").get().count, versionCount);
-    } finally {
-      resumedDb.close();
     }
   } finally {
     await rm(directory, { recursive: true, force: true });

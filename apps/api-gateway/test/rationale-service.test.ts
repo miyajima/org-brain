@@ -576,6 +576,66 @@ describe("rationale service", () => {
     expect(captured.results[0]?.classification_warning).toContain("rationale_missing_review_required");
   });
 
+  it("never creates a Decision Memory from a quarantined decision observation", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as unknown as Parameters<typeof captureMemoryWithInferredRationale>[0];
+    const result = await captureMemoryWithInferredRationale(env, {
+      tenant_id: "default",
+      source: "hook",
+      items: [{
+        external_key: "observed:uncertified-decision",
+        canonical_key: "b".repeat(64),
+        kind: "decision",
+        content: "Use ORGBRAIN_API_URL as the canonical endpoint variable.",
+        rationale: "A single canonical variable prevents connector drift.",
+        reuse_rule: "Apply this when configuring an OrgBrain client.",
+        project_id: "org-brain",
+        capture_origin: "observed",
+        verification: {
+          state: "verified",
+          verified_at: 1_700_000_000_500,
+          attestation_ref: `sha256:${"a".repeat(64)}`
+        },
+        learning: {
+          schema_version: 2,
+          lesson_type: "decision",
+          kind: "decision",
+          trigger: "An OrgBrain client endpoint is configured",
+          capture_intent: "verify",
+          decision_type: "implementation",
+          decision_key: "orgbrain_api_endpoint_variable",
+          question: "Which environment variable is canonical?",
+          decision: "ORGBRAIN_API_URL",
+          rationale: "A single canonical variable prevents connector drift.",
+          constraints: [],
+          alternatives: [{
+            alternative: "Treat ORGBRAIN_API_BASE as a second canonical variable",
+            reason_rejected: "Two canonical variables can drift."
+          }],
+          applicability: { target_files: [], components: ["orgbrain-client"] },
+          evidence_selectors: [{ type: "user_statement", ref: "ORGBRAIN_API_URL", supports: ["decision"] }],
+          gaps: []
+        },
+        quality_dimensions: {
+          semantic_completeness: 100,
+          evidence_support: 100,
+          rationale_quality: 100,
+          future_reuse: 100,
+          scope_specificity: 100,
+          freshness_validity: 100,
+          atomicity: 100
+        }
+      }]
+    }, { canAttest: true });
+
+    expect(result.results[0]).toMatchObject({
+      status: "created",
+      decision_memory_id: null,
+      classification_warning: expect.arrayContaining(["ai_consensus_required"])
+    });
+    expect(db.memories[0]).toMatchObject({ lifecycle_state: "suppressed" });
+  });
+
   it("returns the winning memory when a concurrent canonical insert loses", async () => {
     const db = new FakeD1();
     db.canonicalRaceWinnerId = "memory-race-winner";

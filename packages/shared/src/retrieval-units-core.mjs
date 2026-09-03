@@ -1,3 +1,5 @@
+import { isAiConsensusCertified } from "./memory-contract-judge.mjs";
+
 export const RETRIEVAL_UNIT_EXTRACTOR = "deterministic-retrieval-units-v1";
 export const RETRIEVAL_UNIT_EXTRACTOR_V4 = "deterministic-retrieval-units-v4";
 export const RETRIEVAL_SEGMENT_MAX_RECORDS = 32;
@@ -569,26 +571,77 @@ export function buildRetrievalUnitsV4(record) {
 
 export function buildVerifiedLearningRetrievalUnits(record, now = Date.now()) {
   if (record?.capture_origin !== "observed" || record?.verification_state !== "verified") return [];
+  if (record?.verified_at === null || record?.verified_at === undefined || record?.verified_at === "" || !Number.isFinite(Number(record.verified_at))) return [];
   if (Number.isFinite(record.valid_until) && record.valid_until <= now) return [];
   let learning;
   try { learning = JSON.parse(record.learning_json ?? "null"); } catch { return []; }
-  if (!learning || typeof learning !== "object") return [];
-  const conclusion = collapseWhitespace(learning.conclusion);
-  const rationale = collapseWhitespace(learning.rationale);
+  if (!learning || typeof learning !== "object" || learning.schema_version !== 2) return [];
+  const judgeConsensus = record.judge_consensus && typeof record.judge_consensus === "object"
+    ? record.judge_consensus
+    : (() => { try { return JSON.parse(record.judge_consensus_json ?? "null"); } catch { return null; } })();
+  if (!isAiConsensusCertified({
+    learning,
+    ai_certification: record.ai_certification,
+    judge_consensus: judgeConsensus,
+    verifier_version: record.verifier_version
+  })) return [];
+  const lessonType = collapseWhitespace(learning.lesson_type);
+  const conclusion = collapseWhitespace(
+    lessonType === "decision"
+      ? learning.selected_value ?? learning.decision
+      : lessonType === "success"
+        ? learning.procedure
+        : lessonType === "failure"
+          ? learning.correction
+          : ""
+  );
+  const rationale = collapseWhitespace(
+    lessonType === "decision"
+      ? learning.rationale
+      : lessonType === "success"
+        ? learning.why_it_worked
+        : lessonType === "failure"
+          ? learning.root_cause
+          : ""
+  );
   const trigger = collapseWhitespace(learning.trigger);
-  const reuseRule = collapseWhitespace(learning.reuse_rule);
-  const outcome = collapseWhitespace(learning.outcome ?? "decision recorded");
-  if (!conclusion || !rationale || !trigger || !reuseRule) return [];
+  const reuseRule = collapseWhitespace(
+    lessonType === "success"
+      ? learning.reuse_when
+      : lessonType === "failure"
+        ? learning.avoidance_rule
+        : learning.reuse_when ?? trigger
+  );
+  const outcome = collapseWhitespace(
+    lessonType === "success"
+      ? learning.observed_outcome
+      : lessonType === "failure"
+        ? learning.verified_outcome
+        : learning.selected_value ?? learning.decision
+  );
   const applicability = learning.applicability && typeof learning.applicability === "object" ? learning.applicability : {};
   const scope = [
     ...(Array.isArray(applicability.target_files) ? applicability.target_files : []),
     ...(Array.isArray(applicability.components) ? applicability.components : [])
   ].map(collapseWhitespace).filter(Boolean);
+  const evidenceSelectors = Array.isArray(learning.evidence_selectors) ? learning.evidence_selectors : [];
+  const contractComplete = lessonType === "success"
+    ? Boolean(conclusion && rationale && outcome && reuseRule)
+    : lessonType === "decision"
+      ? Boolean(conclusion && rationale && collapseWhitespace(learning.question) && scope.length > 0)
+      : lessonType === "failure"
+        ? Boolean(
+            collapseWhitespace(learning.symptom) &&
+            collapseWhitespace(learning.failed_approach) &&
+            conclusion && rationale && outcome && reuseRule
+          )
+        : false;
+  if (!trigger || !contractComplete || evidenceSelectors.length === 0) return [];
   const specs = [
-    ["atomic", conclusion, { channel: "atomic", lesson_type: learning.lesson_type, kind: learning.kind }],
+    ["atomic", conclusion, { channel: "atomic", lesson_type: lessonType, kind: learning.kind, schema_version: 2 }],
     ["profile", `Trigger: ${trigger}. Reuse or avoid: ${reuseRule}. Applies to: ${scope.join(", ") || "project scope"}.`, { channel: "profile", scope }],
     ["ledger", `Verified outcome: ${outcome}.`, { channel: "ledger", verification_state: "verified" }],
-    ["timeline", `Observed and verified at ${new Date(record.verified_at ?? record.updated_at).toISOString()}.`, { channel: "timeline" }],
+    ["timeline", `Observed and verified at ${new Date(Number(record.verified_at)).toISOString()}.`, { channel: "timeline" }],
     ["segment", `${conclusion} Reason: ${rationale} Reuse or avoidance: ${reuseRule} Outcome: ${outcome}.`, { channel: "segment" }]
   ];
   return specs.map(([unitType, rawText, metadata], index) => {
@@ -601,7 +654,7 @@ export function buildVerifiedLearningRetrievalUnits(record, now = Date.now()) {
       unit_type: unitType,
       speaker: null,
       text,
-      event_at: unitType === "timeline" ? record.verified_at ?? record.updated_at : retrievalUnitEventAt(record),
+      event_at: unitType === "timeline" ? Number(record.verified_at) : retrievalUnitEventAt(record),
       valid_from: record.valid_from ?? null,
       valid_until: record.valid_until ?? null,
       source_ref_json: JSON.stringify(sourceReference(record)),

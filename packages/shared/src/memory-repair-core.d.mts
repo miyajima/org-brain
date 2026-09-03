@@ -1,22 +1,20 @@
 export type RuntimeRepairAction = {
-  type: "update" | "derive" | "suppress";
+  type: "certification_pending" | "quarantine" | "excluded";
+  disposition: "certification_pending" | "quarantine" | "excluded";
   memory_id: string;
   tenant_id: string;
   reason_code: string;
+  reason_codes: string[];
   project_id?: string | null;
-  business_category_id?: string;
-  work_type?: string;
-  kind?: string;
-  content?: string;
-  summary?: string | null;
-  external_key?: string;
-  canonical_key?: string;
-  candidate_hash?: string;
-  root_memory_id?: string;
-  derived_from?: string;
+  proposed_business_category_id: string;
+  proposed_work_type: string;
+  proposed_owner_principal: string | null;
+  canonical_key: string | null;
+  learning_event_hash: string | null;
+  candidate_hash: string;
+  dedupe_winner?: true;
   winner_memory_id?: string;
-  created_at?: number;
-  [key: string]: unknown;
+  created_at: number;
 };
 
 export type RuntimeMemoryRepairPlan = {
@@ -32,6 +30,9 @@ export type RuntimeMemoryRepairPlan = {
   actions: RuntimeRepairAction[];
   credential_rotation_required: Array<{ memory_id: string; reason_code: "rotation_required" }>;
   stats: {
+    certification_pending_count: number;
+    quarantine_count: number;
+    excluded_count: number;
     derive_count: number;
     update_count: number;
     suppress_count: number;

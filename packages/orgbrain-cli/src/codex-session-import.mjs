@@ -35,7 +35,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_SESSIONS_ROOT = path.join(os.homedir(), ".codex", "sessions");
 const DEFAULT_MAX_TURN_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_LINE_BYTES = 2 * 1024 * 1024;
-const INTERESTING_ROW = /"(?:session_meta|turn_context|user_message|agent_message|mcp_tool_call_end|custom_tool_call|function_call|custom_tool_call_output|function_call_output)"/u;
+const INTERESTING_ROW = /"(?:session_meta|turn_context|response_item|user_message|agent_message|mcp_tool_call_end|custom_tool_call|function_call|custom_tool_call_output|function_call_output)"/u;
 const REASONING_ROW = /"(?:agent_reasoning|reasoning)"/u;
 
 function hash(value) {
@@ -205,8 +205,18 @@ function rowPayload(row) {
 
 function finalAnswer(row) {
   const payload = rowPayload(row);
-  if (payload?.type !== "agent_message" || payload?.phase !== "final_answer") return null;
-  const text = typeof payload.message === "string" ? payload.message.trim() : "";
+  const isLegacyAgentMessage = payload?.type === "agent_message";
+  const isAssistantMessage = payload?.type === "message" && payload?.role === "assistant";
+  if ((!isLegacyAgentMessage && !isAssistantMessage) || payload?.phase !== "final_answer") return null;
+  const text = isLegacyAgentMessage
+    ? typeof payload.message === "string" ? payload.message.trim() : ""
+    : Array.isArray(payload.content)
+      ? payload.content
+          .filter((item) => item?.type === "output_text" && typeof item.text === "string")
+          .map((item) => item.text.trim())
+          .filter(Boolean)
+          .join("\n")
+      : "";
   const occurredAt = Date.parse(row?.timestamp);
   return text && Number.isFinite(occurredAt) ? { text, occurredAt } : null;
 }
@@ -217,13 +227,19 @@ function sessionMeta(row) {
   const id = String(row.payload.id ?? "").trim();
   const cwd = String(row.payload.cwd ?? "").trim();
   const threadSource = String(row.payload.thread_source ?? "").trim();
-  return id && cwd && Number.isFinite(startedAt) ? { id, cwd, threadSource, startedAt } : null;
+  const modelProvider = String(row.payload.model_provider ?? "").trim() || null;
+  return id && cwd && Number.isFinite(startedAt) ? { id, cwd, threadSource, modelProvider, startedAt } : null;
 }
 
 function turnIdentity(rows, fallbackIndex) {
-  const context = rows.find((row) => rowPayload(row)?.type === "turn_context");
+  const context = rows.find((row) => row?.type === "turn_context" || rowPayload(row)?.type === "turn_context");
   const turnId = String(rowPayload(context)?.turn_id ?? `legacy-${fallbackIndex}`).trim();
   return turnId || `legacy-${fallbackIndex}`;
+}
+
+function turnModel(rows) {
+  const context = rows.find((row) => row?.type === "turn_context" || rowPayload(row)?.type === "turn_context");
+  return String(rowPayload(context)?.model ?? "").trim() || null;
 }
 
 function hasFormalObserveEvent(rows) {
@@ -348,6 +364,7 @@ async function routeTurn({ meta, rows, index, context }) {
   const excluded = [];
   const active = [];
   const quarantine = [];
+  let extraction = null;
 
   if (hasObserve) {
     const observed = await prepareObservedLearningRecords({
@@ -366,9 +383,15 @@ async function routeTurn({ meta, rows, index, context }) {
       const normalized = captureItemPayload(normalizeObservedRecord(record, occurredAt, record.externalKey));
       const semanticHash = semanticCandidateHash(normalized);
       const externalKey = `${baseExternalKey}:${semanticHash}`;
-      active.push({ ...normalized, external_key: externalKey });
+      quarantine.push(rewriteReviewCandidate({
+        item: { ...normalized, external_key: externalKey },
+        observation: normalized.learning,
+        capture_intent: "review",
+        verification: normalized.verification,
+        evidence: normalized.evidence ?? []
+      }, externalKey, occurredAt, ["historical_observation_review_only"]));
     }
-    for (const candidate of (observed.reviewCandidates ?? []).slice(0, Math.max(0, 3 - active.length))) {
+    for (const candidate of (observed.reviewCandidates ?? []).slice(0, Math.max(0, 3 - quarantine.length))) {
       const normalized = rewriteReviewCandidate(candidate, candidate.external_key, occurredAt);
       const semanticHash = semanticCandidateHash(normalized);
       quarantine.push({ ...normalized, external_key: `${baseExternalKey}:${semanticHash}` });
@@ -378,7 +401,7 @@ async function routeTurn({ meta, rows, index, context }) {
         ? observed.report.review_reason_codes
         : ["observe_not_accepted"]));
     }
-  } else if (final) {
+  } else {
     const fallback = await prepareMemoryRecordsV2({
       sourceName: "codex",
       externalKey: `${baseExternalKey}:fallback`,
@@ -388,11 +411,21 @@ async function routeTurn({ meta, rows, index, context }) {
       projectIdExplicit: true,
       businessCategoryId: context.workspace.businessCategoryId,
       workType: context.workspace.workType,
-      assistantText: final.text,
+      assistantText: final?.text ?? "",
       eventType: "HistoricalImport",
-      metadata: { sessionHash, turnHash }
-    }, context.workspace, context.tenant_id);
-    for (const record of fallback.records.slice(0, 3)) {
+      metadata: {
+        sessionHash,
+        turnHash,
+        modelProvider: meta.modelProvider,
+        model: turnModel(rows)
+      }
+    }, context.workspace, context.tenant_id, { rows, historical: true });
+    for (const candidate of fallback.reviewCandidates.slice(0, 3)) {
+      const normalized = rewriteReviewCandidate(candidate, candidate.external_key, occurredAt, ["historical_episode_review_only"]);
+      const semanticHash = semanticCandidateHash(normalized);
+      quarantine.push({ ...normalized, external_key: `${baseExternalKey}:${semanticHash}` });
+    }
+    for (const record of fallback.records.slice(0, Math.max(0, 3 - quarantine.length))) {
       const item = captureItemPayload({
         ...record,
         captureRoute: "initial_import",
@@ -408,11 +441,22 @@ async function routeTurn({ meta, rows, index, context }) {
         evidence: item.evidence ?? []
       }, externalKey, occurredAt, ["historical_final_answer_unverified"]));
     }
-    if (quarantine.length === 0) excluded.push(...(fallback.report.excluded_reasons.length
-      ? fallback.report.excluded_reasons
-      : ["non_durable_turn"]));
-  } else {
-    excluded.push("final_answer_missing");
+    if (quarantine.length === 0) {
+      excluded.push(...(fallback.report.excluded_reasons.length
+        ? fallback.report.excluded_reasons
+        : [final ? "non_durable_turn" : "final_answer_missing"]));
+    }
+    if (fallback.report.no_candidate) excluded.push("no_candidate");
+    if (!final) excluded.push("final_answer_missing");
+    extraction = {
+      would_call_llm: fallback.report.would_call_llm,
+      packet_hash: fallback.report.packet_hash,
+      reserved_tokens: fallback.report.reserved_tokens,
+      provider: fallback.report.provider,
+      model: fallback.report.model,
+      hard_excluded_count: fallback.report.hard_excluded_count,
+      no_candidate: fallback.report.no_candidate
+    };
   }
 
   const batch = {
@@ -422,6 +466,15 @@ async function routeTurn({ meta, rows, index, context }) {
     task_key: `codex:${sessionHash}:${turnHash}`,
     active,
     quarantine,
+    extraction: extraction ?? {
+      would_call_llm: false,
+      packet_hash: null,
+      reserved_tokens: 0,
+      provider: meta.modelProvider,
+      model: turnModel(rows),
+      hard_excluded_count: 0,
+      no_candidate: active.length === 0 && quarantine.length === 0
+    },
     excluded_reason_codes: [...new Set(excluded)].sort()
   };
   Object.defineProperty(batch, "review", { value: quarantine, enumerable: false, writable: false });
@@ -491,11 +544,12 @@ async function scanSession(file, context, options, workspaceCache) {
       continue;
     }
     const payload = rowPayload(row);
-    if (payload?.type === "turn_context") await flush();
+    const isTurnContext = row?.type === "turn_context" || payload?.type === "turn_context";
+    if (isTurnContext) await flush();
     currentTurnBytes += lineBytes;
     if (currentTurnBytes > (options.maxTurnBytes ?? DEFAULT_MAX_TURN_BYTES)) {
       currentTurnOversized = true;
-      if (payload?.type === "turn_context") currentRows.push(row);
+      if (isTurnContext) currentRows.push(row);
       continue;
     }
     currentRows.push(row);
@@ -528,6 +582,7 @@ function summarize(planCore) {
   const activeItems = batches.flatMap((batch) => batch.active);
   const reviews = batches.flatMap((batch) => batch.quarantine ?? batch.review ?? []);
   const reasons = batches.flatMap((batch) => batch.excluded_reason_codes);
+  const extraction = batches.map((batch) => batch.extraction ?? {});
   const countBy = (values) => Object.fromEntries([...new Set(values)].sort().map((value) => [value, values.filter((item) => item === value).length]));
   return {
     sessions_scanned: planCore.sources.length,
@@ -535,8 +590,15 @@ function summarize(planCore) {
     active_count: activeItems.length,
     review_count: reviews.length,
     quarantine_count: reviews.length,
+    no_candidate_count: extraction.filter((item) => item.no_candidate === true).length,
+    hard_exclusion_count: extraction.reduce((sum, item) => sum + Number(item.hard_excluded_count ?? 0), 0),
+    llm_planned_count: extraction.filter((item) => item.would_call_llm === true).length,
+    maximum_reserved_tokens: extraction.reduce((sum, item) => sum + Number(item.reserved_tokens ?? 0), 0),
     excluded_turn_count: batches.filter((batch) => batch.active.length === 0 && (batch.quarantine ?? batch.review ?? []).length === 0).length,
-    lesson_type_counts: countBy(activeItems.map((item) => item.learning?.lesson_type ?? "unknown")),
+    lesson_type_counts: countBy([
+      ...activeItems.map((item) => item.learning?.lesson_type ?? "unknown"),
+      ...reviews.map((item) => item.observation?.lesson_type ?? item.item?.learning?.lesson_type ?? "unknown")
+    ]),
     excluded_reason_counts: countBy(reasons)
   };
 }
@@ -544,7 +606,9 @@ function summarize(planCore) {
 export async function buildCodexSessionImportPlan(options = {}) {
   const workspaceRoot = normalizeWorkspaceRoot(options.workspaceRoot ?? process.cwd());
   const context = await resolveImportContext(workspaceRoot, options.env ?? process.env);
-  const allFiles = await listJsonlFiles(options.sessionsRoot ?? DEFAULT_SESSIONS_ROOT);
+  const allFiles = Array.isArray(options.sessionFiles)
+    ? [...new Set(options.sessionFiles.map((file) => path.resolve(file)))].sort()
+    : await listJsonlFiles(options.sessionsRoot ?? DEFAULT_SESSIONS_ROOT);
   const files = Number.isInteger(options.limitSessions) && options.limitSessions > 0
     ? allFiles.slice(-options.limitSessions)
     : allFiles;

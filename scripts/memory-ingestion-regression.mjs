@@ -677,7 +677,9 @@ export async function emitIngestionRegressionSessions(corpus, outputDirectory, o
       session_hash: testCase.session_hash,
       split: testCase.split,
       expected_route: testCase.expected_route,
-      expected_storage_route: captureCase ? testCase.expected_route : "not_applicable",
+      expected_storage_route: captureCase
+        ? testCase.expected_route === "active" ? "review" : testCase.expected_route
+        : "not_applicable",
       expected_storage_kind: captureCase && testCase.lesson_type ? (testCase.lesson_type === "failure" ? "pitfall" : testCase.lesson_type === "success" ? "fact" : "decision") : null,
       reason_code: testCase.reason_code || null,
       scenario_id: testCase.scenario_id ?? null,

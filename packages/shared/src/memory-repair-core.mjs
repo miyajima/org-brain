@@ -1,9 +1,10 @@
 import {
   buildProjectCategoryIdentity,
-  extractDurableMemoryDrafts,
   normalizeMemoryPaths,
   screenSensitiveMemory
 } from "./memory-capture-v2-runtime.mjs";
+import { normalizeMemoryContractV2Event } from "./memory-contract-v2-runtime.mjs";
+import { assessMemoryUsefulnessV1 } from "./memory-quality-runtime.mjs";
 
 const VALID_WORK_TYPES = new Set([
   "implementation", "review", "debug", "proposal",
@@ -11,6 +12,8 @@ const VALID_WORK_TYPES = new Set([
 ]);
 const DURABLE_KINDS = new Set(["decision", "constraint", "pitfall", "preference", "fact"]);
 const AUTOMATIC_SOURCES = new Set(["codex", "claude", "cursor", "openclaw", "opencode", "hook"]);
+const GENERIC_PITFALL_PATTERN = /reuse this workaround only for the same project pattern|same project pattern|同じプロジェクト(?:の)?パターン/u;
+const TRANSIENT_COMPLETION_PATTERN = /(?:実装|作業|対応).{0,24}(?:完了|成功)|(?:commit|push|deploy).{0,24}(?:completed|succeeded|成功)/iu;
 
 function collapseWhitespace(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
@@ -96,15 +99,31 @@ export async function hashMemoryCandidateJson(candidate) {
   return sha256(JSON.stringify(candidateSnapshot(candidate)));
 }
 
+async function hashRepairAction(action) {
+  return sha256(JSON.stringify({
+    memory_id: action.memory_id,
+    disposition: action.disposition,
+    project_id: action.project_id,
+    proposed_business_category_id: action.proposed_business_category_id,
+    proposed_work_type: action.proposed_work_type,
+    proposed_owner_principal: action.proposed_owner_principal,
+    canonical_key: action.canonical_key,
+    learning_event_hash: action.learning_event_hash,
+    reason_codes: action.reason_codes,
+    dedupe_winner: action.dedupe_winner === true,
+    winner_memory_id: action.winner_memory_id ?? null
+  }));
+}
+
 export async function planMemoryRepairRows(rows, options = {}) {
   const tenantId = options.tenant_id ?? "default";
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   const workspaceRoot = options.workspace_root ?? null;
   const sensitivePolicy = options.sensitive_policy ?? { mode: "deny", allowed_principals: [] };
   const actions = [];
-  const candidates = [];
   const credentialRotation = [];
   const categories = new Map();
+  const rowsById = new Map(rows.map((row) => [String(row.id), row]));
 
   for (const row of rows) {
     const alreadySuppressed = row.lifecycle_state === "suppressed";
@@ -140,17 +159,40 @@ export async function planMemoryRepairRows(rows, options = {}) {
       source_refs_json: row.source_refs_json ?? null,
       conflicts_json: row.conflicts_json ?? null
     }), sensitivePolicy);
-    const extraction = extractDurableMemoryDrafts({
-      event_id: `repair:${row.id}`,
-      tenant_id: tenantId,
-      project_id: projectId,
-      source: row.source ?? "repair",
-      occurred_at: createdAt,
-      text: normalizedContent
-    }, {
-      workspace_root: workspaceRoot,
-      sensitive_policy: sensitivePolicy,
-      max_candidates: 3
+    const learning = row.learning && typeof row.learning === "object"
+      ? row.learning
+      : (() => {
+        try { return JSON.parse(row.learning_json ?? "null"); } catch { return null; }
+      })();
+    const qualityDimensions = row.quality_dimensions && typeof row.quality_dimensions === "object"
+      ? row.quality_dimensions
+      : (() => {
+        try { return JSON.parse(row.quality_dimensions_json ?? "null"); } catch { return null; }
+      })();
+    const validation = learning
+      ? await normalizeMemoryContractV2Event(learning, {
+        workspaceRoot,
+        sensitivePolicy
+      })
+      : { accepted: false, event: null, event_hash: null, reason_codes: ["learning_v2_missing"] };
+    const usefulness = assessMemoryUsefulnessV1({
+      content: normalizedContent,
+      summary: normalizedSummary,
+      rationale: normalizedRationale,
+      reuse_rule: normalizedReuseRule,
+      learning: validation.event ?? learning,
+      evidence,
+      source_references: sourceReferences,
+      quality_dimensions: qualityDimensions,
+      capture_origin: row.capture_origin,
+      verification_state: row.verification_state,
+      verified_at: row.verified_at,
+      valid_until: row.valid_until ?? row.expires_at,
+      conflicts,
+      ai_certification: row.ai_certification,
+      judge_consensus: row.judge_consensus,
+      reason_codes: validation.reason_codes,
+      now
     });
     const rawExpiry = row.valid_until ?? row.expires_at;
     const expiry = rawExpiry === null || rawExpiry === undefined ? null : Number(rawExpiry);
@@ -160,148 +202,103 @@ export async function planMemoryRepairRows(rows, options = {}) {
       }
       continue;
     }
-    let suppressReason = null;
+    let disposition = null;
+    const reasonCodes = new Set([...validation.reason_codes, ...usefulness.reason_codes, ...usefulness.hard_violations]);
     if (persistedSensitivity.hard_reject) {
-      suppressReason = "credential_detected";
+      disposition = "excluded";
+      reasonCodes.add("credential_detected");
       credentialRotation.push({ memory_id: row.id, reason_code: "rotation_required" });
     } else if (!persistedSensitivity.allowed) {
-      suppressReason = "sensitive_memory_denied";
+      disposition = "excluded";
+      reasonCodes.add("sensitive_memory_denied");
     } else if (Number.isFinite(expiry) && expiry <= now) {
-      suppressReason = "expired";
+      disposition = "excluded";
+      reasonCodes.add("expired");
     } else if (!normalizedContent) {
-      suppressReason = "low_quality";
-    } else if (extraction.drafts.length === 0 && extraction.excluded.some((item) => item.reason === "transient")) {
-      suppressReason = "transient";
+      disposition = "excluded";
+      reasonCodes.add("low_quality");
+    } else if (TRANSIENT_COMPLETION_PATTERN.test(normalizedContent) && !learning) {
+      disposition = "excluded";
+      reasonCodes.add("transient");
+    } else if (row.kind === "pitfall" && GENERIC_PITFALL_PATTERN.test(`${normalizedContent} ${normalizedReuseRule ?? ""}`)) {
+      disposition = "quarantine";
+      reasonCodes.add("generic_pitfall_placeholder");
     } else if (isLikelyRawHook(row, tags)) {
-      suppressReason = extraction.drafts.length > 0 ? "derived_atomic" :
-        "low_quality";
-    } else if (extraction.drafts.length === 0 && !DURABLE_KINDS.has(row.kind)) {
-      suppressReason = "low_quality";
+      disposition = "quarantine";
+      reasonCodes.add("raw_hook_review_required");
+    } else if (usefulness.route === "excluded" || !DURABLE_KINDS.has(row.kind)) {
+      disposition = usefulness.hard_violations.length > 0 ? "excluded" : "quarantine";
+    } else if (validation.accepted && usefulness.route === "active") {
+      disposition = "certification_pending";
+      reasonCodes.add("repair_requires_certified_publish");
+    } else {
+      disposition = "quarantine";
     }
 
     const workType = VALID_WORK_TYPES.has(row.work_type) ? row.work_type : "other";
-    if (!suppressReason) {
-      const kind = DURABLE_KINDS.has(row.kind)
-        ? row.kind
-        : extraction.drafts[0]?.kind ?? "fact";
-      const canonicalText = normalizeCanonical(normalizedContent);
-      const canonicalKey = await sha256(`${tenantId}\0${projectId || "global"}\0${kind}\0${canonicalText}`);
-      const updated = {
-        type: "update",
-        memory_id: row.id,
-        tenant_id: tenantId,
-        project_id: projectId,
-        business_category_id: businessCategoryId,
-        work_type: workType,
-        kind,
-        content: normalizedContent,
-        summary: normalizedSummary,
-        tags,
-        entities,
-        rationale: normalizedRationale,
-        reuse_rule: normalizedReuseRule,
-        evidence,
-        source_references: sourceReferences,
-        conflicts,
-        canonical_key: canonicalKey,
-        valid_until: Number.isFinite(expiry) ? expiry : null,
-        confidence_score: Number.isFinite(row.confidence_score) ? row.confidence_score : 0.5,
-        utility_score: Number.isFinite(row.utility_score) ? row.utility_score : 0.5,
-        created_at: createdAt,
-        reason_code: "normalized"
-      };
-      actions.push(updated);
-      candidates.push(updated);
-    } else {
-      actions.push({
-        type: "suppress",
-        memory_id: row.id,
-        tenant_id: tenantId,
-        reason_code: suppressReason,
-        created_at: createdAt
-      });
-    }
-
-    if (suppressReason === "derived_atomic") {
-      for (const [index, draft] of extraction.drafts.entries()) {
-        const canonicalKey = await sha256(`${tenantId}\0${projectId || "global"}\0${draft.kind}\0${draft.canonical_text}`);
-        const externalKey = `repair:${row.id}:${canonicalKey}`.slice(0, 256);
-        const idHash = await sha256(`${tenantId}\0${externalKey}`);
-        const derived = {
-          type: "derive",
-          memory_id: `mem_repair_${idHash.slice(0, 24)}`,
-          tenant_id: tenantId,
-          project_id: projectId,
-          business_category_id: businessCategoryId,
-          work_type: workType,
-          external_key: externalKey,
-          kind: draft.kind,
-          content: draft.content,
-          summary: draft.summary,
-          tags: [...new Set([...draft.tags, "repair-v2", `derived-from:${row.id}`])],
-          source: "memory-repair",
-          source_references: draft.source_references,
-          valid_from: draft.valid_from,
-          valid_until: draft.valid_until,
-          confidence_score: draft.confidence_score,
-          utility_score: draft.utility_score,
-          rationale: draft.rationale,
-          reuse_rule: draft.reuse_rule,
-          evidence: draft.evidence,
-          canonical_key: canonicalKey,
-          root_memory_id: row.id,
-          derived_from: row.id,
-          visibility: draft.visibility,
-          allowed_principals: draft.allowed_principals,
-          created_at: createdAt + index,
-          reason_code: "atomic_derivation"
-        };
-        derived.candidate_hash = await hashMemoryCandidateJson(derived);
-        actions.push(derived);
-        candidates.push(derived);
-      }
-    }
+    const kind = DURABLE_KINDS.has(row.kind) ? row.kind : "fact";
+    const canonicalText = normalizeCanonical(normalizedContent);
+    const canonicalKey = canonicalText
+      ? await sha256(`${tenantId}\0${projectId || "global"}\0${kind}\0${canonicalText}`)
+      : null;
+    const action = {
+      type: disposition,
+      disposition,
+      memory_id: row.id,
+      tenant_id: tenantId,
+      project_id: projectId,
+      proposed_business_category_id: businessCategoryId,
+      proposed_work_type: workType,
+      proposed_owner_principal: row.owner_principal ?? row.created_by_principal ?? row.actor_id ?? null,
+      canonical_key: canonicalKey,
+      learning_event_hash: validation.event_hash,
+      reason_codes: [...reasonCodes].sort(),
+      reason_code: [...reasonCodes].sort()[0] ?? `${disposition}_required`,
+      created_at: createdAt
+    };
+    action.candidate_hash = await hashRepairAction(action);
+    actions.push(action);
   }
 
   const groups = new Map();
-  for (const candidate of candidates) {
-    const group = groups.get(candidate.canonical_key) ?? [];
-    group.push(candidate);
-    groups.set(candidate.canonical_key, group);
+  for (const action of actions) {
+    if (!action.canonical_key) continue;
+    const group = groups.get(action.canonical_key) ?? [];
+    group.push(action);
+    groups.set(action.canonical_key, group);
   }
   for (const group of groups.values()) {
     if (group.length < 2) continue;
     const [winner, ...duplicates] = [...group].sort((left, right) =>
-      qualityScore(right) - qualityScore(left) || String(left.memory_id).localeCompare(String(right.memory_id))
+      qualityScore(rowsById.get(String(right.memory_id)) ?? {}) - qualityScore(rowsById.get(String(left.memory_id)) ?? {}) ||
+      String(left.memory_id).localeCompare(String(right.memory_id))
     );
     winner.dedupe_winner = true;
     for (const duplicate of duplicates) {
-      duplicate.suppressed_by_dedupe = true;
-      actions.push({
-        type: "suppress",
-        memory_id: duplicate.memory_id,
-        tenant_id: tenantId,
-        reason_code: "duplicate_canonical_key",
-        canonical_key: duplicate.canonical_key,
-        winner_memory_id: winner.memory_id,
-        created_at: duplicate.created_at
-      });
+      duplicate.type = "excluded";
+      duplicate.disposition = "excluded";
+      duplicate.reason_codes = [...new Set([...duplicate.reason_codes, "duplicate_canonical_key"])].sort();
+      duplicate.reason_code = "duplicate_canonical_key";
+      duplicate.winner_memory_id = winner.memory_id;
     }
   }
+  await Promise.all(actions.map(async (action) => {
+    action.candidate_hash = await hashRepairAction(action);
+  }));
 
-  const effectiveActions = actions.filter((action) =>
-    !(action.type === "update" || action.type === "derive") || !action.suppressed_by_dedupe
-  );
   return {
     tenant_id: tenantId,
     scanned_count: rows.length,
     categories: [...categories.values()],
-    actions: effectiveActions,
+    actions,
     credential_rotation_required: credentialRotation,
     stats: {
-      derive_count: effectiveActions.filter((action) => action.type === "derive").length,
-      update_count: effectiveActions.filter((action) => action.type === "update").length,
-      suppress_count: effectiveActions.filter((action) => action.type === "suppress").length,
+      certification_pending_count: actions.filter((action) => action.type === "certification_pending").length,
+      quarantine_count: actions.filter((action) => action.type === "quarantine").length,
+      excluded_count: actions.filter((action) => action.type === "excluded").length,
+      derive_count: 0,
+      update_count: 0,
+      suppress_count: 0,
       credential_count: credentialRotation.length,
       duplicate_group_count: [...groups.values()].filter((group) => group.length > 1).length
     }

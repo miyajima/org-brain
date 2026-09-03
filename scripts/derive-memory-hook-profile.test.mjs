@@ -65,7 +65,7 @@ describe("data-derived memory hook profile", () => {
     }
   });
 
-  it("rejects every negative gold example for its declared reason", async () => {
+  it("routes every negative gold example to hard exclusion or review for its declared reason", async () => {
     const dataset = await loadGoldDataset();
     for (const example of dataset.examples.filter((item) => !item.expected.accept)) {
       const result = extractDurableMemoryDrafts(example.input, {
@@ -73,7 +73,11 @@ describe("data-derived memory hook profile", () => {
         max_candidates: MEMORY_CAPTURE_HOOK_PROFILE.max_candidates
       });
       expect(result.drafts, example.id).toEqual([]);
-      expect(result.excluded.map((item) => item.reason), example.id).toContain(example.expected.reason);
+      const reasons = [
+        ...result.excluded.map((item) => item.reason),
+        ...result.review_drafts.flatMap((item) => item.review_reason_codes ?? [])
+      ];
+      expect(reasons, example.id).toContain(example.expected.reason);
     }
   });
 

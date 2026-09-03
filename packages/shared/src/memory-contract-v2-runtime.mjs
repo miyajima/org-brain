@@ -2,7 +2,7 @@ import { normalizeMemoryPaths, screenSensitiveMemory } from "./memory-capture-v2
 
 export const MEMORY_CONTRACT_V2_SCHEMA_VERSION = 2;
 export const MEMORY_CONTRACT_V2_PROMPT_ID = "orgbrain-memory-contract-v2";
-export const MEMORY_CONTRACT_V2_VERIFIER_VERSION = "verifier-v2";
+export const MEMORY_CONTRACT_V2_VERIFIER_VERSION = "verifier-v3";
 export const MEMORY_CONTRACT_V2_MAX_EVENTS = 3;
 export const MEMORY_CONTRACT_V2_LESSON_TYPES = ["success", "decision", "failure"];
 export const MEMORY_CONTRACT_V2_INTENTS = ["verify", "review"];
@@ -244,7 +244,6 @@ export async function normalizeMemoryContractV2Event(input, options = {}) {
   const evidenceSelectors = normalizeEvidence(input.evidence_selectors, options.workspaceRoot, reasons, allowMissing);
   if (evidenceSelectors.length === 0 && !allowMissing) reasons.push("evidence_selector_required");
   const gaps = normalizedStrings(input.gaps, 500, 16, reasons, "gaps", allowMissing);
-  if (gaps.length > 0) reasons.push("gaps_present");
 
   const event = {
     record_type: "learning_observation",
@@ -264,8 +263,13 @@ export async function normalizeMemoryContractV2Event(input, options = {}) {
     event.reuse_when = requiredText(input.reuse_when, "reuse_when", reasons, allowMissing);
   }
   if (lessonType === "decision") {
+    const decisionTypeSupplied = input.decision_type !== undefined && input.decision_type !== null && input.decision_type !== "";
     event.decision_type = MEMORY_CONTRACT_V2_DECISION_TYPES.includes(input.decision_type) ? input.decision_type : null;
-    if (!event.decision_type) reasons.push("invalid_decision_type");
+    if (decisionTypeSupplied && !event.decision_type) reasons.push("invalid_decision_type");
+    if (!decisionTypeSupplied && !allowMissing) reasons.push("invalid_decision_type");
+    if (!event.decision_type && allowMissing && !gaps.includes("decision_type_missing")) {
+      gaps.push("decision_type_missing");
+    }
     event.decision_key = normalizeDecisionKey(input.decision_key, reasons, allowMissing);
     event.question = requiredText(input.question, "question", reasons, allowMissing);
     event.selected_value = optionalText(input.selected_value, "selected_value", reasons);
@@ -281,6 +285,8 @@ export async function normalizeMemoryContractV2Event(input, options = {}) {
       if (event.alternatives.length === 0) reasons.push("alternatives_required_for_decision_type");
     }
   }
+
+  if (gaps.length > 0) reasons.push("gaps_present");
   if (lessonType === "failure") {
     event.symptom = requiredText(input.symptom, "symptom", reasons, allowMissing);
     event.failed_approach = requiredText(input.failed_approach, "failed_approach", reasons, allowMissing);

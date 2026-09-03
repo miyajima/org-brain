@@ -11,18 +11,19 @@ test("bilingual semantic v4 sessions preserve meaning, retrieve reasons, and rep
     const result = await runMemoryIngestionStorageRegression({ outputDir: root });
     assert.equal(result.report.status, "passed");
     assert.deepEqual(result.report.language_counts, { en: 519, ja: 518 });
-    assert.deepEqual(result.report.capture_lane_counts, { active: 225, review: 12, excluded: 200 });
-    assert.equal(result.report.stored_language_counts.en + result.report.stored_language_counts.ja, 225);
+    assert.deepEqual(result.report.capture_lane_counts, { active: 0, review: 237, excluded: 200 });
+    assert.equal(result.report.stored_language_counts.en + result.report.stored_language_counts.ja, 237);
     assert.equal(result.report.stored_decision_language_counts.en > 0, true);
     assert.equal(result.report.stored_decision_language_counts.ja > 0, true);
-    assert.equal(result.report.storage.decision_memories, 75);
+    assert.equal(result.report.storage.decision_memories, 0);
     assert.equal(result.report.storage.decision_fields_complete, true);
     assert.equal(result.report.semantic.storage.cases, 225);
     assert.equal(result.report.semantic.storage.error_count, 0);
     assert.equal(result.report.semantic.retrieval.error_count, 0);
     assert.equal(result.report.semantic.retrieval.checks > 0, true);
     assert.deepEqual(result.report.replay, {
-      first_created: 225,
+      first_created: 0,
+      first_quarantined: 237,
       second_created: 0,
       new_memory_count: 0,
       new_version_count: 0,

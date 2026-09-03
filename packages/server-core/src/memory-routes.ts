@@ -85,6 +85,34 @@ routes.get("/v1/memory-quality/runs/:runId", async (c) => {
   }));
 });
 
+routes.get("/v1/memory-quality/audit", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const principal = ports.getApiPrincipal(c);
+  const projectId = c.req.query("project_id")?.trim() || null;
+  const scope = c.req.query("scope") === "tenant" ? "tenant" : "project";
+  if (scope === "tenant") {
+    if (!await ports.isTenantAdmin(c, tenantId)) {
+      await ports.assertPermission(c.env, { tenantId, principal, permission: "memory:audit" });
+    }
+  } else {
+    if (!projectId) throw new HttpError(400, "project_id_required", "project_id is required for project audit");
+    await ports.assertPermission(c.env, { tenantId, projectId, principal, permission: "read" });
+  }
+  return ports.jsonOk(c, await ports.getMemoryQualityAudit(c.env, tenantId, {
+    scope,
+    projectId,
+    principal
+  }));
+});
+
+routes.get("/v1/admin/memory-quality/audit/memories/:memoryId", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  if (!await ports.isTenantAdmin(c, tenantId)) {
+    throw new HttpError(403, "tenant_admin_required", "Tenant administrator access is required");
+  }
+  return ports.jsonOk(c, await ports.getMemoryQualityAuditDetail(c.env, tenantId, c.req.param("memoryId")));
+});
+
 routes.get("/v1/memories", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const scope = c.req.query("scope") === "mine" ? "mine" : "org";

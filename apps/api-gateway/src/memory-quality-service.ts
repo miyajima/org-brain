@@ -1,5 +1,15 @@
-import { HttpError } from "@org-brain/shared";
+import {
+  HttpError,
+  MEMORY_QUALITY_AUDIT_CONTRACT,
+  evaluateMemoryQualityAuditItemV1,
+  evaluateMemoryQualityAuditV1
+} from "@org-brain/shared";
 import type { Env } from "./types";
+import {
+  evaluateResourceRead,
+  loadAccessPolicies,
+  loadPrincipalGroupIds
+} from "./access-policy-service";
 
 type QualityRunRow = {
   id: string;
@@ -57,6 +67,123 @@ type QualityCaseRow = {
 const runColumns = `id, tenant_id, project_id, corpus_id, prompt_contract_id, verifier_version,
   judge_profile_id, manifest_hash, status, input_source, ground_truth_basis, capture_routes_json,
   privacy_json, hard_violation_count, started_at, completed_at`;
+
+const auditMemoryColumns = `id, tenant_id, project_id, business_category_id, work_type, source,
+  external_key, content, summary, tags_json, kind, lifecycle_state, created_at, valid_from,
+  valid_until, expires_at, confidence_score, utility_score, rationale, reuse_rule,
+  evidence_json, source_refs_json, conflicts_json, content_hash, canonical_key, capture_origin,
+  capture_route, verification_state, verified_at, learning_json, quality_dimensions_json,
+  owner_principal, created_by_principal, actor_id, permissions_json, scope_type, scope_key, deleted_at`;
+
+type AuditOptions = {
+  scope: "project" | "tenant";
+  projectId?: string | null;
+  principal: string;
+  now?: number;
+};
+
+function parseArray(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readableMemory(
+  row: Record<string, unknown>,
+  principal: string,
+  tenantId: string,
+  projectId: string | null,
+  groupIds: Set<string>
+): boolean {
+  if (row.owner_principal === principal) return true;
+  if ((row.scope_type === "user" || row.scope_type === "agent") && row.scope_key === principal) return true;
+  if (row.scope_type === "project" && row.project_id === projectId) return true;
+  const grants = parseArray(row.permissions_json);
+  if (grants.length === 0) return true;
+  return grants.some((value) => {
+    const grant = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    if (!parseArray(grant.permissions).includes("read")) return false;
+    if (grant.principal_type === "principal") return grant.principal_id === principal;
+    if (grant.principal_type === "group") return typeof grant.principal_id === "string" && groupIds.has(grant.principal_id);
+    return grant.principal_type === "tenant" && grant.principal_id === tenantId;
+  });
+}
+
+function readableDecision(row: Record<string, unknown>, principal: string): boolean {
+  if (row.visibility !== "restricted") return true;
+  return parseArray(row.allowed_principals_json).includes(principal);
+}
+
+export async function getMemoryQualityAudit(env: Env, tenantId: string, options: AuditOptions) {
+  const projectId = options.projectId?.trim() || null;
+  if (options.scope === "project" && !projectId) {
+    throw new HttpError(400, "project_id_required", "project_id is required for a project memory quality audit");
+  }
+  const projectClause = options.scope === "project" ? " AND project_id = ?" : "";
+  const bindings = options.scope === "project" ? [tenantId, projectId] : [tenantId];
+  const [memoryRows, decisionRows] = await Promise.all([
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT ${auditMemoryColumns} FROM memories WHERE tenant_id = ?${projectClause} ORDER BY id`
+    ).bind(...bindings).all<Record<string, unknown>>(),
+    env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, project_id, business_category_id, work_type, status, rationale, source_refs_json,
+              confirmation_state, confirmed_at, valid_until, visibility, allowed_principals_json
+       FROM decision_memories WHERE tenant_id = ?${projectClause} ORDER BY id`
+    ).bind(...bindings).all<Record<string, unknown>>()
+  ]);
+  let readableMemories = memoryRows.results;
+  let readableDecisions = decisionRows.results;
+  if (options.scope === "project") {
+    const [groupIds, memoryPolicies, decisionPolicies] = await Promise.all([
+      loadPrincipalGroupIds(env, tenantId, options.principal),
+      loadAccessPolicies(env, tenantId, "memory", memoryRows.results.map((row) => String(row.id))),
+      loadAccessPolicies(env, tenantId, "decision_memory", decisionRows.results.map((row) => String(row.id)))
+    ]);
+    const accessOptions = { tenantId, principal: options.principal, projectId };
+    readableMemories = memoryRows.results.filter((row) => {
+      const policy = memoryPolicies.get(String(row.id));
+      return policy
+        ? evaluateResourceRead(policy, accessOptions, groupIds)
+        : readableMemory(row, options.principal, tenantId, projectId, groupIds);
+    });
+    readableDecisions = decisionRows.results.filter((row) => {
+      const policy = decisionPolicies.get(String(row.id));
+      return policy ? evaluateResourceRead(policy, accessOptions, groupIds) : readableDecision(row, options.principal);
+    });
+  }
+  return evaluateMemoryQualityAuditV1({
+    tenant_id: tenantId,
+    project_id: projectId,
+    scope: options.scope,
+    memory_rows: readableMemories,
+    decision_rows: readableDecisions,
+    now: options.now
+  });
+}
+
+export async function getMemoryQualityAuditDetail(
+  env: Env,
+  tenantId: string,
+  memoryId: string,
+  options: { now?: number } = {}
+) {
+  const row = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT ${auditMemoryColumns} FROM memories WHERE tenant_id = ? AND id = ? LIMIT 1`
+  ).bind(tenantId, memoryId).first<Record<string, unknown>>();
+  if (!row) throw new HttpError(404, "memory_not_found", "Memory was not found");
+  const item = await evaluateMemoryQualityAuditItemV1(row, { now: options.now });
+  return {
+    contract: MEMORY_QUALITY_AUDIT_CONTRACT,
+    generated_at: options.now ?? Date.now(),
+    read_only: true,
+    ...item
+  };
+}
 
 function parseJson<T>(raw: string, fallback: T): T {
   try { return JSON.parse(raw) as T; } catch { return fallback; }

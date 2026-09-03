@@ -218,6 +218,8 @@ export interface MemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEn
   upsertOwnPrincipalOwnerMapping: PortFunction;
   upsertPrincipalOwnerMapping: PortFunction;
   getMemoryQualityRun: PortFunction;
+  getMemoryQualityAudit: PortFunction;
+  getMemoryQualityAuditDetail: PortFunction;
   listMemoryQualityRuns: PortFunction;
   getMemoryImpactExecution: PortFunction;
   getMemoryImpactSummary: PortFunction;

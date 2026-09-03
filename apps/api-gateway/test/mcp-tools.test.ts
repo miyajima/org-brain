@@ -26,6 +26,7 @@ describe("OrgBrainMCP tool surface", () => {
     });
 
     expect(registeredTools).toContain("orgbrain_context_enrich");
+    expect(registeredTools).toContain("orgbrain_memory_quality_audit");
     expect(registeredTools).toContain("orgbrain_memories_extract");
     expect(registeredTools).toContain("orgbrain_memories_capture_rationale");
     expect(registeredTools).toContain("orgbrain_decision_memories_create");

@@ -335,7 +335,7 @@ function baseRows(): MemoryRecord[] {
 }
 
 describe("memory maintenance", () => {
-  it("uses the shared deterministic repair planner", async () => {
+  it("uses the shared strict repair planner without deriving active memories", async () => {
     const plan = await planTenantMemoryRepair([{
       id: "repair-source",
       project_id: "proj-a",
@@ -348,10 +348,14 @@ describe("memory maintenance", () => {
       now: Date.parse("2026-03-30T00:00:00.000Z")
     });
 
-    expect(plan.actions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "derive", candidate_hash: expect.stringMatching(/^[a-f0-9]{64}$/u) }),
-      expect.objectContaining({ type: "suppress", memory_id: "repair-source", reason_code: "derived_atomic" })
-    ]));
+    expect(plan.actions).toEqual([
+      expect.objectContaining({
+        type: "quarantine",
+        memory_id: "repair-source",
+        candidate_hash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        reason_codes: expect.arrayContaining(["learning_v2_missing", "raw_hook_review_required"])
+      })
+    ]);
   });
 
   it("uses the shared project-only decision classification planner", async () => {

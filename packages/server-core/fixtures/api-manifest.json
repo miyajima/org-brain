@@ -1,7 +1,7 @@
 {
   "contract_version": "orgbrain-api-manifest/v1",
-  "oss_ref": "4746fe70406656b4ec85fec485033dc4be5d4303",
-  "generated_at": "2026-08-22T05:53:03.000Z",
+  "oss_ref": "95effa659c853540ed675e259bb321869844bc9e",
+  "generated_at": "2026-08-29T02:43:52.000Z",
   "routes": [
     {
       "method": "GET",
@@ -132,6 +132,17 @@
       "permission": "share",
       "request_schema": "PutV1AccessPoliciesResourceTypeResourceIdRequest",
       "response_schema": "PutV1AccessPoliciesResourceTypeResourceIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/memory-quality/audit/memories/:memoryId",
+      "permission": "read",
+      "request_schema": "GetV1AdminMemoryQualityAuditMemoriesMemoryIdRequest",
+      "response_schema": "GetV1AdminMemoryQualityAuditMemoriesMemoryIdResponse",
       "success_statuses": [
         200
       ],
@@ -908,6 +919,17 @@
       "idempotent": true
     },
     {
+      "method": "GET",
+      "path": "/v1/groups/:groupId/members/:principal/impact",
+      "permission": "admin",
+      "request_schema": "GetV1GroupsGroupIdMembersPrincipalImpactRequest",
+      "response_schema": "GetV1GroupsGroupIdMembersPrincipalImpactResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
       "method": "POST",
       "path": "/v1/managed-object-external-refs",
       "permission": "write",
@@ -1320,6 +1342,17 @@
       "permission": "read",
       "request_schema": "GetV1MemoryIngestionsVerifiedIdRequest",
       "response_schema": "GetV1MemoryIngestionsVerifiedIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-quality/audit",
+      "permission": "read",
+      "request_schema": "GetV1MemoryQualityAuditRequest",
+      "response_schema": "GetV1MemoryQualityAuditResponse",
       "success_statuses": [
         200
       ],

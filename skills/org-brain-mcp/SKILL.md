@@ -30,13 +30,14 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
 9. If memory was consulted but did not replace another lookup, report `memory_used: yes` and `avoided_lookup: none` only when the detail is relevant to the user-visible outcome.
 10. Interactive clients that support MCP `2026-07-28` must use the client's MCP OAuth flow. The API Gateway terminates OAuth; Cloudflare Access protects only the upstream user-login step. Automatic hooks use one Access Service Token per client installation on the separate hook edge; never reuse it across clients or machines.
 11. Treat hook, MCP, and skill as separate layers: hook selects when to run, MCP is the only preferred cloud transport, and this skill defines usage policy.
-12. For automatic hook capture, call the known capture tool directly without `server/discover` or `tools/list`; this path must not invoke an LLM.
+12. For automatic hook capture, call only the known hook tools directly without `server/discover` or `tools/list`. The hook process must never call an LLM provider itself. After the deterministic full-turn prefilter finds a durable but incomplete episode, it may call `orgbrain_memory_extraction_enqueue` once; only the server-side asynchronous worker may call the same allowlisted provider/model, subject to the 2,000 input / 800 output token ceiling and tenant budget. Rule-complete candidates go directly to review without an LLM.
 
 ## Tool Map
 - List memory: `orgbrain_memories_list`
 - Propose memory save: `orgbrain_memories_propose`
 - Confirm memory save: `orgbrain_memories_confirm`
 - Non-interactive hook capture: `orgbrain_memories_capture_rationale`
+- Review-only async extraction enqueue: `orgbrain_memory_extraction_enqueue`
 - Upsert memory: `orgbrain_memories_upsert`
 - Enrich task context: `orgbrain_context_enrich`
 - Create decision memory: `orgbrain_decision_memories_create`
@@ -68,7 +69,7 @@ ORGBRAIN_TENANT_ID=default
 
    The actual path is `~/.config/org-brain/clients/<installation-id>/credentials.env` with mode `0600`.
 6. Keep workspace-to-project routing in `~/.config/org-brain/workspaces.json`; never add repository paths to credential or audit metadata.
-7. Verify interactive OAuth with discovery and a read-only call. Verify automatic hooks by calling only the known `orgbrain_memories_capture_rationale` tool; the hook identity must be rejected from every other tool.
+7. Verify interactive OAuth with discovery and a read-only call. Verify automatic hooks by calling only the known `orgbrain_memories_capture_rationale` and `orgbrain_memory_extraction_enqueue` tools; the hook identity must be rejected from every other tool. Verify extraction first in `shadow`, where no provider call is allowed, then in an explicitly enabled canary.
 8. Never print the client secret or enrollment code. Report only presence, installation ID, client type, and MCP hostname.
 
 ## Operational Notes

@@ -13,6 +13,7 @@ import {
 } from "@org-brain/shared";
 import { runCapability } from "./capabilities/runtime";
 import { runSkillGeneration } from "./capabilities/skill-generation";
+import { runMemoryExtraction } from "./capabilities/memory-extraction";
 import { LeaseDO } from "./do/lease";
 import { MailboxDO } from "./do/mailbox";
 import { runScheduledMemoryMaintenance } from "./memory-maintenance";
@@ -378,7 +379,9 @@ async function processMessage(env: Env, raw: unknown): Promise<void> {
     const context = toContext(env, envelope);
     const result = capability === "skill_generation"
       ? await runSkillGeneration(context)
-      : await runCapability(context);
+      : capability === "memory_extraction"
+        ? await runMemoryExtraction(context)
+        : await runCapability(context);
     assertWithinCapabilityCostLimit(result.durationMs, policy.costLimitMs);
     await recordMeasurementVariant(env, envelope, result);
 

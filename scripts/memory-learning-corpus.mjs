@@ -48,7 +48,18 @@ export function filesUnder(root) {
 
 export function listCorpusSessions(sessionsRoot) {
   return filesUnder(sessionsRoot)
-    .map(readCodexSession)
+    .flatMap((filePath) => {
+      try {
+        const session = readCodexSession(filePath);
+        return session ? [session] : [];
+      } catch (error) {
+        // Codex can archive a completed session between directory enumeration
+        // and parsing. Treat that single vanished file as a concurrent move;
+        // the next corpus run will discover it at its new location.
+        if (error && typeof error === "object" && error.code === "ENOENT") return [];
+        throw error;
+      }
+    })
     .filter(Boolean)
     .filter((session) => session.threadSource === "user" && session.finals.length > 0)
     .sort((left, right) => left.startedAt - right.startedAt);

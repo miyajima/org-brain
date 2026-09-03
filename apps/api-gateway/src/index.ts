@@ -20,6 +20,11 @@ import { registerOperationsRoutes } from "./operations-routes";
 import { registerCollaborationRoutes } from "./collaboration-routes";
 import { registerMemoryRoutes } from "./memory-routes";
 import { registerDecisionContextRoutes } from "./decision-context-routes";
+import {
+  dispatchMemoryExtractionOutbox,
+  reconcileMemoryExtractionReservations,
+  sweepMemoryExtractionArtifacts
+} from "./memory-extraction-enqueue-service";
 
 const app = new Hono<ApiContextEnv>();
 
@@ -209,6 +214,15 @@ export default {
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const scheduledFor = controller.scheduledTime ?? Date.now();
+    try {
+      await dispatchMemoryExtractionOutbox(env, scheduledFor);
+      await reconcileMemoryExtractionReservations(env, scheduledFor);
+      await sweepMemoryExtractionArtifacts(env, scheduledFor);
+    } catch (error) {
+      // Code deploy and D1 migration are intentionally separate boundaries.
+      // Keep pre-migration retention jobs healthy while extraction remains off.
+      if (!/no such table:\s*memory_extraction_/iu.test(error instanceof Error ? error.message : String(error))) throw error;
+    }
     await runRecordedScheduledJob(env.OPEN_BRAIN_DB, {
       jobName: "retention-sweep",
       scheduledFor,

@@ -40,8 +40,18 @@ function stableValue(value) {
 
 function stableJson(value) { return JSON.stringify(stableValue(value)); }
 
+function normalizedCandidate(item) {
+  if (!item || typeof item !== "object") return item;
+  if (!item.item || typeof item.item !== "object") return item;
+  return {
+    ...item.item,
+    learning: item.observation && typeof item.observation === "object" ? item.observation : item.item.learning,
+    evidence: Array.isArray(item.evidence) ? item.evidence : item.item.evidence
+  };
+}
+
 function candidateHash(item) {
-  const payload = captureItemPayload(item);
+  const payload = captureItemPayload(normalizedCandidate(item));
   delete payload.external_key;
   delete payload.capture_route;
   delete payload.capture_batch_id;
@@ -172,7 +182,7 @@ async function evaluateInitialRoute(testCase, compiled, workspaceRoot) {
 
 function assessmentFor(item) {
   if (!item) return null;
-  const value = item.item && typeof item.item === "object" ? item.item : item;
+  const value = normalizedCandidate(item);
   return assessMemoryUsefulnessV1({
     content: value.content,
     summary: value.summary,
@@ -194,9 +204,10 @@ function assessmentFor(item) {
 
 function dimensionsReport(cases) {
   const axes = ["semantic_completeness", "evidence_support", "rationale_quality", "future_reuse", "scope_specificity", "freshness_validity", "atomicity"];
+  const assessedCases = cases.filter((item) => item.assessment);
   return Object.fromEntries(axes.map((axis) => {
-    const numerator = cases.filter((item) => Number(item.assessment?.quality_dimensions?.[axis]) >= 95).length;
-    const denominator = cases.length;
+    const numerator = assessedCases.filter((item) => Number(item.assessment?.quality_dimensions?.[axis]) >= 95).length;
+    const denominator = assessedCases.length;
     const interval = wilsonInterval(numerator, denominator);
     return [axis, {
       numerator,
@@ -204,7 +215,7 @@ function dimensionsReport(cases) {
       point_estimate: denominator > 0 ? numerator / denominator : null,
       wilson_lower: interval.lower,
       wilson_upper: interval.upper,
-      hard_violation_count: cases.reduce((sum, item) => sum + (item.assessment?.hard_violations?.length ?? 0), 0)
+      hard_violation_count: assessedCases.reduce((sum, item) => sum + (item.assessment?.hard_violations?.length ?? 0), 0)
     }];
   }));
 }
@@ -247,6 +258,8 @@ export async function evaluateIngestion(options) {
   let manifest;
   let cases;
   let languageCounts = null;
+  let historicalExtraction = null;
+  let historicalCandidateAssessments = [];
   if (options.input === "generated") {
     const corpus = await buildMemoryIngestionRegressionCorpus();
     languageCounts = corpus.language_counts;
@@ -268,7 +281,7 @@ export async function evaluateIngestion(options) {
         : false;
       const selected = candidates[0] ?? [...initial.active, ...initial.quarantine][0] ?? null;
       const assessment = assessmentFor(selected);
-      const semanticErrors = semanticTraceErrors(item, selected ?? {});
+      const semanticErrors = semanticTraceErrors(item, normalizedCandidate(selected) ?? {});
       return {
         case_hash: hash(item.id),
         session_hash: item.session_hash,
@@ -295,14 +308,17 @@ export async function evaluateIngestion(options) {
     for (const item of manifest.sessions) {
       const session = sessionByHash.get(item.session_hash);
       if (!session) continue;
-      const group = projectGroups.get(item.project_hash) ?? { item, session };
+      const group = projectGroups.get(item.project_hash) ?? { item, session, sessionFiles: [] };
+      group.sessionFiles.push(session.filePath);
       projectGroups.set(item.project_hash, group);
     }
     cases = [];
-    for (const { item: groupItem, session: groupSession } of projectGroups.values()) {
+    const historicalSummaries = [];
+    for (const { item: groupItem, session: groupSession, sessionFiles } of projectGroups.values()) {
       const imported = await createCodexSessionImportReport({
         workspaceRoot: groupSession.cwd,
         sessionsRoot,
+        sessionFiles,
         env: {
           ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
           ORGBRAIN_ENABLE_ORG_SHARING: "false",
@@ -311,18 +327,27 @@ export async function evaluateIngestion(options) {
           ORGBRAIN_HOOK_ENV_FILES: path.join(output, "missing-hooks.env")
         }
       });
-      for (const batch of imported.plan.batches) {
+      historicalSummaries.push({ project_hash: groupItem.project_hash, ...imported.summary });
+      for (const [batchIndex, batch] of imported.plan.batches.entries()) {
         const sessionMeta = manifest.sessions.find((entry) => entry.session_hash === batch.session_hash) ?? groupItem;
         const candidates = [...(batch.active ?? []), ...(batch.quarantine ?? batch.review ?? [])];
+        historicalCandidateAssessments.push(...candidates.map((candidate) => {
+          const normalizedCandidateValue = normalizedCandidate(candidate);
+          return {
+            lesson_type: normalizedCandidateValue?.learning?.lesson_type ?? normalizedCandidateValue?.observation?.lesson_type ?? null,
+            assessment: assessmentFor(candidate)
+          };
+        }));
         const candidateHashes = candidates.map(candidateHash);
         const selected = candidates[0] ?? null;
+        const normalized = normalizedCandidate(selected);
         const assessment = assessmentFor(selected);
         cases.push({
-          case_hash: hash(`${batch.session_hash}:${batch.turn_hash}`),
+          case_hash: hash(`${groupItem.project_hash}:${batch.session_hash}:${batch.turn_hash}:${batchIndex}`),
           session_hash: batch.session_hash,
           project_hash: sessionMeta.project_hash,
           split: sessionMeta.split,
-          lesson_type: selected?.learning?.lesson_type ?? null,
+          lesson_type: normalized?.learning?.lesson_type ?? normalized?.observation?.lesson_type ?? null,
           expected_route: null,
           actual_route: batch.active?.length ? "active" : candidates.length ? "quarantine" : "excluded",
           reason_codes: [...new Set([...(batch.excluded_reason_codes ?? []), ...candidates.flatMap((candidate) => candidate.reason_codes ?? [])])],
@@ -333,6 +358,37 @@ export async function evaluateIngestion(options) {
         });
       }
     }
+    const sum = (key) => historicalSummaries.reduce((total, item) => total + Number(item[key] ?? 0), 0);
+    const mergeCounts = (key) => {
+      const merged = {};
+      for (const item of historicalSummaries) {
+        for (const [name, count] of Object.entries(item[key] ?? {})) merged[name] = (merged[name] ?? 0) + Number(count);
+      }
+      return Object.fromEntries(Object.entries(merged).sort(([left], [right]) => left.localeCompare(right)));
+    };
+    historicalExtraction = {
+      projects: historicalSummaries.length,
+      sessions_scanned: sum("sessions_scanned"),
+      turns_scanned: sum("turns_scanned"),
+      active_count: sum("active_count"),
+      review_count: sum("review_count"),
+      no_candidate_count: sum("no_candidate_count"),
+      hard_exclusion_count: sum("hard_exclusion_count"),
+      llm_planned_count: sum("llm_planned_count"),
+      maximum_reserved_tokens: sum("maximum_reserved_tokens"),
+      actual_llm_tokens: 0,
+      lesson_type_counts: mergeCounts("lesson_type_counts"),
+      excluded_reason_counts: mergeCounts("excluded_reason_counts"),
+      session_exclusion_counts: mergeCounts("scan_exclusion_counts"),
+      by_project_hash: historicalSummaries.map((item) => ({
+        project_hash: item.project_hash,
+        turns_scanned: item.turns_scanned,
+        review_count: item.review_count,
+        no_candidate_count: item.no_candidate_count,
+        llm_planned_count: item.llm_planned_count,
+        lesson_type_counts: item.lesson_type_counts
+      }))
+    };
     if (cases.length === 0) {
       cases = manifest.sessions.map((item, index) => ({ case_hash: hash(`${item.session_hash}:${item.source_path_hash}:${item.split}:${index}`), session_hash: item.session_hash, project_hash: item.project_hash, split: item.split, expected_route: null, actual_route: "excluded", reason_codes: [item.workspace_state === "missing" ? "workspace_missing" : "no_eligible_turn"], assessment: null }));
     }
@@ -341,8 +397,15 @@ export async function evaluateIngestion(options) {
   }
 
   const denominator = cases.length;
-  const dimensions = dimensionsReport(cases);
-  const hardViolationCount = cases.reduce((sum, item) => sum + (item.assessment?.hard_violations?.length ?? 0), 0);
+  const candidateCases = cases.filter((item) => item.assessment);
+  const qualityCases = options.input === "mac" ? historicalCandidateAssessments.filter((item) => item.assessment) : candidateCases;
+  const dimensions = dimensionsReport(qualityCases);
+  const hardViolationCount = qualityCases.reduce((sum, item) => sum + (item.assessment?.hard_violations?.length ?? 0), 0);
+  const hardViolationReasonCounts = Object.fromEntries(
+    [...new Set(qualityCases.flatMap((item) => item.assessment?.hard_violations ?? []))]
+      .sort()
+      .map((reason) => [reason, qualityCases.filter((item) => item.assessment?.hard_violations?.includes(reason)).length])
+  );
   const parityMismatches = cases.filter((item) => item.parity_mismatch).length;
   const semanticCases = cases.filter((item) => Array.isArray(item.semantic_errors));
   const semanticErrorCount = semanticCases.reduce((sum, item) => sum + item.semantic_errors.length, 0);
@@ -371,8 +434,8 @@ export async function evaluateIngestion(options) {
       })
   );
   const lessonTypeCounts = Object.fromEntries(
-    [...new Set(cases.map((item) => item.lesson_type).filter(Boolean))]
-      .map((type) => [type, cases.filter((item) => item.lesson_type === type).length])
+    [...new Set(qualityCases.map((item) => item.lesson_type).filter(Boolean))]
+      .map((type) => [type, qualityCases.filter((item) => item.lesson_type === type).length])
   );
   const routeCountsByLanguage = Object.fromEntries(
     [...new Set(cases.map((item) => item.language).filter(Boolean))].sort().map((language) => [language, {
@@ -382,6 +445,19 @@ export async function evaluateIngestion(options) {
     }])
   );
   const localJudgeAvailable = options.judgeMode === "local" && process.env.ORGBRAIN_PRIVATE_JUDGE_AVAILABLE === "true";
+  const dimensionFailures = Object.entries(dimensions)
+    .filter(([, metric]) => metric.wilson_lower === null || metric.wilson_lower < 0.95)
+    .map(([axis]) => `quality_wilson_below_95:${axis}`);
+  const blockingReasons = [
+    ...(denominator < 75 ? ["minimum_75_cases_not_met"] : []),
+    ...(options.input === "mac" ? ["held_out_ground_truth_pending"] : []),
+    ...(semanticCases.length === 0 ? ["semantic_trace_cases_missing"] : []),
+    ...(semanticErrorCount > 0 ? ["semantic_trace_verification_failed"] : []),
+    ...(!localJudgeAvailable ? ["private_judge_unavailable"] : []),
+    ...(parityMismatches > 0 ? ["route_candidate_parity_mismatch"] : []),
+    ...(hardViolationCount > 0 ? ["hard_violations_present"] : []),
+    ...dimensionFailures
+  ];
   const status = denominator > 0 && localJudgeAvailable && parityMismatches === 0 && semanticErrorCount === 0 && hardViolationCount === 0 && Object.values(dimensions).every((metric) => metric.wilson_lower !== null && metric.wilson_lower >= 0.95)
     ? "passed"
     : "insufficient_evidence";
@@ -398,10 +474,19 @@ export async function evaluateIngestion(options) {
       console: { host: "127.0.0.1", port: 4321, run_id: runId, mode: "run-scoped-read-only" }
     },
     dimensions,
+    coverage: {
+      turns: denominator,
+      candidate_turns: candidateCases.length,
+      candidate_count: qualityCases.length,
+      candidate_rate: denominator > 0 ? candidateCases.length / denominator : null,
+      excluded_turns: cases.filter((item) => item.actual_route === "excluded").length
+    },
+    extraction: historicalExtraction,
     route_counts: Object.fromEntries(["active", "quarantine", "excluded"].map((route) => [route, cases.filter((item) => item.actual_route === route).length])),
     language_counts: languageCounts,
     route_counts_by_language: routeCountsByLanguage,
     lesson_type_counts: lessonTypeCounts,
+    reason_code_counts: Object.fromEntries([...new Set(cases.flatMap((item) => item.reason_codes))].sort().map((reason) => [reason, cases.filter((item) => item.reason_codes.includes(reason)).length])),
     semantic: {
       contract: manifest.generated?.semantic_contract ?? null,
       scenario_counts: manifest.generated?.semantic_scenario_counts ?? null,
@@ -412,11 +497,21 @@ export async function evaluateIngestion(options) {
       by_language: semanticByLanguage
     },
     hard_violation_count: hardViolationCount,
+    hard_violation_reason_counts: hardViolationReasonCounts,
     parity_mismatch_count: parityMismatches,
     parity: { candidate_hashes_checked: cases.filter((item) => item.initial_candidate_hash || item.candidate_hash).length, mismatches: parityMismatches },
     network,
-    counts: { sessions: manifest.counts.sessions ?? denominator, projects: manifest.counts.projects ?? 1, cases: denominator },
+    counts: {
+      sessions: manifest.counts.sessions ?? denominator,
+      session_entries: manifest.sessions?.length ?? manifest.counts.sessions ?? denominator,
+      unique_sessions: Array.isArray(manifest.sessions) ? new Set(manifest.sessions.map((item) => item.session_hash)).size : manifest.counts.sessions ?? denominator,
+      duplicate_session_entries: Array.isArray(manifest.sessions) ? manifest.sessions.length - new Set(manifest.sessions.map((item) => item.session_hash)).size : 0,
+      final_answers: manifest.counts.final_answers ?? null,
+      projects: manifest.counts.projects ?? 1,
+      cases: denominator
+    },
     privacy: { raw_transcript_persisted: false, reasoning_persisted: false, absolute_path_persisted: false, credential_value_persisted: false },
+    blocking_reasons: blockingReasons,
     insufficiency_reason: denominator < 75
       ? "minimum_75_cases_not_met"
       : semanticErrorCount > 0
@@ -427,7 +522,9 @@ export async function evaluateIngestion(options) {
             ? "route_candidate_parity_mismatch"
             : "quality_gate_not_met"
   };
-  const db = createDatabase(path.join(output, "quality.sqlite"));
+  const databaseFile = path.join(output, "quality.sqlite");
+  if (new Set(cases.map((item) => item.case_hash)).size !== cases.length) throw new Error("duplicate_quality_case_hash");
+  const db = createDatabase(databaseFile);
   db.prepare("INSERT OR REPLACE INTO quality_runs VALUES (?, ?, ?, ?, ?, ?)").run(runId, report.input_source, status, hash(JSON.stringify(manifest)), JSON.stringify(report.privacy), Date.now());
   db.prepare("DELETE FROM quality_cases").run();
   const insert = db.prepare("INSERT OR REPLACE INTO quality_cases VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -437,6 +534,7 @@ export async function evaluateIngestion(options) {
     db.prepare("INSERT OR REPLACE INTO quality_dimensions VALUES (?, ?, ?, ?, ?, ?)").run(axis, metric.numerator, metric.denominator, metric.point_estimate, metric.wilson_lower, metric.hard_violation_count);
   }
   db.close();
+  fs.chmodSync(databaseFile, 0o600);
   writePrivate(path.join(output, "manifest.json"), manifest);
   writePrivate(path.join(output, "report.json"), report);
   return { output, report };

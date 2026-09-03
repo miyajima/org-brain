@@ -41,6 +41,7 @@ const WRITE_TOOL_NAMES = new Set([
   "orgbrain_memories_extract",
   "orgbrain_memories_propose",
   "orgbrain_memories_capture_rationale",
+  "orgbrain_memory_extraction_enqueue",
   "orgbrain_memories_confirm",
   "orgbrain_memories_upsert",
   "orgbrain_decision_memories_create",

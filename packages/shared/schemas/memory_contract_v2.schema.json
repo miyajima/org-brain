@@ -87,6 +87,9 @@
       },
       "then": {
         "required": ["decision_type", "decision_key", "question"],
+        "properties": {
+          "decision_type": { "enum": ["user_choice", "preference", "implementation", "governance"] }
+        },
         "anyOf": [{ "required": ["selected_value"] }, { "required": ["decision"] }]
       }
     },

@@ -265,6 +265,53 @@ test("dry-run keeps strict fallback as review and excludes transient, subagent, 
   );
 });
 
+test("dry-run recognizes top-level Codex turn_context rows as turn boundaries", async () => {
+  const root = await temporaryRoot("orgbrain-import-turn-context-");
+  const workspace = path.join(root, "org-brain");
+  const sessions = path.join(root, "sessions");
+  const dbPath = path.join(root, "memory.sqlite");
+  await mkdir(workspace, { recursive: true });
+  await writeFile(path.join(workspace, "base.txt"), "base\n");
+  initializeGitWorkspace(workspace);
+
+  await writeSession(sessions, "top-level-turn-context", workspace, [
+    {
+      timestamp: "2026-08-14T00:00:01.000Z",
+      type: "turn_context",
+      payload: { turn_id: "turn-one" }
+    },
+    {
+      timestamp: "2026-08-14T00:00:02.000Z",
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "assistant",
+        phase: "final_answer",
+        content: [{ type: "output_text", text: durableFinalAnswer(1) }]
+      }
+    },
+    {
+      timestamp: "2026-08-14T00:00:03.000Z",
+      type: "turn_context",
+      payload: { turn_id: "turn-two" }
+    },
+    row({ type: "agent_message", phase: "final_answer", message: durableFinalAnswer(2) }, 4)
+  ]);
+
+  const report = await createCodexSessionImportReport({
+    workspaceRoot: workspace,
+    sessionsRoot: sessions,
+    env: localEnv(root, dbPath)
+  });
+
+  assert.equal(report.summary.sessions_scanned, 1);
+  assert.equal(report.summary.turns_scanned, 2);
+  assert.equal(report.summary.review_count, 2);
+  assert.equal(report.summary.excluded_turn_count, 0);
+  assert.equal(report.plan.batches[0].turn_hash, codexSessionImportInternals.hash("turn-one"));
+  assert.equal(report.plan.batches[1].turn_hash, codexSessionImportInternals.hash("turn-two"));
+});
+
 test("all 200 non-durable fixtures stay out of active and review routes", async () => {
   const root = await temporaryRoot("orgbrain-import-nondurable-");
   const workspace = path.join(root, "current", "org-brain");
@@ -427,7 +474,7 @@ test("same Git common directory includes worktrees and incomplete observe remain
   );
 });
 
-test("verified success, decision, and failure become active and local replay is idempotent", async () => {
+test("historical verified success, decision, and failure remain quarantined and replay is idempotent", async () => {
   const root = await temporaryRoot("orgbrain-import-active-");
   const workspace = path.join(root, "org-brain");
   const sessions = path.join(root, "sessions");
@@ -480,9 +527,9 @@ test("verified success, decision, and failure become active and local replay is 
   const report = await createCodexSessionImportReport({ workspaceRoot: workspace, sessionsRoot: sessions, env });
   const repeatedReport = await createCodexSessionImportReport({ workspaceRoot: workspace, sessionsRoot: sessions, env });
   assert.equal(repeatedReport.plan_hash, report.plan_hash);
-  assert.equal(report.summary.active_count, 3);
+  assert.equal(report.summary.active_count, 0);
   assert.deepEqual(report.summary.lesson_type_counts, { decision: 1, failure: 1, success: 1 });
-  assert.equal(report.summary.review_count, 0);
+  assert.equal(report.summary.review_count, 3);
 
   const store = new LocalMemoryStore(dbPath);
   const first = await applyCodexSessionImportPlan(report, {
@@ -492,7 +539,8 @@ test("verified success, decision, and failure become active and local replay is 
     store
   });
   assert.equal(first.ok, true);
-  assert.equal(first.results[0].active.filter((item) => item.created).length, 3);
+  assert.equal(first.results[0].active.filter((item) => item.created).length, 0);
+  assert.equal(first.results[0].quarantine.length, 3);
 
   const second = await applyCodexSessionImportPlan(report, {
     expectedPlanHash: report.plan_hash,
@@ -505,10 +553,7 @@ test("verified success, decision, and failure become active and local replay is 
 
   const memories = [];
   for await (const memory of store.export("default", "org-brain")) memories.push(memory);
-  assert.equal(memories.length, 3);
-  assert.equal(memories.every((item) => item.lifecycle_state === "active"), true);
-  assert.equal(memories.every((item) => item.capture_origin === "observed"), true);
-  assert.equal(memories.every((item) => item.verification_state === "verified"), true);
+  assert.equal(memories.length, 0);
 
   const cloudEnv = {
     ...env,
@@ -520,8 +565,8 @@ test("verified success, decision, and failure become active and local replay is 
   };
   const cloudReport = await createCodexSessionImportReport({ workspaceRoot: workspace, sessionsRoot: sessions, env: cloudEnv });
   assert.deepEqual(
-    cloudReport.plan.batches.flatMap((batch) => batch.active).map((item) => item.external_key),
-    report.plan.batches.flatMap((batch) => batch.active).map((item) => item.external_key)
+    cloudReport.plan.batches.flatMap((batch) => batch.quarantine).map((item) => item.external_key),
+    report.plan.batches.flatMap((batch) => batch.quarantine).map((item) => item.external_key)
   );
   const originalFetch = globalThis.fetch;
   const requests = [];
@@ -550,7 +595,7 @@ test("verified success, decision, and failure become active and local replay is 
     });
     assert.equal(cloudApplied.ok, true);
     assert.equal(requests.length, 1);
-    assert.equal(requests[0].params.arguments.items.length, 3);
+    assert.equal(requests[0].params.arguments.quarantine_candidates.length, 3);
   } finally {
     globalThis.fetch = originalFetch;
   }

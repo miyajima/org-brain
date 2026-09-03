@@ -248,6 +248,17 @@ describe("memory impact service", () => {
       effect_outcome: "neutral",
       failure_opportunity_state: "applicable"
     })).rejects.toMatchObject({ code: "failure_pattern_id_required" });
+    await expect(recordMemoryEffect(env, "tenant-a", {
+      usage_event_id: usage.usage_id,
+      idempotency_key: "unverified-avoidance",
+      evidence_level: "reported",
+      effect_outcome: "positive",
+      failure_opportunity_state: "applicable",
+      failure_pattern_id: "failure-1",
+      action_changed: true,
+      alternative_executed: true,
+      failure_avoided: true
+    })).rejects.toMatchObject({ code: "verified_failure_avoidance_required" });
     const effect = await recordMemoryEffect(env, "tenant-a", {
       usage_event_id: usage.usage_id,
       idempotency_key: "effect-1",

@@ -110,9 +110,9 @@
     { "id": "verify-scope-missing", "event": "decision", "event_patch": { "capture_intent": "review", "applicability": { "target_files": [], "components": [] } }, "scenario": { "file": "dirty", "user_text": "Choose review-first import policy" }, "expected": { "state": "partial", "reason_codes": ["scope_missing", "review_intent"] } }
   ],
   "routing_cases": [
-    { "id": "route-active-success", "scenario": "verified_observe", "event": "success", "expected": { "route": "active", "lesson_type": "success" } },
-    { "id": "route-active-decision", "scenario": "verified_observe", "event": "decision", "expected": { "route": "active", "lesson_type": "decision" } },
-    { "id": "route-active-failure", "scenario": "verified_observe", "event": "failure", "expected": { "route": "active", "lesson_type": "failure" } },
+    { "id": "route-active-success", "scenario": "verified_observe", "event": "success", "expected": { "route": "review", "lesson_type": "success", "reason_codes": ["historical_observation_review_only"] } },
+    { "id": "route-active-decision", "scenario": "verified_observe", "event": "decision", "expected": { "route": "review", "lesson_type": "decision", "reason_codes": ["historical_observation_review_only"] } },
+    { "id": "route-active-failure", "scenario": "verified_observe", "event": "failure", "expected": { "route": "review", "lesson_type": "failure", "reason_codes": ["historical_observation_review_only"] } },
     { "id": "route-incomplete-observe", "scenario": "incomplete_observe", "event": "success", "expected": { "route": "review", "reason_codes": ["observe_not_accepted"] } },
     { "id": "route-durable-final", "scenario": "durable_final", "expected": { "route": "review", "reason_codes": ["historical_final_answer_unverified"] } },
     { "id": "route-transient-final", "scenario": "final", "text": "Implementation completed; commit, push, CI, and build succeeded.", "expected": { "route": "excluded" } },
@@ -131,7 +131,7 @@
     { "id": "pair-success-file", "layer": "verification", "control": "verify-success-complete", "mutation": "verify-success-file-clean", "expected_transition": "verified->partial" },
     { "id": "pair-decision-confirmation", "layer": "verification", "control": "verify-decision-complete", "mutation": "verify-decision-user-missing", "expected_transition": "verified->partial" },
     { "id": "pair-failure-before", "layer": "verification", "control": "verify-failure-complete", "mutation": "verify-failure-before-missing", "expected_transition": "verified->partial" },
-    { "id": "pair-observe-attestation", "layer": "routing", "control": "route-active-success", "mutation": "route-incomplete-observe", "expected_transition": "active->review" },
+    { "id": "pair-observe-attestation", "layer": "routing", "control": "route-active-success", "mutation": "route-incomplete-observe", "expected_transition": "review->review" },
     { "id": "pair-final-durability", "layer": "routing", "control": "route-durable-final", "mutation": "route-transient-final", "expected_transition": "review->excluded" },
     { "id": "pair-thread-source", "layer": "routing", "control": "route-durable-final", "mutation": "route-durable-subagent", "expected_transition": "review->excluded" },
     { "id": "pair-workspace-scope", "layer": "routing", "control": "route-durable-final", "mutation": "route-durable-other-workspace", "expected_transition": "review->excluded" }

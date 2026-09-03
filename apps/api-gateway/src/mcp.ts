@@ -79,7 +79,9 @@ import {
 import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
 import { getDomainContext, queryMetrics, searchManagedObjects } from "./domain-metric-service";
 import { getDomainRecall, recordDomainRecallFeedback } from "./domain-recall-service";
+import { getMemoryQualityAudit } from "./memory-quality-service";
 import { ingestVerifiedKnowledgeBundle } from "./verified-ingestion-service";
+import { enqueueMemoryExtraction } from "./memory-extraction-enqueue-service";
 import {
   getDecisionResources,
   getResourceDecisions,
@@ -169,6 +171,8 @@ type ToolHandler<Shape extends z.ZodRawShape> = (
 ) => CallToolResult | Promise<CallToolResult>;
 
 const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
+  orgbrain_memory_quality_audit: "Run the read-only memory-quality-audit/v1 evaluator. Returns aggregate coverage, reason-code samples, and no raw memory content.",
+  orgbrain_memory_extraction_enqueue: "Enqueue one review-only, same-provider/model extraction from a redacted TurnEvidenceV1 packet. The hook never calls the provider directly.",
   orgbrain_prompt_recall: "Use before answering an organization-specific question. Return the relevant Decision, rationale, rejected alternatives, constraints, success conditions, metrics, evidence metadata, follow-up, and trace URL. If the answer uses the memory, cite the trace and invite the user to say 範囲が違う, 古い, or 関係ない.",
   orgbrain_domain_recall_feedback: "Record the user's correction without mutating the underlying Decision. Map 範囲が違う to wrong_scope, 古い to outdated, 関係ない to not_relevant, 関係が違う to incorrect_relation, and この会話では使わない to dismiss_for_session. Call this when the user corrects a recalled memory."
 };
@@ -606,6 +610,69 @@ class OrgBrainMcpTools {
           view
         });
         return toContent(memories);
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_memory_quality_audit",
+      {
+        tenant_id: z.string().optional(),
+        scope: z.enum(["project", "tenant"]),
+        project_id: z.string().min(1).max(128).nullable().optional()
+      },
+      async ({ tenant_id, scope, project_id }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const projectId = project_id?.trim() || null;
+        if (scope === "project" && !projectId) {
+          throw new HttpError(400, "project_id_required", "project_id is required for project audit");
+        }
+        await this.requirePermission(
+          tenantId,
+          scope === "tenant" ? "memory:audit" : "read",
+          scope === "project" ? projectId : null
+        );
+        return toContent(await getMemoryQualityAudit(this.env, tenantId, {
+          scope,
+          projectId,
+          principal: this.props.principal
+        }));
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_memory_extraction_enqueue",
+      {
+        tenant_id: z.string().optional(),
+        project_id: z.string().min(1).max(128),
+        provider: z.enum(["openai", "gemini", "anthropic"]),
+        model: z.string().min(1).max(128),
+        session_hash: z.string().min(1).max(128),
+        turn_hash: z.string().min(1).max(128),
+        packet: z.record(z.string(), z.unknown()),
+        packet_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/u).optional(),
+        tier: z.literal("tier2").optional(),
+        retention_class: z.enum(["standard", "restricted"]).optional(),
+        schema_version: z.string().max(128).optional(),
+        prompt_version: z.string().max(128).optional(),
+        redaction_version: z.string().max(128).optional(),
+        prefilter_version: z.string().max(128).optional()
+      },
+      async ({ tenant_id, ...payload }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        if (!this.props.clientInstallationId || this.props.clientPurpose !== "capture") {
+          throw new HttpError(403, "forbidden", "memory extraction enqueue requires the calling capture installation");
+        }
+        await this.requirePermission(tenantId, "write", payload.project_id);
+        return toContent(await this.auditedMutation(
+          tenantId,
+          "mcp.orgbrain_memory_extraction_enqueue",
+          "memory_extraction_run",
+          () => enqueueMemoryExtraction(this.env, payload, {
+            tenantId,
+            principal: this.props.principal,
+            installationId: this.props.clientInstallationId!
+          })
+        ));
       }
     );
 
@@ -1857,7 +1924,7 @@ export async function assertMcpToolAllowed(request: Request, props: AgentProps):
   }
   const body = await request.clone().json<{
     method?: unknown;
-    params?: { name?: unknown };
+    params?: { name?: unknown; arguments?: Record<string, unknown> };
   }>().catch(() => null);
   if (body?.method !== "tools/call" || typeof body.params?.name !== "string") {
     if (props.authSource === "oauth" && body?.method === "server/discover") return;
@@ -1869,7 +1936,11 @@ export async function assertMcpToolAllowed(request: Request, props: AgentProps):
   }
   if (props.authSource === "oauth") {
     const requirement = requirementForMcpTool(body.params.name);
-    if (!props.scopes?.includes(requirement.scope)) throw new McpInsufficientScopeError(requirement.scope);
+    const requiredScope = body.params.name === "orgbrain_memory_quality_audit" &&
+      body.params.arguments?.scope === "tenant"
+      ? "orgbrain:audit"
+      : requirement.scope;
+    if (!props.scopes?.includes(requiredScope)) throw new McpInsufficientScopeError(requiredScope);
   }
 }
 

@@ -52,8 +52,11 @@ export const MEMORY_INGESTION_ORACLE_MINIMUMS = Object.freeze({
   contract_cases: 14,
   verification_cases: 11,
   routing_cases: 15,
-  active_routes: 3,
-  review_routes: 2,
+  // Historical session extraction is certification-pending by contract and
+  // cannot create active memories. Active behavior is covered by the
+  // independent contract/calibration cohorts below.
+  active_routes: 0,
+  review_routes: 5,
   excluded_routes: 10,
   metamorphic_pairs: 8
 });
@@ -135,6 +138,7 @@ export function evaluateMemoryIngestionOracleQualification(input = {}) {
     metamorphic_violations: input.metamorphic_violation_count === 0,
     duplicate_ids: input.duplicate_ids === 0,
     leakage_violations: input.leakage_violations === 0,
+    historical_active_zero: values.active_routes === 0,
     structural_errors: Array.isArray(input.structural_errors) && input.structural_errors.length === 0,
     ...minimumChecks
   };

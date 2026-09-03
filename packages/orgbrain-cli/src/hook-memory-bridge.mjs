@@ -29,6 +29,12 @@ import {
   collectVerifiedLearningEventsFromRows
 } from "./lib/memory-learning-transcript.mjs";
 import {
+  buildLearningExtractionPacket,
+  buildTurnEvidenceV1,
+  discoverLearningEpisodes,
+  loadTurnEvidenceRows
+} from "./lib/turn-evidence-v1.mjs";
+import {
   configuredTenantFromEnv,
   legacyProjectNamesFileFromEnv,
   loadLegacyProjectNames,
@@ -53,6 +59,7 @@ const DEFAULT_ENV_FILES = [
 ];
 const MCP_CAPTURE_TOOL = "orgbrain_memories_capture_rationale";
 const MCP_LEARNING_BATCH_TOOL = "orgbrain_learning_batch_ingest";
+const MCP_EXTRACTION_ENQUEUE_TOOL = "orgbrain_memory_extraction_enqueue";
 const CAPTURE_TIMEOUT_MS = 5_000;
 const INSTALLATION_CREDENTIAL_KEYS = new Set([
   "ORGBRAIN_MCP_URL",
@@ -622,7 +629,9 @@ function buildCodexStopRecord(payloadText, parsed) {
     metadata: {
       sessionId,
       turnId,
-      transcriptPath: firstString(parsed?.transcript_path)
+      transcriptPath: firstString(parsed?.transcript_path),
+      modelProvider: firstString(parsed?.model_provider, parsed?.provider),
+      model: firstString(parsed?.model)
     }
   });
 }
@@ -1240,7 +1249,7 @@ export function captureItemPayload(record) {
   };
 }
 
-export async function prepareMemoryRecordsV2(record, workspace, tenantId) {
+export async function prepareMemoryRecordsV2(record, workspace, tenantId, options = {}) {
   const extraction = extractDurableMemoryDrafts({
     event_id: record.externalKey,
     tenant_id: tenantId,
@@ -1295,16 +1304,84 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId) {
       actorId: buildActorId(record)
     };
   });
+  const evidenceRows = Array.isArray(options.rows) && (options.rows.length > 0 || options.requireFullTurn === true)
+    ? options.rows
+    : [{
+        timestamp: new Date(record.createdAt).toISOString(),
+        payload: {
+          type: "message",
+          role: "assistant",
+          phase: "final_answer",
+          content: [{ type: "output_text", text: record.assistantText }]
+        }
+      }];
+  const turnEvidence = await buildTurnEvidenceV1({
+    rows: evidenceRows,
+    session_hash: record.metadata?.sessionHash ?? (record.metadata?.sessionId ? sha256(record.metadata.sessionId) : null),
+    turn_hash: record.metadata?.turnHash ?? (record.metadata?.turnId ? sha256(record.metadata.turnId) : null),
+    project_id: workspace.projectId,
+    provider: record.metadata?.modelProvider ?? null,
+    model: record.metadata?.model ?? null
+  }, {
+    workspace_root: workspace.workspaceRoot,
+    sensitive_policy: workspace.sensitiveMemory
+  });
+  const episodeDiscovery = await discoverLearningEpisodes(turnEvidence, {
+    workspace_root: workspace.workspaceRoot,
+    sensitive_policy: workspace.sensitiveMemory
+  });
+  const reviewCandidates = episodeDiscovery.review_drafts.map((proposal) => ({
+    external_key: `learning-review:${sha256(`${record.externalKey}\0${proposal.event_hash}`)}`,
+    prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
+    prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
+    contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
+    verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
+    capture_intent: "review",
+    project_id: workspace.projectId,
+    task_key: firstString(record.metadata?.sessionId, record.metadata?.turnId, record.metadata?.sessionHash, record.metadata?.turnHash)
+      ? `codex:${firstString(record.metadata?.sessionId, record.metadata?.sessionHash)}:${firstString(record.metadata?.turnId, record.metadata?.turnHash)}`
+      : null,
+    observation: proposal.observation,
+    support_span_ids: proposal.support_span_ids,
+    gaps: proposal.gaps,
+    reason_codes: proposal.reason_codes,
+    verification: { state: "unverified", verified_at: null },
+    created_at: record.createdAt,
+    expires_at: record.createdAt + (turnEvidence.snippets.some((item) => item.text.includes("[REDACTED_")) ? 7 : 180) * 24 * 60 * 60 * 1000
+  }));
+  const extractionPacket = episodeDiscovery.llm_recommended && turnEvidence.provider && turnEvidence.model
+    ? buildLearningExtractionPacket(turnEvidence, episodeDiscovery)
+    : null;
+  const hardExcluded = episodeDiscovery.excluded.filter((item) => item.disposition === "hard_excluded");
   return {
     records,
+    reviewCandidates,
+    extractionRequest: extractionPacket ? {
+      packet: extractionPacket,
+      packet_hash: extractionPacket.packet_hash,
+      provider: turnEvidence.provider,
+      model: turnEvidence.model,
+      reserved_tokens: 2_800
+    } : null,
     category,
     report: {
       candidate_count: records.length,
+      review_count: reviewCandidates.length,
+      no_candidate: records.length === 0 && reviewCandidates.length === 0 && hardExcluded.length === 0,
+      hard_excluded_count: hardExcluded.length,
+      would_call_llm: Boolean(extractionPacket),
+      packet_hash: extractionPacket?.packet_hash ?? null,
+      provider: turnEvidence.provider,
+      model: turnEvidence.model,
+      reserved_tokens: extractionPacket ? 2_800 : 0,
       candidate_hashes: records.map((candidate) => sha256(JSON.stringify(captureCandidateJson(candidate)))),
       capture_profile_id: MEMORY_CAPTURE_HOOK_PROFILE.profile_id,
       capture_profile_source_hash: MEMORY_CAPTURE_HOOK_PROFILE.source_dataset_sha256,
       quality_scores: records.map((candidate) => candidate.qualityScore ?? null),
-      excluded_reasons: [...new Set(extraction.excluded.map((item) => item.reason))],
+      excluded_reasons: [...new Set([
+        ...extraction.excluded.map((item) => item.reason),
+        ...episodeDiscovery.excluded.map((item) => item.reason)
+      ])],
       sensitivity_reason: extraction.sensitivity.reason,
       sensitive_counts: extraction.sensitivity.counts
     }
@@ -1531,6 +1608,31 @@ export function buildMcpLearningBatchRequest(tenantId, sourceName, input = {}) {
   });
 }
 
+export function buildMcpMemoryExtractionRequest(tenantId, extractionRequest, projectId) {
+  return modernMcpRequest({
+    id: `memory-extraction:${extractionRequest.packet_hash.slice(-40)}`,
+    method: "tools/call",
+    name: MCP_EXTRACTION_ENQUEUE_TOOL,
+    clientName: "orgbrain-hook-memory-bridge",
+    params: {
+      arguments: {
+        tenant_id: tenantId,
+        project_id: projectId,
+        provider: extractionRequest.provider,
+        model: extractionRequest.model,
+        session_hash: extractionRequest.packet.session_hash,
+        turn_hash: extractionRequest.packet.turn_hash,
+        packet: extractionRequest.packet,
+        packet_hash: extractionRequest.packet_hash,
+        tier: "tier2",
+        retention_class: extractionRequest.packet.snippets?.some?.((item) => item.text?.includes?.("[REDACTED_"))
+          ? "restricted"
+          : "standard"
+      }
+    }
+  });
+}
+
 export function hookCaptureLogFields(captureV2Mode, records, report, memoryIds = []) {
   if (captureV2Mode !== "off") {
     return {
@@ -1595,6 +1697,30 @@ export async function postLearningBatchViaMcp(config, tenantId, sourceName, inpu
   }
   const resultText = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
   if (typeof resultText !== "string") throw new Error("org-brain MCP learning batch returned no text result");
+  return JSON.parse(resultText);
+}
+
+export async function postMemoryExtractionViaMcp(config, tenantId, extractionRequest, projectId) {
+  await ensureMcpInstallationIdentity(config);
+  const response = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      ...modernMcpHeaders("tools/call", MCP_EXTRACTION_ENQUEUE_TOOL),
+      "CF-Access-Client-Id": config.clientId,
+      "CF-Access-Client-Secret": config.clientSecret,
+      "x-orgbrain-tenant": tenantId
+    },
+    body: JSON.stringify(buildMcpMemoryExtractionRequest(tenantId, extractionRequest, projectId)),
+    signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || body.error || body.result?.isError) {
+    if (response.status === 401 || response.status === 403) validatedMcpConfigurations.delete(config);
+    const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
+    throw new Error(`org-brain MCP memory extraction enqueue failed (${response.status}): ${detail}`);
+  }
+  const resultText = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
+  if (typeof resultText !== "string") throw new Error("org-brain MCP memory extraction enqueue returned no text result");
   return JSON.parse(resultText);
 }
 
@@ -1743,10 +1869,65 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let shadowReport = null;
   let learningReport = null;
   let learningReviewCandidates = [];
+  let extractionPrepared = null;
+  let extractionEnqueue = null;
+  const extractionMode = process.env.ORGBRAIN_MEMORY_EXTRACTION_MODE ?? "off";
+  let evidenceRows = [];
+  let evidenceLoadError = null;
+  if (inputSourceName === "codex-stop" && extractionMode !== "off") {
+    evidenceRows = await loadTurnEvidenceRows({
+      transcript_path: normalizedRecord.metadata?.transcriptPath,
+      turn_id: normalizedRecord.metadata?.turnId
+    }).catch((error) => {
+      evidenceLoadError = error instanceof Error ? error.message : "turn_evidence_load_failed";
+      return [];
+    });
+    extractionPrepared = await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId, {
+      rows: evidenceRows,
+      requireFullTurn: true
+    });
+    if (evidenceLoadError) extractionPrepared.report.turn_evidence_error = evidenceLoadError;
+    shadowReport = extractionPrepared.report;
+    learningReviewCandidates = extractionPrepared.reviewCandidates ?? [];
+    if (
+      ["canary", "on"].includes(extractionMode) &&
+      extractionPrepared.extractionRequest &&
+      workspace.projectId &&
+      memoryMode.cloudWritesAllowed
+    ) {
+      const extractionMcp = resolveMcpConfig();
+      if (extractionMcp.complete) {
+        extractionEnqueue = await postMemoryExtractionViaMcp(
+          extractionMcp,
+          tenantId,
+          extractionPrepared.extractionRequest,
+          workspace.projectId
+        ).catch((error) => ({
+          execution_status: "enqueue_failed",
+          outcome: null,
+          error_code: hookDeliveryErrorCode(error),
+          reserved_tokens: 0,
+          cache_hit: false
+        }));
+      } else {
+        extractionEnqueue = {
+          execution_status: "not_enqueued",
+          outcome: "model_unavailable",
+          error_code: "missing_orgbrain_mcp_env",
+          reserved_tokens: 0,
+          cache_hit: false
+        };
+      }
+    }
+  }
   if (inputSourceName === "codex-stop" && ["shadow", "on"].includes(workspace.memoryLearningMode)) {
-    const observed = await prepareObservedLearningRecords(normalizedRecord, workspace, tenantId);
+    const observed = await prepareObservedLearningRecords(normalizedRecord, workspace, tenantId, {
+      ...(evidenceRows.length ? { rows: evidenceRows } : {})
+    });
     learningReport = observed.report;
-    learningReviewCandidates = observed.reviewCandidates ?? [];
+    learningReviewCandidates = [...(observed.reviewCandidates ?? []), ...learningReviewCandidates]
+      .filter((candidate, index, all) => all.findIndex((item) => item.external_key === candidate.external_key) === index)
+      .slice(0, 3);
     if (workspace.memoryLearningMode === "on") records = observed.records;
   }
   if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "on") {
@@ -1773,6 +1954,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         mode: "local",
         inserted: 0,
         review_count: savedReviews.length,
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
         ...memoryModeFields(memoryMode)
       });
@@ -1798,6 +1980,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         skipped: "missing-orgbrain-mcp-env-for-learning-contract",
         review_count: learningReviewCandidates.length,
         quarantine_count: learningReviewCandidates.length,
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
         ...memoryModeFields(memoryMode)
       });
@@ -1825,6 +2008,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         outbox,
         error_code: error?.name === "TimeoutError" ? "mcp_timeout" : "mcp_learning_batch_failed",
         review_count: learningReviewCandidates.length,
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
         ...memoryModeFields(memoryMode)
       });
@@ -1836,15 +2020,23 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       inserted: Number(result?.verified_inserted ?? 0),
       review_count: Number(result?.review_inserted ?? learningReviewCandidates.length),
       quarantine_count: Number(result?.quarantine_inserted ?? result?.review_inserted ?? learningReviewCandidates.length),
+      ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
       transport: "mcp-2026-07-28",
       ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
       ...memoryModeFields(memoryMode)
     });
   }
   if (!records && workspace.memoryLearningMode !== "on" && (captureV2Mode === "on" || captureV2Mode === "shadow")) {
-    const v2 = await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId);
+    const v2 = extractionPrepared ?? await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId, {
+      ...(evidenceRows.length ? { rows: evidenceRows } : {})
+    });
     shadowReport = v2.report;
-    if (captureV2Mode === "on") records = v2.records;
+    learningReviewCandidates = [...learningReviewCandidates, ...(v2.reviewCandidates ?? [])]
+      .filter((candidate, index, all) => all.findIndex((item) => item.external_key === candidate.external_key) === index)
+      .slice(0, 3);
+    // Rule and inferred extraction never becomes active directly. Complete
+    // candidates still enter the review/quarantine contract without an LLM.
+    if (captureV2Mode === "on") records = [];
   }
   if (!records && workspace.memoryLearningMode !== "on" && captureV2Mode !== "on") {
     if (prepared.action === "skip") {
@@ -1864,6 +2056,90 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     prepared.record.workType ??= workspace.workType ?? "other";
     records = [prepared.record];
   }
+  if (learningReviewCandidates.length > 0 && workspace.memoryLearningMode !== "on" && captureV2Mode === "on") {
+    const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+    const { TaskCommitmentStore, taskKeyFromHookPayload } = await import("./lib/task-commitment-store.mjs");
+    const commitmentStore = new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+    const taskKey = taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord);
+    if (!memoryMode.cloudWritesAllowed) {
+      const saved = await commitmentStore.saveLearningCandidates({
+        tenantId,
+        projectId: workspace.projectId,
+        taskKey,
+        candidates: learningReviewCandidates
+      });
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        mode: "local",
+        inserted: 0,
+        review_count: saved.length,
+        quarantine_count: saved.length,
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
+        ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    const reviewMcp = resolveMcpConfig();
+    const reviewBatch = {
+      projectId: workspace.projectId,
+      taskKey,
+      records: [],
+      reviewCandidates: learningReviewCandidates
+    };
+    if (!reviewMcp.complete) {
+      const outbox = await commitmentStore.saveLearningOutbox({
+        tenantId,
+        payload: buildMcpLearningBatchRequest(tenantId, sourceName, reviewBatch)
+      });
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        queued: "learning-outbox",
+        outbox,
+        review_count: learningReviewCandidates.length,
+        quarantine_count: learningReviewCandidates.length,
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
+        ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    try {
+      const reviewResult = await postLearningBatchViaMcp(reviewMcp, tenantId, sourceName, reviewBatch);
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        inserted: 0,
+        review_count: Number(reviewResult?.review_inserted ?? learningReviewCandidates.length),
+        quarantine_count: Number(reviewResult?.quarantine_inserted ?? reviewResult?.review_inserted ?? learningReviewCandidates.length),
+        transport: "mcp-2026-07-28",
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
+        ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    } catch (error) {
+      const outbox = await commitmentStore.saveLearningOutbox({
+        tenantId,
+        payload: buildMcpLearningBatchRequest(tenantId, sourceName, reviewBatch)
+      });
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        queued: "learning-outbox",
+        outbox,
+        error_code: error?.name === "TimeoutError" ? "mcp_timeout" : "mcp_learning_batch_failed",
+        review_count: learningReviewCandidates.length,
+        quarantine_count: learningReviewCandidates.length,
+        ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
+        ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+  }
   if (!records?.length) {
     return finish({
       ok: true,
@@ -1872,6 +2148,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       skipped: "no-durable-candidates",
       reason_codes: shadowReport?.excluded_reasons ?? [],
       sensitivity_reason: shadowReport?.sensitivity_reason ?? null,
+      ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
       ...memoryModeFields(memoryMode)
     });
   }

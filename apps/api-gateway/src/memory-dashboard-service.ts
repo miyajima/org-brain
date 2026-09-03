@@ -24,6 +24,7 @@ export type MemoryMapOptions = {
   from?: number | null;
   to?: number | null;
   limit?: number;
+  includeInferred?: boolean;
 };
 
 type UsageQuery = {
@@ -453,6 +454,10 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
       project_count: clusters.results.length,
       entity_count: 0,
       decision_count: 0,
+      decision_count_total: 0,
+      decision_count_confirmed: 0,
+      decision_count_inferred: 0,
+      decision_count_truncated: false,
       related_count: 0,
       relationship_count: 0,
       cross_project_link_count: 0,
@@ -535,7 +540,7 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
        WHERE ${usageClauses.join(" AND ")}
        GROUP BY ui.source_id
      )
-     SELECT m.id, m.project_id, m.content, m.summary, m.owner_principal,
+     SELECT m.id, m.project_id, m.content, m.summary, m.kind, m.learning_json, m.owner_principal,
             m.created_by_principal, COALESCE(m.updated_at, m.created_at) AS updated_at,
             COALESCE(s.reference_count, 0) AS reference_count,
             COALESCE(s.used_count, 0) AS used_count,
@@ -567,7 +572,14 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
       net_saved_tokens: numeric(row.net_saved_tokens),
       injected_tokens: numeric(row.injected_tokens),
       updated_at: numeric(row.updated_at),
-      cluster_key: `project:${row.project_id ?? "unassigned"}`
+      cluster_key: `project:${row.project_id ?? "unassigned"}`,
+      semantic_kind: typeof row.kind === "string" ? row.kind : null,
+      lesson_type: (() => {
+        try {
+          const learning = JSON.parse(String(row.learning_json ?? "null")) as Record<string, unknown> | null;
+          return typeof learning?.lesson_type === "string" ? learning.lesson_type : null;
+        } catch { return null; }
+      })()
     };
   });
   const nodeIds = new Set(memoryNodes.map((node) => node.id));
@@ -599,13 +611,25 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
       confidence: null,
       cross_project: projectByMemoryId.get(edge.source) !== projectByMemoryId.get(edge.target)
     }));
+  const decisionStats = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT COUNT(*) AS total_count,
+            SUM(CASE WHEN status = 'accepted'
+                          AND confirmation_state IN ('user_confirmed', 'user_corrected', 'reviewed', 'confirmed')
+                          AND confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS confirmed_count
+     FROM decision_rationales
+     WHERE tenant_id = ?
+       AND memory_id IN (SELECT value FROM json_each(?))`
+  ).bind(options.tenantId, JSON.stringify([...nodeIds])).first<{ total_count: number; confirmed_count: number }>();
   const decisionRows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, memory_id, project_id, decision_type, conclusion,
-            reason_summary, confirmation_state, confidence_score,
+            reason_summary, status, confirmation_state, confirmed_at, confidence_score,
             created_at
      FROM decision_rationales
      WHERE tenant_id = ?
        AND memory_id IN (SELECT value FROM json_each(?))
+       ${options.includeInferred ? "" : `AND status = 'accepted'
+       AND confirmation_state IN ('user_confirmed', 'user_corrected', 'reviewed', 'confirmed')
+       AND confirmed_at IS NOT NULL`}
      ORDER BY created_at DESC, id DESC
      LIMIT 20`
   ).bind(options.tenantId, JSON.stringify([...nodeIds])).all<{
@@ -615,7 +639,9 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
     decision_type: string;
     conclusion: string;
     reason_summary: string | null;
+    status: string;
     confirmation_state: string | null;
+    confirmed_at: number | null;
     confidence_score: number | null;
     created_at: number;
   }>();
@@ -642,8 +668,11 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
       cluster_key: `project:${row.project_id ?? memoryNodes.find((node) => node.id === row.memory_id)?.project_id ?? "unassigned"}`,
       decision_type: row.decision_type,
       confirmation_state: row.confirmation_state,
-      confidence_score: row.confidence_score
+      confidence_score: row.confidence_score,
+      semantic_kind: "decision",
+      lesson_type: "decision"
     }));
+  const confirmedDecisionStates = new Set(["user_confirmed", "user_corrected", "reviewed", "confirmed"]);
   for (const row of decisionRows.results.slice(0, decisionNodes.length)) {
     if (!nodeIds.has(row.memory_id)) continue;
     links.push({
@@ -652,7 +681,7 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
       target: `decision:${row.id}`,
       relation: `decision:${row.decision_type}`,
       directed: true,
-      inferred: row.confirmation_state !== "user_confirmed" && row.confirmation_state !== "confirmed",
+      inferred: !(row.status === "accepted" && confirmedDecisionStates.has(row.confirmation_state ?? "") && row.confirmed_at !== null),
       weight: numeric(row.confidence_score) || 1,
       confidence: row.confidence_score === null ? null : numeric(row.confidence_score)
     });
@@ -877,6 +906,10 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
     project_count: projectNodes.length,
     entity_count: entityNodes.length,
     decision_count: decisionNodes.length,
+    decision_count_total: numeric(decisionStats?.total_count),
+    decision_count_confirmed: numeric(decisionStats?.confirmed_count),
+    decision_count_inferred: Math.max(0, numeric(decisionStats?.total_count) - numeric(decisionStats?.confirmed_count)),
+    decision_count_truncated: (options.includeInferred ? numeric(decisionStats?.total_count) : numeric(decisionStats?.confirmed_count)) > decisionNodes.length,
     related_count: projectNodes.length + entityNodes.length + decisionNodes.length,
     relationship_count: relationshipCount,
     cross_project_link_count: crossProjectLinkCount,

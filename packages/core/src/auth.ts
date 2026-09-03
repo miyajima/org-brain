@@ -7,11 +7,11 @@ import {
 
 export const ROLE_PERMISSIONS: Readonly<Record<OrgRole, readonly OrgPermission[]>> = {
   tenant_admin: ORG_PERMISSIONS,
-  project_owner: ["read", "write", "share", "delete", "export", "memory:attest"],
+  project_owner: ["read", "write", "share", "delete", "export", "memory:audit", "memory:attest"],
   contributor: ["read", "write", "share", "memory:attest"],
   reader: ["read"],
   service_agent: ["read", "write", "memory:attest"],
-  auditor: ["read", "export"]
+  auditor: ["read", "export", "memory:audit"]
 };
 
 export function isOrgRole(value: unknown): value is OrgRole {
@@ -26,6 +26,7 @@ const SCOPE_PERMISSION: Record<OrgBrainOAuthScope, OrgPermission> = {
   "orgbrain:read": "read",
   "orgbrain:write": "write",
   "orgbrain:share": "share",
+  "orgbrain:audit": "memory:audit",
   "orgbrain:attest": "memory:attest",
   "orgbrain:export": "export",
   "orgbrain:admin": "admin"

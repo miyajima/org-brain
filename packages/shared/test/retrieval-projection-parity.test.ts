@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  MEMORY_CONTRACT_JUDGE_PROFILES,
+  MEMORY_CONTRACT_JUDGE_PROMPT_HASH
+} from "../src/memory-contract-judge.mjs";
+import {
   analyzeRetrievalIntent as analyzeCloudIntent,
   buildVerifiedLearningRetrievalUnits as buildCloudLearning,
   buildRetrievalUnits as buildCloudV3,
@@ -120,17 +124,32 @@ describe("SQLite and D1 retrieval projection parity", () => {
       verification_state: "verified",
       source_references: [{ type: "event", ref: "learning-a", captured_at: 1_700_000_000_000 }],
       learning_json: JSON.stringify({
-        schema_version: 1,
+        schema_version: 2,
         lesson_type: "failure",
         kind: "pitfall",
         trigger: "A final response claims a command succeeded",
-        conclusion: "Only a same-turn command result can attest command success",
-        rationale: "Final-answer prose is not an execution result",
-        reuse_rule: "Require an observed exit code or a valid signed command attestation",
-        outcome: "False command evidence was rejected",
+        symptom: "A final response was treated as proof that a command succeeded",
+        failed_approach: "Trust final-answer prose as execution evidence",
+        root_cause: "Final-answer prose is not an execution result",
+        correction: "Only a same-turn command result can attest command success",
+        verified_outcome: "False command evidence was rejected",
+        avoidance_rule: "Require an observed exit code or a valid signed command attestation",
         applicability: { target_files: ["packages/orgbrain-cli/src/lib/memory-learning-transcript.mjs"], components: ["memory-learning"] },
         evidence_selectors: [{ type: "command", ref: "vitest memory-evidence-verifier" }],
-        gaps: []
+        gaps: [],
+        contract_metadata: {
+          ai_certification: "ai_consensus_certified",
+          judge_consensus: {
+            judgments: MEMORY_CONTRACT_JUDGE_PROFILES.map((profile) => ({
+              judge_name: profile.id,
+              model_family: profile.model_family,
+              prompt_hash: MEMORY_CONTRACT_JUDGE_PROMPT_HASH,
+              verdict: "pass",
+              reason_codes: [],
+              support: []
+            }))
+          }
+        }
       })
     };
     const now = 1_800_000_000_000;
@@ -140,6 +159,37 @@ describe("SQLite and D1 retrieval projection parity", () => {
     expect(cloud).toHaveLength(5);
     expect(cloud.map(normalizedUnit)).toEqual(local.map(normalizedUnit));
     expect(cloud.map((unit) => unit.unit_type)).toEqual(["atomic", "profile", "ledger", "timeline", "segment"]);
+  });
+
+  it("does not project verified learning without verified_at and certified judge consensus", async () => {
+    const base = {
+      id: "learning-uncertified",
+      tenant_id: "default",
+      project_id: "orgbrain",
+      content: "Use the verified path.",
+      summary: "Verified path",
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_000,
+      valid_from: null,
+      valid_until: 1_900_000_000_000,
+      source_references: [{ type: "event", ref: "learning-a", captured_at: 1_700_000_000_000 }],
+      capture_origin: "observed",
+      verification_state: "verified",
+      learning_json: JSON.stringify({
+        schema_version: 2,
+        lesson_type: "decision",
+        kind: "decision",
+        trigger: "A storage implementation is selected",
+        question: "Which storage implementation should be used?",
+        selected_value: "Use the verified path",
+        rationale: "It preserves deterministic replay",
+        applicability: { target_files: ["src/store.ts"], components: ["storage"] },
+        evidence_selectors: [{ type: "file", ref: "src/store.ts" }]
+      })
+    };
+
+    expect(await buildCloudLearning({ ...base, verified_at: null }, 1_800_000_000_000)).toEqual([]);
+    expect(await buildCloudLearning({ ...base, verified_at: 1_700_000_000_500 }, 1_800_000_000_000)).toEqual([]);
   });
 
 });

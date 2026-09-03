@@ -167,11 +167,19 @@ export function assessMemoryCaptureDraft(draft, profile) {
 
 export function enforceMemoryCaptureHookProfile(result, profile) {
   const drafts = [];
+  const reviewDrafts = [...(result.review_drafts ?? [])];
   const excluded = [...(result.excluded ?? [])];
   for (const draft of result.drafts ?? []) {
     const assessment = assessMemoryCaptureDraft(draft, profile);
     if (!assessment.accepted) {
-      excluded.push(...assessment.reasons.map((reason) => ({ reason })));
+      reviewDrafts.push({
+        ...draft,
+        evidence: assessment.verifiable_evidence,
+        quality_score: assessment.quality_score,
+        capture_profile_id: profile.profile_id,
+        review_reason_codes: assessment.reasons,
+        tags: [...new Set([...(draft.tags ?? []), `capture-profile:${profile.profile_id}`, "review-required"])]
+      });
       continue;
     }
     const ttlDays = profile.ttl_days_by_kind[draft.kind];
@@ -184,5 +192,12 @@ export function enforceMemoryCaptureHookProfile(result, profile) {
       tags: [...new Set([...(draft.tags ?? []), `capture-profile:${profile.profile_id}`])]
     });
   }
-  return { ...result, drafts, excluded, capture_profile: profile };
+  return {
+    ...result,
+    drafts,
+    review_drafts: reviewDrafts,
+    excluded,
+    no_candidate: drafts.length === 0 && reviewDrafts.length === 0,
+    capture_profile: profile
+  };
 }

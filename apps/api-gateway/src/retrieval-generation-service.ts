@@ -200,6 +200,7 @@ async function backfillVerifiedLearningGeneration(
      FROM memories
      WHERE tenant_id = ? AND id > ?
        AND capture_origin = 'observed' AND verification_state = 'verified'
+       AND verified_at IS NOT NULL
        AND lifecycle_state = 'active' AND (valid_until IS NULL OR valid_until > ?)
        AND (? IS NULL OR project_id = ?)
      ORDER BY id LIMIT ?`

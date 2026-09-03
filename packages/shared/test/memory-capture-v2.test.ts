@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import {
   DurableRuleMemoryExtractor,
+  enforceMemoryCaptureHookProfile,
   extractDurableMemoryDrafts,
   normalizeMemoryPaths,
   screenSensitiveMemory
@@ -224,5 +225,42 @@ describe("memory capture v2 policy", () => {
     expect(normalizeMemoryPaths("See /home/other/private.txt and /tmp/session/output.log")).toBe(
       "See [external-path] and [external-path]"
     );
+  });
+
+  it("keeps soft quality failures in review_drafts instead of excluding their evidence", () => {
+    const draft = extractDurableMemoryDrafts({
+      event_id: "evt-review-draft",
+      tenant_id: "default",
+      project_id: "org-brain",
+      source: "codex",
+      occurred_at: 1_786_000_000_000,
+      text: "D1へ統一する方針とする。理由は運用を簡素化するため。"
+    });
+    const result = enforceMemoryCaptureHookProfile(draft, {
+      schema_version: 1,
+      profile_id: "strict-review-test",
+      source_dataset: "fixture",
+      source_dataset_sha256: null,
+      max_candidates: 3,
+      accepted_kinds: ["decision"],
+      required_fields: ["rationale", "reuse_rule", "evidence"],
+      minimum_rationale_characters: 1,
+      minimum_reuse_rule_characters: 1,
+      minimum_evidence_by_kind: { decision: 1 },
+      allowed_evidence_types: ["file", "doc", "command"],
+      ttl_days_by_kind: { decision: 180 },
+      reject_gaps: true,
+      require_atomic_conclusion: true,
+      require_distinct_rationale: true,
+      rejected_example_reasons: []
+    });
+    expect(result.drafts).toEqual([]);
+    expect(result.review_drafts).toHaveLength(1);
+    expect(result.review_drafts[0]).toMatchObject({
+      content: expect.stringContaining("D1"),
+      review_reason_codes: expect.arrayContaining(["quality_missing_evidence", "quality_missing_reuse_rule"])
+    });
+    expect(result.excluded).toEqual([]);
+    expect(result.no_candidate).toBe(false);
   });
 });

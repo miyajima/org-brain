@@ -20,7 +20,7 @@ test("locked ingestion oracle qualifies all independent decision-table layers", 
   const result = await qualifyMemoryIngestionOracle();
   assert.equal(result.passed, true);
   assert.equal(result.locked, true);
-  assert.deepEqual(result.route_counts, { active: 3, review: 2, excluded: 10 });
+  assert.deepEqual(result.route_counts, { active: 0, review: 5, excluded: 10 });
   assert.equal(result.label_mismatch_count, 0);
   assert.equal(result.metamorphic_pair_count, 8);
   assert.equal(result.metamorphic_violation_count, 0);
@@ -30,7 +30,7 @@ test("locked ingestion oracle qualifies all independent decision-table layers", 
 test("oracle lock and runtime comparison reject a relabeled expected outcome", async () => {
   const loaded = await loadMemoryIngestionOracle();
   const tampered = structuredClone(loaded.definition);
-  tampered.routing_cases.find((item) => item.id === "route-active-success").expected.route = "review";
+  tampered.routing_cases.find((item) => item.id === "route-active-success").expected.route = "active";
 
   const structural = validateMemoryIngestionOracleDefinition(tampered, loaded.expectedHash);
   assert.equal(structural.passed, false);

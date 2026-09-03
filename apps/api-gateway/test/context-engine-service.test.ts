@@ -252,6 +252,8 @@ class FakeStatement {
         row.business_category_id = this.args[22] === null ? null : String(this.args[22]);
         row.work_type = this.args[23] === null ? null : String(this.args[23]);
       }
+    } else if (this.sql.includes("INSERT INTO retrieval_units(")) {
+      this.db.retrievalUnitInsertCount += 1;
     } else if (this.sql.includes("INSERT INTO memory_usage_events")) {
       this.db.usageEventBindings.push(this.args);
     }
@@ -265,6 +267,7 @@ class FakeD1 {
   groupMembers: GroupMemberRecord[] = [];
   resourceAcl: ResourceAclRecord[] = [];
   usageEventBindings: unknown[][] = [];
+  retrievalUnitInsertCount = 0;
   executionContexts: Array<{
     tenant_id: string;
     external_run_id: string;
@@ -320,9 +323,9 @@ function baseDecision(overrides: Partial<DecisionMemoryRecord>): DecisionMemoryR
     confidence: 0.88,
     visibility: "tenant",
     allowed_principals_json: "[]",
-    confirmation_state: "inferred_unconfirmed",
+    confirmation_state: "reviewed",
     confirmation_note: null,
-    confirmed_at: null,
+    confirmed_at: now,
     created_at: now,
     updated_at: now,
     ...overrides
@@ -438,11 +441,15 @@ describe("context-engine-service", () => {
       origin_source: "hook",
       origin_external_key: "evt-1:constraint",
       auto_generated: 1,
-      confidence: 0.9
+      confidence: 0.9,
+      status: "uncertain",
+      confirmation_state: "inferred_unconfirmed",
+      confirmed_at: null
     });
+    expect(db.retrievalUnitInsertCount).toBe(0);
   });
 
-  it("allows an evidence-backed 0.90 inferred constraint to block only when enabled", async () => {
+  it("never lets an inferred uncertain constraint enter the default pre-action gate", async () => {
     const db = new FakeD1();
     db.decisionMemories = [baseDecision({
       id: "dm-auto-block",
@@ -450,7 +457,9 @@ describe("context-engine-service", () => {
       decision: "New code must not use legacy_auth.",
       rationale: "It creates duplicate authentication state.",
       confidence: 0.9,
+      status: "uncertain",
       confirmation_state: "inferred_unconfirmed",
+      confirmed_at: null,
       source_refs_json: JSON.stringify([{
         type: "current_code",
         id: "apps/api-gateway/src/auth.ts",
@@ -472,7 +481,7 @@ describe("context-engine-service", () => {
       },
       { principal: "user:reviewer" }
     );
-    expect(blocked.outcome).toBe("block");
+    expect(blocked.outcome).not.toBe("block");
     expect(blocked.policy.inferred_unconfirmed_block_threshold).toBe(0.9);
 
     const disabled = await preActionDecisionGate(
@@ -494,6 +503,9 @@ describe("context-engine-service", () => {
       id: "dm-missing-request-scope",
       decision: "New code must not use legacy_auth.",
       confidence: 0.9,
+      status: "uncertain",
+      confirmation_state: "inferred_unconfirmed",
+      confirmed_at: null,
       source_refs_json: JSON.stringify([{
         type: "current_code",
         id: "apps/api-gateway/src/auth.ts",
@@ -512,7 +524,8 @@ describe("context-engine-service", () => {
     );
 
     expect(result.outcome).toBe("review");
-    expect(result.context.review_decision_memory_ids).toContain("dm-missing-request-scope");
+    expect(result.context.review_decision_memory_ids).toEqual([]);
+    expect(result.context.decisionContext).toEqual([]);
   });
 
   it("never blocks 0.89 or an evidence-free 0.90 inferred constraint", async () => {
@@ -535,6 +548,9 @@ describe("context-engine-service", () => {
       const db = new FakeD1();
       db.decisionMemories = [baseDecision({
         ...fixture,
+        status: "uncertain",
+        confirmation_state: "inferred_unconfirmed",
+        confirmed_at: null,
         decision: "New code must not use legacy_auth."
       })];
       const result = await preActionDecisionGate(
@@ -679,7 +695,7 @@ describe("context-engine-service", () => {
     expect(result.summary).toContain("new_auth_provider");
   });
 
-  it("penalizes deprecated memory below active memory", async () => {
+  it("excludes deprecated memory from default context", async () => {
     const db = new FakeD1();
     const now = Date.now();
     db.decisionMemories = [
@@ -703,10 +719,10 @@ describe("context-engine-service", () => {
       task: { title: "legacy_auth new_auth_provider", description: "認証APIを更新する" }
     })) as any;
 
-    expect(result.decisionContext.map((item: any) => item.id).slice(0, 2)).toEqual(["dm-active", "dm-deprecated"]);
+    expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-active"]);
   });
 
-  it("detects active/deprecated conflicts on the same topic", async () => {
+  it("does not inject deprecated conflicts into default context", async () => {
     const db = new FakeD1();
     db.decisionMemories = [
       baseDecision({ id: "dm-active" }),
@@ -721,11 +737,7 @@ describe("context-engine-service", () => {
       task: { title: "legacy_auth", description: "認証方針を確認する" }
     })) as any;
 
-    expect(result.conflicts).toHaveLength(1);
-    expect(result.conflicts[0]).toMatchObject({
-      preferredMemoryId: "dm-active",
-      conflictingMemoryIds: ["dm-old"]
-    });
+    expect(result.conflicts).toHaveLength(0);
   });
 
   it("filters out unauthorized memories and unauthorized source refs", async () => {
@@ -965,6 +977,30 @@ describe("context-engine-service", () => {
     expect(confirmed.decisionMemory).toMatchObject({ confirmationState: "reviewed", confirmationNote: "Architectural decision confirmed" });
     expect(confirmed.decisionMemory.reviewerRefs[0]).toMatchObject({ id: "architect" });
     expect(db.decisionMemoryVersions.map((version) => version.operation)).toEqual(["revise", "confirm"]);
+  });
+
+  it("promotes an inferred decision exactly once through explicit confirmation", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [baseDecision({
+      id: "dm-confirm-once",
+      status: "uncertain",
+      confirmation_state: "inferred_unconfirmed",
+      confirmed_at: null
+    })];
+    const body = {
+      reviewerRefs: [{ type: "user", id: "architect", name: "Architect" }],
+      confirmationState: "reviewed",
+      confirmationNote: "Reviewed once",
+      confidence: 0.9
+    };
+
+    const first = await confirmDecisionMemory({ OPEN_BRAIN_DB: db } as any, "org_123", "dm-confirm-once", body) as any;
+    const second = await confirmDecisionMemory({ OPEN_BRAIN_DB: db } as any, "org_123", "dm-confirm-once", body) as any;
+
+    expect(first.decisionMemory).toMatchObject({ status: "active", confirmationState: "reviewed" });
+    expect(second).toMatchObject({ idempotent: true });
+    expect(db.decisionMemoryVersions.filter((version) => version.operation === "confirm")).toHaveLength(1);
+    expect(db.retrievalUnitInsertCount).toBe(2);
   });
 
   it("filters decision search by reviewer and confirmation state with opt-in trust signals", async () => {
