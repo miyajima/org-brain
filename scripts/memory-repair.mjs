@@ -181,7 +181,10 @@ function memorySelectSql(tenantId, projectId, projectNull, cursor, limit) {
                  external_key, content, summary, tags_json, kind, lifecycle_state,
                  created_at, valid_until, expires_at, confidence_score, utility_score,
                  entities_json, rationale, reuse_rule, evidence_json, source_refs_json,
-                 conflicts_json, current_version
+                 conflicts_json, current_version, content_hash, canonical_key,
+                 capture_origin, capture_route, verification_state, verified_at,
+                 learning_json, quality_dimensions_json, owner_principal,
+                 created_by_principal, actor_id, permissions_json
           FROM memories
           WHERE tenant_id = ${sqlString(tenantId)}
             ${projectPredicate(projectId, projectNull)}
@@ -231,7 +234,10 @@ async function scanLocal(options) {
                 external_key, content, summary, tags_json, kind, lifecycle_state,
                 created_at, valid_until, expires_at, confidence_score, utility_score,
                 entities_json, rationale, reuse_rule, evidence_json, source_refs_json,
-                conflicts_json, current_version
+                conflicts_json, current_version, content_hash, canonical_key,
+                capture_origin, capture_route, verification_state, verified_at,
+                learning_json, quality_dimensions_json, owner_principal,
+                created_by_principal, actor_id, permissions_json
          FROM memories WHERE tenant_id = ? ${projectSql} AND id > ?
          ORDER BY id LIMIT ?`
       ).all(...projectParams, cursor, options.pageSize);
@@ -778,31 +784,8 @@ async function main() {
   const report = sanitizedPlan(plan);
   const planHash = sha256Buffer(JSON.stringify(report));
   if (checkpoint.plan_hash !== planHash) throw new Error("checkpoint_plan_mismatch");
-  let appliedCount = 0;
-  if (options.apply) {
-    if (!options.resume) {
-      backup = await createBackup(options);
-      const backupStats = await stat(backup);
-      if ((backupStats.mode & 0o077) !== 0) throw new Error("backup_permissions_not_private");
-      const manifest = {
-        version: 1,
-        created_at: Date.now(),
-      target: options.location,
-      tenant_id: options.tenant,
-      project_id: options.project,
-      project_null: options.projectNull,
-        backup_path: backup,
-        backup_sha256: await sha256File(backup),
-        plan_sha256: planHash
-      };
-      await writePrivateJson(manifestPath, manifest);
-      await writePrivateJson(planPath, plan);
-      await writePrivateJson(checkpointPath, checkpoint);
-    }
-    appliedCount = options.location === "local"
-      ? await applyLocal(options, plan, checkpointPath, checkpoint)
-      : await applyCloud(options, plan, checkpointPath, checkpoint);
-  }
+  if (options.apply) throw new Error("strict_repair_apply_requires_certified_pipeline");
+  const appliedCount = 0;
   const finalReport = {
     version: 1,
     generated_at: Date.now(),
@@ -829,7 +812,7 @@ async function main() {
     await writePrivateJson(options.reportPath, finalReport);
   }
   if (options.json) console.log(JSON.stringify(finalReport, null, 2));
-  else console.log(`mode=${finalReport.mode} target=${finalReport.target} scanned=${report.scanned_count} decisions=${report.decision_scanned_count} derive=${report.stats.derive_count} suppress=${report.stats.suppress_count} delete=0`);
+  else console.log(`mode=${finalReport.mode} target=${finalReport.target} scanned=${report.scanned_count} decisions=${report.decision_scanned_count} certification_pending=${report.stats.certification_pending_count} quarantine=${report.stats.quarantine_count} excluded=${report.stats.excluded_count} delete=0`);
 }
 
 main().catch((error) => {

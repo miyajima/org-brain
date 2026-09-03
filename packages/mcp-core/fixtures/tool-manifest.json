@@ -3562,6 +3562,97 @@
       "scope": "orgbrain:write"
     },
     {
+      "name": "orgbrain_memory_extraction_enqueue",
+      "description": "Enqueue one review-only, same-provider/model extraction from a redacted TurnEvidenceV1 packet. The hook never calls the provider directly.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "gemini",
+              "anthropic"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "session_hash": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "turn_hash": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "packet": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "packet_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "tier": {
+            "type": "string",
+            "const": "tier2"
+          },
+          "retention_class": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "restricted"
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "prompt_version": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "redaction_version": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "prefilter_version": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "project_id",
+          "provider",
+          "model",
+          "session_hash",
+          "turn_hash",
+          "packet"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
       "name": "orgbrain_memory_failure_pattern_create",
       "description": null,
       "input_schema": {
@@ -4356,6 +4447,45 @@
       "output_schema": null,
       "permission": "write",
       "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_quality_audit",
+      "description": "Run the read-only memory-quality-audit/v1 evaluator. Returns aggregate coverage, reason-code samples, and no raw memory content.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "project",
+              "tenant"
+            ]
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "scope"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
     },
     {
       "name": "orgbrain_memory_usage_state_update",

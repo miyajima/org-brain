@@ -423,7 +423,9 @@ export function extractDurableMemoryDrafts(input, options = {}) {
   if (!screened.allowed) {
     return {
       drafts: [],
-      excluded: [{ reason: screened.reason, candidate_hash: null }],
+      review_drafts: [],
+      excluded: [{ reason: screened.reason, candidate_hash: null, disposition: "hard_excluded" }],
+      no_candidate: false,
       sensitivity: screened,
       raw_transcript_persisted: false
     };
@@ -431,7 +433,9 @@ export function extractDurableMemoryDrafts(input, options = {}) {
   if (UNSAFE_INSTRUCTION_PATTERN.test(screened.text)) {
     return {
       drafts: [],
-      excluded: [{ reason: "unsafe_instruction", candidate_hash: null }],
+      review_drafts: [],
+      excluded: [{ reason: "unsafe_instruction", candidate_hash: null, disposition: "hard_excluded" }],
+      no_candidate: false,
       sensitivity: screened,
       raw_transcript_persisted: false
     };
@@ -454,31 +458,31 @@ export function extractDurableMemoryDrafts(input, options = {}) {
   );
   for (const [blockIndex, block] of candidateBlocks.entries()) {
     if (/^#{1,6}\s/u.test(block) || EXISTING_REDACTION_PATTERN.test(block) && block.length < 40) {
-      excluded.push({ reason: "low_signal", preview: clip(block, 80) });
+      excluded.push({ reason: "low_signal", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
     if (isStructuralFragment(block)) {
-      excluded.push({ reason: "low_signal", preview: clip(block, 80) });
+      excluded.push({ reason: "low_signal", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
     if (isTransient(block, screened.text)) {
-      excluded.push({ reason: "transient", preview: clip(block, 80) });
+      excluded.push({ reason: "transient", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
     const classification = classify(block, screened.text);
     if (!classification) {
-      excluded.push({ reason: "low_signal", preview: clip(block, 80) });
+      excluded.push({ reason: "low_signal", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
     const conclusion = conclusionFromText(block);
     const canonicalText = normalizeCanonical(conclusion);
     if (!canonicalText || seen.has(`${classification.kind}:${canonicalText}`)) {
-      excluded.push({ reason: "duplicate", preview: clip(block, 80) });
+      excluded.push({ reason: "duplicate", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
     seen.add(`${classification.kind}:${canonicalText}`);
     if (drafts.length >= maxCandidates) {
-      excluded.push({ reason: "candidate_limit", preview: clip(block, 80) });
+      excluded.push({ reason: "candidate_limit", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
     const candidateContext = structuredInput
@@ -519,7 +523,14 @@ export function extractDurableMemoryDrafts(input, options = {}) {
     });
   }
 
-  const result = { drafts, excluded, sensitivity: screened, raw_transcript_persisted: false };
+  const result = {
+    drafts,
+    review_drafts: [],
+    excluded,
+    no_candidate: drafts.length === 0,
+    sensitivity: screened,
+    raw_transcript_persisted: false
+  };
   return options.capture_profile
     ? enforceMemoryCaptureHookProfile(result, options.capture_profile)
     : result;

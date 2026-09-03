@@ -103,6 +103,10 @@ export type VerifiedLearningRetrievalRecord = RetrievalUnitRecord & {
   verification_state?: string | null;
   verified_at?: number | null;
   learning_json?: string | null;
+  ai_certification?: string | null;
+  judge_consensus?: Record<string, unknown> | null;
+  judge_consensus_json?: string | null;
+  verifier_version?: string | null;
 };
 
 export type RetrievalIntent = {

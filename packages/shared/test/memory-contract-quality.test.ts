@@ -24,7 +24,7 @@ function qualifiedOracle() {
     status: "qualified",
     total_cases: 40,
     layer_counts: { contract: 14, verification: 11, routing: 15 },
-    route_counts: { active: 3, review: 2, excluded: 10 },
+    route_counts: { active: 0, review: 5, excluded: 10 },
     label_mismatch_count: 0,
     metamorphic_pair_count: 8,
     metamorphic_violation_count: 0,

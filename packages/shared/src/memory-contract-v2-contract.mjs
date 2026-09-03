@@ -11,7 +11,7 @@ import { MEMORY_CONTRACT_V2_REASON_CODE_DESCRIPTIONS } from "./memory-contract-v
 // The contract check script fails when the schema changes without this manifest
 // being regenerated, so adapters cannot silently drift from the shared schema.
 export const MEMORY_CONTRACT_V2_SCHEMA_SOURCE_HASH =
-  "sha256:453779956bdab2bace666f49dba63db0e077a822af5363ae3bc8ed5749e5d691";
+  "sha256:d9e6eb9869000a4f7a8f08b996be7b1c0c85abd384932b1b9bd80e71f99c05c5";
 export const MEMORY_CONTRACT_V2_REASON_CODES_SOURCE_HASH =
   "sha256:431a804af352bb2202724c04b3c65231ff805fac4a285fbab397c1744ef79de8";
 export const MEMORY_INGESTION_REGRESSION_V3_FIXTURE_HASH =
@@ -69,4 +69,4 @@ export const MEMORY_CONTRACT_V2_CONTRACT_MANIFEST = Object.freeze({
 });
 
 export const MEMORY_CONTRACT_V2_CONTRACT_HASH =
-  "sha256:f5a78848ffc628bd146740dbaa0b2780dd60e601a5b7ae63e337ce044cd3d3bb";
+  "sha256:b706fe1705366e931a34b1e564b4a1a6c38e63756272c8bdbefbba8eee49c0af";

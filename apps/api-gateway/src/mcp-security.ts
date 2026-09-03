@@ -212,7 +212,7 @@ async function authorizeAccessRequest(request: Request, env: Env): Promise<McpAu
       runtimeActor,
       allowedTools: installation.purpose === "recall"
         ? ["orgbrain_prompt_recall", "orgbrain_domain_recall_feedback"]
-        : ["orgbrain_memories_capture_rationale"]
+        : ["orgbrain_memories_capture_rationale", "orgbrain_memory_extraction_enqueue"]
     };
   }
   const grant = await resolveVerifiedAccessUser(

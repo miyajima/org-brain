@@ -44,6 +44,33 @@ describe("MCP routing under Hono mount path stripping", () => {
     await expect(assertMcpToolAllowed(request("orgbrain_task_create"), props)).rejects.toMatchObject({ status: 403 });
   });
 
+  it("uses read scope for project audits and audit scope for tenant audits", async () => {
+    const request = (scope: "project" | "tenant") => new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "orgbrain_memory_quality_audit", arguments: { scope, project_id: "org-brain" } }
+      })
+    });
+    const base = {
+      tenantId: "default",
+      principal: "user:alice",
+      allowedTenants: ["default"],
+      defaultRole: "reader" as const,
+      authSource: "oauth" as const
+    };
+
+    await expect(assertMcpToolAllowed(request("project"), { ...base, scopes: ["orgbrain:read" as const] }))
+      .resolves.toBeUndefined();
+    await expect(assertMcpToolAllowed(request("tenant"), { ...base, scopes: ["orgbrain:read" as const] }))
+      .rejects.toMatchObject({ scope: "orgbrain:audit" });
+    await expect(assertMcpToolAllowed(request("tenant"), { ...base, scopes: ["orgbrain:audit" as const] }))
+      .resolves.toBeUndefined();
+  });
+
   it("returns 401 (not 404) for unauthenticated MCP request", async () => {
     const app = new Hono<{ Bindings: Env }>();
     mountMcp(app);

@@ -328,7 +328,7 @@ export async function qualifyMemoryIngestionOracle(options = {}) {
       const scanReason = Object.keys(report.summary.scan_exclusion_counts).find((key) => report.summary.scan_exclusion_counts[key] > 0) ?? null;
       const actual = {
         route,
-        lesson_type: active[0]?.learning?.lesson_type ?? null,
+        lesson_type: active[0]?.learning?.lesson_type ?? review[0]?.observation?.lesson_type ?? review[0]?.item?.learning?.lesson_type ?? null,
         reason_codes: reasonCodes,
         scan_reason: scanReason
       };

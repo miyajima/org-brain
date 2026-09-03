@@ -188,6 +188,7 @@ routes.get("/v1/dashboard/memory-map", async (c) => {
     q: c.req.query("q"),
     from: Number.isFinite(fromValue) ? fromValue : null,
     to: Number.isFinite(toValue) ? toValue : null,
+    includeInferred: c.req.query("include_inferred") === "true" || c.req.query("include_inferred") === "1",
     limit: Number.isFinite(limit) ? limit : 1500
   }));
 });

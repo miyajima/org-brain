@@ -14,15 +14,15 @@ describe("shared API manifest", () => {
     );
     expect(counts).toEqual({
       "asset-agent": 20,
-      collaboration: 20,
+      collaboration: 21,
       "dashboard-access": 10,
       "decision-context": 33,
       domain: 27,
       identity: 19,
-      memory: 43,
+      memory: 45,
       operations: 13
     });
-    expect(definitions).toHaveLength(185);
+    expect(definitions).toHaveLength(188);
   });
 
   it("adds MCP and OAuth protocol operations without duplicates", () => {
@@ -32,8 +32,8 @@ describe("shared API manifest", () => {
       generatedAt: "2026-08-20T00:00:00.000Z",
       routes
     });
-    expect(manifest.routes).toHaveLength(194);
-    expect(new Set(manifest.routes.map((route) => `${route.method} ${route.path}`)).size).toBe(194);
+    expect(manifest.routes).toHaveLength(197);
+    expect(new Set(manifest.routes.map((route) => `${route.method} ${route.path}`)).size).toBe(197);
     const shared = manifest.routes.filter((route) => route.path.startsWith("/v1/") || route.path.startsWith("/api/"));
     expect(shared.every((route) => route.request_schema && route.response_schema)).toBe(true);
   });

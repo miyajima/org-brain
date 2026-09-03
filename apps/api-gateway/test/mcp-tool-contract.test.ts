@@ -9,7 +9,7 @@ import type { Env } from "../src/types";
 describe("MCP tool contract", () => {
   beforeEach(() => resetCapturedMcpToolContracts());
 
-  it("captures all 48 schemas and scope mappings from the shared registry", async () => {
+  it("captures all schemas and scope mappings from the shared registry", async () => {
     await createOrgBrainMcpServer({} as Env, {
       principal: "manifest-generator",
       ownerPrincipal: "manifest-generator",
@@ -20,8 +20,16 @@ describe("MCP tool contract", () => {
       authSource: "access-service"
     });
     const tools = capturedMcpToolContracts();
-    expect(tools).toHaveLength(48);
-    expect(new Set(tools.map((tool) => tool.name)).size).toBe(48);
+    expect(tools).toHaveLength(50);
+    expect(new Set(tools.map((tool) => tool.name)).size).toBe(50);
+    expect(tools.find((tool) => tool.name === "orgbrain_memory_quality_audit")).toMatchObject({
+      permission: "read",
+      scope: "orgbrain:read"
+    });
+    expect(tools.find((tool) => tool.name === "orgbrain_memory_extraction_enqueue")).toMatchObject({
+      permission: "write",
+      scope: "orgbrain:write"
+    });
     expect(tools.every((tool) => tool.input_schema.type === "object")).toBe(true);
   });
 });

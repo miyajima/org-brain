@@ -207,6 +207,41 @@ function semanticStorageErrors(testCase, row) {
   });
 }
 
+function quarantineCandidatePayload(row) {
+  const payload = parseJsonObject(row.payload_json) ?? {};
+  const item = payload.item && typeof payload.item === "object" ? payload.item : payload;
+  return {
+    ...item,
+    learning: payload.observation && typeof payload.observation === "object"
+      ? payload.observation
+      : item.learning,
+    evidence: Array.isArray(payload.evidence) ? payload.evidence : item.evidence
+  };
+}
+
+function semanticQuarantineSummary(snapshot, caseByExternalKey) {
+  const rows = snapshot.candidates.filter((row) => caseByExternalKey.get(row.external_key)?.semantic_expectation);
+  const failures = rows.flatMap((row) => {
+    const testCase = caseByExternalKey.get(row.external_key);
+    const errors = semanticTraceErrors(testCase, quarantineCandidatePayload(row));
+    return errors.map((error) => ({ case_id: testCase.id, scenario_id: testCase.scenario_id, error }));
+  });
+  const byLesson = Object.fromEntries(["success", "decision", "failure"].map((lessonType) => {
+    const lessonRows = rows.filter((row) => caseByExternalKey.get(row.external_key)?.cohort === lessonType);
+    return [lessonType, {
+      cases: lessonRows.length,
+      passed: lessonRows.filter((row) => semanticTraceErrors(caseByExternalKey.get(row.external_key), quarantineCandidatePayload(row)).length === 0).length
+    }];
+  }));
+  return {
+    cases: rows.length,
+    passed: rows.length - new Set(failures.map((item) => item.case_id)).size,
+    error_count: failures.length,
+    failures,
+    by_lesson: byLesson
+  };
+}
+
 function semanticStorageSummary(snapshot, caseByExternalKey) {
   const rows = snapshot.memories.filter((row) => caseByExternalKey.has(row.external_key));
   const failures = rows.flatMap((row) => {
@@ -316,6 +351,20 @@ async function semanticRetrievalSummary(store, corpus, activeByExternalKey, proj
   };
 }
 
+async function quarantineRetrievalSummary(store, corpus, projectId) {
+  const checks = [];
+  for (const testCase of semanticSamples(corpus)) {
+    for (const [queryType, query] of Object.entries(testCase.semantic_expectation?.queries ?? {})) {
+      if (!query) continue;
+      const hits = await store.search({ tenant_id: "default", project_id: projectId, query, limit: 50, search_mode: "hybrid_v4" });
+      const leaked = hits.some((hit) => String(hit.memory?.external_key ?? "").startsWith("codex-import:v2:"));
+      checks.push({ case_id: testCase.id, query_type: queryType, status: leaked ? "failed" : "passed" });
+    }
+  }
+  const failures = checks.filter((item) => item.status === "failed");
+  return { checks: checks.length, passed: checks.length - failures.length, error_count: failures.length, failures };
+}
+
 export async function runMemoryIngestionStorageRegression(options = {}) {
   const ownsRoot = !options.outputDir;
   const root = path.resolve(options.outputDir ?? await mkdtemp(path.join(os.tmpdir(), "orgbrain-ingestion-storage-")));
@@ -331,28 +380,30 @@ export async function runMemoryIngestionStorageRegression(options = {}) {
       sessionsRoot: fixture.captureSessions,
       env
     });
-    assert.equal(report.summary.active_count, 225);
-    assert.equal(report.summary.review_count, 12);
+    assert.equal(report.summary.active_count, 0);
+    assert.equal(report.summary.review_count, 237);
 
     const oracle = JSON.parse(await readFile(path.join(fixture.sessions, "oracle.json"), "utf8"));
     const oracleBySession = new Map(oracle.cases.map((item) => [item.session_hash, item]));
     const batchBySession = new Map(report.plan.batches.map((batch) => [batch.session_hash, batch]));
     const caseBySessionHash = new Map(corpus.cases.map((testCase) => [testCase.session_hash, testCase]));
-    const activeByExternalKey = new Map();
+    const reviewByExternalKey = new Map();
     for (const batch of report.plan.batches) {
       const testCase = caseBySessionHash.get(batch.session_hash);
-      for (const item of batch.active ?? []) {
-        if (testCase) activeByExternalKey.set(item.external_key, { item, testCase });
+      for (const item of batch.quarantine ?? batch.review ?? []) {
+        if (testCase) reviewByExternalKey.set(item.external_key, { item, testCase });
       }
     }
-    const caseByExternalKey = new Map([...activeByExternalKey].map(([externalKey, value]) => [externalKey, value.testCase]));
+    const caseByExternalKey = new Map([...reviewByExternalKey].map(([externalKey, value]) => [externalKey, value.testCase]));
     for (const testCase of corpus.cases.filter((item) => CAPTURE_COHORTS.has(item.cohort))) {
       const expected = oracleBySession.get(testCase.session_hash);
-      assert.equal(expected?.expected_storage_route, testCase.expected_route);
-      assert.equal(actualRoute(batchBySession.get(testCase.session_hash)), testCase.expected_route);
+      const historicalRoute = testCase.expected_route === "active" ? "review" : testCase.expected_route;
+      assert.equal(expected?.expected_storage_route, historicalRoute);
+      assert.equal(actualRoute(batchBySession.get(testCase.session_hash)), historicalRoute);
     }
 
     const store = new LocalMemoryStore(dbPath);
+    await store.init();
     const first = await applyCodexSessionImportPlan(report, {
       expectedPlanHash: report.plan_hash,
       workspaceRoot: fixture.workspace,
@@ -362,13 +413,15 @@ export async function runMemoryIngestionStorageRegression(options = {}) {
     });
     assert.equal(first.ok, true);
     const firstCreated = first.results.flatMap((item) => item.active ?? []).filter((item) => item.created).length;
-    assert.equal(firstCreated, 225);
+    const firstQuarantined = first.results.flatMap((item) => item.quarantine ?? item.review ?? []).length;
+    assert.equal(firstCreated, 0);
+    assert.equal(firstQuarantined, 237);
 
     const beforeReplay = snapshotDatabase(dbPath);
-    const semanticStorage = semanticStorageSummary(beforeReplay, caseByExternalKey);
+    const semanticStorage = semanticQuarantineSummary(beforeReplay, caseByExternalKey);
     assert.equal(semanticStorage.cases, 225);
     assert.equal(semanticStorage.error_count, 0);
-    const semanticRetrieval = await semanticRetrievalSummary(store, corpus, activeByExternalKey, report.plan.target.project_id);
+    const semanticRetrieval = await quarantineRetrievalSummary(store, corpus, report.plan.target.project_id);
     assert.equal(semanticRetrieval.error_count, 0);
     const second = await applyCodexSessionImportPlan(report, {
       expectedPlanHash: report.plan_hash,
@@ -388,25 +441,25 @@ export async function runMemoryIngestionStorageRegression(options = {}) {
     const storage = storageSummary(afterReplay);
     const languageByExternalKey = new Map(
       report.plan.batches.flatMap((batch) =>
-        (batch.active ?? []).map((item) => [
+        (batch.quarantine ?? batch.review ?? []).map((item) => [
           item.external_key,
           corpus.cases.find((testCase) => testCase.session_hash === batch.session_hash)?.language ?? null
         ])
       )
     );
-    const storedLanguages = afterReplay.memories.map((item) => languageByExternalKey.get(item.external_key));
-    const storedDecisionLanguages = afterReplay.memories
-      .filter((item) => item.kind === "decision")
+    const storedLanguages = afterReplay.candidates.map((item) => languageByExternalKey.get(item.external_key));
+    const storedDecisionLanguages = afterReplay.candidates
+      .filter((item) => quarantineCandidatePayload(item).learning?.lesson_type === "decision")
       .map((item) => languageByExternalKey.get(item.external_key));
     const storedLanguageCounts = countLanguages(storedLanguages);
     const storedDecisionLanguageCounts = countLanguages(storedDecisionLanguages);
     assert.equal(storedLanguageCounts.en > 0 && storedLanguageCounts.ja > 0, true);
     assert.equal(storedDecisionLanguageCounts.en > 0 && storedDecisionLanguageCounts.ja > 0, true);
     assert.doesNotMatch(JSON.stringify(afterReplay), /api[_-]?key\s*[:=]|@example\.invalid|\+1 \(555\)/iu);
-    assert.equal(storage.active_memories, 225);
-    assert.equal(storage.memory_versions, 225);
-    assert.equal(storage.quarantine_candidates, 12);
-    assert.equal(storage.decision_memories, 75);
+    assert.equal(storage.active_memories, 0);
+    assert.equal(storage.memory_versions, 0);
+    assert.equal(storage.quarantine_candidates, 237);
+    assert.equal(storage.decision_memories, 0);
     assert.equal(storage.decision_fields_complete, true);
     assert.equal(afterReplay.candidates.every((item) => item.status === "quarantine"), true);
 
@@ -417,7 +470,7 @@ export async function runMemoryIngestionStorageRegression(options = {}) {
       generated_case_count: corpus.cases.length,
       language_counts: corpus.language_counts,
       cohort_language_counts: corpus.cohort_language_counts,
-      capture_lane_counts: { active: 225, review: 12, excluded: 200 },
+      capture_lane_counts: { active: 0, review: 237, excluded: 200 },
       stored_language_counts: storedLanguageCounts,
       stored_decision_language_counts: storedDecisionLanguageCounts,
       storage,
@@ -427,6 +480,7 @@ export async function runMemoryIngestionStorageRegression(options = {}) {
       },
       replay: {
         first_created: firstCreated,
+        first_quarantined: firstQuarantined,
         second_created: secondCreated,
         new_memory_count: afterReplay.active - beforeReplay.active,
         new_version_count: afterReplay.versions - beforeReplay.versions,

@@ -37,6 +37,7 @@ export type RuntimeMemoryDraft = {
   gaps: string | null;
   quality_score?: number;
   capture_profile_id?: string;
+  review_reason_codes?: string[];
 };
 
 export type RuntimeSensitivityResult = {
@@ -57,7 +58,14 @@ export type RuntimeSensitivityResult = {
 
 export type RuntimeMemoryExtractionResult = {
   drafts: RuntimeMemoryDraft[];
-  excluded: Array<{ reason: string; preview?: string; candidate_hash?: string | null }>;
+  review_drafts: RuntimeMemoryDraft[];
+  excluded: Array<{
+    reason: string;
+    preview?: string;
+    candidate_hash?: string | null;
+    disposition?: "hard_excluded" | "no_candidate";
+  }>;
+  no_candidate: boolean;
   sensitivity: RuntimeSensitivityResult;
   raw_transcript_persisted: false;
 };

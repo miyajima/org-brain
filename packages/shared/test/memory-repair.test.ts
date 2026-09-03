@@ -7,7 +7,7 @@ import {
 const NOW = Date.parse("2026-08-12T00:00:00.000Z");
 
 describe("memory repair planner", () => {
-  it("derives atomic memories before suppressing a large hook transcript", async () => {
+  it("quarantines a large hook transcript without deriving active memories", async () => {
     const plan = await planMemoryRepairRows([{
       id: "legacy-hook",
       project_id: "org-brain",
@@ -30,11 +30,14 @@ describe("memory repair planner", () => {
       created_at: NOW - 1_000
     }], { tenant_id: "default", now: NOW });
 
-    expect(plan.actions.some((action: any) => action.type === "derive")).toBe(true);
+    expect(plan.actions.every((action) => ["certification_pending", "quarantine", "excluded"].includes(action.type))).toBe(true);
     expect(plan.actions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "suppress", memory_id: "legacy-hook", reason_code: "derived_atomic" })
+      expect.objectContaining({
+        type: "quarantine",
+        memory_id: "legacy-hook",
+        reason_codes: expect.arrayContaining(["raw_hook_review_required"])
+      })
     ]));
-    expect(plan.actions.filter((action: any) => action.type === "derive")).toHaveLength(2);
   });
 
   it("reports credential rotation without retaining the detected value", async () => {
@@ -52,7 +55,7 @@ describe("memory repair planner", () => {
     ]);
     expect(JSON.stringify(plan.credential_rotation_required)).not.toContain(secret);
     expect(plan.actions).toContainEqual(expect.objectContaining({
-      type: "suppress",
+      type: "excluded",
       memory_id: "credential-memory",
       reason_code: "credential_detected"
     }));
@@ -74,7 +77,7 @@ describe("memory repair planner", () => {
       { memory_id: "credential-evidence", reason_code: "rotation_required" }
     ]);
     expect(plan.actions).toContainEqual(expect.objectContaining({
-      type: "suppress",
+      type: "excluded",
       memory_id: "credential-evidence",
       reason_code: "credential_detected"
     }));
@@ -112,19 +115,17 @@ describe("memory repair planner", () => {
       reuse_rule: `When editing ${root}/src/index.ts, apply this rule.`,
       evidence_json: JSON.stringify([{ type: "file", ref: `${root}/docs/SPEC.md` }]),
       source_refs_json: JSON.stringify([{ type: "file", ref: "/Users/bob/private/notes.md" }]),
-      conflicts_json: JSON.stringify(["::code-comment{secret}", `${root}/src/index.ts`]),
+      conflicts_json: JSON.stringify(["::code-comment{title=note}", `${root}/src/index.ts`]),
       created_at: NOW
     }], { tenant_id: "default", now: NOW, workspace_root: root });
 
-    const update = plan.actions.find((action: any) => action.type === "update") as any;
-    expect(update.summary).toBe("See docs/SPEC.md");
-    expect(update.rationale).toBe("Defined by AGENTS.md");
-    expect(update.reuse_rule).toBe("When editing src/index.ts, apply this rule.");
-    expect(update.evidence).toEqual([{ type: "file", ref: "docs/SPEC.md" }]);
-    expect(update.source_references).toEqual([{ type: "file", ref: "[external-path]" }]);
-    expect(update.conflicts).toEqual(["", "src/index.ts"]);
-    expect(JSON.stringify(update)).not.toContain("/Users/");
-    expect(JSON.stringify(update)).not.toContain("::code-comment");
+    const review = plan.actions.find((action) => action.memory_id === "metadata-paths");
+    expect(review).toBeDefined();
+    if (!review) throw new Error("metadata-paths action missing");
+    expect(review.type).toBe("excluded");
+    expect(review.candidate_hash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(JSON.stringify(plan)).not.toContain("/Users/");
+    expect(JSON.stringify(plan)).not.toContain("::code-comment");
   });
 
   it("suppresses default-deny sensitive data and transient completion rows", async () => {
@@ -149,14 +150,14 @@ describe("memory repair planner", () => {
 
     expect(plan.actions).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        type: "suppress",
+        type: "excluded",
         memory_id: "pii-memory",
-        reason_code: "sensitive_memory_denied"
+        reason_codes: expect.arrayContaining(["sensitive_memory_denied"])
       }),
       expect.objectContaining({
-        type: "suppress",
+        type: "excluded",
         memory_id: "completion-memory",
-        reason_code: "transient"
+        reason_codes: expect.arrayContaining(["transient"])
       })
     ]));
   });
@@ -187,19 +188,22 @@ describe("memory repair planner", () => {
         created_at: NOW
       }
     ];
+    const standaloneWeak = await planMemoryRepairRows([rows[0]], { tenant_id: "default", now: NOW });
+    const standaloneStrong = await planMemoryRepairRows([rows[1]], { tenant_id: "default", now: NOW });
     const plan = await planMemoryRepairRows(rows, { tenant_id: "default", now: NOW });
 
+    expect(plan.actions).toContainEqual(expect.objectContaining({ type: "quarantine", memory_id: "strong", dedupe_winner: true }));
     expect(plan.actions).toContainEqual(expect.objectContaining({
-      type: "update",
-      memory_id: "strong"
-    }));
-    expect(plan.actions).toContainEqual(expect.objectContaining({
-      type: "suppress",
+      type: "excluded",
       memory_id: "weak",
       reason_code: "duplicate_canonical_key",
       winner_memory_id: "strong"
     }));
-    expect(plan.actions).not.toContainEqual(expect.objectContaining({ type: "update", memory_id: "weak" }));
+    expect(plan.actions.every((action) => ["certification_pending", "quarantine", "excluded"].includes(action.type))).toBe(true);
+    const weak = plan.actions.find((action) => action.memory_id === "weak");
+    const strong = plan.actions.find((action) => action.memory_id === "strong");
+    expect(weak?.candidate_hash).not.toBe(standaloneWeak.actions[0]?.candidate_hash);
+    expect(strong?.candidate_hash).not.toBe(standaloneStrong.actions[0]?.candidate_hash);
   });
 
   it("classifies every active decision from explicit project metadata", async () => {

@@ -25,6 +25,11 @@ export type Env = {
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   SKILL_GENERATION_PROVIDERS_JSON?: string;
+  /** Same-provider/model allowlist. Entries must opt in to zero retention and strict JSON schema. */
+  MEMORY_EXTRACTION_PROVIDER_MODELS_JSON?: string;
+  /** Defaults to 500000 for Tier 2 and zero for Tier 3. */
+  MEMORY_EXTRACTION_TIER2_MONTHLY_TOKENS?: string;
+  MEMORY_EXTRACTION_TIER3_MONTHLY_TOKENS?: string;
 };
 
 export type CapabilityContext = {

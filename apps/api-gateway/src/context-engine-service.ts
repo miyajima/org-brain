@@ -718,9 +718,9 @@ function detectConflicts(scored: ScoredDecisionMemory[], now: number) {
   const conflicts = [];
   for (const [topic, items] of byTopic.entries()) {
     if (items.length < 2) continue;
+    const activeItems = items.filter((item) => item.memory.status === "active" && (!item.memory.validUntil || item.memory.validUntil >= now));
     const hasInactive = items.some((item) => item.memory.status !== "active" || Boolean(item.memory.supersededBy) || Boolean(item.memory.validUntil && item.memory.validUntil < now));
-    const hasActive = items.some((item) => item.memory.status === "active" && (!item.memory.validUntil || item.memory.validUntil >= now));
-    if (!hasInactive || !hasActive) continue;
+    if (activeItems.length === 0 || (!hasInactive && activeItems.length < 2)) continue;
     const sorted = [...items].sort(compareScored);
     const preferred = sorted.find((item) => item.memory.status === "active" && (!item.memory.validUntil || item.memory.validUntil >= now)) ?? sorted[0];
     const conflicting = sorted.filter((item) => item.memory.id !== preferred.memory.id);
@@ -978,7 +978,16 @@ async function loadDecisionMemories(env: Env, args: {
   limit: number;
   businessCategoryId?: string | null;
   workType?: MemoryWorkType | null;
+  includeReviewCandidates?: boolean;
 }): Promise<DecisionMemory[]> {
+  const eligibility = args.includeReviewCandidates
+    ? ""
+    : `AND status = 'active'
+       AND confirmation_state IN ('user_confirmed', 'user_corrected', 'reviewed')
+       AND confirmed_at IS NOT NULL
+       AND TRIM(rationale) <> ''
+       AND source_refs_json IS NOT NULL AND source_refs_json <> '[]'
+       AND (valid_until IS NULL OR valid_until > CAST(strftime('%s','now') AS INTEGER) * 1000)`;
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, domain, title, decision, rationale,
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
@@ -987,6 +996,7 @@ async function loadDecisionMemories(env: Env, args: {
             created_at, updated_at, business_category_id, work_type
      FROM decision_memories
      WHERE tenant_id = ?
+       ${eligibility}
        AND (? IS NULL OR project_id = ? OR project_id IS NULL)
        AND (? IS NULL OR business_category_id = ?)
        AND (? IS NULL OR work_type = ?)
@@ -1327,6 +1337,27 @@ async function projectDecisionMemory(env: Env, memory: DecisionMemory) {
       extractorVersion: generation.extractor_version
     }))
   ];
+  const now = Date.now();
+  const eligible = memory.status === "active" &&
+    ["user_confirmed", "user_corrected", "reviewed"].includes(memory.confirmationState) &&
+    memory.confirmedAt !== null &&
+    Boolean(memory.rationale.trim()) &&
+    memory.sourceRefs.length > 0 &&
+    (!memory.validFrom || memory.validFrom <= now) &&
+    (!memory.validUntil || memory.validUntil > now);
+  if (!eligible) {
+    const cleanup = generations.flatMap((generation) => [
+      env.OPEN_BRAIN_DB.prepare(
+        "DELETE FROM retrieval_units_fts WHERE tenant_id = ? AND unit_id = ?"
+      ).bind(memory.tenantId, generation.unitId),
+      env.OPEN_BRAIN_DB.prepare(
+        "DELETE FROM retrieval_units WHERE tenant_id = ? AND id = ?"
+      ).bind(memory.tenantId, generation.unitId)
+    ]);
+    if (typeof env.OPEN_BRAIN_DB.batch === "function") await env.OPEN_BRAIN_DB.batch(cleanup);
+    else for (const statement of cleanup) await statement.run();
+    return;
+  }
   const statements = generations.flatMap((generation) => [
       env.OPEN_BRAIN_DB.prepare(
         "DELETE FROM retrieval_units_fts WHERE tenant_id = ? AND unit_id = ?"
@@ -1389,6 +1420,11 @@ export async function backfillDecisionRetrievalUnits(
   const rows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id FROM decision_memories
      WHERE tenant_id = ? AND status = 'active' AND id > ?
+       AND confirmation_state IN ('user_confirmed', 'user_corrected', 'reviewed')
+       AND confirmed_at IS NOT NULL
+       AND TRIM(rationale) <> ''
+       AND source_refs_json IS NOT NULL AND source_refs_json <> '[]'
+       AND (valid_until IS NULL OR valid_until > CAST(strftime('%s','now') AS INTEGER) * 1000)
        AND (? IS NULL OR project_id = ?)
      ORDER BY id
      LIMIT ?`
@@ -1685,10 +1721,15 @@ export async function upsertAutoDecisionMemory(env: Env, args: {
     certified: args.certified === true
   });
   const existing = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id FROM decision_memories
+    `SELECT id, status, confirmation_state, confirmed_at FROM decision_memories
      WHERE tenant_id = ? AND origin_source = ? AND origin_external_key = ? AND auto_generated = 1
      LIMIT 1`
-  ).bind(args.tenantId, args.source, args.externalKey).first<{ id: string }>();
+  ).bind(args.tenantId, args.source, args.externalKey).first<{
+    id: string;
+    status: string;
+    confirmation_state: string;
+    confirmed_at: number | null;
+  }>();
   const body: DecisionMemoryCreateRequest = {
     tenant_id: args.tenantId,
     project_id: args.projectId,
@@ -1700,7 +1741,7 @@ export async function upsertAutoDecisionMemory(env: Env, args: {
     source_refs: sourceRefs,
     valid_from: args.validFrom,
     valid_until: args.validUntil ?? args.validFrom + INFERRED_DECISION_TTL_MS,
-    status: "active",
+    status: "uncertain",
     confidence,
     visibility: args.visibility,
     allowed_principals: args.allowedPrincipals,
@@ -1710,6 +1751,10 @@ export async function upsertAutoDecisionMemory(env: Env, args: {
     work_type: args.workType
   };
   if (existing?.id) {
+    if (existing.status === "active" && existing.confirmed_at !== null &&
+      ["user_confirmed", "user_corrected", "reviewed"].includes(existing.confirmation_state)) {
+      return { decisionMemory: await loadDecisionMemoryById(env, args.tenantId, existing.id), idempotent: true };
+    }
     return reviseDecisionMemory(env, args.tenantId, existing.id, {
       ...body,
       note: "Idempotent refresh from the originating memory capture."
@@ -1757,7 +1802,8 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
   const loaded = await loadDecisionMemories(env, {
     ...request,
     q: candidateIds ? "" : q,
-    limit: candidateIds ? Math.max(candidateIds.length, request.limit) : request.limit
+    limit: candidateIds ? Math.max(candidateIds.length, request.limit) : request.limit,
+    includeReviewCandidates: Boolean(request.confirmationState)
   });
   const candidateOrder = new Map((candidateIds ?? []).map((id, index) => [id, index]));
   const memories = candidateIds
@@ -2024,7 +2070,8 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
     tenantId: memory.tenantId,
     projectId: memory.projectId,
     q: memory.title,
-    limit: 64
+    limit: 64,
+    includeReviewCandidates: true
   });
   const visibleRelated = await filterReadableDecisionMemories(env, memory.tenantId, related, userId, agentId, userId ?? agentId);
   const scored = visibleRelated
@@ -2143,17 +2190,38 @@ export async function confirmDecisionMemory(
       ? parseOptionalNumber(body.confidence, "confidence", current.confidence, 0, 1)
       : clamp(current.confidence + parseOptionalNumber(body.confidenceDelta ?? body.confidence_delta, "confidenceDelta", 0, -1, 1), 0, 1);
   const now = Date.now();
+  const alreadyConfirmed = current.status === "active" && current.confirmedAt !== null &&
+    ["user_confirmed", "user_corrected", "reviewed"].includes(current.confirmationState);
+  const confirmationState = parseEnum(
+    body.confirmationState ?? body.confirmation_state,
+    "confirmationState",
+    CONFIRMATION_STATES,
+    alreadyConfirmed ? current.confirmationState : "reviewed"
+  );
+  const confirmationNote = body.confirmationNote !== undefined || body.confirmation_note !== undefined
+    ? parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000)
+    : current.confirmationNote;
   const memory: DecisionMemory = {
     ...current,
+    status: "active",
     reviewerRefs: reviewerRefs.length > 0 ? reviewerRefs : current.reviewerRefs,
-    confirmationState: parseEnum(body.confirmationState ?? body.confirmation_state, "confirmationState", CONFIRMATION_STATES, "reviewed"),
-    confirmationNote: parseOptionalString(body.confirmationNote ?? body.confirmation_note, "confirmationNote", 1000),
+    confirmationState,
+    confirmationNote,
     confidence,
     validFrom: body.validFrom !== undefined || body.valid_from !== undefined ? parseTimestamp(body.validFrom ?? body.valid_from, "validFrom") : current.validFrom,
     validUntil: body.validUntil !== undefined || body.valid_until !== undefined ? parseTimestamp(body.validUntil ?? body.valid_until, "validUntil") : current.validUntil,
     confirmedAt: now,
     updatedAt: now
   };
+  if (alreadyConfirmed &&
+    memory.confirmationState === current.confirmationState &&
+    memory.confirmationNote === current.confirmationNote &&
+    memory.confidence === current.confidence &&
+    memory.validFrom === current.validFrom &&
+    memory.validUntil === current.validUntil &&
+    JSON.stringify(memory.reviewerRefs) === JSON.stringify(current.reviewerRefs)) {
+    return { decisionMemory: current, idempotent: true };
+  }
   await persistDecisionMemory(env, memory);
   await insertDecisionMemoryVersion(env, { memory, operation: "confirm", reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
   return { decisionMemory: memory };
@@ -2482,7 +2550,7 @@ export async function getDecisionReviewQueue(
   const withinDays = parseOptionalInteger(body.within_days, "within_days", 30, 1, 365);
   const limit = parseOptionalInteger(body.limit, "limit", 50, 1, 100);
   const principal = normalizePrincipal(options.principal);
-  const memories = await loadDecisionMemories(env, { tenantId, projectId, q: "", limit: 100 });
+  const memories = await loadDecisionMemories(env, { tenantId, projectId, q: "", limit: 100, includeReviewCandidates: true });
   const visible = await filterReadableDecisionMemories(
     env,
     tenantId,

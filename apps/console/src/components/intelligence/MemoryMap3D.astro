@@ -27,6 +27,8 @@ type MemoryMapNode = {
   decision_type?: string | null;
   confirmation_state?: string | null;
   confidence_score?: number | null;
+  semantic_kind?: string | null;
+  lesson_type?: string | null;
   fx?: number;
   fy?: number;
   fz?: number;
@@ -41,6 +43,10 @@ type MemoryMapData = {
   project_count?: number;
   entity_count?: number;
   decision_count?: number;
+  decision_count_total?: number;
+  decision_count_confirmed?: number;
+  decision_count_inferred?: number;
+  decision_count_truncated?: boolean;
   related_count?: number;
   relationship_count?: number;
   cross_project_link_count?: number;
@@ -509,7 +515,7 @@ const filterSummary = [
 
   const root = document.querySelector<HTMLElement>("[data-memory-map-root]");
   if (root) {
-    const data = JSON.parse(root.dataset.map || "{}") as { nodes: MapNode[]; links: Array<{ id?: string; source: string; target: string; relation: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean }>; cluster_mode: boolean; total_count?: number; visible_count?: number; memory_visible_count?: number; project_count?: number; entity_count?: number; decision_count?: number; related_count?: number; relationship_count?: number; cross_project_link_count?: number; truncated?: boolean };
+    const data = JSON.parse(root.dataset.map || "{}") as { nodes: MapNode[]; links: Array<{ id?: string; source: string; target: string; relation: string; directed?: boolean; inferred?: boolean; weight?: number; confidence?: number | null; cross_project?: boolean }>; cluster_mode: boolean; total_count?: number; visible_count?: number; memory_visible_count?: number; project_count?: number; entity_count?: number; decision_count?: number; decision_count_total?: number; decision_count_confirmed?: number; decision_count_inferred?: number; decision_count_truncated?: boolean; related_count?: number; relationship_count?: number; cross_project_link_count?: number; truncated?: boolean };
     const stage = root.querySelector<HTMLElement>("[data-map-stage]");
     const glowOverlay = root.querySelector<SVGSVGElement>("[data-map-glow-overlay]");
     const svgGlowGroup = root.querySelector<SVGGElement>("[data-map-svg-glow]");

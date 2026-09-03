@@ -16,6 +16,7 @@ export const ORG_PERMISSIONS = [
   "admin",
   "delete",
   "export",
+  "memory:audit",
   "memory:attest"
 ] as const;
 
@@ -23,6 +24,7 @@ export const ORGBRAIN_OAUTH_SCOPES = [
   "orgbrain:read",
   "orgbrain:write",
   "orgbrain:share",
+  "orgbrain:audit",
   "orgbrain:attest",
   "orgbrain:export",
   "orgbrain:admin"

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -17,7 +17,12 @@ test("private mac run persists hashes only and disposes only marked run director
   ].map(JSON.stringify).join("\n"));
   const { report } = await evaluateIngestion({ input: "mac", outputDir: output, sessionsRoot: sessions, runId: "run-safe", judgeMode: "local" });
   assert.equal(report.status, "insufficient_evidence");
+  assert.equal(report.blocking_reasons.includes("held_out_ground_truth_pending"), true);
+  assert.equal(report.blocking_reasons.includes("private_judge_unavailable"), true);
+  assert.equal(report.counts.unique_sessions, 1);
+  assert.equal(report.counts.duplicate_session_entries, 0);
   const persisted = await readFile(path.join(output, "report.json"), "utf8");
+  assert.equal((await stat(path.join(output, "quality.sqlite"))).mode & 0o777, 0o600);
   assert.doesNotMatch(persisted, /private@example|\/Users\/private/u);
   assert.equal(viewQualityRun(["--run-id", "run-safe", "--quality-root", path.join(root, "runs")]).run_id, "run-safe");
   assert.equal(disposeQualityRun(["--dispose", "--run-id", "run-safe", "--quality-root", path.join(root, "runs")]).disposed, true);
@@ -42,7 +47,9 @@ test("generated run evaluates both parsers and records Wilson dimensions instead
   assert.equal(report.semantic.by_lesson.failure.error_count, 0);
   assert.equal(report.semantic.by_language.en.error_count, 0);
   assert.equal(report.semantic.by_language.ja.error_count, 0);
-  assert.equal(report.dimensions.semantic_completeness.denominator, report.counts.cases);
+  assert.equal(report.dimensions.semantic_completeness.denominator, report.coverage.candidate_turns);
+  assert.equal(report.coverage.candidate_count, report.dimensions.semantic_completeness.denominator);
+  assert.equal(report.coverage.candidate_turns >= report.route_counts.active + report.route_counts.quarantine, true);
   assert.equal(report.dimensions.semantic_completeness.wilson_lower !== null, true);
   assert.equal(report.loopback.api.run_id, "generated");
   assert.equal(report.privacy.raw_transcript_persisted, false);

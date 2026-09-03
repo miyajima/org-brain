@@ -101,8 +101,12 @@ export async function getDecisionBriefing(
             confirmed_at, created_at, updated_at
      FROM decision_memories
      WHERE tenant_id = ? AND (? IS NULL OR project_id = ?)
+       AND status = 'active'
+       AND confirmation_state IN ('user_confirmed', 'user_corrected', 'reviewed')
+       AND confirmed_at IS NOT NULL
+       AND (valid_until IS NULL OR valid_until > ?)
      ORDER BY updated_at DESC LIMIT ?`
-  ).bind(args.tenantId, args.projectId ?? null, args.projectId ?? null, Math.min(400, args.limit * 6)).all<DecisionRow>();
+  ).bind(args.tenantId, args.projectId ?? null, args.projectId ?? null, Date.now(), Math.min(400, args.limit * 6)).all<DecisionRow>();
   const decisionIds = rows.results.map((row) => row.id);
   const [policies, groupIds, artifactRows] = await Promise.all([
     loadAccessPolicies(env, args.tenantId, "decision_memory", decisionIds),

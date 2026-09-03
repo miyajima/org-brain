@@ -813,9 +813,21 @@ export async function captureMemoryWithInferredRationale(
       const reuseRule = parsedItem.reuse_rule == null
         ? null
         : screen(parsedItem.reuse_rule, `${field}.reuse_rule`);
-      const learning = parsedItem.learning == null
+      const screenedLearning = parsedItem.learning == null
         ? null
         : JSON.parse(screen(JSON.stringify(parsedItem.learning), `${field}.learning`)) as Record<string, unknown>;
+      const learning = screenedLearning && parsedItem.ai_certification && parsedItem.judge_consensus
+        ? {
+          ...screenedLearning,
+          contract_metadata: {
+            ...(screenedLearning.contract_metadata && typeof screenedLearning.contract_metadata === "object"
+              ? screenedLearning.contract_metadata as Record<string, unknown>
+              : {}),
+            ai_certification: parsedItem.ai_certification,
+            judge_consensus: parsedItem.judge_consensus
+          }
+        }
+        : screenedLearning;
       const tags = parsedItem.tags.map((tag, tagIndex) => screen(tag, `${field}.tags[${tagIndex}]`));
       const itemEvidence = (parsedItem.evidence.length > 0 ? parsedItem.evidence : request.evidence)
         .map((entry, evidenceIndex) => ({
@@ -1020,7 +1032,11 @@ export async function captureMemoryWithInferredRationale(
       entities: entry.entities.length > 0 ? entry.entities : entry.extracted.entities,
       evidence: entry.evidence.length > 0 ? entry.evidence : entry.extracted.evidence
     });
-    const decision = (env.ORGBRAIN_MEMORY_CAPTURE_V2_MODE === "on" || entry.item.verification.state === "verified") &&
+    const decision = entry.qualityRoute === "active" &&
+      entry.item.verification.state === "verified" &&
+      entry.item.capture_origin === "observed" &&
+      Number.isFinite(Number(entry.item.verification.verified_at)) &&
+      entry.item.ai_certification === "ai_consensus_certified" &&
       (entry.item.kind === "decision" || entry.item.kind === "constraint")
       ? await upsertAutoDecisionMemory(env, {
         tenantId: request.tenantId,
@@ -1047,7 +1063,8 @@ export async function captureMemoryWithInferredRationale(
         confidence: entry.item.confidence_score ?? entry.extracted.rationale.confidence_score ?? 0.5,
         visibility: entry.item.visibility,
         allowedPrincipals: entry.item.allowed_principals,
-        principal: request.actorId
+        principal: request.actorId,
+        certified: true
       })
       : null;
     results.push({

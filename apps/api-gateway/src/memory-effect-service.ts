@@ -513,6 +513,9 @@ export async function recordMemoryEffect(env: Pick<Env, "OPEN_BRAIN_DB">, tenant
   if (failureAvoided && !(opportunity === "applicable" && actionChanged && alternativeExecuted)) {
     throw new HttpError(400, "invalid_failure_avoidance_evidence", "failure avoidance requires applicable opportunity, action change, and executed alternative");
   }
+  if (failureAvoided && (evidenceLevel !== "verified" || !body.verification_ref_type || !body.verification_ref_id)) {
+    throw new HttpError(400, "verified_failure_avoidance_required", "failure avoidance requires verified evidence and a verification reference");
+  }
   const supersedesEffectId = typeof body.supersedes_effect_id === "string" && body.supersedes_effect_id.trim()
     ? body.supersedes_effect_id.trim()
     : null;

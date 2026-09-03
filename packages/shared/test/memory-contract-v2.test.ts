@@ -45,6 +45,31 @@ describe("Memory Contract v2 normalizer", () => {
       evidence_selectors: [],
       gaps: ["outcome evidence is pending"]
     })).toBe(true);
+    expect(validateMemoryContractV2Event({
+      ...base,
+      lesson_type: "decision",
+      capture_intent: "review",
+      decision_type: null,
+      decision_key: "storage_backend",
+      question: "どの保存方式を採用しますか？",
+      selected_value: "D1",
+      constraints: [],
+      alternatives: [],
+      evidence_selectors: [],
+      gaps: ["decision_type_missing"]
+    })).toBe(true);
+    expect(validateMemoryContractV2Event({
+      ...base,
+      lesson_type: "decision",
+      capture_intent: "verify",
+      decision_type: null,
+      decision_key: "storage_backend",
+      question: "どの保存方式を採用しますか？",
+      selected_value: "D1",
+      constraints: [],
+      alternatives: [],
+      evidence_selectors: [{ type: "user_statement", ref: "D1", supports: ["selected_value"] }]
+    })).toBe(false);
   });
 
   it("accepts an explicit user choice without inventing rationale", async () => {
@@ -87,6 +112,38 @@ describe("Memory Contract v2 normalizer", () => {
     });
     expect(verify.accepted).toBe(false);
     expect(verify.event).toBeNull();
+  });
+
+  it("allows a missing decision type only for review and records the gap", async () => {
+    const review = await normalizeMemoryContractV2Event({
+      ...base,
+      lesson_type: "decision",
+      capture_intent: "review",
+      decision_key: "storage_backend",
+      question: "どの保存方式を採用しますか？",
+      selected_value: "D1",
+      constraints: [],
+      alternatives: [],
+      evidence_selectors: []
+    });
+    expect(review.accepted).toBe(true);
+    expect(review.event?.lesson_type === "decision" && review.event.decision_type).toBeNull();
+    expect(review.event?.gaps).toContain("decision_type_missing");
+    expect(review.reason_codes).toContain("gaps_present");
+
+    const verify = await normalizeMemoryContractV2Event({
+      ...base,
+      lesson_type: "decision",
+      capture_intent: "verify",
+      decision_key: "storage_backend",
+      question: "どの保存方式を採用しますか？",
+      selected_value: "D1",
+      constraints: [],
+      alternatives: [],
+      evidence_selectors: [{ type: "user_statement", ref: "D1", supports: ["selected_value"] }]
+    });
+    expect(verify.accepted).toBe(false);
+    expect(verify.reason_codes).toContain("invalid_decision_type");
   });
 
   it("requires a digest for deterministic tool-result evidence and rejects secrets", async () => {
