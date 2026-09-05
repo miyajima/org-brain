@@ -69,6 +69,13 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
       enrollment_expires_at INTEGER, created_at INTEGER NOT NULL, activated_at INTEGER,
       last_used_at INTEGER, revoked_at INTEGER
     );
+    CREATE TABLE memories(
+      id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT, content TEXT NOT NULL,
+      summary TEXT, kind TEXT NOT NULL DEFAULT 'episodic', lifecycle_state TEXT DEFAULT 'active',
+      expires_at INTEGER, created_at INTEGER NOT NULL,
+      permissions_json TEXT DEFAULT '[]', deleted_at INTEGER, valid_from INTEGER, valid_until INTEGER
+    );
+    CREATE VIRTUAL TABLE memories_fts USING fts5(memory_id UNINDEXED, tenant_id UNINDEXED, content);
   `);
   database.exec(readFileSync(new URL("../../../migrations/0038_memory_extraction_pipeline.sql", import.meta.url), "utf8"));
   database.prepare("INSERT INTO mcp_client_installations(id,tenant_id,owner_principal,client_type,device_label,purpose,status,created_at) VALUES(?,?,?,?,?,?,?,?)")
@@ -175,7 +182,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
 
 function providerCandidate() {
   return {
-    lesson_type: "decision",
+    lesson_type: "decision" as const,
     support_span_ids: ["s1.1"],
     gaps: ["question_missing", "alternatives_missing"],
     fields: [
@@ -190,6 +197,17 @@ function providerCandidate() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("memory extraction capability", () => {
+  it("accepts legacy schemas and rejects v3 without its routing contract", async () => {
+    const { bucket, context } = await fixture();
+    const stored = await (await bucket.get("inputs/run-a.json"))!.json<Record<string, unknown> & { packet: Record<string, unknown> }>();
+    for (const schema of ["learning-extraction-proposal/v1", "learning-extraction-proposal/v2"]) {
+      stored.packet.schema = schema;
+      expect(__memoryExtractionInternals.parseInput(stored, context).packet.schema).toBe(schema);
+    }
+    stored.packet.schema = "learning-extraction-proposal/v3";
+    expect(() => __memoryExtractionInternals.parseInput(stored, context)).toThrow("v3_routing_invalid");
+  });
+
   it("settles one review-only candidate, exact usage, and never calls the provider twice", async () => {
     const { database, bucket, context } = await fixture();
     const provider = vi.fn(async () => new Response(JSON.stringify({
@@ -279,7 +297,7 @@ describe("memory extraction capability", () => {
       packet: { snippets: Array<{ span_id: string; role: string; text: string }> };
     }>();
     stored.packet.snippets.push({ span_id: "s2.1", role: "user", text: "理由は処理速度を優先するため。" });
-    const [candidate] = await __memoryExtractionInternals.verifiedCandidates(stored as never, [{
+    const verification = await __memoryExtractionInternals.verifiedCandidates(stored as never, [{
       lesson_type: "decision",
       support_span_ids: ["s1.1"],
       gaps: [],
@@ -289,9 +307,94 @@ describe("memory extraction capability", () => {
         { name: "rationale", values: ["理由は処理速度を優先するため。"] }
       ]
     }]);
-    expect(candidate.observation.rationale).toBeNull();
-    expect(candidate.gaps).toContain("rationale_unsupported");
-    expect(candidate.support_span_ids).toEqual(["s1.1"]);
+    expect(verification.candidates).toEqual([]);
+    expect(verification.rejections).toEqual([{
+      candidate_index: 0,
+      reason_codes: ["rationale_not_exactly_grounded"]
+    }]);
     expect(context.tenantId).toBe("tenant-a");
+  });
+
+  it("allows update and conflict actions only for a memory retrieved from the same project", async () => {
+    const { bucket } = await fixture();
+    const stored = await (await bucket.get("inputs/run-a.json"))!.json<Record<string, unknown> & {
+      packet: { existing_memories?: Array<{ id: string; kind: string; text: string }> };
+    }>();
+    stored.packet.existing_memories = [{ id: "memory-1", kind: "decision", text: "REST APIを利用する。" }];
+    const proposal = providerCandidate();
+    proposal.fields.push(
+      { name: "persistence", values: ["durable"] },
+      { name: "memory_kind", values: ["decision"] },
+      { name: "action", values: ["update"] },
+      { name: "target_memory_id", values: ["memory-1"] }
+    );
+    const { candidates: [candidate] } = await __memoryExtractionInternals.verifiedCandidates(stored as never, [proposal]);
+    expect(candidate).toMatchObject({ action: "update", target_memory_id: "memory-1", memory_kind: "decision" });
+
+    proposal.fields = proposal.fields.map((field) => field.name === "target_memory_id"
+      ? { ...field, values: ["memory-from-another-project"] }
+      : field);
+    await expect(__memoryExtractionInternals.verifiedCandidates(stored as never, [proposal])).resolves.toEqual({
+      candidates: [],
+      rejections: [{ candidate_index: 0, reason_codes: ["target_memory_id_unsearched"] }]
+    });
+  });
+
+  it("never forwards restricted, invalid-lifecycle or sensitive existing memories", async () => {
+    const { database, context, bucket } = await fixture();
+    const input = await (await bucket.get("inputs/run-a.json"))!.json<{ packet: { snippets: Array<{ span_id: string; text: string }> } }>();
+    input.packet.snippets = [{ span_id: "s1.1", text: "REST API" }];
+    const now = Date.now();
+    const insert = (id: string, options: { tenant?: string; project?: string; acl?: string; deleted?: number; from?: number; until?: number; expires?: number; state?: string; summary?: string; content?: string } = {}) => {
+      database.prepare("INSERT INTO memories(id,tenant_id,project_id,content,summary,kind,lifecycle_state,expires_at,created_at,permissions_json,deleted_at,valid_from,valid_until) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .run(id, options.tenant ?? "tenant-a", options.project ?? "project-a", options.content ?? "REST API", options.summary ?? "REST API", "decision", options.state ?? "active", options.expires ?? null, now, options.acl ?? "[]", options.deleted ?? null, options.from ?? null, options.until ?? null);
+      database.prepare("INSERT INTO memories_fts(memory_id,tenant_id,content) VALUES(?,?,?)").run(id, options.tenant ?? "tenant-a", "REST API");
+    };
+    // Every rejected class is tested separately so LIMIT 5 cannot hide a leak.
+    const rejected = [
+      { acl: '[{"principal_type":"principal","principal_id":"user:test","permissions":["read"]}]' },
+      { acl: "invalid-json" }, { tenant: "other" }, { project: "other" },
+      { deleted: now }, { from: now + 100_000 }, { until: now - 1 },
+      { expires: now - 1 }, { state: "suppressed" },
+      { content: "x".repeat(200) + " password=not-a-real-test-secret", summary: "safe summary" },
+      { summary: "REST API test@example.com" },
+      { content: "x".repeat(200) + ' password = "synthetic-test-secret"', summary: "safe summary" },
+      { summary: 'REST API password = "synthetic-test-secret"' },
+      { content: "x".repeat(200) + "\nBearer synthetic-test-token-1234567890", summary: "safe summary" },
+      { summary: "REST API\nBearer synthetic-test-token-1234567890" }
+    ];
+    for (const [i, options] of rejected.entries()) {
+      database.exec("DELETE FROM memories; DELETE FROM memories_fts;");
+      insert("safe"); insert(`blocked-${i}`, options);
+      const result = await __memoryExtractionInternals.loadExistingMemoryCandidates(context, input as never);
+      expect(result.map(row => row.id)).toEqual(["safe"]);
+    }
+  });
+
+  it("does not persist a provider skip as a review candidate", async () => {
+    const { bucket } = await fixture();
+    const stored = await (await bucket.get("inputs/run-a.json"))!.json<Record<string, unknown>>();
+    const proposal = providerCandidate();
+    proposal.fields.push({ name: "action", values: ["skip"] });
+    await expect(__memoryExtractionInternals.verifiedCandidates(stored as never, [proposal])).resolves.toEqual({
+      candidates: [],
+      rejections: [{ candidate_index: 0, reason_codes: ["provider_skip"] }]
+    });
+  });
+
+  it("rejects unresolved supports and lesson-kind mismatches with reason codes only", async () => {
+    const { bucket } = await fixture();
+    const stored = await (await bucket.get("inputs/run-a.json"))!.json<Record<string, unknown>>();
+    const unresolved = providerCandidate();
+    unresolved.support_span_ids = ["s1.1.fake"];
+    const mismatch = providerCandidate();
+    mismatch.fields.push({ name: "memory_kind", values: ["pitfall"] });
+    await expect(__memoryExtractionInternals.verifiedCandidates(stored as never, [unresolved, mismatch])).resolves.toEqual({
+      candidates: [],
+      rejections: [
+        { candidate_index: 0, reason_codes: ["support_id_unresolved"] },
+        { candidate_index: 1, reason_codes: ["lesson_memory_kind_mismatch"] }
+      ]
+    });
   });
 });

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["drafts"],
+  "properties": {
+    "drafts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "source_hash",
+          "outcome",
+          "usefulness",
+          "lesson_types",
+          "support_spans",
+          "exclusion_reason",
+          "confidence",
+          "rationale"
+        ],
+        "properties": {
+          "case_id": { "type": "string" },
+          "source_hash": { "type": "string" },
+          "outcome": { "type": "string", "enum": ["candidate", "no_candidate", "episode_fragment", "hard_excluded"] },
+          "usefulness": { "type": "string", "enum": ["durable_memory", "operational_history_only", "not_useful", "excluded"] },
+          "lesson_types": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["decision", "failure", "success"] }
+          },
+          "support_spans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["turn_id", "quote", "start", "end"],
+              "properties": {
+                "turn_id": { "type": "string" },
+                "quote": { "type": "string" },
+                "start": { "type": "integer" },
+                "end": { "type": "integer" }
+              }
+            }
+          },
+          "exclusion_reason": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+          "rationale": { "type": "string" }
+        }
+      }
+    }
+  }
+}

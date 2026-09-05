@@ -1,0 +1,1052 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+Astro.response.headers.set("Cache-Control", "private, no-store");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+---
+<BaseLayout title="記憶抽出の人手評価 | Org Brain" lang="ja" wide>
+  <section class="evaluation-page" data-evaluation-page>
+    <header class="evaluation-hero">
+      <div>
+        <p class="evaluation-kicker">PRIVATE REVIEW ROOM · SINGLE REVIEWER PILOT</p>
+        <h1>記憶抽出の人手評価</h1>
+        <p class="evaluation-lead">重複排除と安全フィルターを通した会話を読み、Router v3.2では予測を見ない人手ラベルとして確定します。旧v1セットは従来どおりAI下書きを確認できます。</p>
+      </div>
+      <div class="local-seal" aria-label="データはこのブラウザ内だけに保存されます">
+        <span class="local-seal-dot" aria-hidden="true"></span>
+        <strong>LOCAL CONTROL</strong>
+        <small>通常は端末内 · AI時のみ送信</small>
+      </div>
+    </header>
+
+    <aside class="privacy-notice" role="note">
+      <strong>暫定評価</strong>
+      <span>1名評価のため正式認定には使いません。Router v3.2の初期表示には予測・AI下書きを含めず、回答はこのブラウザで明示的に確定した内容だけを保存します。</span>
+    </aside>
+
+    <aside class="label-guide" role="note">
+      <strong>Router v3.2 判定基準</strong>
+      <span><b>durable_memory</b>：今後も使える判断・制約・教訓が本文から確認できる（根拠と将来の利用場面が必須）。</span>
+      <span><b>operational_history_only</b>：作業履歴・今回限りの修正・検証として有用だが永続化しない。</span>
+      <span><b>not_useful</b>：挨拶、重複、具体性のない進捗など、後から参照する価値が乏しい。</span>
+      <span><b>excluded</b>：秘密・直接PII・prompt injectionなど安全上の処理対象外。</span>
+    </aside>
+
+    <section class="import-panel" data-import-panel>
+      <div>
+        <p class="panel-index">01 / LOAD</p>
+        <h2>固定評価セットを読み込む</h2>
+        <p><code>orgbrain-memory-extraction-evaluation/v1</code> または <code>memory-extraction-router-v32-review/v1</code> のJSONを選択してください。v3.2は配信payloadから予測を除去したblind reviewです。</p>
+      </div>
+      <div class="import-controls">
+        <label class="field-stack">
+          <span>評価者ID</span>
+          <input type="text" value="reviewer-local" maxlength="80" autocomplete="off" data-reviewer-id />
+        </label>
+        <label class="file-button">
+          <span>評価セットを選択</span>
+          <input type="file" accept="application/json,.json" data-bundle-input />
+        </label>
+        <label class="secondary-file-button">
+          <span>回答JSONを復元</span>
+          <input type="file" accept="application/json,.json" data-progress-input disabled />
+        </label>
+      </div>
+      <p class="import-error" role="alert" data-import-error hidden></p>
+    </section>
+
+    <section class="evaluation-workspace" data-workspace hidden>
+      <aside class="case-rail" aria-label="評価ケース一覧">
+        <div class="progress-header">
+          <p class="panel-index">02 / PROGRESS</p>
+          <strong data-progress-count>0 / 0</strong>
+        </div>
+        <div class="progress-track" role="progressbar" aria-label="評価の完了率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress-track>
+          <span data-progress-bar></span>
+        </div>
+        <div class="phase-summary" data-phase-summary></div>
+        <nav class="case-list" aria-label="ケースを選択" data-case-list></nav>
+        <div class="rail-actions">
+          <button type="button" class="secondary-action" data-export>回答JSONを書き出す</button>
+          <button type="button" class="quiet-action" data-reset>端末内の回答を消去</button>
+        </div>
+      </aside>
+
+      <div class="review-stage">
+        <header class="case-header">
+          <div>
+            <p class="panel-index" data-case-position>CASE 0 / 0</p>
+            <h2 data-case-title>—</h2>
+          </div>
+          <div class="case-badges">
+            <span class="phase-badge" data-case-phase>—</span>
+            <span class="save-state" aria-live="polite" data-save-state>端末内に保存</span>
+          </div>
+        </header>
+
+        <section class="episode-panel" aria-labelledby="episode-heading">
+          <div class="section-heading">
+            <div><p class="panel-index">EVIDENCE CAPSULE</p><h3 id="episode-heading">会話エピソード</h3></div>
+            <p>表示本文はファイル名・パス・構造タグを除去済み · 根拠にする文を選択して「選択範囲を追加」</p>
+          </div>
+          <div class="episode-timeline" data-turns></div>
+        </section>
+
+        <section class="ai-draft-panel" data-ai-draft-panel aria-labelledby="ai-draft-heading">
+          <div class="ai-draft-intro">
+            <div><p class="panel-index">AI REVIEW ASSIST</p><h3 id="ai-draft-heading">AI評価下書き</h3></div>
+            <button type="button" class="ai-draft-action" data-ai-draft>AI評価</button>
+          </div>
+          <p class="ai-draft-disclosure">固定セットには全CASEの事前評価を収録できます。各下書きに使用モデルを表示し、既存の人手入力は上書きしません。再評価する場合も表示本文だけを送信します。</p>
+          <p class="ai-draft-status" role="status" aria-live="polite" data-ai-draft-status>未実行</p>
+          <div class="ai-draft-result" data-ai-draft-result hidden>
+            <div class="ai-draft-summary">
+              <span data-ai-draft-outcome>—</span>
+              <span data-ai-draft-usefulness>—</span>
+              <span data-ai-draft-confidence>—</span>
+            </div>
+            <p data-ai-draft-rationale></p>
+            <div data-ai-draft-spans></div>
+            <button type="button" class="secondary-action" data-ai-draft-apply>この下書きを反映</button>
+            <small data-ai-draft-apply-note></small>
+          </div>
+        </section>
+
+        <form class="annotation-panel" data-annotation-form>
+          <div class="section-heading">
+            <div><p class="panel-index">HUMAN LABEL</p><h3>あなたの判定</h3></div>
+            <p><span aria-hidden="true">*</span> は完了に必要</p>
+          </div>
+
+          <fieldset>
+            <legend>1. このエピソードの結果 <span>*</span></legend>
+            <div class="choice-grid outcome-grid">
+              <label><input type="radio" name="outcome" value="candidate" /><span><strong>候補あり</strong><small>再利用可能な記憶がある</small></span></label>
+              <label><input type="radio" name="outcome" value="no_candidate" /><span><strong>候補なし</strong><small>永続的な学びではない</small></span></label>
+              <label><input type="radio" name="outcome" value="episode_fragment" /><span><strong>未完の断片</strong><small>結果や因果がまだ閉じていない</small></span></label>
+              <label><input type="radio" name="outcome" value="hard_excluded" /><span><strong>除外</strong><small>秘密・PII・unsafe等を含む</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset data-usefulness-fieldset>
+            <legend>2. 何に使えるか <span>*</span></legend>
+            <div class="choice-grid usefulness-grid">
+              <label><input type="radio" name="usefulness" value="durable_memory" /><span><strong>永続記憶</strong><small>将来も使う安定した知識・方針</small></span></label>
+              <label><input type="radio" name="usefulness" value="operational_history_only" /><span><strong>運用履歴のみ</strong><small>時系列・同じ修正の反復防止に有用</small></span></label>
+              <label><input type="radio" name="usefulness" value="not_useful" /><span><strong>利用価値なし</strong><small>将来の検索・判断には不要</small></span></label>
+              <label><input type="radio" name="usefulness" value="excluded" /><span><strong>安全上の除外</strong><small>保存・処理してはいけない</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset data-lesson-fieldset>
+            <legend>3. 候補の種類（複数選択可） <span>*</span></legend>
+            <div class="choice-grid lesson-grid">
+              <label><input type="checkbox" name="lesson_type" value="decision" /><span><strong>Decision</strong><small>明示的で永続的な選択</small></span></label>
+              <label><input type="checkbox" name="lesson_type" value="failure" /><span><strong>Failure</strong><small>失敗 → 修正 → 成功が因果接続</small></span></label>
+              <label><input type="checkbox" name="lesson_type" value="success" /><span><strong>Success</strong><small>手順 → 検証 → 結果が確認可能</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset data-evidence-fieldset>
+            <legend>4. 根拠範囲 <span>*</span></legend>
+            <div class="evidence-empty" data-evidence-empty>会話本文から根拠にする範囲を選択してください。</div>
+            <ol class="evidence-list" data-evidence-list></ol>
+          </fieldset>
+
+          <label class="field-stack exclusion-field" data-exclusion-field hidden>
+            <span>除外理由コード <b>*</b></span>
+            <input type="text" name="exclusion_reason" placeholder="例: credential_detected" maxlength="120" />
+          </label>
+
+          <label class="field-stack future-use-field" data-future-use-field hidden>
+            <span>将来どの場面で使うか <b>*</b></span>
+            <textarea name="future_use" rows="2" maxlength="300" placeholder="例：同じ構成を選ぶときの制約確認に使う"></textarea>
+          </label>
+
+          <fieldset>
+            <legend>5. 判定の確信度 <span>*</span></legend>
+            <div class="confidence-row">
+              <label><input type="radio" name="confidence" value="high" /><span>高い</span></label>
+              <label><input type="radio" name="confidence" value="medium" /><span>中程度</span></label>
+              <label><input type="radio" name="confidence" value="low" /><span>低い</span></label>
+            </div>
+          </fieldset>
+
+          <label class="field-stack note-field">
+            <span>メモ（任意）</span>
+            <textarea name="note" rows="3" maxlength="1000" placeholder="迷った点やガイドライン改善案"></textarea>
+          </label>
+        </form>
+
+        <p class="validation-message" role="alert" data-validation hidden></p>
+        <footer class="case-actions">
+          <button type="button" class="secondary-action" data-previous>前のケース</button>
+          <span><kbd>←</kbd><kbd>→</kbd> で移動</span>
+          <button type="button" class="quiet-action" data-uncertain hidden>保留にする</button>
+          <button type="button" class="primary-action" data-next>完了して次へ</button>
+        </footer>
+      </div>
+    </section>
+  </section>
+</BaseLayout>
+
+<script>
+  import {
+    createEmptyAnnotation,
+    createProgress,
+    createSanitizedEvaluationCase,
+    applyEvaluationAiDraft,
+    isAnnotationComplete,
+    parseEvaluationAiDraft,
+    parseEvaluationBundle,
+    parseEvaluationProgress,
+    storageKey,
+    summarizeEvaluation,
+    type EvaluationAnnotation,
+    type EvaluationAiDraft,
+    type EvaluationBundle,
+    type EvaluationProgress,
+    type EvidenceSpan,
+    type LessonType,
+    type EvaluationUsefulness
+  } from "../../lib/memory-extraction-evaluation";
+
+  const bundleInput = document.querySelector<HTMLInputElement>("[data-bundle-input]");
+  const progressInput = document.querySelector<HTMLInputElement>("[data-progress-input]");
+  const reviewerInput = document.querySelector<HTMLInputElement>("[data-reviewer-id]");
+  const importError = document.querySelector<HTMLElement>("[data-import-error]");
+  const workspace = document.querySelector<HTMLElement>("[data-workspace]");
+  const caseList = document.querySelector<HTMLElement>("[data-case-list]");
+  const turnsRoot = document.querySelector<HTMLElement>("[data-turns]");
+  const form = document.querySelector<HTMLFormElement>("[data-annotation-form]");
+  const validation = document.querySelector<HTMLElement>("[data-validation]");
+  const lessonFieldset = document.querySelector<HTMLFieldSetElement>("[data-lesson-fieldset]");
+  const evidenceFieldset = document.querySelector<HTMLFieldSetElement>("[data-evidence-fieldset]");
+  const exclusionField = document.querySelector<HTMLElement>("[data-exclusion-field]");
+  const futureUseField = document.querySelector<HTMLElement>("[data-future-use-field]");
+  const aiDraftPanel = document.querySelector<HTMLElement>("[data-ai-draft-panel]");
+  const evidenceList = document.querySelector<HTMLOListElement>("[data-evidence-list]");
+  const evidenceEmpty = document.querySelector<HTMLElement>("[data-evidence-empty]");
+  const previousButton = document.querySelector<HTMLButtonElement>("[data-previous]");
+  const nextButton = document.querySelector<HTMLButtonElement>("[data-next]");
+  const uncertainButton = document.querySelector<HTMLButtonElement>("[data-uncertain]");
+  const exportButton = document.querySelector<HTMLButtonElement>("[data-export]");
+  const resetButton = document.querySelector<HTMLButtonElement>("[data-reset]");
+  const aiDraftButton = document.querySelector<HTMLButtonElement>("[data-ai-draft]");
+  const aiDraftApplyButton = document.querySelector<HTMLButtonElement>("[data-ai-draft-apply]");
+  const aiDraftResult = document.querySelector<HTMLElement>("[data-ai-draft-result]");
+  const aiDraftStatus = document.querySelector<HTMLElement>("[data-ai-draft-status]");
+
+  let bundle: EvaluationBundle | null = null;
+  let progress: EvaluationProgress | null = null;
+  let currentIndex = 0;
+  let saveTimer: number | undefined;
+  let aiDraft: EvaluationAiDraft | null = null;
+
+  const outcomeLabels: Record<string, string> = {
+    candidate: "候補あり",
+    no_candidate: "候補なし",
+    episode_fragment: "未完の断片",
+    hard_excluded: "除外"
+  };
+  const usefulnessLabels: Record<string, string> = {
+    durable_memory: "永続化対象",
+    operational_history_only: "時系列・再発防止には有用／永続化対象外",
+    not_useful: "将来の利用価値なし",
+    excluded: "安全上の除外"
+  };
+  const confidenceLabels: Record<string, string> = { high: "確信度 高", medium: "確信度 中", low: "確信度 低" };
+
+  function showError(message: string) {
+    if (!importError) return;
+    importError.textContent = message;
+    importError.hidden = false;
+  }
+
+  function clearError() {
+    if (importError) importError.hidden = true;
+  }
+
+  async function readJson(file: File): Promise<unknown> {
+    if (file.size > 20 * 1024 * 1024) throw new Error("JSONは20MiB以下にしてください。");
+    return JSON.parse(await file.text());
+  }
+
+  function currentCase() {
+    return bundle?.cases[currentIndex] ?? null;
+  }
+
+  function currentReviewCase() {
+    const item = currentCase();
+    return item ? createSanitizedEvaluationCase(item) : null;
+  }
+
+  function currentAnnotation(): EvaluationAnnotation | null {
+    const item = currentCase();
+    if (!item || !progress) return null;
+    return progress.annotations[item.id] ??= createEmptyAnnotation(item.id, new Date().toISOString(), {
+      routerV32: Boolean(bundle?.router_v32),
+      sourceHash: item.source_hash,
+      priorAiExposure: bundle?.router_v32 ? item.prior_ai_exposure ?? "unknown" : "unknown"
+    });
+  }
+
+  function annotationHasInput(annotation: EvaluationAnnotation | null): boolean {
+    return Boolean(annotation && (annotation.outcome || annotation.usefulness || annotation.confidence || annotation.note.trim()
+      || annotation.exclusion_reason.trim() || annotation.future_use?.trim() || annotation.lesson_types.length || annotation.evidence_spans.length));
+  }
+
+  function annotationReviewed(annotation: EvaluationAnnotation | undefined): boolean {
+    return isAnnotationComplete(annotation) || Boolean(bundle?.router_v32 && annotation?.review_status === "uncertain");
+  }
+
+  function loadAiDraft() {
+    aiDraft = currentCase()?.ai_draft ?? null;
+    if (aiDraftPanel) aiDraftPanel.hidden = Boolean(bundle?.router_v32);
+    if (bundle?.router_v32) {
+      aiDraft = null;
+      return;
+    }
+    if (aiDraftResult) aiDraftResult.hidden = !aiDraft;
+    if (aiDraftStatus) aiDraftStatus.textContent = aiDraft
+      ? `${aiDraft.model}/${aiDraft.reasoning_effort}の事前評価です。内容を確認してから人の回答へ反映してください。`
+      : "事前評価なし";
+    if (aiDraftButton) {
+      aiDraftButton.disabled = false;
+      aiDraftButton.textContent = aiDraft ? "再評価" : "AI評価";
+    }
+    if (aiDraft) renderAiDraft();
+  }
+
+  function renderAiDraft() {
+    if (!aiDraft || !aiDraftResult) return;
+    aiDraftResult.hidden = false;
+    const outcome = document.querySelector<HTMLElement>("[data-ai-draft-outcome]");
+    const usefulness = document.querySelector<HTMLElement>("[data-ai-draft-usefulness]");
+    const confidence = document.querySelector<HTMLElement>("[data-ai-draft-confidence]");
+    const rationale = document.querySelector<HTMLElement>("[data-ai-draft-rationale]");
+    const spans = document.querySelector<HTMLElement>("[data-ai-draft-spans]");
+    const applyNote = document.querySelector<HTMLElement>("[data-ai-draft-apply-note]");
+    if (outcome) outcome.textContent = outcomeLabels[aiDraft.outcome] ?? aiDraft.outcome;
+    if (usefulness) usefulness.textContent = usefulnessLabels[aiDraft.usefulness] ?? aiDraft.usefulness;
+    if (confidence) confidence.textContent = confidenceLabels[aiDraft.confidence] ?? aiDraft.confidence;
+    if (rationale) rationale.textContent = aiDraft.rationale;
+    if (spans) {
+      spans.replaceChildren();
+      if (aiDraft.support_spans.length) {
+        const heading = document.createElement("strong");
+        heading.textContent = "AIが有用と判断した箇所";
+        const list = document.createElement("ul");
+        aiDraft.support_spans.forEach((span) => {
+          const item = document.createElement("li");
+          const quote = document.createElement("q");
+          quote.textContent = span.quote;
+          const meta = document.createElement("small");
+          meta.textContent = `${span.turn_id} · ${span.start}–${span.end}`;
+          item.appendChild(quote);
+          item.appendChild(meta);
+          list.appendChild(item);
+        });
+        spans.appendChild(heading);
+        spans.appendChild(list);
+      }
+    }
+    const hasInput = annotationHasInput(currentAnnotation());
+    if (aiDraftApplyButton) aiDraftApplyButton.disabled = hasInput;
+    if (applyNote) applyNote.textContent = hasInput
+      ? "人手入力済みのCASEなので比較表示のみです。既存回答は保護されています。"
+      : "反映後も内容を修正できます。回答にはAI支援の記録が残ります。";
+  }
+
+  async function requestAiDraft() {
+    const item = currentReviewCase();
+    if (!item || !aiDraftButton || !aiDraftStatus) return;
+    const characters = item.turns.reduce((sum, turn) => sum + turn.content.length, 0);
+    const approved = confirm(
+      `CASE ${currentIndex + 1} の表示本文（ファイル名・パス・構造タグ除去済み、${characters.toLocaleString("ja-JP")}文字）をOpenAI GPT-5.6 Solへ送信し、high reasoningで評価下書きを作成します。送信しますか？`
+    );
+    if (!approved) return;
+    aiDraftButton.disabled = true;
+    aiDraftButton.textContent = "評価中…";
+    aiDraftStatus.textContent = "Sol highが下書きを作成しています。通常は数十秒かかります。";
+    if (aiDraftResult) aiDraftResult.hidden = true;
+    try {
+      const response = await fetch("/api/evaluation-ai-draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contract: "orgbrain-memory-extraction-ai-draft-request/v1",
+          content_filter: "orgbrain-memory-extraction-review-text/v1",
+          case: { id: item.id, source_hash: item.source_hash, turns: item.turns }
+        })
+      });
+      const payload = await response.json().catch(() => null) as { data?: unknown; error?: { message?: string } } | null;
+      if (!response.ok) throw new Error(payload?.error?.message ?? `AI評価に失敗しました（HTTP ${response.status}）。`);
+      aiDraft = parseEvaluationAiDraft(payload?.data, item, "sanitized_review_text_v1");
+      aiDraftStatus.textContent = "AI下書きができました。内容を確認してから反映してください。";
+      renderAiDraft();
+    } catch (error) {
+      aiDraft = null;
+      aiDraftStatus.textContent = error instanceof Error ? error.message : "AI評価に失敗しました。";
+    } finally {
+      aiDraftButton.disabled = false;
+      aiDraftButton.textContent = currentCase()?.ai_draft ? "再評価" : "AI評価";
+    }
+  }
+
+  function applyAiDraft() {
+    const item = currentCase();
+    const annotation = currentAnnotation();
+    if (!item || !annotation || !progress || !aiDraft) return;
+    try {
+      progress.annotations[item.id] = applyEvaluationAiDraft(annotation, aiDraft);
+      persist();
+      updateSummary();
+      renderCaseList();
+      renderForm();
+      renderAiDraft();
+      if (aiDraftStatus) aiDraftStatus.textContent = "AI下書きを反映しました。人が確認・修正してから次へ進んでください。";
+    } catch (error) {
+      if (aiDraftStatus) aiDraftStatus.textContent = error instanceof Error ? error.message : "AI下書きを反映できませんでした。";
+    }
+  }
+
+  function persist(showSaved = true) {
+    if (!bundle || !progress) return;
+    progress.updated_at = new Date().toISOString();
+    localStorage.setItem(storageKey(bundle.set_id), JSON.stringify(progress));
+    if (!showSaved) return;
+    const saveState = document.querySelector<HTMLElement>("[data-save-state]");
+    if (!saveState) return;
+    saveState.textContent = "保存中…";
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => { saveState.textContent = "端末内に保存済み"; }, 220);
+  }
+
+  function isCaseAccessible(index: number): boolean {
+    if (!bundle) return false;
+    if (bundle.router_v32) return true;
+    const summary = summarizeEvaluation(bundle, progress);
+    return bundle.cases[index]?.phase === "calibration" || summary.calibrationUnlocked;
+  }
+
+  function accessibleIndex(start: number, direction: 1 | -1): number {
+    if (!bundle) return -1;
+    for (let index = start + direction; index >= 0 && index < bundle.cases.length; index += direction) {
+      if (isCaseAccessible(index)) return index;
+    }
+    return -1;
+  }
+
+  function updateSummary() {
+    if (!bundle) return;
+    const summary = summarizeEvaluation(bundle, progress);
+    const count = document.querySelector<HTMLElement>("[data-progress-count]");
+    const bar = document.querySelector<HTMLElement>("[data-progress-bar]");
+    const track = document.querySelector<HTMLElement>("[data-progress-track]");
+    const phaseSummary = document.querySelector<HTMLElement>("[data-phase-summary]");
+    const percent = summary.total ? Math.round((summary.complete / summary.total) * 100) : 0;
+    if (count) count.textContent = `${summary.complete} / ${summary.total}`;
+    if (bar) bar.style.width = `${percent}%`;
+    if (track) track.setAttribute("aria-valuenow", String(percent));
+    if (phaseSummary) {
+      phaseSummary.replaceChildren();
+      const calibration = document.createElement("p");
+      calibration.innerHTML = `<span>${bundle.router_v32 ? "今回の40件" : "Calibration"}</span><strong>${summary.calibrationComplete} / ${summary.calibrationTotal}</strong>`;
+      const locked = document.createElement("p");
+      locked.innerHTML = `<span>${bundle.router_v32 ? (bundle.experiment_manifest?.dataset_role === "final_holdout" ? "Final holdout" : "開発レビュー") : "Locked test"}</span><strong>${summary.lockedComplete} / ${summary.lockedTotal}</strong>`;
+      const gate = document.createElement("small");
+      gate.textContent = bundle.router_v32 ? "確定した回答はexportしてCLIのimport-reviewへ渡します" : summary.calibrationUnlocked ? "Locked test を開始できます" : "Calibration完了後にLocked testを解放";
+      phaseSummary.appendChild(calibration);
+      phaseSummary.appendChild(locked);
+      phaseSummary.appendChild(gate);
+    }
+  }
+
+  function renderCaseList() {
+    if (!bundle || !caseList) return;
+    const activeBundle = bundle;
+    caseList.replaceChildren();
+    activeBundle.cases.forEach((item, index) => {
+      const annotation = progress?.annotations[item.id];
+      const complete = annotationReviewed(annotation);
+      const accessible = isCaseAccessible(index);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "case-list-item";
+      button.dataset.current = String(index === currentIndex);
+      button.dataset.complete = String(complete);
+      button.disabled = !accessible;
+      button.setAttribute("aria-current", index === currentIndex ? "step" : "false");
+      const number = document.createElement("span");
+      number.textContent = String(index + 1).padStart(3, "0");
+      const label = document.createElement("span");
+      label.innerHTML = `<strong>${activeBundle.router_v32 ? "Router v3.2" : item.phase === "calibration" ? "Calibration" : "Locked test"}</strong><small>${complete ? annotation?.review_status === "uncertain" ? "保留" : outcomeLabels[annotation?.outcome ?? ""] ?? "完了" : accessible ? item.ai_draft ? "AI下書きあり" : "未評価" : "未解放"}</small>`;
+      const mark = document.createElement("i");
+      mark.textContent = complete ? "✓" : accessible ? "·" : "—";
+      button.appendChild(number);
+      button.appendChild(label);
+      button.appendChild(mark);
+      button.addEventListener("click", () => {
+        currentIndex = index;
+        renderCurrentCase();
+        renderCaseList();
+      });
+      caseList.appendChild(button);
+    });
+  }
+
+  function renderTurns() {
+    const item = currentReviewCase();
+    if (!item || !turnsRoot) return;
+    turnsRoot.replaceChildren();
+    item.turns.forEach((turn, index) => {
+      const article = document.createElement("article");
+      article.className = `episode-turn role-${turn.role}`;
+      const rail = document.createElement("div");
+      rail.className = "turn-rail";
+      rail.innerHTML = `<span>${String(index + 1).padStart(2, "0")}</span><i></i>`;
+      const body = document.createElement("div");
+      body.className = "turn-body";
+      const heading = document.createElement("header");
+      const role = document.createElement("strong");
+      role.textContent = turn.role.toUpperCase();
+      const id = document.createElement("code");
+      id.textContent = turn.id;
+      heading.appendChild(role);
+      heading.appendChild(id);
+      const content = document.createElement("p");
+      content.className = "turn-content";
+      content.dataset.turnId = turn.id;
+      content.textContent = turn.content;
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "selection-action";
+      addButton.textContent = "選択範囲を追加";
+      addButton.addEventListener("click", () => addSelectedEvidence(content, turn.id));
+      body.appendChild(heading);
+      body.appendChild(content);
+      body.appendChild(addButton);
+      article.appendChild(rail);
+      article.appendChild(body);
+      turnsRoot.appendChild(article);
+    });
+  }
+
+  function addSelectedEvidence(container: HTMLElement, turnId: string) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      showValidation("このメッセージ内で根拠にする文を選択してください。");
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (!container.contains(range.commonAncestorContainer)) {
+      showValidation("選択範囲と追加ボタンが同じメッセージ内になるようにしてください。");
+      return;
+    }
+    const before = range.cloneRange();
+    before.selectNodeContents(container);
+    before.setEnd(range.startContainer, range.startOffset);
+    const rawQuote = range.toString();
+    const leading = rawQuote.length - rawQuote.trimStart().length;
+    const quote = rawQuote.trim();
+    if (!quote) return;
+    const start = before.toString().length + leading;
+    const annotation = currentAnnotation();
+    if (!annotation) return;
+    const span: EvidenceSpan = {
+      turn_id: turnId,
+      quote,
+      start,
+      end: start + quote.length,
+      basis: "sanitized_review_text_v1"
+    };
+    if (!annotation.evidence_spans.some((item) => item.turn_id === span.turn_id && item.start === span.start && item.end === span.end)) {
+      annotation.evidence_spans.push(span);
+      updateAnnotationTimestamp(annotation);
+      persist();
+      renderEvidence();
+      updateSummary();
+      renderCaseList();
+    }
+    selection.removeAllRanges();
+    hideValidation();
+  }
+
+  function renderEvidence() {
+    const annotation = currentAnnotation();
+    if (!annotation || !evidenceList || !evidenceEmpty) return;
+    evidenceList.replaceChildren();
+    evidenceEmpty.hidden = annotation.evidence_spans.length > 0;
+    annotation.evidence_spans.forEach((span, index) => {
+      const item = document.createElement("li");
+      const quote = document.createElement("q");
+      quote.textContent = span.quote;
+      const meta = document.createElement("small");
+      meta.textContent = `${span.turn_id} · ${span.start}–${span.end}`;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "削除";
+      remove.setAttribute("aria-label", `根拠「${span.quote.slice(0, 30)}」を削除`);
+      remove.addEventListener("click", () => {
+        annotation.evidence_spans.splice(index, 1);
+        updateAnnotationTimestamp(annotation);
+        persist();
+        renderEvidence();
+        updateSummary();
+        renderCaseList();
+      });
+      item.appendChild(quote);
+      item.appendChild(meta);
+      item.appendChild(remove);
+      evidenceList.appendChild(item);
+    });
+  }
+
+  function updateConditionalFields() {
+    if (!form) return;
+    const outcome = new FormData(form).get("outcome");
+    const candidate = outcome === "candidate";
+    if (lessonFieldset) lessonFieldset.disabled = !candidate;
+    if (evidenceFieldset) evidenceFieldset.disabled = !candidate;
+    if (exclusionField) exclusionField.hidden = outcome !== "hard_excluded";
+    if (futureUseField) futureUseField.hidden = !bundle?.router_v32 || !candidate;
+    const futureUse = form.elements.namedItem("future_use") as HTMLTextAreaElement | null;
+    if (futureUse) futureUse.required = Boolean(bundle?.router_v32 && candidate);
+    form.querySelectorAll<HTMLInputElement>('input[name="usefulness"]').forEach((input) => {
+      const allowed = outcome === "candidate"
+        ? input.value === "durable_memory"
+        : outcome === "hard_excluded"
+          ? input.value === "excluded"
+          : outcome === "no_candidate" || outcome === "episode_fragment"
+            ? ["operational_history_only", "not_useful"].includes(input.value)
+            : false;
+      input.disabled = !allowed;
+      if (!allowed) input.checked = false;
+      if ((outcome === "candidate" && input.value === "durable_memory")
+        || (outcome === "hard_excluded" && input.value === "excluded")) input.checked = true;
+    });
+  }
+
+  function renderForm() {
+    const annotation = currentAnnotation();
+    if (!annotation || !form) return;
+    form.reset();
+    if (annotation.outcome) {
+      const input = form.querySelector<HTMLInputElement>(`input[name="outcome"][value="${annotation.outcome}"]`);
+      if (input) input.checked = true;
+    }
+    if (annotation.usefulness) {
+      const input = form.querySelector<HTMLInputElement>(`input[name="usefulness"][value="${annotation.usefulness}"]`);
+      if (input) input.checked = true;
+    }
+    annotation.lesson_types.forEach((type) => {
+      const input = form.querySelector<HTMLInputElement>(`input[name="lesson_type"][value="${type}"]`);
+      if (input) input.checked = true;
+    });
+    if (annotation.confidence) {
+      const input = form.querySelector<HTMLInputElement>(`input[name="confidence"][value="${annotation.confidence}"]`);
+      if (input) input.checked = true;
+    }
+    const reason = form.elements.namedItem("exclusion_reason") as HTMLInputElement | null;
+    const note = form.elements.namedItem("note") as HTMLTextAreaElement | null;
+    const futureUse = form.elements.namedItem("future_use") as HTMLTextAreaElement | null;
+    if (reason) reason.value = annotation.exclusion_reason;
+    if (note) note.value = annotation.note;
+    if (futureUse) futureUse.value = annotation.future_use ?? "";
+    updateConditionalFields();
+    renderEvidence();
+  }
+
+  function updateAnnotationTimestamp(annotation: EvaluationAnnotation) {
+    annotation.updated_at = new Date().toISOString();
+    const complete = isAnnotationComplete(annotation);
+    annotation.completed_at = complete ? annotation.completed_at ?? annotation.updated_at : null;
+    if (annotation.router_v32) annotation.review_status = complete ? "accepted" : "pending";
+  }
+
+  function syncAnnotationFromForm() {
+    const annotation = currentAnnotation();
+    if (!annotation || !form) return;
+    const data = new FormData(form);
+    annotation.outcome = data.get("outcome") as EvaluationAnnotation["outcome"];
+    annotation.usefulness = annotation.outcome === "candidate"
+      ? "durable_memory"
+      : annotation.outcome === "hard_excluded"
+        ? "excluded"
+        : data.get("usefulness") as EvaluationUsefulness | null;
+    annotation.lesson_types = annotation.outcome === "candidate"
+      ? data.getAll("lesson_type") as LessonType[]
+      : [];
+    annotation.exclusion_reason = annotation.outcome === "hard_excluded" ? String(data.get("exclusion_reason") ?? "").trim() : "";
+    annotation.confidence = data.get("confidence") as EvaluationAnnotation["confidence"];
+    annotation.note = String(data.get("note") ?? "");
+    annotation.future_use = String(data.get("future_use") ?? "").trim();
+    if (bundle?.router_v32) {
+      annotation.router_v32 = true;
+      annotation.source_hash = currentCase()?.source_hash;
+      annotation.review_status = isAnnotationComplete(annotation) ? "accepted" : "pending";
+      annotation.label_origin = annotation.label_origin ?? (annotation.prior_ai_exposure === "ai_assisted" ? "human_revised" : "human_blind");
+      annotation.prior_ai_exposure = annotation.prior_ai_exposure ?? "none";
+      annotation.revision_id = annotation.revision_id ?? `${annotation.case_id}:${annotation.started_at}`;
+    }
+    updateAnnotationTimestamp(annotation);
+    updateConditionalFields();
+    persist();
+    updateSummary();
+    renderCaseList();
+    hideValidation();
+  }
+
+  function showValidation(message: string) {
+    if (!validation) return;
+    validation.textContent = message;
+    validation.hidden = false;
+  }
+
+  function hideValidation() {
+    if (validation) validation.hidden = true;
+  }
+
+  function renderCurrentCase() {
+    const item = currentCase();
+    if (!item || !bundle) return;
+    document.querySelector<HTMLElement>("[data-case-position]")!.textContent = `CASE ${currentIndex + 1} / ${bundle.cases.length}`;
+    document.querySelector<HTMLElement>("[data-case-title]")!.textContent = item.id;
+    document.querySelector<HTMLElement>("[data-case-phase]")!.textContent = bundle.router_v32
+      ? (bundle.experiment_manifest?.dataset_role === "final_holdout" ? "FINAL HOLDOUT · BLIND" : "ROUTER V3.2 · BLIND")
+      : item.phase === "calibration" ? "CALIBRATION" : "LOCKED TEST";
+    if (previousButton) previousButton.disabled = accessibleIndex(currentIndex, -1) < 0;
+    if (nextButton) nextButton.textContent = currentIndex === bundle.cases.length - 1
+      ? bundle.router_v32 ? "評価を確定" : "評価を完了"
+      : bundle.router_v32 ? "この評価を確定して次へ" : "完了して次へ";
+    if (uncertainButton) uncertainButton.hidden = !bundle.router_v32;
+    loadAiDraft();
+    renderTurns();
+    renderForm();
+    hideValidation();
+  }
+
+  function openBundle(nextBundle: EvaluationBundle) {
+    bundle = nextBundle;
+    const saved = localStorage.getItem(storageKey(bundle.set_id));
+    try {
+      progress = saved ? parseEvaluationProgress(JSON.parse(saved), bundle) : createProgress(bundle, reviewerInput?.value ?? "reviewer-local");
+    } catch {
+      progress = createProgress(bundle, reviewerInput?.value ?? "reviewer-local");
+    }
+    if (reviewerInput && progress.reviewer_id) reviewerInput.value = progress.reviewer_id;
+    currentIndex = Math.max(0, bundle.cases.findIndex((item, index) => isCaseAccessible(index) && !annotationReviewed(progress?.annotations[item.id])));
+    if (workspace) workspace.hidden = false;
+    if (progressInput) progressInput.disabled = false;
+    persist(false);
+    updateSummary();
+    renderCaseList();
+    renderCurrentCase();
+    clearError();
+  }
+
+  bundleInput?.addEventListener("change", async () => {
+    const file = bundleInput.files?.[0];
+    if (!file) return;
+    try {
+      openBundle(parseEvaluationBundle(await readJson(file)));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : String(error));
+    } finally {
+      bundleInput.value = "";
+    }
+  });
+
+  async function loadLoopbackBundleFromQuery() {
+    const pageUrl = new URL(window.location.href);
+    const source = pageUrl.searchParams.get("local_bundle_url");
+    if (!source || !["127.0.0.1", "localhost"].includes(pageUrl.hostname)) return;
+    try {
+      const target = new URL(source, pageUrl);
+      if (target.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(target.hostname)) {
+        throw new Error("local_bundle_url must point to a loopback HTTP server");
+      }
+      const response = await fetch(target, { cache: "no-store" });
+      if (!response.ok) throw new Error(`ローカル評価セットを取得できませんでした（HTTP ${response.status}）。`);
+      openBundle(parseEvaluationBundle(await response.json()));
+      pageUrl.searchParams.delete("local_bundle_url");
+      history.replaceState(null, "", `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  void loadLoopbackBundleFromQuery();
+
+  progressInput?.addEventListener("change", async () => {
+    const file = progressInput.files?.[0];
+    if (!file || !bundle) return;
+    try {
+      progress = parseEvaluationProgress(await readJson(file), bundle);
+      if (reviewerInput) reviewerInput.value = progress.reviewer_id;
+      persist(false);
+      updateSummary();
+      renderCaseList();
+      renderCurrentCase();
+      clearError();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : String(error));
+    } finally {
+      progressInput.value = "";
+    }
+  });
+
+  reviewerInput?.addEventListener("change", () => {
+    if (!progress) return;
+    progress.reviewer_id = reviewerInput.value.trim();
+    persist();
+  });
+
+  form?.addEventListener("change", syncAnnotationFromForm);
+  form?.addEventListener("input", (event) => {
+    if ((event.target as HTMLElement).matches("textarea, input[type=text]")) syncAnnotationFromForm();
+  });
+
+  previousButton?.addEventListener("click", () => {
+    const previousIndex = accessibleIndex(currentIndex, -1);
+    if (previousIndex < 0) return;
+    currentIndex = previousIndex;
+    renderCurrentCase();
+    renderCaseList();
+  });
+
+  nextButton?.addEventListener("click", () => {
+    const annotation = currentAnnotation();
+    if (!annotation || !isAnnotationComplete(annotation)) {
+      const message = annotation?.outcome === "candidate"
+        ? bundle?.router_v32 ? "候補の種類・根拠範囲・将来の利用場面・確信度を入力してください。" : "候補の種類・根拠範囲・確信度を入力してください。"
+        : annotation?.outcome === "hard_excluded"
+          ? "除外理由コードと確信度を入力してください。"
+          : "結果・利用価値・確信度を入力してください。";
+      showValidation(message);
+      return;
+    }
+    if (!bundle || currentIndex === bundle.cases.length - 1) {
+      showValidation("この評価セットの入力が完了しました。回答JSONを書き出して保管してください。");
+      return;
+    }
+    const nextIndex = accessibleIndex(currentIndex, 1);
+    if (nextIndex < 0) {
+      showValidation("Calibrationをすべて完了するとLocked testが解放されます。");
+      return;
+    }
+    currentIndex = nextIndex;
+    renderCurrentCase();
+    renderCaseList();
+    document.querySelector("[data-case-position]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  uncertainButton?.addEventListener("click", () => {
+    const annotation = currentAnnotation();
+    if (!annotation || !bundle?.router_v32) return;
+    annotation.review_status = "uncertain";
+    annotation.completed_at = null;
+    annotation.updated_at = new Date().toISOString();
+    persist();
+    updateSummary();
+    renderCaseList();
+    const nextIndex = accessibleIndex(currentIndex, 1);
+    if (nextIndex < 0) {
+      showValidation("保留として記録しました。回答JSONを書き出してください。");
+      return;
+    }
+    currentIndex = nextIndex;
+    renderCurrentCase();
+    renderCaseList();
+  });
+
+  exportButton?.addEventListener("click", () => {
+    if (!bundle || !progress) return;
+    persist(false);
+    const blob = new Blob([`${JSON.stringify(progress, null, 2)}\n`], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${bundle.set_id}-annotations.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+
+  resetButton?.addEventListener("click", () => {
+    if (!bundle || !confirm(`評価セット「${bundle.set_id}」の端末内回答をすべて消去しますか？`)) return;
+    localStorage.removeItem(storageKey(bundle.set_id));
+    progress = createProgress(bundle, reviewerInput?.value ?? "reviewer-local");
+    currentIndex = 0;
+    persist(false);
+    updateSummary();
+    renderCaseList();
+    renderCurrentCase();
+  });
+
+  aiDraftButton?.addEventListener("click", requestAiDraft);
+  aiDraftApplyButton?.addEventListener("click", applyAiDraft);
+
+  document.addEventListener("keydown", (event) => {
+    if (!bundle || event.metaKey || event.ctrlKey || event.altKey ||
+      (event.target as HTMLElement).matches("input, textarea, select")) return;
+    if (event.key === "ArrowLeft") previousButton?.click();
+    if (event.key === "ArrowRight") nextButton?.click();
+  });
+</script>
+
+<style>
+  .evaluation-page { --eval-accent: #81e6d9; --eval-ink: #e9f2f3; display: grid; gap: 1.25rem; }
+  .evaluation-hero { display: flex; justify-content: space-between; gap: 2rem; align-items: end; padding: clamp(1.5rem, 4vw, 3.5rem); border: 1px solid rgba(129,230,217,.18); border-radius: 28px; background: linear-gradient(135deg, rgba(8,25,30,.96), rgba(7,10,16,.98) 62%), repeating-linear-gradient(90deg, transparent 0 59px, rgba(129,230,217,.03) 60px); box-shadow: inset 0 1px rgba(255,255,255,.05); }
+  .evaluation-kicker, .panel-index { color: var(--eval-accent); font: 700 .68rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
+  .evaluation-hero h1 { margin-top: .75rem; max-width: 14ch; color: var(--eval-ink); font-size: clamp(2.2rem, 5vw, 4.8rem); line-height: .96; letter-spacing: -.06em; }
+  .evaluation-lead { max-width: 55rem; margin-top: 1rem; color: #9eb0b4; font-size: clamp(.95rem, 1.4vw, 1.1rem); line-height: 1.75; }
+  .local-seal { flex: 0 0 170px; min-height: 170px; border: 1px solid rgba(129,230,217,.35); border-radius: 50%; display: grid; place-content: center; justify-items: center; text-align: center; color: var(--eval-accent); transform: rotate(-5deg); box-shadow: inset 0 0 0 7px #071014, inset 0 0 0 8px rgba(129,230,217,.16); }
+  .local-seal-dot { width: 9px; height: 9px; margin-bottom: .55rem; border-radius: 50%; background: var(--eval-accent); box-shadow: 0 0 18px var(--eval-accent); }
+  .local-seal strong { font: 800 1rem/1 ui-monospace, monospace; letter-spacing: .12em; }
+  .local-seal small { margin-top: .5rem; color: #91a8aa; font-size: .65rem; }
+  .privacy-notice { display: flex; gap: .8rem; align-items: baseline; padding: 1rem 1.25rem; border-left: 3px solid #f6c66b; background: rgba(246,198,107,.07); color: #b9b4a7; font-size: .9rem; line-height: 1.6; }
+  .privacy-notice strong { flex: 0 0 auto; color: #f6d896; }
+  .label-guide { display: grid; gap: .35rem; padding: 1rem 1.25rem; border: 1px solid rgba(129,230,217,.16); border-radius: 14px; background: rgba(129,230,217,.035); color: #9aaeb0; font-size: .78rem; line-height: 1.55; }
+  .label-guide strong { color: var(--eval-accent); }
+  .label-guide b { color: #dbe7e7; font-family: ui-monospace, monospace; font-size: .72rem; }
+  .import-panel { display: grid; grid-template-columns: minmax(0,1fr) minmax(280px, .8fr); gap: 2rem; align-items: center; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid rgba(255,255,255,.09); border-radius: 22px; background: rgba(7,10,16,.72); }
+  .import-panel h2 { margin-top: .5rem; color: var(--eval-ink); font-size: 1.35rem; }
+  .import-panel p:not(.panel-index):not(.import-error) { margin-top: .5rem; color: #89979c; line-height: 1.65; }
+  .import-panel code { color: #b1c8ca; }
+  .import-controls { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  .field-stack { display: grid; gap: .45rem; color: #aebabe; font-size: .78rem; }
+  .field-stack:first-child { grid-column: 1 / -1; }
+  .field-stack input, .field-stack textarea { width: 100%; min-height: 46px; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; background: #090e14; padding: .75rem .85rem; color: white; resize: vertical; }
+  .file-button, .secondary-file-button { position: relative; min-height: 48px; display: grid; place-items: center; border-radius: 12px; cursor: pointer; font-weight: 750; text-align: center; }
+  .file-button { background: var(--eval-accent); color: #061012; }
+  .secondary-file-button { border: 1px solid rgba(129,230,217,.35); color: var(--eval-accent); }
+  .file-button input, .secondary-file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .secondary-file-button:has(input:disabled) { opacity: .42; cursor: not-allowed; }
+  .import-error, .validation-message { grid-column: 1 / -1; padding: .8rem 1rem; border: 1px solid rgba(251,113,133,.3); border-radius: 10px; background: rgba(251,113,133,.08); color: #fda4af; }
+  .evaluation-workspace { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 1rem; align-items: start; }
+  .case-rail { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); display: flex; flex-direction: column; padding: 1rem; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; background: #070b10; overflow: hidden; }
+  .progress-header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  .progress-header strong { color: white; font: 700 .8rem ui-monospace, monospace; }
+  .progress-track { height: 4px; margin-top: .8rem; border-radius: 99px; background: #192127; overflow: hidden; }
+  .progress-track span { display: block; height: 100%; width: 0; background: var(--eval-accent); transition: width .25s ease; }
+  .phase-summary { display: grid; gap: .3rem; padding: .9rem 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .phase-summary p { display: flex; justify-content: space-between; color: #87949a; font-size: .72rem; }
+  .phase-summary strong { color: #dbe5e7; }
+  .phase-summary small { margin-top: .25rem; color: #657177; font-size: .65rem; line-height: 1.45; }
+  .case-list { min-height: 120px; display: grid; gap: .35rem; padding: .75rem 0; overflow-y: auto; }
+  :global(.case-list-item) { width: 100%; min-height: 52px; display: grid; grid-template-columns: 2.3rem 1fr auto; gap: .55rem; align-items: center; border: 1px solid transparent; border-radius: 10px; padding: .5rem .65rem; background: transparent; color: #76838a; text-align: left; }
+  :global(.case-list-item > span:first-child) { font: 650 .65rem ui-monospace, monospace; }
+  :global(.case-list-item > span:nth-child(2)) { display: grid; gap: .15rem; }
+  :global(.case-list-item strong) { color: #c3ced0; font-size: .75rem; }
+  :global(.case-list-item small) { font-size: .65rem; }
+  :global(.case-list-item i) { font-style: normal; }
+  :global(.case-list-item[data-current="true"]) { border-color: rgba(129,230,217,.28); background: rgba(129,230,217,.07); color: var(--eval-accent); }
+  :global(.case-list-item[data-complete="true"] i) { color: var(--eval-accent); }
+  :global(.case-list-item:disabled) { opacity: .38; }
+  .rail-actions { display: grid; gap: .45rem; padding-top: .7rem; border-top: 1px solid rgba(255,255,255,.07); }
+  .review-stage { min-width: 0; display: grid; gap: 1rem; }
+  .case-header, .episode-panel, .ai-draft-panel, .annotation-panel, .case-actions { border: 1px solid rgba(255,255,255,.08); border-radius: 20px; background: rgba(7,11,16,.86); }
+  .case-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.15rem 1.35rem; }
+  .case-header h2 { margin-top: .35rem; color: white; font: 650 1.25rem ui-monospace, monospace; overflow-wrap: anywhere; }
+  .case-badges { display: flex; flex-wrap: wrap; justify-content: end; gap: .5rem; }
+  .phase-badge, .save-state { padding: .4rem .65rem; border-radius: 99px; font-size: .66rem; letter-spacing: .06em; }
+  .phase-badge { border: 1px solid rgba(129,230,217,.25); color: var(--eval-accent); }
+  .save-state { background: rgba(255,255,255,.05); color: #7e8b91; }
+  .episode-panel, .ai-draft-panel, .annotation-panel { padding: clamp(1rem, 2.5vw, 1.6rem); }
+  .ai-draft-panel { border-color: rgba(160,133,255,.24); background: linear-gradient(135deg, rgba(24,17,47,.88), rgba(7,11,16,.92)); }
+  .ai-draft-intro { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .ai-draft-intro h3 { margin-top: .35rem; color: #eee9ff; font-size: 1.1rem; }
+  .ai-draft-action { min-height: 46px; border-radius: 11px; padding: .65rem 1rem; background: #a085ff; color: #0d0920; font-size: .78rem; font-weight: 800; }
+  .ai-draft-disclosure { margin-top: .8rem; color: #aaa2c4; font-size: .75rem; line-height: 1.6; }
+  .ai-draft-status { margin-top: .7rem; color: #b8addc; font-size: .75rem; }
+  .ai-draft-result { display: grid; gap: .85rem; margin-top: 1rem; border-top: 1px solid rgba(160,133,255,.18); padding-top: 1rem; }
+  .ai-draft-summary { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .ai-draft-summary span { border: 1px solid rgba(160,133,255,.32); border-radius: 99px; padding: .35rem .6rem; color: #d4caff; font-size: .7rem; }
+  .ai-draft-result > p { color: #d6d0e5; line-height: 1.7; }
+  .ai-draft-result [data-ai-draft-spans] { display: grid; gap: .5rem; }
+  .ai-draft-result [data-ai-draft-spans] > strong { color: #bdb1e5; font-size: .74rem; }
+  .ai-draft-result ul { display: grid; gap: .4rem; list-style: none; }
+  .ai-draft-result li { display: grid; gap: .25rem; border-left: 2px solid #a085ff; padding: .55rem .7rem; background: rgba(160,133,255,.07); }
+  .ai-draft-result q { color: #ddd7ec; font-size: .75rem; line-height: 1.55; }
+  .ai-draft-result small { color: #82799d; font-size: .65rem; line-height: 1.5; }
+  .ai-draft-result > .secondary-action { justify-self: start; }
+  .section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 1.25rem; }
+  .section-heading h3 { margin-top: .35rem; color: white; font-size: 1.2rem; }
+  .section-heading > p { max-width: 24rem; color: #748187; font-size: .72rem; text-align: right; }
+  .episode-timeline { display: grid; }
+  :global(.episode-turn) { display: grid; grid-template-columns: 42px minmax(0,1fr); }
+  :global(.turn-rail) { display: flex; flex-direction: column; align-items: center; color: #64737a; font: 650 .62rem ui-monospace, monospace; }
+  :global(.turn-rail i) { width: 1px; flex: 1; min-height: 18px; margin-top: .35rem; background: linear-gradient(rgba(129,230,217,.35), rgba(129,230,217,.03)); }
+  :global(.episode-turn:last-child .turn-rail i) { background: transparent; }
+  :global(.turn-body) { min-width: 0; margin-bottom: .85rem; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: #0a1016; padding: 1rem; }
+  :global(.turn-body header) { display: flex; justify-content: space-between; gap: .75rem; align-items: center; }
+  :global(.turn-body header strong) { color: var(--eval-accent); font: 750 .65rem ui-monospace, monospace; letter-spacing: .1em; }
+  :global(.turn-body header code) { max-width: 60%; overflow: hidden; color: #5f6c72; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+  :global(.turn-content) { margin-top: .7rem; color: #d4dddf; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+  :global(.turn-content::selection) { background: rgba(129,230,217,.34); color: white; }
+  :global(.selection-action) { min-height: 44px; margin-top: .8rem; border: 1px solid rgba(129,230,217,.2); border-radius: 9px; padding: .45rem .7rem; background: transparent; color: #87cfc7; font-size: .72rem; }
+  .annotation-panel { display: grid; gap: 1.35rem; }
+  .annotation-panel fieldset { min-width: 0; border: 0; padding: 0; }
+  .annotation-panel fieldset:disabled { opacity: .36; }
+  .annotation-panel legend { margin-bottom: .65rem; color: #c9d4d6; font-size: .82rem; font-weight: 700; }
+  .annotation-panel legend span, .field-stack b { color: #f6c66b; }
+  .choice-grid { display: grid; gap: .55rem; }
+  .outcome-grid, .usefulness-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .lesson-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .choice-grid label { position: relative; min-height: 86px; cursor: pointer; }
+  .choice-grid input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .choice-grid label > span { height: 100%; display: grid; align-content: center; gap: .3rem; border: 1px solid rgba(255,255,255,.09); border-radius: 12px; padding: .8rem; background: #090f15; }
+  .choice-grid strong { color: #d8e0e2; font-size: .82rem; }
+  .choice-grid small { color: #6f7d83; font-size: .68rem; line-height: 1.45; }
+  .choice-grid input:checked + span { border-color: rgba(129,230,217,.55); background: rgba(129,230,217,.08); box-shadow: inset 0 0 0 1px rgba(129,230,217,.12); }
+  .choice-grid input:focus-visible + span { outline: 2px solid var(--eval-accent); outline-offset: 2px; }
+  .confidence-row { display: flex; flex-wrap: wrap; gap: .55rem; }
+  .confidence-row label { position: relative; min-width: 112px; cursor: pointer; }
+  .confidence-row input { position: absolute; opacity: 0; }
+  .confidence-row span { min-height: 44px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; color: #93a1a6; }
+  .confidence-row input:checked + span { border-color: rgba(129,230,217,.5); background: rgba(129,230,217,.08); color: var(--eval-accent); }
+  .confidence-row input:focus-visible + span { outline: 2px solid var(--eval-accent); outline-offset: 2px; }
+  .evidence-empty { border: 1px dashed rgba(255,255,255,.12); border-radius: 10px; padding: 1rem; color: #65737a; font-size: .78rem; }
+  .evidence-list { display: grid; gap: .55rem; list-style: none; }
+  :global(.evidence-list li) { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .3rem 1rem; align-items: center; border-left: 2px solid var(--eval-accent); padding: .65rem .8rem; background: rgba(129,230,217,.05); }
+  :global(.evidence-list q) { color: #cbd9da; font-size: .78rem; line-height: 1.55; }
+  :global(.evidence-list small) { color: #627278; font: .62rem ui-monospace, monospace; }
+  :global(.evidence-list button) { grid-column: 2; grid-row: 1 / 3; min-width: 48px; min-height: 44px; color: #f0a4ae; font-size: .7rem; }
+  .exclusion-field, .note-field { max-width: 100%; }
+  .case-actions { min-height: 76px; display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center; padding: 1rem 1.2rem; }
+  .case-actions > span { justify-self: center; color: #59666c; font-size: .68rem; }
+  kbd { min-width: 24px; display: inline-grid; place-items: center; margin: 0 .15rem; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: .2rem; background: #0c1218; }
+  .primary-action, .secondary-action, .quiet-action { min-height: 44px; border-radius: 10px; padding: .65rem .9rem; font-size: .78rem; font-weight: 750; }
+  .primary-action { background: var(--eval-accent); color: #061012; }
+  .secondary-action { border: 1px solid rgba(129,230,217,.25); color: #98d9d2; }
+  .quiet-action { color: #7b676b; font-weight: 500; }
+  button:disabled { cursor: not-allowed; opacity: .42; }
+  button:not(:disabled):hover, .file-button:hover, .secondary-file-button:hover { filter: brightness(1.12); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, label:has(input[type=file]:focus-visible) { outline: 2px solid var(--eval-accent); outline-offset: 3px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 1000px) {
+    .evaluation-workspace { grid-template-columns: 1fr; }
+    .case-rail { position: static; max-height: none; }
+    .case-list { max-height: 260px; }
+    .outcome-grid, .usefulness-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width: 680px) {
+    .evaluation-hero { align-items: start; }
+    .local-seal { display: none; }
+    .privacy-notice { align-items: start; flex-direction: column; }
+    .import-panel { grid-template-columns: 1fr; }
+    .import-controls { grid-template-columns: 1fr; }
+    .field-stack:first-child { grid-column: auto; }
+    .case-header, .section-heading { align-items: start; flex-direction: column; }
+    .case-badges { justify-content: start; }
+    .section-heading > p { text-align: left; }
+    .outcome-grid, .usefulness-grid, .lesson-grid { grid-template-columns: 1fr; }
+    .choice-grid label { min-height: 74px; }
+    .case-actions { grid-template-columns: 1fr 1fr; }
+    .case-actions > span { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .progress-track span { transition: none; }
+    .local-seal { transform: none; }
+  }
+</style>
