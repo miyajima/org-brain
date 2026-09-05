@@ -1,7 +1,6 @@
-# Memory Capture / Graph Harness Compatibility
+# Memory Capture / Harness Compatibility
 
-This repository owns all memory extraction and quality decisions. The global
-Adaptive Outcome Harness Router remains unchanged.
+This repository owns all memory extraction and quality decisions. The shared Astra Harness does not own memory extraction or persistence.
 
 ## Contract
 
