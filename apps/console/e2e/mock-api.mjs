@@ -1068,6 +1068,36 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (path === "/evaluation-ai-draft" && request.method === "POST") {
+    const body = await readJson(request);
+    const evaluationCase = body.case ?? {};
+    const serializedTurns = JSON.stringify(evaluationCase.turns ?? []);
+    if (body.content_filter !== "orgbrain-memory-extraction-review-text/v1"
+      || /<\/?[A-Za-z][^<>\n]*>|\b[A-Za-z0-9_@-]+\.(?:astro|json|md|mjs|tsx?)\b/u.test(serializedTurns)) {
+      json(response, 422, { ok: false, error: { code: "unsanitized_evaluation_case" } });
+      return;
+    }
+    const turn = evaluationCase.turns?.[0] ?? {};
+    const quote = String(turn.content ?? "").slice(0, 12);
+    json(response, 200, {
+      ok: true,
+      data: {
+        model: "gpt-5.6-sol",
+        reasoning_effort: "high",
+        source_hash: evaluationCase.source_hash,
+        outcome: "candidate",
+        usefulness: "durable_memory",
+        lesson_types: ["decision"],
+        support_spans: [{ turn_id: turn.id, quote, start: 0, end: quote.length }],
+        exclusion_reason: "",
+        confidence: "high",
+        rationale: "今後も再利用できる明示的な決定です。",
+        generated_at: "2026-09-03T03:00:00.000Z"
+      }
+    });
+    return;
+  }
+
   if (path === "/v1/capabilities" && request.method === "GET") {
     json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
     return;

@@ -42,6 +42,8 @@ export default defineConfig({
         CLOUDFLARE_INCLUDE_PROCESS_ENV: "true",
         INSIGHTS_UI_MODE: "on",
         MEMORY_QUALITY_UI_MODE: "on",
+        MEMORY_EXTRACTION_AI_DRAFT_URL: `http://127.0.0.1:${mockApiPort}/evaluation-ai-draft`,
+        MEMORY_EXTRACTION_AI_DRAFT_TOKEN: "e2e-orgbrain-ai-draft-token",
         DECISION_CONSOLE_MODE: process.env.CONSOLE_E2E_DECISION_MODE ?? "off"
       }
     }
