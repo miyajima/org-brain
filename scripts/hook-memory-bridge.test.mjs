@@ -1013,6 +1013,62 @@ describe("hook-memory-bridge promotion", () => {
     expect(normalizedCloudPayload).toEqual(canonical);
   });
 
+  it("keeps verified current work as a project-scoped 30-day episodic record", async () => {
+    const createdAt = Date.parse("2026-09-04T00:00:00.000Z");
+    const record = normalizeRecord("codex-stop", JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      turn_id: "turn-operational",
+      created_at: createdAt,
+      last_assistant_message: "実装しました。テスト4件成功し、検証済みです。"
+    }));
+    record.createdAt = createdAt;
+    const prepared = await prepareMemoryRecordsV2(record, {
+      tenantId: "default",
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation",
+      workspaceRoot: "/tmp/workspaces/org-brain",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] }
+    }, "default");
+    expect(prepared.report.routing.decisions.operational_history).toBe(true);
+    expect(prepared.reviewCandidates).toEqual([]);
+    expect(prepared.operationalRecords).toHaveLength(1);
+    expect(prepared.operationalRecords[0]).toMatchObject({
+      kind: "episodic",
+      projectId: "org-brain",
+      captureProfileId: "memory-extraction-router/v2",
+      validUntil: createdAt + 30 * 24 * 60 * 60 * 1000
+    });
+  });
+
+  it("uses rule output only as an LLM hint for durable candidates", async () => {
+    const record = normalizeRecord("codex-stop", JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      turn_id: "turn-durable-router",
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      last_assistant_message: "実装方針として認証APIはOAuthを必ず使うと決定した。理由は既存クライアントとの互換性を保つため。"
+    }));
+    const prepared = await prepareMemoryRecordsV2(record, {
+      tenantId: "default",
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation",
+      workspaceRoot: "/tmp/workspaces/org-brain",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] }
+    }, "default");
+    expect(prepared.report.routing.disposition).toBe("llm_candidate");
+    expect(prepared.report.routing.decisions).toMatchObject({
+      durable_candidate: true,
+      operational_history: true
+    });
+    expect(prepared.reviewCandidates).toEqual([]);
+    expect(prepared.operationalRecords).toHaveLength(1);
+    expect(prepared.extractionRequest?.packet.schema).toBe("learning-extraction-proposal/v2");
+  });
+
   it("builds one batch MCP call for v2 candidates", () => {
     const request = buildMcpCaptureRequest("default", "codex", [{
       externalKey: "codex:turn-v2:v2:a",

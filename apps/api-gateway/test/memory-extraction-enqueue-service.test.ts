@@ -134,6 +134,17 @@ function input(overrides: Record<string, unknown> = {}) {
 const options = { tenantId: "tenant-a", principal: "client:installation-a", installationId: "installation-a" };
 
 describe("memory extraction enqueue", () => {
+  it("accepts legacy v1/v2 packets but rejects an incomplete v3 contract", () => {
+    for (const schema of ["learning-extraction-proposal/v1", "learning-extraction-proposal/v2"]) {
+      const raw = input();
+      (raw.packet as Record<string, unknown>).schema = schema;
+      expect(__memoryExtractionEnqueueInternals.parseInput(raw).packet.schema).toBe(schema);
+    }
+    const raw = input();
+    (raw.packet as Record<string, unknown>).schema = "learning-extraction-proposal/v3";
+    expect(() => __memoryExtractionEnqueueInternals.parseInput(raw)).toThrow("v3_routing_invalid");
+  });
+
   it("uses UTC calendar months for token buckets", () => {
     expect(__memoryExtractionEnqueueInternals.utcMonth(Date.parse("2026-08-31T23:59:59.999Z"))).toBe("2026-08");
     expect(__memoryExtractionEnqueueInternals.utcMonth(Date.parse("2026-09-01T00:00:00.000Z"))).toBe("2026-09");
@@ -211,6 +222,22 @@ describe("memory extraction enqueue", () => {
     });
     expect(oversized.bucket.objects.size).toBe(0);
     expect(oversized.sent).toHaveLength(0);
+  });
+
+  it("queues a high-recall router candidate even when legacy rule proposals are empty", async () => {
+    const routed = createFixture();
+    const routedInput = input();
+    (routedInput.packet as Record<string, unknown>).rule_proposals = [];
+    (routedInput.packet as Record<string, unknown>).routing = {
+      disposition: "operational_history",
+      llm_recommended: true,
+      decisions: { durable_candidate: true, operational_history: true },
+      reason_codes: ["ambiguous_durable_signal"]
+    };
+    const result = await enqueueMemoryExtraction(routed.env, routedInput, options);
+    expect(result).toMatchObject({ execution_status: "reserved", outcome: null, reserved_tokens: 2_800 });
+    expect(routed.bucket.objects.size).toBe(1);
+    expect(routed.sent).toHaveLength(1);
   });
 
   it("honors the previous HMAC key during rotation and prevents budget over-reservation", async () => {

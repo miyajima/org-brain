@@ -1,5 +1,9 @@
 import {
   assertMemoryExtractionInputWithinCeiling,
+  validateV3Packet,
+  validateV3Candidate,
+  assertV3ProviderProfile,
+  buildMemoryFtsQuery,
   buildMemoryExtractionPrompt,
   MEMORY_EXTRACTION_MAX_CANDIDATES,
   MEMORY_EXTRACTION_MAX_INPUT_TOKENS,
@@ -11,6 +15,7 @@ import {
   MEMORY_CONTRACT_V2_PROMPT_ID,
   MEMORY_CONTRACT_V2_VERIFIER_VERSION,
   normalizeMemoryContractV2Event,
+  screenSensitiveMemory,
   sha256,
   ulid
 } from "@org-brain/shared";
@@ -46,6 +51,8 @@ type ExtractionInput = {
     snippets: Array<{ span_id: string; role: string; text: string; text_hash?: string }>;
     events: Array<Record<string, unknown>>;
     rule_proposals: Array<{ lesson_type: string; support_span_ids: string[]; gaps: string[]; observation?: Record<string, unknown> }>;
+    routing?: Record<string, unknown> | null;
+    existing_memories?: Array<{ id: string; kind: string; text: string }>;
     limits: { input_tokens: number; output_tokens: number; candidates: number; calls: number };
   };
 };
@@ -56,6 +63,8 @@ type ProviderCandidate = {
   gaps: string[];
   fields: Array<{ name: string; values: string[] }>;
 };
+
+const DURABLE_MEMORY_KINDS = new Set(["fact", "decision", "constraint", "pitfall", "preference", "org_knowledge"]);
 
 type ProviderResult = {
   candidates: ProviderCandidate[];
@@ -97,6 +106,7 @@ function requiredString(value: unknown, field: string, maxLength = 256): string 
 function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
   const value = asRecord(raw);
   const packet = asRecord(value.packet);
+  validateV3Packet(packet);
   const limits = asRecord(packet.limits);
   const provider = requiredString(value.provider, "provider", 32);
   if (!(["openai", "gemini", "anthropic"] as string[]).includes(provider)) throw new Error("invalid memory extraction input: provider");
@@ -104,7 +114,9 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
   if (!(["tier2", "tier3"] as string[]).includes(tier)) throw new Error("invalid memory extraction input: tier");
   const tenantId = requiredString(value.tenant_id, "tenant_id", 128);
   if (tenantId !== ctx.tenantId) throw new Error("memory extraction tenant mismatch");
-  if (value.schema_version !== 1 || packet.schema !== "learning-extraction-proposal/v1") throw new Error("invalid memory extraction schema");
+  if (value.schema_version !== 1 || !["learning-extraction-proposal/v1", "learning-extraction-proposal/v2", "learning-extraction-proposal/v3"].includes(String(packet.schema))) {
+    throw new Error("invalid memory extraction schema");
+  }
   if (packet.provider !== provider || packet.model !== value.model) throw new Error("invalid memory extraction input: provider/model mismatch");
   if (packet.session_hash !== value.session_hash || packet.turn_hash !== value.turn_hash) throw new Error("invalid memory extraction input: turn identity mismatch");
   if (limits.input_tokens !== MAX_INPUT_TOKENS || limits.output_tokens !== MAX_OUTPUT_TOKENS || limits.candidates !== MAX_CANDIDATES || limits.calls !== 1) {
@@ -148,6 +160,8 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
       snippets,
       events: Array.isArray(packet.events) ? packet.events.slice(0, 24).map(asRecord) : [],
       rule_proposals: ruleProposals,
+      routing: packet.routing && typeof packet.routing === "object" ? asRecord(packet.routing) : null,
+      existing_memories: [],
       limits: { input_tokens: MAX_INPUT_TOKENS, output_tokens: MAX_OUTPUT_TOKENS, candidates: MAX_CANDIDATES, calls: 1 }
     }
   };
@@ -164,6 +178,61 @@ async function readInput(ctx: CapabilityContext): Promise<ExtractionInput> {
   if (packetHash !== input.packet_hash) throw new Error("memory extraction packet hash mismatch");
   if (input.contract_hash !== MEMORY_CONTRACT_V2_CONTRACT_HASH) throw new Error("memory extraction contract hash mismatch");
   return input;
+}
+
+async function loadExistingMemoryCandidates(ctx: CapabilityContext, input: ExtractionInput) {
+  const query = input.packet.snippets.map((item) => item.text).join(" ").slice(0, 1_000);
+  const ftsQuery = buildMemoryFtsQuery(query);
+  if (!ftsQuery || !input.project_id) return [];
+  try {
+    const rows = await ctx.env.OPEN_BRAIN_DB.prepare(
+      `SELECT m.id, m.kind, m.summary, m.content
+       FROM memories_fts
+       JOIN memories m ON m.id = memories_fts.memory_id AND m.tenant_id = memories_fts.tenant_id
+       WHERE memories_fts.tenant_id = ? AND memories_fts.content MATCH ?
+         AND m.project_id = ?
+         AND (m.permissions_json IS NULL OR m.permissions_json = '[]')
+         AND m.deleted_at IS NULL
+         AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'suppressed')
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
+         AND (m.valid_from IS NULL OR m.valid_from <= ?)
+         AND (m.valid_until IS NULL OR m.valid_until > ?)
+       ORDER BY bm25(memories_fts) ASC, m.created_at DESC
+       LIMIT 5`
+    ).bind(ctx.tenantId, ftsQuery, input.project_id, Date.now(), Date.now(), Date.now())
+      .all<{ id: string; kind: string; summary: string | null; content: string }>();
+    // No trusted requesting principal is carried by this capability. Never
+    // forward ACL-restricted records, even if a caller supplies an identity.
+    // Screen full content AND summary before truncating either for the provider.
+    return rows.results.flatMap((row) => {
+      // JSON escaping changes quotes and line boundaries used by secret rules.
+      // Inspect each raw field independently; serialization is not sanitization.
+      if ([row.summary ?? "", row.content].some((field) =>
+        !screenSensitiveMemory(field.normalize("NFKC"), { mode: "deny", allowed_principals: [] }).allowed
+      )) return [];
+      return [{
+        id: row.id,
+        kind: row.kind,
+        text: (row.summary ?? row.content).normalize("NFKC").replace(/\s+/gu, " ").trim().slice(0, 120)
+      }];
+    });
+  } catch (error) {
+    throw new Error(`retrieval_unavailable:${error instanceof Error ? error.message : "query_failed"}`);
+  }
+}
+
+function withBoundedExistingMemories(input: ExtractionInput, candidates: Array<{ id: string; kind: string; text: string }>): ExtractionInput {
+  const accepted: Array<{ id: string; kind: string; text: string }> = [];
+  for (const candidate of candidates) {
+    const next = { ...input, packet: { ...input.packet, existing_memories: [...accepted, candidate] } };
+    try {
+      assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(next.packet as unknown as Record<string, unknown>));
+      accepted.push(candidate);
+    } catch {
+      break;
+    }
+  }
+  return { ...input, packet: { ...input.packet, existing_memories: accepted } };
 }
 
 function providerEntry(env: Env, input: ExtractionInput): Record<string, unknown> | null {
@@ -357,15 +426,16 @@ async function generate(env: Env, input: ExtractionInput, prompt: string, key: s
   }
   const rows = asRecord(parsed).candidates;
   if (!Array.isArray(rows)) throw new Error("provider_failed:invalid_schema");
+  if (input.packet.schema === "learning-extraction-proposal/v3" && (rows.length > MAX_CANDIDATES
+    || Object.keys(asRecord(parsed)).some((key) => key !== "candidates"))) throw new Error("provider_failed:invalid_schema");
   return { candidates: rows.slice(0, MAX_CANDIDATES) as ProviderCandidate[], ...usage(response) };
 }
 
-function exactGrounded(value: unknown, evidenceText: string, gaps: string[], field: string): string | null {
+function exactGrounded(value: unknown, evidenceText: string, rejections: string[], field: string): string | null {
   if (value === null || typeof value !== "string" || !value.trim()) return null;
-  const normalized = value.normalize("NFKC").replace(/\s+/gu, " ").trim();
-  const haystack = evidenceText.normalize("NFKC").replace(/\s+/gu, " ");
-  if (haystack.includes(normalized)) return normalized;
-  gaps.push(`${field}_unsupported`);
+  const exact = value.trim();
+  if (evidenceText.includes(exact)) return exact;
+  rejections.push(`${field}_not_exactly_grounded`);
   return null;
 }
 
@@ -387,25 +457,81 @@ function inferredDecisionType(evidenceText: string): "preference" | "implementat
 }
 
 async function verifiedCandidates(input: ExtractionInput, candidates: ProviderCandidate[]) {
+  const v3 = input.packet.schema === "learning-extraction-proposal/v3";
+  if (v3 && candidates.length > MAX_CANDIDATES) throw new Error("provider_failed:candidate_count_exceeded");
   const snippetIds = new Set(input.packet.snippets.map((item) => item.span_id));
   const eventIds = new Set(input.packet.events.map((item) => String(item.event_id ?? "")).filter(Boolean));
-  const resolvesSupportId = (id: string) => eventIds.has(id)
-    || [...snippetIds].some((snippetId) => id === snippetId || id.startsWith(`${snippetId}.`));
+  const resolvesSupportId = (id: string) => eventIds.has(id) || snippetIds.has(id);
   const output = [];
+  const rejections: Array<{ candidate_index: number; reason_codes: string[] }> = [];
+  const reject = (candidateIndex: number, reasonCodes: string[]) => {
+    rejections.push({ candidate_index: candidateIndex, reason_codes: [...new Set(reasonCodes)].sort() });
+  };
   for (const [index, raw] of candidates.entries()) {
-    if (!raw || !["success", "decision", "failure"].includes(raw.lesson_type)) continue;
+    if (v3) {
+      const validation = validateV3Candidate(raw, input.packet);
+      if (!validation.valid) { reject(index, [validation.reason ?? "candidate_schema_invalid"]); continue; }
+    }
+    if (!raw || !["success", "decision", "failure"].includes(raw.lesson_type)) {
+      reject(index, ["lesson_type_invalid"]);
+      continue;
+    }
     const supportSpanIds = Array.isArray(raw.support_span_ids)
-      ? [...new Set(raw.support_span_ids.filter((id) => typeof id === "string" && resolvesSupportId(id)))].slice(0, 16)
+      ? [...new Set(raw.support_span_ids.filter((id): id is string => typeof id === "string"))].slice(0, 16)
       : [];
-    if (supportSpanIds.length === 0) continue;
-    const supportedSnippets = input.packet.snippets.filter((item) => supportSpanIds.some((id) => id === item.span_id || id.startsWith(`${item.span_id}.`)));
+    if (supportSpanIds.length === 0) {
+      reject(index, ["support_missing"]);
+      continue;
+    }
+    if (supportSpanIds.some((id) => !resolvesSupportId(id))) {
+      reject(index, ["support_id_unresolved"]);
+      continue;
+    }
+    const supportedSnippets = input.packet.snippets.filter((item) => supportSpanIds.includes(item.span_id));
     const evidenceText = supportedSnippets.map((item) => item.text).join("\n");
     const gaps = Array.isArray(raw.gaps) ? raw.gaps.filter((item) => typeof item === "string").slice(0, 16) : [];
+    const groundingRejections: string[] = [];
     const fields = providerFields(raw);
     const one = (name: string) => fields.get(name)?.[0] ?? null;
     const many = (name: string) => fields.get(name) ?? [];
-    const grounded = (value: string | null, field: string) => exactGrounded(value, evidenceText, gaps, field);
-    const decisionType = raw.lesson_type === "decision" ? inferredDecisionType(evidenceText) : null;
+    const grounded = (value: string | null, field: string) => exactGrounded(value, evidenceText, groundingRejections, field);
+    const persistence = one("persistence") === "operational_history" ? "operational_history" : "durable";
+    if (one("persistence") && !["durable", "operational_history"].includes(one("persistence")!)) {
+      reject(index, ["persistence_invalid"]);
+      continue;
+    }
+    const defaultKind = raw.lesson_type === "failure" ? "pitfall" : raw.lesson_type === "success" ? "org_knowledge" : "decision";
+    const requestedKind = one("memory_kind");
+    const compatibleKinds = raw.lesson_type === "failure"
+      ? new Set(["pitfall"])
+      : raw.lesson_type === "decision"
+        ? new Set(["decision", "constraint", "preference"])
+        : new Set(["fact", "org_knowledge"]);
+    if (requestedKind && (persistence === "operational_history" ? requestedKind !== "episodic" : !compatibleKinds.has(requestedKind))) {
+      reject(index, ["lesson_memory_kind_mismatch"]);
+      continue;
+    }
+    const memoryKind = persistence === "operational_history"
+      ? "episodic"
+      : requestedKind && DURABLE_MEMORY_KINDS.has(requestedKind) ? requestedKind : defaultKind;
+    const requestedAction = one("action") ?? "create";
+    if (!["create", "skip", "update", "conflict"].includes(requestedAction)) {
+      reject(index, ["action_invalid"]);
+      continue;
+    }
+    // A provider-side skip is an auditable no-candidate decision, not a memory
+    // proposal. It must never create a quarantine row that could be promoted.
+    if (requestedAction === "skip") {
+      reject(index, ["provider_skip"]);
+      continue;
+    }
+    const targetMemoryId = one("target_memory_id");
+    const suppliedMemoryIds = new Set((input.packet.existing_memories ?? []).map((item) => item.id));
+    if (requestedAction !== "create" && (!targetMemoryId || !suppliedMemoryIds.has(targetMemoryId))) {
+      reject(index, ["target_memory_id_unsearched"]);
+      continue;
+    }
+    const decisionType = raw.lesson_type === "decision" ? (v3 ? one("decision_type") : inferredDecisionType(evidenceText)) : null;
     if (raw.lesson_type === "decision" && !decisionType) gaps.push("decision_type_missing");
     if (raw.lesson_type === "decision" && one("decision_type") && one("decision_type") !== decisionType) gaps.push("decision_type_unsupported");
     const common = {
@@ -421,7 +547,7 @@ async function verifiedCandidates(input: ExtractionInput, candidates: ProviderCa
         }),
         components: input.project_id ? [input.project_id] : []
       },
-      evidence_selectors: input.packet.snippets.filter((item) => supportSpanIds.some((id) => id === item.span_id || id.startsWith(`${item.span_id}.`))).filter((item) => item.role === "user").map((item) => ({ type: "user_statement", ref: item.text, supports: supportSpanIds.filter((id) => id === item.span_id || id.startsWith(`${item.span_id}.`)) })),
+      evidence_selectors: input.packet.snippets.filter((item) => supportSpanIds.includes(item.span_id)).filter((item) => item.role === "user").map((item) => ({ type: "user_statement", ref: item.text, supports: [item.span_id] })),
       gaps: [...new Set(gaps)]
     } as Record<string, unknown>;
     if (raw.lesson_type === "success") Object.assign(common, {
@@ -456,18 +582,29 @@ async function verifiedCandidates(input: ExtractionInput, candidates: ProviderCa
       verified_outcome: grounded(one("verified_outcome"), "verified_outcome"),
       avoidance_rule: grounded(one("avoidance_rule"), "avoidance_rule")
     });
+    if (groundingRejections.length > 0) {
+      reject(index, groundingRejections);
+      continue;
+    }
     common.gaps = [...new Set(gaps)];
     const normalized = await normalizeMemoryContractV2Event(common, { sensitivePolicy: { mode: "deny", allowed_principals: [] } });
-    if (!normalized.accepted || !normalized.event) continue;
+    if (!normalized.accepted || !normalized.event) {
+      reject(index, ["normalized_contract_rejected"]);
+      continue;
+    }
     output.push({
       external_key: `memory-extraction:${input.run_id}:${normalized.event_hash}`,
       observation: normalized.event,
+      persistence,
+      memory_kind: memoryKind,
+      action: requestedAction,
+      target_memory_id: requestedAction === "create" ? null : targetMemoryId,
       support_span_ids: supportSpanIds,
       gaps: normalized.event.gaps,
       reason_codes: [...new Set(["llm_proposed_review_only", ...normalized.reason_codes])]
     });
   }
-  return output.slice(0, MAX_CANDIDATES);
+  return { candidates: output.slice(0, MAX_CANDIDATES), rejections };
 }
 
 async function writeResult(ctx: CapabilityContext, input: ExtractionInput, result: Record<string, unknown>) {
@@ -483,7 +620,14 @@ async function settleRun(
   ctx: CapabilityContext,
   input: ExtractionInput,
   outcome: string,
-  options: { candidates?: Awaited<ReturnType<typeof verifiedCandidates>>; inputTokens?: number | null; outputTokens?: number | null; chargedTokens?: number; errorCode?: string } = {}
+  options: {
+    candidates?: Awaited<ReturnType<typeof verifiedCandidates>>["candidates"];
+    verificationRejections?: Awaited<ReturnType<typeof verifiedCandidates>>["rejections"];
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    chargedTokens?: number;
+    errorCode?: string;
+  } = {}
 ) {
   const now = Date.now();
   const candidates = options.candidates ?? [];
@@ -496,7 +640,7 @@ async function settleRun(
       schema: "memory-extraction-evidence-capsule/v1",
       run_id: input.run_id,
       packet_hash: input.packet_hash,
-      snippets: input.packet.snippets.filter((item) => [...usedSpanIds].some((id) => id === item.span_id || String(id).startsWith(`${item.span_id}.`))),
+      snippets: input.packet.snippets.filter((item) => usedSpanIds.has(item.span_id)),
       events: input.packet.events.filter((item) => usedSpanIds.has(String(item.event_id ?? ""))),
       expires_at: input.capsule_expires_at
     };
@@ -512,6 +656,8 @@ async function settleRun(
     outcome,
     candidate_count: candidates.length,
     candidate_hashes: await Promise.all(candidates.map((item) => sha256(JSON.stringify(item)))),
+    verification_rejection_count: options.verificationRejections?.length ?? 0,
+    verification_rejections: options.verificationRejections ?? [],
     input_tokens: options.inputTokens ?? null,
     output_tokens: options.outputTokens ?? null,
     charged_tokens: chargedTokens,
@@ -575,6 +721,7 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     return capabilityResult(startedAt, run.result_r2_key, `Memory extraction already settled: ${run.outcome ?? "unknown"}`);
   }
   const input = await readInput(ctx);
+  if (input.packet.schema === "learning-extraction-proposal/v3") assertV3ProviderProfile();
   if (input.run_id !== run.id) throw new Error("memory extraction task/run mismatch");
   if (input.installation_id !== run.installation_id
     || input.provider !== run.provider
@@ -613,8 +760,10 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
      WHERE tenant_id = ? AND id = ? AND execution_status = 'reserved'`
   ).bind(Date.now(), Date.now(), ctx.tenantId, input.run_id).run();
   try {
-    const prompt = compactPrompt(input);
-    const generated = await generate(ctx.env, input, prompt, key);
+    const existingMemories = await loadExistingMemoryCandidates(ctx, input);
+    const enrichedInput = withBoundedExistingMemories(input, existingMemories);
+    const prompt = compactPrompt(enrichedInput);
+    const generated = await generate(ctx.env, enrichedInput, prompt, key);
     if (
       (generated.inputTokens !== null && generated.inputTokens > MAX_INPUT_TOKENS) ||
       (generated.outputTokens !== null && generated.outputTokens > MAX_OUTPUT_TOKENS)
@@ -627,12 +776,14 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
       });
       return capabilityResult(startedAt, settled.resultKey, "Memory extraction provider_failed", generated.inputTokens ?? 0, generated.outputTokens ?? 0);
     }
-    const candidates = await verifiedCandidates(input, generated.candidates);
+    const verification = await verifiedCandidates(enrichedInput, generated.candidates);
+    const candidates = verification.candidates;
     const usageKnown = generated.inputTokens !== null && generated.outputTokens !== null;
     const charged = usageKnown ? generated.inputTokens! + generated.outputTokens! : RESERVED_TOKENS;
     const outcome = candidates.length > 0 ? "succeeded" : "no_candidate";
     const settled = await settleRun(ctx, input, outcome, {
       candidates,
+      verificationRejections: verification.rejections,
       inputTokens: generated.inputTokens,
       outputTokens: generated.outputTokens,
       chargedTokens: Math.min(RESERVED_TOKENS, charged)
@@ -648,6 +799,8 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
 
 export const __memoryExtractionInternals = {
   parseInput,
+  loadExistingMemoryCandidates,
+  withBoundedExistingMemories,
   providerEntry,
   tierLimit,
   compactPrompt,

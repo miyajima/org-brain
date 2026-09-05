@@ -1,5 +1,7 @@
 import {
   assertMemoryExtractionInputWithinCeiling,
+  validateV3Packet,
+  assertV3ProviderProfile,
   buildMemoryExtractionPrompt,
   HttpError,
   MEMORY_EXTRACTION_TOKEN_PROFILE,
@@ -17,10 +19,11 @@ const TIER2_LIMIT = 500_000;
 const STAGING_TTL_MS = 24 * 60 * 60 * 1000;
 const STANDARD_CAPSULE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const RESTRICTED_CAPSULE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const PROMPT_VERSION = "memory-extraction-prompt/v1";
+const PROMPT_VERSION = "memory-extraction-prompt/v2";
 const REDACTION_VERSION = "turn-evidence-redaction/v1";
-const PREFILTER_VERSION = "episode-state-machine/v1";
-const SCHEMA_VERSION = "learning-extraction-proposal/v1";
+const PREFILTER_VERSION = "memory-extraction-router/v2";
+const SCHEMA_VERSION = "learning-extraction-proposal/v2";
+const ACCEPTED_PACKET_SCHEMAS = new Set(["learning-extraction-proposal/v1", SCHEMA_VERSION, "learning-extraction-proposal/v3"]);
 
 type EnqueueInput = {
   project_id: string;
@@ -75,8 +78,19 @@ function parseInput(raw: unknown): EnqueueInput {
   const retentionClass = value.retention_class ?? "standard";
   if (retentionClass !== "standard" && retentionClass !== "restricted") throw new HttpError(400, "invalid_payload", "retention_class is invalid");
   const packet = asRecord(value.packet);
-  if (packet.schema !== SCHEMA_VERSION) throw new HttpError(400, "invalid_payload", "packet must use learning-extraction-proposal/v1");
+  if (!ACCEPTED_PACKET_SCHEMAS.has(String(packet.schema))) {
+    throw new HttpError(400, "invalid_payload", "packet must use learning-extraction-proposal/v1 or v2");
+  }
   const limits = asRecord(packet.limits);
+  if (packet.schema === "learning-extraction-proposal/v3") {
+    try { validateV3Packet(packet); } catch (error) {
+      throw new HttpError(400, "invalid_payload", error instanceof Error ? error.message : "v3_packet_invalid");
+    }
+    // No verified provider request token profile has been installed for v3.
+    try { assertV3ProviderProfile(); } catch {
+      throw new HttpError(503, "unsupported_token_profile", "v3 is offline shadow only until its provider profile is verified");
+    }
+  }
   if (limits.input_tokens !== 2_000 || limits.output_tokens !== 800 || limits.candidates !== 3 || limits.calls !== 1) {
     throw new HttpError(400, "invalid_payload", "packet token and call limits must match the server contract");
   }
@@ -250,7 +264,12 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
     return response({ id: runId, task_id: taskId, execution_status: "settled", outcome: "hard_excluded", reserved_tokens: 0 }, false);
   }
   const ruleProposals = Array.isArray(input.packet.rule_proposals) ? input.packet.rule_proposals : [];
-  if (ruleProposals.length === 0) {
+  const routing = asRecord(input.packet.routing);
+  const decisions = asRecord(routing.decisions);
+  const routedToLlm = routing.llm_recommended === true
+    || decisions.durable_candidate === true
+    || routing.disposition === "llm_candidate";
+  if (ruleProposals.length === 0 && !routedToLlm) {
     await insertTerminalRun(env, { ...common, outcome: "no_candidate", errorCode: null });
     return response({ id: runId, task_id: taskId, execution_status: "settled", outcome: "no_candidate", reserved_tokens: 0 }, false);
   }
