@@ -6,9 +6,19 @@ import {
   screenSensitiveMemory
 } from "../../../shared/src/memory-capture-v2-runtime.mjs";
 import { normalizeMemoryContractV2Event } from "../../../shared/src/memory-contract-v2-runtime.mjs";
+import { stripMemoryCitationBlocks } from "../../../shared/src/memory-extraction-review-text-runtime.mjs";
+import { packMemoryExtractionSnippets } from "../../../shared/src/memory-extraction-provider-contract-runtime.mjs";
+import { packV3Evidence } from "../../../shared/src/memory-extraction-v3-packing.mjs";
+import { MEMORY_EXTRACTION_ROUTER_MODEL_V2 } from "./memory-extraction-router-model-v2.mjs";
+import { MEMORY_EXTRACTION_ROUTER_MODEL_V3 } from "./memory-extraction-router-model-v3.mjs";
 
 export const TURN_EVIDENCE_V1_SCHEMA = "turn-evidence/v1";
 export const LEARNING_EXTRACTION_PROPOSAL_V1_SCHEMA = "learning-extraction-proposal/v1";
+export const LEARNING_EXTRACTION_PROPOSAL_V2_SCHEMA = "learning-extraction-proposal/v2";
+export const LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA = "learning-extraction-proposal/v3";
+export const MEMORY_EXTRACTION_ROUTER_V1 = "memory-extraction-router/v1";
+export const MEMORY_EXTRACTION_ROUTER_V2 = "memory-extraction-router/v2";
+export const MEMORY_EXTRACTION_ROUTER_V3 = "memory-extraction-router/v3";
 export const MEMORY_EXTRACTION_INPUT_TOKEN_LIMIT = 2_000;
 export const MEMORY_EXTRACTION_OUTPUT_TOKEN_LIMIT = 800;
 export const MEMORY_EXTRACTION_MAX_CANDIDATES = 3;
@@ -24,6 +34,13 @@ const CORRECTION_SIGNAL = /\b(?:fix(?:ed)?|correct(?:ed)?|changed?|switch(?:ed)?
 const SUCCESS_SIGNAL = /\b(?:pass(?:ed)?|succeed(?:ed)?|success|resolved|verified|exit[_ ]?code\s*[=:]?\s*0|2\d\d)\b|(?:成功|通った|解消|確認(?:した|できた|済み)|検証済み|終了コード\s*0)/iu;
 const REASON_SIGNAL = /\b(?:because|since|reason|root cause|caused by)\b|(?:理由|なぜなら|原因)/iu;
 const REUSE_SIGNAL = /\b(?:when|whenever|next time|reuse|avoid)\b|(?:場合|次回|再利用|回避策|再発時)/iu;
+const PREFERENCE_SIGNAL = /\b(?:prefer|preference|always use|default to)\b|(?:好む|希望|優先する|既定(?:にする|とする)|デフォルト(?:にする|とする))/iu;
+const CONSTRAINT_SIGNAL = /\b(?:must|never|do not|don't|prohibited|required|only)\b|(?:必ず|必須|禁止|してはいけない|しないこと|のみ許可|対象外)/iu;
+const PROPOSAL_ONLY_SIGNAL = /\b(?:suggest|proposal|propose|consider|might|could)\b|(?:提案|検討|候補|かもしれない|するとよい)/iu;
+const OPERATIONAL_SIGNAL = /\b(?:implemented|completed|done|passed|verified|deployed|build|test|lint|format|status|current)\b|(?:実装(?:した|しました)|完了|対応済み|成功|通った|検証済み|ビルド|テスト|現在値|対象ファイル)/iu;
+const STRUCTURAL_NOISE = /^(?:[-*+]|\d+[.)])?\s*(?:対象ファイル|files?|paths?|tags?|model|session|turn|case)\s*:?\s*$/iu;
+const STRUCTURAL_BLOCK = /^\s*<(?:skill|environment_context|recommended_plugins|app-context|permissions|INSTRUCTIONS)(?:\s|>)/iu;
+const REVIEW_REQUEST = /\b(?:review|score|audit)\b|(?:レビュー|評価|採点|監査して)/iu;
 const UNSAFE_SIGNAL = /\b(?:ignore|disregard|override)\b.{0,40}\b(?:previous|system|developer|security)\b|\b(?:reveal|exfiltrate|print)\b.{0,40}\b(?:secret|credential|system prompt)\b|前の指示を無視|秘密.{0,12}(?:表示|送信)/iu;
 
 function sha256(value) {
@@ -90,6 +107,20 @@ export async function loadTurnEvidenceRows(input = {}) {
 function clip(value, limit) {
   const text = String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
   return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1))}…`;
+}
+
+function clipUtf8Prefix(value, limitBytes) {
+  const text = String(value ?? "");
+  if (Buffer.byteLength(text, "utf8") <= limitBytes) return text;
+  let bytes = 0;
+  let output = "";
+  for (const character of text) {
+    const next = Buffer.byteLength(character, "utf8");
+    if (bytes + next > limitBytes) break;
+    output += character;
+    bytes += next;
+  }
+  return output;
 }
 
 function contentText(content) {
@@ -179,9 +210,347 @@ function sentenceSpans(snippets) {
       span_id: `${snippet.span_id}.${index + 1}`,
       parent_span_id: snippet.span_id,
       role: snippet.role,
+      context_only: snippet.context_only === true,
       text: clip(text, 1_000)
     }))
     .filter((item) => item.text.length >= 8));
+}
+
+export function sentenceSpansV3(snippets) {
+  let order = 0;
+  const seen = new Map();
+  return snippets.flatMap((snippet) => {
+    const spans = [];
+    const pattern = /[^。！？.!?\n]+(?:[。！？.!?]+|$)|[^\n]+$/gu;
+    for (const match of snippet.text.matchAll(pattern)) {
+      const text = match[0].trim();
+      if (!text) continue;
+      const start = match.index + match[0].indexOf(text);
+      const span = { span_id: `${snippet.span_id}@${start}:${start + text.length}`, parent_span_id: snippet.span_id,
+        role: snippet.role, context_only: snippet.context_only === true, start, end: start + text.length, text, order: order++, aliases: [] };
+      const key = `${span.context_only}:${span.role}:${text.replace(/\s+/gu, " ")}`;
+      if (seen.has(key)) { seen.get(key).aliases.push(span.span_id); continue; }
+      seen.set(key, span);
+      spans.push(span);
+    }
+    return spans;
+  });
+}
+
+function uniqueReasonCodes(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function sigmoid(value) {
+  if (value >= 0) return 1 / (1 + Math.exp(-value));
+  const exp = Math.exp(value);
+  return exp / (1 + exp);
+}
+
+function linearProbability(features, model) {
+  const score = model.feature_names.reduce((total, name, index) =>
+    total + (model.weights[index] ?? 0) * (features[name] ?? 0), model.intercept);
+  return { score, probability: sigmoid(score) };
+}
+
+function routerContext(turnEvidence, v3 = false) {
+  const routingSnippets = [
+    ...(turnEvidence?.context_snippets ?? []).map((snippet) => ({ ...snippet, context_only: true })),
+    ...(turnEvidence?.snippets ?? []).map((snippet) => ({ ...snippet, context_only: false }))
+  ].filter((snippet) => !STRUCTURAL_BLOCK.test(snippet.text));
+  const spans = v3 ? sentenceSpansV3(routingSnippets) : sentenceSpans(routingSnippets);
+  const events = turnEvidence?.events ?? [];
+  const meaningful = spans.filter((span) => span.text.length >= 8 && !STRUCTURAL_NOISE.test(span.text));
+  const supportable = meaningful.filter((span) => !span.context_only);
+  const userSpans = meaningful.filter((span) => span.role === "user");
+  const allText = meaningful.map((span) => span.text).join("\n");
+  const userText = userSpans.map((span) => span.text).join("\n");
+  const failed = FAILURE_SIGNAL.test(allText) || events.some((event) => event.status === "failed");
+  const corrected = CORRECTION_SIGNAL.test(allText);
+  const verified = SUCCESS_SIGNAL.test(allText) || events.some((event) =>
+    event.status === "completed" && (event.exit_code === 0 || event.http_status >= 200 && event.http_status < 300));
+  const explicitDecision = (DECISION_SIGNAL.test(userText)
+    || (DECISION_SIGNAL.test(allText) && DURABLE_SCOPE.test(allText)))
+    && !TRANSIENT_CHOICE.test(allText);
+  const preference = PREFERENCE_SIGNAL.test(allText);
+  const constraint = CONSTRAINT_SIGNAL.test(allText);
+  const explicitUserAdoption = DECISION_SIGNAL.test(userText)
+    || PREFERENCE_SIGNAL.test(userText)
+    || CONSTRAINT_SIGNAL.test(userText);
+  const reusable = REUSE_SIGNAL.test(allText) || (REASON_SIGNAL.test(allText) && corrected);
+  const proposalOnly = PROPOSAL_ONLY_SIGNAL.test(allText)
+    && !verified && !corrected && !explicitDecision && !preference && !constraint;
+  const reviewOnly = REVIEW_REQUEST.test(userText) && !explicitUserAdoption;
+  const eventCompleted = events.some((event) => event.status === "completed");
+  const operational = verified || OPERATIONAL_SIGNAL.test(allText)
+    || events.some((event) => event.type === "file_change" || event.status === "completed");
+  const operationalSpans = meaningful.filter((span) => OPERATIONAL_SIGNAL.test(span.text) || SUCCESS_SIGNAL.test(span.text));
+  const structuralNoiseCount = spans.filter((span) => STRUCTURAL_NOISE.test(span.text)).length;
+  const durableSignalCount = [explicitDecision, preference, constraint, failed && corrected, reusable, DURABLE_SCOPE.test(allText)]
+    .filter(Boolean).length;
+  const features = {
+    negated_adoption: /(?:採用|選択|決定).{0,8}(?:しない|しません|未定)|(?:do not|not).{0,10}(?:adopt|select|decide)/iu.test(userText) ? 1 : 0,
+    ordered_causal_chain: meaningful.some((_, index) => /(?:失敗|エラー|failure|error)[\s\S]*?(?:修正|対処|fix|correct)[\s\S]*?(?:検証|成功|verified|passed)/iu.test(meaningful.slice(index, index + 4).map((span) => span.text).join("\n"))) ? 1 : 0,
+    adopted_durable: explicitUserAdoption && DURABLE_SCOPE.test(userText) ? 1 : 0,
+    transient_durable: TRANSIENT_CHOICE.test(allText) && DURABLE_SCOPE.test(allText) ? 1 : 0,
+    assistant_proposal_unadopted: !explicitUserAdoption && meaningful.some((span) => span.role === "assistant" && PROPOSAL_ONLY_SIGNAL.test(span.text)) ? 1 : 0
+  };
+  return {
+    spans,
+    events,
+    meaningful,
+    supportable,
+    allText,
+    userText,
+    signals: {
+      failed,
+      corrected,
+      verified,
+      explicitDecision,
+      preference,
+      constraint,
+      explicitUserAdoption,
+      reusable,
+      proposalOnly,
+      reviewOnly,
+      eventCompleted,
+      operational
+    },
+    features: {
+      ...(v3 ? features : {}),
+      user_adoption: explicitUserAdoption ? 1 : 0,
+      durable_decision: explicitDecision ? 1 : 0,
+      preference: preference ? 1 : 0,
+      constraint: constraint ? 1 : 0,
+      failure_correction: failed && corrected ? 1 : 0,
+      durable_scope: DURABLE_SCOPE.test(allText) ? 1 : 0,
+      reusable_or_causal: reusable ? 1 : 0,
+      verified: verified ? 1 : 0,
+      operational_status: OPERATIONAL_SIGNAL.test(allText) ? 1 : 0,
+      event_completed: eventCompleted ? 1 : 0,
+      proposal_only: proposalOnly ? 1 : 0,
+      review_only: reviewOnly ? 1 : 0,
+      explicitly_transient: TRANSIENT_CHOICE.test(allText) ? 1 : 0,
+      assistant_only: meaningful.length > 0 && userSpans.length === 0 ? 1 : 0,
+      span_density: Math.min(meaningful.length, 8) / 8,
+      causal_closure: failed && corrected && verified ? 1 : 0,
+      user_span_ratio: meaningful.length === 0 ? 0 : userSpans.length / meaningful.length,
+      operational_span_ratio: meaningful.length === 0 ? 0 : operationalSpans.length / meaningful.length,
+      structural_noise_ratio: spans.length === 0 ? 0 : structuralNoiseCount / spans.length,
+      proposal_adoption_gap: proposalOnly && !explicitUserAdoption ? 1 : 0,
+      durable_signal_count: durableSignalCount / 6,
+      transient_status_combo: TRANSIENT_CHOICE.test(allText) && operational ? 1 : 0,
+      ...(v3 ? {
+        user_adoption: explicitUserAdoption && !features.negated_adoption ? 1 : 0,
+        durable_decision: explicitUserAdoption && !features.negated_adoption && !TRANSIENT_CHOICE.test(userText) && DURABLE_SCOPE.test(userText) ? 1 : 0,
+        proposal_only: features.assistant_proposal_unadopted,
+        proposal_adoption_gap: features.assistant_proposal_unadopted,
+        causal_closure: features.ordered_causal_chain
+      } : {})
+    }
+  };
+}
+
+export function extractMemoryRouterFeatures(turnEvidence, options = {}) {
+  return routerContext(turnEvidence, options.version === "v3").features;
+}
+
+/**
+ * A deliberately high-recall, explainable router. It only decides whether an
+ * episode is safe to ignore, useful as short-lived history, or worth the one
+ * bounded LLM call. Durable kind and persistence actions remain downstream.
+ */
+function routeTurnEvidenceV2(turnEvidence, options = {}) {
+  const model = options.model ?? MEMORY_EXTRACTION_ROUTER_MODEL_V2;
+  if (turnEvidence?.hard_exclusion_reason) {
+    return {
+      schema: MEMORY_EXTRACTION_ROUTER_V2,
+      disposition: "hard_excluded",
+      reason_codes: [turnEvidence.hard_exclusion_reason],
+      support_span_ids: [],
+      score: null,
+      llm_recommended: false,
+      operational_history_recommended: false,
+      decisions: { hard_excluded: true, durable_candidate: false, operational_history: false },
+      probabilities: { durable_candidate: 0, operational_history: 0 },
+      model: { schema: model.schema, training_set: model.training_set }
+    };
+  }
+
+  const context = routerContext(turnEvidence);
+  const { meaningful, signals, features } = context;
+  if (meaningful.length === 0) {
+    return {
+      schema: MEMORY_EXTRACTION_ROUTER_V2,
+      disposition: "discard",
+      reason_codes: ["no_meaningful_text"],
+      support_span_ids: [],
+      score: 0,
+      llm_recommended: false,
+      operational_history_recommended: false,
+      decisions: { hard_excluded: false, durable_candidate: false, operational_history: false },
+      probabilities: { durable_candidate: 0, operational_history: 0 },
+      model: { schema: model.schema, training_set: model.training_set }
+    };
+  }
+  const durable = linearProbability(features, { ...model.durable_candidate, feature_names: model.feature_names });
+  const operational = linearProbability(features, { ...model.operational_history, feature_names: model.feature_names });
+  const durableCandidate = durable.probability >= model.durable_candidate.threshold;
+  const operationalHistory = operational.probability >= model.operational_history.threshold;
+  const reasons = [];
+  if (signals.explicitDecision) reasons.push("explicit_user_decision");
+  if (signals.preference) reasons.push("explicit_user_preference");
+  if (signals.constraint) reasons.push("explicit_user_constraint");
+  if (features.failure_correction) reasons.push("failure_correction_chain");
+  if (features.durable_scope) reasons.push("durable_scope");
+  if (signals.reusable) reasons.push("reusable_or_causal");
+  if (signals.proposalOnly) reasons.push("proposal_not_adopted");
+  if (signals.reviewOnly) reasons.push("review_report_not_adopted");
+  if (features.explicitly_transient) reasons.push("explicitly_transient");
+  if (operationalHistory) reasons.push(signals.verified ? "verified_current_outcome" : "current_task_status");
+
+  const durableSupport = meaningful.filter((span) =>
+    DECISION_SIGNAL.test(span.text)
+    || PREFERENCE_SIGNAL.test(span.text)
+    || CONSTRAINT_SIGNAL.test(span.text)
+    || FAILURE_SIGNAL.test(span.text)
+    || CORRECTION_SIGNAL.test(span.text)
+    || REASON_SIGNAL.test(span.text)
+    || REUSE_SIGNAL.test(span.text));
+  const operationalSupport = meaningful.filter((span) => OPERATIONAL_SIGNAL.test(span.text) || SUCCESS_SIGNAL.test(span.text));
+  const selectedSupport = [...new Map([
+    ...(durableCandidate ? (durableSupport.length > 0 ? durableSupport : meaningful) : []),
+    ...(operationalHistory ? (operationalSupport.length > 0 ? operationalSupport : meaningful) : [])
+  ].map((span) => [span.span_id, span])).values()];
+  const disposition = durableCandidate ? "llm_candidate" : operationalHistory ? "operational_history" : "discard";
+  return {
+    schema: MEMORY_EXTRACTION_ROUTER_V2,
+    disposition,
+    reason_codes: uniqueReasonCodes(disposition === "discard" ? [...reasons, "no_durable_or_operational_signal"] : reasons),
+    support_span_ids: selectedSupport.map((span) => span.span_id).slice(0, 8),
+    score: durable.score,
+    llm_recommended: durableCandidate,
+    operational_history_recommended: operationalHistory,
+    decisions: { hard_excluded: false, durable_candidate: durableCandidate, operational_history: operationalHistory },
+    probabilities: { durable_candidate: durable.probability, operational_history: operational.probability },
+    model: { schema: model.schema, training_set: model.training_set }
+  };
+}
+
+function routerReasonCodes(context, operationalHistory) {
+  const { signals, features } = context;
+  const reasons = [];
+  if (signals.explicitDecision) reasons.push("explicit_user_decision");
+  if (signals.preference) reasons.push("explicit_user_preference");
+  if (signals.constraint) reasons.push("explicit_user_constraint");
+  if (features.failure_correction) reasons.push("failure_correction_chain");
+  if (features.causal_closure) reasons.push("causal_chain_closed");
+  if (features.durable_scope) reasons.push("durable_scope");
+  if (signals.reusable) reasons.push("reusable_or_causal");
+  if (signals.proposalOnly) reasons.push("proposal_not_adopted");
+  if (signals.reviewOnly) reasons.push("review_report_not_adopted");
+  if (features.explicitly_transient) reasons.push("explicitly_transient");
+  if (operationalHistory) reasons.push(signals.verified ? "verified_current_outcome" : "current_task_status");
+  return reasons;
+}
+
+function rankedSupport(context, primaryRoute) {
+  const scored = context.supportable.map((span, index) => {
+    let score = span.role === "user" ? 3 : 0;
+    if (primaryRoute === "llm_candidate") {
+      if (DECISION_SIGNAL.test(span.text)) score += 6;
+      if (PREFERENCE_SIGNAL.test(span.text) || CONSTRAINT_SIGNAL.test(span.text)) score += 5;
+      if (FAILURE_SIGNAL.test(span.text) || CORRECTION_SIGNAL.test(span.text)) score += 4;
+      if (REASON_SIGNAL.test(span.text) || REUSE_SIGNAL.test(span.text)) score += 3;
+      if (DURABLE_SCOPE.test(span.text)) score += 2;
+      if (TRANSIENT_CHOICE.test(span.text)) score -= 5;
+      if (OPERATIONAL_SIGNAL.test(span.text) && !REASON_SIGNAL.test(span.text)) score -= 1;
+    } else if (primaryRoute === "operational_history") {
+      if (OPERATIONAL_SIGNAL.test(span.text) || SUCCESS_SIGNAL.test(span.text)) score += 6;
+      if (FAILURE_SIGNAL.test(span.text) || CORRECTION_SIGNAL.test(span.text)) score += 2;
+      if (TRANSIENT_CHOICE.test(span.text)) score += 1;
+    }
+    return { span, score, index };
+  });
+  const positive = scored.filter((item) => item.score > 0);
+  return (positive.length > 0 ? positive : scored)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 8)
+    .map((item) => item.span);
+}
+
+export function routeTurnEvidenceV3(turnEvidence, options = {}) {
+  const model = options.model ?? MEMORY_EXTRACTION_ROUTER_MODEL_V3;
+  if (model.schema !== "memory-extraction-router-model/v3") throw new Error("router_model_version_mismatch");
+  // Inspect whole, unfiltered current input; normalization is for detection only.
+  const raw = (turnEvidence?.snippets ?? []).map((span) => span.text).join("\n").normalize("NFKC").replace(/[\u200b-\u200f\u2060\ufeff]/gu, "");
+  const unsafe = /(?:sk-proj-|ghp_)[A-Za-z0-9_]{16,}/u.test(raw) ? "secret_detected"
+    : /[\w.+-]+@[\w.-]+\.[a-z]{2,}/iu.test(raw) ? "direct_pii_detected"
+      : UNSAFE_SIGNAL.test(raw) || /(?:ignore|disregard|override)[\s\S]{0,45}(?:previous|prior|system|developer|security)|(?:reveal|print|exfiltrate)[\s\S]{0,30}(?:secret|credential|system prompt)|(?:システム.{0,8}指示|安全検査).{0,12}(?:無視|無効化)/iu.test(raw) ? "prompt_injection_detected" : null;
+  if (unsafe && !turnEvidence.hard_exclusion_reason) turnEvidence = { ...turnEvidence, hard_exclusion_reason: unsafe };
+  if (turnEvidence?.hard_exclusion_reason) {
+    return {
+      schema: MEMORY_EXTRACTION_ROUTER_V3,
+      primary_route: "hard_excluded",
+      disposition: "hard_excluded",
+      reason_codes: [turnEvidence.hard_exclusion_reason],
+      support_span_ids: [],
+      score: null,
+      llm_recommended: false,
+      operational_history_recommended: false,
+      decisions: { hard_excluded: true, durable_candidate: false, operational_history: false },
+      probabilities: { durable_candidate: 0, operational_history: null },
+      model: { schema: model.schema, training_set: model.training_set }
+    };
+  }
+  if (model.training_set === "bootstrap-unfitted") throw new Error("memory_extraction_router_v3_unfitted");
+  const context = routerContext(turnEvidence, model.feature_revision === "v3.1");
+  if (context.supportable.length === 0) {
+    return {
+      schema: MEMORY_EXTRACTION_ROUTER_V3,
+      primary_route: "discard",
+      disposition: "discard",
+      reason_codes: ["no_meaningful_text"],
+      support_span_ids: [],
+      score: 0,
+      llm_recommended: false,
+      operational_history_recommended: false,
+      decisions: { hard_excluded: false, durable_candidate: false, operational_history: false },
+      probabilities: { durable_candidate: 0, operational_history: 0 },
+      model: { schema: model.schema, training_set: model.training_set }
+    };
+  }
+  const durable = linearProbability(context.features, { ...model.durable_candidate, feature_names: model.feature_names });
+  const durableCandidate = durable.probability >= model.durable_candidate.threshold;
+  const operational = durableCandidate
+    ? null
+    : linearProbability(context.features, { ...model.operational_history, feature_names: model.feature_names });
+  const operationalHistory = !durableCandidate && operational.probability >= model.operational_history.threshold;
+  const primaryRoute = durableCandidate ? "llm_candidate" : operationalHistory ? "operational_history" : "discard";
+  const reasons = routerReasonCodes(context, operationalHistory);
+  const support = primaryRoute === "discard" ? [] : rankedSupport({ ...context,
+    supportable: sentenceSpansV3(turnEvidence.snippets ?? []).filter((span) => !span.context_only && !STRUCTURAL_BLOCK.test(span.text)) }, primaryRoute);
+  return {
+    schema: MEMORY_EXTRACTION_ROUTER_V3,
+    primary_route: primaryRoute,
+    disposition: primaryRoute,
+    reason_codes: uniqueReasonCodes(primaryRoute === "discard" ? [...reasons, "no_durable_or_operational_signal"] : reasons),
+    support_span_ids: support.map((span) => span.span_id),
+    score: durable.score,
+    llm_recommended: durableCandidate,
+    operational_history_recommended: operationalHistory,
+    decisions: { hard_excluded: false, durable_candidate: durableCandidate, operational_history: operationalHistory },
+    probabilities: { durable_candidate: durable.probability, operational_history: operational?.probability ?? null },
+    model: { schema: model.schema, training_set: model.training_set }
+  };
+}
+
+export function routeTurnEvidence(turnEvidence, options = {}) {
+  const model = options.model ?? (options.version === "v3" ? MEMORY_EXTRACTION_ROUTER_MODEL_V3 : MEMORY_EXTRACTION_ROUTER_MODEL_V2);
+  if (options.version && model.schema !== `memory-extraction-router-model/${options.version}`) throw new Error("router_model_version_mismatch");
+  return model?.schema === "memory-extraction-router-model/v3" || options.version === "v3"
+    ? routeTurnEvidenceV3(turnEvidence, { ...options, model })
+    : routeTurnEvidenceV2(turnEvidence, { ...options, model });
 }
 
 function firstMatch(spans, pattern, after = -1) {
@@ -240,7 +609,10 @@ async function normalizeProposal(observation, supportSpanIds, reasonCodes, optio
 export async function buildTurnEvidenceV1(input, options = {}) {
   const rows = Array.isArray(input?.rows) ? input.rows : [];
   const snippets = [];
+  const snippetAliases = {};
+  const messageSpanByKey = new Map();
   const eventsByCall = new Map();
+  let messageSpanIndex = 0;
   let provider = clip(input?.provider, 64) || null;
   let model = clip(input?.model, 128) || null;
   let hardExclusion = null;
@@ -264,12 +636,23 @@ export async function buildTurnEvidenceV1(input, options = {}) {
       }
       const keepAssistant = message.role !== "assistant" || message.phase === "final_answer" || message.phase === "final";
       if (keepAssistant && screened.text.trim()) {
+        messageSpanIndex += 1;
+        const spanId = `s${messageSpanIndex}`;
+        const text = clip(stripMemoryCitationBlocks(screened.text), 4_000);
+        if (!text) continue;
+        const messageKey = `${message.role}\0${text}`;
+        const existingSpanId = messageSpanByKey.get(messageKey);
+        if (existingSpanId) {
+          snippetAliases[spanId] = existingSpanId;
+          continue;
+        }
+        messageSpanByKey.set(messageKey, spanId);
         snippets.push({
-          span_id: `s${snippets.length + 1}`,
+          span_id: spanId,
           role: message.role,
           kind: message.role === "assistant" ? "assistant_final" : "user_message",
-          text: clip(screened.text, 4_000),
-          text_hash: `sha256:${sha256(screened.text)}`
+          text,
+          text_hash: `sha256:${sha256(text)}`
         });
       }
     }
@@ -291,6 +674,10 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     http_status: event.http_status ?? null,
     changed_paths: event.changed_paths ?? []
   }));
+  const retainedSnippets = hardExclusion ? [] : snippets.slice(0, 8);
+  const retainedSpanIds = new Set(retainedSnippets.map((snippet) => snippet.span_id));
+  const retainedAliases = Object.fromEntries(Object.entries(snippetAliases)
+    .filter(([alias, target]) => Number(alias.slice(1)) <= 8 && retainedSpanIds.has(target)));
   const turnEvidence = {
     schema: TURN_EVIDENCE_V1_SCHEMA,
     session_hash: input?.session_hash ?? null,
@@ -298,7 +685,8 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     project_id: input?.project_id ?? null,
     provider,
     model,
-    snippets: hardExclusion ? [] : snippets.slice(0, 8),
+    snippets: retainedSnippets,
+    snippet_aliases: hardExclusion ? {} : retainedAliases,
     events: hardExclusion ? [] : events.slice(0, 24),
     hard_exclusion_reason: hardExclusion,
     raw_transcript_persisted: false,
@@ -309,16 +697,19 @@ export async function buildTurnEvidenceV1(input, options = {}) {
 }
 
 export async function discoverLearningEpisodes(turnEvidence, options = {}) {
-  if (turnEvidence?.hard_exclusion_reason) {
+  const routing = routeTurnEvidence(turnEvidence, { model: options.router_model, version: options.router_version });
+  if (routing.decisions.hard_excluded) {
     return {
       drafts: [],
       review_drafts: [],
       excluded: [{ reason: turnEvidence.hard_exclusion_reason, disposition: "hard_excluded" }],
       no_candidate: false,
-      llm_recommended: false
+      llm_recommended: false,
+      routing,
+      operational_history: null
     };
   }
-  const spans = sentenceSpans(turnEvidence?.snippets ?? []);
+  const spans = routing.schema === MEMORY_EXTRACTION_ROUTER_V3 ? sentenceSpansV3(turnEvidence?.snippets ?? []) : sentenceSpans(turnEvidence?.snippets ?? []);
   const events = turnEvidence?.events ?? [];
   const proposals = [];
 
@@ -434,29 +825,59 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
     unique.push(proposal);
   }
   const reviewDrafts = unique.slice(0, MEMORY_EXTRACTION_MAX_CANDIDATES);
+  const routedSpans = new Set(routing.support_span_ids);
+  const operationalText = routing.decisions.operational_history
+    ? spans.filter((span) => routedSpans.has(span.span_id)).map((span) => span.text).join(" ").slice(0, 1_000)
+    : "";
   return {
     drafts: [],
-    review_drafts: reviewDrafts,
-    excluded: [],
-    no_candidate: reviewDrafts.length === 0,
-    llm_recommended: reviewDrafts.some((item) => item.requires_llm)
+    review_drafts: routing.decisions.durable_candidate ? reviewDrafts : [],
+    excluded: routing.disposition === "discard"
+      ? routing.reason_codes.map((reason) => ({ reason, disposition: "filtered" }))
+      : [],
+    no_candidate: routing.disposition === "discard",
+    llm_recommended: routing.llm_recommended,
+    routing,
+    operational_history: routing.decisions.operational_history && operationalText
+      ? {
+          kind: "episodic",
+          content: operationalText,
+          summary: operationalText.slice(0, 240),
+          support_span_ids: routing.support_span_ids,
+          expires_in_days: 30,
+          reason_codes: routing.reason_codes
+        }
+      : null
   };
 }
 
 export function buildLearningExtractionPacket(turnEvidence, discovery) {
-  const supportIds = new Set((discovery?.review_drafts ?? []).flatMap((item) => item.support_span_ids ?? []));
+  if (discovery?.routing?.schema === MEMORY_EXTRACTION_ROUTER_V3) return buildV3Packet(turnEvidence, discovery);
+  const supportIds = new Set([
+    ...(discovery?.routing?.support_span_ids ?? []),
+    ...(discovery?.review_drafts ?? []).flatMap((item) => item.support_span_ids ?? [])
+  ]);
   const parentIds = new Set([...supportIds].map((id) => String(id).split(".")[0]));
   const parents = (turnEvidence?.snippets ?? []).filter((item) => parentIds.has(item.span_id));
   const atomicSpans = sentenceSpans(parents);
-  const snippets = atomicSpans.filter((item) => supportIds.has(item.span_id)).map((item) => ({
-    span_id: item.span_id,
-    role: item.role,
-    text: clip(item.text, 2_500),
-    text_hash: `sha256:${sha256(item.text)}`
-  }));
+  const rankedIds = new Map((discovery?.routing?.support_span_ids ?? []).map((id, index) => [id, index]));
+  const evidenceCandidates = atomicSpans
+    .filter((span) => supportIds.has(span.span_id))
+    .sort((left, right) => (rankedIds.get(left.span_id) ?? 99) - (rankedIds.get(right.span_id) ?? 99))
+    .slice(0, 8)
+    .sort((left, right) => atomicSpans.findIndex((item) => item.span_id === left.span_id)
+      - atomicSpans.findIndex((item) => item.span_id === right.span_id))
+    .map((item) => ({
+      span_id: item.span_id,
+      role: item.role,
+      text: item.text,
+      text_hash: `sha256:${sha256(item.text)}`
+    }));
   const events = (turnEvidence?.events ?? []).filter((item) => supportIds.has(item.event_id));
   const packet = {
-    schema: LEARNING_EXTRACTION_PROPOSAL_V1_SCHEMA,
+    schema: discovery?.routing?.schema === MEMORY_EXTRACTION_ROUTER_V3
+      ? LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA
+      : LEARNING_EXTRACTION_PROPOSAL_V2_SCHEMA,
     evidence_schema: TURN_EVIDENCE_V1_SCHEMA,
     tenant_scope: true,
     project_id: turnEvidence?.project_id ?? null,
@@ -464,8 +885,9 @@ export function buildLearningExtractionPacket(turnEvidence, discovery) {
     turn_hash: turnEvidence?.turn_hash ?? null,
     provider: turnEvidence?.provider ?? null,
     model: turnEvidence?.model ?? null,
-    snippets,
+    snippets: [],
     events,
+    routing: discovery?.routing ?? null,
     rule_proposals: (discovery?.review_drafts ?? []).map((item) => ({
       lesson_type: item.observation.lesson_type,
       support_span_ids: item.support_span_ids,
@@ -478,5 +900,62 @@ export function buildLearningExtractionPacket(turnEvidence, discovery) {
       calls: 1
     }
   };
-  return { ...packet, packet_hash: `sha256:${sha256(stableJson(packet))}` };
+  const packed = packet.schema === LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA
+    ? packMemoryExtractionSnippets(packet, evidenceCandidates, { reserve_bytes: 512, max_snippets: 8 })
+    : { packet: { ...packet, snippets: evidenceCandidates.slice(0, 3).map((item, index) => {
+        const remaining = 320 - evidenceCandidates.slice(0, index).reduce((sum, candidate) => sum + Buffer.byteLength(candidate.text, "utf8"), 0);
+        const text = clipUtf8Prefix(item.text, Math.max(0, remaining)).trim();
+        return { ...item, text, text_hash: `sha256:${sha256(text)}` };
+      }).filter((item) => item.text) } };
+  const finalizedPacket = {
+    ...packed.packet,
+    snippets: packed.packet.snippets.map((item) => ({ ...item, text_hash: `sha256:${sha256(item.text)}` }))
+  };
+  return { ...finalizedPacket, packet_hash: `sha256:${sha256(stableJson(finalizedPacket))}` };
+}
+
+export function rankedEvidenceGroupsV3(snippets) {
+  const spans = sentenceSpansV3(snippets).filter((span) => !span.context_only && !STRUCTURAL_BLOCK.test(span.text));
+  const score = (span) => (span.role === "user" ? 3 : 0)
+    + (DECISION_SIGNAL.test(span.text) ? 6 : 0)
+    + (PREFERENCE_SIGNAL.test(span.text) || CONSTRAINT_SIGNAL.test(span.text) ? 5 : 0)
+    + (FAILURE_SIGNAL.test(span.text) || CORRECTION_SIGNAL.test(span.text) ? 4 : 0)
+    + (REASON_SIGNAL.test(span.text) || REUSE_SIGNAL.test(span.text) ? 3 : 0)
+    + (DURABLE_SCOPE.test(span.text) ? 2 : 0) - (TRANSIENT_CHOICE.test(span.text) ? 5 : 0)
+    - (OPERATIONAL_SIGNAL.test(span.text) && !REASON_SIGNAL.test(span.text) ? 1 : 0);
+  const groups = [];
+  for (let index = 0; index < spans.length;) {
+    let group = [spans[index]];
+    let complete = false;
+    for (let size = 1; size <= 4 && index + size <= spans.length; size += 1) {
+      const candidate = spans.slice(index, index + size);
+      if (candidate.some((span, offset) => offset > 0 && span.order !== candidate[offset - 1].order + 1)) break;
+      const text = candidate.map((span) => span.text).join("\n");
+      if (/(?:失敗|エラー|failure|error)[\s\S]*?(?:修正|対処|fix|correct)[\s\S]*?(?:検証|成功|verified|passed)/iu.test(text)
+        || DECISION_SIGNAL.test(candidate[0].text) && candidate.some((span) => REASON_SIGNAL.test(span.text))) {
+        group = candidate; complete = true; break;
+      }
+    }
+    const adopted = group.some((span) => span.role === "user" && DECISION_SIGNAL.test(span.text) && DURABLE_SCOPE.test(span.text));
+    groups.push({ spans: group, score: Math.max(...group.map(score)) + (complete ? 3 : 0) + (adopted ? 2 : 0) });
+    index += group.length;
+  }
+  return groups.sort((a, b) => b.score - a.score || a.spans[0].order - b.spans[0].order).map((group) => group.spans);
+}
+
+function buildV3Packet(turnEvidence, discovery) {
+  const packet = {
+    schema: LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA, packet_revision: "v3.1", evidence_schema: TURN_EVIDENCE_V1_SCHEMA,
+    tenant_scope: true, project_id: turnEvidence.project_id ?? null, session_hash: turnEvidence.session_hash ?? null,
+    turn_hash: turnEvidence.turn_hash ?? null, provider: turnEvidence.provider ?? null, model: turnEvidence.model ?? null,
+    routing: discovery.routing, snippets: [], events: [], rule_proposals: [],
+    limits: { input_tokens: 2000, output_tokens: 800, candidates: 3, calls: 1 }
+  };
+  const packed = packV3Evidence(packet, rankedEvidenceGroupsV3(turnEvidence.snippets ?? []));
+  const finalized = { ...packed.packet,
+    routing: { ...discovery.routing, support_span_ids: packed.packet.snippets.map((span) => span.span_id) },
+    snippets: packed.packet.snippets.map((span) => ({ ...span, text_hash: `sha256:${sha256(span.text)}` })),
+    packing: { estimated_input_tokens: packed.estimated_input_tokens, omitted_span_ids: packed.omitted_span_ids }
+  };
+  return { ...finalized, packet_hash: `sha256:${sha256(stableJson(finalized))}` };
 }

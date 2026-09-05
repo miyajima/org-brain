@@ -1330,31 +1330,52 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     workspace_root: workspace.workspaceRoot,
     sensitive_policy: workspace.sensitiveMemory
   });
-  const reviewCandidates = episodeDiscovery.review_drafts.map((proposal) => ({
-    external_key: `learning-review:${sha256(`${record.externalKey}\0${proposal.event_hash}`)}`,
-    prompt_contract_id: MEMORY_CONTRACT_V2_PROMPT_ID,
-    prompt_hash: MEMORY_CONTRACT_V2_PROMPT_HASH,
-    contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
-    verifier_version: MEMORY_CONTRACT_V2_VERIFIER_VERSION,
-    capture_intent: "review",
-    project_id: workspace.projectId,
-    task_key: firstString(record.metadata?.sessionId, record.metadata?.turnId, record.metadata?.sessionHash, record.metadata?.turnHash)
-      ? `codex:${firstString(record.metadata?.sessionId, record.metadata?.sessionHash)}:${firstString(record.metadata?.turnId, record.metadata?.turnHash)}`
-      : null,
-    observation: proposal.observation,
-    support_span_ids: proposal.support_span_ids,
-    gaps: proposal.gaps,
-    reason_codes: proposal.reason_codes,
-    verification: { state: "unverified", verified_at: null },
-    created_at: record.createdAt,
-    expires_at: record.createdAt + (turnEvidence.snippets.some((item) => item.text.includes("[REDACTED_")) ? 7 : 180) * 24 * 60 * 60 * 1000
-  }));
+  // Rule proposals are hints for the one bounded LLM call. They are no longer
+  // independently persisted as durable review candidates, because doing so
+  // made the prefilter an irreversible final classifier.
+  const reviewCandidates = [];
+  const operational = episodeDiscovery.operational_history;
+  const operationalRecords = operational && workspace.projectId
+    ? (() => {
+        const canonicalKey = sha256(`${tenantId}\0${workspace.projectId}\0episodic\0${operational.content}`);
+        return [{
+          externalKey: `episodic:v3:${canonicalKey}`,
+          canonicalKey,
+          createdAt: record.createdAt,
+          cwd: record.cwd,
+          projectId: workspace.projectId,
+          projectIdExplicit: record.projectIdExplicit,
+          businessCategoryId,
+          businessCategory: category,
+          workType,
+          summary: operational.summary,
+          tags: dedupeTags(["capture-v3", "operational-history", "ttl-30d", record.eventType]),
+          content: operational.content,
+          kind: "episodic",
+          rationale: "Short-lived project history retained for chronology and repeat-prevention only.",
+          reuseRule: "Use only for the same project while unexpired; do not treat as a durable rule.",
+          evidence: [{ type: "external", ref: `turn:${turnEvidence.turn_hash ?? turnEvidence.evidence_hash}`, weight: 0.8 }],
+          sourceReferences: operational.support_span_ids.map((spanId) => ({ type: "turn_evidence", ref: spanId })),
+          validUntil: record.createdAt + operational.expires_in_days * 24 * 60 * 60 * 1000,
+          confidenceScore: 0.8,
+          utilityScore: 0.55,
+          visibility: "private",
+          allowedPrincipals: [],
+          qualityScore: 70,
+          captureProfileId: "memory-extraction-router/v2",
+          captureRoute: "realtime_hook",
+          actorType: "system",
+          actorId: buildActorId(record)
+        }];
+      })()
+    : [];
   const extractionPacket = episodeDiscovery.llm_recommended && turnEvidence.provider && turnEvidence.model
     ? buildLearningExtractionPacket(turnEvidence, episodeDiscovery)
     : null;
   const hardExcluded = episodeDiscovery.excluded.filter((item) => item.disposition === "hard_excluded");
   return {
     records,
+    operationalRecords,
     reviewCandidates,
     extractionRequest: extractionPacket ? {
       packet: extractionPacket,
@@ -1370,6 +1391,8 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       no_candidate: records.length === 0 && reviewCandidates.length === 0 && hardExcluded.length === 0,
       hard_excluded_count: hardExcluded.length,
       would_call_llm: Boolean(extractionPacket),
+      routing: episodeDiscovery.routing,
+      operational_history_count: operationalRecords.length,
       packet_hash: extractionPacket?.packet_hash ?? null,
       provider: turnEvidence.provider,
       model: turnEvidence.model,
@@ -2036,7 +2059,11 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       .slice(0, 3);
     // Rule and inferred extraction never becomes active directly. Complete
     // candidates still enter the review/quarantine contract without an LLM.
-    if (captureV2Mode === "on") records = [];
+    if (captureV2Mode === "on") {
+      // Only the exact-source, project-scoped 30-day episodic route may be
+      // activated without an LLM review. Durable rule drafts remain review-only.
+      records = extractionMode === "on" ? (v2.operationalRecords ?? []) : [];
+    }
   }
   if (!records && workspace.memoryLearningMode !== "on" && captureV2Mode !== "on") {
     if (prepared.action === "skip") {
