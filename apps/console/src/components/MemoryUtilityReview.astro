@@ -1,0 +1,66 @@
+<section class="utility-review" aria-labelledby="utility-title" data-utility>
+  <h2 id="utility-title">活用比較</h2>
+  <p>同じ依頼への3つの回答を比較します。回答確定まで方式とAI評価は読み込みません。入力・実行内容はCodexの非公開セッションログにも残ります。</p>
+  <label>活用比較JSON <input type="file" accept="application/json" data-utility-import /></label>
+  <p role="status" data-utility-status></p>
+  <div data-utility-work hidden>
+    <label>場面 <select data-utility-case></select></label>
+    <h3>タスク</h3><pre data-utility-task></pre>
+    <div data-utility-answers></div>
+    <label>最も役立つ回答
+      <select data-utility-choice><option value="">選んでください</option><option value="answer-1">回答1</option><option value="answer-2">回答2</option><option value="answer-3">回答3</option><option value="equal">同等</option><option value="none">どれも不適切</option><option value="hold">判断保留</option></select>
+    </label>
+    <label>判断の理由・補足 <textarea data-utility-note></textarea></label>
+    <button type="button" data-utility-confirm>この場面の回答を確定</button>
+    <button type="button" data-utility-export>人の判定をJSONで保存</button>
+    <p>全10場面の確定後、比較用の別ファイルを読み込めます。判断保留は拡大実験の支持に使いません。</p>
+    <label>方式・AI評価・根拠JSON <input type="file" accept="application/json" data-utility-reveal disabled /></label>
+    <pre data-utility-details hidden></pre>
+  </div>
+</section>
+<script>
+  import {parseUtilityReview,utilityKey,utilityHash,validJudgment,type UtilityReview,type HumanJudgment} from '../lib/memory-utility-review';
+  const root=document.querySelector<HTMLElement>('[data-utility]');
+  if(root){
+    const el=<T = HTMLElement,>(name:string)=>root.querySelector('[data-utility-'+name+']') as unknown as T;
+    let review:UtilityReview|null=null;let judgments:Record<string,HumanJudgment>={};let reveal:Record<string,unknown>|null=null;
+    const current=()=>review!.cases.find(c=>c.id===el<HTMLSelectElement>('case').value)!;
+    const complete=()=>review!.cases.every(c=>validJudgment(judgments[c.id]));
+    const status=(s:string)=>{el('status').textContent=s;};
+    function render(){
+      if(!review)return;const c=current(),saved=judgments[c.id];
+      el('task').textContent=c.task;el('answers').replaceChildren();
+      for(const [i,a] of c.answers.entries()){
+        const box=document.createElement('article'),title=document.createElement('h3'),text=document.createElement('pre'),label=document.createElement('label'),error=document.createElement('textarea');
+        title.textContent='回答'+(i+1);text.textContent=a.text;label.textContent='回答'+(i+1)+'の重大な誤り（なければ空欄）';error.dataset.answerId=a.id;error.value=saved?.errors[a.id]??'';error.disabled=Boolean(saved);label.appendChild(error);box.appendChild(title);box.appendChild(text);box.appendChild(label);el('answers').appendChild(box);
+      }
+      el<HTMLSelectElement>('choice').value=saved?.choice??'';el<HTMLSelectElement>('choice').disabled=Boolean(saved);el<HTMLTextAreaElement>('note').value=saved?.note??'';el<HTMLTextAreaElement>('note').disabled=Boolean(saved);el<HTMLButtonElement>('confirm').disabled=Boolean(saved);
+      el<HTMLInputElement>('reveal').disabled=!complete();
+      const details=(reveal?.cases as Array<Record<string,unknown>>|undefined)?.find(x=>x.id===c.id);
+      el('details').hidden=!details;el('details').textContent=details?JSON.stringify(details,null,2):'';
+      status(`${Object.keys(judgments).length} / 10 場面を確定${saved?' · この場面は確定済み':''}`);
+    }
+    el<HTMLInputElement>('import').addEventListener('change',async e=>{
+      try{const file=(e.target as HTMLInputElement).files?.[0];if(!file)return;review=parseUtilityReview(JSON.parse(await file.text()));judgments={};reveal=null;
+        const stored=localStorage.getItem(utilityKey(review.experiment_id));
+        if(stored){const data=JSON.parse(stored);if(data.review!==JSON.stringify(review)||data.contract!=='memory-utility-human/v1')throw Error('同じ実験IDに異なる回答があります。上書きしません。');for(const [id,j] of Object.entries(data.judgments??{})){if(!review.cases.some(c=>c.id===id)||!validJudgment(j))throw Error('保存された判定が不正です。');judgments[id]=j;}}
+        el<HTMLSelectElement>('case').replaceChildren(...review.cases.map((c,i)=>{const o=document.createElement('option');o.value=c.id;o.textContent=`場面 ${i+1}`;return o;}));el('work').hidden=false;render();
+      }catch(e){review=null;el('work').hidden=true;status(String(e));}
+    });
+    el('case').addEventListener('change',render);
+    el('confirm').addEventListener('click',()=>{
+      if(!review)return;const c=current();if(judgments[c.id])return;const choice=el<HTMLSelectElement>('choice').value;if(!choice){status('最も役立つ回答を選んでください。');return;}
+      const errors=Object.fromEntries([...el('answers').querySelectorAll<HTMLTextAreaElement>('textarea')].map(x=>[x.dataset.answerId!,x.value]));
+      const next={...judgments,[c.id]:{choice,errors,note:el<HTMLTextAreaElement>('note').value,confirmed_at:new Date().toISOString()}};
+      try{localStorage.setItem(utilityKey(review.experiment_id),JSON.stringify({contract:'memory-utility-human/v1',review:JSON.stringify(review),judgments:next}));judgments=next;render();}catch(e){status('保存できませんでした: '+String(e));}
+    });
+    el('export').addEventListener('click',()=>{if(!review)return;const blob=new Blob([JSON.stringify({contract:'memory-utility-human/v1',experiment_id:review.experiment_id,review,judgments},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='memory-utility-human.json';a.click();URL.revokeObjectURL(url);});
+    el<HTMLInputElement>('reveal').addEventListener('change',async e=>{
+      try{if(!review||!complete())throw Error('先に全10場面を確定してください。');const file=(e.target as HTMLInputElement).files?.[0];if(!file)return;const data=JSON.parse(await file.text());if(data.contract!=='memory-utility-reveal/v1'||data.experiment_id!==review.experiment_id||!Array.isArray(data.cases)||data.cases.length!==10||data.review_hash!==await utilityHash(review))throw Error('比較用JSONの実験が一致しません。');reveal=data;render();}catch(e){status(String(e));}
+    });
+  }
+</script>
+<style>
+  .utility-review{margin:2rem 0;padding:1.5rem;border:1px solid #527c78;border-radius:16px;background:#0c171c;color:#e1eceb;display:grid;gap:1rem}
+  h2{font-size:1.5rem}p{line-height:1.7;color:#b6c8c7}label{display:grid;gap:.5rem;margin:.75rem 0}input,select,textarea,button{padding:.7rem;background:#15272c;color:#e1eceb;border:1px solid #527c78;border-radius:6px}button{margin:.5rem;cursor:pointer}button:disabled,input:disabled{opacity:.5}textarea{min-height:80px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.7;margin:1rem 0}article{padding:1rem;border-bottom:1px solid #527c78}[hidden]{display:none!important}
+</style>
