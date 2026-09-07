@@ -1,4 +1,5 @@
 ---
+import MemoryUtilityReview from "../../components/MemoryUtilityReview.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
 Astro.response.headers.set("Cache-Control", "private, no-store");
@@ -18,6 +19,8 @@ Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
         <small>通常は端末内 · AI時のみ送信</small>
       </div>
     </header>
+
+    <MemoryUtilityReview />
 
     <aside class="privacy-notice" role="note">
       <strong>暫定評価</strong>
