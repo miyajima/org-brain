@@ -1,0 +1,64 @@
+{
+  "schema": "memory-extraction-a-plus-diagnostic/v1",
+  "status": "evaluation_incomplete",
+  "scope": {
+    "cases": 8,
+    "synthetic": true,
+    "human_labels": false,
+    "formal_acceptance": false
+  },
+  "integrity": {
+    "freeze_complete": true,
+    "sequential_complete": true,
+    "human_labels_complete": false,
+    "fixed_dataset_complete": false
+  },
+  "metrics": {
+    "A": {
+      "candidate_count": 5,
+      "correct_candidate_count": 2,
+      "gold_count": 6,
+      "matched_gold_count": 2,
+      "precision": 0.4,
+      "recall": 0.3333333333333333,
+      "average_measured_tokens": 14142.25,
+      "usage_unknown_cases": 0,
+      "safety_violations": 0,
+      "false_positive_non_persistent": 2,
+      "failed_calls": 0
+    },
+    "A_PLUS": {
+      "candidate_count": 6,
+      "correct_candidate_count": 6,
+      "gold_count": 6,
+      "matched_gold_count": 6,
+      "precision": 1,
+      "recall": 1,
+      "average_measured_tokens": 14164.5,
+      "usage_unknown_cases": 0,
+      "safety_violations": 0,
+      "false_positive_non_persistent": 0,
+      "failed_calls": 0
+    }
+  },
+  "comparison": {
+    "precision_points": 0.6,
+    "recall_points": 0.6666666666666667,
+    "average_measured_tokens": 22.25
+  },
+  "usage": {
+    "calls": 16,
+    "input_tokens": 223102,
+    "cached_input_tokens": 118272,
+    "output_tokens": 3352,
+    "total_tokens": 226454
+  },
+  "activation_recommended": false,
+  "freeze": {
+    "source": "sha256:a6442240f60dc296e6988090fe437393b00e4631dee0044a9a97d1298dabecca",
+    "runner": "sha256:afb4b3455578566b2d431af489dd6a76705273393a9eb35944ed6a5029937d97",
+    "model_configuration": "sha256:aa938da7a2059ebe869029446e8795da6aab6f61c6899f717fe8eeb47f9d086e",
+    "data": "sha256:b20529a99c44b4b6c3c988cee57f989ce67d72a9304993e3b4288cbeca645f14",
+    "labels": "sha256:21661bd04627fdb42d019fe5e8a25912db00b688b00d6fdda30e737c1162fb94"
+  }
+}

@@ -24,6 +24,7 @@ import {
 import type { Env } from "./types";
 import { ensureAccessPolicy, type AccessPolicySubject } from "./access-policy-service";
 import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
+import { retrievalProjectionQueue } from "./retrieval-rollout";
 
 type LifecycleWriteItem = {
   external_key?: string | null;
@@ -998,12 +999,9 @@ async function saveCurrentSnapshot(
     }
     throw error;
   }
-  if (
-    lifecycleState !== "suppressed" &&
-    env.RETRIEVAL_PROJECTION_QUEUE &&
-    (env.HYBRID_V3_MODE === "canary" || env.HYBRID_V3_MODE === "on")
-  ) {
-    await env.RETRIEVAL_PROJECTION_QUEUE.send(
+  const projectionQueue = retrievalProjectionQueue(env);
+  if (lifecycleState !== "suppressed" && projectionQueue) {
+    await projectionQueue.send(
       {
         version: 1,
         tenant_id: args.tenantId,

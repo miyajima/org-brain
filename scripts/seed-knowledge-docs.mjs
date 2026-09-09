@@ -264,7 +264,7 @@ Use memory retrieval for both direct API lookups and cap-runner prompt context.
 
 - \`rewrite_query=true\` adds phrase, token OR, split token OR, and singularized token OR variants.
 - \`search_mode=hybrid\` falls back to knowledge docs only when lexical memory hits are fewer than 3.
-- cap-runner uses \`rewrite_query=true\` and \`search_mode=hybrid\`.
+- cap-runner uses \`rewrite_query=true\` and \`search_mode=hybrid_v4\`.
 
 Hybrid fallback only becomes useful when [[capabilities/knowledge-docs]] has seeded docs.`
       )

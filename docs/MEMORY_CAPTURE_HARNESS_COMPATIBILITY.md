@@ -13,6 +13,21 @@ This repository owns all memory extraction and quality decisions. The shared Ast
   backwards read capped at 4 MiB), verifies successful observe calls against
   real tool/file/user evidence, and sends at most one batch to the known
   capture tool. It does not invoke an LLM, `tools/list`, or tool discovery.
+- Stop remains silent when it finds a complete durable success, inferred
+  decision, or fully diagnosed failure. It queues at most three redacted
+  confirmation candidates in the private local hook database. The next
+  substantive UserPromptSubmit for that task may inject one confirmation batch,
+  and no session receives more than one batch.
+- Interactive confirmation uses `request_user_input`. Save and corrected
+  answers must follow `orgbrain_memories_propose` then
+  `orgbrain_memories_confirm`; skip answers perform no memory write. Structured
+  user choices already held as task commitments are excluded from this prompt.
+- Explicit user decision search is a deterministic, candidate-only OR lane in
+  the project router. It does not persist memory, invoke an LLM in the hook, or
+  add a hook batch; the existing safety screen and verifier remain mandatory.
+- The optional `coverage/v1` extraction profile changes provider work inside
+  that same batch to at most two calls. The Stop hook still invokes no LLM and
+  sends at most one batch. See `MEMORY_EXTRACTION_COVERAGE_V1.md`.
 - `Status`, `Conclusion`, `Evidence`, and `Gaps` headings are optional hints,
   not a required wire format. Responses without headings follow the same path.
 - `Conclusion` and `Evidence` remain useful fallback hints, but final-answer

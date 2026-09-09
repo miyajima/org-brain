@@ -15,8 +15,13 @@ import {
   calibrationReportStage,
   calibrationStage,
   canonicalItemFromC,
+  compactEvaluationEvidence,
+  compactQualityItemsPayload,
+  compactQualityRecordsPayload,
+  compactQualitySpanCatalog,
   C_INSTRUCTION,
   deriveStatus,
+  EVALUATION_STATUS_INSTRUCTION,
   evaluationStage,
   evaluationInput,
   hydrateAcceptedOutput,
@@ -24,16 +29,22 @@ import {
   hydrateQualityOutput,
   outputForJob as reloadOutputForJob,
   prepareCliStage,
+  QUALITY_ADOPTION_INSTRUCTION,
   QUALITY_CHECKED_FIELDS_INSTRUCTION,
   QUALITY_RETENTION_INSTRUCTION,
+  QUALITY_SCOPE_INSTRUCTION,
+  QUALITY_SUPPORT_INSTRUCTION,
+  QUALITY_STATUS_INSTRUCTION,
   qualityItemsPayload,
   replayStage,
+  safeOutput,
   qualityAudit,
   spanCatalog,
   supportIdsByItem,
   retrieve,
   retentionDecision,
   seal,
+  semanticQualitySpans,
   segments,
   validateC,
   validateEvaluation,
@@ -351,6 +362,13 @@ test('replay payload is bounded by five units and keeps conflict targets inside 
 });
 
 test('evaluation harm evidence binds checked_answer_id to its enclosing answer', () => {
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /meets\/partial\/failsならsupport_idsは必ず1件以上/u);
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /そのanswer自身のmemories_by_answerにあるid集合と完全一致/u);
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /他answerだけにあるmemory idを含めない/u);
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /必ず空文字""/u);
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /supplied memoryがなくてもsupport_ids/u);
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /partial\/failsならproblematic_answer_passage/u);
+  assert.match(EVALUATION_STATUS_INSTRUCTION, /空文字専用フィールドには"unknown"/u);
   const source = {target: [{id: 'm1', role: 'user', text: 'task', at: at(0)}], context: [], task: {text: 'task', at: at(1)}};
   const base = id => ({id, metrics: {
     continuation: {rating: 'unknown', reason: 'insufficient', support_ids: []},
@@ -392,6 +410,13 @@ test('quality item checks enumerate only the nine semantic fields', () => {
   assert.match(QUALITY_RETENTION_INSTRUCTION, /short TTL/);
   assert.match(QUALITY_RETENTION_INSTRUCTION, /reuse_whenがunknown/);
   assert.match(QUALITY_RETENTION_INSTRUCTION, /overretention/);
+  assert.match(QUALITY_ADOPTION_INSTRUCTION, /statusとdecision certaintyがobserved/);
+  assert.match(QUALITY_ADOPTION_INSTRUCTION, /成果物パス/);
+  assert.match(QUALITY_SUPPORT_INSTRUCTION, /必ず1件以上/);
+  assert.match(QUALITY_SUPPORT_INSTRUCTION, /空配列にしない/);
+  assert.match(QUALITY_STATUS_INSTRUCTION, /全てpassedならpassed/);
+  assert.match(QUALITY_STATUS_INSTRUCTION, /unknownが1件でもあればunknown/);
+  assert.match(C_INSTRUCTION, /別のobserved item/);
 
   const spans = [span('m1', 'quality source')];
   const item = cItem('i1', spans[0]);
@@ -408,6 +433,35 @@ test('quality item checks enumerate only the nine semantic fields', () => {
   const extra = structuredClone(output);
   extra.item_checks[0].checked_fields = [...V12_FIELD_NAMES, 'id'];
   assert.throws(() => validateQuality(extra, spans, [item]), /quality_fields_incomplete/);
+});
+
+test('downstream semantic quality input keeps evidence and target omission candidates in a compact form', () => {
+  const context = {...span('ctx', '補助文脈だけ。', 'assistant'), id: 'context-0:ctx:full'};
+  const evidence = span('evidence', 'テストは成功した。', 'assistant');
+  const candidate = span('candidate', '/Users/example/result.json', 'assistant');
+  const noise = span('noise', '了解しました。', 'assistant');
+  const item = cItem('i1', evidence, {category: 'operational'});
+  const selected = semanticQualitySpans([context, evidence, candidate, noise], [item]);
+  assert.deepEqual(selected.map(value => value.id), [evidence.id, candidate.id]);
+  assert.deepEqual(Object.keys(compactQualityItemsPayload([item], selected)).sort(), ['field_order', 'items']);
+  assert.deepEqual(compactQualitySpanCatalog(selected)[0], ['span-1', 'assistant', 'target', evidence.text]);
+  assert.deepEqual(compactQualityRecordsPayload([{
+    id: 'case:C:i1', storage: 'short', storage_reason: 'operational_status_ttl'
+  }], [item]), [{item_id: 'item-1', storage: 'short', storage_reason: 'operational_status_ttl'}]);
+});
+
+test('quality omission candidates exclude host transport messages without hiding ordinary paths', () => {
+  assert.match(QUALITY_SCOPE_INSTRUCTION, /transport metadata/u);
+  assert.match(QUALITY_SCOPE_INSTRUCTION, /workspace roots/u);
+  const environmentOpen = {...span('environment', '<environment_context>'), id: 'target:environment:1'};
+  const environmentDetail = {...span('environment', '<filesystem><workspace_roots><root>/Users/example</root></workspace_roots></filesystem>'), id: 'target:environment:2'};
+  const evidence = span('answer', '対象の回答を確認した。', 'assistant');
+  const artifact = span('artifact', '成果物は /Users/example/result.json に保存した。', 'assistant');
+  const item = cItem('i1', evidence, {category: 'operational'});
+  const selected = semanticQualitySpans([environmentOpen, environmentDetail, evidence, artifact], [item]);
+  assert.deepEqual(selected.map(value => value.id), [evidence.id, artifact.id]);
+  const audit = qualityAudit({items: [item]}, [environmentOpen, environmentDetail, evidence]);
+  assert.equal(audit.counts.omission, 0);
 });
 
 test('quality audit catches tautological rationale while preserving an unknown cause', () => {
@@ -448,6 +502,23 @@ test('conditional user execution requests are not adopted decisions', () => {
   assert.throws(() => validateC({items: [item]}, [request]), /false_adoption/);
 });
 
+test('questions asking how to confirm a setting are observed rather than adopted decisions', () => {
+  assert.match(C_INSTRUCTION, /確認方法を尋ねる質問は.*adoptedにせずobserved/u);
+  const source = span('m1', '音声チャネルの設定確認は？', 'user');
+  const item = cItem('i1', source, {
+    category: 'decision', subtype: 'settings', status: 'adopted', source_role: 'user',
+    content: 'unknown', decision: '音声チャネルの設定確認方法を求める。', scope: '音声チャネルの設定確認。'
+  });
+  item.field_certainty.content = 'unknown';
+  item.evidence.content = [];
+  for (const field of ['decision', 'scope']) {
+    item.field_certainty[field] = 'adopted';
+    item.evidence[field] = [{id: source.id, quote: source.text}];
+  }
+  assert.equal(deriveStatus(item, [source]), 'observed');
+  assert.throws(() => validateC({items: [item]}, [source]), /false_adoption/);
+});
+
 test('unconditional user choice remains an adopted decision', () => {
   const choice = span('m1', 'これで進めます。', 'user');
   const item = cItem('i1', choice, {
@@ -467,6 +538,47 @@ test('unconditional user choice remains an adopted decision', () => {
   assert.equal(retentionDecision(canonicalItemFromC(item, [choice])).storage, 'long');
 });
 
+test('adopted scoped decisions without a reuse condition remain available for the short TTL', () => {
+  assert.match(QUALITY_RETENTION_INSTRUCTION, /short TTL/u);
+  const choice = span('m1', 'gcloudコマンドをインストールしてください', 'user');
+  const item = cItem('i1', choice, {
+    category: 'decision', status: 'adopted', content: choice.text,
+    decision: 'gcloudコマンドをインストールする。', scope: 'gcloudコマンドのインストール。', reuse_when: 'unknown'
+  });
+  item.field_certainty.decision = 'adopted';
+  item.field_certainty.scope = 'observed';
+  item.evidence.decision = [{id: choice.id, quote: choice.text}];
+  item.evidence.scope = [{id: choice.id, quote: choice.text}];
+  item.support_ids = [choice.id];
+  const canonical = canonicalItemFromC(item, [choice]);
+  assert.deepEqual(retentionDecision(canonical), {storage: 'short', storage_reason: 'adopted_scoped_decision_ttl'});
+  const record = buildStore([canonical], at(1), 'C', 'case').records[0];
+  assert.equal(record.storage, 'short');
+  assert.deepEqual(retentionDecision(record), {storage: 'short', storage_reason: 'adopted_scoped_decision_ttl'});
+});
+
+test('context-only decisions are not retained while target-grounded decisions remain eligible', () => {
+  const contextChoice = {...span('m1', 'この方針で進めてください。', 'user'), id: 'context-1:m1:full'};
+  const targetReport = span('m2', '対象工程を完了しました。', 'assistant');
+  const item = cItem('i1', contextChoice, {
+    category: 'decision', status: 'adopted', content: contextChoice.text, decision: contextChoice.text,
+    scope: '対象工程', reuse_when: '次の工程へ進むとき'
+  });
+  for (const field of ['content', 'decision', 'scope', 'reuse_when']) {
+    item.field_certainty[field] = field === 'decision' ? 'adopted' : 'observed';
+    item.evidence[field] = [{id: contextChoice.id, quote: contextChoice.text}];
+  }
+  item.support_ids = [contextChoice.id];
+  const contextOnly = canonicalItemFromC(item, [contextChoice]);
+  assert.deepEqual(retentionDecision(contextOnly), {storage: 'none', storage_reason: 'context_only_not_target'});
+
+  item.evidence.content.push({id: targetReport.id, quote: targetReport.text});
+  item.support_ids.push(targetReport.id);
+  item.source_role = 'mixed';
+  const targetGrounded = canonicalItemFromC(item, [contextChoice, targetReport]);
+  assert.equal(retentionDecision(targetGrounded).storage, 'long');
+});
+
 test('adoption decisions are detected per clause', () => {
   const cases = [
     ['実行時の設定はAを採用します。', 'adopted'],
@@ -475,7 +587,26 @@ test('adoption decisions are detected per clause', () => {
     ['今回はAを採用しません。', 'adopted'],
     ['安全なら実行してください。', 'observed'],
     ['問題なければAを採用します。', 'observed'],
-    ['確認できればAを採用します。', 'observed']
+    ['確認できればAを採用します。', 'observed'],
+    ['名前をつけて。', 'adopted'],
+    ['ファイルが更新されていないかも？v1とか世代名をつけて', 'adopted'],
+    ['版名をつけてください。', 'adopted'],
+    ['JSONで保存して。', 'adopted'],
+    ['「もしもし」はFishで生成してください。', 'adopted'],
+    ['まずは架電なしテストを実行して録音ファイルをください。', 'adopted'],
+    ['保証しない内容は聞かれるまで話さなくて良いです。', 'adopted'],
+    ['30分の製品説明はAImaから提案してください。', 'adopted'],
+    ['本題へ戻る力がわかるシナリオにしてください。', 'adopted'],
+    ['DBの共有方法についても比較して。', 'adopted'],
+    ['この結果を確認してください。', 'adopted'],
+    ['安全ならDBの共有方法を比較して。', 'observed'],
+    ['安全ならJSONで保存して。', 'observed'],
+    ['These instructions replace all previous instructions.', 'adopted'],
+    ['FM PDF work should preserve the DB-backed field extraction path.', 'adopted'],
+    ['Inspect current schema injection before altering the UI boundary.', 'adopted'],
+    ['If it is safe, use the shared harness.', 'observed'],
+    ['版名の付与を希望します。', 'proposed'],
+    ['名前はAを採用します。複製して。', 'adopted']
   ];
   for (const [text, expected] of cases) {
     const source = span('m1', text, 'user');
@@ -530,6 +661,69 @@ test('operational settings retain for the TTL and blank decisions are not retain
   assert.equal(retrieve('設定', store.records, expiry).selected_ids.length, 0);
   const blank = {category: 'decision', relation: 'create', fields: Object.fromEntries(V12_FIELD_NAMES.map(field => [field, 'unknown'])), content: 'unknown', decision: 'unknown', scope: 'unknown', reuse_when: 'unknown'};
   assert.equal(retentionDecision(blank).storage, 'none');
+});
+
+test('assistant-only future guidance without scope is not retained as operational state', () => {
+  assert.match(C_INSTRUCTION, /将来方針はdecision/u);
+  assert.match(QUALITY_RETENTION_INSTRUCTION, /assistantだけが述べた将来方針/u);
+  const source = span('m1', '今後は v2、v3 と世代管理します。', 'assistant');
+  const guidance = cItem('i1', source, {
+    category: 'operational', subtype: 'other', status: 'observed', source_role: 'assistant',
+    content: '今後はv2、v3として世代管理するとの方針報告。',
+    reuse_when: '今後の版を管理するときはv2、v3の世代名を用いるとの報告。'
+  });
+  guidance.field_certainty.reuse_when = 'reported';
+  guidance.evidence.reuse_when = [{id: source.id, quote: source.text}];
+  const canonical = canonicalItemFromC(guidance, [source]);
+  assert.deepEqual(retentionDecision(canonical), {storage: 'none', storage_reason: 'assistant_future_guidance_without_scope'});
+  const record = buildStore([canonical], at(1), 'C', 'case').records[0];
+  assert.deepEqual(retentionDecision(record), {storage: 'none', storage_reason: 'assistant_future_guidance_without_scope'});
+
+  const completed = cItem('i2', source, {
+    category: 'operational', subtype: 'other', status: 'observed', source_role: 'assistant',
+    content: 'v1への複製とハッシュ一致を報告した。', outcome: 'SHA-256ハッシュが一致した。'
+  });
+  completed.field_certainty.outcome = 'reported';
+  completed.evidence.outcome = [{id: source.id, quote: source.text}];
+  assert.deepEqual(retentionDecision(canonicalItemFromC(completed, [source])), {storage: 'short', storage_reason: 'operational_status_ttl'});
+});
+
+test('assistant-only observed decisions are not retained without user adoption', () => {
+  assert.match(QUALITY_RETENTION_INSTRUCTION, /decision\/observedならscopeの有無にかかわらず保存none/u);
+  const source = span('m1', '今後は v2、v3 と世代管理します。', 'assistant');
+  const item = cItem('i1', source, {
+    category: 'decision', subtype: 'other', status: 'observed', source_role: 'assistant',
+    content: 'unknown', decision: '今後はv2、v3として世代管理する。',
+    reuse_when: '今後の世代管理時', scope: '今後作成する後続世代'
+  });
+  item.field_certainty.content = 'unknown';
+  item.evidence.content = [];
+  for (const field of ['decision', 'reuse_when', 'scope']) {
+    item.field_certainty[field] = 'reported';
+    item.evidence[field] = [{id: source.id, quote: source.text}];
+  }
+  const canonical = canonicalItemFromC(item, [source]);
+  assert.deepEqual(retentionDecision(canonical), {storage: 'none', storage_reason: 'assistant_decision_without_user_adoption'});
+  const record = buildStore([canonical], at(1), 'C', 'case').records[0];
+  assert.deepEqual(retentionDecision(record), {storage: 'none', storage_reason: 'assistant_decision_without_user_adoption'});
+});
+
+test('a concrete failure incident remains available for the short TTL without claiming resolution', () => {
+  assert.match(QUALITY_RETENTION_INSTRUCTION, /具体的なincidentならshort TTL/u);
+  const source = span('m1', '資料本体は未更新だったためv1へ複製し、ハッシュ一致を確認した。成果物は /Users/example/v1.pptx。', 'assistant');
+  const item = cItem('i1', source, {
+    category: 'failure', subtype: 'other', status: 'observed', source_role: 'assistant',
+    content: source.text, symptom: '資料本体が未更新だった。', correction: 'v1へ複製した。',
+    outcome: 'ハッシュ一致を確認した。', scope: '/Users/example/v1.pptx', reuse_when: 'unknown'
+  });
+  for (const field of ['symptom', 'correction', 'outcome', 'scope']) {
+    item.field_certainty[field] = 'reported';
+    item.evidence[field] = [{id: source.id, quote: source.text}];
+  }
+  const canonical = canonicalItemFromC(item, [source]);
+  assert.deepEqual(retentionDecision(canonical), {storage: 'short', storage_reason: 'concrete_failure_incident_ttl'});
+  const record = buildStore([canonical], at(1), 'C', 'case').records[0];
+  assert.deepEqual(retentionDecision(record), {storage: 'short', storage_reason: 'concrete_failure_incident_ttl'});
 });
 
 test('grounded short operational retention is accepted while extra retention is flagged', () => {
@@ -592,6 +786,8 @@ test('evaluation input uses per-answer opaque memory, relation, incident and evi
   const item = {id: 'case', context: [], target: [{id: 'm1', role: 'user', text: 'task', at: at(0)}], task: {text: 'task', at: at(1)}};
   const retrieval = {stores: {B: {records: []}, C: {records: [previous, record]}}, retrieval: {B: {selected_ids: []}, C: {selected_ids: [record.id]}}};
   const input = evaluationInput(item, retrieval, {A: {answer: 'a', used_memory_ids: []}, B: {answer: 'b', used_memory_ids: []}, C: {answer: 'c', used_memory_ids: ['memory-1']}});
+  assert.deepEqual(input.payload.evidence.span_order, ['id', 'role', 'text']);
+  assert.deepEqual(input.payload.evidence.spans, [['target:m1:1', 'user', 'task']]);
   const memory = input.payload.memories_by_answer['answer-1'];
   const cAnswerId = Object.entries(input.memoryMappingByAnswer).find(([, mapping]) => mapping.method === 'C')[0];
   const cMemory = input.payload.memories_by_answer[cAnswerId][0];
@@ -604,10 +800,42 @@ test('evaluation input uses per-answer opaque memory, relation, incident and evi
   assert.equal(cMemory.storage_reason, undefined);
   assert.equal(cMemory.evidence.content[0].id, 'evidence-2');
   assert.equal(input.payload.candidates_by_answer[cAnswerId][0].id, 'memory-1');
-  assert.equal(input.payload.candidates_by_answer[cAnswerId][1].id, 'memory-2');
+  assert.deepEqual(input.payload.candidates_by_answer[cAnswerId][1], {memory_ref: 'memory-2'});
   assert.equal(input.payload.answers.find(answer => answer.id === cAnswerId).used_memory_ids[0], 'memory-2');
   assert.equal(input.memoryMappingByAnswer[cAnswerId].records[1].raw_id, record.id);
   assert.equal(input.memoryMappingByAnswer[cAnswerId].method, 'C');
+});
+
+test('evaluation candidate references remove selected-memory duplication without dropping unselected candidates', () => {
+  const selected = {
+    id: 'case:C:i1', content: 'selected memory', fields: Object.fromEntries(V12_FIELD_NAMES.map(field => [field, field === 'content' ? 'selected memory' : 'unknown'])),
+    field_certainty: Object.fromEntries(V12_FIELD_NAMES.map(field => [field, field === 'content' ? 'observed' : 'unknown'])), category: 'reference', subtype: 'unknown',
+    incident_id: 'selected', status: 'observed', source_role: 'user', storage: 'short', relation: 'create', target_ids: [], gaps: [],
+    evidence: Object.fromEntries(V12_FIELD_NAMES.map(field => [field, field === 'content' ? [{id: 'target:m1:full', quote: 'selected memory'}] : []])),
+    at: at(0), expires_at: at(2), active: true
+  };
+  const unselected = {...structuredClone(selected), id: 'case:C:i2', content: 'unselected memory', incident_id: 'unselected'};
+  unselected.fields.content = 'unselected memory';
+  unselected.evidence.content = [{id: 'target:m2:full', quote: 'unselected memory'}];
+  const item = {id: 'case', context: [], target: [{id: 'm1', role: 'user', text: 'task', at: at(0)}], task: {text: 'task', at: at(1)}};
+  const retrieval = {stores: {B: {records: []}, C: {records: [selected, unselected]}}, retrieval: {B: {selected_ids: []}, C: {selected_ids: [selected.id]}}};
+  const input = evaluationInput(item, retrieval, {A: {answer: 'a', used_memory_ids: []}, B: {answer: 'b', used_memory_ids: []}, C: {answer: 'c', used_memory_ids: ['memory-1']}});
+  const cAnswerId = Object.entries(input.memoryMappingByAnswer).find(([, mapping]) => mapping.method === 'C')[0];
+  assert.deepEqual(input.payload.candidates_by_answer[cAnswerId][0], {memory_ref: 'memory-1'});
+  assert.equal(input.payload.candidates_by_answer[cAnswerId][1].content, 'unselected memory');
+  assert.equal(input.payload.memories_by_answer[cAnswerId][0].content, 'selected memory');
+});
+
+test('evaluation evidence keeps every source id, role and text while dropping repeated transport metadata', () => {
+  const spans = Array.from({length: 500}, (_, index) => ({
+    id: `target:m${index}:full`, message_id: `m${index}`, role: index % 2 ? 'assistant' : 'user',
+    at: at(index), start: 0, end: 1000, text: `source ${index} ${'x'.repeat(80)}`
+  }));
+  const compact = compactEvaluationEvidence(spans);
+  assert.deepEqual(compact.span_order, ['id', 'role', 'text']);
+  assert.equal(compact.spans.length, spans.length);
+  assert.deepEqual(compact.spans[499], [spans[499].id, spans[499].role, spans[499].text]);
+  assert.ok(Buffer.byteLength(JSON.stringify(compact)) < Buffer.byteLength(JSON.stringify(spans)));
 });
 
 test('calibration report creates and consumes a jobs array through quality review', () => {
@@ -757,6 +985,7 @@ test('C IDs are explicit in both prompt and transport schema, while support IDs 
   assert.match(C_INSTRUCTION, /成功・失敗・gap・修正・結果を別incidentに分割せず/u);
   assert.match(C_INSTRUCTION, /source_roleは全9つのfield（content、decision、rationale、symptom、cause、correction、outcome、reuse_when、scope）のevidenceを合算.*role集合/u);
   assert.match(C_INSTRUCTION, /assistant span.*content evidence.*user span.*scope evidence.*source_roleはmixed/u);
+  assert.match(C_INSTRUCTION, /並列の運用方法.*rationaleはunknown/u);
   assert.equal(V12_C_OUTPUT_SCHEMA.properties.items.items.properties.id.pattern, undefined);
   assert.equal(V12_C_OUTPUT_SCHEMA.properties.items.items.properties.target_ids.items.pattern, undefined);
   const source = span('m1', 'support evidence');
@@ -1114,6 +1343,14 @@ test('main CLI acceptance path verifies the full native session before accepting
   assert.deepEqual(accepted.output, {answer: 'native answer', used_memory_ids: []});
   assert.equal(accepted.execution_transport, V12_EXECUTION_TRANSPORT);
   assert.equal(fs.existsSync(path.join(root, `cli-completed-${id}.json`)), true);
+});
+
+test('safe output screens JSON strings independently without weakening sensitive-value rejection', () => {
+  const splitAcrossFields = JSON.stringify({reason: '確認予定の列挙だけです。', support_ids: ['target:r69b1:10']});
+  assert.equal(safeOutput(splitAcrossFields), splitAcrossFields);
+  assert.throws(() => safeOutput(JSON.stringify({reason: '会議は10:30に開始します。'})), /unsafe_output/);
+  assert.throws(() => safeOutput(JSON.stringify({answer: '連絡先はperson@example.comです。'})), /unsafe_output/);
+  assert.throws(() => safeOutput(JSON.stringify({answer: 'api_key=abcdefghijklmnop'})), /unsafe_output/);
 });
 
 test('main C acceptance hydrates IDs-only transport, reloads canonically, and holds tampering', async () => {

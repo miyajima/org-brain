@@ -134,6 +134,13 @@ export const RULES = [
 ].join('');
 
 export const JSON_ANGLE_ESCAPE_INSTRUCTION = 'JSON文字列内で原文の不等号を保持する場合は文字そのものを出力せず、必ずJSON escapeの \\u003c と \\u003e を使う（例: \\u003coai-mem-citation\\u003e）。\\uの直後は16進4桁の003cまたは003eだけにし、\\u0003cや\\u0003eは決して使わない。JSON.parse後の値では原文の文字を保持する。';
+export const EVALUATION_STATUS_INSTRUCTION = [
+  '評価出力では次の決定表を厳守する。全metricでratingがmeets/partial/failsならsupport_idsは必ず1件以上、unknownなら不足理由をreasonへ具体的に書く。',
+  '各answerのmemory_harm.checked_memory_idsは、そのanswer自身のmemories_by_answerにあるid集合と完全一致させる。空なら必ず[]とし、他answerだけにあるmemory idを含めない。',
+  'memory_harmがmeetsならproblematic_answer_passage、causal_memory_id、missing_evidence_reasonは必ず空文字""、constraint_support_idsは必ず空配列[]にする。supplied memoryがなくてもsupport_idsはsource spanから1件以上示す。',
+  'memory_harmがpartial/failsならproblematic_answer_passageは回答と一字一句同じ非空部分、causal_memory_idはchecked_memory_ids内の1件、constraint_support_idsは1件以上、missing_evidence_reasonは空文字""にする。',
+  'memory_harmがunknownならproblematic_answer_passageとcausal_memory_idは空文字""、missing_evidence_reasonは具体的な非空文字列にする。これらの空文字専用フィールドには"unknown"、"none"、"なし"を入れない。'
+].join('');
 
 export function serializeV12Payload(payload) {
   return JSON.stringify(payload).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e');
@@ -149,8 +156,12 @@ export const C_INSTRUCTION = [
   'content, decision, rationale, symptom, cause, correction, outcome, reuse_when, scopeを分ける。',
   '各既知フィールドのevidenceには根拠にしたspan_catalogのordinal tokenだけを入れ、quoteフィールドは出力しない。受理時にコードがordinalから対象spanの実IDと全文quoteを補完する。',
   'unsupportedなフィールドは必ずunknownにし、rationaleにreported/stated/記載とだけ書いて穴埋めしない。',
+  'rationaleは原文が「ため」「ので」「理由」「目的」などで決定・行為との因果または目的を明示した場合だけ既知にする。近接する方針、手順、利点、結果を「〜できるため」のような新しい因果文へ組み替えない。digest固定とrollbackのような並列の運用方法はcontent等へ保持し、原文に因果がなければrationaleはunknownにする。',
   'source_roleは全9つのfield（content、decision、rationale、symptom、cause、correction、outcome、reuse_when、scope）のevidenceを合算したspan metadataのrole集合から厳密に導出する。認識可能なroleが1種類だけならそのrole、2種類以上ならmixed、1つもなければunknownとする。例えばassistant spanをcontent evidenceに使い、user spanをscope evidenceに使うitemのsource_roleはmixedであり、assistantにはしない。assistantの報告だけではcauseの確認、remedyの検証、採用を断定しない。',
   'userが明示的に選択した場合、rationaleがunknownでもstatusはadoptedにできる。提案はproposed、観測はobserved、不確かなものはunknown。',
+  'adoptedのdecisionにはuserが選んだ範囲だけを書く。assistantが追加した実施方法・将来方針・完了報告はcontent/correction/outcome等へreportedとして分離し、userの採用へ広げない。userが無条件の命令形で依頼した作業は、その依頼範囲だけadoptedにできるが、実行結果まで採用・確認済みにしない。疑問形、方法・手順の照会、確認方法を尋ねる質問は、userの明示的な選択を伴わない限りadoptedにせずobservedとする。条件付き依頼は条件を保持してobservedとし、条件成立や採用済みを推測しない。希望・検討はproposed。',
+  'adopted itemには、userが選んでいないassistant由来の将来方針をcontent、decision、reuse_when、scopeへ混在させない。assistantだけが述べた将来方針や実施報告は、同じincident_idの別のobserved itemへ分ける。将来方針はdecision、実施報告はoperationalに分類し、reported certaintyとassistant evidenceを保つ。',
+  'target turnが作成・更新した成果物を絶対パスやfile citationで特定している場合、そのパスを該当itemのcontent、outcome、scopeのいずれかへ保持する。evidence参照だけで成果物の識別情報を省略しない。',
   'relationのupdate/conflictは同じ出力内の先行idだけをtarget_idsに指定し、更新前を消さず、矛盾は両方残す。',
   'support_idsはevidenceに使ったspan idの配列にする。保存時の集約support_idsは、検証済みevidenceからコードが重複なく派生する。',
   'storageは出力しない。保存期間と保存可否は後段のコードがcategory/status/evidenceから決める。',
@@ -159,12 +170,18 @@ export const C_INSTRUCTION = [
 
 export const QUALITY_CHECKED_FIELDS_INSTRUCTION = `item_checksのchecked_fieldsは必ず${JSON.stringify(V12_FIELD_NAMES)}だけを各項目一度ずつ列挙する。itemの他の構造フィールドも監査対象として確認するがchecked_fieldsには含めない。`;
 
-export const QUALITY_SCOPE_INSTRUCTION = '抽出対象はspan_catalogのscopeがtargetのturnだけである。scopeがcontextのspanは対象turnの意味・依頼・採用・根拠の確認に使う補助文脈であり、contextだけに現れる独立した実装・決定・状態を保存しないことはomissionではない。checked_setはcontextも含め全spanを確認した証跡であり、全spanの保存を要求するものではない。omissionを指摘する場合は欠落した対象turnのtarget spanをsupport_idsに含め、その対象情報が欠落した理由を具体的に述べる。';
+export const QUALITY_SCOPE_INSTRUCTION = '抽出対象はspan_catalogのscopeがtargetのturnだけである。scopeがcontextのspanは対象turnの意味・依頼・採用・根拠の確認に使う補助文脈であり、contextだけに現れる独立した実装・決定・状態を保存しないことはomissionではない。hostが注入したrecommended_plugins、AGENTS.md指示、environment_context、cwd、shell、workspace roots、permission profileは実行環境から再供給されるtransport metadataであり、その非保存はomissionではない。ただし、通常の会話本文でuserがそれ自体の保存・変更・再利用を選択した場合は除く。checked_setはcontextも含め提供された全spanを確認した証跡であり、全spanの保存を要求するものではない。omissionを指摘する場合は欠落した対象turnのtarget spanをsupport_idsに含め、その対象情報が将来の別turnで必要な決定、制約、失敗、現在地、成果物識別子のいずれかである理由を具体的に述べる。';
+
+export const QUALITY_ADOPTION_INSTRUCTION = '採用監査ではuserが選んだ範囲とassistantが追加した実施方法・将来方針・結果を区別する。false_adoptionはitem.statusがadoptedまたはdecisionのfield_certaintyがadoptedなのに採用根拠がない場合だけ指摘する。statusとdecision certaintyがobservedの条件付き依頼をfalse_adoptionにしない。userの無条件の命令形は、その依頼範囲だけ採用根拠にできるが、実行結果の確認根拠にはならない。条件付き依頼は採用済みにしない。userの依頼を超えたassistant由来の方針や結果をadopted itemへ混在させた場合はfalse_adoptionとする。target turnの成果物パスをsemantic fieldに保持せずevidence参照だけにした場合はomissionとする。';
+
+export const QUALITY_SUPPORT_INSTRUCTION = 'positive_evidenceのsupport_idsはresultがpassed、failed、unknownのいずれでも必ず1件以上にし、空配列にしない。欠如やunknown fieldを根拠にpassedとする場合も、その判定対象itemを支えるsource spanをitem_checksのsupport_idsから引用する。';
+
+export const QUALITY_STATUS_INSTRUCTION = '全体statusは、findingがなく6件のpositive_evidenceが全てpassedならpassed、failedまたはfindingが1件でもあればfailed、failedがなくunknownが1件でもあればunknownにする。';
 
 export const QUALITY_RETENTION_INSTRUCTION = [
   '保持監査はcode_decides_v1.2のretentionDecisionを基準にする。',
   'categoryがoperationalでsubtypeがsettings、testcounts、otherのitemは、具体的な設定、実装完了または未完了、テスト実行結果・件数など対象eventに結びつく短期の運用状態ならshort TTLが正しい。reuse_whenがunknownまたは一回限りでも、具体的な短期運用状態であることだけを理由にoverretentionと判定しない。',
-  'operationalでも内容が空または全field unknown、duplicate、実体のない一般論なら保存noneであり、shortまたはlongで保持すればoverretentionとする。referenceの具体的contentはshortで、long保存はoverretentionとする。decisionのproposedまたは未採用、scopeやreuse_when不明の項目をlong保存しない。'
+  'operationalでも内容が空または全field unknown、duplicate、実体のない一般論なら保存noneであり、shortまたはlongで保持すればoverretentionとする。assistantだけが述べた将来方針は、decision/observedならscopeの有無にかかわらず保存noneとする。operational/observedとして抽出した場合も、reuse_whenが既知でもscopeと現在eventのsymptom/cause/correction/outcomeが全て不明なら保存noneとする。failureはsymptomとreuse_whenが根拠付きならlong、reuse_whenが不明でもscopeとsymptomに加えてcorrectionまたはoutcomeが根拠付きの具体的なincidentならshort TTLとする。referenceの具体的contentはshortで、long保存はoverretentionとする。decisionのproposedまたは未採用、scope不明の項目をlong保存しない。userが採用したdecisionでdecisionとscopeが根拠付きなreuse_whenだけ不明な場合は、採用済み事実を失わないようshort TTLで保持する。reuse_whenも根拠付きの場合だけlongにする。'
 ].join('');
 
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -469,6 +486,13 @@ function qualityItemTokens(items) {
   return {itemIds, incidents};
 }
 
+function recordSourceItemId(record) {
+  if (typeof record?.source_item_id === 'string' && record.source_item_id) return record.source_item_id;
+  if (typeof record?.id !== 'string') return null;
+  const separator = record.id.lastIndexOf(':');
+  return separator >= 0 ? record.id.slice(separator + 1) : null;
+}
+
 export function qualityItemsPayload(items, spans) {
   if (!Array.isArray(items) || !Array.isArray(spans)) fail('quality_input_items_required');
   const {itemIds, incidents} = qualityItemTokens(items);
@@ -499,7 +523,7 @@ export function qualityItemsPayload(items, spans) {
 function qualityRecordsPayload(records, items, spans) {
   if (!Array.isArray(records) || !Array.isArray(items) || !Array.isArray(spans)) fail('quality_input_records_required');
   const {itemIds, incidents} = qualityItemTokens(items);
-  const recordIds = new Map(records.map((record, index) => [record.id, itemIds.get(record.source_item_id) ?? `retained-${index + 1}`]));
+  const recordIds = new Map(records.map((record, index) => [record.id, itemIds.get(recordSourceItemId(record)) ?? `retained-${index + 1}`]));
   return records.map((record, index) => ({
     id: recordIds.get(record.id) ?? `retained-${index + 1}`,
     category: record.category,
@@ -516,6 +540,53 @@ function qualityRecordsPayload(records, items, spans) {
   }));
 }
 
+export function semanticQualitySpans(spans, items) {
+  if (!Array.isArray(spans) || !Array.isArray(items)) fail('semantic_quality_input_required');
+  const evidenceIds = new Set(items.flatMap(item => supportIdsFromEvidence(item)));
+  const transportMessageIds = hostTransportMessageIds(spans);
+  return spans.filter(span => evidenceIds.has(span.id)
+    || durableOmissionCandidate(span, transportMessageIds));
+}
+
+export function compactQualitySpanCatalog(spans) {
+  return spans.map((span, index) => [
+    `span-${index + 1}`,
+    span.role,
+    typeof span.id === 'string' && span.id.startsWith('target:') ? 'target' : 'context',
+    span.text
+  ]);
+}
+
+export function compactQualityItemsPayload(items, spans) {
+  const full = qualityItemsPayload(items, spans);
+  return {
+    field_order: [...V12_FIELD_NAMES],
+    items: full.map(item => ({
+      id: item.id,
+      category: item.category,
+      subtype: item.subtype,
+      incident_id: item.incident_id,
+      status: item.status,
+      source_role: item.source_role,
+      fields: V12_FIELD_NAMES.map(field => item[field]),
+      certainty: V12_FIELD_NAMES.map(field => item.field_certainty[field]),
+      gaps: item.gaps,
+      evidence: V12_FIELD_NAMES.map(field => item.evidence[field].map(entry => entry.id)),
+      relation: item.relation,
+      target_ids: item.target_ids
+    }))
+  };
+}
+
+export function compactQualityRecordsPayload(records, items) {
+  const {itemIds} = qualityItemTokens(items);
+  return records.map((record, index) => ({
+    item_id: itemIds.get(recordSourceItemId(record)) ?? `retained-${index + 1}`,
+    storage: record.storage,
+    storage_reason: record.storage_reason
+  }));
+}
+
 function resolvedFieldEvidence(item, spans, code = 'evidence') {
   // The same source span may support several fields (for example content and
   // decision). Duplicate detection applies within a field; cross-field reuse
@@ -527,16 +598,18 @@ function unknownValue(value) {
   return typeof value !== 'string' || !value.trim() || value.trim().toLowerCase() === 'unknown' || value.trim() === '不明';
 }
 
-const ADOPTION_UNCERTAINTY = /(?:未定|検討|希望|候補|べきか|可能性|か[？?]?$)/iu;
-const ADOPTION_CONDITION = /(?:もし|万一|仮に|ならば?|であれば|でなければ|なければ|れば|たら|場合(?:は|には)?)/iu;
-const ADOPTION_CONDITION_END = /(?:もし|万一|仮に|ならば?|であれば|でなければ|なければ|れば|たら|場合(?:は|には)?)\s*$/iu;
+const ADOPTION_UNCERTAINTY = /(?:未定|検討|希望|候補|べきか|可能性|[？?]$)/iu;
+const ADOPTION_CONDITION = /(?:(?<!もし)もし(?!もし)|万一|仮に|ならば?|であれば|でなければ|なければ|れば|たら|場合(?:は|には)?|\bif\b|\bunless\b|\bprovided\s+that\b)/iu;
+const ADOPTION_CONDITION_END = /(?:(?<!もし)もし(?!もし)|万一|仮に|ならば?|であれば|でなければ|なければ|れば|たら|場合(?:は|には)?|\bif\b[^,.]*|\bunless\b[^,.]*|\bprovided\s+that\b[^,.]*)\s*$/iu;
 const ADOPTION_NEGATIVE = /(?:採用し(?:ない|ません|なかった|ませんでした)|不要(?:です|だ|でした)?|必要(?:ない|ありません|なし)|(?:禁止|除外)(?:する|します|した|しました|です)?|使(?:わない|いません)|なくてよい|無くてよい)/iu;
 const ADOPTION_POSITIVE = /(?:採用(?:する|します|した|しました|で(?:進め|決定))|これ(?:で|を)進め(?:る|ます|よう)|実施(?:する|します)|使用(?:する|します)|使(?:う|います)(?!べき|か)|決定(?:する|します|した|しました)|選択(?:する|します|した|しました)|了解(?:です|しました)?|やり(?:ます|ますね)|保存して(?:進め|おき)|反映して(?:進め|おき))/iu;
-const ADOPTION_EXECUTION_REQUEST = /(?:実行|やって|コミット|保存|削除|反映|適用)(?:してください|して下さい|して|する|します|しろ|せよ|くれ)/iu;
+const ADOPTION_EXECUTION_REQUEST = /(?:実行|やって|コミット|保存|削除|反映|適用|生成|作成|取得|提供|送付|付け|つけ|管理|比較|調査|確認|検証|レビュー|説明)(?:してください|して下さい|して|する|します|しろ|せよ|くれ|てください|て下さい|て)/iu;
+const ADOPTION_SCOPED_INSTRUCTION = /(?:(?:v[1-9][0-9]*|世代名|版名)[^。\n]*(?:つけ|付け|管理)|(?:json|csv|ya?ml|markdown|pdf|pptx|xlsx|docx)[^。\n]*(?:保存|出力|作成|使|使用|適用))(?:してください|して下さい|して|する|します|しろ|せよ|くれ)?/iu;
+const ADOPTION_DIRECTIVE_END = /(?:ください|下さい|なくて(?:よい|良い|いい)(?:です)?|にして(?:ください|下さい)?|で(?:よい|良い|いい)(?:です)?)[。！!]?$/iu;
+const ADOPTION_ENGLISH_DIRECTIVE = /\b(?:replace|use|do\s+not\s+use|must|should|preserve|inspect|keep|never|always|default\s+to|limit)\b/iu;
 
 function adoptionSentences(value) {
-  return value
-    .split(/[。．！？!?；;\n]+/u)
+  return (value.match(/[^。．！？!?；;\n]+[。．！？!?；;]?/gu) ?? [])
     .map(sentence => sentence.trim())
     .filter(Boolean);
 }
@@ -551,7 +624,9 @@ function adoptionSignal(text) {
   for (const sentence of adoptionSentences(value)) {
     let pendingConditional = false;
     for (const clause of sentence.split(/[、,]+/u).map(value => value.trim()).filter(Boolean)) {
-      const explicitDecision = ADOPTION_NEGATIVE.test(clause) || ADOPTION_POSITIVE.test(clause);
+      const explicitDecision = ADOPTION_NEGATIVE.test(clause) || ADOPTION_POSITIVE.test(clause)
+        || ADOPTION_EXECUTION_REQUEST.test(clause) || ADOPTION_SCOPED_INSTRUCTION.test(clause)
+        || ADOPTION_DIRECTIVE_END.test(clause) || ADOPTION_ENGLISH_DIRECTIVE.test(clause);
       const executionRequest = ADOPTION_EXECUTION_REQUEST.test(clause);
       const conditional = ADOPTION_CONDITION.test(clause) || pendingConditional;
       if (!ADOPTION_UNCERTAINTY.test(clause) && explicitDecision && !conditional) return true;
@@ -1188,10 +1263,11 @@ function allFieldsUnknown(item) {
 function userDecisionQuotes(item, spans = []) {
   const decision = item.evidence?.decision ?? [];
   const available = new Map([...(item._support_spans ?? []), ...(spans ?? [])].map(span => [span.id, span]));
+  const provenanceRoles = new Map((item.provenance ?? []).map(entry => [entry.span_id, entry.speaker]));
   return decision.flatMap(entry => {
     const span = entry.span ?? available.get(entry.id);
-    if (span?.role !== 'user') return [];
-    const quote = typeof entry.quote === 'string' ? entry.quote : span.text;
+    if ((span?.role ?? provenanceRoles.get(entry.id)) !== 'user') return [];
+    const quote = typeof entry.quote === 'string' ? entry.quote : span?.text;
     return typeof quote === 'string' && quote.trim() ? [quote] : [];
   });
 }
@@ -1204,23 +1280,44 @@ function hasUserAdoptionEvidence(item, spans = []) {
 export function retentionDecision(item) {
   if (!item || typeof item !== 'object') fail('retention_item_required');
   if (item.relation === 'duplicate' || allFieldsUnknown(item)) return {storage: 'none', storage_reason: 'duplicate_or_empty'};
+  const semanticSupportIds = supportIdsFromEvidence(item);
+  if (semanticSupportIds.length && semanticSupportIds.every(id => id.startsWith('context-'))) {
+    return {storage: 'none', storage_reason: 'context_only_not_target'};
+  }
   if (item.baseline_persistence === 'operational_history') return {storage: 'short', storage_reason: 'frozen_v2_operational_history'};
   if (item.baseline_persistence === 'durable' && item.category !== 'reference'
     && (isKnown(item.content) || isKnown(item.reason) || isKnown(item.reuse_when))) return {storage: 'long', storage_reason: 'frozen_v2_grounded_durable_candidate'};
-  if (item.category === 'operational') return {storage: 'short', storage_reason: 'operational_status_ttl'};
+  if (item.category === 'operational') {
+    const assistantFutureGuidance = item.status === 'observed' && item.source_role === 'assistant'
+      && isKnown(item.reuse_when) && !isKnown(item.scope)
+      && ['symptom', 'cause', 'correction', 'outcome'].every(field => !isKnown(item[field] ?? item.fields?.[field]));
+    if (assistantFutureGuidance) return {storage: 'none', storage_reason: 'assistant_future_guidance_without_scope'};
+    return {storage: 'short', storage_reason: 'operational_status_ttl'};
+  }
   if (item.category === 'reference') return {
     storage: isKnown(item.content) && item.content.length > 8 ? 'short' : 'none',
     storage_reason: isKnown(item.content) ? 'reference_short_lived' : 'reference_without_content'
   };
   if (item.category === 'decision') {
-    const grounded = isKnown(item.decision) && isKnown(item.scope) && isKnown(item.reuse_when);
-    if (item.status === 'adopted' && grounded && hasUserAdoptionEvidence(item)) return {storage: 'long', storage_reason: 'adopted_scoped_decision'};
-    if (item.status === 'proposed' || !grounded) return {storage: 'none', storage_reason: 'decision_not_adopted_or_scoped'};
+    const scoped = isKnown(item.decision) && isKnown(item.scope);
+    const reusable = isKnown(item.reuse_when);
+    const adopted = item.status === 'adopted' && hasUserAdoptionEvidence(item);
+    if (adopted && scoped && reusable) return {storage: 'long', storage_reason: 'adopted_scoped_decision'};
+    if (adopted && scoped) return {storage: 'short', storage_reason: 'adopted_scoped_decision_ttl'};
+    if (item.status === 'observed' && item.source_role === 'assistant') return {storage: 'none', storage_reason: 'assistant_decision_without_user_adoption'};
+    if (item.status === 'proposed') return {storage: 'none', storage_reason: 'proposed_decision'};
+    if (!scoped) return {storage: 'none', storage_reason: 'decision_without_scope'};
+    if (item.status === 'adopted') return {storage: 'none', storage_reason: 'adopted_decision_without_user_evidence'};
     return {storage: 'short', storage_reason: 'decision_observed_without_adoption'};
   }
   if (item.category === 'failure') {
     const reusable = isKnown(item.symptom) && isKnown(item.reuse_when);
     if (reusable && (item.status === 'observed' || item.status === 'adopted' || item.status === 'unknown')) return {storage: 'long', storage_reason: 'specific_reusable_failure'};
+    const concreteIncident = isKnown(item.symptom) && isKnown(item.scope)
+      && (isKnown(item.correction) || isKnown(item.outcome));
+    if (concreteIncident && (item.status === 'observed' || item.status === 'adopted' || item.status === 'unknown')) {
+      return {storage: 'short', storage_reason: 'concrete_failure_incident_ttl'};
+    }
     if (reusable) return {storage: 'short', storage_reason: 'proposed_failure_short_lived'};
     return {storage: 'none', storage_reason: 'failure_without_grounded_reuse_condition'};
   }
@@ -1693,7 +1790,7 @@ export function calibrationReportStage(ctx) {
       const records = buildStore(canonical.map(value => ({...value, at: atForItem(item)})), atForItem(item), 'C', item.id).records;
       const supportIdsByItemValue = supportIdsByItem(output.items, spans);
       return makeJob(root, `quality-calibration-${item.id}`, {
-        instruction: `抽出結果の意味品質を監査する。fabricated_reason、false_adoption、false_resolution、overretention、omission、fragmented_incidentの6種類を必ず全て検査する。各kindについてpositive_evidenceを一件ずつ、resultをpassed/failed/unknownのいずれか、具体的なreason、span_catalogのordinal tokenのsupport_ids付きで記録する。span_catalogの全source spanをspan-1、span-2のようなordinal tokenでchecked_setに一度ずつ列挙し、quoteは出力しない。canonical_idは出力せず、受理時にコードが入力順ordinalから対象spanの実IDと全文quoteを補完する。全抽出itemをitem_checksで確認し、item_idはitem-1、item-2のようなordinal tokenを使う。item_checksのsupport_idsは、コードが全field evidenceのspan ordinal tokenから導出したpayload.support_ids_by_item[item_id]と完全一致させ、抽出itemのraw support_idsはコピーしない。fieldごとのevidenceはspan ordinal tokenで意味品質を確認する。findingはspan ordinal tokenで支持し、対象itemがなければitem_idをnoneにする。findingがないkindもpositive_evidenceを記録する。unknownを含む場合はstatusをpassedにしない。assistant報告だけの原因・修正・結果はverifiedと扱わない。${QUALITY_SCOPE_INSTRUCTION}${QUALITY_CHECKED_FIELDS_INSTRUCTION}${QUALITY_RETENTION_INSTRUCTION}`,
+        instruction: `抽出結果の意味品質を監査する。fabricated_reason、false_adoption、false_resolution、overretention、omission、fragmented_incidentの6種類を必ず全て検査する。各kindについてpositive_evidenceを一件ずつ、resultをpassed/failed/unknownのいずれか、具体的なreason、span_catalogのordinal tokenのsupport_ids付きで記録する。span_catalogの全source spanをspan-1、span-2のようなordinal tokenでchecked_setに一度ずつ列挙し、quoteは出力しない。canonical_idは出力せず、受理時にコードが入力順ordinalから対象spanの実IDと全文quoteを補完する。全抽出itemをitem_checksで確認し、item_idはitem-1、item-2のようなordinal tokenを使う。item_checksのsupport_idsは、コードが全field evidenceのspan ordinal tokenから導出したpayload.support_ids_by_item[item_id]と完全一致させ、抽出itemのraw support_idsはコピーしない。fieldごとのevidenceはspan ordinal tokenで意味品質を確認する。findingはspan ordinal tokenで支持し、対象itemがなければitem_idをnoneにする。findingがないkindもpositive_evidenceを記録する。assistant報告だけの原因・修正・結果はverifiedと扱わない。${QUALITY_STATUS_INSTRUCTION}${QUALITY_SUPPORT_INSTRUCTION}${QUALITY_SCOPE_INSTRUCTION}${QUALITY_ADOPTION_INSTRUCTION}${QUALITY_CHECKED_FIELDS_INSTRUCTION}${QUALITY_RETENTION_INSTRUCTION}`,
         phase: 'calibration', case_id: item.id, span_catalog: spanCatalog(spans), extracted: {items: qualityItemsPayload(output.items, spans)}, support_ids_by_item: supportIdsByItemValue, retained: qualityRecordsPayload(records, output.items, spans), output_schema: V12_QUALITY_SCHEMA
       }, {stage: 'quality', quality_phase: 'calibration', case_id: item.id, spans, extracted_items: output.items, support_ids_by_item: supportIdsByItemValue});
     });
@@ -2064,6 +2161,13 @@ function evaluationSpans(item) {
   return [...item.context.flatMap((context, index) => segments(context, `context-${index}`)), ...targetSpansForCase(item)];
 }
 
+export function compactEvaluationEvidence(spans) {
+  return {
+    span_order: ['id', 'role', 'text'],
+    spans: spans.map(span => [span.id, span.role, span.text])
+  };
+}
+
 function checkSupportIds(ids, spans, required = false) {
   if (!Array.isArray(ids) || new Set(ids).size !== ids.length || ids.some(id => !spans.some(span => span.id === id))) fail('evaluation_evidence_invalid');
   if (required && !ids.length) fail('evaluation_evidence_required');
@@ -2400,12 +2504,18 @@ export function downstreamQualityStage(ctx) {
       const cJobValue = readArtifact(root, `job-extract-c-${item.id}`);
       const cOutput = outputForJob(root, `extract-c-${item.id}`);
       const spans = evaluationSpans(item);
+      const qualitySpans = semanticQualitySpans(spans, cOutput.items);
       const records = retrieval.cases[item.id].stores.C.records;
-      const supportIdsByItemValue = supportIdsByItem(cOutput.items, spans);
+      const supportIdsByItemValue = supportIdsByItem(cOutput.items, qualitySpans);
       jobs.push(makeJob(root, `quality-${item.id}`, {
-        instruction: `抽出結果と保持結果の意味品質を監査する。fabricated_reason、false_adoption、false_resolution、overretention、omission、fragmented_incidentの6種類を必ず全て検査する。各kindについてpositive_evidenceを一件ずつ、resultをpassed/failed/unknownのいずれか、具体的なreason、span_catalogのordinal tokenのsupport_ids付きで記録する。span_catalogの全source spanをspan-1、span-2のようなordinal tokenでchecked_setに一度ずつ列挙し、quoteは出力しない。canonical_idは出力せず、受理時にコードが入力順ordinalから対象spanの実IDと全文quoteを補完する。全抽出itemをitem_checksで確認し、item_idはitem-1、item-2のようなordinal tokenを使う。item_checksのsupport_idsは、コードが全field evidenceのspan ordinal tokenから導出したpayload.support_ids_by_item[item_id]と完全一致させ、抽出itemのraw support_idsはコピーしない。fieldごとのevidence tokenとspan_catalog本文の一致および意味品質を別に確認する。findingはspan ordinal tokenで支持し、対象itemがなければitem_idをnoneにする。空のfindingでもpositive_evidenceを必ず示す。unknownを含む場合はstatusをpassedにしない。assistant報告だけの原因・修正・結果はverifiedと扱わない。${QUALITY_SCOPE_INSTRUCTION}${QUALITY_CHECKED_FIELDS_INSTRUCTION}${QUALITY_RETENTION_INSTRUCTION}`,
-        phase: 'downstream', case_id: item.id, span_catalog: spanCatalog(spans), extracted: {items: qualityItemsPayload(cOutput.items, spans)}, support_ids_by_item: supportIdsByItemValue, retained: qualityRecordsPayload(records, cOutput.items, spans), output_schema: V12_QUALITY_SCHEMA
-      }, {stage: 'quality', quality_phase: 'downstream', case_id: item.id, spans, extracted_items: cOutput.items, support_ids_by_item: supportIdsByItemValue, extraction_job_hash: cJobValue.content_hash}));
+        instruction: `抽出・保持の意味品質を監査する。span_catalogの各配列は[id, role, scope, text]で、全field evidenceとコードが選んだtargetの欠落候補を含む。提供された全spanをchecked_setへ一度ずつ列挙する。extracted.field_orderはitemsのfields、certainty、evidence各配列に共通する。retained.item_idは対応するextracted itemのIDであり、新しいitemではない。全itemをitem_checksで確認し、support_idsはsupport_ids_by_itemと完全一致させる。fabricated_reason、false_adoption、false_resolution、overretention、omission、fragmented_incidentを全て検査し、各kindのpositive_evidenceを一件、passed/failed/unknown、具体的理由、非空support_ids付きで返す。findingも非空support_idsで支持し、対象itemがなければitem_idはnone。assistant報告だけの原因・修正・結果はverifiedにしない。${QUALITY_STATUS_INSTRUCTION}${QUALITY_SUPPORT_INSTRUCTION}${QUALITY_SCOPE_INSTRUCTION}${QUALITY_ADOPTION_INSTRUCTION}${QUALITY_CHECKED_FIELDS_INSTRUCTION}${QUALITY_RETENTION_INSTRUCTION}`,
+        phase: 'downstream',
+        case_id: item.id,
+        span_catalog: compactQualitySpanCatalog(qualitySpans),
+        extracted: compactQualityItemsPayload(cOutput.items, qualitySpans),
+        support_ids_by_item: supportIdsByItemValue,
+        retained: compactQualityRecordsPayload(records, cOutput.items)
+      }, {stage: 'quality', quality_phase: 'downstream', case_id: item.id, spans: qualitySpans, extracted_items: cOutput.items, support_ids_by_item: supportIdsByItemValue, extraction_job_hash: cJobValue.content_hash}));
     }
     const artifact = stableArtifact(root, 'quality-jobs', {contract: 'memory-utility-quality-jobs/v1.2', parent_hash: retrieval.content_hash, jobs, categories: V12_QUALITY_KINDS, semantic_model_required: true});
     return {status: 'quality_incomplete', pending: pending(root, artifact.jobs), jobs: artifact.jobs.length};
@@ -2449,7 +2559,10 @@ export function evaluationInput(item, retrieval, replies) {
     const blindedCandidates = units.map(unit => ({...blindedUnit(unit, records, opaqueByRecord.get(unit.ids[0]), maps, counter), active: unit.ids.some(id => records.find(record => record.id === id)?.active)}));
     const blindedSelected = selectedUnits.map(unit => blindedUnit(unit, records, opaqueByRecord.get(unit.ids[0]), maps, counter));
     memoriesByAnswer[answerId] = blindedSelected;
-    candidatesByAnswer[answerId] = blindedCandidates;
+    candidatesByAnswer[answerId] = blindedCandidates.map(candidate => {
+      const selected = blindedSelected.find(memory => memory.id === candidate.id);
+      return selected ? {memory_ref: candidate.id} : candidate;
+    });
     const usedMemoryIds = (replies[method].used_memory_ids ?? []).map(id => {
       if (!/^memory-[1-9][0-9]*$/u.test(id)) return null;
       const selectedIndex = Number(id.slice('memory-'.length)) - 1;
@@ -2464,7 +2577,7 @@ export function evaluationInput(item, retrieval, replies) {
     };
   }
   return {
-    payload: {task: item.task.text, evidence: evaluationSpans(item), answers, memories_by_answer: memoriesByAnswer, candidates_by_answer: candidatesByAnswer},
+    payload: {task: item.task.text, evidence: compactEvaluationEvidence(evaluationSpans(item)), answers, memories_by_answer: memoriesByAnswer, candidates_by_answer: candidatesByAnswer},
     memoryMappingByAnswer
   };
 }
@@ -2483,7 +2596,7 @@ export function evaluationStage(ctx) {
     const replies = Object.fromEntries(METHODS.map(method => [method, outputForJob(root, `replay-${method.toLowerCase()}-${item.id}`)]));
     const input = evaluationInput(item, retrieval.cases[item.id], replies);
     jobs.push(makeJob(root, `evaluate-${item.id}`, {
-      instruction: `方式名を推測せず採点。タスクと時間境界以前の根拠だけを使う。continuation/constraints/recurrence_prevention/memory_harmを全回答について採点し、根拠span IDを示す。memory_harmは全 supplied memory をchecked_memory_idsに列挙する。partial/failsは回答から一字一句同じ問題箇所、原因となるmemory ID、制約を支持するsource spanを示す。unknownは不足根拠理由を明記する。抽出のunsupported/duplicate/retention/missed_update/fragmented_incidentも原文根拠付きで列挙する。${JSON_ANGLE_ESCAPE_INSTRUCTION}`,
+      instruction: `方式名を推測せず採点。evidence.span_orderはevidence.spans各配列の列順で、全source spanを元の順序で含む。candidates_by_answerの{memory_ref:"memory-N"}は、同じanswerのmemories_by_answerにある同じidの完全なmemory objectを候補順のその位置で参照する。memory_ref以外の候補は未選択候補の完全なobjectである。タスクと時間境界以前の根拠だけを使う。continuation/constraints/recurrence_prevention/memory_harmを全回答について採点し、根拠span IDを示す。抽出のunsupported/duplicate/retention/missed_update/fragmented_incidentも原文根拠付きで列挙する。${EVALUATION_STATUS_INSTRUCTION}${JSON_ANGLE_ESCAPE_INSTRUCTION}`,
       ...input.payload,
       output_schema: V12_EVALUATION_SCHEMA
     }, {stage: 'evaluate', case_id: item.id, answer_ids: input.payload.answers.map(answer => answer.id), memory_ids_by_answer: Object.fromEntries(Object.entries(input.payload.memories_by_answer).map(([id, memories]) => [id, memories.map(memory => memory.id)])), memory_mapping_by_answer: input.memoryMappingByAnswer}));
@@ -2556,8 +2669,29 @@ export function prepareCliStage(ctx, options = {}) {
   return {id, prompt_path: promptPath, schema_path: schemaPath, schema_hash: schemaHash, attempts_path: attemptsPath, request: path.join(root, `cli-request-${id}.json`), model: V12_MODEL, effort: V12_EFFORT, timeout_ms: V12_TIMEOUT_MS, max_attempts: V12_MAX_ATTEMPTS};
 }
 
-function safeOutput(raw) {
-  if (typeof raw !== 'string' || !screenSensitiveMemory(raw).allowed) fail('unsafe_output');
+export function safeOutput(raw) {
+  if (typeof raw !== 'string') fail('unsafe_output');
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch {
+    if (!screenSensitiveMemory(raw).allowed) fail('unsafe_output');
+    return raw;
+  }
+  const pending = [parsed];
+  while (pending.length) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (!screenSensitiveMemory(value).allowed) fail('unsafe_output');
+      continue;
+    }
+    if (Array.isArray(value)) {
+      pending.push(...value);
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) pending.push(key, child);
+    }
+  }
   return raw;
 }
 
@@ -2974,7 +3108,21 @@ function strongResolutionText(value) {
 }
 
 function durableSignal(text) {
-  return /(?:採用|決定|方針|必ず|再発|失敗|エラー|障害|原因|修正|対処|回避|再利用|次回|記憶|保存|仕様|設定|テスト)/iu.test(String(text ?? ''));
+  return /(?:採用|決定|方針|必ず|再発|失敗|エラー|障害|原因|修正|対処|回避|再利用|次回|記憶|保存|仕様|設定|テスト|完了|成功|未実施|未着手|成果物|passed|failed|path=|\/Users\/|https?:\/\/)/iu.test(String(text ?? ''));
+}
+
+const HOST_TRANSPORT_OPENING = /^(?:<environment_context>|<recommended_plugins>|# AGENTS\.md instructions\b|<app-context>|<permissions instructions>|<skills_instructions>|<collaboration_mode>|<apps_instructions>|<plugins_instructions>)/u;
+
+function hostTransportMessageIds(spans) {
+  return new Set(spans
+    .filter(span => span?.role === 'user' && HOST_TRANSPORT_OPENING.test(String(span.text ?? '').trim()))
+    .map(span => span.message_id ?? span.id));
+}
+
+function durableOmissionCandidate(span, transportMessageIds = null) {
+  if (typeof span?.id !== 'string' || !span.id.startsWith('target:') || !durableSignal(span.text)) return false;
+  const transport = transportMessageIds ?? hostTransportMessageIds([span]);
+  return !transport.has(span.message_id ?? span.id);
 }
 
 function evidenceForField(item, field) {
@@ -3021,8 +3169,11 @@ export function qualityAudit(output, spans, options = {}) {
   const targetSpans = spans.some(span => typeof span?.id === 'string' && span.id.startsWith('target:'))
     ? spans.filter(span => typeof span?.id === 'string' && span.id.startsWith('target:'))
     : spans;
+  const transportMessageIds = hostTransportMessageIds(targetSpans);
   for (const span of targetSpans) {
-    if (durableSignal(span.text) && !covered.has(span.id)) findings.push(finding('omission', 'durable source signal is absent from every extracted item', [span.id], {source_span_id: span.id}));
+    if (durableSignal(span.text) && !transportMessageIds.has(span.message_id ?? span.id) && !covered.has(span.id)) {
+      findings.push(finding('omission', 'durable source signal is absent from every extracted item', [span.id], {source_span_id: span.id}));
+    }
   }
   for (const record of options.records ?? []) {
     const expected = retentionDecision(record);

@@ -17,6 +17,50 @@ import {
 
 const DEFAULT_SESSIONS_ROOT = path.join(os.homedir(), ".codex", "sessions");
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const SESSION_SCAN_CHUNK_BYTES = 64 * 1024;
+const SESSION_SCAN_MAX_LINE_BYTES = 2 * 1024 * 1024;
+const USER_SESSION_SOURCES = new Set(["exec", "vscode"]);
+const USER_SESSION_ORIGINATORS = new Set(["codex desktop", "codex_work_desktop"]);
+
+function classifyThreadSource(payload) {
+  const explicit = typeof payload.thread_source === "string" ? payload.thread_source.trim() : "";
+  if (explicit) return explicit;
+
+  // Recent desktop sessions can omit thread_source. Infer a user root only for
+  // the narrow native shape observed for git-backed root sessions. Explicit
+  // automation labels always win, while subagent source objects and parented
+  // sessions fail closed.
+  const source = typeof payload.source === "string" ? payload.source.trim().toLowerCase() : "";
+  const originator = typeof payload.originator === "string" ? payload.originator.trim().toLowerCase() : "";
+  const hasParent = typeof payload.parent_thread_id === "string"
+    ? payload.parent_thread_id.trim().length > 0
+    : payload.parent_thread_id != null;
+  const hasSubagentHistory = payload.subagent_history_start_ordinal != null;
+  const hasAgentPath = typeof payload.agent_path === "string"
+    ? payload.agent_path.trim().length > 0
+    : payload.agent_path != null;
+  const hasGitMetadata = payload.git != null && typeof payload.git === "object";
+  return !hasParent && !hasSubagentHistory && !hasAgentPath && hasGitMetadata &&
+    USER_SESSION_SOURCES.has(source) && USER_SESSION_ORIGINATORS.has(originator)
+    ? "user"
+    : "";
+}
+
+export function codexFinalAnswerText(row) {
+  const payload = row?.payload && typeof row.payload === "object" ? row.payload : row;
+  if (payload?.phase !== "final_answer") return null;
+  if (payload.type === "agent_message") {
+    const text = typeof payload.message === "string" ? payload.message.trim() : "";
+    return text || null;
+  }
+  if (payload.type !== "message" || payload.role !== "assistant" || !Array.isArray(payload.content)) return null;
+  const text = payload.content
+    .filter((item) => item?.type === "output_text" && typeof item.text === "string")
+    .map((item) => item.text)
+    .join("\n")
+    .trim();
+  return text || null;
+}
 
 function usage() {
   console.log(`Codex session Stop-hook replay
@@ -101,41 +145,83 @@ function listJsonlFiles(root) {
 
 export function readCodexSession(filePath) {
   let meta = null;
-  const finals = [];
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/u)) {
-    if (!line) continue;
+  const eventFinals = [];
+  const responseFinals = [];
+  const fd = fs.openSync(filePath, "r");
+  const chunk = Buffer.allocUnsafe(SESSION_SCAN_CHUNK_BYTES);
+  let carry = Buffer.alloc(0);
+  let skippingOversizedLine = false;
+  const visit = (line) => {
+    if (!line) return;
     const isSessionMeta = /"type"\s*:\s*"session_meta"/u.test(line);
-    const isFinalAnswer = /"type"\s*:\s*"agent_message"/u.test(line) &&
-      /"phase"\s*:\s*"final_answer"/u.test(line);
+    const isFinalAnswer = /"phase"\s*:\s*"final_answer"/u.test(line) &&
+      (/"type"\s*:\s*"agent_message"/u.test(line) ||
+        (/"type"\s*:\s*"message"/u.test(line) && /"role"\s*:\s*"assistant"/u.test(line)));
     // Do not parse reasoning, tool, subagent, or automation payloads. The
     // historical baseline needs only session metadata and final-answer rows.
-    if (!isSessionMeta && !isFinalAnswer) continue;
+    if (!isSessionMeta && !isFinalAnswer) return;
     let row;
     try {
       row = JSON.parse(line);
     } catch {
-      continue;
+      return;
     }
     if (row?.type === "session_meta" && row.payload && typeof row.payload === "object") {
       meta = {
         id: String(row.payload.id ?? "").trim(),
         cwd: String(row.payload.cwd ?? "").trim(),
         startedAt: Date.parse(row.timestamp),
-        threadSource: String(row.payload.thread_source ?? "").trim()
+        threadSource: classifyThreadSource(row.payload)
       };
-      continue;
+      return;
     }
-    if (
-      row?.type === "event_msg" &&
-      row.payload?.type === "agent_message" &&
-      row.payload?.phase === "final_answer"
-    ) {
-      const text = typeof row.payload.message === "string" ? row.payload.message.trim() : "";
+    const text = codexFinalAnswerText(row);
+    if (text) {
       const occurredAt = Date.parse(row.timestamp);
-      if (text && Number.isFinite(occurredAt)) finals.push({ text, occurredAt });
+      if (Number.isFinite(occurredAt)) {
+        const target = row?.type === "event_msg" ? eventFinals : responseFinals;
+        target.push({ text, occurredAt });
+      }
     }
+  };
+  try {
+    while (true) {
+      const bytesRead = fs.readSync(fd, chunk, 0, chunk.length, null);
+      if (bytesRead === 0) break;
+      let start = 0;
+      for (let index = 0; index < bytesRead; index += 1) {
+        if (chunk[index] !== 0x0a) continue;
+        if (!skippingOversizedLine) {
+          const segment = chunk.subarray(start, index);
+          const line = carry.length > 0 ? Buffer.concat([carry, segment]).toString("utf8") : segment.toString("utf8");
+          visit(line.endsWith("\r") ? line.slice(0, -1) : line);
+        }
+        carry = Buffer.alloc(0);
+        skippingOversizedLine = false;
+        start = index + 1;
+      }
+      const tail = chunk.subarray(start, bytesRead);
+      if (skippingOversizedLine || tail.length === 0) continue;
+      if (carry.length + tail.length > SESSION_SCAN_MAX_LINE_BYTES) {
+        carry = Buffer.alloc(0);
+        skippingOversizedLine = true;
+      } else {
+        carry = carry.length > 0 ? Buffer.concat([carry, tail]) : Buffer.from(tail);
+      }
+    }
+    if (!skippingOversizedLine && carry.length > 0) visit(carry.toString("utf8"));
+  } finally {
+    fs.closeSync(fd);
   }
   if (!meta?.id || !meta.cwd || !Number.isFinite(meta.startedAt)) return null;
+  // Some session formats persist both response_item and event_msg copies of a
+  // final answer. Remove only the matching near-simultaneous response copy so a
+  // session that changes persistence format still retains its other turns.
+  const finals = [
+    ...eventFinals,
+    ...responseFinals.filter((response) => !eventFinals.some((event) =>
+      event.text === response.text && Math.abs(event.occurredAt - response.occurredAt) <= 5_000))
+  ].sort((left, right) => left.occurredAt - right.occurredAt);
   return { ...meta, filePath, finals };
 }
 

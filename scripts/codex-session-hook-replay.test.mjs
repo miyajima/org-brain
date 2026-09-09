@@ -38,6 +38,19 @@ function final(message, minute = 1) {
   };
 }
 
+function responseFinal(message, minute = 1) {
+  return {
+    timestamp: `2026-08-12T00:${String(minute).padStart(2, "0")}:00.000Z`,
+    type: "response_item",
+    payload: {
+      type: "message",
+      role: "assistant",
+      phase: "final_answer",
+      content: [{ type: "output_text", text: message }]
+    }
+  };
+}
+
 describe("Codex session Stop-hook replay", () => {
   it("reads only final-answer events from a root session", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "orgbrain-replay-test-"));
@@ -57,6 +70,88 @@ describe("Codex session Stop-hook replay", () => {
       threadSource: "user",
       finals: [{ text: "Never commit credentials." }]
     });
+  });
+
+  it("streams past an oversized irrelevant row without loading the full session", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "orgbrain-replay-test-"));
+    temporaryRoots.push(root);
+    const file = await writeSession(root, "oversized", [
+      meta("session-oversized", "/workspace/org-brain"),
+      { timestamp: "2026-08-12T00:00:30.000Z", type: "response_item", payload: { output: "x".repeat(2 * 1024 * 1024 + 1) } },
+      final("Streamed final answer.")
+    ]);
+
+    expect(readCodexSession(file)).toMatchObject({
+      id: "session-oversized",
+      finals: [{ text: "Streamed final answer." }]
+    });
+  });
+
+  it("infers a modern git-backed desktop root when thread_source is absent", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "orgbrain-replay-test-"));
+    temporaryRoots.push(root);
+    const row = meta("session-modern-root", "/workspace/org-brain");
+    delete row.payload.thread_source;
+    Object.assign(row.payload, {
+      source: "vscode",
+      originator: "Codex Desktop",
+      git: { branch: "codex/example" },
+      parent_thread_id: null,
+      subagent_history_start_ordinal: null
+    });
+    const file = await writeSession(root, "modern-root", [row, responseFinal("Modern root final answer.")]);
+
+    expect(readCodexSession(file)).toMatchObject({
+      id: "session-modern-root",
+      threadSource: "user",
+      finals: [{ text: "Modern root final answer." }]
+    });
+  });
+
+  it("prefers event finals when a session contains both persisted representations", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "orgbrain-replay-test-"));
+    temporaryRoots.push(root);
+    const file = await writeSession(root, "duplicate-final", [
+      meta("session-duplicate-final", "/workspace/org-brain"),
+      responseFinal("Same final answer."),
+      final("Same final answer.")
+    ]);
+
+    expect(readCodexSession(file)?.finals).toEqual([{ text: "Same final answer.", occurredAt: Date.parse("2026-08-12T00:01:00.000Z") }]);
+  });
+
+  it("retains distinct turns when a session changes final-answer representation", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "orgbrain-replay-test-"));
+    temporaryRoots.push(root);
+    const file = await writeSession(root, "mixed-finals", [
+      meta("session-mixed-finals", "/workspace/org-brain"),
+      final("Earlier event final."),
+      responseFinal("Later response final.", 2)
+    ]);
+
+    expect(readCodexSession(file)?.finals.map((item) => item.text)).toEqual([
+      "Earlier event final.",
+      "Later response final."
+    ]);
+  });
+
+  it("fails closed for unlabeled parented and subagent-shaped sessions", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "orgbrain-replay-test-"));
+    temporaryRoots.push(root);
+    const shapes = [
+      { source: { subagent: { thread_spawn: { parent_thread_id: "parent" } } }, originator: "Codex Desktop", git: {} },
+      { source: "vscode", originator: "Codex Desktop", git: {}, parent_thread_id: "parent" },
+      { source: "vscode", originator: "Codex Desktop" },
+      { source: "vscode", originator: "unknown", git: {} }
+    ];
+
+    for (const [index, shape] of shapes.entries()) {
+      const row = meta(`session-excluded-${index}`, "/workspace/org-brain");
+      delete row.payload.thread_source;
+      Object.assign(row.payload, shape);
+      const file = await writeSession(root, `excluded-${index}`, [row, final("Excluded final answer.")]);
+      expect(readCodexSession(file)?.threadSource).toBe("");
+    }
   });
 
   it("excludes subagents and structural noise while producing a stable plan", async () => {

@@ -27,6 +27,8 @@ export type Env = {
   SKILL_GENERATION_PROVIDERS_JSON?: string;
   /** Same-provider/model allowlist. Entries must opt in to zero retention and strict JSON schema. */
   MEMORY_EXTRACTION_PROVIDER_MODELS_JSON?: string;
+  /** Exact tenant/project/installation opt-in for coverage/v1. */
+  MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON?: string;
   /** Defaults to 500000 for Tier 2 and zero for Tier 3. */
   MEMORY_EXTRACTION_TIER2_MONTHLY_TOKENS?: string;
   MEMORY_EXTRACTION_TIER3_MONTHLY_TOKENS?: string;

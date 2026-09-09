@@ -9,7 +9,8 @@ compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 # MCP_ACCESS_AUD / MCP_HOOK_ACCESS_AUD secrets for the separate user and hook
 # Access applications.
 HYBRID_V3_MODE = "off"
-HYBRID_V4_MODE = "shadow"
+# Repository default. Verify v4 projection coverage before deploying this config.
+HYBRID_V4_MODE = "on"
 HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
 ORGBRAIN_MEMORY_CAPTURE_V2_MODE = "off"
 ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING = "off"

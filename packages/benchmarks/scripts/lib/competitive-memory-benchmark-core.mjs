@@ -219,7 +219,8 @@ function normalizeSearchResponse(response, adapterName) {
       usage: {
         turns: 1,
         cost_usd: adapterName.startsWith("orgbrain-local") ? 0 : null
-      }
+      },
+      context_tokens: estimateTokens(response)
     };
   }
   const results = Array.isArray(response?.results) ? response.results : [];
@@ -227,6 +228,11 @@ function normalizeSearchResponse(response, adapterName) {
   const cost = Number(response?.usage?.cost_usd);
   return {
     results,
+    context_tokens:
+      Number.isFinite(Number(response?.evidence_bundle?.estimated_tokens)) &&
+      Number(response.evidence_bundle.estimated_tokens) >= 0
+        ? Number(response.evidence_bundle.estimated_tokens)
+        : estimateTokens(results),
     usage: {
       turns: Number.isFinite(turns) && turns > 0 ? turns : 1,
       cost_usd:
@@ -350,7 +356,7 @@ export async function runCompetitiveBenchmark(adapter, tasks = buildCompetitiveT
       const latencyMs = performance.now() - started;
       const { results, usage } = searchResponse;
       latencies.push(latencyMs);
-      if (attempt === 0) contextTokens += estimateTokens(results);
+      if (attempt === 0) contextTokens += searchResponse.context_tokens;
       const ids = results.map((result) => (result.memory ?? result).id);
       const top1 = task.expected_ids.includes(ids[0]);
       const recallAt5 = task.expected_ids.some((id) => ids.includes(id));

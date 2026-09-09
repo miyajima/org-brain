@@ -708,6 +708,7 @@ describe("memory-service", () => {
       tenant_id: "default",
       project_id: "proj1",
       q: "release automation",
+      search_mode: "memories",
       limit_durable: 8,
       limit_recent: 8
     });
@@ -799,7 +800,8 @@ describe("memory-service", () => {
     const search = await searchMemories(env, {
       tenant_id: "default",
       project_id: "proj1",
-      q: "deploy cron maintenance"
+      q: "deploy cron maintenance",
+      search_mode: "memories"
     });
     expect(search.results.map((item) => item.id)).toEqual(["canonical-1", "capture-v2-1", "curated-1"]);
     expect(search.results.map((item) => item.id)).not.toContain("raw-openclaw-hook");
@@ -851,7 +853,8 @@ describe("memory-service", () => {
     const search = await searchMemories(env, {
       tenant_id: "default",
       project_id: "proj1",
-      q: "deploy verification policy"
+      q: "deploy verification policy",
+      search_mode: "memories"
     });
 
     expect(search.results.map((item) => item.id)).toEqual(["high-quality", "low-quality"]);

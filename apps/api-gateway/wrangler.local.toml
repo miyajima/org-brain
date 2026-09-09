@@ -5,7 +5,8 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 HYBRID_V3_MODE = "off"
-HYBRID_V4_MODE = "shadow"
+# Local default mirrors the repository production target.
+HYBRID_V4_MODE = "on"
 HYBRID_V4_SHADOW_SAMPLE_RATE = "0.05"
 ORGBRAIN_MEMORY_CAPTURE_V2_MODE = "off"
 ORGBRAIN_UNCONFIRMED_DECISION_BLOCKING = "off"

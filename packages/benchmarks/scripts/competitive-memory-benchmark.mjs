@@ -129,7 +129,6 @@ class OrgBrainLocalAdapter {
   async search(query) {
     return this.store.retrieveContext({
       ...query,
-      search_mode: "hybrid_v4",
       top_k: 5,
       token_budget: 8_000
     });

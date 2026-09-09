@@ -9,7 +9,13 @@ import { recordMemoryUsage } from "./memory-effect-service";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import { normalizeActorPrincipal, parseOptionalFiniteNumber, parseString } from "./memory-service-utils";
 import type { MemoryRow, PrincipalActorOptions } from "./memory-service-types";
-export { resolveRetrievalSearchMode, searchMemories, shouldRunRetrievalShadow, stableResultReadable } from "./memory-search-service";
+export {
+  resolveRetrievalProfileSearchMode,
+  resolveRetrievalSearchMode,
+  searchMemories,
+  shouldRunRetrievalShadow,
+  stableResultReadable
+} from "./memory-search-service";
 export { getMemoryProfile, retrieveMemoryContext } from "./memory-context-service";
 
 type UpsertMemoryItem = {

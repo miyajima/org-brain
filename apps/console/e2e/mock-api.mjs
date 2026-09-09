@@ -1814,7 +1814,7 @@ const server = http.createServer(async (request, response) => {
       project_id: body.project_id ?? null,
       q: body.q ?? "",
       rewrite_query: Boolean(body.rewrite_query),
-      search_mode: body.search_mode ?? "hybrid",
+      search_mode: body.search_mode ?? "hybrid_v4",
       include_history: Boolean(body.include_history),
       results: [{
         kind: "memory",

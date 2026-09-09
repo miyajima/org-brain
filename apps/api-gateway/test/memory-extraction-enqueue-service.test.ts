@@ -68,6 +68,7 @@ function createFixture() {
     );
   `);
   database.exec(readFileSync(new URL("../../../migrations/0038_memory_extraction_pipeline.sql", import.meta.url), "utf8"));
+  database.exec(readFileSync(new URL("../../../migrations/0039_memory_extraction_coverage.sql", import.meta.url), "utf8"));
   const db = {
     prepare: (sql: string) => new Statement(database, sql),
     batch: async (statements: Statement[]) => {
@@ -131,9 +132,47 @@ function input(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function coverageInput() {
+  const raw = input();
+  (raw as any).packet = {
+    ...(raw.packet as Record<string, unknown>),
+    schema: "learning-extraction-proposal/v2",
+    extraction_profile: "coverage/v1",
+    snippets: [{ span_id: "s1@0:18", parent_span_id: "s1", role: "user", source: "user", start: 0, end: 18, order: 0, text: "実装ではREST APIを必ず使う。", text_hash: "sha256:120b663900f60276f12c303a1cf39c8325b968af746ce30cf5706c1cc221c724" }],
+    coverage: {
+      groups: [{ group_id: "group:s1@0:18", span_ids: ["s1@0:18"], priority: 2, important: true, latest_order: 0 }],
+      pass1_group_ids: ["group:s1@0:18"], omitted: [], pool_span_count: 1, pool_text_bytes: 40
+    },
+    limits: { input_tokens: 2_000, output_tokens: 800, candidates: 3, calls: 2 }
+  };
+  return raw;
+}
+
 const options = { tenantId: "tenant-a", principal: "client:installation-a", installationId: "installation-a" };
 
 describe("memory extraction enqueue", () => {
+  it("migrates populated extraction rows without changing IDs, foreign keys, indexes, or balances", () => {
+    const database = new DatabaseSync(":memory:");
+    database.exec(`PRAGMA foreign_keys=ON;
+      CREATE TABLE capabilities(tenant_id TEXT NOT NULL,name TEXT NOT NULL,version INTEGER NOT NULL,input_schema TEXT NOT NULL,output_schema TEXT NOT NULL,max_concurrency INTEGER,cost_limit_ms INTEGER,allowed_tools TEXT,updated_at INTEGER NOT NULL,PRIMARY KEY(tenant_id,name));
+    `);
+    database.exec(readFileSync(new URL("../../../migrations/0038_memory_extraction_pipeline.sql", import.meta.url), "utf8"));
+    database.prepare("INSERT INTO memory_extraction_runs(id,tenant_id,project_id,installation_id,task_id,execution_status,provider,model,packet_hash,cache_key,key_version,schema_version,contract_hash,prompt_version,redaction_version,prefilter_version,reserved_tokens,staging_r2_key,created_at,updated_at,staging_expires_at,capsule_expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run("run-old", "tenant-a", "project-a", "installation-a", "task-old", "reserved", "openai", "gpt-test", "packet", "cache", "key", "v2", "contract", "prompt", "redaction", "prefilter", 2_800, "staging", 1, 1, 2, 3);
+    database.prepare("INSERT INTO memory_extraction_token_buckets VALUES(?,?,?,?,?,?,?)").run("tenant-a", "2026-09", "tier2", 10_000, 2_800, 125, 1);
+    database.prepare("INSERT INTO memory_extraction_token_reservations(tenant_id,run_id,utc_month,tier,reserved_tokens,applied,settled,created_at) VALUES(?,?,?,?,?,1,0,?)").run("tenant-a", "run-old", "2026-09", "tier2", 2_800, 1);
+    database.prepare("INSERT INTO memory_extraction_outbox(id,tenant_id,run_id,task_id,envelope_json,available_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)").run("out-old", "tenant-a", "run-old", "task-old", "{}", 1, 1, 1);
+    database.exec(readFileSync(new URL("../../../migrations/0039_memory_extraction_coverage.sql", import.meta.url), "utf8"));
+    expect(database.prepare("SELECT id, reserved_tokens, extraction_profile FROM memory_extraction_runs").get()).toEqual({ id: "run-old", reserved_tokens: 2_800, extraction_profile: null });
+    expect(database.prepare("SELECT reserved_tokens, consumed_tokens FROM memory_extraction_token_buckets").get()).toEqual({ reserved_tokens: 2_800, consumed_tokens: 125 });
+    expect(database.prepare("SELECT run_id FROM memory_extraction_token_reservations").get()).toEqual({ run_id: "run-old" });
+    expect(database.prepare("SELECT run_id FROM memory_extraction_outbox").get()).toEqual({ run_id: "run-old" });
+    expect(database.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    const indexes = database.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_memory_extraction_%' ORDER BY name").all().map((row) => row.name);
+    expect(indexes).toEqual(expect.arrayContaining(["idx_memory_extraction_outbox_dispatch", "idx_memory_extraction_passes_state", "idx_memory_extraction_runs_execution", "idx_memory_extraction_runs_expiry", "idx_memory_extraction_runs_project"]));
+    expect(database.prepare("SELECT cost_limit_ms FROM capabilities WHERE name='memory_extraction'").get()).toEqual({ cost_limit_ms: 90_000 });
+  });
+
   it("accepts legacy v1/v2 packets but rejects an incomplete v3 contract", () => {
     for (const schema of ["learning-extraction-proposal/v1", "learning-extraction-proposal/v2"]) {
       const raw = input();
@@ -163,6 +202,30 @@ describe("memory extraction enqueue", () => {
     expect(database.prepare("SELECT COUNT(*) AS count FROM tasks").get()).toEqual({ count: 1 });
     expect(database.prepare("SELECT state FROM memory_extraction_outbox").get()).toEqual({ state: "sent" });
     expect([...bucket.objects.keys()].filter((key) => key.includes("/staging/"))).toHaveLength(1);
+  });
+
+  it("requires an exact coverage allowlist match and reserves the full two-pass budget", async () => {
+    const fixture = createFixture();
+    await expect(enqueueMemoryExtraction(fixture.env, coverageInput(), options)).rejects.toMatchObject({
+      status: 403, code: "memory_extraction_coverage_not_allowlisted"
+    });
+    expect(fixture.bucket.objects.size).toBe(0);
+    fixture.env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON = JSON.stringify([{
+      tenant_id: options.tenantId, project_id: "project-a", installation_id: options.installationId
+    }]);
+    const queued = await enqueueMemoryExtraction(fixture.env, coverageInput(), options);
+    expect(queued).toMatchObject({ execution_status: "reserved", reserved_tokens: 5_600, cache_hit: false });
+    expect(fixture.database.prepare("SELECT extraction_profile, reserved_tokens, length(prompt_policy_hash) AS prompt_hash_length, length(verifier_policy_hash) AS verifier_hash_length, length(execution_policy_hash) AS execution_hash_length FROM memory_extraction_runs").get()).toEqual({
+      extraction_profile: "coverage/v1", reserved_tokens: 5_600, prompt_hash_length: 71, verifier_hash_length: 71, execution_hash_length: 71
+    });
+    expect((fixture.sent[0] as any).payload.constraints).toEqual({ reserved_tokens: 5_600, calls: 2 });
+    const stored = JSON.parse([...fixture.bucket.objects.values()][0]);
+    // Load the consumer at runtime to exercise the wire contract across TS project boundaries.
+    const runnerPath = "../../cap-runner/src/capabilities/memory-extraction.ts";
+    const { __memoryExtractionInternals } = await import(runnerPath);
+    const parsed = __memoryExtractionInternals.parseInput(stored, { tenantId: options.tenantId });
+    expect(parsed.run_id).toBe(queued.run_id);
+    expect(parsed.extraction_profile).toBe("coverage/v1");
   });
 
   it("fails closed before R2/Queue for model unavailability and rejects Tier 3 on the extraction route", async () => {
@@ -303,6 +366,24 @@ describe("memory extraction enqueue", () => {
     expect(fixture.bucket.objects.size).toBe(0);
   });
 
+  it("deletes expired coverage pass artifacts and clears their D1 references", async () => {
+    const fixture = createFixture();
+    fixture.env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON = JSON.stringify([{
+      tenant_id: options.tenantId, project_id: "project-a", installation_id: options.installationId
+    }]);
+    const queued = await enqueueMemoryExtraction(fixture.env, coverageInput(), options);
+    const passKey = `tenants/${options.tenantId}/memory-extraction/passes/${queued.run_id}/1.json`;
+    fixture.bucket.objects.set(passKey, "{}");
+    const now = Date.now();
+    fixture.database.prepare("INSERT INTO memory_extraction_passes(tenant_id,run_id,pass_no,state,result_r2_key,charged_tokens,created_at,updated_at) VALUES(?,?,1,'succeeded',?,10,?,?)")
+      .run(options.tenantId, queued.run_id, passKey, now, now);
+    fixture.database.prepare("UPDATE memory_extraction_runs SET capsule_expires_at=0 WHERE id=?").run(queued.run_id);
+    const swept = await sweepMemoryExtractionArtifacts(fixture.env, now);
+    expect(swept.pass_results_deleted).toBe(1);
+    expect(fixture.bucket.objects.has(passKey)).toBe(false);
+    expect(fixture.database.prepare("SELECT result_r2_key FROM memory_extraction_passes WHERE run_id=? AND pass_no=1").get(queued.run_id)).toEqual({ result_r2_key: null });
+  });
+
   it("expires unexecuted reservations without charge and releases the monthly bucket", async () => {
     const fixture = createFixture();
     const queued = await enqueueMemoryExtraction(fixture.env, input(), options);
@@ -313,6 +394,32 @@ describe("memory extraction enqueue", () => {
       .toEqual({ execution_status: "settled", outcome: "expired", charged_tokens: 0 });
     expect(fixture.database.prepare("SELECT reserved_tokens, consumed_tokens FROM memory_extraction_token_buckets").get())
       .toEqual({ reserved_tokens: 0, consumed_tokens: 0 });
+  });
+
+  it("charges only an uncertain running coverage pass when its reservation expires", async () => {
+    const fixture = createFixture();
+    fixture.env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON = JSON.stringify([{
+      tenant_id: options.tenantId, project_id: "project-a", installation_id: options.installationId
+    }]);
+    const queued = await enqueueMemoryExtraction(fixture.env, coverageInput(), options);
+    const now = Date.now();
+    fixture.database.prepare("UPDATE memory_extraction_runs SET execution_status='running', staging_expires_at=0 WHERE id=?").run(queued.run_id);
+    fixture.database.prepare("INSERT INTO memory_extraction_passes(tenant_id,run_id,pass_no,state,charged_tokens,created_at,updated_at) VALUES(?,?,1,'running',0,?,?)")
+      .run(options.tenantId, queued.run_id, now, now);
+    fixture.database.prepare("INSERT INTO memory_extraction_passes(tenant_id,run_id,pass_no,state,charged_tokens,created_at,updated_at) VALUES(?,?,2,'planned',0,?,?)")
+      .run(options.tenantId, queued.run_id, now, now);
+
+    const reconciled = await reconcileMemoryExtractionReservations(fixture.env, now);
+
+    expect(reconciled).toEqual({ examined: 1, settled: 1, expired: 1 });
+    expect(fixture.database.prepare("SELECT outcome, charged_tokens FROM memory_extraction_runs WHERE id=?").get(queued.run_id))
+      .toEqual({ outcome: "outcome_unknown", charged_tokens: 2_800 });
+    expect(fixture.database.prepare("SELECT pass_no,state,charged_tokens FROM memory_extraction_passes ORDER BY pass_no").all()).toEqual([
+      { pass_no: 1, state: "outcome_unknown", charged_tokens: 2_800 },
+      { pass_no: 2, state: "skipped", charged_tokens: 0 }
+    ]);
+    expect(fixture.database.prepare("SELECT reserved_tokens, consumed_tokens FROM memory_extraction_token_buckets").get())
+      .toEqual({ reserved_tokens: 0, consumed_tokens: 2_800 });
   });
 
   it("returns the winning run as a cache hit under concurrent enqueue", async () => {
