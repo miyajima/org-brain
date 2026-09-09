@@ -1,0 +1,48 @@
+{
+  "benchmark": "competitive-memory-v1",
+  "evaluated_at": "2026-09-09T05:30:07.558Z",
+  "repository_head": "f30a09954e18a0d3537470ed87af7d39be56be55",
+  "working_tree_changes_included": true,
+  "adapter": "orgbrain-local",
+  "retrieval_path": {
+    "method": "LocalMemoryStore.retrieveContext",
+    "search_mode_argument": "omitted",
+    "resolved_default": "hybrid_v4"
+  },
+  "command": "rtk pnpm benchmark:competitive -- --adapter orgbrain-local --repeat 5 --output /private/tmp/orgbrain-v4-after-20260909.json --model-id none-retrieval-only --budget-usd 0 --hardware-id mac-local-arm64 --json",
+  "dataset": {
+    "version": "competitive-memory-v1",
+    "status": "development",
+    "tasks": 200,
+    "personal_tasks": 100,
+    "organization_tasks": 100,
+    "repeats": 5,
+    "attempts": 1000
+  },
+  "metrics": {
+    "accuracy_percent": 100,
+    "recall_at_5_percent": 100,
+    "pass_5_percent": 100,
+    "task_completion_rate_percent": 100,
+    "permission_or_cross_tenant_leakage_count": 0,
+    "decision_grade_provenance_rate_percent": 100,
+    "average_injected_context_tokens": 65.68,
+    "search_latency_p50_ms": 36.83,
+    "search_latency_p95_ms": 61.87,
+    "ingest_latency_p50_ms": 13.62,
+    "ingest_latency_p95_ms": 25.43,
+    "failed_rows": 0
+  },
+  "measurement_contract": {
+    "context_metric": "evidence_bundle.estimated_tokens when available; result serialization estimate otherwise",
+    "comparison_warning": "Earlier full-record context-token values are not directly comparable because they used a different measurement contract."
+  },
+  "ranking": {
+    "eligible": false,
+    "reasons": [
+      "Only orgbrain-local was rerun; Mem0, Hindsight, and Mnemosyne results are absent from this run.",
+      "Personal and organization capability scorecards are incomplete.",
+      "The 200 tasks are development data rather than an independently audited sealed holdout."
+    ]
+  }
+}

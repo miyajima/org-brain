@@ -78,6 +78,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     CREATE VIRTUAL TABLE memories_fts USING fts5(memory_id UNINDEXED, tenant_id UNINDEXED, content);
   `);
   database.exec(readFileSync(new URL("../../../migrations/0038_memory_extraction_pipeline.sql", import.meta.url), "utf8"));
+  database.exec(readFileSync(new URL("../../../migrations/0039_memory_extraction_coverage.sql", import.meta.url), "utf8"));
   database.prepare("INSERT INTO mcp_client_installations(id,tenant_id,owner_principal,client_type,device_label,purpose,status,created_at) VALUES(?,?,?,?,?,?,?,?)")
     .run("installation-a", "tenant-a", "user:test", "codex", "test", "capture", "active", Date.now());
   const packet = {
@@ -180,6 +181,41 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
   return { database, bucket, context };
 }
 
+async function enableCoverage(fx: Awaited<ReturnType<typeof fixture>>) {
+  const stored = await (await fx.bucket.get("inputs/run-a.json"))!.json<any>();
+  stored.packet = {
+    ...stored.packet,
+    schema: "learning-extraction-proposal/v2",
+    extraction_profile: "coverage/v1",
+    snippets: [
+      { span_id: "s1@0:18", parent_span_id: "s1", role: "user", source: "user", start: 0, end: 18, order: 0, text: "実装ではREST APIを必ず使う。", text_hash: `sha256:${await sha256("実装ではREST APIを必ず使う。")}` },
+      { span_id: "s2@0:9", parent_span_id: "s2", role: "assistant", source: "assistant", start: 0, end: 9, order: 1, text: "旧方式は失敗した。", text_hash: `sha256:${await sha256("旧方式は失敗した。")}` }
+    ],
+    coverage: {
+      groups: [
+        { group_id: "g1", span_ids: ["s1@0:18"], priority: 2, important: true, latest_order: 0 },
+        { group_id: "g2", span_ids: ["s2@0:9"], priority: 3, important: true, latest_order: 1 }
+      ],
+      pass1_group_ids: ["g1"], omitted: []
+    },
+    limits: { input_tokens: 2_000, output_tokens: 800, candidates: 3, calls: 2 }
+  };
+  stored.extraction_profile = "coverage/v1";
+  stored.prompt_policy_hash = `sha256:${"1".repeat(64)}`;
+  stored.verifier_policy_hash = `sha256:${"2".repeat(64)}`;
+  stored.execution_policy_hash = `sha256:${"3".repeat(64)}`;
+  stored.packet_hash = `sha256:${await sha256(JSON.stringify(stableValue(stored.packet)))}`;
+  fx.bucket.objects.set("inputs/run-a.json", JSON.stringify(stored));
+  fx.database.prepare("UPDATE memory_extraction_runs SET schema_version='learning-extraction-proposal/v2', packet_hash=?, extraction_profile='coverage/v1', prompt_policy_hash=?, verifier_policy_hash=?, execution_policy_hash=?, reserved_tokens=5600 WHERE id='run-a'")
+    .run(stored.packet_hash, stored.prompt_policy_hash, stored.verifier_policy_hash, stored.execution_policy_hash);
+  fx.database.prepare("UPDATE memory_extraction_token_buckets SET reserved_tokens=5600").run();
+  fx.database.prepare("UPDATE memory_extraction_token_reservations SET reserved_tokens=5600").run();
+  fx.context.env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON = JSON.stringify([{
+    tenant_id: "tenant-a", project_id: "project-a", installation_id: "installation-a"
+  }]);
+  return fx;
+}
+
 function providerCandidate() {
   return {
     lesson_type: "decision" as const,
@@ -229,6 +265,98 @@ describe("memory extraction capability", () => {
 
     await runMemoryExtraction(context);
     expect(provider).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs coverage pass two once, persists both checkpoints, and settles measured usage", async () => {
+    const { database, bucket, context } = await enableCoverage(await fixture());
+    const first = {
+      lesson_type: "decision", support_span_ids: ["s1@0:18"], gaps: [],
+      fields: [{ name: "decision", values: ["実装ではREST APIを必ず使う。"] }]
+    };
+    const second = {
+      lesson_type: "failure", support_span_ids: ["s2@0:9"], gaps: [],
+      fields: [{ name: "symptom", values: ["旧方式は失敗した。"] }]
+    };
+    const provider = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [first] }), usage: { input_tokens: 100, output_tokens: 20 } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [second] }), usage: { input_tokens: 110, output_tokens: 25 } }), { status: 200 }));
+    vi.stubGlobal("fetch", provider);
+    const result = await runMemoryExtraction(context);
+    expect(result.totalTokens).toBe(255);
+    expect(provider).toHaveBeenCalledTimes(2);
+    expect(database.prepare("SELECT pass_no, state, charged_tokens, result_r2_key FROM memory_extraction_passes ORDER BY pass_no").all()).toEqual([
+      expect.objectContaining({ pass_no: 1, state: "succeeded", charged_tokens: 120 }),
+      expect.objectContaining({ pass_no: 2, state: "succeeded", charged_tokens: 135 })
+    ]);
+    expect(database.prepare("SELECT outcome, coverage_status, charged_tokens FROM memory_extraction_runs WHERE id='run-a'").get()).toEqual({ outcome: "succeeded", coverage_status: "executed", charged_tokens: 255 });
+    expect(database.prepare("SELECT COUNT(*) AS count FROM memory_learning_candidates").get()).toEqual({ count: 2 });
+    expect([...bucket.objects.keys()].filter((key) => key.includes("/passes/run-a/"))).toHaveLength(2);
+  });
+
+  it("keeps pass-one candidates when coverage pass two fails and never retries it", async () => {
+    const { database, context } = await enableCoverage(await fixture());
+    const first = {
+      lesson_type: "decision", support_span_ids: ["s1@0:18"], gaps: [],
+      fields: [{ name: "decision", values: ["実装ではREST APIを必ず使う。"] }]
+    };
+    const provider = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [first] }), usage: { input_tokens: 100, output_tokens: 20 } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ output_text: "not-json" }), { status: 200 }));
+    vi.stubGlobal("fetch", provider);
+    const result = await runMemoryExtraction(context);
+    expect(result.summary).toContain("coverage failed");
+    expect(database.prepare("SELECT outcome, coverage_status, charged_tokens FROM memory_extraction_runs WHERE id='run-a'").get()).toEqual({ outcome: "succeeded", coverage_status: "failed", charged_tokens: 2_920 });
+    expect(database.prepare("SELECT COUNT(*) AS count FROM memory_learning_candidates").get()).toEqual({ count: 1 });
+    await runMemoryExtraction(context);
+    expect(provider).toHaveBeenCalledTimes(2);
+  });
+
+  it("resumes only pass two from a persisted pass-one checkpoint", async () => {
+    const fx = await enableCoverage(await fixture());
+    const stored = await (await fx.bucket.get("inputs/run-a.json"))!.json<any>();
+    const parsed = __memoryExtractionInternals.parseInput(stored, fx.context);
+    const first = {
+      lesson_type: "decision" as const, support_span_ids: ["s1@0:18"], gaps: [],
+      fields: [{ name: "decision", values: ["実装ではREST APIを必ず使う。"] }]
+    };
+    const verification = await __memoryExtractionInternals.verifiedCandidates(parsed, [first]);
+    const artifactKey = "tenants/tenant-a/memory-extraction/passes/run-a/1.json";
+    const artifact = { pass_no: 1, state: "succeeded", request_hash: "sha256:checkpoint", generated: { candidates: [first], inputTokens: 100, outputTokens: 20 }, verification, input_tokens: 100, output_tokens: 20, charged_tokens: 120, error_code: null, result_r2_key: artifactKey, presented_group_ids: ["g1"], omitted_groups: [] };
+    fx.bucket.objects.set(artifactKey, JSON.stringify(artifact));
+    const now = Date.now();
+    fx.database.prepare("INSERT INTO memory_extraction_passes(tenant_id,run_id,pass_no,state,request_hash,result_r2_key,actual_input_tokens,actual_output_tokens,charged_tokens,created_at,updated_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run("tenant-a", "run-a", 1, "succeeded", artifact.request_hash, artifactKey, 100, 20, 120, now, now, now);
+    fx.database.prepare("UPDATE memory_extraction_runs SET execution_status='running' WHERE id='run-a'").run();
+    const second = { lesson_type: "failure" as const, support_span_ids: ["s2@0:9"], gaps: [], fields: [{ name: "symptom", values: ["旧方式は失敗した。"] }] };
+    const provider = vi.fn(async () => new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [second] }), usage: { input_tokens: 110, output_tokens: 25 } }), { status: 200 }));
+    vi.stubGlobal("fetch", provider);
+    const result = await runMemoryExtraction(fx.context);
+    expect(result.totalTokens).toBe(255);
+    expect(provider).toHaveBeenCalledTimes(1);
+    expect(fx.database.prepare("SELECT pass_no,state FROM memory_extraction_passes ORDER BY pass_no").all()).toEqual([{ pass_no: 1, state: "succeeded" }, { pass_no: 2, state: "succeeded" }]);
+  });
+
+  it("revalidates the coverage allowlist before any provider call", async () => {
+    const { database, context } = await enableCoverage(await fixture());
+    context.env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON = "[]";
+    const provider = vi.fn();
+    vi.stubGlobal("fetch", provider);
+    await runMemoryExtraction(context);
+    expect(provider).not.toHaveBeenCalled();
+    expect(database.prepare("SELECT outcome, coverage_status, charged_tokens FROM memory_extraction_runs WHERE id='run-a'").get()).toEqual({ outcome: "provider_failed", coverage_status: "rejected", charged_tokens: 0 });
+  });
+
+  it("keeps coverage candidate keys independent of pass and array position", async () => {
+    const fx = await enableCoverage(await fixture());
+    const stored = await (await fx.bucket.get("inputs/run-a.json"))!.json<any>();
+    const parsed = __memoryExtractionInternals.parseInput(stored, fx.context);
+    const valid = {
+      lesson_type: "decision" as const, support_span_ids: ["s1@0:18"], gaps: [],
+      fields: [{ name: "decision", values: ["実装ではREST APIを必ず使う。"] }]
+    };
+    const first = await __memoryExtractionInternals.verifiedCandidates(parsed, [valid]);
+    const shifted = await __memoryExtractionInternals.verifiedCandidates(parsed, [{ ...valid, lesson_type: "unknown" } as never, valid]);
+    expect(first.candidates[0].external_key).toBe(shifted.candidates[0].external_key);
   });
 
   it("charges the full reservation and forbids automatic rerun after an uncertain timeout", async () => {
@@ -336,6 +464,7 @@ describe("memory extraction capability", () => {
       : field);
     await expect(__memoryExtractionInternals.verifiedCandidates(stored as never, [proposal])).resolves.toEqual({
       candidates: [],
+      accepted_indices: [],
       rejections: [{ candidate_index: 0, reason_codes: ["target_memory_id_unsearched"] }]
     });
   });
@@ -378,6 +507,7 @@ describe("memory extraction capability", () => {
     proposal.fields.push({ name: "action", values: ["skip"] });
     await expect(__memoryExtractionInternals.verifiedCandidates(stored as never, [proposal])).resolves.toEqual({
       candidates: [],
+      accepted_indices: [],
       rejections: [{ candidate_index: 0, reason_codes: ["provider_skip"] }]
     });
   });
@@ -391,6 +521,7 @@ describe("memory extraction capability", () => {
     mismatch.fields.push({ name: "memory_kind", values: ["pitfall"] });
     await expect(__memoryExtractionInternals.verifiedCandidates(stored as never, [unresolved, mismatch])).resolves.toEqual({
       candidates: [],
+      accepted_indices: [],
       rejections: [
         { candidate_index: 0, reason_codes: ["support_id_unresolved"] },
         { candidate_index: 1, reason_codes: ["lesson_memory_kind_mismatch"] }

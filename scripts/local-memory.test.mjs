@@ -468,8 +468,18 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
       principal_id: "reader",
       limit: 5
     });
+    const defaultSearch = await store.search({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer?",
+      principal_id: "reader",
+      limit: 5
+    });
     assert.equal(v3[0].memory.id, first.memory_id);
     assert.equal(v4[0].memory.id, first.memory_id);
+    assert.deepEqual(
+      defaultSearch.map((result) => result.memory.id),
+      v4.map((result) => result.memory.id)
+    );
 
     const context = await store.retrieveContext({
       tenant_id: "personal",

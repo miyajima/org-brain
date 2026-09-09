@@ -52,7 +52,7 @@ function parseProfileRequest(raw: unknown): {
     limitDurable: parseOptionalInteger(body.limit_durable, "limit_durable", 8, 1, 16),
     limitRecent: parseOptionalInteger(body.limit_recent, "limit_recent", 8, 1, 16),
     rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
-    searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "memories"),
+    searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "hybrid_v4"),
     businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
     workType: body.work_type ?? null
   };

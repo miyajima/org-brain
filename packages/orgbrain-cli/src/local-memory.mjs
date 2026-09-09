@@ -347,7 +347,7 @@ async function handleMemory(store, action, rest, args) {
       work_type: args.get("--work-type", null),
       query,
       limit: Number(args.get("--limit", 10)),
-      search_mode: args.get("--search-mode", "memories")
+      search_mode: args.get("--search-mode", "hybrid_v4")
     });
     const usage = await store.recordUsage({
       tenant_id: tenantId,

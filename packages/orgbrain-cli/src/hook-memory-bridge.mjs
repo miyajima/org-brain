@@ -28,6 +28,7 @@ import {
   collectVerifiedLearningEvents,
   collectVerifiedLearningEventsFromRows
 } from "./lib/memory-learning-transcript.mjs";
+import { prepareMemoryConfirmationCandidates } from "./lib/memory-confirmation-hints.mjs";
 import {
   buildLearningExtractionPacket,
   buildTurnEvidenceV1,
@@ -90,6 +91,22 @@ const META_ONLY_PATTERNS = [
   /^よろしく/,
   /^必要なら/
 ];
+
+export async function queueMemoryConfirmationCandidates({
+  dbPath,
+  tenantId = "default",
+  projectId = null,
+  taskPayload,
+  candidates = []
+} = {}) {
+  const prepared = prepareMemoryConfirmationCandidates(candidates);
+  if (prepared.length === 0) return [];
+  const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+  const { TaskCommitmentStore, taskKeyFromHookPayload } = await import("./lib/task-commitment-store.mjs");
+  const taskKey = taskKeyFromHookPayload(taskPayload);
+  return new TaskCommitmentStore(dbPath || process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB)
+    .queueMemoryConfirmations({ tenantId, projectId, taskKey, candidates: prepared });
+}
 
 function resolveHome(value) {
   if (!value) return value;
@@ -1324,7 +1341,8 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     model: record.metadata?.model ?? null
   }, {
     workspace_root: workspace.workspaceRoot,
-    sensitive_policy: workspace.sensitiveMemory
+    sensitive_policy: workspace.sensitiveMemory,
+    preserve_snippet_text: options.extractionProfile === "coverage/v1"
   });
   const episodeDiscovery = await discoverLearningEpisodes(turnEvidence, {
     workspace_root: workspace.workspaceRoot,
@@ -1369,20 +1387,31 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
         }];
       })()
     : [];
-  const extractionPacket = episodeDiscovery.llm_recommended && turnEvidence.provider && turnEvidence.model
-    ? buildLearningExtractionPacket(turnEvidence, episodeDiscovery)
-    : null;
+  let extractionPacket = null;
+  let extractionPacketError = null;
+  if (episodeDiscovery.llm_recommended && turnEvidence.provider && turnEvidence.model) {
+    try {
+      extractionPacket = buildLearningExtractionPacket(turnEvidence, episodeDiscovery, {
+        extraction_profile: options.extractionProfile
+      });
+    } catch (error) {
+      extractionPacketError = error instanceof Error ? error.message : "memory_extraction_packet_failed";
+    }
+  }
   const hardExcluded = episodeDiscovery.excluded.filter((item) => item.disposition === "hard_excluded");
+  const extractionWirePacket = extractionPacket
+    ? Object.fromEntries(Object.entries(extractionPacket).filter(([key]) => key !== "packet_hash"))
+    : null;
   return {
     records,
     operationalRecords,
     reviewCandidates,
     extractionRequest: extractionPacket ? {
-      packet: extractionPacket,
+      packet: extractionWirePacket,
       packet_hash: extractionPacket.packet_hash,
       provider: turnEvidence.provider,
       model: turnEvidence.model,
-      reserved_tokens: 2_800
+      reserved_tokens: extractionWirePacket.extraction_profile === "coverage/v1" ? 5_600 : 2_800
     } : null,
     category,
     report: {
@@ -1394,9 +1423,10 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       routing: episodeDiscovery.routing,
       operational_history_count: operationalRecords.length,
       packet_hash: extractionPacket?.packet_hash ?? null,
+      extraction_error: extractionPacketError,
       provider: turnEvidence.provider,
       model: turnEvidence.model,
-      reserved_tokens: extractionPacket ? 2_800 : 0,
+      reserved_tokens: extractionPacket ? (extractionPacket.extraction_profile === "coverage/v1" ? 5_600 : 2_800) : 0,
       candidate_hashes: records.map((candidate) => sha256(JSON.stringify(captureCandidateJson(candidate)))),
       capture_profile_id: MEMORY_CAPTURE_HOOK_PROFILE.profile_id,
       capture_profile_source_hash: MEMORY_CAPTURE_HOOK_PROFILE.source_dataset_sha256,
@@ -1894,7 +1924,22 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let learningReviewCandidates = [];
   let extractionPrepared = null;
   let extractionEnqueue = null;
+  let confirmationQueue = [];
+  const queueConfirmations = async () => {
+    if (inputSourceName !== "codex-stop") return [];
+    return queueMemoryConfirmationCandidates({
+      tenantId,
+      projectId: workspace.projectId,
+      taskPayload: normalizedRecord.metadata ?? normalizedRecord,
+      candidates: learningReviewCandidates
+    });
+  };
   const extractionMode = process.env.ORGBRAIN_MEMORY_EXTRACTION_MODE ?? "off";
+  const extractionProfileValue = process.env.ORGBRAIN_MEMORY_EXTRACTION_PROFILE?.trim();
+  if (extractionProfileValue && !["off", "coverage/v1"].includes(extractionProfileValue)) {
+    throw new Error(`unsupported ORGBRAIN_MEMORY_EXTRACTION_PROFILE: ${extractionProfileValue}`);
+  }
+  const extractionProfile = extractionProfileValue === "coverage/v1" ? "coverage/v1" : undefined;
   let evidenceRows = [];
   let evidenceLoadError = null;
   if (inputSourceName === "codex-stop" && extractionMode !== "off") {
@@ -1907,7 +1952,8 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     });
     extractionPrepared = await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId, {
       rows: evidenceRows,
-      requireFullTurn: true
+      requireFullTurn: true,
+      extractionProfile
     });
     if (evidenceLoadError) extractionPrepared.report.turn_evidence_error = evidenceLoadError;
     shadowReport = extractionPrepared.report;
@@ -1963,6 +2009,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       projectId: workspace.projectId,
       taskKey
     }).catch(() => []);
+    confirmationQueue = await queueConfirmations().catch(() => []);
     if (!memoryMode.cloudWritesAllowed) {
       const savedReviews = await commitmentStore.saveLearningCandidates({
         tenantId,
@@ -1977,6 +2024,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         mode: "local",
         inserted: 0,
         review_count: savedReviews.length,
+        confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
         ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
         ...memoryModeFields(memoryMode)
@@ -2002,6 +2050,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         outbox,
         skipped: "missing-orgbrain-mcp-env-for-learning-contract",
         review_count: learningReviewCandidates.length,
+        confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
         quarantine_count: learningReviewCandidates.length,
         ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
@@ -2031,6 +2080,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         outbox,
         error_code: error?.name === "TimeoutError" ? "mcp_timeout" : "mcp_learning_batch_failed",
         review_count: learningReviewCandidates.length,
+        confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
         ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
         ...memoryModeFields(memoryMode)
@@ -2042,6 +2092,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       tenant_id: tenantId,
       inserted: Number(result?.verified_inserted ?? 0),
       review_count: Number(result?.review_inserted ?? learningReviewCandidates.length),
+      confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
       quarantine_count: Number(result?.quarantine_inserted ?? result?.review_inserted ?? learningReviewCandidates.length),
       ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
       transport: "mcp-2026-07-28",
@@ -2065,6 +2116,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       records = extractionMode === "on" ? (v2.operationalRecords ?? []) : [];
     }
   }
+  confirmationQueue = await queueConfirmations().catch(() => []);
   if (!records && workspace.memoryLearningMode !== "on" && captureV2Mode !== "on") {
     if (prepared.action === "skip") {
       return finish({

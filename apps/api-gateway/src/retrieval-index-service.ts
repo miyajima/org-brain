@@ -8,6 +8,7 @@ import {
 } from "@org-brain/shared";
 import type { Env } from "./types";
 import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
+import { retrievalProjectionQueue } from "./retrieval-rollout";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5" as const;
 export const EMBEDDING_MODEL_V3 = "@cf/qwen/qwen3-embedding-0.6b" as const;
@@ -748,11 +749,9 @@ export async function backfillV3RetrievalUnits(
       await env.OPEN_BRAIN_DB.batch(statements.slice(offset, offset + 50));
     }
     projectedUnits += units.length;
-    if (
-      env.RETRIEVAL_PROJECTION_QUEUE &&
-      (env.HYBRID_V3_MODE === "canary" || env.HYBRID_V3_MODE === "on")
-    ) {
-      await env.RETRIEVAL_PROJECTION_QUEUE.send({
+    const projectionQueue = retrievalProjectionQueue(env);
+    if (projectionQueue) {
+      await projectionQueue.send({
         version: 1,
         tenant_id: row.tenant_id,
         memory_id: row.id,

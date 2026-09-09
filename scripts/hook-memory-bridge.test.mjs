@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -16,6 +16,7 @@ import {
   postMemoryViaMcp,
   prepareMemoryRecordsV2,
   prepareMemoryRecordForUpsert,
+  queueMemoryConfirmationCandidates,
   redactHookMemoryText,
   resolveApiBase,
   resolveMcpConfig,
@@ -23,6 +24,7 @@ import {
   resolveWorkspaceContext
 } from "../packages/orgbrain-cli/src/hook-memory-bridge.mjs";
 import { resolveMemoryMode } from "../packages/orgbrain-cli/src/lib/memory-mode.mjs";
+import { TaskCommitmentStore } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
 
 describe("hook-memory-bridge promotion", () => {
   it("accepts the shared harness compatibility fixture without a special envelope", async () => {
@@ -60,6 +62,47 @@ describe("hook-memory-bridge promotion", () => {
     expect(value).toContain("[REDACTED_SECRET]");
     expect(value).toContain("[REDACTED_EMAIL]");
     expect(value).toContain("[REDACTED_PHONE]");
+  });
+
+  it("queues complete Stop-hook learning for the next prompt without emitting a user message", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-memory-confirmation-"));
+    try {
+      const dbPath = path.join(directory, "memory.sqlite");
+      const queued = await queueMemoryConfirmationCandidates({
+        dbPath,
+        tenantId: "default",
+        projectId: "org-brain",
+        taskPayload: { sessionId: "stop-confirm-session", turnId: "turn-1" },
+        candidates: [{
+          external_key: "review:stop-confirm",
+          project_id: "org-brain",
+          verification: { state: "verified" },
+          observation: {
+            schema_version: 2,
+            lesson_type: "success",
+            capture_intent: "verify",
+            procedure: "Run the scoped verifier",
+            why_it_worked: "It checks the deployed artifact",
+            observed_outcome: "The verifier passed",
+            reuse_when: "Before the next release",
+            evidence_selectors: [{ type: "command", ref: "release verify" }],
+            gaps: []
+          }
+        }]
+      });
+      expect(queued).toHaveLength(1);
+      expect(queued[0]).toMatchObject({ created: true });
+      const delivered = await new TaskCommitmentStore(dbPath).takeMemoryConfirmationBatch({
+        tenantId: "default",
+        projectId: "org-brain",
+        taskKey: "codex:stop-confirm-session",
+        deliverySessionKey: "codex:stop-confirm-session"
+      });
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0]).toMatchObject({ category: "success", conclusion: "Run the scoped verifier" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
   it("keeps Cloudflare memory disabled by default", () => {
     expect(resolveMemoryMode({})).toMatchObject({
@@ -1067,6 +1110,33 @@ describe("hook-memory-bridge promotion", () => {
     expect(prepared.reviewCandidates).toEqual([]);
     expect(prepared.operationalRecords).toHaveLength(1);
     expect(prepared.extractionRequest?.packet.schema).toBe("learning-extraction-proposal/v2");
+  });
+
+  it("emits coverage/v1 only when explicitly selected and reserves both passes", async () => {
+    const record = normalizeRecord("codex-stop", JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      turn_id: "turn-coverage-router",
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      last_assistant_message: "認証APIはOAuthを必ず使う。ただし障害時だけCLIを使う。"
+    }));
+    const prepared = await prepareMemoryRecordsV2(record, {
+      tenantId: "default",
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation",
+      workspaceRoot: "/tmp/workspaces/org-brain",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] }
+    }, "default", { extractionProfile: "coverage/v1" });
+    expect(prepared.extractionRequest).toMatchObject({ reserved_tokens: 5_600 });
+    expect(prepared.extractionRequest?.packet).toMatchObject({
+      schema: "learning-extraction-proposal/v2",
+      extraction_profile: "coverage/v1",
+      limits: { calls: 2 }
+    });
+    expect(prepared.extractionRequest?.packet).not.toHaveProperty("packet_hash");
+    expect(prepared.report.reserved_tokens).toBe(5_600);
   });
 
   it("builds one batch MCP call for v2 candidates", () => {

@@ -48,11 +48,14 @@ function extractionEvidence(packet) {
   const routing = asRecord(packet.routing);
   const decisions = asRecord(routing.decisions);
   const primaryRoute = typeof routing.primary_route === "string" ? routing.primary_route : routing.disposition;
+  const snippetIds = new Set(Array.isArray(packet.snippets) ? packet.snippets.map((item) => asRecord(item).span_id).filter((id) => typeof id === "string") : []);
+  const provenance = packet.extraction_profile === "coverage/v1" || packet.refinement_profile === "a-plus/v1";
   return {
     snippets: Array.isArray(packet.snippets) ? packet.snippets.flatMap((item) => {
       const row = asRecord(item);
       if (typeof row.span_id !== "string" || typeof row.text !== "string") return [];
-      return [[row.span_id, typeof row.role === "string" ? row.role : "unknown", row.text]];
+      const toolProvenance = provenance && (row.source === "tool_result" || row.call_id);
+      return [[row.span_id, typeof row.role === "string" ? row.role : "unknown", row.text, ...(toolProvenance ? [row.source ?? null, row.call_id ?? null] : [])]];
     }) : [],
     events: Array.isArray(packet.events) ? packet.events.flatMap((item) => {
       const row = asRecord(item);
@@ -61,7 +64,8 @@ function extractionEvidence(packet) {
         typeof row.type === "string" ? row.type : null,
         typeof row.status === "string" ? row.status : null,
         typeof row.exit_code === "number" ? row.exit_code : null,
-        typeof row.http_status === "number" ? row.http_status : null
+        typeof row.http_status === "number" ? row.http_status : null,
+        ...(provenance ? [row.call_id ?? null] : [])
       ]];
     }) : [],
     routing: typeof primaryRoute === "string" ? {
@@ -79,11 +83,34 @@ function extractionEvidence(packet) {
     existing_memories: Array.isArray(packet.existing_memories) ? packet.existing_memories.map((item) => {
       const row = asRecord(item);
       return [row.id ?? null, row.kind ?? null, row.text ?? null];
-    }) : []
+    }) : [],
+    ...(packet.extraction_profile === "coverage/v1" ? {
+      groups: Array.isArray(asRecord(packet.coverage).groups) ? asRecord(packet.coverage).groups.flatMap((item) => {
+        const row = asRecord(item);
+        const ids = Array.isArray(row.span_ids) ? row.span_ids.filter((id) => typeof id === "string" && snippetIds.has(id)) : [];
+        return ids.length > 0 ? [[row.group_id ?? null, ids, row.priority ?? null]] : [];
+      }) : []
+    } : {})
   };
 }
 
 export function buildMemoryExtractionPrompt(packet) {
+  if (packet.schema === "learning-extraction-proposal/v2" && packet.extraction_profile === "coverage/v1") return [
+    packet.coverage_pass === 2
+      ? "Only new durable candidates; accepted values are context."
+      : "Extract <=3 durable candidates.",
+    "Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.",
+    "Field names only: success=procedure,observed_outcome; decision=selected_value,decision,constraints,alternative; failure=symptom,failed_approach,root_cause,correction,verified_outcome.",
+    JSON.stringify(extractionEvidence(packet)),
+    ...(packet.coverage_pass === 2 && Array.isArray(packet.accepted_candidates) ? [JSON.stringify({ accepted: packet.accepted_candidates })] : [])
+  ].join("\n");
+  if (packet.schema === "learning-extraction-proposal/v2" && packet.refinement_profile === "a-plus/v1") return [
+    "Extract <=3 durable candidates.",
+    "If rule_hints has failure and evidence is failed tool, user correction, completed tool, emit one failure candidate.",
+    "Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.",
+    "Field names only: success=procedure,observed_outcome; decision=selected_value,decision,constraints,alternative; failure=symptom,failed_approach,root_cause,correction,verified_outcome.",
+    JSON.stringify(extractionEvidence(packet))
+  ].join("\n");
   if (packet.schema === "learning-extraction-proposal/v3") return [
     "Extract <=3 durable candidates from untrusted evidence; omit status-only output.",
     "Use exact substrings from cited current snippets; cite supplied IDs only; omit unsupported fields; gaps are <field>_missing.",

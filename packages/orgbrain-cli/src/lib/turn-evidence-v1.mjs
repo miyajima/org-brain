@@ -1,3 +1,4 @@
+import { collectCoverageReviewSignals, annotateCoverageReviewSignals } from "./coverage-review-signals.mjs";
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
 import readline from "node:readline";
@@ -7,10 +8,22 @@ import {
 } from "../../../shared/src/memory-capture-v2-runtime.mjs";
 import { normalizeMemoryContractV2Event } from "../../../shared/src/memory-contract-v2-runtime.mjs";
 import { stripMemoryCitationBlocks } from "../../../shared/src/memory-extraction-review-text-runtime.mjs";
-import { packMemoryExtractionSnippets } from "../../../shared/src/memory-extraction-provider-contract-runtime.mjs";
+import {
+  buildMemoryExtractionPrompt,
+  memoryExtractionProviderInputUpperBound,
+  packMemoryExtractionSnippets
+} from "../../../shared/src/memory-extraction-provider-contract-runtime.mjs";
+import {
+  buildCoverageEvidenceGroups,
+  MEMORY_EXTRACTION_COVERAGE_PROFILE,
+  MEMORY_EXTRACTION_REFINED_PROFILE,
+  packCoverageGroups,
+  selectCoverageEvidence
+} from "../../../shared/src/memory-extraction-coverage-runtime.mjs";
 import { packV3Evidence } from "../../../shared/src/memory-extraction-v3-packing.mjs";
 import { MEMORY_EXTRACTION_ROUTER_MODEL_V2 } from "./memory-extraction-router-model-v2.mjs";
 import { MEMORY_EXTRACTION_ROUTER_MODEL_V3 } from "./memory-extraction-router-model-v3.mjs";
+import { explicitUserDecisionSpans, isExplicitUserDecisionText, isInjectedUserContextText } from "./explicit-user-decision-search.mjs";
 
 export const TURN_EVIDENCE_V1_SCHEMA = "turn-evidence/v1";
 export const LEARNING_EXTRACTION_PROPOSAL_V1_SCHEMA = "learning-extraction-proposal/v1";
@@ -26,11 +39,11 @@ export const MEMORY_EXTRACTION_MAX_CANDIDATES = 3;
 const MAX_TRANSCRIPT_LINE_BYTES = 2 * 1024 * 1024;
 const MAX_TURN_BYTES = 8 * 1024 * 1024;
 
-const DECISION_SIGNAL = /\b(?:decid(?:e|ed)|adopt(?:ed)?|choose|chose|selected|standardize|switch(?:ed)?\s+to|will use|must use)\b|(?:決定(?:した|する)|採用(?:した|する)|選択(?:した|する)|方針(?:とする|にした)|統一(?:する|した)|切り替え(?:る|た)|これで進める)/iu;
+const DECISION_SIGNAL = /\b(?:decid(?:e|ed)|adopt(?:ed)?|choose|chose|selected|standardize|switch(?:ed)?\s+to|will use|must use)\b|(?:決定|採用|選択|選定)(?:した|する|します|しました)|方針(?:とする|にした)|統一(?:する|した|します|しました)|切り替え(?:る|た|ます|ました)|これで進める/iu;
 const TRANSIENT_CHOICE = /(?:今回だけ|このターン|一時的|ひとまず|今だけ|for now|this time|temporary|one[- ]off)/iu;
 const DURABLE_SCOPE = /\b(?:implementation|architecture|api|schema|policy|governance|repository|project|organization|tenant|default|rule)\b|(?:実装|設計|API|スキーマ|方針|ルール|規約|組織|テナント|プロジェクト|既定|デフォルト)/iu;
 const FAILURE_SIGNAL = /\b(?:fail(?:ed|ure)?|error|regression|timed? out|did not work|broken|root cause)\b|(?:失敗|エラー|不具合|回帰|動かな(?:い|かった)|原因|タイムアウト)/iu;
-const CORRECTION_SIGNAL = /\b(?:fix(?:ed)?|correct(?:ed)?|changed?|switch(?:ed)?|retry|workaround|prevent(?:ed)?)\b|(?:修正|変更|切り替え|対処|解消|回避|再実行|再発防止)/iu;
+const CORRECTION_SIGNAL = /\b(?:fix(?:ed)?|correct(?:ed)?|changed?|switch(?:ed)?|retry|retract(?:ed)?|withdraw|workaround|prevent(?:ed)?)\b|(?:修正|訂正|変更|撤回|取り下げ|切り替え|対処|解消|回避|再実行|やり直|再発防止)/iu;
 const SUCCESS_SIGNAL = /\b(?:pass(?:ed)?|succeed(?:ed)?|success|resolved|verified|exit[_ ]?code\s*[=:]?\s*0|2\d\d)\b|(?:成功|通った|解消|確認(?:した|できた|済み)|検証済み|終了コード\s*0)/iu;
 const REASON_SIGNAL = /\b(?:because|since|reason|root cause|caused by)\b|(?:理由|なぜなら|原因)/iu;
 const REUSE_SIGNAL = /\b(?:when|whenever|next time|reuse|avoid)\b|(?:場合|次回|再利用|回避策|再発時)/iu;
@@ -55,6 +68,29 @@ function stableValue(value) {
 
 function stableJson(value) {
   return JSON.stringify(stableValue(value));
+}
+
+function coverageToolResultText(raw) {
+  let value = raw;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return value; }
+  }
+  const strings = [];
+  const visit = (item, key = "", depth = 0) => {
+    if (depth > 4 || item === null || item === undefined) return;
+    if (typeof item === "string") {
+      if (["summary", "message", "text", "stdout", "stderr", "output"].includes(key)) strings.push(item);
+      return;
+    }
+    if (Array.isArray(item)) {
+      for (const child of item.slice(0, 16)) visit(child, key, depth + 1);
+      return;
+    }
+    if (typeof item !== "object") return;
+    for (const [childKey, child] of Object.entries(item)) visit(child, childKey, depth + 1);
+  };
+  visit(value);
+  return [...new Set(strings.map((item) => item.trim()).filter(Boolean))].join("\n");
 }
 
 function rowPayload(row) {
@@ -189,10 +225,19 @@ function toolResultFromRow(row) {
   if (!["function_call_output", "custom_tool_call_output", "tool_result"].includes(payload?.type)) return null;
   const output = payload.output ?? payload.result ?? payload.content ?? "";
   const serialized = typeof output === "string" ? output : stableJson(output);
+  let structured = output && typeof output === "object" ? output : null;
+  if (!structured && typeof output === "string") {
+    try {
+      const parsed = JSON.parse(output);
+      structured = parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      structured = null;
+    }
+  }
   const exitMatch = serialized.match(/(?:exit[_ ]?code|status)\s*[=:]\s*(-?\d{1,3})/iu);
   const httpMatch = serialized.match(/\bHTTP\/?\d(?:\.\d)?\s+(\d{3})\b/iu);
-  const exitCode = Number.isInteger(payload.exit_code) ? payload.exit_code : exitMatch ? Number(exitMatch[1]) : null;
-  const httpStatus = Number.isInteger(payload.http_status) ? payload.http_status : httpMatch ? Number(httpMatch[1]) : null;
+  const exitCode = Number.isInteger(payload.exit_code) ? payload.exit_code : Number.isInteger(structured?.exit_code) ? structured.exit_code : exitMatch ? Number(exitMatch[1]) : null;
+  const httpStatus = Number.isInteger(payload.http_status) ? payload.http_status : Number.isInteger(structured?.http_status) ? structured.http_status : httpMatch ? Number(httpMatch[1]) : null;
   const failed = payload.is_error === true || (exitCode !== null && exitCode !== 0) || (httpStatus !== null && httpStatus >= 400) || /\b(?:error|failed|failure|exception)\b|(?:エラー|失敗)/iu.test(serialized.slice(0, 1_000));
   return {
     call_id: String(payload.call_id ?? payload.id ?? sha256(serialized).slice(0, 24)),
@@ -210,10 +255,15 @@ function sentenceSpans(snippets) {
       span_id: `${snippet.span_id}.${index + 1}`,
       parent_span_id: snippet.span_id,
       role: snippet.role,
-      context_only: snippet.context_only === true,
+      source: snippet.source,
+      call_id: snippet.call_id,
+      source_order: snippet.source_order,
+      review_signal_score: snippet.review_signal_score ?? 0,
+      review_signal_reasons: snippet.review_signal_reasons ?? [],
+      context_only: snippet.context_only === true || snippet.role === "user" && isInjectedUserContextText(snippet.text),
       text: clip(text, 1_000)
     }))
-    .filter((item) => item.text.length >= 8));
+    .filter((item) => item.text.length >= (item.source === "tool_result" ? 4 : 8)));
 }
 
 export function sentenceSpansV3(snippets) {
@@ -227,7 +277,7 @@ export function sentenceSpansV3(snippets) {
       if (!text) continue;
       const start = match.index + match[0].indexOf(text);
       const span = { span_id: `${snippet.span_id}@${start}:${start + text.length}`, parent_span_id: snippet.span_id,
-        role: snippet.role, context_only: snippet.context_only === true, start, end: start + text.length, text, order: order++, aliases: [] };
+        role: snippet.role, context_only: snippet.context_only === true || snippet.role === "user" && isInjectedUserContextText(snippet.text), start, end: start + text.length, text, order: order++, aliases: [] };
       const key = `${span.context_only}:${span.role}:${text.replace(/\s+/gu, " ")}`;
       if (seen.has(key)) { seen.get(key).aliases.push(span.span_id); continue; }
       seen.set(key, span);
@@ -256,25 +306,28 @@ function linearProbability(features, model) {
 function routerContext(turnEvidence, v3 = false) {
   const routingSnippets = [
     ...(turnEvidence?.context_snippets ?? []).map((snippet) => ({ ...snippet, context_only: true })),
-    ...(turnEvidence?.snippets ?? []).map((snippet) => ({ ...snippet, context_only: false }))
+    ...(turnEvidence?.snippets ?? []).map((snippet) => ({ ...snippet, context_only: snippet.context_only === true }))
   ].filter((snippet) => !STRUCTURAL_BLOCK.test(snippet.text));
   const spans = v3 ? sentenceSpansV3(routingSnippets) : sentenceSpans(routingSnippets);
   const events = turnEvidence?.events ?? [];
   const meaningful = spans.filter((span) => span.text.length >= 8 && !STRUCTURAL_NOISE.test(span.text));
   const supportable = meaningful.filter((span) => !span.context_only);
   const userSpans = meaningful.filter((span) => span.role === "user");
+  const explicitDecisionSearchSpans = explicitUserDecisionSpans(supportable);
   const allText = meaningful.map((span) => span.text).join("\n");
   const userText = userSpans.map((span) => span.text).join("\n");
   const failed = FAILURE_SIGNAL.test(allText) || events.some((event) => event.status === "failed");
   const corrected = CORRECTION_SIGNAL.test(allText);
   const verified = SUCCESS_SIGNAL.test(allText) || events.some((event) =>
     event.status === "completed" && (event.exit_code === 0 || event.http_status >= 200 && event.http_status < 300));
-  const explicitDecision = (DECISION_SIGNAL.test(userText)
+  const explicitDecision = (explicitDecisionSearchSpans.length > 0
+    || DECISION_SIGNAL.test(userText)
     || (DECISION_SIGNAL.test(allText) && DURABLE_SCOPE.test(allText)))
     && !TRANSIENT_CHOICE.test(allText);
   const preference = PREFERENCE_SIGNAL.test(allText);
   const constraint = CONSTRAINT_SIGNAL.test(allText);
-  const explicitUserAdoption = DECISION_SIGNAL.test(userText)
+  const explicitUserAdoption = explicitDecisionSearchSpans.length > 0
+    || DECISION_SIGNAL.test(userText)
     || PREFERENCE_SIGNAL.test(userText)
     || CONSTRAINT_SIGNAL.test(userText);
   const reusable = REUSE_SIGNAL.test(allText) || (REASON_SIGNAL.test(allText) && corrected);
@@ -307,6 +360,8 @@ function routerContext(turnEvidence, v3 = false) {
       corrected,
       verified,
       explicitDecision,
+      explicitDecisionSearch: explicitDecisionSearchSpans.length > 0,
+      explicitDecisionSearchSpans,
       preference,
       constraint,
       explicitUserAdoption,
@@ -378,7 +433,7 @@ function routeTurnEvidenceV2(turnEvidence, options = {}) {
   }
 
   const context = routerContext(turnEvidence);
-  const { meaningful, signals, features } = context;
+  const { meaningful, supportable, signals, features } = context;
   if (meaningful.length === 0) {
     return {
       schema: MEMORY_EXTRACTION_ROUTER_V2,
@@ -395,10 +450,11 @@ function routeTurnEvidenceV2(turnEvidence, options = {}) {
   }
   const durable = linearProbability(features, { ...model.durable_candidate, feature_names: model.feature_names });
   const operational = linearProbability(features, { ...model.operational_history, feature_names: model.feature_names });
-  const durableCandidate = durable.probability >= model.durable_candidate.threshold;
+  const durableCandidate = signals.explicitDecisionSearch || durable.probability >= model.durable_candidate.threshold;
   const operationalHistory = operational.probability >= model.operational_history.threshold;
   const reasons = [];
   if (signals.explicitDecision) reasons.push("explicit_user_decision");
+  if (signals.explicitDecisionSearch) reasons.push("explicit_user_decision_search");
   if (signals.preference) reasons.push("explicit_user_preference");
   if (signals.constraint) reasons.push("explicit_user_constraint");
   if (features.failure_correction) reasons.push("failure_correction_chain");
@@ -409,18 +465,20 @@ function routeTurnEvidenceV2(turnEvidence, options = {}) {
   if (features.explicitly_transient) reasons.push("explicitly_transient");
   if (operationalHistory) reasons.push(signals.verified ? "verified_current_outcome" : "current_task_status");
 
-  const durableSupport = meaningful.filter((span) =>
-    DECISION_SIGNAL.test(span.text)
+  const durableSupport = supportable.filter((span) =>
+    isExplicitUserDecisionText(span.text)
+    || DECISION_SIGNAL.test(span.text)
     || PREFERENCE_SIGNAL.test(span.text)
     || CONSTRAINT_SIGNAL.test(span.text)
     || FAILURE_SIGNAL.test(span.text)
     || CORRECTION_SIGNAL.test(span.text)
     || REASON_SIGNAL.test(span.text)
     || REUSE_SIGNAL.test(span.text));
-  const operationalSupport = meaningful.filter((span) => OPERATIONAL_SIGNAL.test(span.text) || SUCCESS_SIGNAL.test(span.text));
+  const operationalSupport = supportable.filter((span) => OPERATIONAL_SIGNAL.test(span.text) || SUCCESS_SIGNAL.test(span.text));
   const selectedSupport = [...new Map([
-    ...(durableCandidate ? (durableSupport.length > 0 ? durableSupport : meaningful) : []),
-    ...(operationalHistory ? (operationalSupport.length > 0 ? operationalSupport : meaningful) : [])
+    ...(durableCandidate ? signals.explicitDecisionSearchSpans : []),
+    ...(durableCandidate ? (durableSupport.length > 0 ? durableSupport : supportable) : []),
+    ...(operationalHistory ? (operationalSupport.length > 0 ? operationalSupport : supportable) : [])
   ].map((span) => [span.span_id, span])).values()];
   const disposition = durableCandidate ? "llm_candidate" : operationalHistory ? "operational_history" : "discard";
   return {
@@ -441,6 +499,7 @@ function routerReasonCodes(context, operationalHistory) {
   const { signals, features } = context;
   const reasons = [];
   if (signals.explicitDecision) reasons.push("explicit_user_decision");
+  if (signals.explicitDecisionSearch) reasons.push("explicit_user_decision_search");
   if (signals.preference) reasons.push("explicit_user_preference");
   if (signals.constraint) reasons.push("explicit_user_constraint");
   if (features.failure_correction) reasons.push("failure_correction_chain");
@@ -459,6 +518,7 @@ function rankedSupport(context, primaryRoute) {
     let score = span.role === "user" ? 3 : 0;
     if (primaryRoute === "llm_candidate") {
       if (DECISION_SIGNAL.test(span.text)) score += 6;
+      if (isExplicitUserDecisionText(span.text)) score += 8;
       if (PREFERENCE_SIGNAL.test(span.text) || CONSTRAINT_SIGNAL.test(span.text)) score += 5;
       if (FAILURE_SIGNAL.test(span.text) || CORRECTION_SIGNAL.test(span.text)) score += 4;
       if (REASON_SIGNAL.test(span.text) || REUSE_SIGNAL.test(span.text)) score += 3;
@@ -521,15 +581,18 @@ export function routeTurnEvidenceV3(turnEvidence, options = {}) {
     };
   }
   const durable = linearProbability(context.features, { ...model.durable_candidate, feature_names: model.feature_names });
-  const durableCandidate = durable.probability >= model.durable_candidate.threshold;
+  const durableCandidate = context.signals.explicitDecisionSearch || durable.probability >= model.durable_candidate.threshold;
   const operational = durableCandidate
     ? null
     : linearProbability(context.features, { ...model.operational_history, feature_names: model.feature_names });
   const operationalHistory = !durableCandidate && operational.probability >= model.operational_history.threshold;
   const primaryRoute = durableCandidate ? "llm_candidate" : operationalHistory ? "operational_history" : "discard";
   const reasons = routerReasonCodes(context, operationalHistory);
-  const support = primaryRoute === "discard" ? [] : rankedSupport({ ...context,
-    supportable: sentenceSpansV3(turnEvidence.snippets ?? []).filter((span) => !span.context_only && !STRUCTURAL_BLOCK.test(span.text)) }, primaryRoute);
+  const support = primaryRoute === "discard" ? [] : [...new Map([
+    ...context.signals.explicitDecisionSearchSpans,
+    ...rankedSupport({ ...context,
+      supportable: sentenceSpansV3(turnEvidence.snippets ?? []).filter((span) => !span.context_only && !STRUCTURAL_BLOCK.test(span.text)) }, primaryRoute)
+  ].map((span) => [span.span_id, span])).values()].slice(0, 8);
   return {
     schema: MEMORY_EXTRACTION_ROUTER_V3,
     primary_route: primaryRoute,
@@ -613,11 +676,12 @@ export async function buildTurnEvidenceV1(input, options = {}) {
   const messageSpanByKey = new Map();
   const eventsByCall = new Map();
   let messageSpanIndex = 0;
+  let toolSpanIndex = 0;
   let provider = clip(input?.provider, 64) || null;
   let model = clip(input?.model, 128) || null;
   let hardExclusion = null;
 
-  for (const row of rows) {
+  for (const [sourceOrder, row] of rows.entries()) {
     const payload = rowPayload(row);
     if (payload?.type === "turn_context") model ||= clip(payload.model, 128) || null;
     if (row?.type === "session_meta") provider ||= clip(row.payload?.model_provider, 64) || null;
@@ -638,7 +702,8 @@ export async function buildTurnEvidenceV1(input, options = {}) {
       if (keepAssistant && screened.text.trim()) {
         messageSpanIndex += 1;
         const spanId = `s${messageSpanIndex}`;
-        const text = clip(stripMemoryCitationBlocks(screened.text), 4_000);
+        const stripped = stripMemoryCitationBlocks(screened.text);
+        const text = options.preserve_snippet_text === true ? stripped.trim() : clip(stripped, 4_000);
         if (!text) continue;
         const messageKey = `${message.role}\0${text}`;
         const existingSpanId = messageSpanByKey.get(messageKey);
@@ -649,6 +714,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
         messageSpanByKey.set(messageKey, spanId);
         snippets.push({
           span_id: spanId,
+          ...(options.preserve_snippet_text === true ? { source_order: sourceOrder } : {}),
           role: message.role,
           kind: message.role === "assistant" ? "assistant_final" : "user_message",
           text,
@@ -660,11 +726,25 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     const call = toolCallFromRow(row, options.workspace_root);
     if (call) eventsByCall.set(call.call_id, { ...eventsByCall.get(call.call_id), ...call });
     const result = toolResultFromRow(row);
+    if (options.preserve_snippet_text === true && (result || payload?.type === "mcp_tool_call_end")) {
+      const toolCallId = result?.call_id ?? call?.call_id;
+      const rawResult = payload.output ?? payload.result ?? payload.content;
+      const normalized = normalizeMemoryPaths(coverageToolResultText(rawResult), options.workspace_root ?? null);
+      const screened = screenSensitiveMemory(normalized, options.sensitive_policy);
+      if (!screened.allowed || UNSAFE_SIGNAL.test(normalized)) { hardExclusion = screened.reason ?? "unsafe_instruction"; break; }
+      if (toolCallId && screened.text.trim() && !snippets.some((snippet) => snippet.call_id === toolCallId)) {
+        toolSpanIndex += 1;
+        const text = screened.text.trim();
+        snippets.push({ span_id: `t${toolSpanIndex}`, source_order: sourceOrder, role: "tool", source: "tool_result", call_id: toolCallId,
+          kind: "tool_result", text, text_hash: `sha256:${sha256(text)}` });
+      }
+    }
     if (result) eventsByCall.set(result.call_id, { ...eventsByCall.get(result.call_id), ...result });
   }
 
   const events = [...eventsByCall.values()].map((event, index) => ({
     event_id: `e${index + 1}`,
+    ...(options.preserve_snippet_text === true ? { call_id: event.call_id } : {}),
     type: event.type ?? "tool_execution",
     name: event.name ?? "tool",
     status: event.status ?? "unknown",
@@ -674,10 +754,11 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     http_status: event.http_status ?? null,
     changed_paths: event.changed_paths ?? []
   }));
-  const retainedSnippets = hardExclusion ? [] : snippets.slice(0, 8);
+  const retainedSnippetLimit = options.preserve_snippet_text === true ? snippets.length : 8;
+  const retainedSnippets = hardExclusion ? [] : snippets.slice(0, retainedSnippetLimit);
   const retainedSpanIds = new Set(retainedSnippets.map((snippet) => snippet.span_id));
   const retainedAliases = Object.fromEntries(Object.entries(snippetAliases)
-    .filter(([alias, target]) => Number(alias.slice(1)) <= 8 && retainedSpanIds.has(target)));
+    .filter(([alias, target]) => Number(alias.slice(1)) <= retainedSnippetLimit && retainedSpanIds.has(target)));
   const turnEvidence = {
     schema: TURN_EVIDENCE_V1_SCHEMA,
     session_hash: input?.session_hash ?? null,
@@ -685,7 +766,8 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     project_id: input?.project_id ?? null,
     provider,
     model,
-    snippets: retainedSnippets,
+    snippets: options.preserve_snippet_text === true ? annotateCoverageReviewSignals(retainedSnippets, collectCoverageReviewSignals(rows, input?.project_id)) : retainedSnippets,
+    ...(options.preserve_snippet_text === true && !hardExclusion ? { review_diagnostics: collectCoverageReviewSignals(rows, input?.project_id) } : {}),
     snippet_aliases: hardExclusion ? {} : retainedAliases,
     events: hardExclusion ? [] : events.slice(0, 24),
     hard_exclusion_reason: hardExclusion,
@@ -750,7 +832,9 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
     if (proposal) proposals.push(proposal);
   }
 
-  const decision = spans.find((span) => DECISION_SIGNAL.test(span.text) && !TRANSIENT_CHOICE.test(span.text) && DURABLE_SCOPE.test(span.text));
+  const searchedDecision = explicitUserDecisionSpans(spans)[0] ?? null;
+  const decision = searchedDecision
+    ?? spans.find((span) => DECISION_SIGNAL.test(span.text) && !TRANSIENT_CHOICE.test(span.text) && DURABLE_SCOPE.test(span.text));
   if (decision && proposals.length < MEMORY_EXTRACTION_MAX_CANDIDATES) {
     const decisionType = inferDecisionType(decision.text);
     const rationale = clause(spans, REASON_SIGNAL);
@@ -783,7 +867,11 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
       gaps,
       ...fields
     };
-    const proposal = await normalizeProposal(observation, [decision.span_id], ["episode_decision_detected", "inferred_unconfirmed"], options);
+    const proposal = await normalizeProposal(observation, [decision.span_id], [
+      "episode_decision_detected",
+      ...(searchedDecision ? ["explicit_user_decision_search"] : []),
+      "inferred_unconfirmed"
+    ], options);
     if (proposal) proposals.push(proposal);
   }
 
@@ -851,29 +939,118 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
   };
 }
 
-export function buildLearningExtractionPacket(turnEvidence, discovery) {
+export function buildLearningExtractionPacket(turnEvidence, discovery, options = {}) {
   if (discovery?.routing?.schema === MEMORY_EXTRACTION_ROUTER_V3) return buildV3Packet(turnEvidence, discovery);
+  const coverage = options.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE;
+  const refined = options.refinement_profile === MEMORY_EXTRACTION_REFINED_PROFILE;
   const supportIds = new Set([
     ...(discovery?.routing?.support_span_ids ?? []),
     ...(discovery?.review_drafts ?? []).flatMap((item) => item.support_span_ids ?? [])
   ]);
   const parentIds = new Set([...supportIds].map((id) => String(id).split(".")[0]));
-  const parents = (turnEvidence?.snippets ?? []).filter((item) => parentIds.has(item.span_id));
+  const sourceSnippets = turnEvidence?.snippets ?? [];
+  const refinedDecisionParents = refined
+    ? sourceSnippets.filter((snippet) => snippet.role === "user" && snippet.context_only !== true && isExplicitUserDecisionText(snippet.text))
+    : [];
+  const refinedDecisionAssistantParents = refinedDecisionParents.flatMap((decision) => {
+    const following = sourceSnippets.find((snippet) => snippet.role === "assistant"
+      && Number.isFinite(snippet.source_order) && Number.isFinite(decision.source_order)
+      && snippet.source_order > decision.source_order);
+    const fallback = [...sourceSnippets].reverse().find((snippet) => snippet.role === "assistant");
+    return following ? [following] : fallback ? [fallback] : [];
+  });
+  const refinedDecisionParentIds = new Set([...refinedDecisionParents, ...refinedDecisionAssistantParents].map((item) => item.span_id));
+  const failedCallIds = new Set((turnEvidence?.events ?? []).filter((event) => event.status === "failed").map((event) => event.call_id).filter(Boolean));
+  const completedCallIds = new Set((turnEvidence?.events ?? []).filter((event) => event.status === "completed").map((event) => event.call_id).filter(Boolean));
+  const refinedFailureContext = refined && failedCallIds.size > 0 && completedCallIds.size > 0
+    && sourceSnippets.some((snippet) => snippet.role === "user"
+      && (CORRECTION_SIGNAL.test(snippet.text) || (snippet.review_signal_reasons ?? []).includes("human_correction_or_interruption")));
+  const supportParents = sourceSnippets.filter((item) => parentIds.has(item.span_id) && Number.isFinite(item.source_order));
+  const supportOrders = supportParents.map((item) => item.source_order);
+  const precedingUserOrders = supportParents.filter((item) => item.role === "assistant").flatMap((item) => {
+    const preceding = sourceSnippets.filter((candidate) => candidate.role === "user" && Number.isFinite(candidate.source_order) && candidate.source_order < item.source_order).at(-1);
+    return preceding ? [preceding.source_order] : [];
+  });
+  const supportOrderRange = supportOrders.length > 0 ? [Math.min(...supportOrders, ...precedingUserOrders), Math.max(...supportOrders)] : null;
+  const supportedCallIds = new Set(refined ? (turnEvidence?.events ?? [])
+    .filter((event) => supportIds.has(event.event_id))
+    .map((event) => event.call_id)
+    .filter(Boolean) : []);
+  const parents = (turnEvidence?.snippets ?? []).filter((item) => parentIds.has(item.span_id)
+    || refinedDecisionParentIds.has(item.span_id)
+    || refined && item.source === "tool_result" && (supportedCallIds.has(item.call_id)
+      || supportOrderRange && item.source_order >= supportOrderRange[0] && item.source_order <= supportOrderRange[1])
+    || refinedFailureContext && item.source === "tool_result" && (failedCallIds.has(item.call_id) || completedCallIds.has(item.call_id))
+    || refined && item.role === "user" && supportOrderRange && item.source_order >= supportOrderRange[0] && item.source_order <= supportOrderRange[1]);
   const atomicSpans = sentenceSpans(parents);
+  const effectiveSupportIds = new Set([...supportIds, ...(refined ? atomicSpans.filter((span) => span.source === "tool_result"
+    || span.role === "user" || refinedDecisionParentIds.has(String(span.span_id).split(".")[0])).map((span) => span.span_id) : [])]);
   const rankedIds = new Map((discovery?.routing?.support_span_ids ?? []).map((id, index) => [id, index]));
-  const evidenceCandidates = atomicSpans
-    .filter((span) => supportIds.has(span.span_id))
+  const rankedCandidates = atomicSpans
+    .filter((span) => effectiveSupportIds.has(span.span_id))
     .sort((left, right) => (rankedIds.get(left.span_id) ?? 99) - (rankedIds.get(right.span_id) ?? 99))
-    .slice(0, 8)
+    .map((span, legacyRank) => ({ ...span, legacy_rank: legacyRank }));
+  const failureEpisodeCandidates = refined ? [...rankedCandidates]
+    .filter((span) => span.source === "tool_result" && failedCallIds.has(span.call_id))
+    .sort((left, right) => (right.source_order ?? -1) - (left.source_order ?? -1))
+    .flatMap((failedSpan) => {
+      const completedSpan = rankedCandidates
+        .filter((span) => span.source === "tool_result" && completedCallIds.has(span.call_id)
+          && Number.isFinite(span.source_order) && span.source_order > failedSpan.source_order)
+        .sort((left, right) => left.source_order - right.source_order)[0];
+      if (!completedSpan) return [];
+      const correctionSpan = rankedCandidates
+        .filter((span) => span.role === "user" && Number.isFinite(span.source_order)
+          && span.source_order > failedSpan.source_order && span.source_order < completedSpan.source_order
+          && (CORRECTION_SIGNAL.test(span.text) || (span.review_signal_reasons ?? []).includes("human_correction_or_interruption")))
+        .sort((left, right) => right.source_order - left.source_order)[0];
+      return correctionSpan ? [[failedSpan, correctionSpan, completedSpan]] : [];
+    })[0] ?? [] : [];
+  const rankedEvidenceCandidates = (failureEpisodeCandidates.length === 3
+    ? failureEpisodeCandidates
+    : refined
+    ? [...rankedCandidates].sort((left, right) => ((right.review_signal_score ?? 0) + (right.source === "tool_result" && completedCallIds.has(right.call_id) ? 100 : 0))
+      - ((left.review_signal_score ?? 0) + (left.source === "tool_result" && completedCallIds.has(left.call_id) ? 100 : 0)) || left.legacy_rank - right.legacy_rank)
+    : rankedCandidates);
+  const explicitDecisionCandidate = refined && failureEpisodeCandidates.length !== 3
+    && (discovery?.review_drafts ?? []).some((item) => item?.observation?.lesson_type === "decision")
+    ? rankedCandidates.find((span) => span.role === "user" && isExplicitUserDecisionText(span.text))
+    : null;
+  const pairedDecisionAssistantCandidate = explicitDecisionCandidate
+    ? rankedCandidates.find((span) => span.role === "assistant"
+      && refinedDecisionAssistantParents.some((parent) => parent.span_id === String(span.span_id).split(".")[0]))
+    : null;
+  const selectedEvidenceCandidates = explicitDecisionCandidate
+    ? [explicitDecisionCandidate, pairedDecisionAssistantCandidate, ...rankedEvidenceCandidates]
+      .filter(Boolean)
+      .filter((item, index, values) => values.findIndex((candidate) => candidate.span_id === item.span_id) === index)
+      .slice(0, 3)
+    : rankedEvidenceCandidates.slice(0, refined ? 3 : 8);
+  const evidenceCandidates = selectedEvidenceCandidates
     .sort((left, right) => atomicSpans.findIndex((item) => item.span_id === left.span_id)
       - atomicSpans.findIndex((item) => item.span_id === right.span_id))
     .map((item) => ({
       span_id: item.span_id,
       role: item.role,
       text: item.text,
-      text_hash: `sha256:${sha256(item.text)}`
+      text_hash: `sha256:${sha256(item.text)}`,
+      ...(refined ? {
+        source: item.source ?? item.role,
+        call_id: item.call_id ?? null
+      } : {})
     }));
-  const events = (turnEvidence?.events ?? []).filter((item) => supportIds.has(item.event_id));
+  const selectedToolCallIds = new Set(evidenceCandidates.filter((item) => item.source === "tool_result" && item.call_id).map((item) => item.call_id));
+  const events = coverage
+    ? (turnEvidence?.events ?? []).slice(0, 24)
+    : (turnEvidence?.events ?? []).filter((item) => supportIds.has(item.event_id) || refined && selectedToolCallIds.has(item.call_id));
+  const ruleProposals = (discovery?.review_drafts ?? []).map((item) => ({
+    lesson_type: item.observation.lesson_type,
+    support_span_ids: item.support_span_ids,
+    gaps: item.gaps
+  }));
+  if (failureEpisodeCandidates.length === 3 && !ruleProposals.some((item) => item.lesson_type === "failure")) {
+    ruleProposals.unshift({ lesson_type: "failure", support_span_ids: failureEpisodeCandidates.map((item) => item.span_id), gaps: [] });
+  }
   const packet = {
     schema: discovery?.routing?.schema === MEMORY_EXTRACTION_ROUTER_V3
       ? LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA
@@ -885,21 +1062,57 @@ export function buildLearningExtractionPacket(turnEvidence, discovery) {
     turn_hash: turnEvidence?.turn_hash ?? null,
     provider: turnEvidence?.provider ?? null,
     model: turnEvidence?.model ?? null,
+    ...(coverage ? { extraction_profile: MEMORY_EXTRACTION_COVERAGE_PROFILE } : {}),
+    ...(refined ? { refinement_profile: MEMORY_EXTRACTION_REFINED_PROFILE } : {}),
     snippets: [],
     events,
     routing: discovery?.routing ?? null,
-    rule_proposals: (discovery?.review_drafts ?? []).map((item) => ({
-      lesson_type: item.observation.lesson_type,
-      support_span_ids: item.support_span_ids,
-      gaps: item.gaps
-    })),
+    rule_proposals: ruleProposals,
     limits: {
       input_tokens: MEMORY_EXTRACTION_INPUT_TOKEN_LIMIT,
       output_tokens: MEMORY_EXTRACTION_OUTPUT_TOKEN_LIMIT,
       candidates: MEMORY_EXTRACTION_MAX_CANDIDATES,
-      calls: 1
+      calls: coverage ? 2 : 1
     }
   };
+  if (coverage) {
+    const groups = buildCoverageEvidenceGroups(turnEvidence?.snippets ?? [], events, {
+      hash_text: (text) => `sha256:${sha256(text)}`
+    });
+    const pool = selectCoverageEvidence(groups);
+    const requestPacket = { ...packet, snippets: [], coverage_pass: 1 };
+    const pass1 = packCoverageGroups(requestPacket, pool.groups, {
+      reserve_bytes: 256,
+      max_snippets: 8,
+      upper_bound: (value) => memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(value))
+    });
+    if (pass1.groups.length === 0 && pool.groups.length > 0) throw new Error("coverage_skipped_input_budget");
+    const poolSnippets = pool.groups.flatMap((group) => group.snippets)
+      .sort((left, right) => left.order - right.order)
+      .map((item) => ({ ...item, text_hash: item.text_hash ?? `sha256:${sha256(item.text)}` }));
+    const finalizedPacket = {
+      ...packet,
+      snippets: poolSnippets,
+      coverage: {
+        groups: pool.groups.map((group) => ({
+          group_id: group.group_id,
+          span_ids: group.span_ids,
+          priority: group.priority,
+          important: group.important,
+          latest_order: group.latest_order,
+          review_signal_score: group.review_signal_score,
+          review_signal_reasons: group.review_signal_reasons
+        })),
+        pass1_group_ids: pass1.groups.map((group) => group.group_id),
+        omitted: [...pool.omitted, ...pass1.omitted],
+        review_diagnostics: turnEvidence.review_diagnostics ?? null,
+        pool_span_count: pool.span_count,
+        pool_text_bytes: pool.text_bytes,
+        pass1_upper_bound: pass1.upper_bound
+      }
+    };
+    return { ...finalizedPacket, packet_hash: `sha256:${sha256(stableJson(finalizedPacket))}` };
+  }
   const packed = packet.schema === LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA
     ? packMemoryExtractionSnippets(packet, evidenceCandidates, { reserve_bytes: 512, max_snippets: 8 })
     : { packet: { ...packet, snippets: evidenceCandidates.slice(0, 3).map((item, index) => {

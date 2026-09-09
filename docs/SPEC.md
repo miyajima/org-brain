@@ -323,7 +323,7 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - `/v1/*`, `/api/*`, Remote MCP tool は tenant grant に加えて固定 role / project scope の permission check を通す。単一 `API_KEY` の self-host operator は `tenant_admin`、policy付きAPI keyは既定 `service_agent`、Access loginはpolicy未指定時 `reader` とする
 - `GET|PUT|DELETE /v1/role-assignments` は tenant admin 用の role assignment surface、`GET /v1/audit-events` と `/v1/audit-events/verify` は auditor 用の監査・hash chain検証 surface とする
 - API mutation は本文・secretを保存せず、principal、tenant/project、action、resource、outcome、request id、permission、statusだけを SHA-256 hash chain付き `audit_events` に記録する
-- `/v1/memories/search` と cap-runner retrieval は共有 helper を使い、`bm25_v1`、`bm25_rewrite_v1`、`hybrid_memory_docs_v1`、`hybrid_v2` を切り替える
+- `/v1/memories/search` と cap-runner retrieval は共有 helper を使う。repository runtime は未指定の API search を `hybrid_v4` に昇格し、cap-runner も `hybrid_v4` を明示する。旧 `bm25_v1`、`bm25_rewrite_v1`、`hybrid_memory_docs_v1`、`hybrid_v2`、`hybrid_v3` は互換・ロールバック経路として維持する
 - `rewrite_query=true` は phrase / token OR / split token OR / singularized token OR の最大 4 変種で lexical FTS5 を引き、memory id 単位で best rank を採用する
 - `search_mode=hybrid` は dedupe 後の lexical memory hit が 3 件未満のときに `knowledge_docs_fts` を追加検索し、memory/doc を summary/title 単位で dedupe して返す
 - `search_mode=hybrid_v2` は lexical / semantic / graph / time / authority /

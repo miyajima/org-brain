@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orgbrain.example/schemas/memory-extraction-coverage-evaluation-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "freeze", "cases"],
+  "properties": {
+    "schema": { "const": "memory-extraction-coverage-evaluation/v1" },
+    "freeze": {
+      "type": "object",
+      "required": ["code", "prompt", "verifier", "execution_policy", "model_configuration", "data", "labels"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "prompt": { "type": "string", "minLength": 1 },
+        "verifier": { "type": "string", "minLength": 1 },
+        "execution_policy": { "type": "string", "minLength": 1 },
+        "model_configuration": { "type": "string", "minLength": 1 },
+        "data": { "type": "string", "minLength": 1 },
+        "labels": { "type": "string", "minLength": 1 }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "session_id", "split", "category", "labels_source", "provider", "model", "packet", "gold", "variants"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "session_id": { "type": "string", "minLength": 1 },
+          "split": { "enum": ["tune", "fixed"] },
+          "category": { "enum": ["decision", "failure", "success", "non_persistent"] },
+          "labels_source": { "const": "human" },
+          "provider": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 },
+          "packet": { "type": "object" },
+          "gold": { "type": "array" },
+          "variants": {
+            "type": "object",
+            "required": ["A", "B", "C"],
+            "properties": {
+              "A": { "$ref": "#/$defs/variant" },
+              "B": { "$ref": "#/$defs/variant" },
+              "C": { "$ref": "#/$defs/variant" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "variant": {
+      "type": "object",
+      "required": ["passes", "judgments"],
+      "properties": {
+        "passes": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "required": ["status", "provider", "model"],
+            "properties": {
+              "status": { "enum": ["succeeded", "failed", "outcome_unknown", "skipped"] },
+              "provider": { "type": "string", "minLength": 1 },
+              "model": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "judgments": { "type": "array" }
+      }
+    }
+  }
+}

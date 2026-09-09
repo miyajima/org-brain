@@ -46,6 +46,17 @@ export function resolveRetrievalSearchMode(
   return requested;
 }
 
+export function resolveRetrievalProfileSearchMode(
+  profile: MemorySearchRequest["retrieval_profile"] = "default"
+): MemorySearchMode {
+  return ({
+    default: "memories",
+    lexical: "hybrid_v3",
+    hybrid: "hybrid_v4",
+    structured: "hybrid_v4"
+  } as const)[profile];
+}
+
 function parseSearchRequest(raw: unknown): {
   tenantId: string;
   projectId: string | null;
@@ -75,12 +86,7 @@ function parseSearchRequest(raw: unknown): {
     limit: parseOptionalInteger(body.limit, "limit", 5, 1, 50),
     rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
     searchMode: parseMemorySearchMode(
-      body.search_mode ?? ({
-        default: "memories",
-        lexical: "hybrid_v3",
-        hybrid: "hybrid_v4",
-        structured: "hybrid_v4"
-      } as const)[body.retrieval_profile ?? "default"],
+      body.search_mode ?? resolveRetrievalProfileSearchMode(body.retrieval_profile),
       "search_mode",
       "memories"
     ),
@@ -653,7 +659,11 @@ export async function searchMemories(
   const principalId = normalizeActorPrincipal(options.actorPrincipal);
   let base: MemorySearchResponse;
   if (request.searchMode === "hybrid_v3" || request.searchMode === "hybrid_v4") {
-    const preliminary = await searchTenantRetrievalUnitsV3(env.OPEN_BRAIN_DB, {
+    const searchUnits =
+      request.searchMode === "hybrid_v4"
+        ? searchTenantRetrievalUnitsV4
+        : searchTenantRetrievalUnitsV3;
+    const preliminary = await searchUnits(env.OPEN_BRAIN_DB, {
       ...request,
       limit: 20,
       principalId,
@@ -680,10 +690,6 @@ export async function searchMemories(
     } catch {
       reranker = null;
     }
-    const searchUnits =
-      request.searchMode === "hybrid_v4"
-        ? searchTenantRetrievalUnitsV4
-        : searchTenantRetrievalUnitsV3;
     base = await searchUnits(env.OPEN_BRAIN_DB, {
       ...request,
       limit: widenedLimit,

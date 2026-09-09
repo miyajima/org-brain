@@ -9,6 +9,7 @@ import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs
 import { modernMcpHeaders, modernMcpRequest } from "./lib/mcp-modern-request.mjs";
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { hasTaskIdentity, TaskCommitmentStore, taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
+import { formatMemoryConfirmationContext } from "./lib/memory-confirmation-hints.mjs";
 import { MEMORY_CONTRACT_V2_PROMPT } from "../../shared/src/memory-contract-v2-runtime.mjs";
 import {
   answerGuidanceForDisposition,
@@ -103,6 +104,14 @@ function hookEventName(payload) {
 function projectIdFromPayload(payload, scope) {
   if (typeof payload?.project_id === "string" && payload.project_id.trim()) return payload.project_id.trim();
   return scope.projectId;
+}
+
+function memoryConfirmationSessionKey(payload, fallbackTaskKey) {
+  const sessionId = payload?.session_id ?? payload?.thread_id ?? payload?.["thread-id"] ??
+    payload?.["session-id"] ?? payload?.sessionId ?? payload?.threadId ?? null;
+  return sessionId
+    ? taskKeyFromHookPayload({ session_id: sessionId })
+    : fallbackTaskKey;
 }
 
 function formatCommitmentContext(commitments) {
@@ -224,6 +233,17 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   }
   const commitmentContext = formatCommitmentContext(commitments);
   contextParts.push(...commitmentContext);
+  if (hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent) {
+    const confirmationSessionKey = memoryConfirmationSessionKey(payload, taskKey);
+    const confirmationCandidates = await commitmentStore.takeMemoryConfirmationBatch({
+      tenantId: scope.tenantId,
+      projectId: projectIdFromPayload(payload, scope),
+      taskKey: confirmationSessionKey,
+      deliverySessionKey: confirmationSessionKey
+    }).catch(() => []);
+    const confirmationContext = formatMemoryConfirmationContext(confirmationCandidates);
+    if (confirmationContext) contextParts.unshift(confirmationContext);
+  }
   const learningInstruction = scope.learningMode === "shadow" || scope.learningMode === "on"
     ? VERIFIED_LEARNING_HIDDEN_INSTRUCTION
     : null;

@@ -1,0 +1,44 @@
+{
+  "contract": "orgbrain-explicit-decision-search-evaluation-summary/v1",
+  "generated_at": "2026-09-09T10:43:04.775Z",
+  "dataset": {
+    "original_broad_matches": 205,
+    "current_turn_broad_matches": 182,
+    "clean_unique_utterances": 172,
+    "calibration_cases": 31,
+    "locked_cases": 141,
+    "calibration_provisional_decisions": 2,
+    "locked_provisional_decisions": 3,
+    "labels": "agent_reviewed_provisional_needs_human_review"
+  },
+  "locked_router_comparison": {
+    "legacy_decision_recall": 0,
+    "legacy_decisions_found": 0,
+    "new_decision_recall": 1,
+    "new_decisions_found": 3,
+    "explicit_search_false_positives": 0
+  },
+  "unseen_extraction": {
+    "preflight_candidates": 3,
+    "eligible_cases": 2,
+    "excluded_cases": 1,
+    "provider": "openai-codex-cli",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "sequential": true,
+    "schema_valid_cases": 2,
+    "accepted_decisions": 2,
+    "empty_failure_candidates_rejected": 1,
+    "incomplete_failure_candidates_review_only": 1,
+    "input_tokens": 49267,
+    "output_tokens": 1208,
+    "reasoning_tokens": 852,
+    "total_tokens": 50475,
+    "persisted": false,
+    "resend_allowed": false
+  },
+  "verdict": {
+    "diagnostic": "pass",
+    "production_acceptance": "insufficient_sample_and_no_human_gold"
+  }
+}

@@ -1576,14 +1576,19 @@ export async function buildTenantMemoryProfile(
       return items;
     }, []);
 
+  const searchMode = options.searchMode ?? "hybrid_v4";
   const search = options.q
-    ? await searchTenantMemories(db, {
+    ? await (searchMode === "hybrid_v4"
+        ? searchTenantRetrievalUnitsV4
+        : searchMode === "hybrid_v3"
+          ? searchTenantRetrievalUnitsV3
+          : searchTenantMemories)(db, {
         tenantId,
         projectId,
         q: options.q,
         limit: 5,
         rewriteQuery: options.rewriteQuery ?? false,
-        searchMode: options.searchMode ?? "memories",
+        searchMode,
         includeHistory: false
       })
     : null;

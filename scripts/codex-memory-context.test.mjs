@@ -8,6 +8,10 @@ import { MEMORY_CONTRACT_JUDGE_PROMPT_HASH } from "../packages/shared/src/memory
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import { installLocalDomainPack, upsertLocalDomainRecallUnit } from "../packages/orgbrain-cli/src/lib/local-domain-recall.mjs";
 import { TaskCommitmentStore, guardCodexQuestion } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
+import {
+  formatMemoryConfirmationContext,
+  prepareMemoryConfirmationCandidates
+} from "../packages/orgbrain-cli/src/lib/memory-confirmation-hints.mjs";
 
 async function fixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-codex-context-"));
@@ -374,6 +378,212 @@ test("Codex restores all explicit answers after compaction and blocks the same q
     }, commitmentStore, "default");
     assert.equal(missingTaskIdentity.allow, true);
     assert.equal(missingTaskIdentity.reason, "task_identity_missing");
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("memory confirmation candidates require complete durable evidence and exclude explicit user choices", () => {
+  const complete = {
+    external_key: "review:success",
+    project_id: "org-brain",
+    verification: { state: "verified" },
+    observation: {
+      schema_version: 2,
+      lesson_type: "success",
+      capture_intent: "verify",
+      procedure: "Run the scoped migration",
+      why_it_worked: "The command used api_key=secret-value with the supported schema",
+      observed_outcome: "All rows migrated",
+      reuse_when: "The same schema version is deployed",
+      evidence_selectors: [{ type: "command", ref: "migration --check" }],
+      gaps: []
+    }
+  };
+  const explicitChoice = {
+    external_key: "review:choice",
+    verification: { state: "verified" },
+    observation: {
+      schema_version: 2,
+      lesson_type: "decision",
+      decision_type: "user_choice",
+      selected_value: "Codex first",
+      rationale: "The user selected it",
+      evidence_selectors: [{ type: "user_statement", ref: "Codex first" }],
+      gaps: []
+    }
+  };
+  const inferredDecision = {
+    external_key: "review:inferred-decision",
+    project_id: "org-brain",
+    verification: {
+      verification_state: "partial",
+      evidence: [{ type: "file", ref: "config.json" }, { type: "command", ref: "config check" }],
+      reason_codes: ["decision_confirmation_evidence_required", "review_intent"]
+    },
+    observation: {
+      schema_version: 2,
+      lesson_type: "decision",
+      capture_intent: "review",
+      decision_type: "implementation",
+      selected_value: "Use the bounded queue",
+      rationale: "It prevents repeated prompts",
+      evidence_selectors: [{ type: "file", ref: "config.json" }, { type: "command", ref: "config check" }],
+      gaps: []
+    }
+  };
+  const incompleteFailure = {
+    external_key: "review:failure",
+    verification: { state: "verified" },
+    observation: {
+      schema_version: 2,
+      lesson_type: "failure",
+      symptom: "The build failed",
+      root_cause: "Unknown",
+      correction: "Retry",
+      verified_outcome: "Passed",
+      avoidance_rule: "Retry later",
+      evidence_selectors: [{ type: "command", ref: "build" }],
+      gaps: []
+    }
+  };
+  const candidates = prepareMemoryConfirmationCandidates([complete, explicitChoice, inferredDecision, incompleteFailure]);
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0].category, "success");
+  assert.equal(candidates[1].category, "decision");
+  assert.match(candidates[0].reason, /\[REDACTED_SECRET\]/u);
+  assert.doesNotMatch(JSON.stringify(candidates[0]), /secret-value/u);
+
+  const bounded = prepareMemoryConfirmationCandidates(Array.from({ length: 4 }, (_, index) => ({
+    ...complete,
+    external_key: `review:bounded:${index}`,
+    observation: {
+      ...complete.observation,
+      procedure: `${index}:${"p".repeat(500)}`,
+      why_it_worked: "r".repeat(500),
+      observed_outcome: "o".repeat(500),
+      reuse_when: "u".repeat(500)
+    }
+  })));
+  assert.equal(bounded.length, 3);
+  const context = formatMemoryConfirmationContext(bounded.map((candidate, index) => ({
+    ...candidate,
+    id: `memory-confirmation:${String(index).repeat(40)}`,
+    tenant_id: "default"
+  })));
+  assert.ok(Buffer.byteLength(context, "utf8") < 7_168);
+});
+
+test("Codex delivers durable memory confirmations once per session and records the answer without a task commitment", async () => {
+  const ctx = await fixture();
+  try {
+    const commitmentStore = new TaskCommitmentStore(ctx.store.dbPath);
+    const [candidate] = prepareMemoryConfirmationCandidates([{
+      external_key: "review:failure:one",
+      project_id: "org-brain",
+      verification: { state: "verified" },
+      observation: {
+        schema_version: 2,
+        lesson_type: "failure",
+        capture_intent: "verify",
+        symptom: "The release check failed",
+        failed_approach: "Used an outdated manifest",
+        root_cause: "The manifest digest did not match the deployed image",
+        correction: "Updated the manifest to the deployed digest",
+        verified_outcome: "The release check passed",
+        avoidance_rule: "Read back the deployed digest before final inspection",
+        evidence_selectors: [{ type: "command", ref: "release-check" }],
+        gaps: []
+      }
+    }]);
+    await commitmentStore.queueMemoryConfirmations({
+      tenantId: "default",
+      projectId: "org-brain",
+      taskKey: "codex:memory-confirm-session",
+      candidates: [candidate]
+    });
+
+    const payload = {
+      hook_event_name: "UserPromptSubmit",
+      session_id: "memory-confirm-session",
+      cwd: ctx.workspace,
+      project_id: "org-brain",
+      prompt: "Continue with the release documentation"
+    };
+    const first = await buildCodexMemoryContext(payload, { ...ctx, commitmentStore });
+    const context = first.hookSpecificOutput.additionalContext;
+    assert.match(context, /OrgBrain memory confirmation/u);
+    assert.match(context, /失敗原因と再発防止策として保存しますか/u);
+    assert.match(context, /request_user_input exactly once/u);
+    assert.match(context, /orgbrain_memories_propose/u);
+    assert.match(context, /orgbrain_memories_confirm/u);
+
+    const questions = JSON.parse(context.match(/^questions=(.+)$/mu)[1]);
+    const saved = await commitmentStore.ingestToolResult({
+      ...payload,
+      hook_event_name: "PostToolUse",
+      tool_name: "request_user_input",
+      tool_input: { questions },
+      tool_result: { answers: { [questions[0].id]: "保存する (Recommended)" } }
+    }, "default");
+    assert.equal(saved.count, 0);
+    assert.deepEqual(saved.memory_confirmations.map((item) => item.state), ["accepted"]);
+
+    const second = await buildCodexMemoryContext(payload, { ...ctx, commitmentStore });
+    assert.doesNotMatch(second?.hookSpecificOutput?.additionalContext ?? "", /OrgBrain memory confirmation/u);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("memory confirmation answers distinguish corrections from skips", async () => {
+  const ctx = await fixture();
+  try {
+    const commitmentStore = new TaskCommitmentStore(ctx.store.dbPath);
+    const candidates = prepareMemoryConfirmationCandidates(["alpha", "beta"].map((name) => ({
+      external_key: `review:${name}`,
+      project_id: "org-brain",
+      verification: { state: "verified" },
+      observation: {
+        schema_version: 2,
+        lesson_type: "success",
+        capture_intent: "verify",
+        procedure: `Run verifier ${name}`,
+        why_it_worked: `Verifier ${name} checks the scoped artifact`,
+        observed_outcome: `Verifier ${name} passed`,
+        reuse_when: `Before release ${name}`,
+        evidence_selectors: [{ type: "command", ref: `verify ${name}` }],
+        gaps: []
+      }
+    })));
+    await commitmentStore.queueMemoryConfirmations({
+      tenantId: "default",
+      projectId: "org-brain",
+      taskKey: "codex:answer-kinds",
+      candidates
+    });
+    const delivered = await commitmentStore.takeMemoryConfirmationBatch({
+      tenantId: "default",
+      projectId: "org-brain",
+      taskKey: "codex:answer-kinds",
+      deliverySessionKey: "codex:answer-kinds"
+    });
+    const context = formatMemoryConfirmationContext(delivered);
+    const questions = JSON.parse(context.match(/^questions=(.+)$/mu)[1]);
+    const result = await commitmentStore.ingestToolResult({
+      session_id: "answer-kinds",
+      project_id: "org-brain",
+      tool_name: "request_user_input",
+      tool_input: { questions },
+      tool_result: {
+        answers: {
+          [questions[0].id]: "手順を修正版の検証コマンドに変更する",
+          [questions[1].id]: "今回は保存しない"
+        }
+      }
+    }, "default");
+    assert.equal(result.count, 0);
+    assert.deepEqual(result.memory_confirmations.map((item) => item.state).sort(), ["corrected", "rejected"]);
   } finally {
     await ctx.cleanup();
   }

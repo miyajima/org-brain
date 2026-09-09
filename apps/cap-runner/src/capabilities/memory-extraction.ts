@@ -1,27 +1,33 @@
 import {
+  verifiedCandidates,
   assertMemoryExtractionInputWithinCeiling,
   validateV3Packet,
-  validateV3Candidate,
   assertV3ProviderProfile,
   buildMemoryFtsQuery,
   buildMemoryExtractionPrompt,
+  decideCoverageSecondPass,
+  MEMORY_EXTRACTION_COVERAGE_PROFILE,
+  mergeCoverageCandidates,
+  packCoverageGroups,
   MEMORY_EXTRACTION_MAX_CANDIDATES,
   MEMORY_EXTRACTION_MAX_INPUT_TOKENS,
   MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS,
   MEMORY_EXTRACTION_OUTPUT_SCHEMA,
   MEMORY_EXTRACTION_TOKEN_PROFILE,
+  memoryExtractionProviderInputUpperBound,
   MEMORY_CONTRACT_V2_CONTRACT_HASH,
   MEMORY_CONTRACT_V2_PROMPT_HASH,
   MEMORY_CONTRACT_V2_PROMPT_ID,
   MEMORY_CONTRACT_V2_VERIFIER_VERSION,
-  normalizeMemoryContractV2Event,
   screenSensitiveMemory,
   sha256,
   ulid
 } from "@org-brain/shared";
 import type { CapabilityContext, CapabilityResult, Env } from "../types";
 
-const RESERVED_TOKENS = 2_800;
+const LEGACY_RESERVED_TOKENS = 2_800;
+const COVERAGE_RESERVED_TOKENS = 5_600;
+const PASS_UNKNOWN_CHARGE = 2_800;
 const MAX_INPUT_TOKENS = MEMORY_EXTRACTION_MAX_INPUT_TOKENS;
 const MAX_OUTPUT_TOKENS = MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS;
 const MAX_CANDIDATES = MEMORY_EXTRACTION_MAX_CANDIDATES;
@@ -45,14 +51,22 @@ type ExtractionInput = {
   prompt_version: string;
   redaction_version: string;
   prefilter_version: string;
+  extraction_profile: "coverage/v1" | null;
+  prompt_policy_hash: string;
+  verifier_policy_hash: string;
+  execution_policy_hash: string;
   capsule_expires_at: number;
   packet: {
     schema: string;
-    snippets: Array<{ span_id: string; role: string; text: string; text_hash?: string }>;
+    snippets: Array<{ span_id: string; role: string; text: string; text_hash?: string; parent_span_id?: string; source?: string; call_id?: string; start?: number; end?: number; order?: number }>;
     events: Array<Record<string, unknown>>;
     rule_proposals: Array<{ lesson_type: string; support_span_ids: string[]; gaps: string[]; observation?: Record<string, unknown> }>;
     routing?: Record<string, unknown> | null;
     existing_memories?: Array<{ id: string; kind: string; text: string }>;
+    extraction_profile?: "coverage/v1";
+    coverage?: { groups?: Array<{ group_id: string; span_ids: string[]; priority: number; important: boolean; latest_order: number; review_signal_score?: number; review_signal_reasons?: string[] }>; pass1_group_ids?: string[]; omitted?: unknown[] };
+    coverage_pass?: number;
+    accepted_candidates?: unknown[];
     limits: { input_tokens: number; output_tokens: number; candidates: number; calls: number };
   };
 };
@@ -64,7 +78,6 @@ type ProviderCandidate = {
   fields: Array<{ name: string; values: string[] }>;
 };
 
-const DURABLE_MEMORY_KINDS = new Set(["fact", "decision", "constraint", "pitfall", "preference", "org_knowledge"]);
 
 type ProviderResult = {
   candidates: ProviderCandidate[];
@@ -83,6 +96,10 @@ type RunRow = {
   outcome: string | null;
   result_r2_key: string | null;
   tombstoned_at: number | null;
+  extraction_profile: string | null;
+  prompt_policy_hash: string;
+  verifier_policy_hash: string;
+  execution_policy_hash: string;
 };
 
 const outputJsonSchema = MEMORY_EXTRACTION_OUTPUT_SCHEMA;
@@ -119,18 +136,29 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
   }
   if (packet.provider !== provider || packet.model !== value.model) throw new Error("invalid memory extraction input: provider/model mismatch");
   if (packet.session_hash !== value.session_hash || packet.turn_hash !== value.turn_hash) throw new Error("invalid memory extraction input: turn identity mismatch");
-  if (limits.input_tokens !== MAX_INPUT_TOKENS || limits.output_tokens !== MAX_OUTPUT_TOKENS || limits.candidates !== MAX_CANDIDATES || limits.calls !== 1) {
+  const extractionProfile = packet.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE ? MEMORY_EXTRACTION_COVERAGE_PROFILE : null;
+  if (packet.extraction_profile !== undefined && !extractionProfile) throw new Error("invalid memory extraction profile");
+  if (extractionProfile && packet.schema !== "learning-extraction-proposal/v2") throw new Error("invalid memory extraction profile schema");
+  if (limits.input_tokens !== MAX_INPUT_TOKENS || limits.output_tokens !== MAX_OUTPUT_TOKENS || limits.candidates !== MAX_CANDIDATES || limits.calls !== (extractionProfile ? 2 : 1)) {
     throw new Error("invalid memory extraction limits");
   }
-  const snippets = Array.isArray(packet.snippets) ? packet.snippets.slice(0, 8).map((item, index) => {
+  const packetSnippets = Array.isArray(packet.snippets) ? packet.snippets : [];
+  if (extractionProfile && packetSnippets.length > 16) throw new Error("coverage evidence pool exceeds fixed ceiling");
+  const snippets = packetSnippets.slice(0, extractionProfile ? 16 : 8).map((item, index) => {
     const row = asRecord(item);
     return {
       span_id: requiredString(row.span_id, `packet.snippets[${index}].span_id`, 128),
       role: requiredString(row.role, `packet.snippets[${index}].role`, 32),
       text: requiredString(row.text, `packet.snippets[${index}].text`, 4_000),
-      ...(typeof row.text_hash === "string" ? { text_hash: row.text_hash.slice(0, 80) } : {})
+      ...(typeof row.text_hash === "string" ? { text_hash: row.text_hash.slice(0, 80) } : {}),
+      ...(typeof row.parent_span_id === "string" ? { parent_span_id: row.parent_span_id.slice(0, 128) } : {}),
+      ...(typeof row.source === "string" ? { source: row.source.slice(0, 32) } : {}),
+      ...(typeof row.call_id === "string" ? { call_id: row.call_id } : {}),
+      ...(Number.isInteger(row.start) ? { start: Number(row.start) } : {}),
+      ...(Number.isInteger(row.end) ? { end: Number(row.end) } : {}),
+      ...(Number.isInteger(row.order) ? { order: Number(row.order) } : {})
     };
-  }) : [];
+  });
   const ruleProposals = Array.isArray(packet.rule_proposals) ? packet.rule_proposals.slice(0, 3).map((item) => {
     const row = asRecord(item);
     return {
@@ -154,6 +182,10 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
     prompt_version: requiredString(value.prompt_version, "prompt_version", 128),
     redaction_version: requiredString(value.redaction_version, "redaction_version", 128),
     prefilter_version: requiredString(value.prefilter_version, "prefilter_version", 128),
+    extraction_profile: extractionProfile,
+    prompt_policy_hash: extractionProfile ? requiredString(value.prompt_policy_hash, "prompt_policy_hash", 80) : (typeof value.prompt_policy_hash === "string" ? value.prompt_policy_hash : ""),
+    verifier_policy_hash: extractionProfile ? requiredString(value.verifier_policy_hash, "verifier_policy_hash", 80) : (typeof value.verifier_policy_hash === "string" ? value.verifier_policy_hash : ""),
+    execution_policy_hash: extractionProfile ? requiredString(value.execution_policy_hash, "execution_policy_hash", 80) : (typeof value.execution_policy_hash === "string" ? value.execution_policy_hash : ""),
     capsule_expires_at: Number(value.capsule_expires_at),
     packet: {
       schema: packet.schema as string,
@@ -162,7 +194,11 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
       rule_proposals: ruleProposals,
       routing: packet.routing && typeof packet.routing === "object" ? asRecord(packet.routing) : null,
       existing_memories: [],
-      limits: { input_tokens: MAX_INPUT_TOKENS, output_tokens: MAX_OUTPUT_TOKENS, candidates: MAX_CANDIDATES, calls: 1 }
+      ...(extractionProfile ? {
+        extraction_profile: extractionProfile,
+        coverage: asRecord(packet.coverage) as ExtractionInput["packet"]["coverage"]
+      } : {}),
+      limits: { input_tokens: MAX_INPUT_TOKENS, output_tokens: MAX_OUTPUT_TOKENS, candidates: MAX_CANDIDATES, calls: extractionProfile ? 2 : 1 }
     }
   };
 }
@@ -177,6 +213,29 @@ async function readInput(ctx: CapabilityContext): Promise<ExtractionInput> {
   const packetHash = `sha256:${await sha256(JSON.stringify(stableValue(rawPacket)))}`;
   if (packetHash !== input.packet_hash) throw new Error("memory extraction packet hash mismatch");
   if (input.contract_hash !== MEMORY_CONTRACT_V2_CONTRACT_HASH) throw new Error("memory extraction contract hash mismatch");
+  if (input.extraction_profile) {
+    const bytes = input.packet.snippets.reduce((sum, snippet) => sum + new TextEncoder().encode(snippet.text).byteLength, 0);
+    if (input.packet.snippets.length > 16 || bytes > 16 * 1024) throw new Error("coverage evidence pool exceeds fixed ceiling");
+    const ids = new Set<string>();
+    for (const snippet of input.packet.snippets) {
+      if (ids.has(snippet.span_id)) throw new Error("coverage duplicate span id");
+      ids.add(snippet.span_id);
+      if (!snippet.text_hash || snippet.text_hash !== `sha256:${await sha256(snippet.text)}`) throw new Error("coverage snippet hash mismatch");
+      if (!snippet.parent_span_id || !snippet.source || !Number.isInteger(snippet.start) || !Number.isInteger(snippet.end) || !Number.isInteger(snippet.order)) throw new Error("coverage snippet provenance missing");
+      if (snippet.start! < 0 || snippet.end! <= snippet.start! || snippet.span_id !== `${snippet.parent_span_id}@${snippet.start}:${snippet.end}`) throw new Error("coverage snippet offset mismatch");
+    }
+    const metadata = Array.isArray(input.packet.coverage?.groups) ? input.packet.coverage!.groups! : [];
+    if (metadata.some((group) => !Array.isArray(group.span_ids) || group.span_ids.some((id) => !ids.has(id)))) throw new Error("coverage group dependency missing");
+    const groups = coverageGroups(input);
+    const groupIds = groups.map((group) => group.group_id);
+    const pass1Ids = [...new Set(input.packet.coverage?.pass1_group_ids ?? [])];
+    const pass1Groups = groups.filter((group) => pass1Ids.includes(group.group_id));
+    const pass1SpanCount = pass1Groups.reduce((sum, group) => sum + group.snippets.length, 0);
+    if (groups.length === 0 || pass1Ids.length === 0 || new Set(groupIds).size !== groupIds.length
+      || pass1Groups.length !== pass1Ids.length || pass1SpanCount === 0 || pass1SpanCount > 8) throw new Error("coverage groups missing");
+    const pass1Packet = coverageRequestPacket(input, 1, []).packet;
+    assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(pass1Packet as unknown as Record<string, unknown>));
+  }
   return input;
 }
 
@@ -226,7 +285,8 @@ function withBoundedExistingMemories(input: ExtractionInput, candidates: Array<{
   for (const candidate of candidates) {
     const next = { ...input, packet: { ...input.packet, existing_memories: [...accepted, candidate] } };
     try {
-      assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(next.packet as unknown as Record<string, unknown>));
+      const promptPacket = input.extraction_profile ? coverageRequestPacket(next as ExtractionInput, 1, []).packet : next.packet;
+      assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(promptPacket as unknown as Record<string, unknown>));
       accepted.push(candidate);
     } catch {
       break;
@@ -257,6 +317,20 @@ function providerKey(env: Env, input: ExtractionInput): string | null {
   return key?.trim() || null;
 }
 
+function coverageAllowed(env: Env, input: ExtractionInput): boolean {
+  if (!input.extraction_profile || !env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON?.trim()) return !input.extraction_profile;
+  try {
+    const parsed = JSON.parse(env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON) as unknown;
+    const entries = Array.isArray(parsed) ? parsed : Array.isArray(asRecord(parsed).entries) ? asRecord(parsed).entries as unknown[] : [];
+    return entries.map(asRecord).some((entry) => entry.tenant_id === input.tenant_id && entry.project_id === input.project_id && entry.installation_id === input.installation_id
+      && ![entry.tenant_id, entry.project_id, entry.installation_id].includes("*"));
+  } catch { return false; }
+}
+
+function reservationTokens(input: ExtractionInput): number {
+  return input.extraction_profile ? COVERAGE_RESERVED_TOKENS : LEGACY_RESERVED_TOKENS;
+}
+
 function utcMonth(now: number): string {
   return new Date(now).toISOString().slice(0, 7);
 }
@@ -271,6 +345,7 @@ function tierLimit(env: Env, tier: ExtractionTier): number {
 async function reserveBudget(ctx: CapabilityContext, input: ExtractionInput, now: number): Promise<boolean> {
   const month = utcMonth(now);
   const limit = tierLimit(ctx.env, input.tier);
+  const reservedTokens = reservationTokens(input);
   await ctx.env.OPEN_BRAIN_DB.prepare(
     `INSERT OR IGNORE INTO memory_extraction_token_buckets(
        tenant_id, utc_month, tier, token_limit, reserved_tokens, consumed_tokens, updated_at
@@ -287,7 +362,7 @@ async function reserveBudget(ctx: CapabilityContext, input: ExtractionInput, now
          WHERE tenant_id = ? AND utc_month = ? AND tier = ?
            AND consumed_tokens + reserved_tokens + ? <= token_limit
        )`
-    ).bind(ctx.tenantId, input.run_id, month, input.tier, RESERVED_TOKENS, now, ctx.tenantId, month, input.tier, RESERVED_TOKENS),
+    ).bind(ctx.tenantId, input.run_id, month, input.tier, reservedTokens, now, ctx.tenantId, month, input.tier, reservedTokens),
     ctx.env.OPEN_BRAIN_DB.prepare(
       `UPDATE memory_extraction_token_buckets
        SET reserved_tokens = reserved_tokens + ?, updated_at = ?
@@ -296,7 +371,7 @@ async function reserveBudget(ctx: CapabilityContext, input: ExtractionInput, now
            SELECT 1 FROM memory_extraction_token_reservations r
            WHERE r.tenant_id = ? AND r.run_id = ? AND r.applied = 0
          )`
-    ).bind(RESERVED_TOKENS, now, ctx.tenantId, month, input.tier, ctx.tenantId, input.run_id),
+    ).bind(reservedTokens, now, ctx.tenantId, month, input.tier, ctx.tenantId, input.run_id),
     ctx.env.OPEN_BRAIN_DB.prepare(
       "UPDATE memory_extraction_token_reservations SET applied = 1 WHERE tenant_id = ? AND run_id = ? AND applied = 0"
     ).bind(ctx.tenantId, input.run_id),
@@ -307,7 +382,7 @@ async function reserveBudget(ctx: CapabilityContext, input: ExtractionInput, now
            SELECT 1 FROM memory_extraction_token_reservations r
            WHERE r.tenant_id = ? AND r.run_id = ? AND r.applied = 1 AND r.settled = 0
          )`
-    ).bind(RESERVED_TOKENS, now, ctx.tenantId, input.run_id, ctx.tenantId, input.run_id)
+    ).bind(reservedTokens, now, ctx.tenantId, input.run_id, ctx.tenantId, input.run_id)
   ]);
   return Number(results[3]?.meta.changes ?? 0) === 1;
 }
@@ -426,185 +501,158 @@ async function generate(env: Env, input: ExtractionInput, prompt: string, key: s
   }
   const rows = asRecord(parsed).candidates;
   if (!Array.isArray(rows)) throw new Error("provider_failed:invalid_schema");
-  if (input.packet.schema === "learning-extraction-proposal/v3" && (rows.length > MAX_CANDIDATES
+  if ((input.packet.schema === "learning-extraction-proposal/v3" || input.extraction_profile) && (rows.length > MAX_CANDIDATES
     || Object.keys(asRecord(parsed)).some((key) => key !== "candidates"))) throw new Error("provider_failed:invalid_schema");
   return { candidates: rows.slice(0, MAX_CANDIDATES) as ProviderCandidate[], ...usage(response) };
 }
 
-function exactGrounded(value: unknown, evidenceText: string, rejections: string[], field: string): string | null {
-  if (value === null || typeof value !== "string" || !value.trim()) return null;
-  const exact = value.trim();
-  if (evidenceText.includes(exact)) return exact;
-  rejections.push(`${field}_not_exactly_grounded`);
-  return null;
+function coverageGroups(input: ExtractionInput) {
+  const metadata = Array.isArray(input.packet.coverage?.groups) ? input.packet.coverage!.groups! : [];
+  return metadata.map((group) => {
+    const spanIds = new Set(Array.isArray(group.span_ids) ? group.span_ids : []);
+    const snippets = input.packet.snippets.filter((snippet) => spanIds.has(snippet.span_id));
+    return {
+      ...group,
+      span_ids: snippets.map((snippet) => snippet.span_id),
+      snippets,
+      byte_length: snippets.reduce((sum, snippet) => sum + new TextEncoder().encode(snippet.text).byteLength, 0)
+    };
+  }).filter((group) => group.snippets.length > 0);
 }
 
-function providerFields(raw: ProviderCandidate): Map<string, string[]> {
-  const output = new Map<string, string[]>();
-  for (const field of Array.isArray(raw.fields) ? raw.fields : []) {
-    if (!field || typeof field.name !== "string" || !Array.isArray(field.values)) continue;
-    const values = field.values.filter((value): value is string => typeof value === "string").slice(0, 16);
-    if (values.length > 0) output.set(field.name, [...(output.get(field.name) ?? []), ...values].slice(0, 16));
-  }
-  return output;
+function acceptedPromptContext(candidates: ProviderCandidate[]) {
+  return candidates.slice(0, 3).map((candidate) => ({
+    lesson_type: candidate.lesson_type,
+    support_span_ids: candidate.support_span_ids,
+    fields: candidate.fields.map((field) => ({ name: field.name, values: field.values.slice(0, 4) }))
+  }));
 }
 
-function inferredDecisionType(evidenceText: string): "preference" | "implementation" | "governance" | null {
-  if (/\b(?:policy|governance|approval|permission|acl|must|never)\b|(?:規約|承認|権限|禁止|必須)/iu.test(evidenceText)) return "governance";
-  if (/\b(?:prefer|preference)\b|(?:好む|希望|優先)/iu.test(evidenceText)) return "preference";
-  if (/\b(?:api|schema|architecture|implementation|library|framework|database|runtime)\b|(?:API|スキーマ|設計|実装|ライブラリ|フレームワーク|データベース|ランタイム)/iu.test(evidenceText)) return "implementation";
-  return null;
-}
-
-async function verifiedCandidates(input: ExtractionInput, candidates: ProviderCandidate[]) {
-  const v3 = input.packet.schema === "learning-extraction-proposal/v3";
-  if (v3 && candidates.length > MAX_CANDIDATES) throw new Error("provider_failed:candidate_count_exceeded");
-  const snippetIds = new Set(input.packet.snippets.map((item) => item.span_id));
-  const eventIds = new Set(input.packet.events.map((item) => String(item.event_id ?? "")).filter(Boolean));
-  const resolvesSupportId = (id: string) => eventIds.has(id) || snippetIds.has(id);
-  const output = [];
-  const rejections: Array<{ candidate_index: number; reason_codes: string[] }> = [];
-  const reject = (candidateIndex: number, reasonCodes: string[]) => {
-    rejections.push({ candidate_index: candidateIndex, reason_codes: [...new Set(reasonCodes)].sort() });
+function coverageRequestPacket(input: ExtractionInput, passNo: 1 | 2, accepted: ProviderCandidate[], targetGroupIds?: string[]) {
+  const groups = coverageGroups(input);
+  const requested = new Set(targetGroupIds ?? (passNo === 1 ? input.packet.coverage?.pass1_group_ids ?? [] : groups.map((group) => group.group_id)));
+  const basePacket = {
+    ...input.packet,
+    snippets: [],
+    coverage_pass: passNo,
+    ...(passNo === 2 ? { accepted_candidates: acceptedPromptContext(accepted) } : {})
   };
-  for (const [index, raw] of candidates.entries()) {
-    if (v3) {
-      const validation = validateV3Candidate(raw, input.packet);
-      if (!validation.valid) { reject(index, [validation.reason ?? "candidate_schema_invalid"]); continue; }
+  return packCoverageGroups(basePacket, groups.filter((group) => requested.has(group.group_id)), {
+    reserve_bytes: 0,
+    max_snippets: 8,
+    upper_bound: (packet: Record<string, unknown>) => memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(packet))
+  });
+}
+
+type PassExecution = {
+  pass_no: 1 | 2;
+  state: "succeeded" | "failed" | "outcome_unknown" | "skipped";
+  request_hash: string | null;
+  generated: ProviderResult | null;
+  verification: Awaited<ReturnType<typeof verifiedCandidates>> | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  charged_tokens: number;
+  error_code: string | null;
+  result_r2_key: string | null;
+  omitted_groups?: unknown[];
+  presented_group_ids?: string[];
+};
+
+async function readPassArtifact(ctx: CapabilityContext, key: string): Promise<PassExecution> {
+  const object = await ctx.env.OPEN_BRAIN_BUCKET.get(key);
+  if (!object) throw new Error("coverage_pass_result_missing");
+  return object.json<PassExecution>();
+}
+
+async function executeCoveragePass(
+  ctx: CapabilityContext,
+  input: ExtractionInput,
+  passNo: 1 | 2,
+  accepted: ProviderCandidate[],
+  key: string,
+  targetGroupIds?: string[]
+): Promise<PassExecution> {
+  const now = Date.now();
+  await ctx.env.OPEN_BRAIN_DB.prepare(
+    `INSERT OR IGNORE INTO memory_extraction_passes(tenant_id, run_id, pass_no, state, charged_tokens, created_at, updated_at)
+     VALUES(?,?,?,'planned',0,?,?)`
+  ).bind(ctx.tenantId, input.run_id, passNo, now, now).run();
+  const existing = await ctx.env.OPEN_BRAIN_DB.prepare(
+    "SELECT state, result_r2_key, request_hash, actual_input_tokens, actual_output_tokens, charged_tokens, error_code FROM memory_extraction_passes WHERE tenant_id=? AND run_id=? AND pass_no=?"
+  ).bind(ctx.tenantId, input.run_id, passNo).first<{ state: PassExecution["state"] | "planned" | "running"; result_r2_key: string | null; request_hash: string | null; actual_input_tokens: number | null; actual_output_tokens: number | null; charged_tokens: number; error_code: string | null }>();
+  if (existing?.state === "succeeded" && existing.result_r2_key) return readPassArtifact(ctx, existing.result_r2_key);
+  if (existing?.state === "failed" || existing?.state === "outcome_unknown" || existing?.state === "skipped") return {
+    pass_no: passNo, state: existing.state, request_hash: existing.request_hash, generated: null, verification: null,
+    input_tokens: existing.actual_input_tokens, output_tokens: existing.actual_output_tokens, charged_tokens: existing.charged_tokens,
+    error_code: existing.error_code, result_r2_key: existing.result_r2_key
+  };
+  if (existing?.state === "running") {
+    const deterministicKey = `tenants/${ctx.tenantId}/memory-extraction/passes/${input.run_id}/${passNo}.json`;
+    const recoveredObject = await ctx.env.OPEN_BRAIN_BUCKET.get(deterministicKey);
+    if (recoveredObject) {
+      const recovered = await recoveredObject.json<PassExecution>();
+      if (recovered.request_hash === existing.request_hash && (recovered.state === "succeeded" || recovered.state === "failed")) {
+        await ctx.env.OPEN_BRAIN_DB.prepare(
+          `UPDATE memory_extraction_passes SET state=?, result_r2_key=?, actual_input_tokens=?, actual_output_tokens=?, charged_tokens=?, error_code=?, completed_at=?, updated_at=?
+           WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='running' AND request_hash=?`
+        ).bind(recovered.state, deterministicKey, recovered.input_tokens, recovered.output_tokens, recovered.charged_tokens, recovered.error_code, now, now, ctx.tenantId, input.run_id, passNo, existing.request_hash).run();
+        return recovered;
+      }
     }
-    if (!raw || !["success", "decision", "failure"].includes(raw.lesson_type)) {
-      reject(index, ["lesson_type_invalid"]);
-      continue;
-    }
-    const supportSpanIds = Array.isArray(raw.support_span_ids)
-      ? [...new Set(raw.support_span_ids.filter((id): id is string => typeof id === "string"))].slice(0, 16)
-      : [];
-    if (supportSpanIds.length === 0) {
-      reject(index, ["support_missing"]);
-      continue;
-    }
-    if (supportSpanIds.some((id) => !resolvesSupportId(id))) {
-      reject(index, ["support_id_unresolved"]);
-      continue;
-    }
-    const supportedSnippets = input.packet.snippets.filter((item) => supportSpanIds.includes(item.span_id));
-    const evidenceText = supportedSnippets.map((item) => item.text).join("\n");
-    const gaps = Array.isArray(raw.gaps) ? raw.gaps.filter((item) => typeof item === "string").slice(0, 16) : [];
-    const groundingRejections: string[] = [];
-    const fields = providerFields(raw);
-    const one = (name: string) => fields.get(name)?.[0] ?? null;
-    const many = (name: string) => fields.get(name) ?? [];
-    const grounded = (value: string | null, field: string) => exactGrounded(value, evidenceText, groundingRejections, field);
-    const persistence = one("persistence") === "operational_history" ? "operational_history" : "durable";
-    if (one("persistence") && !["durable", "operational_history"].includes(one("persistence")!)) {
-      reject(index, ["persistence_invalid"]);
-      continue;
-    }
-    const defaultKind = raw.lesson_type === "failure" ? "pitfall" : raw.lesson_type === "success" ? "org_knowledge" : "decision";
-    const requestedKind = one("memory_kind");
-    const compatibleKinds = raw.lesson_type === "failure"
-      ? new Set(["pitfall"])
-      : raw.lesson_type === "decision"
-        ? new Set(["decision", "constraint", "preference"])
-        : new Set(["fact", "org_knowledge"]);
-    if (requestedKind && (persistence === "operational_history" ? requestedKind !== "episodic" : !compatibleKinds.has(requestedKind))) {
-      reject(index, ["lesson_memory_kind_mismatch"]);
-      continue;
-    }
-    const memoryKind = persistence === "operational_history"
-      ? "episodic"
-      : requestedKind && DURABLE_MEMORY_KINDS.has(requestedKind) ? requestedKind : defaultKind;
-    const requestedAction = one("action") ?? "create";
-    if (!["create", "skip", "update", "conflict"].includes(requestedAction)) {
-      reject(index, ["action_invalid"]);
-      continue;
-    }
-    // A provider-side skip is an auditable no-candidate decision, not a memory
-    // proposal. It must never create a quarantine row that could be promoted.
-    if (requestedAction === "skip") {
-      reject(index, ["provider_skip"]);
-      continue;
-    }
-    const targetMemoryId = one("target_memory_id");
-    const suppliedMemoryIds = new Set((input.packet.existing_memories ?? []).map((item) => item.id));
-    if (requestedAction !== "create" && (!targetMemoryId || !suppliedMemoryIds.has(targetMemoryId))) {
-      reject(index, ["target_memory_id_unsearched"]);
-      continue;
-    }
-    const decisionType = raw.lesson_type === "decision" ? (v3 ? one("decision_type") : inferredDecisionType(evidenceText)) : null;
-    if (raw.lesson_type === "decision" && !decisionType) gaps.push("decision_type_missing");
-    if (raw.lesson_type === "decision" && one("decision_type") && one("decision_type") !== decisionType) gaps.push("decision_type_unsupported");
-    const common = {
-      record_type: "learning_observation",
-      schema_version: 2,
-      lesson_type: raw.lesson_type,
-      capture_intent: "review",
-      trigger: grounded(one("trigger"), "trigger"),
-      applicability: {
-        target_files: many("target_files").flatMap((item) => {
-          const value = grounded(item, "target_files");
-          return value && !value.startsWith("/") ? [value] : [];
-        }),
-        components: input.project_id ? [input.project_id] : []
-      },
-      evidence_selectors: input.packet.snippets.filter((item) => supportSpanIds.includes(item.span_id)).filter((item) => item.role === "user").map((item) => ({ type: "user_statement", ref: item.text, supports: [item.span_id] })),
-      gaps: [...new Set(gaps)]
-    } as Record<string, unknown>;
-    if (raw.lesson_type === "success") Object.assign(common, {
-      procedure: grounded(one("procedure"), "procedure"),
-      why_it_worked: grounded(one("why_it_worked"), "why_it_worked"),
-      observed_outcome: grounded(one("observed_outcome"), "observed_outcome"),
-      reuse_when: grounded(one("reuse_when"), "reuse_when")
-    });
-    if (raw.lesson_type === "decision") Object.assign(common, {
-      decision_type: decisionType,
-      decision_key: `inferred.${(await sha256(`${input.run_id}:${index}`)).slice(0, 24)}`,
-      question: grounded(one("question"), "question"),
-      selected_value: grounded(one("selected_value"), "selected_value"),
-      decision: grounded(one("decision"), "decision"),
-      constraints: many("constraints").flatMap((item) => {
-        const value = grounded(item, "constraints");
-        return value ? [value] : [];
-      }),
-      rationale: grounded(one("rationale"), "rationale"),
-      alternatives: many("alternative").flatMap((item, alternativeIndex) => {
-        const alternative = grounded(item, "alternative");
-        if (!alternative) return [];
-        return [{ alternative, reason_rejected: grounded(many("reason_rejected")[alternativeIndex] ?? null, "reason_rejected") }];
-      }),
-      reuse_when: grounded(one("reuse_when"), "reuse_when")
-    });
-    if (raw.lesson_type === "failure") Object.assign(common, {
-      symptom: grounded(one("symptom"), "symptom"),
-      failed_approach: grounded(one("failed_approach"), "failed_approach"),
-      root_cause: grounded(one("root_cause"), "root_cause"),
-      correction: grounded(one("correction"), "correction"),
-      verified_outcome: grounded(one("verified_outcome"), "verified_outcome"),
-      avoidance_rule: grounded(one("avoidance_rule"), "avoidance_rule")
-    });
-    if (groundingRejections.length > 0) {
-      reject(index, groundingRejections);
-      continue;
-    }
-    common.gaps = [...new Set(gaps)];
-    const normalized = await normalizeMemoryContractV2Event(common, { sensitivePolicy: { mode: "deny", allowed_principals: [] } });
-    if (!normalized.accepted || !normalized.event) {
-      reject(index, ["normalized_contract_rejected"]);
-      continue;
-    }
-    output.push({
-      external_key: `memory-extraction:${input.run_id}:${normalized.event_hash}`,
-      observation: normalized.event,
-      persistence,
-      memory_kind: memoryKind,
-      action: requestedAction,
-      target_memory_id: requestedAction === "create" ? null : targetMemoryId,
-      support_span_ids: supportSpanIds,
-      gaps: normalized.event.gaps,
-      reason_codes: [...new Set(["llm_proposed_review_only", ...normalized.reason_codes])]
-    });
+    await ctx.env.OPEN_BRAIN_DB.prepare(
+      "UPDATE memory_extraction_passes SET state='outcome_unknown', charged_tokens=?, error_code='redelivery_after_running', completed_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='running'"
+    ).bind(PASS_UNKNOWN_CHARGE, now, now, ctx.tenantId, input.run_id, passNo).run();
+    return { pass_no: passNo, state: "outcome_unknown", request_hash: existing.request_hash, generated: null, verification: null, input_tokens: null, output_tokens: null, charged_tokens: PASS_UNKNOWN_CHARGE, error_code: "redelivery_after_running", result_r2_key: null };
   }
-  return { candidates: output.slice(0, MAX_CANDIDATES), rejections };
+
+  const packed = coverageRequestPacket(input, passNo, accepted, targetGroupIds);
+  if (packed.groups.length === 0) {
+    const reason = "coverage_skipped_input_budget";
+    await ctx.env.OPEN_BRAIN_DB.prepare(
+      "UPDATE memory_extraction_passes SET state='skipped', charged_tokens=0, error_code=?, completed_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='planned'"
+    ).bind(reason, now, now, ctx.tenantId, input.run_id, passNo).run();
+    return { pass_no: passNo, state: "skipped", request_hash: null, generated: null, verification: null, input_tokens: null, output_tokens: null, charged_tokens: 0, error_code: reason, result_r2_key: null, omitted_groups: packed.omitted, presented_group_ids: [] };
+  }
+  const requestPacket = packed.packet as ExtractionInput["packet"];
+  const requestInput = { ...input, packet: requestPacket };
+  const prompt = compactPrompt(requestInput);
+  const requestHash = `sha256:${await sha256(JSON.stringify(stableValue(requestPacket)))}`;
+  const claimed = await ctx.env.OPEN_BRAIN_DB.prepare(
+    "UPDATE memory_extraction_passes SET state='running', request_hash=?, started_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='planned'"
+  ).bind(requestHash, now, now, ctx.tenantId, input.run_id, passNo).run();
+  if (Number(claimed.meta.changes ?? 0) !== 1) throw new Error("coverage_pass_claim_lost");
+  try {
+    const generated = await generate(ctx.env, requestInput, prompt, key);
+    const usageKnown = generated.inputTokens !== null && generated.outputTokens !== null;
+    const chargedTokens = usageKnown ? generated.inputTokens! + generated.outputTokens! : PASS_UNKNOWN_CHARGE;
+    const ceilingExceeded = (generated.inputTokens ?? 0) > MAX_INPUT_TOKENS || (generated.outputTokens ?? 0) > MAX_OUTPUT_TOKENS;
+    const verification = ceilingExceeded ? { candidates: [], accepted_indices: [], rejections: [{ candidate_index: -1, reason_codes: ["provider_usage_ceiling_exceeded"] }] } : await verifiedCandidates(requestInput, generated.candidates);
+    const artifactKey = `tenants/${ctx.tenantId}/memory-extraction/passes/${input.run_id}/${passNo}.json`;
+    const artifact: PassExecution = {
+      pass_no: passNo, state: ceilingExceeded ? "failed" : "succeeded", request_hash: requestHash, generated, verification,
+      input_tokens: generated.inputTokens, output_tokens: generated.outputTokens, charged_tokens: chargedTokens,
+      error_code: ceilingExceeded ? "provider_usage_ceiling_exceeded" : null, result_r2_key: artifactKey,
+      omitted_groups: packed.omitted,
+      presented_group_ids: packed.groups.map((group: { group_id: string }) => group.group_id)
+    };
+    await ctx.env.OPEN_BRAIN_BUCKET.put(artifactKey, JSON.stringify(artifact), {
+      httpMetadata: { contentType: "application/json" },
+      customMetadata: { tenant_id: ctx.tenantId, run_id: input.run_id, pass_no: String(passNo), request_hash: requestHash }
+    });
+    await ctx.env.OPEN_BRAIN_DB.prepare(
+      `UPDATE memory_extraction_passes SET state=?, result_r2_key=?, actual_input_tokens=?, actual_output_tokens=?, charged_tokens=?, error_code=?, completed_at=?, updated_at=?
+       WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='running' AND request_hash=?`
+    ).bind(artifact.state, artifactKey, generated.inputTokens, generated.outputTokens, chargedTokens, artifact.error_code, Date.now(), Date.now(), ctx.tenantId, input.run_id, passNo, requestHash).run();
+    return artifact;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const state = message.startsWith("outcome_unknown:") ? "outcome_unknown" : "failed";
+    await ctx.env.OPEN_BRAIN_DB.prepare(
+      "UPDATE memory_extraction_passes SET state=?, charged_tokens=?, error_code=?, completed_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='running' AND request_hash=?"
+    ).bind(state, PASS_UNKNOWN_CHARGE, message.slice(0, 160), Date.now(), Date.now(), ctx.tenantId, input.run_id, passNo, requestHash).run();
+    return { pass_no: passNo, state, request_hash: requestHash, generated: null, verification: null, input_tokens: null, output_tokens: null, charged_tokens: PASS_UNKNOWN_CHARGE, error_code: message.slice(0, 160), result_r2_key: null, omitted_groups: packed.omitted, presented_group_ids: packed.groups.map((group: { group_id: string }) => group.group_id) };
+  }
 }
 
 async function writeResult(ctx: CapabilityContext, input: ExtractionInput, result: Record<string, unknown>) {
@@ -627,6 +675,12 @@ async function settleRun(
     outputTokens?: number | null;
     chargedTokens?: number;
     errorCode?: string;
+    coverageStatus?: string | null;
+    passes?: PassExecution[];
+    inputOmitted?: unknown[];
+    candidateLimitCount?: number;
+    conflictCount?: number;
+    durationMs?: number;
   } = {}
 ) {
   const now = Date.now();
@@ -661,6 +715,26 @@ async function settleRun(
     input_tokens: options.inputTokens ?? null,
     output_tokens: options.outputTokens ?? null,
     charged_tokens: chargedTokens,
+    actual_input_tokens: options.inputTokens ?? null,
+    actual_output_tokens: options.outputTokens ?? null,
+    conservative_charged_tokens: chargedTokens,
+    ...(input.extraction_profile ? {
+      extraction_profile: input.extraction_profile,
+      coverage_status: options.coverageStatus ?? null,
+      pass_count: options.passes?.filter((item) => item.state === "succeeded" || item.state === "failed" || item.state === "outcome_unknown").length ?? 0,
+      passes: (options.passes ?? []).map((item) => ({
+        pass_no: item.pass_no, state: item.state, request_hash: item.request_hash,
+        input_tokens: item.input_tokens, output_tokens: item.output_tokens,
+        charged_tokens: item.charged_tokens, error_code: item.error_code
+      })),
+      presented_group_count: new Set((options.passes ?? []).flatMap((item) => item.presented_group_ids ?? [])).size,
+      omitted_groups: options.inputOmitted ?? input.packet.coverage?.omitted ?? [],
+      omitted_group_count: (options.inputOmitted ?? input.packet.coverage?.omitted ?? []).length,
+      candidate_limit_count: options.candidateLimitCount ?? 0,
+      conflict_count: options.conflictCount ?? 0,
+      review_signals: input.packet.coverage?.groups ?? [],
+      duration_ms: options.durationMs ?? null
+    } : {}),
     read_only_source: true
   };
   const resultKey = await writeResult(ctx, input, report);
@@ -683,11 +757,11 @@ async function settleRun(
   statements.push(ctx.env.OPEN_BRAIN_DB.prepare(
     `UPDATE memory_extraction_runs
      SET execution_status = 'settled', outcome = ?, actual_input_tokens = ?, actual_output_tokens = ?,
-         charged_tokens = ?, capsule_r2_key = ?, result_r2_key = ?, error_code = ?, settled_at = ?, updated_at = ?
+         charged_tokens = ?, capsule_r2_key = ?, result_r2_key = ?, error_code = ?, coverage_status = ?, settled_at = ?, updated_at = ?
      WHERE tenant_id = ? AND id = ? AND execution_status <> 'settled'`
   ).bind(
     outcome, options.inputTokens ?? null, options.outputTokens ?? null, chargedTokens,
-    capsuleKey, resultKey, options.errorCode ?? null, now, now, ctx.tenantId, input.run_id
+    capsuleKey, resultKey, options.errorCode ?? null, options.coverageStatus ?? null, now, now, ctx.tenantId, input.run_id
   ));
   await ctx.env.OPEN_BRAIN_DB.batch(statements);
   await settleBudget(ctx, input, chargedTokens, now);
@@ -708,10 +782,81 @@ function capabilityResult(startedAt: number, resultKey: string, summary: string,
   };
 }
 
+async function skipCoveragePass(ctx: CapabilityContext, input: ExtractionInput, passNo: 1 | 2, reason: string): Promise<PassExecution> {
+  const now = Date.now();
+  await ctx.env.OPEN_BRAIN_DB.prepare(
+    `INSERT OR IGNORE INTO memory_extraction_passes(tenant_id, run_id, pass_no, state, charged_tokens, error_code, completed_at, created_at, updated_at)
+     VALUES(?,?,?,'skipped',0,?,?,?,?)`
+  ).bind(ctx.tenantId, input.run_id, passNo, reason, now, now, now).run();
+  await ctx.env.OPEN_BRAIN_DB.prepare(
+    "UPDATE memory_extraction_passes SET state='skipped', charged_tokens=0, error_code=?, completed_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND pass_no=? AND state='planned'"
+  ).bind(reason, now, now, ctx.tenantId, input.run_id, passNo).run();
+  return { pass_no: passNo, state: "skipped", request_hash: null, generated: null, verification: null, input_tokens: null, output_tokens: null, charged_tokens: 0, error_code: reason, result_r2_key: null, presented_group_ids: [] };
+}
+
+function acceptedProviderCandidates(pass: PassExecution): ProviderCandidate[] {
+  if (pass.state !== "succeeded" || !pass.generated || !pass.verification) return [];
+  return pass.generated.candidates.filter((_, index) => pass.verification!.accepted_indices.includes(index));
+}
+
+async function runCoverageExtraction(ctx: CapabilityContext, input: ExtractionInput, key: string, startedAt: number): Promise<CapabilityResult> {
+  const existingMemories = await loadExistingMemoryCandidates(ctx, input);
+  const enrichedInput = withBoundedExistingMemories(input, existingMemories);
+  const pass1 = await executeCoveragePass(ctx, enrichedInput, 1, [], key);
+  let pass2: PassExecution;
+  if (pass1.state !== "succeeded") {
+    pass2 = await skipCoveragePass(ctx, enrichedInput, 2, "pass1_not_successful");
+  } else {
+    const adoptedSpanIds = pass1.verification?.candidates.flatMap((candidate) => candidate.support_span_ids) ?? [];
+    const decision = decideCoverageSecondPass({
+      groups: coverageGroups(enrichedInput),
+      pass1_presented_group_ids: enrichedInput.packet.coverage?.pass1_group_ids ?? [],
+      pass1_adopted_span_ids: adoptedSpanIds,
+      pass1_status: "succeeded"
+    });
+    pass2 = decision.run
+      ? await executeCoveragePass(ctx, enrichedInput, 2, acceptedProviderCandidates(pass1), key, decision.group_ids)
+      : await skipCoveragePass(ctx, enrichedInput, 2, decision.reason);
+  }
+  const successfulRaw = [pass1, pass2].map(acceptedProviderCandidates);
+  const groups = coverageGroups(enrichedInput);
+  const priorityBySpan = Object.fromEntries(groups.flatMap((group) => group.span_ids.map((id) => [id, group.priority])));
+  const orderBySpan = Object.fromEntries(enrichedInput.packet.snippets.map((snippet, index) => [snippet.span_id, snippet.order ?? index]));
+  const signalBySpan = Object.fromEntries(groups.flatMap((group) => group.span_ids.map((id) => [id, group.review_signal_score ?? 0])));
+  const merged = mergeCoverageCandidates(successfulRaw, { priority_by_span: priorityBySpan, order_by_span: orderBySpan, signal_by_span: signalBySpan });
+  const verification = await verifiedCandidates(enrichedInput, merged.candidates);
+  verification.rejections.push(...merged.conflicts.map((_: unknown, index: number) => ({ candidate_index: -1 - index, reason_codes: ["atomic_evidence_conflict"] })));
+  verification.rejections.push(...merged.omitted.map((_: unknown, index: number) => ({ candidate_index: -100 - index, reason_codes: ["candidate_limit"] })));
+  const passes = [pass1, pass2];
+  const chargedTokens = passes.reduce((sum, pass) => sum + pass.charged_tokens, 0);
+  const actualKnown = passes.filter((pass) => pass.state !== "skipped").every((pass) => pass.input_tokens !== null && pass.output_tokens !== null);
+  const inputTokens = actualKnown ? passes.reduce((sum, pass) => sum + (pass.input_tokens ?? 0), 0) : null;
+  const outputTokens = actualKnown ? passes.reduce((sum, pass) => sum + (pass.output_tokens ?? 0), 0) : null;
+  const failedPass = passes.find((pass) => pass.state === "failed" || pass.state === "outcome_unknown");
+  const coverageStatus = failedPass ? "failed" : pass2.state === "succeeded" ? "executed" : pass2.error_code;
+  const outcome = verification.candidates.length > 0 ? "succeeded" : failedPass ? (failedPass.state === "outcome_unknown" ? "outcome_unknown" : "provider_failed") : "no_candidate";
+  const settled = await settleRun(ctx, enrichedInput, outcome, {
+    candidates: verification.candidates,
+    verificationRejections: verification.rejections,
+    inputTokens,
+    outputTokens,
+    chargedTokens,
+    errorCode: failedPass?.error_code ?? undefined,
+    coverageStatus,
+    passes,
+    inputOmitted: [...(enrichedInput.packet.coverage?.omitted ?? []), ...passes.flatMap((pass) => pass.omitted_groups ?? [])],
+    candidateLimitCount: merged.omitted.length,
+    conflictCount: merged.conflicts.length,
+    durationMs: Math.max(0, Date.now() - startedAt)
+  });
+  return capabilityResult(startedAt, settled.resultKey, `Memory extraction ${outcome}; coverage ${coverageStatus}`, inputTokens ?? 0, outputTokens ?? 0);
+}
+
 export async function runMemoryExtraction(ctx: CapabilityContext): Promise<CapabilityResult> {
   const startedAt = Date.now();
   const run = await ctx.env.OPEN_BRAIN_DB.prepare(
     `SELECT id, installation_id, provider, model, packet_hash, contract_hash,
+            extraction_profile, prompt_policy_hash, verifier_policy_hash, execution_policy_hash,
             execution_status, outcome, result_r2_key, tombstoned_at
      FROM memory_extraction_runs WHERE tenant_id = ? AND task_id = ?`
   ).bind(ctx.tenantId, ctx.taskId).first<RunRow>();
@@ -727,7 +872,11 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     || input.provider !== run.provider
     || input.model !== run.model
     || input.packet_hash !== run.packet_hash
-    || input.contract_hash !== run.contract_hash) {
+    || input.contract_hash !== run.contract_hash
+    || input.extraction_profile !== run.extraction_profile
+    || input.prompt_policy_hash !== run.prompt_policy_hash
+    || input.verifier_policy_hash !== run.verifier_policy_hash
+    || input.execution_policy_hash !== run.execution_policy_hash) {
     throw new Error("memory extraction run attestation mismatch");
   }
   const installation = await ctx.env.OPEN_BRAIN_DB.prepare(
@@ -741,8 +890,12 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     const settled = await settleRun(ctx, input, "model_unavailable", { errorCode: "tier3_certification_pipeline_required" });
     return capabilityResult(startedAt, settled.resultKey, "Memory extraction Tier 3 certification unavailable");
   }
-  if (run.execution_status === "running") {
-    const settled = await settleRun(ctx, input, "outcome_unknown", { chargedTokens: RESERVED_TOKENS, errorCode: "redelivery_after_running" });
+  if (input.extraction_profile && !coverageAllowed(ctx.env, input)) {
+    const settled = await settleRun(ctx, input, "provider_failed", { errorCode: "memory_extraction_coverage_not_allowlisted", coverageStatus: "rejected" });
+    return capabilityResult(startedAt, settled.resultKey, "Coverage extraction allowlist mismatch");
+  }
+  if (run.execution_status === "running" && !input.extraction_profile) {
+    const settled = await settleRun(ctx, input, "outcome_unknown", { chargedTokens: LEGACY_RESERVED_TOKENS, errorCode: "redelivery_after_running" });
     return capabilityResult(startedAt, settled.resultKey, "Memory extraction outcome unknown after redelivery");
   }
   const key = providerKey(ctx.env, input);
@@ -750,7 +903,9 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     const settled = await settleRun(ctx, input, "model_unavailable", { errorCode: "same_model_not_allowlisted" });
     return capabilityResult(startedAt, settled.resultKey, "Same provider/model unavailable; no fallback used");
   }
-  const reserved = run.execution_status === "reserved" || await reserveBudget(ctx, input, Date.now());
+  const reserved = run.execution_status === "reserved"
+    || (Boolean(input.extraction_profile) && run.execution_status === "running")
+    || await reserveBudget(ctx, input, Date.now());
   if (!reserved) {
     const settled = await settleRun(ctx, input, "budget_exhausted", { errorCode: "monthly_token_budget_exhausted" });
     return capabilityResult(startedAt, settled.resultKey, "Memory extraction monthly budget exhausted");
@@ -759,6 +914,7 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     `UPDATE memory_extraction_runs SET execution_status = 'running', started_at = ?, updated_at = ?
      WHERE tenant_id = ? AND id = ? AND execution_status = 'reserved'`
   ).bind(Date.now(), Date.now(), ctx.tenantId, input.run_id).run();
+  if (input.extraction_profile) return runCoverageExtraction(ctx, input, key, startedAt);
   try {
     const existingMemories = await loadExistingMemoryCandidates(ctx, input);
     const enrichedInput = withBoundedExistingMemories(input, existingMemories);
@@ -771,7 +927,7 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
       const settled = await settleRun(ctx, input, "provider_failed", {
         inputTokens: generated.inputTokens,
         outputTokens: generated.outputTokens,
-        chargedTokens: RESERVED_TOKENS,
+        chargedTokens: LEGACY_RESERVED_TOKENS,
         errorCode: "provider_usage_ceiling_exceeded"
       });
       return capabilityResult(startedAt, settled.resultKey, "Memory extraction provider_failed", generated.inputTokens ?? 0, generated.outputTokens ?? 0);
@@ -779,20 +935,20 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     const verification = await verifiedCandidates(enrichedInput, generated.candidates);
     const candidates = verification.candidates;
     const usageKnown = generated.inputTokens !== null && generated.outputTokens !== null;
-    const charged = usageKnown ? generated.inputTokens! + generated.outputTokens! : RESERVED_TOKENS;
+    const charged = usageKnown ? generated.inputTokens! + generated.outputTokens! : LEGACY_RESERVED_TOKENS;
     const outcome = candidates.length > 0 ? "succeeded" : "no_candidate";
     const settled = await settleRun(ctx, input, outcome, {
       candidates,
       verificationRejections: verification.rejections,
       inputTokens: generated.inputTokens,
       outputTokens: generated.outputTokens,
-      chargedTokens: Math.min(RESERVED_TOKENS, charged)
+      chargedTokens: Math.min(LEGACY_RESERVED_TOKENS, charged)
     });
     return capabilityResult(startedAt, settled.resultKey, `Memory extraction ${outcome}`, generated.inputTokens ?? 0, generated.outputTokens ?? 0);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const outcome = message.startsWith("outcome_unknown:") ? "outcome_unknown" : "provider_failed";
-    const settled = await settleRun(ctx, input, outcome, { chargedTokens: RESERVED_TOKENS, errorCode: message.slice(0, 160) });
+    const settled = await settleRun(ctx, input, outcome, { chargedTokens: LEGACY_RESERVED_TOKENS, errorCode: message.slice(0, 160) });
     return capabilityResult(startedAt, settled.resultKey, `Memory extraction ${outcome}`);
   }
 }
@@ -806,7 +962,11 @@ export const __memoryExtractionInternals = {
   compactPrompt,
   verifiedCandidates,
   outputJsonSchema,
-  RESERVED_TOKENS,
+  RESERVED_TOKENS: LEGACY_RESERVED_TOKENS,
+  COVERAGE_RESERVED_TOKENS,
+  coverageAllowed,
+  coverageRequestPacket,
+  executeCoveragePass,
   MAX_INPUT_TOKENS,
   MAX_OUTPUT_TOKENS
 };

@@ -17,6 +17,14 @@ describe("memory extraction provider input budget", () => {
       }
     }
   });
+
+  it("states the strict evidence contract for a-plus packets", () => {
+    const prompt = buildMemoryExtractionPrompt({ schema: "learning-extraction-proposal/v2", refinement_profile: "a-plus/v1", snippets: [],
+      rule_proposals: [{ lesson_type: "failure", support_span_ids: ["t1", "s1", "t2"], gaps: [] }] });
+    expect(prompt).toContain("Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.");
+    expect(prompt).toContain("If rule_hints has failure");
+    expect(prompt).toContain('"rule_hints":["failure"]');
+  });
   it("uses a conservative UTF-8 upper bound for the full prompt and strict schema", () => {
     const prompt = buildMemoryExtractionPrompt({
       snippets: [{ span_id: "s1", role: "user", text: "実装ではREST APIを採用する。" }],

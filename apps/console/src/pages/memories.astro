@@ -100,7 +100,7 @@ type SearchResponse = {
   project_id: string | null;
   q: string;
   rewrite_query: boolean;
-  search_mode: "memories" | "hybrid";
+  search_mode: "memories" | "hybrid_v4";
   include_history: boolean;
   results: MemorySearchResult[];
   meta: {
@@ -309,7 +309,7 @@ const view = ["search", "profile", "maintenance", ...(qualityViewEnabled ? ["qua
   ? (params.get("view") as "search" | "profile" | "maintenance" | "quality")
   : "search";
 const rewriteQuery = params.get("rewrite_query") !== "0";
-const searchMode = params.get("search_mode") === "memories" ? "memories" : "hybrid";
+const searchMode = params.get("search_mode") === "memories" ? "memories" : "hybrid_v4";
 const includeHistory = params.get("include_history") !== "0";
 const entityId = params.get("entity_id")?.trim() || "";
 const entityRole = params.get("entity_role")?.trim() || "";
@@ -916,7 +916,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             <label>
               <span class="surface-label">Search mode</span>
               <select name="search_mode">
-                <option value="hybrid" selected={searchMode === "hybrid"}>hybrid</option>
+                <option value="hybrid_v4" selected={searchMode === "hybrid_v4"}>structured (v4)</option>
                 <option value="memories" selected={searchMode === "memories"}>memories</option>
               </select>
             </label>

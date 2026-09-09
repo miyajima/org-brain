@@ -101,6 +101,22 @@ test("capability scores without evidence remain unmeasured", async () => {
   }
 });
 
+test("context efficiency measures the injected evidence bundle instead of the full storage record", async () => {
+  const task = buildCompetitiveTasks()[0];
+  const expected = task.memories.find((memory) => task.expected_ids.includes(memory.id));
+  const adapter = {
+    name: "orgbrain-local-context-metric",
+    reset: async () => undefined,
+    capture: async () => ({}),
+    search: async () => ({
+      results: [{ memory: { ...expected, content: "x".repeat(8_000) } }],
+      evidence_bundle: { estimated_tokens: 17 }
+    })
+  };
+  const report = await runCompetitiveBenchmark(adapter, [task], { repeat: 1 });
+  assert.equal(report.metrics.average_context_tokens, 17);
+});
+
 test("ranking requires every configured complete same-harness report and a strict OrgBrain lead", () => {
   const harness = { model_id: "model-a", budget_usd: 2, hardware_id: "runner-a" };
   const component = (score) => ({ score, evidence: ["benchmark artifact"] });

@@ -5223,7 +5223,7 @@ export class LocalMemoryStore {
     minimum_total_score: minimumTotalScoreInput = null,
     include_suppressed = false,
     principal_id: principalId = null,
-    search_mode: searchMode = "memories",
+    search_mode: searchMode = "hybrid_v4",
     at = Date.now()
   }) {
     await this.init();

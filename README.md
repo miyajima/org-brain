@@ -899,6 +899,8 @@ and emit one resolution notification.
 Memory search supports lexical query expansion, hybrid memory/docs retrieval, recent history,
 lifecycle states, and rationale-aware filters. `search_mode=hybrid_v2` fuses lexical,
 semantic, graph, time, authority, and utility signals and returns a score breakdown.
+Repository runtime configs promote an omitted/default search to `hybrid_v4`;
+explicit legacy modes remain available for compatibility and rollback.
 When Workers AI and Vectorize are not bound, semantic scoring is explicitly reported
 as unavailable and the response sets `meta.retrieval.degraded=true`; it is never
 simulated with lexical overlap.

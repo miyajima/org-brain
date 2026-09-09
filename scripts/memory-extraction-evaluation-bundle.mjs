@@ -7,6 +7,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { pathToFileURL } from "node:url";
 import { listCorpusSessions } from "./memory-learning-corpus.mjs";
+import { codexFinalAnswerText } from "./codex-session-hook-replay.mjs";
 import {
   buildTurnEvidenceV1,
   discoverLearningEpisodes
@@ -52,8 +53,7 @@ function turnId(rows, index) {
 
 function finalTimestamp(rows) {
   for (const row of [...rows].reverse()) {
-    const payload = rowPayload(row);
-    if (payload?.type === "agent_message" && payload?.phase === "final_answer") {
+    if (codexFinalAnswerText(row)) {
       const parsed = Date.parse(row.timestamp);
       if (Number.isFinite(parsed)) return parsed;
     }
@@ -62,10 +62,7 @@ function finalTimestamp(rows) {
 }
 
 function hasFinalAnswer(rows) {
-  return rows.some((row) => {
-    const payload = rowPayload(row);
-    return payload?.type === "agent_message" && payload?.phase === "final_answer" && typeof payload.message === "string";
-  });
+  return rows.some((row) => codexFinalAnswerText(row) != null);
 }
 
 export async function readSessionTurnGroups(file, options = {}) {

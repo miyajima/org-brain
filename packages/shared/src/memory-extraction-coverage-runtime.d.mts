@@ -1,0 +1,15 @@
+export const MEMORY_EXTRACTION_COVERAGE_PROFILE: "coverage/v1";
+export const MEMORY_EXTRACTION_REFINED_PROFILE: "a-plus/v1";
+export const MEMORY_EXTRACTION_COVERAGE_MAX_POOL_SPANS: number;
+export const MEMORY_EXTRACTION_COVERAGE_MAX_POOL_BYTES: number;
+export const MEMORY_EXTRACTION_COVERAGE_MAX_SNIPPETS: number;
+export const COVERAGE_PRIORITY: Readonly<Record<string, number>>;
+export function splitCoverageSentences(snippets: unknown[], options?: Record<string, unknown>): any[];
+export function coveragePriority(text: string, options?: Record<string, unknown>): number;
+export function buildCoverageEvidenceGroups(snippets: unknown[], events?: unknown[], options?: Record<string, unknown>): any[];
+export function selectCoverageEvidence(groups: any[], options?: Record<string, unknown>): any;
+export function packCoverageGroups(packet: Record<string, unknown>, groups: any[], options?: Record<string, unknown>): any;
+export function decideCoverageSecondPass(input?: Record<string, unknown>): any;
+export function validateCoverageCandidate(candidate: Record<string, unknown>, packet: Record<string, unknown>): { valid: boolean; reason_codes: string[] };
+export function coverageCandidateFingerprint(candidate: Record<string, unknown>): string;
+export function mergeCoverageCandidates(passCandidates: unknown[][], options?: Record<string, unknown>): any;

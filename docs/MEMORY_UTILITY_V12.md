@@ -1,6 +1,6 @@
 # Memory Utility v1.2 実験 runbook
 
-v1.2は開発データだけを使う私的な比較実験です。通常のRouter、共通契約、本番DB、provider API、アプリケーションサーバーは変更しません。`A`には実験記憶を供給せず、host共通背景記憶は各native sessionで同じhashになるよう固定します。`B`は固定10件では検証済みv1.1出力を再利用し、holdout 5件では凍結v2の抽出・保存判定を使います。`C`はv1.2契約で抽出します。Cのitem IDと先行item参照は`i1`、`i2`の形式に固定し、保存する集約`support_ids`は検証済みfield evidenceからコードで導出します。Cのfield-level `evidence`とqualityの`checked_set`は、native transportでは原文を含めず、source spanを入力順で数えた`span-1`、`span-2`のようなbounded ordinal tokenを持つ`{id}`だけを送ります。qualityのitem参照も抽出itemを入力順で数えた`item-1`、`item-2`のtokenに固定します。受理時にjobのprivate source spanとextracted itemからコードがtokenを実IDへ解決し、検証済みの全文`quote`をcanonical outputへ補完します。Cのspan参照は最大512件、qualityのitem参照は最大96件に制限し、各schemaのenum総数を1000以下でpreflightします。C・quality・replay・evaluationのJSON文字列内で原文の不等号を保持する場合は、`\u003c` / `\u003e`のescapeを使い、受理後のJSON値で原文に戻します。
+v1.2は開発データだけを使う私的な比較実験です。通常のRouter、共通契約、本番DB、provider API、アプリケーションサーバーは変更しません。`A`には実験記憶を供給せず、host共通背景記憶は各native sessionで同じhashになるよう固定します。`B`は固定10件では検証済みv1.1出力を再利用し、holdout 5件では凍結v2の抽出・保存判定を使います。`C`はv1.2契約で抽出します。Cのitem IDと先行item参照は`i1`、`i2`の形式に固定し、保存する集約`support_ids`は検証済みfield evidenceからコードで導出します。Cのfield-level `evidence`とqualityの`checked_set`は、native transportでは原文を含めず、source spanを入力順で数えた`span-1`、`span-2`のようなbounded ordinal tokenを持つ`{id}`だけを送ります。qualityのitem参照も抽出itemを入力順で数えた`item-1`、`item-2`のtokenに固定します。受理時にjobのprivate source spanとextracted itemからコードがtokenを実IDへ解決し、検証済みの全文`quote`をcanonical outputへ補完します。Cのspan参照は最大512件、qualityのitem参照は最大96件に制限し、各schemaのenum総数を1000以下でpreflightします。C・quality・replay・evaluationのJSON文字列内で原文の不等号を保持する場合は、`\u003c` / `\u003e`のescapeを使い、受理後のJSON値で原文に戻します。受理前の機密・個人情報検査は、正しいJSONでは各keyと文字列valueを独立して検査し、別fieldの一般語と証拠IDを連結した誤検知を防ぎます。JSONとして読めない出力は全文を検査し、credential、PII、機微領域の拒否基準は維持します。
 
 再現対象は、親agentが選定した未使用の新規runだけです。attempt1〜7の既存runを`V12_MANIFEST`に設定してはなりません。
 
@@ -47,6 +47,16 @@ node scripts/memory-utility-v12.mjs prepare \
 `initial-JOB_ID.json`には`raw_hash`、`parsed_hash`、`canonical_hash`と`canonical_provenance`を持たせます。provenanceはcanonicalization contract、transport kind、`initial.parsed`をsourceとすること、transport hash、canonical hashを記録します。`accepted-JOB_ID.json`にも同じraw・transport・canonicalのhashとprovenanceを束縛します。
 
 reload時の`outputForJob`は、job・initial・acceptedのhash chainを確認し、rawを再parseして`parsed_hash`と一致すること、initialのparsedから再hydrationしたcanonical outputとcanonical hash・provenance・accepted outputが一致することを検証します。改変、ID差し替え、quote差し替え、受理済みcanonical outputの変更は`answer_binding_changed`として受理しません。
+
+## 保持判定と品質評価の範囲
+
+userが採用したdecisionで`decision`と`scope`に根拠があり、`reuse_when`だけが不明な場合は、採用済み事実を破棄せずshort TTLで保持します。`reuse_when`も根拠付きの場合だけlongで保持します。保存recordの再監査でも、provenanceのspeakerからuser根拠を復元し、抽出時と同じ判定にします。
+
+assistantだけが述べた将来方針は`decision/observed`として現在の運用状態から分離します。誤って`operational/observed`になった場合も、`reuse_when`だけが既知で`scope`と現在eventの`symptom`、`cause`、`correction`、`outcome`が全て不明なら保存しません。具体的な設定、完了・未完了、テスト結果などの短期運用状態は従来どおりshort TTLで保持します。
+
+`failure`は`symptom`と`reuse_when`が根拠付きならlongで保持します。`reuse_when`が不明でも、`scope`と`symptom`に加えて`correction`または`outcome`が根拠付きの具体的なincidentは、解決済みと断定せず成果物の現在地を失わないようshort TTLで保持します。
+
+hostが注入する`recommended_plugins`、AGENTS.md指示、`environment_context`、cwd、shell、workspace roots、permission profileは、後続turnで実行環境から再供給されるtransport metadataです。未抽出であることを機械的またはsemantic qualityの`omission`に数えません。通常の会話でuserがそれ自体の保存、変更、再利用を選択した場合はこの除外を適用しません。
 
 ## 段階の実行
 
@@ -175,6 +185,8 @@ node scripts/memory-utility-v12.mjs replay \
 
 15件×3方式の全`replay-a-*`、`replay-b-*`、`replay-c-*`を一件ずつ実行します。各payloadのsupplied memoryは最大5 retrieval unitです。gapは本文へ渡し、conflictは一つのmemory objectの`members`内に両側を保持します。relation target、incident、evidenceのIDはreplayではunit内のlocal ID、evaluationではanswer単位のopaque IDです。
 
+evaluation payloadでは、選択済みmemoryとcandidateが同一objectの場合、`candidates_by_answer`側を`{"memory_ref":"memory-N"}`に置き換えます。この参照は同じanswerの`memories_by_answer`にある同一IDの完全なobjectを指し、候補順を維持します。未選択candidateは完全なobjectのまま保持するため、評価情報を落とさず入力の重複だけを除去します。
+
 ```sh
 JOB_ID=replay-a-CASE_ID
 node scripts/memory-utility-v12.mjs prepare-cli \
@@ -247,21 +259,26 @@ native finalがない既知の通信失敗やtimeoutだけはrunnerの定義し�
 
 合格条件を満たさないquality、根拠不足、評価不一致、tie、unknownは改善の証拠に数えません。15件の実行結果を得ても、方式優位、本番品質、再発率改善を単独で主張しません。現在の実装・テスト段階では実データのmodel callは行っておらず、このrunbookは承認後の再現手順です。
 
-## 引き継ぎ時点の状態（2026-09-07）
+## 最終実行結果（2026-09-09）
 
-v1.2は実験用実装であり、比較45回答・15評価とholdout実行は未完了です。
-本番採用や改善効果の確認済みを意味しません。現行のブラウザレビュー画面は
-v1の10件形式専用で、v1.2の15件形式には未対応です。
+attempt38（`/private/tmp/orgbrain-memory-utility-v12-20260909-attempt38`）で、公開smoke 4件、校正抽出5件、校正品質5件、本比較の抽出16件、semantic quality 15件、A/B/C再回答45件、盲検評価15件を完了した。101 jobはすべて初回結果を受理した。`export`は`ai_evaluated_human_pending`、`audit`は`ok`、最終`report`は`improvement_unconfirmed`、`production_eligible=false`である。人手レビューは実施していない。
 
-- attempt9：校正C 5件を受理、意味品質は4件passed・1件failed。
-  contextだけの情報をomissionとしたため、校正と本比較の両方の品質指示へ
-  target-onlyの抽出範囲を明記しました。元の176ファイルは保全しています。
-- attempt10：公開smoke 4件を受理、校正C 4件を受理、5件目が
-  `false_adoption`で保留。113ファイルを保全し、後続は未実施です。
-  自然な世代名付与依頼と採用検証規則の不一致が次の調査対象です。
-- attempt1〜10は再実行・修復・上書きせず、以後の実験には未使用runを使います。
-- 完了済みのv1.1の10件・30回答の予備AI評価は、v1.2の効果証明とは区別します。
+4指標をmeets=3、partial=2、fails=1としてケースごとに合算した予備比較では、C対Aは10勝3敗1分1 unknown、C対Bは7勝2敗5分1 unknownだった。全15件の総点はA=131、B=131、C=147（各方式180点満点）。ただしCのmemory harmはmeets 11件、partial 2件、fails 2件で、重大な記憶エラーは3ケース・4件残った。semantic qualityも13/15 passed、2件でomissionを検出した。このため、得点差を改善確認や受入合格へ昇格させない。
 
-次の作業では採用の意味判定と機械的受理条件の整合を精査し、校正通過後に
-固定10件＋holdout 5件の比較を完走してください。現在の運用はAstra親タスク単独で、
-サブエージェントを使用しません。私的な原文・実行ログ・比較データはGitへ含めません。
+主な残存問題は次のとおり。
+
+- 完了済み作業に古い未完了状態を適用し、追加ログインを案内した。
+- 質問で特定されていないAPI keyのsuffixを記憶から回答へ持ち込んだ。
+- 過去のE2E状況を、別のgit完了依頼の必須確認へ広げた。
+- 「TencentDBの構造をそのままコピーしない」という否定制約を落とし、統合案の方向を反転させた。
+- Fish公式TTS APIの利用事実と参照先、およびMTP 4bit推奨の速度差と品質判断理由を保存しなかった。
+
+元のsource manifest一時ディレクトリが消失したため、固定済みのcase ID、source hash、選定条件を変えずに`/private/tmp/orgbrain-router-v33-cloud-20260909-recovered/manifest.json`へ120ケースを復元した。入力caseのhashは従来runと一致する。復元manifest自体のhashは`sha256:d60df16096391504dd5e2363a544e8e7d4824ef9e7518943568234a011f9e932`としてattempt38に束縛した。
+
+attempt36はnetwork-only failureで保留し、attempt37は校正で、並列に記載されたdigest固定とrollbackを因果関係として補った`fabricated_reason`を検出して保留した。どちらも再送・修復していない。attempt38のrun 1237 filesとcode snapshot 7件は`/private/tmp/orgbrain-memory-utility-v12-20260909-attempt38-preservation/baseline.json`に保全した。
+
+attempt38でholdoutの回答と評価は既に露出した。v1.2を同じholdoutへ合わせて修正・再実行してはならない。時間的なsupersessionと完了状態、否定制約、credential fragment除外、検索関連性、API・出所・定量理由の完全性を改善する場合は、v1.3として新しい非重複データを固定して評価する。
+
+使用量はinput 3,135,755 tokens、cached input 894,080 tokens、非cached input 2,241,675 tokens、output 139,276 tokens。reasoning、total、costはAPIから得られずunknownである。これはAPI使用量の記録であり、契約料金の節約額を示さない。
+
+私的な原文・実行ログ・比較データはGitへ含めない。現行のブラウザレビュー画面はv1の10件形式専用で、v1.2の15件形式には未対応である。

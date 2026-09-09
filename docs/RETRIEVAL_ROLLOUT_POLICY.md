@@ -15,12 +15,14 @@ shadow or retiring v3 does not delete v4 code or v4 projections.
 
 Explicit `hybrid_v3` and `hybrid_v4` requests always use the requested version.
 When both versions are eligible for default routing, v4 takes precedence. The
-production default is v3 `off` and v4 `shadow` at 5%, avoiding permanent double
-shadow and keeping a measured v4 promotion path.
+repository runtime default is now v3 `off` and v4 `on`; v3 remains rebuildable
+for rollback. This source setting does not establish the state of a deployed
+Worker or the completeness of its v4 projections.
 
 ## Promotion gates
 
-Promotion from `shadow` to `canary` requires all of the following:
+Before deploying a repository configuration that advances `shadow` to
+`canary` or `on`, verify all of the following:
 
 - projection parity fixture: identical v3/v4 unit IDs and deterministic top-5
   output between the SQLite and D1 logic for every committed fixture;

@@ -182,7 +182,7 @@ async function loadMemoryProfile(ctx: CapabilityContext, query: string): Promise
     limitDurable: 8,
     limitRecent: 8,
     rewriteQuery: true,
-    searchMode: "hybrid"
+    searchMode: "hybrid_v4"
   });
 
   const searchMeta = profile.meta.search;

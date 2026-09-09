@@ -3,6 +3,7 @@ import {
   validateV3Packet,
   assertV3ProviderProfile,
   buildMemoryExtractionPrompt,
+  MEMORY_EXTRACTION_COVERAGE_PROFILE,
   HttpError,
   MEMORY_EXTRACTION_TOKEN_PROFILE,
   MEMORY_CONTRACT_V2_CONTRACT_HASH,
@@ -14,7 +15,8 @@ import {
 } from "@org-brain/shared";
 import type { Env } from "./types";
 
-const RESERVED_TOKENS = 2_800;
+const LEGACY_RESERVED_TOKENS = 2_800;
+const COVERAGE_RESERVED_TOKENS = 5_600;
 const TIER2_LIMIT = 500_000;
 const STAGING_TTL_MS = 24 * 60 * 60 * 1000;
 const STANDARD_CAPSULE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
@@ -39,6 +41,7 @@ type EnqueueInput = {
   prompt_version?: string;
   redaction_version?: string;
   prefilter_version?: string;
+  extraction_profile?: "coverage/v1";
 };
 
 type EnqueueOptions = {
@@ -91,13 +94,34 @@ function parseInput(raw: unknown): EnqueueInput {
       throw new HttpError(503, "unsupported_token_profile", "v3 is offline shadow only until its provider profile is verified");
     }
   }
-  if (limits.input_tokens !== 2_000 || limits.output_tokens !== 800 || limits.candidates !== 3 || limits.calls !== 1) {
+  const extractionProfile = packet.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE ? MEMORY_EXTRACTION_COVERAGE_PROFILE : undefined;
+  if (packet.extraction_profile !== undefined && !extractionProfile) throw new HttpError(400, "invalid_payload", "unsupported extraction_profile");
+  if (extractionProfile && packet.schema !== SCHEMA_VERSION) throw new HttpError(400, "invalid_payload", "coverage/v1 requires learning-extraction-proposal/v2");
+  const expectedCalls = extractionProfile ? 2 : 1;
+  if (limits.input_tokens !== 2_000 || limits.output_tokens !== 800 || limits.candidates !== 3 || limits.calls !== expectedCalls) {
     throw new HttpError(400, "invalid_payload", "packet token and call limits must match the server contract");
   }
-  try {
-    assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(packet));
-  } catch {
-    throw new HttpError(413, "memory_extraction_input_too_large", "redacted extraction evidence exceeds the 2000-token ceiling");
+  if (extractionProfile) {
+    const snippets = Array.isArray(packet.snippets) ? packet.snippets : [];
+    const bytes = snippets.reduce((sum, item) => sum + new TextEncoder().encode(String(asRecord(item).text ?? "")).byteLength, 0);
+    if (snippets.length > 16 || bytes > 16 * 1024) throw new HttpError(413, "memory_extraction_pool_too_large", "coverage evidence pool exceeds its fixed ceiling");
+    const coverage = asRecord(packet.coverage);
+    const pass1Ids = new Set(Array.isArray(coverage.pass1_group_ids) ? coverage.pass1_group_ids.filter((id): id is string => typeof id === "string") : []);
+    const groups = Array.isArray(coverage.groups) ? coverage.groups.map(asRecord) : [];
+    const groupIds = groups.map((group) => String(group.group_id));
+    const pass1Groups = groups.filter((group) => pass1Ids.has(String(group.group_id)));
+    const spanIds = new Set(pass1Groups.flatMap((group) => Array.isArray(group.span_ids) ? group.span_ids.filter((id): id is string => typeof id === "string") : []));
+    const requestPacket = { ...packet, coverage_pass: 1, snippets: snippets.filter((item) => spanIds.has(String(asRecord(item).span_id))) };
+    if (requestPacket.snippets.length === 0 || requestPacket.snippets.length > 8 || pass1Ids.size === 0 || pass1Groups.length !== pass1Ids.size || new Set(groupIds).size !== groupIds.length) {
+      throw new HttpError(400, "invalid_payload", "coverage pass 1 selection is invalid");
+    }
+    try { assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(requestPacket)); } catch {
+      throw new HttpError(413, "memory_extraction_input_too_large", "coverage pass 1 exceeds the 2000-token ceiling");
+    }
+  } else {
+    try { assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(packet)); } catch {
+      throw new HttpError(413, "memory_extraction_input_too_large", "redacted extraction evidence exceeds the 2000-token ceiling");
+    }
   }
   return {
     project_id: text(value.project_id, "project_id", 128),
@@ -112,7 +136,8 @@ function parseInput(raw: unknown): EnqueueInput {
     schema_version: typeof value.schema_version === "string" ? value.schema_version : SCHEMA_VERSION,
     prompt_version: typeof value.prompt_version === "string" ? value.prompt_version : PROMPT_VERSION,
     redaction_version: typeof value.redaction_version === "string" ? value.redaction_version : REDACTION_VERSION,
-    prefilter_version: typeof value.prefilter_version === "string" ? value.prefilter_version : PREFILTER_VERSION
+    prefilter_version: typeof value.prefilter_version === "string" ? value.prefilter_version : PREFILTER_VERSION,
+    extraction_profile: extractionProfile
   };
 }
 
@@ -156,6 +181,16 @@ function providerAllowed(env: Env, provider: string, model: string): boolean {
   }
 }
 
+function coverageAllowed(env: Env, tenantId: string, projectId: string, installationId: string): boolean {
+  if (!env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON?.trim()) return false;
+  try {
+    const parsed = JSON.parse(env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON) as unknown;
+    const entries = Array.isArray(parsed) ? parsed : Array.isArray(asRecord(parsed).entries) ? asRecord(parsed).entries as unknown[] : [];
+    return entries.map(asRecord).some((entry) => entry.tenant_id === tenantId && entry.project_id === projectId && entry.installation_id === installationId
+      && ![entry.tenant_id, entry.project_id, entry.installation_id].includes("*"));
+  } catch { return false; }
+}
+
 function tierLimit(env: Env, tier: "tier2" | "tier3"): number {
   const configured = Number(tier === "tier2" ? env.MEMORY_EXTRACTION_TIER2_MONTHLY_TOKENS : env.MEMORY_EXTRACTION_TIER3_MONTHLY_TOKENS);
   if (Number.isSafeInteger(configured) && configured >= 0) return configured;
@@ -192,19 +227,22 @@ async function insertTerminalRun(env: Env, args: {
   runId: string; taskId: string; tenantId: string; projectId: string; installationId: string;
   provider: string; model: string; packetHash: string; cacheKey: string; keyVersion: string;
   schemaVersion: string; promptVersion: string; redactionVersion: string; prefilterVersion: string;
+  extractionProfile?: "coverage/v1"; promptPolicyHash: string; verifierPolicyHash: string; executionPolicyHash: string;
   outcome: "hard_excluded" | "model_unavailable" | "no_candidate"; errorCode: string | null; now: number; capsuleExpiresAt: number;
 }) {
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO memory_extraction_runs(
        id, tenant_id, project_id, installation_id, task_id, execution_status, outcome,
        provider, model, packet_hash, cache_key, key_version, schema_version, contract_hash,
-       prompt_version, redaction_version, prefilter_version, reserved_tokens, charged_tokens,
+       prompt_version, redaction_version, prefilter_version, extraction_profile, prompt_policy_hash,
+       verifier_policy_hash, execution_policy_hash, reserved_tokens, charged_tokens,
        staging_r2_key, error_code, created_at, updated_at, settled_at, staging_expires_at, capsule_expires_at
-     ) VALUES(?,?,?,?,?,'settled',?,?,?,?,?,?,?,?,?,?,?,0,0,'',?,?,?,?,?,?)`
+     ) VALUES(?,?,?,?,?,'settled',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,'',?,?,?,?,?,?)`
   ).bind(
     args.runId, args.tenantId, args.projectId, args.installationId, args.taskId, args.outcome,
     args.provider, args.model, args.packetHash, args.cacheKey, args.keyVersion, args.schemaVersion,
     MEMORY_CONTRACT_V2_CONTRACT_HASH, args.promptVersion, args.redactionVersion, args.prefilterVersion,
+    args.extractionProfile ?? null, args.promptPolicyHash, args.verifierPolicyHash, args.executionPolicyHash,
     args.errorCode, args.now, args.now, args.now, args.now + STAGING_TTL_MS, args.capsuleExpiresAt
   ).run();
 }
@@ -225,6 +263,36 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
   if (input.packet.session_hash !== input.session_hash || input.packet.turn_hash !== input.turn_hash) {
     throw new HttpError(409, "turn_identity_mismatch", "packet session/turn hashes do not match the request identity");
   }
+  if (input.extraction_profile && !coverageAllowed(env, options.tenantId, input.project_id, options.installationId)) {
+    throw new HttpError(403, "memory_extraction_coverage_not_allowlisted", "coverage/v1 requires an exact tenant, project, and installation allowlist entry");
+  }
+  if (input.extraction_profile) {
+    const snippets = Array.isArray(input.packet.snippets) ? input.packet.snippets.map(asRecord) : [];
+    const ids = new Set<string>();
+    for (const [index, snippet] of snippets.entries()) {
+      const spanId = text(snippet.span_id, `packet.snippets[${index}].span_id`, 128);
+      if (ids.has(spanId)) throw new HttpError(400, "invalid_payload", "coverage span IDs must be unique");
+      ids.add(spanId);
+      if (typeof snippet.parent_span_id !== "string" || typeof snippet.source !== "string" || !Number.isInteger(snippet.start) || !Number.isInteger(snippet.end) || !Number.isInteger(snippet.order)) {
+        throw new HttpError(400, "invalid_payload", "coverage snippet provenance is incomplete");
+      }
+      if (Number(snippet.start) < 0 || Number(snippet.end) <= Number(snippet.start) || spanId !== `${snippet.parent_span_id}@${snippet.start}:${snippet.end}`) {
+        throw new HttpError(400, "invalid_payload", "coverage snippet offsets do not match its ID");
+      }
+      const expectedHash = `sha256:${await sha256(String(snippet.text ?? ""))}`;
+      if (snippet.text_hash !== expectedHash) throw new HttpError(409, "coverage_snippet_hash_mismatch", "coverage snippet hash does not match redacted text");
+    }
+    const coverage = asRecord(input.packet.coverage);
+    const groups = Array.isArray(coverage.groups) ? coverage.groups.map(asRecord) : [];
+    if (groups.some((group) => !Array.isArray(group.span_ids) || group.span_ids.some((id) => typeof id !== "string" || !ids.has(id)))) {
+      throw new HttpError(400, "invalid_payload", "coverage group dependency is missing");
+    }
+  }
+  const policyHashes = {
+    promptPolicyHash: `sha256:${await sha256(input.extraction_profile ? "memory-extraction-coverage-prompt/v1" : input.prompt_version ?? PROMPT_VERSION)}`,
+    verifierPolicyHash: `sha256:${await sha256(input.extraction_profile ? "memory-extraction-coverage-verifier/v1" : MEMORY_CONTRACT_V2_CONTRACT_HASH)}`,
+    executionPolicyHash: `sha256:${await sha256(input.extraction_profile ? "memory-extraction-coverage-execution/v1" : "memory-extraction-single-pass/v1")}`
+  };
   const screened = screenSensitiveMemory(packetJson, { mode: "deny", allowed_principals: [] });
   const keys = hmacKeys(env);
   const identity = stableJson({
@@ -238,6 +306,10 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
     prompt: input.prompt_version,
     redaction: input.redaction_version,
     prefilter: input.prefilter_version,
+    extraction_profile: input.extraction_profile ?? null,
+    prompt_policy_hash: policyHashes.promptPolicyHash,
+    verifier_policy_hash: policyHashes.verifierPolicyHash,
+    execution_policy_hash: policyHashes.executionPolicyHash,
     provider: input.provider,
     model: input.model
   });
@@ -257,7 +329,7 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
     packetHash, cacheKey: activeCacheKey, keyVersion: keys.active.version,
     schemaVersion: input.schema_version ?? SCHEMA_VERSION, promptVersion: input.prompt_version ?? PROMPT_VERSION,
     redactionVersion: input.redaction_version ?? REDACTION_VERSION, prefilterVersion: input.prefilter_version ?? PREFILTER_VERSION,
-    now, capsuleExpiresAt
+    extractionProfile: input.extraction_profile, ...policyHashes, now, capsuleExpiresAt
   };
   if (!screened.allowed) {
     await insertTerminalRun(env, { ...common, outcome: "hard_excluded", errorCode: screened.reason ?? "sensitive_content" });
@@ -281,6 +353,8 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
   const stagingKey = `tenants/${options.tenantId}/memory-extraction/staging/${runId}.json`;
   const storedInput = {
     schema_version: 1,
+    session_hash: input.session_hash,
+    turn_hash: input.turn_hash,
     run_id: runId,
     tenant_id: options.tenantId,
     project_id: input.project_id,
@@ -293,6 +367,10 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
     prompt_version: input.prompt_version ?? PROMPT_VERSION,
     redaction_version: input.redaction_version ?? REDACTION_VERSION,
     prefilter_version: input.prefilter_version ?? PREFILTER_VERSION,
+    extraction_profile: input.extraction_profile ?? null,
+    prompt_policy_hash: policyHashes.promptPolicyHash,
+    verifier_policy_hash: policyHashes.verifierPolicyHash,
+    execution_policy_hash: policyHashes.executionPolicyHash,
     capsule_expires_at: capsuleExpiresAt,
     packet: input.packet
   };
@@ -302,6 +380,7 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
   });
 
   const month = utcMonth(now);
+  const reservedTokens = input.extraction_profile ? COVERAGE_RESERVED_TOKENS : LEGACY_RESERVED_TOKENS;
   const limit = tierLimit(env, input.tier ?? "tier2");
   const idem = `memory-extraction:${activeCacheKey}`;
   const envelope: Envelope<TaskCreatedPayload> = {
@@ -317,7 +396,7 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
       capability: "memory_extraction",
       priority: 0,
       input_ref: `r2://${stagingKey}`,
-      constraints: { reserved_tokens: RESERVED_TOKENS, calls: 1 },
+      constraints: { reserved_tokens: reservedTokens, calls: input.extraction_profile ? 2 : 1 },
       wait_event_type: "memory.extraction.settled"
     }
   };
@@ -334,15 +413,18 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
       `INSERT INTO memory_extraction_runs(
          id, tenant_id, project_id, installation_id, task_id, execution_status, outcome,
          provider, model, packet_hash, cache_key, key_version, schema_version, contract_hash,
-         prompt_version, redaction_version, prefilter_version, reserved_tokens, charged_tokens,
+         prompt_version, redaction_version, prefilter_version, extraction_profile, prompt_policy_hash,
+         verifier_policy_hash, execution_policy_hash, reserved_tokens, charged_tokens,
          staging_r2_key, created_at, updated_at, staging_expires_at, capsule_expires_at
-       ) VALUES(?,?,?,?,?,'planned',NULL,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?,?,?)`
+       ) VALUES(?,?,?,?,?,'planned',NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?,?,?)`
     ).bind(
       runId, options.tenantId, input.project_id, options.installationId, taskId,
       input.provider, input.model, packetHash, activeCacheKey, keys.active.version,
       input.schema_version ?? SCHEMA_VERSION, MEMORY_CONTRACT_V2_CONTRACT_HASH,
       input.prompt_version ?? PROMPT_VERSION, input.redaction_version ?? REDACTION_VERSION,
-      input.prefilter_version ?? PREFILTER_VERSION, stagingKey, now, now, now + STAGING_TTL_MS, capsuleExpiresAt
+      input.prefilter_version ?? PREFILTER_VERSION, input.extraction_profile ?? null,
+      policyHashes.promptPolicyHash, policyHashes.verifierPolicyHash, policyHashes.executionPolicyHash,
+      stagingKey, now, now, now + STAGING_TTL_MS, capsuleExpiresAt
     ),
     env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO memory_extraction_token_reservations(
@@ -354,12 +436,12 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
          WHERE tenant_id = ? AND utc_month = ? AND tier = ?
            AND consumed_tokens + reserved_tokens + ? <= token_limit
        )`
-    ).bind(options.tenantId, runId, month, input.tier ?? "tier2", RESERVED_TOKENS, now, options.tenantId, month, input.tier ?? "tier2", RESERVED_TOKENS),
+    ).bind(options.tenantId, runId, month, input.tier ?? "tier2", reservedTokens, now, options.tenantId, month, input.tier ?? "tier2", reservedTokens),
     env.OPEN_BRAIN_DB.prepare(
       `UPDATE memory_extraction_token_buckets SET reserved_tokens = reserved_tokens + ?, updated_at = ?
        WHERE tenant_id = ? AND utc_month = ? AND tier = ?
          AND EXISTS (SELECT 1 FROM memory_extraction_token_reservations WHERE tenant_id = ? AND run_id = ? AND applied = 0)`
-    ).bind(RESERVED_TOKENS, now, options.tenantId, month, input.tier ?? "tier2", options.tenantId, runId),
+    ).bind(reservedTokens, now, options.tenantId, month, input.tier ?? "tier2", options.tenantId, runId),
     env.OPEN_BRAIN_DB.prepare(
       "UPDATE memory_extraction_token_reservations SET applied = 1 WHERE tenant_id = ? AND run_id = ? AND applied = 0"
     ).bind(options.tenantId, runId),
@@ -367,7 +449,7 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
       `UPDATE memory_extraction_runs SET execution_status = 'reserved', reserved_tokens = ?, updated_at = ?
        WHERE tenant_id = ? AND id = ?
          AND EXISTS (SELECT 1 FROM memory_extraction_token_reservations WHERE tenant_id = ? AND run_id = ? AND applied = 1)`
-    ).bind(RESERVED_TOKENS, now, options.tenantId, runId, options.tenantId, runId),
+    ).bind(reservedTokens, now, options.tenantId, runId, options.tenantId, runId),
     env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO tasks(id, tenant_id, project_id, capability, status, priority, input_ref,
          idempotency_key, trace_id, wait_event_type, created_by_principal, created_at, updated_at)
@@ -403,7 +485,7 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
   await env.OPEN_BRAIN_DB.prepare(
     "UPDATE memory_extraction_outbox SET state = 'sent', sent_at = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND state = 'pending'"
   ).bind(Date.now(), Date.now(), options.tenantId, outboxId).run();
-  return response({ id: runId, task_id: taskId, execution_status: "reserved", outcome: null, reserved_tokens: RESERVED_TOKENS }, false);
+  return response({ id: runId, task_id: taskId, execution_status: "reserved", outcome: null, reserved_tokens: reservedTokens }, false);
 }
 
 export async function dispatchMemoryExtractionOutbox(env: Env, now = Date.now()) {
@@ -449,14 +531,33 @@ export async function dispatchMemoryExtractionOutbox(env: Env, now = Date.now())
 
 export async function reconcileMemoryExtractionReservations(env: Env, now = Date.now()) {
   const expiredRows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, task_id, execution_status
+    `SELECT id, tenant_id, task_id, execution_status, reserved_tokens, extraction_profile
      FROM memory_extraction_runs
      WHERE execution_status IN ('planned','reserved','running') AND staging_expires_at <= ?
      ORDER BY staging_expires_at ASC LIMIT 100`
-  ).bind(now).all<{ id: string; tenant_id: string; task_id: string; execution_status: string }>();
+  ).bind(now).all<{ id: string; tenant_id: string; task_id: string; execution_status: string; reserved_tokens: number; extraction_profile: string | null }>();
   let expired = 0;
   for (const row of expiredRows.results) {
-    const unknown = row.execution_status === "running";
+    let unknown = row.execution_status === "running";
+    let chargedTokens = unknown ? row.reserved_tokens : 0;
+    if (row.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE) {
+      const runningPasses = await env.OPEN_BRAIN_DB.prepare(
+        "SELECT COUNT(*) AS count FROM memory_extraction_passes WHERE tenant_id=? AND run_id=? AND state='running'"
+      ).bind(row.tenant_id, row.id).first<{ count: number }>();
+      unknown = Number(runningPasses?.count ?? 0) > 0;
+      await env.OPEN_BRAIN_DB.batch([
+        env.OPEN_BRAIN_DB.prepare(
+          "UPDATE memory_extraction_passes SET state='outcome_unknown', charged_tokens=2800, error_code='running_reservation_expired', completed_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND state='running'"
+        ).bind(now, now, row.tenant_id, row.id),
+        env.OPEN_BRAIN_DB.prepare(
+          "UPDATE memory_extraction_passes SET state='skipped', charged_tokens=0, error_code='unexecuted_reservation_expired', completed_at=?, updated_at=? WHERE tenant_id=? AND run_id=? AND state='planned'"
+        ).bind(now, now, row.tenant_id, row.id)
+      ]);
+      const passUsage = await env.OPEN_BRAIN_DB.prepare(
+        "SELECT COALESCE(SUM(charged_tokens),0) AS charged_tokens FROM memory_extraction_passes WHERE tenant_id=? AND run_id=?"
+      ).bind(row.tenant_id, row.id).first<{ charged_tokens: number }>();
+      chargedTokens = Number(passUsage?.charged_tokens ?? 0);
+    }
     const results = await env.OPEN_BRAIN_DB.batch([
       env.OPEN_BRAIN_DB.prepare(
         `UPDATE memory_extraction_runs
@@ -464,7 +565,7 @@ export async function reconcileMemoryExtractionReservations(env: Env, now = Date
          WHERE tenant_id = ? AND id = ? AND execution_status = ?`
       ).bind(
         unknown ? "outcome_unknown" : "expired",
-        unknown ? RESERVED_TOKENS : 0,
+        chargedTokens,
         unknown ? "running_reservation_expired" : "unexecuted_reservation_expired",
         now, now, row.tenant_id, row.id, row.execution_status
       ),
@@ -513,19 +614,23 @@ export async function reconcileMemoryExtractionReservations(env: Env, now = Date
 
 export async function sweepMemoryExtractionArtifacts(env: Env, now = Date.now()) {
   const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, staging_r2_key, capsule_r2_key, staging_expires_at, capsule_expires_at
+    `SELECT id, tenant_id, staging_r2_key, capsule_r2_key, staging_expires_at, capsule_expires_at, tombstoned_at
      FROM memory_extraction_runs
      WHERE (staging_r2_key <> '' AND staging_expires_at <= ?)
         OR (capsule_r2_key IS NOT NULL AND capsule_expires_at <= ?)
+        OR (capsule_expires_at <= ? AND EXISTS (
+          SELECT 1 FROM memory_extraction_passes p WHERE p.tenant_id = memory_extraction_runs.tenant_id AND p.run_id = memory_extraction_runs.id AND p.result_r2_key IS NOT NULL
+        )) OR tombstoned_at IS NOT NULL
      LIMIT 100`
-  ).bind(now, now).all<{ id: string; tenant_id: string; staging_r2_key: string; capsule_r2_key: string | null; staging_expires_at: number; capsule_expires_at: number }>();
+  ).bind(now, now, now).all<{ id: string; tenant_id: string; staging_r2_key: string; capsule_r2_key: string | null; staging_expires_at: number; capsule_expires_at: number; tombstoned_at: number | null }>();
   let stagingDeleted = 0;
   let capsulesDeleted = 0;
   let deleteFailed = 0;
   let orphanStagingExamined = 0;
   let orphanStagingDeleted = 0;
+  let passResultsDeleted = 0;
   for (const row of rows.results) {
-    if (row.staging_r2_key && row.staging_expires_at <= now) {
+    if (row.staging_r2_key && (row.staging_expires_at <= now || row.tombstoned_at !== null)) {
       try {
         await env.OPEN_BRAIN_BUCKET.delete(row.staging_r2_key);
         await env.OPEN_BRAIN_DB.prepare("UPDATE memory_extraction_runs SET staging_r2_key = '', updated_at = ? WHERE tenant_id = ? AND id = ?").bind(now, row.tenant_id, row.id).run();
@@ -534,7 +639,7 @@ export async function sweepMemoryExtractionArtifacts(env: Env, now = Date.now())
         deleteFailed += 1;
       }
     }
-    if (row.capsule_r2_key && row.capsule_expires_at <= now) {
+    if (row.capsule_r2_key && (row.capsule_expires_at <= now || row.tombstoned_at !== null)) {
       await env.OPEN_BRAIN_DB.batch([
         env.OPEN_BRAIN_DB.prepare("UPDATE memory_extraction_runs SET error_code = 'evidence_unavailable', updated_at = ? WHERE tenant_id = ? AND id = ?").bind(now, row.tenant_id, row.id),
         env.OPEN_BRAIN_DB.prepare("UPDATE memory_learning_candidates SET status = 'expired', reason_codes_json = json_insert(reason_codes_json, '$[#]', 'evidence_unavailable'), updated_at = ? WHERE tenant_id = ? AND task_key = ? AND status IN ('review','quarantine')").bind(now, row.tenant_id, `extraction:${row.id}`)
@@ -545,6 +650,20 @@ export async function sweepMemoryExtractionArtifacts(env: Env, now = Date.now())
         capsulesDeleted += 1;
       } catch {
         deleteFailed += 1;
+      }
+    }
+    if (row.capsule_expires_at <= now || row.tombstoned_at !== null) {
+      const passes = await env.OPEN_BRAIN_DB.prepare(
+        "SELECT pass_no, result_r2_key FROM memory_extraction_passes WHERE tenant_id=? AND run_id=? AND result_r2_key IS NOT NULL"
+      ).bind(row.tenant_id, row.id).all<{ pass_no: number; result_r2_key: string }>();
+      for (const pass of passes.results) {
+        try {
+          await env.OPEN_BRAIN_BUCKET.delete(pass.result_r2_key);
+          await env.OPEN_BRAIN_DB.prepare(
+            "UPDATE memory_extraction_passes SET result_r2_key=NULL, updated_at=? WHERE tenant_id=? AND run_id=? AND pass_no=? AND result_r2_key=?"
+          ).bind(now, row.tenant_id, row.id, pass.pass_no, pass.result_r2_key).run();
+          passResultsDeleted += 1;
+        } catch { deleteFailed += 1; }
       }
     }
   }
@@ -579,6 +698,7 @@ export async function sweepMemoryExtractionArtifacts(env: Env, now = Date.now())
     capsules_deleted: capsulesDeleted,
     orphan_staging_examined: orphanStagingExamined,
     orphan_staging_deleted: orphanStagingDeleted,
+    pass_results_deleted: passResultsDeleted,
     delete_failed: deleteFailed
   };
 }
