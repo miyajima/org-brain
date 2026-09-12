@@ -1,3 +1,4 @@
+import { memoryUseOperation } from "./memory-use-service";
 import {
   registerMemoryRoutes as registerSharedMemoryRoutes,
   type MemoryPort
@@ -69,6 +70,7 @@ import { assertRetrievalOperator, isTenantAdmin, withPrincipalActor } from "./ro
 import type { Hono } from "hono";
 
 const memoryPort = {
+  memoryUseOperation,
   createBusinessCategory,
   listBusinessCategories,
   updateBusinessCategory,

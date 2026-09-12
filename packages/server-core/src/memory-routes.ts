@@ -241,10 +241,37 @@ routes.patch("/v1/business-categories/:id", async (c) => {
   return ports.jsonOk(c, await ports.updateBusinessCategory(c.env, tenantId, c.req.param("id"), body));
 });
 
+routes.post("/v1/memory-use-contexts", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenant = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.memoryUseOperation(c.env, tenant, body, ports.getApiPrincipal(c), "record"), 201);
+});
+routes.post("/v1/memory-use-evaluations", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenant = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.memoryUseOperation(c.env, tenant, body, ports.getApiPrincipal(c), "evaluate"), 201);
+});
+routes.post("/v1/memory-use-contexts/:id/revoke", async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const tenant = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.memoryUseOperation(c.env, tenant, {...body,id:c.req.param("id")}, ports.getApiPrincipal(c), "revoke"));
+});
+routes.get("/v1/memory-use-contexts", async (c) => {
+  const tenant = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.memoryUseOperation(c.env, tenant, {
+    source_id:c.req.query("source_id"), project_id:c.req.query("project_id"), before:c.req.query("before"),
+    limit:Math.min(100,Math.max(1,Number(c.req.query("limit"))||20))
+  }, ports.getApiPrincipal(c), "history"));
+});
+
 routes.post("/v1/memory-effects", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  return ports.jsonOk(c, await ports.recordMemoryEffect(c.env, tenantId, body), 201);
+  const effect = await ports.recordMemoryEffect(c.env, tenantId, body) as {effect_id:string};
+  const evaluation=(body as {use_evaluation?:Record<string,unknown>}).use_evaluation;
+  if(!evaluation) return ports.jsonOk(c,effect,201);
+  const use_evaluation=await ports.memoryUseOperation(c.env,tenantId,{...evaluation,id:evaluation.id||`${effect.effect_id}:use`,effect_event_id:effect.effect_id},ports.getApiPrincipal(c),"evaluate");
+  return ports.jsonOk(c,{...effect,use_evaluation},201);
 });
 
 routes.post("/v1/memory-usages", async (c) => {

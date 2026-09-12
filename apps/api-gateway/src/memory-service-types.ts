@@ -45,6 +45,7 @@ export type MemoryRow = {
 };
 
 export type MemorySearchRequest = {
+  use_context?: { task?: string; target?: string; constraints?: string; conditions?: string };
   tenant_id?: string;
   project_id?: string | null;
   q?: string;

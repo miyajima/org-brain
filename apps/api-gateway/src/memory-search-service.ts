@@ -1,3 +1,5 @@
+import { memoryUseService } from "./memory-use-service";
+import { memoryUseFlags, type UseContext } from "@org-brain/shared";
 import { HttpError, searchTenantMemories, searchTenantRetrievalUnitsV3, searchTenantRetrievalUnitsV4, sha256, type MemoryKind, type MemoryLifecycleState, type MemorySearchResponse, type MemorySearchMode, type MemorySourceReference, type MemoryWorkType } from "@org-brain/shared";
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import { rerankV3MemoryCandidates, searchRetrievalGenerationSemanticIndex, searchSemanticIndex, searchV3SemanticIndex, searchV4SemanticIndex } from "./retrieval-index-service";
@@ -385,6 +387,10 @@ export async function searchMemories(
   options: PrincipalActorOptions = {}
 ): Promise<MemorySearchResponse> {
   const parsedRequest = parseSearchRequest(rawBody);
+  const useFlags = memoryUseFlags(env as unknown as Record<string, unknown>);
+  if(parsedRequest.includeHistory || parsedRequest.includeSuppressed) {useFlags.context=false;useFlags.ranking=false;}
+  const publicLimit = parsedRequest.limit;
+  if (useFlags.context || useFlags.ranking) parsedRequest.limit = 50;
   await validateBusinessClassification(
     env,
     parsedRequest.tenantId,
@@ -469,6 +475,23 @@ export async function searchMemories(
   let queryHashPromise: Promise<string> | null = null;
   const getQueryHash = () => queryHashPromise ??= sha256(request.q);
   const attachUsage = async (response: MemorySearchResponse): Promise<MemorySearchResponse> => {
+    if ((useFlags.context || useFlags.ranking) && options.actorPrincipal) {
+      const ranked = await memoryUseService(env, request.tenantId, options.actorPrincipal,()=>request.at??Date.now(),request).search({
+        query:request.q,project_id:request.projectId,work_type:request.workType,task_id:request.taskId,
+        context:(rawBody as {use_context?:Partial<UseContext>}).use_context,
+        snapshot_id:(rawBody as {use_snapshot_id?:string}).use_snapshot_id,
+        filter_candidates:async candidates=>{
+          const filters=parseSearchFilters(rawBody);
+          if(!Object.values(filters).some(Boolean)) return candidates;
+          const ids=candidates.filter(x=>x.kind==='memory').map(x=>x.id),allowed=new Set<string>();
+          for(let start=0;start<ids.length;start+=80) for(const id of await filterMemorySearchResults(env,request.tenantId,ids.slice(start,start+80),filters)) allowed.add(id);
+          return candidates.filter(x=>x.kind==='memory'&&allowed.has(x.id));
+        },
+        base:response.results,context_enabled:useFlags.context,ranking_enabled:useFlags.ranking,limit:publicLimit,at:request.at
+      });
+      response={...response,results:ranked.results as typeof response.results,meta:{...response.meta,use_history:ranked.meta}};
+    } else response={...response,results:response.results.slice(0,publicLimit)};
+    response.meta={...response.meta,returned_count:response.results.length,top_result_ids:response.results.map(x=>x.id),top_result_ranks:response.results.map(x=>x.score)};
     if (options.recordUsage === false) return response;
     const queryHash = await getQueryHash();
     const usage = await recordMemoryUsage(env, {
@@ -508,6 +531,8 @@ export async function searchMemories(
       meta: {
         ...response.meta,
         usage_id: usage.usage_id,
+        usage_item_ids: usage.usage_item_ids,
+        usage_items:usage.usage_items,
         verification_sampled: usage.verification_sampled,
         ...(["hybrid_v3", "hybrid_v4"].includes(String(body.search_mode))
           ? { deprecation_warnings: [`${String(body.search_mode)} is deprecated; use retrieval_profile`] }

@@ -66,8 +66,9 @@ Changing the global harness remains unnecessary and outside this contract.
 ## Human review feedback
 
 `memory_learning_mode=confirm` is the initial Codex rollout setting. Stop stores
-only local confirmation candidates and never captures memory, writes a cloud
-outbox, or enqueues extraction, even if extraction is enabled in the environment.
+only local confirmation candidates for new-memory learning and never captures
+new memory, writes its capture outbox, or enqueues extraction, even if extraction
+is enabled in the environment.
 The subsequent interactive Remote MCP write requires the actual human answer.
 
 `memory-review-feedback/v1` links the immutable confirmation ID, candidate hash,
@@ -101,3 +102,23 @@ v3's external execution stop and prior held experiments remain unchanged.
 Deploy migration `0040_memory_confirmation_reviews.sql` before the updated API.
 It adds the private review/receipt table and the Domain Recall assessment column.
 Local verification does not establish a deployed, trusted or authenticated hook.
+
+## Evidence-backed use history
+
+The independently opt-in `ORGBRAIN_USE_COLLECT` branch observes use of existing
+memories; it does not authorize new-memory capture or turn save confirmation into
+a usefulness score. The existing stateless observe tool accepts `use_observation`
+with retrieval/item/version IDs and actual current-turn action/outcome call IDs.
+Stop checks those events within the same bounded transcript read, writes local
+receipts, and may enqueue sanitized use references only when `ORGBRAIN_USE_SYNC`
+is also enabled. Stop performs no additional LLM, discovery, signing, or network
+work. The separate `usage sync` worker handles transport and optional attestations.
+
+Retrieval, adoption, execution, and confirmed outcome remain distinct. Ranking
+requires verified evidence and explicit contribution assessment; an observed
+command failure does not itself mean the memory was harmful. Missing turn markers,
+unknown versions, unverified Cloud receipts, and lost source permissions fail
+closed. Existing confirmation limits and held experiments remain unchanged.
+See [use-history operation](MEMORY_USE_HISTORY.md) and
+[validation](MEMORY_USE_HISTORY_VALIDATION.md). Migration `0041` and Local schema
+26 are additive. Global harness instructions require no changes.

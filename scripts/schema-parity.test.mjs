@@ -31,6 +31,7 @@ const SHARED_TABLES = [
   "memory_effect_events",
   "memory_effect_attributions",
   "memory_effect_daily_metrics",
+  "memory_use_contexts", "memory_use_evidence", "memory_use_evaluations", "memory_use_feedback", "memory_use_statistics", "memory_use_snapshots", "memory_use_outbox",
   "retrieval_ranking_profiles",
   "retrieval_generations",
   "retrieval_generation_assignments",

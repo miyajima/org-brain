@@ -708,6 +708,10 @@ const detailPayload = detail?.kind === "memory"
   ? preloadedDetailPayload ?? await fetchApi<MemoryDetailResponse>(`/api/v1/memories/${encodeURIComponent(detail.id)}/details?tenant_id=${encodeURIComponent(tenantId)}`)
   : preloadedDetailPayload;
 const memoryDetail = detailPayload?.ok ? detailPayload.data : null;
+const useHistoryPayload = detail?.kind === "memory"
+  ? await fetchApi<{items:Array<{id:string;task_id:string;created_at:number;verification_state:string;live:boolean;stages:{retrieved:boolean;adopted:boolean;executed:boolean;outcome_confirmed:boolean};context:{task:string;target:string;constraints:string;conditions:string};evidence:Array<{id:string;role:string;ref_type:string;ref_id:string;excerpt:string;verification_state:string;reason:string|null}>;evaluations:Array<{id:string;outcome:string;verification_state:string}>}>;next_cursor:string|null}>(`/api/v1/memory-use-contexts?tenant_id=${encodeURIComponent(tenantId)}&source_id=${encodeURIComponent(detail.id)}&limit=10`)
+  : null;
+
 const accessPayload = decisionConsoleEnabled && detail?.kind === "memory"
   ? await fetchApi<{ policy: Record<string, unknown>; utilizing_agents: Array<Record<string, unknown>> }>(`/api/v1/access-policies/memory/${encodeURIComponent(detail.id)}?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(detail.project_id ?? projectId)}`)
   : null;
@@ -1314,6 +1318,39 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
 
           {detail ? (
             <div class="mt-4 space-y-3">
+              <details class="rounded-xl border border-white/10 p-3" data-memory-use-history>
+                <summary class="cursor-pointer">{locale === "ja" ? "利用履歴と証拠" : "Use history and evidence"}</summary>
+                {useHistoryPayload?.ok ? (useHistoryPayload.data.items.length ? useHistoryPayload.data.items.map(use => (
+                  <article class="mt-3 border-t border-white/10 pt-3">
+                    <p>{use.context.task} — {use.context.target}</p>
+                    <p class="text-xs text-white/60">{use.task_id} · {formatDate(use.created_at)} · {use.live ? "verified" : "unverified / inactive"}</p>
+                    <p class="text-xs text-white/60">{locale === "ja" ? `取得: ${use.stages.retrieved ? "あり" : "未確認"} / 採用: ${use.stages.adopted ? "あり" : "未確認"} / 実行: ${use.stages.executed ? "あり" : "未確認"} / 結果: ${use.stages.outcome_confirmed ? "確認済み" : "未確認"}` : `Retrieved: ${use.stages.retrieved} / Adopted: ${use.stages.adopted} / Executed: ${use.stages.executed} / Outcome confirmed: ${use.stages.outcome_confirmed}`}</p>
+                    {use.context.conditions && <p>{use.context.conditions}</p>}
+                    {use.context.constraints && <p>{use.context.constraints}</p>}
+                    {use.evidence.map(e => <details class="mt-2 text-sm"><summary>{e.role} · {e.verification_state}</summary><p class="whitespace-pre-wrap">{e.excerpt || e.reason}</p><code>{e.ref_type === "local_attestation" ? "signed local receipt" : `${e.ref_type}:${e.ref_id}`}</code>{e.ref_type === "task_event" && <a class="ml-2 underline" href={`/api/v1/tasks/${encodeURIComponent(use.task_id)}/events?tenant_id=${encodeURIComponent(tenantId)}`}>{locale === "ja" ? "元のタスクイベント" : "Source task events"}</a>}</details>)}
+                    {use.evaluations.map(e => <p class="text-sm">{e.outcome} · {e.verification_state}</p>)}
+                    {use.live && <form data-use-feedback data-locale={locale} class="mt-3 space-y-2">
+                      <input type="hidden" name="tenant_id" value={tenantId} />
+                      <input type="hidden" name="context_id" value={use.id} />
+                      <input type="hidden" name="supersedes_id" value={use.evaluations.at(-1)?.id ?? ""} />
+                      <label class="block">{locale === "ja" ? "この利用がタスクに与えた影響" : "Contribution of this use"}
+                        <select name="contribution" class="ml-2 rounded bg-slate-900 p-2">
+                          <option value="unknown">{locale === "ja" ? "未確認・寄与なし" : "Unknown / no contribution"}</option>
+                          <option value="positive">{locale === "ja" ? "役立った" : "Useful"}</option>
+                          <option value="negative">{locale === "ja" ? "有害だった" : "Harmful"}</option>
+                        </select>
+                      </label>
+                      <label class="block">{locale === "ja" ? "確認できた寄与と根拠" : "Observed contribution and reason"}
+                        <textarea name="statement" required maxlength="600" rows="2" class="mt-1 w-full rounded bg-slate-900 p-2"></textarea>
+                      </label>
+                      <button type="submit" class="rounded border border-white/20 px-3 py-2">{locale === "ja" ? "利用評価を記録" : "Record assessment"}</button>
+                      <p role="status" data-use-feedback-status class="text-sm"></p>
+                    </form>}
+
+                  </article>
+                )) : <p class="mt-3">{locale === "ja" ? "記録された利用履歴はありません。" : "No recorded uses."}</p>) : <p class="mt-3">{locale === "ja" ? "利用履歴は取得できません。" : "Use history unavailable."}</p>}
+                {useHistoryPayload?.ok && useHistoryPayload.data.next_cursor && <a class="mt-3 block" href={`/api/v1/memory-use-contexts?tenant_id=${encodeURIComponent(tenantId)}&source_id=${encodeURIComponent(detail?.id ?? "")}&before=${encodeURIComponent(useHistoryPayload.data.next_cursor)}`}>{locale === "ja" ? "続きの履歴をJSONで表示" : "More history (JSON)"}</a>}
+              </details>
               <dl class="memory-detail-primary">
                 <div>
                   <dt class="surface-label">{detailCopy.answerImpact}</dt>
@@ -2021,6 +2058,31 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
       if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
       if (response.ok) window.location.reload();
       button.disabled = false;
+    });
+  }
+
+  for (const form of document.querySelectorAll<HTMLFormElement>("[data-use-feedback]")) {
+    let pending: {id:string;serialized:string} | null=null;
+    form.addEventListener("submit",async event=>{
+      event.preventDefault();
+      const values=new FormData(form);
+      const status=form.querySelector<HTMLElement>("[data-use-feedback-status]");
+      const button=form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const body={tenant_id:values.get('tenant_id'),context_id:values.get('context_id'),supersedes_id:values.get('supersedes_id')||null,
+        feedback:{contribution:values.get('contribution'),statement:String(values.get('statement')||'').trim()}};
+      const serialized=JSON.stringify(body);
+      if(!pending||pending.serialized!==serialized) pending={id:crypto.randomUUID(),serialized};
+      if(button) button.disabled=true;
+      try {
+        const response=await fetch('/api/v1/memory-use-evaluations',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...body,id:pending.id})});
+        if(!response.ok) throw new Error('assessment_failed');
+        const receipt=await response.json() as {data?:{verification_state?:string}};
+        if(status) status.textContent=receipt.data?.verification_state==='verified' ? (form.dataset.locale==='ja'?'評価を記録しました。':'Assessment recorded.') : (form.dataset.locale==='ja'?'評価を記録しました。行動・結果の証拠が不足するため順位補正はありません。':'Recorded; action or outcome evidence is insufficient for ranking.');
+        const previous=form.elements.namedItem('supersedes_id') as HTMLInputElement;
+        previous.value=pending.id;pending=null;
+      } catch {
+        if(status) status.textContent=form.dataset.locale==='ja'?'保存を確認できませんでした。再送は同じIDで処理します。':'Save could not be confirmed. Retry uses the same ID.';
+      } finally {if(button) button.disabled=false;}
     });
   }
 

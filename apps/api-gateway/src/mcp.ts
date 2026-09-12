@@ -1,3 +1,5 @@
+import { observeMemoryUse } from "@org-brain/shared";
+import { memoryUseOperation } from "./memory-use-service";
 import {
   HttpError,
   sha256,
@@ -172,6 +174,10 @@ type ToolHandler<Shape extends z.ZodRawShape> = (
 ) => CallToolResult | Promise<CallToolResult>;
 
 const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
+  orgbrain_memory_use_context_record: "Record use of an existing retrieval, not a new memory. payload requires id, usage_item_id, project_id, task_id, work_type, context {task,target,constraints,conditions}, evidence [{role,ref_type,ref_id,span_start,span_end,content_hash}]. Optional supersedes_id corrects a prior context. Verification is performed by the server.",
+  orgbrain_memory_use_history: "Read private use history. payload accepts source_id, project_id, limit (1-100), before (next_cursor). Returns independent retrieval/adoption/execution/outcome states, evidence, evaluations, and live validity.",
+  orgbrain_memory_use_evaluate: "Record an explicit use assessment. payload requires id, context_id and either proof_id or feedback {contribution: positive|negative|unknown,statement}. Supply supersedes_id for correction, optionally effect_event_id. Verified action and outcome evidence remain necessary for any ranking contribution. Never infer usefulness from task success or consent to save.",
+  orgbrain_memory_use_revoke: "Revoke an existing use. payload requires id. Invalidates its context search and ranking contributions without editing the original memory.",
   orgbrain_memories_confirmation_status: "Read the result of the same confirmation after a timeout. Never infer saved from an answer or resend an in-progress confirmation.",
   orgbrain_memory_quality_audit: "Run the read-only memory-quality-audit/v1 evaluator. Returns aggregate coverage, reason-code samples, and no raw memory content.",
   orgbrain_memory_extraction_enqueue: "Enqueue one review-only, same-provider/model extraction from a redacted TurnEvidenceV1 packet. The hook never calls the provider directly.",
@@ -396,6 +402,7 @@ class OrgBrainMcpTools {
       , quality_dimensions: z.record(z.string(), z.number().min(0).max(100)).nullable().optional()
     });
     const learningEventShape = {
+      use_observation: z.record(z.string(), z.unknown()).optional(),
       schema_version: z.union([z.literal(1), z.literal(2)]),
       lesson_type: z.enum(["success", "decision", "failure"]),
       kind: z.enum(["decision", "constraint", "pitfall", "preference", "fact"]).optional(),
@@ -445,6 +452,7 @@ class OrgBrainMcpTools {
       "orgbrain_memory_observe",
       learningEventShape,
       async (event) => {
+        if (event.use_observation) return toContent(observeMemoryUse(event.use_observation));
         if (event.schema_version === 2 && !validateMemoryContractV2Event(event)) {
           throw new HttpError(400, "memory_contract_schema_invalid", "memory contract v2 observation does not match the shared schema");
         }
@@ -928,10 +936,12 @@ class OrgBrainMcpTools {
         generation_id: z.string().max(128).nullable().optional(),
         ranking_profile_id: z.string().max(128).nullable().optional(),
         task_id: z.string().max(128).nullable().optional(),
+        use_snapshot_id: z.string().max(128).optional(),
+        use_context: z.object({task:z.string().max(600).optional(),target:z.string().max(600).optional(),constraints:z.string().max(600).optional(),conditions:z.string().max(600).optional()}).optional(),
         trace_id: z.string().max(128).nullable().optional(),
         external_run_id: z.string().max(256).nullable().optional()
       },
-      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, trace_id, external_run_id }) => {
+      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, use_context, use_snapshot_id, trace_id, external_run_id }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, generation_id || ranking_profile_id ? "admin" : "read", project_id);
         const request = {
@@ -954,6 +964,8 @@ class OrgBrainMcpTools {
           generation_id,
           ranking_profile_id,
           task_id,
+          use_context,
+          use_snapshot_id,
           trace_id,
           external_run_id
         };
@@ -1035,19 +1047,22 @@ class OrgBrainMcpTools {
         project_id: z.string().nullable().optional(),
         business_category_id: z.string().max(128).nullable().optional(),
         work_type: workTypeSchema.nullable().optional(),
+        task_id:z.string().max(128).optional(),
+        use_snapshot_id:z.string().max(128).optional(),
+        use_context:z.object({task:z.string().max(600).optional(),target:z.string().max(600).optional(),constraints:z.string().max(600).optional(),conditions:z.string().max(600).optional()}).optional(),
         q: z.string().min(1).max(500),
         top_k: z.number().int().min(1).max(50).optional(),
         token_budget: z.number().int().min(512).max(16000).optional(),
         search_mode: z.enum(["hybrid_v3", "hybrid_v4"]).optional()
       },
-      async ({ tenant_id, project_id, business_category_id, work_type, q, top_k, token_budget, search_mode }) => {
+      async ({ tenant_id, project_id, business_category_id, work_type, task_id, use_context, use_snapshot_id, q, top_k, token_budget, search_mode }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", project_id);
         return toContent(await retrieveMemoryContext(this.env, {
           tenant_id: tenantId,
           project_id,
           business_category_id,
-          work_type,
+          work_type, task_id, use_context, use_snapshot_id,
           q,
           top_k,
           token_budget,
@@ -1289,6 +1304,22 @@ class OrgBrainMcpTools {
         ));
       }
     );
+
+    for (const [name,operation] of Object.entries({orgbrain_memory_use_context_record:"record",orgbrain_memory_use_history:"history",orgbrain_memory_use_evaluate:"evaluate",orgbrain_memory_use_revoke:"revoke"})) {
+      registerTool(this.server,name,{tenant_id:z.string().optional(),payload:z.record(z.string(),z.unknown())},async({tenant_id,payload})=>{
+        const tenant=normalizeTenant(tenant_id,this.props);
+        let projectId=typeof payload.project_id==='string'?payload.project_id:undefined;
+        if(operation==='evaluate'||operation==='revoke') {
+          const id=operation==='evaluate'?payload.context_id:payload.id;
+          if(typeof id==='string') {
+            const row=await this.env.OPEN_BRAIN_DB.prepare('SELECT project_id FROM memory_use_contexts WHERE tenant_id=? AND principal=? AND id=?').bind(tenant,this.props.principal,id).first<{project_id:string}>();
+            projectId=row?.project_id;
+          }
+        }
+        await this.requirePermission(tenant,operation==="history"?"read":"write",projectId);
+        return toContent(await memoryUseOperation(this.env,tenant,payload,this.props.principal,operation));
+      });
+    }
 
     registerTool(this.server, 
       "orgbrain_memory_usage_state_update",

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { collectMemoryUse } from "./lib/memory-use-collector.mjs";
+import { readMemoryUseTurnRows } from "./lib/memory-learning-transcript.mjs";
+import { taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
 
 import crypto from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -1927,12 +1930,13 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const inputSourceName = firstString(sourceInput, "unknown");
   const sourceName = inputSourceName === "codex-stop" ? "codex" : inputSourceName;
   let activityScope = null;
+  let memoryUseReport = null;
   const finish = async (result) => {
     if (activityScope) {
       const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
       const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
       await new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB).recordHookActivity({
-        ...activityScope, event: inputSourceName, status: { ok: result.ok, mode: result.mode ?? null, skipped: result.skipped ?? null,
+        ...activityScope, event: inputSourceName, status: { memory_use:memoryUseReport, ok: result.ok, mode: result.mode ?? null, skipped: result.skipped ?? null,
           confirmation_candidates: result.confirmation_candidates ?? confirmationQueue.length }
       });
     }
@@ -1955,6 +1959,16 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const workspace = await resolveWorkspaceContext(workspaceRecord, { memoryMode });
   tenantId = workspace.tenantId;
   activityScope = { tenantId, projectId: workspace.projectId };
+  if (inputSourceName === "codex-stop") {
+    const { LocalMemoryStore, DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+    const useStore = new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+    const status = await useStore.useHistory("status");
+    if (status.flags.collect) {
+      const rows = await readMemoryUseTurnRows({transcriptPath:normalizedRecord.metadata?.transcriptPath,turnId:normalizedRecord.metadata?.turnId});
+      memoryUseReport = await collectMemoryUse(useStore,{rows,tenantId,projectId:workspace.projectId,taskId:taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord),turnId:normalizedRecord.metadata?.turnId});
+    }
+  }
+
   captureV2Mode = workspace.memoryCaptureV2Mode ?? captureV2Mode;
   let records;
   let shadowReport = null;

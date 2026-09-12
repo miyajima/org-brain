@@ -1,0 +1,13 @@
+{
+  "version": "memory-use-abc/v1",
+  "evidence_cutoff": "2026-09-01T00:00:00Z",
+  "query_time": "2026-09-02T00:00:00Z",
+  "description": "Synthetic, predeclared retrieval fixtures. Independent task families; no model or external side effects. Relevance labels are fixed before measurement.",
+  "cases": [
+    {"id":"reconcile","group":"context","query":"duplicate transaction","relevant_id":"z-reconcile","body":"Alpha protocol: compare the persisted operation identifier before repeating an uncertain request.","context":{"task":"duplicate transaction","target":"duplicate transaction","constraints":"","conditions":""},"distractors":["duplicate transaction dashboard heading only", "duplicate transaction glossary entry without a recovery procedure"],"rating":"positive"},
+    {"id":"locking","group":"context","query":"concurrent writer","relevant_id":"z-locking","body":"Beta protocol: acquire the shared mutex before replacing the durable checkpoint.","context":{"task":"concurrent writer","target":"concurrent writer","constraints":"","conditions":""},"distractors":["concurrent writer overview heading only", "concurrent writer vocabulary entry without a locking procedure"],"rating":"positive"},
+    {"id":"rollback","group":"rated","query":"broken rollout","relevant_id":"z-rollback","body":"Gamma protocol: restore the last accepted revision and verify the health endpoint.","context":{"task":"broken rollout","target":"broken rollout","constraints":"","conditions":""},"distractors":["broken rollout dashboard heading only", "broken rollout glossary entry without a recovery procedure"],"rating":"positive"},
+    {"id":"integrity","group":"important","query":"checksum manifest","relevant_id":"a-integrity","body":"checksum manifest: calculate SHA256 for each artifact and compare every digest before publication.","distractors":[],"rating":null},
+    {"id":"expiry","group":"important","query":"certificate renewal","relevant_id":"a-expiry","body":"certificate renewal: verify the validity period and restart the dependent service after replacing the certificate.","distractors":[],"rating":null}
+  ]
+}

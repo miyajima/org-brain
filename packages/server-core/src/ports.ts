@@ -185,6 +185,7 @@ export interface MemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEn
   memoryImpactReport: PortFunction;
   createMemoryFailurePattern: PortFunction;
   listMemoryFailurePatterns: PortFunction;
+  memoryUseOperation: PortFunction;
   recordMemoryEffect: PortFunction;
   recordMemoryUsage: PortFunction;
   recordMemoryUsageFromRequest: PortFunction;

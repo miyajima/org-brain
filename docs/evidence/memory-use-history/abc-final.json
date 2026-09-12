@@ -1,0 +1,240 @@
+{
+  "fixture_version": "memory-use-abc/v1",
+  "fixture_sha256": "94a9605202697bb91d162c6efbe5167f6e15ffe6910769012df0d19dc7aef848",
+  "policy": "memory-use-ranking/v1",
+  "runtime_sha256": "59d99be8ec6a23ba4c47dd831de21ea66b81b54b5f0b39b7e7de7c193f8a5087",
+  "evidence_cutoff": "2026-09-01T00:00:00Z",
+  "query_time": "2026-09-02T00:00:00Z",
+  "created_at": "2026-09-12T10:41:29.750Z",
+  "node": "v22.23.2",
+  "backend": "LocalMemoryStore + SQLite; hybrid_v4, dense provider disabled",
+  "modes": {
+    "a": {
+      "recall5": 0.4,
+      "ndcg5": 0.4,
+      "p95_ms": 3.3964999999999463,
+      "samples": 200,
+      "cases": [
+        {
+          "id": "reconcile",
+          "group": "context",
+          "ids": [
+            "d-reconcile-0",
+            "d-reconcile-1"
+          ],
+          "recall5": 0,
+          "ndcg5": 0,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "locking",
+          "group": "context",
+          "ids": [
+            "d-locking-0",
+            "d-locking-1"
+          ],
+          "recall5": 0,
+          "ndcg5": 0,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "rollback",
+          "group": "rated",
+          "ids": [
+            "d-rollback-0",
+            "d-rollback-1"
+          ],
+          "recall5": 0,
+          "ndcg5": 0,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "integrity",
+          "group": "important",
+          "ids": [
+            "a-integrity"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "expiry",
+          "group": "important",
+          "ids": [
+            "a-expiry"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [],
+          "degraded_reasons": []
+        }
+      ]
+    },
+    "b": {
+      "recall5": 1,
+      "ndcg5": 0.7785578521428744,
+      "p95_ms": 3.4052090000000135,
+      "samples": 200,
+      "cases": [
+        {
+          "id": "reconcile",
+          "group": "context",
+          "ids": [
+            "d-reconcile-0",
+            "z-reconcile",
+            "d-reconcile-1"
+          ],
+          "recall5": 1,
+          "ndcg5": 0.6309297535714575,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "locking",
+          "group": "context",
+          "ids": [
+            "d-locking-0",
+            "z-locking",
+            "d-locking-1"
+          ],
+          "recall5": 1,
+          "ndcg5": 0.6309297535714575,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "rollback",
+          "group": "rated",
+          "ids": [
+            "d-rollback-0",
+            "z-rollback",
+            "d-rollback-1"
+          ],
+          "recall5": 1,
+          "ndcg5": 0.6309297535714575,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "integrity",
+          "group": "important",
+          "ids": [
+            "a-integrity"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "expiry",
+          "group": "important",
+          "ids": [
+            "a-expiry"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [],
+          "degraded_reasons": []
+        }
+      ]
+    },
+    "c": {
+      "recall5": 1,
+      "ndcg5": 1,
+      "p95_ms": 3.5800420000000486,
+      "samples": 200,
+      "cases": [
+        {
+          "id": "reconcile",
+          "group": "context",
+          "ids": [
+            "z-reconcile",
+            "d-reconcile-0",
+            "d-reconcile-1"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [
+            "a5e1f0869a9cbb35e166884f260e0c5718d837b73cd3f515b3d95c5166344784"
+          ],
+          "degraded_reasons": []
+        },
+        {
+          "id": "locking",
+          "group": "context",
+          "ids": [
+            "z-locking",
+            "d-locking-0",
+            "d-locking-1"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [
+            "a5e1f0869a9cbb35e166884f260e0c5718d837b73cd3f515b3d95c5166344784"
+          ],
+          "degraded_reasons": []
+        },
+        {
+          "id": "rollback",
+          "group": "rated",
+          "ids": [
+            "z-rollback",
+            "d-rollback-0",
+            "d-rollback-1"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [
+            "a5e1f0869a9cbb35e166884f260e0c5718d837b73cd3f515b3d95c5166344784"
+          ],
+          "degraded_reasons": []
+        },
+        {
+          "id": "integrity",
+          "group": "important",
+          "ids": [
+            "a-integrity"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [],
+          "degraded_reasons": []
+        },
+        {
+          "id": "expiry",
+          "group": "important",
+          "ids": [
+            "a-expiry"
+          ],
+          "recall5": 1,
+          "ndcg5": 1,
+          "snapshots": [],
+          "degraded_reasons": []
+        }
+      ]
+    }
+  },
+  "gates": {
+    "context_recall_b_gt_a": true,
+    "rated_ndcg_c_gt_b": true,
+    "important_regressions": 0,
+    "overall_at_least_a": true,
+    "p95_b_ratio": 1.0025641101133718,
+    "p95_c_ratio": 1.0540385691152967,
+    "p95_within_1_15": true
+  },
+  "offline_task_measures": {
+    "completion_rate": null,
+    "reinvestigations": null,
+    "input_tokens": null,
+    "wall_time": null,
+    "reason": "No real agent task execution; retrieval latency is measured separately. No model or external effect replay."
+  },
+  "conclusion": "Synthetic retrieval evidence only. Real task usefulness remains unconfirmed."
+}

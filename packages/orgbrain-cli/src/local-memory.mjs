@@ -54,6 +54,14 @@ Usage:
   orgbrain group create --name <name> [--slug <slug>] [--description <text>]
   orgbrain group add-member <group-id> --principal <principal> [--role owner|admin|member]
   orgbrain group archive <group-id>
+  orgbrain usage configure --mode off|a|b|c [--collect] [--sync]
+  orgbrain usage status
+  orgbrain usage context [json-payload]
+  orgbrain usage history [--source-id <id>] [--project-id <id>]
+  orgbrain usage evaluate [json-payload]
+  orgbrain usage revoke <context-id>
+  orgbrain usage rebuild [json-payload]
+  orgbrain usage sync [--tenant-id id] [--limit 50] [--watch] [--interval 60]
   orgbrain usage record [json-payload]
   orgbrain usage state [json-payload]
   orgbrain effect record [json-payload]
@@ -353,6 +361,9 @@ async function handleMemory(store, action, rest, args) {
       project_id: args.get("--project-id", null),
       business_category_id: args.get("--business-category-id", null),
       work_type: args.get("--work-type", null),
+      task_id: args.get("--task-id", null),
+      use_snapshot_id:args.get("--use-snapshot-id",null),
+      use_context: {conditions:args.get("--conditions", ""),constraints:args.get("--constraints", "")},
       query,
       limit: Number(args.get("--limit", 10)),
       search_mode: args.get("--search-mode", "hybrid_v4")
@@ -360,6 +371,7 @@ async function handleMemory(store, action, rest, args) {
     const usage = await store.recordUsage({
       tenant_id: tenantId,
       project_id: args.get("--project-id", null),
+      task_id: args.get("--task-id", null),
       capability: "memory_search",
       access_path: "search",
       request_source: "local",
@@ -375,7 +387,7 @@ async function handleMemory(store, action, rest, args) {
         used_state: "unknown"
       }))
     });
-    emit({ results, meta: { usage_id: usage.usage_id, verification_sampled: usage.verification_sampled } });
+    emit({ results, meta: { usage_id: usage.usage_id,usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items,use_history:results[0]?.use_history_meta, verification_sampled: usage.verification_sampled } });
     return;
   }
   if (action === "revise") {
@@ -580,7 +592,12 @@ async function serve(store, args) {
       } else if (request.method === "POST" && path === "/v1/memories/capture") {
         sendJson(response, 201, await store.capture(await readRequestBody(request)));
       } else if (request.method === "POST" && path === "/v1/memories/search") {
-        sendJson(response, 200, await store.search(await readRequestBody(request)));
+        const body=await readRequestBody(request);
+        const results=await store.search(body);
+        if((await store.useHistory('status')).flags.collect) {
+          const usage=await store.recordUsage({tenant_id:body.tenant_id||tenantId,project_id:body.project_id,task_id:body.task_id,requested_work_type:body.work_type,access_path:'search',request_source:'local',items:results.map((x,index)=>({source_type:'memory',source_id:x.memory.id,source_version:x.memory.current_version,rank:index+1,score:x.score.total}))});
+          sendJson(response,200,{results,meta:{usage_id:usage.usage_id,usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items,use_history:results[0]?.use_history_meta}});
+        } else sendJson(response,200,results);
       } else if (request.method === "GET" && path === "/v1/business-categories") {
         sendJson(response, 200, await store.listBusinessCategories(tenantId, {
           includeInactive: requestUrl.searchParams.get("include_inactive") === "true"
@@ -613,7 +630,13 @@ async function serve(store, args) {
       } else if (request.method === "POST" && path === "/v1/groups") {
         const body = await readRequestBody(request);
         sendJson(response, 201, await store.createGroup(body.tenant_id || tenantId, body));
-      } else if (request.method === "POST" && path === "/v1/memory-usage") {
+      } else if (request.method === "GET" && path === "/v1/memory-use-contexts") {
+        sendJson(response,200,await store.useHistory("history",{tenant_id:tenantId,source_id:requestUrl.searchParams.get("source_id"),project_id:requestUrl.searchParams.get("project_id"),before:requestUrl.searchParams.get("before"),limit:Number(requestUrl.searchParams.get("limit"))||20}));
+      } else if (request.method === "POST" && ["/v1/memory-use-contexts","/v1/memory-use-evaluations"].includes(path)) {
+        sendJson(response,201,await store.useHistory(path.endsWith("evaluations")?"evaluate":"record",{...await readRequestBody(request),principal_id:process.env.ORGBRAIN_USE_PRINCIPAL||"local"}));
+      } else if (request.method === "POST" && /^\/v1\/memory-use-contexts\/[^/]+\/revoke$/.test(path)) {
+        sendJson(response,200,await store.useHistory("revoke",{...await readRequestBody(request),principal_id:process.env.ORGBRAIN_USE_PRINCIPAL||"local",id:decodeURIComponent(path.split("/")[3])}));
+      } else if (request.method === "POST" && ["/v1/memory-usage","/v1/memory-usages"].includes(path)) {
         sendJson(response, 201, await store.recordUsage(await readRequestBody(request)));
       } else if (request.method === "POST" && path === "/v1/memory-effects") {
         sendJson(response, 201, await store.recordEffect(await readRequestBody(request)));
@@ -747,6 +770,32 @@ async function main() {
     await handleCategory(store, action, rest, args);
   } else if (["profile", "organization", "user", "group"].includes(command)) {
     await handleDirectory(store, command, action, rest, args);
+  } else if (command === "usage" && action === "sync") {
+    const syncOptions={apiBase:process.env.ORGBRAIN_API_URL || process.env.ORGBRAIN_API_BASE,apiKey:process.env.ORGBRAIN_API_KEY,tenantId:args.get("--tenant-id","default"),limit:Number(args.get("--limit",50))};
+    const watch=args.flags.has("--watch");
+    const interval=Number(args.get("--interval",60));
+    if(!Number.isFinite(interval)||interval<5||interval>3600) throw new Error("sync_interval_must_be_5_to_3600_seconds");
+    const controller=new AbortController();
+    const stop=()=>controller.abort();
+    process.once('SIGTERM',stop);process.once('SIGINT',stop);
+    try {
+      let first=true;
+      do {
+        const result=await store.syncMemoryUse(syncOptions);
+        if(first||result.sent||result.failed) emit(result);
+        first=false;
+        if(!watch||controller.signal.aborted) break;
+        const {setTimeout:delay}=await import('node:timers/promises');
+        await delay(interval*1000,undefined,{signal:controller.signal}).catch(error=>{if(error.name!=='AbortError')throw error;});
+      } while(!controller.signal.aborted);
+    } finally {process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);}  } else if (command === "usage" && ["configure","status","context","history","evaluate","revoke","rebuild"].includes(action)) {
+    const payload = ["context","evaluate","rebuild"].includes(action) ? await readStructuredPayload(args, rest) : {};
+    emit(await store.useHistory(action === "context" ? "record" : action, {
+      ...payload, tenant_id:args.get("--tenant-id",payload.tenant_id || "default"), principal_id:args.get("--principal",payload.principal_id || process.env.ORGBRAIN_USE_PRINCIPAL || "local"),
+      ...(action === "configure" ? {mode:args.get("--mode","off"),collect:args.flags.has("--collect"),sync:args.flags.has("--sync")} : {}),
+      ...(action === "history" ? {source_id:args.get("--source-id",null),project_id:args.get("--project-id",null),before:args.get("--before",null),limit:Number(args.get("--limit",20))} : {}),
+      ...(action === "revoke" ? {id:rest[0]} : {})
+    }));
   } else if (command === "usage" && action === "record") {
     emit(await store.recordUsage(await readStructuredPayload(args, rest)));
   } else if (command === "usage" && action === "state") {

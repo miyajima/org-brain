@@ -32,6 +32,6 @@ test("generate the MCP tool manifest fixture", async () => {
     writeFile(new URL("tool-manifest.json", directory), serialized, "utf8"),
     writeFile(new URL("tool-manifest.sha256", directory), `${digest}\n`, "utf8")
   ]);
-  expect(tools).toHaveLength(51);
+  expect(tools).toHaveLength(55);
   expect(digest).toMatch(/^[0-9a-f]{64}$/u);
 });
