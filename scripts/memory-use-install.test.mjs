@@ -14,6 +14,7 @@ test('installed CLI and strict MCP expose usable C and immutable assessments',as
     await f.service.evaluate({id:'evaluation',context_id:'context',proof_id:'context:2'});
     const env={...getDefaultEnvironment(),ORGBRAIN_LOCAL_DB:f.store.dbPath};
     const run=(...args)=>JSON.parse(execFileSync(process.execPath,[cli,...args],{encoding:'utf8',env,stdio:['ignore','pipe','pipe']}));
+    assert.equal(run('usage','configure','--mode','c','--collect').collect,true);
     assert.equal(run('usage','status').flags.ranking,true);
     const result=run('memory','search','duplicate transaction','--tenant-id','t','--project-id','p','--work-type','implementation','--task-id','new-task');
     assert.equal(result.results[0].memory.id,f.id);

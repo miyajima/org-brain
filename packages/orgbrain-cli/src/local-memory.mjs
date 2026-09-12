@@ -128,7 +128,7 @@ function parseArgs(argv) {
       continue;
     }
     const [name, inline] = arg.split("=", 2);
-    if (["--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
+    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
       flags.add(name);
       continue;
     }
