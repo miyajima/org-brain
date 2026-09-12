@@ -173,14 +173,15 @@ test("local MCP confirmation survives a store restart and never persists the raw
       approved: true
     });
     assert.equal(confirmed.saved, true);
-    await assert.rejects(
-      callLocalMcpTool(restartedStore, "orgbrain_memories_confirm", {
-        tenant_id: "default",
-        confirmation_token: proposal.confirmation_token,
-        approved: true
-      }),
-      /confirmation_not_found/u
-    );
+    const retried = await callLocalMcpTool(restartedStore, "orgbrain_memories_confirm", {
+      tenant_id: "default", confirmation_token: proposal.confirmation_token, approved: true
+    });
+    assert.deepEqual(retried, confirmed);
+    const status = await callLocalMcpTool(restartedStore, "orgbrain_memories_confirmation_status", {
+      tenant_id: "default", confirmation_token: proposal.confirmation_token
+    });
+    assert.equal(status.status, "completed");
+    assert.equal(status.memory_id, confirmed.memory_id);
   } finally {
     await ctx.cleanup();
   }

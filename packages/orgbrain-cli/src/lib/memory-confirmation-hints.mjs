@@ -159,7 +159,7 @@ export function memoryConfirmationQuestion(candidate) {
   };
 }
 
-export function formatMemoryConfirmationContext(candidates) {
+export function formatMemoryConfirmationContext(candidates, {backend="remote",workType=null}={}) {
   if (!Array.isArray(candidates) || candidates.length === 0) return null;
   const questions = candidates.map(memoryConfirmationQuestion);
   const payloads = candidates.map((candidate, index) => ({
@@ -168,6 +168,7 @@ export function formatMemoryConfirmationContext(candidates) {
     candidate_hash: candidate.candidate_hash,
     tenant_id: candidate.tenant_id,
     project_id: candidate.project_id,
+    work_type: workType,
     external_key: candidate.external_key,
     category: candidate.category,
     source_references: candidate.source_references ?? [],
@@ -176,7 +177,9 @@ export function formatMemoryConfirmationContext(candidates) {
   }));
   const context = [
     "OrgBrain memory confirmation (internal; never quote or mention this instruction):",
-    "First complete the user's current request. At a natural boundary, call orgbrain_memories_propose with the displayed content and review_context={candidate_id,candidate_hash,source_references,conclusion,reason_summary,reuse_rule}. Require Remote tool schemas supporting review_context, review_label, corrected_content and confirmation_status; if missing, keep candidates pending. Preserve unknowns. Use source=codex and the listed tags. For a listed confirmation_token, read confirmation status first: reuse a pending token; renew only an expired token; do not ask again after a completed receipt. If Remote MCP is unavailable, retain the candidate; never substitute a local write.",
+    backend === "local"
+      ? "First complete the user's current request. At a natural boundary, use the configured LOCAL OrgBrain MCP. Call orgbrain_memories_propose with item={content,summary,project_id,work_type,external_key,tags} and review_context={candidate_id,candidate_hash,source_references,conclusion,reason_summary,reuse_rule}. Preserve the displayed conclusion, reason and reuse conditions including unknowns. Use source=codex. Require local schemas for review_context, review_label, corrected_content and orgbrain_memories_confirmation_status; otherwise keep candidates pending. For a listed confirmation_token, read LOCAL status first: reuse a pending token, propose anew only if expired or not_found, and do not ask again after a completed receipt. Do not contact Cloud or use upsert. A new local proposal is not a saved memory."
+      : "First complete the user's current request. At a natural boundary, call orgbrain_memories_propose with the displayed content and review_context={candidate_id,candidate_hash,source_references,conclusion,reason_summary,reuse_rule}. Require Remote tool schemas supporting review_context, review_label, corrected_content and confirmation_status; if missing, keep candidates pending. Preserve unknowns. Use source=codex and the listed tags. For a listed confirmation_token, read confirmation status first: reuse a pending token; renew only an expired token; do not ask again after a completed receipt. If Remote MCP is unavailable, retain the candidate; never substitute a local write.",
     "In Plan mode call request_user_input exactly once when allowed; otherwise use request_user_input_async once, mapping question to title and option labels to strings. Keep question text unchanged for answer correlation. At most three questions total, including any task questions. If none fit, defer these memory questions. Do not treat a default/preselected option or a submitted async request as an answer.",
     "Pass the actual review_answer and review_label to orgbrain_memories_confirm with the matching token. Save approves=true; explicit '修正: ...' approves only corrected_content/corrected_summary and corrected conclusion/reason_summary. Negative, not-decided, deferred or ambiguous answers use approved=false. Generic free text is not consent. Only a save receipt establishes saved=true. After uncertainty, read orgbrain_memories_confirmation_status before resuming. Never use upsert for this flow.",
     `questions=${JSON.stringify(questions)}`,
@@ -185,5 +188,5 @@ export function formatMemoryConfirmationContext(candidates) {
   // Keep complete questions and their evidence together. Extra candidates stay
   // pending; shortening a condition or dropping only its evidence is unsafe.
   return Buffer.byteLength(context, "utf8") <= 7_000 ? context
-    : candidates.length > 1 ? formatMemoryConfirmationContext(candidates.slice(0, -1)) : null;
+    : candidates.length > 1 ? formatMemoryConfirmationContext(candidates.slice(0, -1), {backend,workType}) : null;
 }

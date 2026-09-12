@@ -7,12 +7,12 @@
 Node.js 22.13以上を使用します。この作業で作ったパッケージを指定してインストールできます。
 
 ```sh
-npm install --global /Users/miyajimakazuhiro/.codex/worktrees/b03c/org-brain/.local/releases/memory-use-history-c/orgbrain-0.1.0.tgz
+npm install --global /Users/miyajimakazuhiro/.codex/worktrees/b03c/org-brain/.local/releases/local-confirmation-v27-final/orgbrain-0.1.0.tgz
 orgbrain usage configure --mode c --collect
 orgbrain usage status
 ```
 
-`--db /absolute/path/memory.sqlite` または `ORGBRAIN_LOCAL_DB` で試用先を指定できます。既存DBにはスキーマ26の追加テーブルが作られます。記憶本文・既存のutility_score・過去の実験結果は変更しません。
+`--db /absolute/path/memory.sqlite` または `ORGBRAIN_LOCAL_DB` で試用先を指定できます。既存DBにはスキーマ27の追加テーブルが作られます。記憶本文・既存のutility_score・過去の実験結果は変更しません。
 
 | モード | 文脈検索 | 利用評価による補正 |
 |---|---|---|
@@ -29,6 +29,8 @@ orgbrain usage history --tenant-id TENANT --project-id PROJECT --limit 20
 ```
 
 Cの補正にはプロジェクト・作業種別・タスクIDが必要です。不明な場合は補正ゼロです。作業種別は `implementation/review/debug/proposal/support/research/operations/other`。条件付きの履歴には `--conditions` と `--constraints` で一致する条件を渡します。履歴・抑制済み記憶を明示して検索する場合は従来の経路を使います。
+
+ローカルの保存確認から保存・再検索までの手順と検証は[ローカル保存確認](LOCAL_MEMORY_CONFIRMATION.md)を参照してください。
 
 ## Codexでの自動収集
 

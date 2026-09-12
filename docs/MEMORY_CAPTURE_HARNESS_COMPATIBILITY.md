@@ -69,7 +69,8 @@ Changing the global harness remains unnecessary and outside this contract.
 only local confirmation candidates for new-memory learning and never captures
 new memory, writes its capture outbox, or enqueues extraction, even if extraction
 is enabled in the environment.
-The subsequent interactive Remote MCP write requires the actual human answer.
+The subsequent interactive MCP write requires the actual human answer. The
+configured backend determines whether that write is local or remote.
 
 `memory-review-feedback/v1` links the immutable confirmation ID, candidate hash,
 original source spans/roles/hashes, actual answer, correction, and save receipt.
@@ -78,7 +79,10 @@ labels; only `accepted` or an explicit `修正: …` answer authorizes persisten
 The confirmation API updates body, summary and search text together. Repeating
 the same answered confirmation returns its receipt; a different answer requires
 a new proposal. Read `orgbrain_memories_confirmation_status` after uncertainty.
-Remote schema support is required before asking; no local canonical fallback.
+For Cloud mode, Remote schema support is required before asking; failure never
+silently falls back to a local write. Explicit local mode uses the local MCP's
+review-aware propose/confirm/status contract. UserPromptSubmit selects the matching
+instructions. Global Astra Harness instructions remain unchanged.
 
 `GET /v1/memory-reviews` returns only the caller's history, optionally scoped by
 project, with a stable cursor. The existing `/reviews` page exposes original
@@ -122,3 +126,29 @@ closed. Existing confirmation limits and held experiments remain unchanged.
 See [use-history operation](MEMORY_USE_HISTORY.md) and
 [validation](MEMORY_USE_HISTORY_VALIDATION.md). Migration `0041` and Local schema
 26 are additive. Global harness instructions require no changes.
+
+## Local confirmation receipts (schema 27)
+
+Local `orgbrain_memories_propose` preserves the displayed conclusion, reason,
+reuse conditions and source references in `review_context`. The matching confirm
+requires the actual `review_answer`; a save selection does not authorize changing
+the displayed content. Explicit corrections require corrected content. Decline,
+undecided and ambiguous answers never authorize a write.
+
+The memory and its immutable receipt are committed in one SQLite transaction.
+The same token and answer return the same receipt after restart; changing the
+answer requires a new proposal. `orgbrain_memories_confirmation_status` reads
+pending/expired proposals or completed receipts. Raw confirmation tokens are not
+stored in these tables. Existing hook receipt processing correlates the candidate,
+question, answer and save result for both backends.
+
+`confirm` mode also injects the stateless observe instruction. Stop remains silent
+and queues candidates only; the next substantive prompt may offer one batch of up
+to three questions per session. This is conditional collection, not a question on
+every turn and not approval-free storage. The current session must have loaded the
+configured local MCP before it can execute the local tools.
+
+`scripts/local-memory-confirmation-flow.test.mjs` exercises actual hook subprocesses
+and strict local MCP across restarts with network access replaced by a failing
+sentinel. Question answers in this test are fixtures, not evidence that a live
+Codex user has seen or accepted a question.

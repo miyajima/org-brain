@@ -15,7 +15,9 @@ metadata:
 Use this skill when the user asks to read/write OrgBrain memory, create tasks, or inspect task events.
 
 ## Rules
-1. Prefer MCP tools over direct HTTP calls.
+1. Prefer MCP tools over direct HTTP calls. Honor an explicitly selected local backend:
+   use the configured local MCP for retrieval and propose/confirm/status. Do not
+   switch to Cloud or treat local mode as an automatic fallback for Cloud errors.
 2. Never use local `~/.openclaw/memory/main.sqlite` as source of truth.
 3. Use `tenant_id="default"` unless the user explicitly specifies another tenant.
 4. For OpenClaw-derived memory writes, set `source="openclaw"` and stable `external_key`.

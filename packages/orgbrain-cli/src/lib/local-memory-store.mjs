@@ -38,7 +38,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 26;
+export const MEMORY_SCHEMA_VERSION = 27;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -688,6 +688,10 @@ function createCanonicalTables(db) {
       payload_json TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS local_mcp_confirmation_receipts (
+      token_hash TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, request_hash TEXT NOT NULL,
+      result_json TEXT NOT NULL, original_json TEXT NOT NULL, created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_local_mcp_confirmations_expiry
       ON local_mcp_confirmations(expires_at);
@@ -4714,7 +4718,21 @@ export class LocalMemoryStore {
     }
   }
 
-  async consumeMcpConfirmation({ token, tenant_id: tenantId = "default", approved, buildCaptureInput }) {
+  async mcpConfirmationStatus({token, tenant_id:tenantId='default'}) {
+    await this.init();
+    const db=this.open({readOnly:true});
+    try {
+      const tokenHash=confirmationTokenHash(token);
+      const receipt=db.prepare('SELECT result_json FROM local_mcp_confirmation_receipts WHERE tenant_id=? AND token_hash=?').get(tenantId,tokenHash);
+      if(receipt) return {...JSON.parse(receipt.result_json),status:'completed'};
+      const row=db.prepare('SELECT payload_json,expires_at FROM local_mcp_confirmations WHERE tenant_id=? AND token_hash=?').get(tenantId,tokenHash);
+      if(!row) throw new Error('confirmation_not_found');
+      return {tenant_id:tenantId,candidate_id:JSON.parse(row.payload_json).review_context?.candidate_id??null,
+        status:row.expires_at<=Date.now()?'expired':'pending',expires_at:row.expires_at,saved:null};
+    } finally {db.close();}
+  }
+
+  async consumeMcpConfirmation({ token, tenant_id: tenantId = "default", approved, buildCaptureInput, requestHash, validateConfirmation, buildReceipt }) {
     await this.init();
     const db = this.open();
     let transactionOpen = false;
@@ -4722,10 +4740,17 @@ export class LocalMemoryStore {
     let payload;
     let saved = null;
     let captureInput = null;
+    let receipt=null;
     try {
       db.exec("BEGIN IMMEDIATE");
       transactionOpen = true;
       const tokenHash = confirmationTokenHash(token);
+      const existing=db.prepare('SELECT request_hash,result_json FROM local_mcp_confirmation_receipts WHERE tenant_id=? AND token_hash=?').get(tenantId,tokenHash);
+      if(existing) {
+        if(existing.request_hash!==requestHash) throw new Error('confirmation_answer_changed');
+        db.exec('COMMIT');transactionOpen=false;
+        return {receipt:JSON.parse(existing.result_json),replayed:true};
+      }
       const row = db.prepare(
         `SELECT payload_json, expires_at
          FROM local_mcp_confirmations
@@ -4733,6 +4758,7 @@ export class LocalMemoryStore {
       ).get(tokenHash, tenantId);
       if (!row) throw new Error("confirmation_not_found");
       payload = JSON.parse(row.payload_json);
+      if (validateConfirmation) validateConfirmation(payload);
       if (Number(row.expires_at) <= Date.now()) {
         db.prepare("DELETE FROM local_mcp_confirmations WHERE token_hash = ?").run(tokenHash);
         expired = true;
@@ -4743,6 +4769,10 @@ export class LocalMemoryStore {
         captureInput = buildCaptureInput(payload);
         saved = this.captureIntoDatabase(db, captureInput);
         db.prepare("DELETE FROM local_mcp_confirmations WHERE token_hash = ?").run(tokenHash);
+      }
+      if(!expired && buildReceipt) {
+        receipt=buildReceipt(payload,saved);
+        db.prepare('INSERT INTO local_mcp_confirmation_receipts VALUES(?,?,?,?,?,?)').run(tokenHash,tenantId,requestHash,JSON.stringify(receipt),JSON.stringify(payload),Date.now());
       }
       db.exec("COMMIT");
       transactionOpen = false;
@@ -4757,7 +4787,7 @@ export class LocalMemoryStore {
     if (saved && captureInput) {
       saved = await this.attachDenseProjection(saved, nullableString(captureInput.tenant_id, 128) || "default");
     }
-    return { payload, saved };
+    return { payload, saved, receipt };
   }
 
   async captureBatch(inputs) {

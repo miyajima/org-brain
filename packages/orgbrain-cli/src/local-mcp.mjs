@@ -1,4 +1,6 @@
 import { observeMemoryUse } from "./lib/memory-use-collector.mjs";
+import { classifyMemoryReviewAnswer, MEMORY_REVIEW_LABELS } from "../../shared/src/memory-usefulness-runtime.mjs";
+import { useHash } from "../../shared/src/memory-use-history-runtime.mjs";
 import { randomUUID } from "node:crypto";
 import {
   createMcpHandler,
@@ -35,6 +37,7 @@ export const LOCAL_MCP_PROTOCOL_VERSION = "2026-07-28";
 export const LOCAL_MCP_COMPAT_PROTOCOL_VERSION = "2025-11-25";
 
 const TOOL_DEFINITIONS = [
+  {name:"orgbrain_memories_confirmation_status",description:"Read a local proposal or durable save receipt after an uncertain response. Does not save or ask again.",inputSchema:{type:"object",required:["confirmation_token"],properties:{tenant_id:{type:"string"},confirmation_token:{type:"string",minLength:1,maxLength:64}}}},
   {
     name: "orgbrain_memories_propose",
     description: "Propose one local memory and inferred rationale without persisting it. Show the conclusion and reason to the user before confirming.",
@@ -44,6 +47,11 @@ const TOOL_DEFINITIONS = [
       properties: {
         tenant_id: { type: "string" },
         source: { type: "string" },
+        review_context: {type:"object",required:["candidate_id","candidate_hash","source_references"],properties:{
+          candidate_id:{type:"string",maxLength:128},candidate_hash:{type:"string",pattern:"^[a-f0-9]{64}$"},
+          source_references:{type:"array",maxItems:8,items:{type:"object"}},
+          conclusion:{type:"string",maxLength:2000},reason_summary:{type:"string",maxLength:2000},reuse_rule:{type:"string",maxLength:2000}
+        }},
         actor_type: { type: "string" },
         actor_id: { type: "string" },
         item: {
@@ -75,10 +83,13 @@ const TOOL_DEFINITIONS = [
         tenant_id: { type: "string" },
         confirmation_token: { type: "string", minLength: 1, maxLength: 64 },
         approved: { type: "boolean" },
+        review_label:{type:"string",enum:MEMORY_REVIEW_LABELS},
+        review_answer:{type:"string",maxLength:2000},
         corrected_content: { type: "string", maxLength: 20000 },
         corrected_summary: { type: "string", maxLength: 1000 },
         conclusion: { type: "string", maxLength: 240 },
         reason_summary: { type: "string", maxLength: 500 },
+        reuse_rule: { type: "string", maxLength: 2000 },
         decision_type: { type: "string", enum: ["adopt", "reject", "prioritize", "diagnose", "workaround", "policy"] },
         status: { type: "string", maxLength: 64 },
         entities: { type: "array", maxItems: 8, items: { type: "object" } },
@@ -600,6 +611,28 @@ function normalizedEvidence(value) {
   });
 }
 
+function localReviewContext(raw) {
+  if(raw===undefined) return undefined;
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)||typeof raw.candidate_id!=='string'||!raw.candidate_id||raw.candidate_id.length>128
+    ||!(/^[a-f0-9]{64}$/u.test(raw.candidate_hash))||!Array.isArray(raw.source_references)||raw.source_references.length>8) throw new Error('invalid_review_context');
+  const value={candidate_id:raw.candidate_id,candidate_hash:raw.candidate_hash,
+    source_references:raw.source_references.map(ref=>{
+      if(!ref||typeof ref!=='object'||typeof ref.ref!=='string'||!ref.ref||ref.ref.length>512) throw new Error('invalid_review_source');
+      const structuralRef=/^turn:(?:sha256:)?[a-f0-9]{64}#[A-Za-z0-9._:-]+$/u.test(ref.ref);
+      const result={ref:structuralRef?ref.ref:screenInteractiveMemory(ref.ref,'review_source')};
+      for(const key of ['type','span_id','parent_span_id','role','content_hash']) if(ref[key]!=null) {
+        if(typeof ref[key]!=='string'||ref[key].length>128) throw new Error('invalid_review_source');
+        result[key]=key==='content_hash'&&/^(?:sha256:)?[a-f0-9]{64}$/u.test(ref[key])?ref[key]:screenInteractiveMemory(ref[key],'review_source');
+      }
+      return result;
+    })};
+  for(const key of ['conclusion','reason_summary','reuse_rule']) if(raw[key]!=null) {
+    if(typeof raw[key]!=='string'||raw[key].length>2000) throw new Error('invalid_review_context');
+    value[key]=screenInteractiveMemory(raw[key],key);
+  }
+  return value;
+}
+
 async function proposeLocalMemory(store, input) {
   if (!input?.item || typeof input.item !== "object") throw new Error("item_required");
   const tenantId = boundedString(input.tenant_id, 128, "default");
@@ -615,7 +648,15 @@ async function proposeLocalMemory(store, input) {
     business_category_id: boundedString(input.item.business_category_id, 128),
     work_type: boundedString(input.item.work_type, 32)
   };
+  const reviewContext=localReviewContext(input.review_context);
   const proposedRationale = rationaleProposal(item);
+  if(reviewContext) {
+    proposedRationale.conclusion=reviewContext.conclusion??item.summary??item.content;
+    proposedRationale.reason_summary=reviewContext.reason_summary??'未確認';
+    item.content=[proposedRationale.conclusion,`理由: ${proposedRationale.reason_summary}`,`再利用条件: ${reviewContext.reuse_rule??'未確認'}`].join('\n');
+    item.summary=proposedRationale.conclusion.slice(0,1000);
+    item.external_key=item.external_key||`review:${reviewContext.candidate_id}`;
+  }
   const now = Date.now();
   const token = randomUUID();
   const payload = {
@@ -623,6 +664,7 @@ async function proposeLocalMemory(store, input) {
     source: boundedString(input.source, 64, "local-mcp"),
     actor_type: boundedString(input.actor_type, 64, "principal"),
     actor_id: boundedString(input.actor_id, 128, process.env.USER || "local-user"),
+    review_context:reviewContext,
     proposed_memory: item,
     proposed_rationale: proposedRationale,
     proposed_entities: normalizedEntities(input.entities),
@@ -640,6 +682,7 @@ async function proposeLocalMemory(store, input) {
     tenant_id: tenantId,
     source: payload.source,
     confirmation_token: token,
+    candidate_id:reviewContext?.candidate_id??null,
     proposed_memory: item,
     proposed_rationale: { ...proposedRationale, confirmation_state: "inferred_unconfirmed" },
     proposed_entities: payload.proposed_entities,
@@ -653,10 +696,36 @@ async function confirmLocalMemory(store, input) {
   if (!token) throw new Error("confirmation_token_required");
   let rationaleId = null;
   let confirmationState = null;
+  let reviewLabel=null;
+  const answer=input.review_answer==null?null:screenInteractiveMemory(input.review_answer,'review_answer');
   const consumed = await store.consumeMcpConfirmation({
     token,
     tenant_id: tenantId,
     approved: input.approved,
+    requestHash:await useHash({...input,tenant_id:tenantId}),
+    validateConfirmation(payload) {
+      if(typeof input.approved!=='boolean') throw new Error('confirmation_approval_required');
+      if(answer&&answer.length>2000) throw new Error('invalid_review_answer');
+      const answerLabel=answer===null?null:classifyMemoryReviewAnswer(answer);
+      const modified=Boolean(input.corrected_content||input.corrected_summary
+        ||input.conclusion&&input.conclusion!==payload.proposed_rationale.conclusion
+        ||input.reason_summary&&input.reason_summary!==payload.proposed_rationale.reason_summary
+        ||input.decision_type&&input.decision_type!==payload.proposed_rationale.decision_type
+        ||input.reuse_rule!=null&&input.reuse_rule!==payload.review_context?.reuse_rule
+        ||input.entities?.length||input.evidence?.length);
+      reviewLabel=input.review_label??answerLabel??(input.approved?(modified?'corrected':'accepted'):'not_needed');
+      if(!MEMORY_REVIEW_LABELS.includes(reviewLabel)||input.review_label&&answerLabel&&input.review_label!==answerLabel) throw new Error('review_label_mismatch');
+      if(payload.review_context&&!answer) throw new Error('review_answer_required');
+      if(input.approved&&!['accepted','corrected'].includes(reviewLabel)||!input.approved&&['accepted','corrected'].includes(reviewLabel)) throw new Error('review_not_approved');
+      if(input.approved&&answerLabel&&!['accepted','corrected'].includes(answerLabel)) throw new Error('review_not_approved');
+      if(payload.review_context&&input.approved&&modified&&answerLabel!=='corrected') throw new Error('correction_not_approved');
+      if(payload.review_context&&input.approved&&reviewLabel==='corrected'&&!input.corrected_content) throw new Error('corrected_content_required');
+    },
+    buildReceipt(payload,saved) {
+      return {tenant_id:tenantId,approved:input.approved,saved:input.approved===true,
+        ...(saved?{memory_id:saved.memory_id,rationale_id:rationaleId,confirmation_state:confirmationState}:{}),
+        candidate_id:payload.review_context?.candidate_id??null,review_label:reviewLabel,review_answer:answer??''};
+    },
     buildCaptureInput(payload) {
       const conclusion = boundedString(input.conclusion || input.corrected_summary || input.corrected_content, 240, payload.proposed_rationale.conclusion);
       const reason = boundedString(input.reason_summary, 500, payload.proposed_rationale.reason_summary);
@@ -679,12 +748,15 @@ async function confirmLocalMemory(store, input) {
         ...payload.proposed_memory,
         tenant_id: tenantId,
         source: payload.source,
+        source_references:payload.review_context?.source_references??[],
         actor_type: payload.actor_type,
         actor_id: payload.actor_id,
         kind: "semantic",
         content: input.corrected_content ? screenInteractiveMemory(input.corrected_content, "corrected_content") : corrected ? `${conclusion}\n理由: ${reason}` : payload.proposed_memory.content,
         summary: input.corrected_summary ? screenInteractiveMemory(input.corrected_summary, "corrected_summary") : conclusion,
         rationale: reason,
+        reuse_rule:input.reuse_rule!=null?screenInteractiveMemory(input.reuse_rule,'reuse_rule')
+          :input.corrected_content?null:payload.review_context?.reuse_rule??null,
         entities: entities.map((entity) => entity.name),
         evidence: [...evidence, {
           evidence_type: "memory",
@@ -695,17 +767,7 @@ async function confirmLocalMemory(store, input) {
       });
     }
   });
-  if (input.approved !== true) {
-    return { tenant_id: tenantId, approved: false, saved: false };
-  }
-  return {
-    tenant_id: tenantId,
-    approved: true,
-    saved: true,
-    memory_id: consumed.saved.memory_id,
-    rationale_id: rationaleId,
-    confirmation_state: confirmationState
-  };
+  return consumed.receipt;
 }
 
 function captureDefaults(input) {
@@ -741,6 +803,7 @@ function captureDefaults(input) {
 
 async function callTool(store, name, input) {
   const tenantId = input.tenant_id || "default";
+  if (name === "orgbrain_memories_confirmation_status") return store.mcpConfirmationStatus({token:boundedString(input.confirmation_token,64),tenant_id:tenantId});
   if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
   if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
