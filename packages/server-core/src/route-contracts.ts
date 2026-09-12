@@ -35,6 +35,8 @@ const SUCCESS_STATUS_OVERRIDES: Readonly<Record<string, number>> = {
   "POST /v1/memory-impact-executions": 201,
   "POST /v1/memory-impact-executions/:externalRunId/report": 201,
   "POST /v1/business-categories": 201,
+  "POST /v1/memory-use-contexts": 201,
+  "POST /v1/memory-use-evaluations": 201,
   "POST /v1/memory-effects": 201,
   "POST /v1/memory-usages": 201,
   "POST /v1/memory-failure-patterns": 201,

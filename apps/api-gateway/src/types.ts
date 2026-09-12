@@ -43,6 +43,13 @@ export type Env = {
   AI?: Ai;
   MEMORY_VECTOR_INDEX?: Vectorize;
   MEMORY_VECTOR_INDEX_V3?: Vectorize;
+  ORGBRAIN_USE_ATTESTATION_KEY?: string;
+  ORGBRAIN_USE_ATTESTATION_TENANT?: string;
+  ORGBRAIN_USE_ATTESTATION_PRINCIPAL?: string;
+  ORGBRAIN_USE_COLLECT?: string;
+  ORGBRAIN_USE_CONTEXT?: string;
+  ORGBRAIN_USE_RANKING?: string;
+  ORGBRAIN_USE_SYNC?: string;
   HYBRID_V3_MODE?: "off" | "shadow" | "canary" | "on";
   HYBRID_V4_MODE?: "off" | "shadow" | "canary" | "on";
   HYBRID_V3_SHADOW_SAMPLE_RATE?: string;

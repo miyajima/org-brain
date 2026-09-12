@@ -1,3 +1,5 @@
+import { memoryUseFlags } from '@org-brain/shared';
+import { memoryUseService } from './memory-use-service';
 import { HttpError, collapseWhitespace, sha256, ulid, type MemoryWorkType } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
@@ -1784,6 +1786,15 @@ export async function upsertAutoDecisionMemory(env: Env, args: {
   }
 }
 
+export async function readDecisionMemoryForUse(env:Env,tenantId:string,id:string,principal:string) {
+  let memory:DecisionMemory;
+  try {memory=await loadDecisionMemoryById(env,tenantId,id);} catch(error) {if(error instanceof HttpError && error.status===404)return null;throw error;}
+  if(memory.status!=='active'||!['user_confirmed','user_corrected','reviewed'].includes(memory.confirmationState)||!validAt(memory,Date.now())) return null;
+  if(!(await filterReadableDecisionMemories(env,tenantId,[memory],principal,null,principal)).length) return null;
+  const version=await env.OPEN_BRAIN_DB.prepare('SELECT count(*) AS n FROM decision_memory_versions WHERE tenant_id=? AND decision_memory_id=?').bind(tenantId,id).first<{n:number}>();
+  return {id,kind:'decision_memory',memory_kind:'decision',current_version:version?.n||null,project_id:memory.projectId,summary:memory.title,content_preview:memory.decision.slice(0,600),created_at:memory.createdAt};
+}
+
 export async function searchDecisionMemories(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const request = parseSearchDecisionRequest(rawBody, options.principal);
   await validateBusinessClassification(
@@ -1805,6 +1816,13 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
     limit: candidateIds ? Math.max(candidateIds.length, request.limit) : request.limit,
     includeReviewCandidates: Boolean(request.confirmationState)
   });
+  const useCandidates = memoryUseFlags(env as unknown as Record<string,unknown>).context && options.principal
+    ? await memoryUseService(env,request.tenantId,options.principal).search({query:q,project_id:request.projectId,work_type:request.workType,task_id:request.taskId,
+      context:(rawBody as {use_context?:Record<string,string>}).use_context,source_types:['decision_memory'],context_enabled:true,limit:20}) : null;
+  for(const candidate of useCandidates?.results??[]) {
+    if(!loaded.some(memory=>memory.id===candidate.id)) loaded.push(await loadDecisionMemoryById(env,request.tenantId,candidate.id));
+    if(candidateIds&&!candidateIds.includes(candidate.id)) candidateIds.push(candidate.id);
+  }
   const candidateOrder = new Map((candidateIds ?? []).map((id, index) => [id, index]));
   const memories = candidateIds
     ? loaded
@@ -1862,6 +1880,8 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
   const conflictMemoryIds = new Set(conflicts.flatMap((conflict) => [conflict.preferredMemoryId, ...conflict.conflictingMemoryIds]));
   const filtered = request.hasConflicts ? scored.filter((item) => conflictMemoryIds.has(item.memory.id)) : scored;
   const selected = filtered.slice(0, request.limit);
+  const versionRows=selected.length ? (await env.OPEN_BRAIN_DB.prepare(`SELECT decision_memory_id,count(*) AS n FROM decision_memory_versions WHERE tenant_id=? AND decision_memory_id IN (${selected.map(()=>'?').join(',')}) GROUP BY decision_memory_id`).bind(request.tenantId,...selected.map(x=>x.memory.id)).all<{decision_memory_id:string;n:number}>()).results : [];
+  const versions=new Map(versionRows.map(row=>[row.decision_memory_id,row.n]));
   const usage = options.recordUsage === false ? null : await recordMemoryUsage(env, {
     tenant_id: request.tenantId,
     project_id: request.projectId ?? undefined,
@@ -1879,6 +1899,7 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
     items: selected.map((item, index) => ({
       source_type: "decision_memory" as const,
       source_id: item.memory.id,
+      source_version:versions.get(item.memory.id)??null,
       rank: index + 1,
       score: item.score.finalScore,
       reference_type: "returned" as const,
@@ -1897,6 +1918,9 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
     conflicts: request.verificationView ? conflicts : undefined,
     meta: {
       usage_id: usage?.usage_id,
+      usage_item_ids:usage?.usage_item_ids,
+      usage_items:usage?.usage_items,
+      use_history:useCandidates?.meta,
       verification_sampled: usage?.verification_sampled,
       retrieval: {
         generation_id: generation?.id ?? null,

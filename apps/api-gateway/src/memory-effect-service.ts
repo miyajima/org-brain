@@ -267,11 +267,12 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
   ).bind(input.tenant_id, usageId));
   if (existing) {
     const items = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
-    ).bind(input.tenant_id, usageId).all<{ id: string }>();
+      "SELECT id,source_type,source_id,source_version FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
+    ).bind(input.tenant_id, usageId).all<{ id: string;source_type:string;source_id:string;source_version:number|null }>();
     return {
       usage_id: usageId,
       usage_item_ids: items.results.map((item) => item.id),
+      usage_items:items.results.map(({id,...item})=>({usage_item_id:id,...item})),
       verification_sampled: shouldSampleMemoryEffectVerification(input.tenant_id, usageId),
       created: false
     };
@@ -330,11 +331,13 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
     )
   ];
   const itemIds: string[] = [];
+  const receiptItems:Array<{usage_item_id:string;source_type:string;source_id:string;source_version:number|null}>=[];
   let index = 0;
   for (const item of unique.values()) {
     const snapshot = await sourceSnapshot(env, input.tenant_id, item);
     const itemId = item.id?.trim() || ulid();
     itemIds.push(itemId);
+    receiptItems.push({usage_item_id:itemId,source_type:item.source_type,source_id:snapshot.id,source_version:Object.hasOwn(item,"source_version") ? item.source_version ?? null : snapshot.source_version});
     statements.push(env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO memory_usage_items(
          id, usage_event_id, tenant_id, source_type, source_id, source_version,
@@ -344,7 +347,7 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       itemId, usageId, input.tenant_id, item.source_type, snapshot.id,
-      item.source_version ?? snapshot.source_version, item.rank ?? ++index,
+      Object.hasOwn(item, 'source_version') ? item.source_version ?? null : snapshot.source_version, item.rank ?? ++index,
       item.score ?? null, item.reference_type ?? "returned", item.used_state ?? "unknown", "reported",
       Math.max(0, Math.round(item.injected_token_estimate ?? 0)),
       snapshot.business_category_id, snapshot.work_type,
@@ -355,6 +358,7 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
   return {
     usage_id: usageId,
     usage_item_ids: itemIds,
+    usage_items:receiptItems,
     verification_sampled: shouldSampleMemoryEffectVerification(input.tenant_id, usageId),
     created: true
   };

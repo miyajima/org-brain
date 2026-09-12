@@ -34,6 +34,8 @@ export function assessMemoryUsefulnessV2(input = {}) {
   };
   if (input.evidence_supported === false) reasons.push("unsupported_claim");
   if (input.within_budget === false) reasons.push("over_budget");
+  if (input.task_contribution === false) reasons.push("no_task_contribution");
+  if (input.incremental_value === false) reasons.push("no_incremental_value");
   const stage = input.stage === "use" ? "use" : "capture";
   return {
     contract: MEMORY_USEFULNESS_CONTRACT,

@@ -97,6 +97,7 @@ type RetrievalUnitCandidateRow = {
 };
 
 export type MemorySearchResult = {
+  use_history?: Record<string, unknown>;
   kind: MemorySearchKind;
   id: string;
   summary: string | null;
@@ -117,6 +118,9 @@ export type MemorySearchResult = {
 };
 
 export type MemorySearchMeta = {
+  usage_item_ids?: string[];
+  usage_items?: Array<{usage_item_id:string;source_type:string;source_id:string;source_version:number|null}>;
+  use_history?: Record<string, unknown>;
   usage_id?: string;
   verification_sampled?: boolean;
   classification_warning?: string[];

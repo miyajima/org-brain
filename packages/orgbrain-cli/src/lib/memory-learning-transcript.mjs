@@ -449,3 +449,15 @@ export async function collectVerifiedLearningEventsFromRows(rowsInput, options =
   }
   return { events, reviews, raw_transcript_persisted: false };
 }
+
+export async function readMemoryUseTurnRows(options) {
+  if (!options.transcriptPath) return [];
+  const raw = await readTail(options.transcriptPath, MAX_TRANSCRIPT_BYTES);
+  const rows = raw.split(/\r?\n/u).filter(Boolean).flatMap(line => { const parsed=safeJson(line); return parsed?[parsed]:[]; });
+  const marker=row=>row.type==='turn_context'||payload(row)?.type==='turn_context';
+  const index=rows.findLastIndex(marker);
+  if(index<0) return [];
+  const id=payload(rows[index])?.turn_id??rows[index].turn_id;
+  if(options.turnId && id!==options.turnId) return [];
+  return rows.slice(index);
+}

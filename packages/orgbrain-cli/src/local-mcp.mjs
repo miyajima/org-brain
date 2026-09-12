@@ -1,3 +1,4 @@
+import { observeMemoryUse } from "./lib/memory-use-collector.mjs";
 import { randomUUID } from "node:crypto";
 import {
   createMcpHandler,
@@ -132,6 +133,7 @@ const TOOL_DEFINITIONS = [
       required: ["schema_version", "lesson_type"],
       properties: {
         schema_version: { type: "integer", enum: [1, 2] },
+        use_observation: {type:"object"},
         lesson_type: { type: "string", enum: ["success", "decision", "failure"] },
         kind: { type: "string", enum: ["decision", "constraint", "pitfall", "preference", "fact"] },
         record_type: { type: "string", const: "learning_observation" },
@@ -249,6 +251,8 @@ const TOOL_DEFINITIONS = [
         minimum_total_score: { type: ["number", "null"], minimum: 0 },
         principal_id: { type: ["string", "null"] },
         task_id: { type: ["string", "null"] },
+        use_snapshot_id: {type:"string",maxLength:128},
+        use_context: {type:"object",properties:{task:{type:"string"},target:{type:"string"},constraints:{type:"string"},conditions:{type:"string"}}},
         trace_id: { type: ["string", "null"] },
         external_run_id: { type: ["string", "null"] },
         search_mode: {
@@ -270,6 +274,9 @@ const TOOL_DEFINITIONS = [
         project_id: { type: ["string", "null"] },
         business_category_id: { type: ["string", "null"] },
         work_type: { type: ["string", "null"] },
+        task_id:{type:"string",maxLength:128},
+        use_snapshot_id:{type:"string",maxLength:128},
+        use_context:{type:"object",properties:{task:{type:"string",maxLength:600},target:{type:"string",maxLength:600},constraints:{type:"string",maxLength:600},conditions:{type:"string",maxLength:600}}},
         top_k: { type: "integer", minimum: 1, maximum: 50 },
         token_budget: { type: "integer", minimum: 512, maximum: 16000 },
         principal_id: { type: ["string", "null"] },
@@ -396,6 +403,10 @@ const TOOL_DEFINITIONS = [
       }
     }
   },
+  { name: "orgbrain_memory_use_context_record", description: "Record existing use. payload: id, usage_item_id, project_id, task_id, work_type, context {task,target,constraints,conditions}, evidence [{role,ref_type,ref_id,span_start,span_end,content_hash}], optional supersedes_id. No new memory is saved.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
+  { name: "orgbrain_memory_use_history", description: "Read private use history and evidence. payload: source_id, project_id, limit (1-100), before (next_cursor); all optional.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
+  { name: "orgbrain_memory_use_evaluate", description: "Record a use assessment. payload: id, context_id, and proof_id or feedback {contribution: positive|negative|unknown,statement}; supersedes_id for correction. Ranking requires verified action and outcome evidence. Do not infer usefulness from task success.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
+  { name: "orgbrain_memory_use_revoke", description: "Revoke a use record and invalidate its search/ranking contribution. payload requires id.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
   {
     name: "orgbrain_memory_usage_state_update",
     description: "Record whether returned memory items were used, not used, or remain unknown.",
@@ -742,6 +753,7 @@ async function callTool(store, name, input) {
   if (name === "orgbrain_metric_query") return queryLocalMetrics(store, input);
   if (name === "orgbrain_domain_recall_feedback") return recordLocalDomainRecallFeedback(store, input);
   if (name === "orgbrain_memory_observe") {
+    if (input.use_observation) return observeMemoryUse(input.use_observation);
     const observe = input.schema_version === 2
       ? observeMemoryContractV2Event
       : observeMemoryLearningEvent;
@@ -895,6 +907,7 @@ async function callTool(store, name, input) {
       business_category_id: input.business_category_id || null,
       work_type: input.work_type || null,
       query: input.query,
+      task_id: input.task_id, use_context: input.use_context,use_snapshot_id:input.use_snapshot_id,
       limit: input.limit || 10,
       minimum_total_score: input.minimum_total_score ?? null,
       principal_id: input.principal_id || null,
@@ -921,7 +934,7 @@ async function callTool(store, name, input) {
         used_state: "unknown"
       }))
     });
-    return { results, meta: { usage_id: usage.usage_id, verification_sampled: usage.verification_sampled } };
+    return { results, meta: { usage_id: usage.usage_id, usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items, verification_sampled: usage.verification_sampled, use_history:results[0]?.use_history_meta } };
   }
   if (name === "orgbrain_memory_retrieve_context") {
     return store.retrieveContext({
@@ -930,6 +943,7 @@ async function callTool(store, name, input) {
       business_category_id: input.business_category_id || null,
       work_type: input.work_type || null,
       query: input.query,
+      task_id:input.task_id,use_context:input.use_context,use_snapshot_id:input.use_snapshot_id,
       top_k: input.top_k || 5,
       token_budget: input.token_budget || 8_000,
       principal_id: input.principal_id || null,
@@ -970,6 +984,8 @@ async function callTool(store, name, input) {
     const { pattern_id: patternId, tenant_id: _tenant, ...update } = input;
     return store.updateFailurePattern(tenantId, patternId, update);
   }
+  const useOperations = {orgbrain_memory_use_context_record:"record",orgbrain_memory_use_history:"history",orgbrain_memory_use_evaluate:"evaluate",orgbrain_memory_use_revoke:"revoke"};
+  if (useOperations[name]) return store.useHistory(useOperations[name], {...input.payload,tenant_id:tenantId,principal_id:process.env.ORGBRAIN_USE_PRINCIPAL || "local"});
   if (name === "orgbrain_memory_usage_state_update") return store.updateUsageStates(tenantId, input);
   if (name === "orgbrain_memory_effect_record") return store.recordEffect(input);
   if (name === "orgbrain_memory_impact_start") {

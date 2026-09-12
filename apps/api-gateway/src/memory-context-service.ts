@@ -302,6 +302,7 @@ export async function retrieveMemoryContext(
   const contextUsage = await recordMemoryUsage(env, {
     tenant_id: tenantId,
     project_id: typeof body.project_id === "string" ? body.project_id : null,
+    task_id:typeof body.task_id === "string" ? body.task_id : null,
     capability: "memory_retrieve_context",
     access_path: "context",
     request_source: "api",
@@ -317,6 +318,7 @@ export async function retrieveMemoryContext(
     items: evidence.map((item, index) => ({
       source_type: "memory" as const,
       source_id: String(item.memory_id),
+      source_version:selected.find(source=>source.id===item.memory_id)?.current_version ?? null,
       rank: index + 1,
       score: typeof item.score === "number" ? item.score : null,
       reference_type: "injected" as const,
@@ -329,6 +331,8 @@ export async function retrieveMemoryContext(
     meta: {
       ...search.meta,
       usage_id: contextUsage.usage_id,
+      usage_item_ids:contextUsage.usage_item_ids,
+      usage_items:contextUsage.usage_items,
       verification_sampled: contextUsage.verification_sampled
     },
     evidence_bundle: {
