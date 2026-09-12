@@ -20,8 +20,8 @@ describe("MCP tool contract", () => {
       authSource: "access-service"
     });
     const tools = capturedMcpToolContracts();
-    expect(tools).toHaveLength(50);
-    expect(new Set(tools.map((tool) => tool.name)).size).toBe(50);
+    expect(tools).toHaveLength(51);
+    expect(new Set(tools.map((tool) => tool.name)).size).toBe(51);
     expect(tools.find((tool) => tool.name === "orgbrain_memory_quality_audit")).toMatchObject({
       permission: "read",
       scope: "orgbrain:read"

@@ -1,4 +1,5 @@
 ---
+import MemoryReviewHistory from "../components/MemoryReviewHistory.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
@@ -7,7 +8,7 @@ import { emptyDecisionBriefing, normalizeDecisionBriefing, scopedHref } from "..
 const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
 const behavior = decisionConsoleBehavior(mode);
 const { params, apiParams, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
-if (!behavior.enabled) return Astro.redirect(scopedHref("/decisions", params), 307);
+
 const briefing = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/decision-briefing", apiParams, { limit: 100 }), Astro.url), normalizeDecisionBriefing, emptyDecisionBriefing());
 const reviewKinds = ["expired", "unconfirmed", "artifact_missing", "share_pending"] as const;
 type ReviewKind = (typeof reviewKinds)[number];
@@ -30,7 +31,8 @@ const formatDate = (value: number) => value
   : "—";
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
-  <section class="decision-reviews-page">
+  <MemoryReviewHistory lang={lang} />
+  <section class="decision-reviews-page" hidden={!behavior.enabled}>
     <header class="decision-page-header"><div><p class="decision-eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p class="decision-page-lead">{copy.lead}</p></div></header>
     {briefing.error && <div class="decision-alert" role="alert"><strong>{copy.error}</strong><span>{briefing.error}</span></div>}
     {reviewItems.length > 0 ? (

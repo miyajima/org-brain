@@ -940,6 +940,10 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
 }
 
 export function buildLearningExtractionPacket(turnEvidence, discovery, options = {}) {
+  if (options.refinement_profile !== undefined && options.refinement_profile !== MEMORY_EXTRACTION_REFINED_PROFILE) throw new Error("unsupported_refinement_profile");
+  if (options.refinement_profile && (options.extraction_profile || discovery?.routing?.schema === MEMORY_EXTRACTION_ROUTER_V3)) {
+    throw new Error("a_plus_requires_one_call_v2");
+  }
   if (discovery?.routing?.schema === MEMORY_EXTRACTION_ROUTER_V3) return buildV3Packet(turnEvidence, discovery);
   const coverage = options.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE;
   const refined = options.refinement_profile === MEMORY_EXTRACTION_REFINED_PROFILE;

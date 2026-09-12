@@ -40,6 +40,7 @@ import {
   legacyProjectNamesFileFromEnv,
   loadLegacyProjectNames,
   loadWorkspaceConfig,
+  resolveWorkspaceMapping,
   migrateLegacyProjectNames,
   normalizeWorkspaceRoot,
   autonomyPolicyFromWorkspaceConfig,
@@ -843,7 +844,7 @@ export async function resolveWorkspaceContext(record, options = {}) {
     options.prompt !== false
   ) {
     const previewConfig = await loadWorkspaceConfig(workspacesFile);
-    const previewMapped = previewConfig.workspaces[cwd];
+    const { entry: previewMapped } = await resolveWorkspaceMapping(previewConfig, cwd);
     const previewLegacy =
       options.migrateLegacy === false
         ? {}
@@ -862,7 +863,8 @@ export async function resolveWorkspaceContext(record, options = {}) {
     const config = options.config ?? await loadWorkspaceConfig(workspacesFile);
     const configuredTenantId = configuredTenantFromEnv(env);
     let changed = false;
-    let mapped = cwd ? config.workspaces[cwd] : null;
+    let mapping = await resolveWorkspaceMapping(config, cwd);
+    let mapped = mapping.entry;
 
     let tenantId = mapped?.tenant_id ?? tenantFallbackFromEnv(env, {
       organizationSharing: memoryMode.orgSharingEnabled
@@ -872,7 +874,8 @@ export async function resolveWorkspaceContext(record, options = {}) {
       const legacyNames = options.legacyNames ?? await loadLegacyProjectNames(legacyFile);
       const migration = migrateLegacyProjectNames(config, legacyNames, configuredTenantId);
       changed = migration.changed;
-      mapped = cwd ? config.workspaces[cwd] : null;
+      mapping = await resolveWorkspaceMapping(config, cwd);
+      mapped = mapping.entry;
       tenantId = mapped?.tenant_id ?? tenantId;
     }
 
@@ -910,7 +913,7 @@ export async function resolveWorkspaceContext(record, options = {}) {
         memoryLearningMode: mapped.memory_learning_mode ?? "off",
         autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config, tenantId),
         workspaceRoot: cwd,
-        source: "workspace"
+        source: mapping.source
       };
     }
 
@@ -1342,7 +1345,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
   }, {
     workspace_root: workspace.workspaceRoot,
     sensitive_policy: workspace.sensitiveMemory,
-    preserve_snippet_text: options.extractionProfile === "coverage/v1"
+    preserve_snippet_text: options.extractionProfile === "coverage/v1" || options.refinementProfile === "a-plus/v1"
   });
   const episodeDiscovery = await discoverLearningEpisodes(turnEvidence, {
     workspace_root: workspace.workspaceRoot,
@@ -1352,6 +1355,28 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
   // independently persisted as durable review candidates, because doing so
   // made the prefilter an irreversible final classifier.
   const reviewCandidates = [];
+  // These are questions for the human, not verified learning or an automatic
+  // capture batch. A missing rationale is precisely something we may clarify.
+  const confirmationCandidates = (episodeDiscovery.review_drafts ?? [])
+    .filter((draft) => draft.observation?.lesson_type === "decision")
+    .flatMap((draft) => {
+      const references = (draft.support_span_ids ?? []).flatMap((spanId) => {
+        const parent = turnEvidence.snippets.find((snippet) => spanId === snippet.span_id || spanId.startsWith(`${snippet.span_id}.`));
+        if (!parent || parent.context_only) return [];
+        return [{
+          type: "turn_evidence", ref: `turn:${turnEvidence.turn_hash ?? turnEvidence.evidence_hash}#${spanId}`,
+          span_id: spanId, parent_span_id: parent.span_id, role: parent.role,
+          content_hash: `sha256:${sha256(parent.text)}`
+        }];
+      }).slice(0, 3);
+      if (!references.length) return [];
+      return [{
+        ...draft, project_id: workspace.projectId, confirmation_only: true,
+        source_references: references,
+        evidence: references.map((reference) => ({ type: "thread", ref: reference.ref })),
+        external_key: `human-review:${draft.event_hash}`
+      }];
+    });
   const operational = episodeDiscovery.operational_history;
   const operationalRecords = operational && workspace.projectId
     ? (() => {
@@ -1392,7 +1417,8 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
   if (episodeDiscovery.llm_recommended && turnEvidence.provider && turnEvidence.model) {
     try {
       extractionPacket = buildLearningExtractionPacket(turnEvidence, episodeDiscovery, {
-        extraction_profile: options.extractionProfile
+        extraction_profile: options.extractionProfile,
+        refinement_profile: options.refinementProfile
       });
     } catch (error) {
       extractionPacketError = error instanceof Error ? error.message : "memory_extraction_packet_failed";
@@ -1406,6 +1432,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     records,
     operationalRecords,
     reviewCandidates,
+    confirmationCandidates,
     extractionRequest: extractionPacket ? {
       packet: extractionWirePacket,
       packet_hash: extractionPacket.packet_hash,
@@ -1417,7 +1444,8 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     report: {
       candidate_count: records.length,
       review_count: reviewCandidates.length,
-      no_candidate: records.length === 0 && reviewCandidates.length === 0 && hardExcluded.length === 0,
+      confirmation_candidate_count: confirmationCandidates.length,
+      no_candidate: records.length === 0 && reviewCandidates.length === 0 && confirmationCandidates.length === 0 && hardExcluded.length === 0,
       hard_excluded_count: hardExcluded.length,
       would_call_llm: Boolean(extractionPacket),
       routing: episodeDiscovery.routing,
@@ -1898,7 +1926,16 @@ export async function captureLocalMemories(sourceName, tenantId, recordOrRecords
 export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const inputSourceName = firstString(sourceInput, "unknown");
   const sourceName = inputSourceName === "codex-stop" ? "codex" : inputSourceName;
-  const finish = (result) => {
+  let activityScope = null;
+  const finish = async (result) => {
+    if (activityScope) {
+      const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+      const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
+      await new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB).recordHookActivity({
+        ...activityScope, event: inputSourceName, status: { ok: result.ok, mode: result.mode ?? null, skipped: result.skipped ?? null,
+          confirmation_candidates: result.confirmation_candidates ?? confirmationQueue.length }
+      });
+    }
     if (options.emit !== false) console.log(JSON.stringify(result));
     return result;
   };
@@ -1917,6 +1954,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const workspaceRecord = prepared.action === "promote" ? prepared.record : normalizedRecord;
   const workspace = await resolveWorkspaceContext(workspaceRecord, { memoryMode });
   tenantId = workspace.tenantId;
+  activityScope = { tenantId, projectId: workspace.projectId };
   captureV2Mode = workspace.memoryCaptureV2Mode ?? captureV2Mode;
   let records;
   let shadowReport = null;
@@ -1931,18 +1969,23 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       tenantId,
       projectId: workspace.projectId,
       taskPayload: normalizedRecord.metadata ?? normalizedRecord,
-      candidates: learningReviewCandidates
+      candidates: [...learningReviewCandidates, ...(extractionPrepared?.confirmationCandidates ?? [])]
     });
   };
-  const extractionMode = process.env.ORGBRAIN_MEMORY_EXTRACTION_MODE ?? "off";
+  const extractionMode = workspace.memoryLearningMode === "confirm" ? "off" : process.env.ORGBRAIN_MEMORY_EXTRACTION_MODE ?? "off";
   const extractionProfileValue = process.env.ORGBRAIN_MEMORY_EXTRACTION_PROFILE?.trim();
   if (extractionProfileValue && !["off", "coverage/v1"].includes(extractionProfileValue)) {
     throw new Error(`unsupported ORGBRAIN_MEMORY_EXTRACTION_PROFILE: ${extractionProfileValue}`);
   }
   const extractionProfile = extractionProfileValue === "coverage/v1" ? "coverage/v1" : undefined;
+  const refinementProfileValue = process.env.ORGBRAIN_MEMORY_REFINEMENT_PROFILE?.trim();
+  if (refinementProfileValue && !["off", "a-plus/v1"].includes(refinementProfileValue)) {
+    throw new Error(`unsupported ORGBRAIN_MEMORY_REFINEMENT_PROFILE: ${refinementProfileValue}`);
+  }
+  const refinementProfile = refinementProfileValue === "a-plus/v1" ? refinementProfileValue : undefined;
   let evidenceRows = [];
   let evidenceLoadError = null;
-  if (inputSourceName === "codex-stop" && extractionMode !== "off") {
+  if (inputSourceName === "codex-stop" && (extractionMode !== "off" || ["on", "shadow", "confirm"].includes(workspace.memoryLearningMode))) {
     evidenceRows = await loadTurnEvidenceRows({
       transcript_path: normalizedRecord.metadata?.transcriptPath,
       turn_id: normalizedRecord.metadata?.turnId
@@ -1953,7 +1996,8 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     extractionPrepared = await prepareMemoryRecordsV2(normalizedRecord, workspace, tenantId, {
       rows: evidenceRows,
       requireFullTurn: true,
-      extractionProfile
+      extractionProfile,
+      refinementProfile
     });
     if (evidenceLoadError) extractionPrepared.report.turn_evidence_error = evidenceLoadError;
     shadowReport = extractionPrepared.report;
@@ -1989,7 +2033,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       }
     }
   }
-  if (inputSourceName === "codex-stop" && ["shadow", "on"].includes(workspace.memoryLearningMode)) {
+  if (inputSourceName === "codex-stop" && ["shadow", "on", "confirm"].includes(workspace.memoryLearningMode)) {
     const observed = await prepareObservedLearningRecords(normalizedRecord, workspace, tenantId, {
       ...(evidenceRows.length ? { rows: evidenceRows } : {})
     });
@@ -1998,6 +2042,16 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       .filter((candidate, index, all) => all.findIndex((item) => item.external_key === candidate.external_key) === index)
       .slice(0, 3);
     if (workspace.memoryLearningMode === "on") records = observed.records;
+  }
+  if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "confirm") {
+    // Confirmation-only rollout: local candidates, no cloud write, outbox,
+    // automatic memory capture or provider enqueue. A later human answer
+    // authorizes the interactive Remote MCP write separately.
+    confirmationQueue = await queueConfirmations();
+    return finish({ ok: true, source: sourceName, tenant_id: tenantId,
+      mode: "confirmation-only", inserted: 0,
+      confirmation_candidates: confirmationQueue.length,
+      confirmation_queue_count: confirmationQueue.filter((item) => item.created).length });
   }
   if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "on") {
     const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
@@ -2009,7 +2063,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       projectId: workspace.projectId,
       taskKey
     }).catch(() => []);
-    confirmationQueue = await queueConfirmations().catch(() => []);
+    confirmationQueue = await queueConfirmations();
     if (!memoryMode.cloudWritesAllowed) {
       const savedReviews = await commitmentStore.saveLearningCandidates({
         tenantId,
@@ -2116,7 +2170,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       records = extractionMode === "on" ? (v2.operationalRecords ?? []) : [];
     }
   }
-  confirmationQueue = await queueConfirmations().catch(() => []);
+  confirmationQueue = await queueConfirmations();
   if (!records && workspace.memoryLearningMode !== "on" && captureV2Mode !== "on") {
     if (prepared.action === "skip") {
       return finish({

@@ -48,6 +48,8 @@ const SUCCESS_STATUS_OVERRIDES: Readonly<Record<string, number>> = {
 };
 
 const IDEMPOTENCY_KEY_ROUTES = new Set([
+  "POST /v1/memories/confirm",
+  "POST /v1/memories/confirmation-status",
   "POST /v1/resources",
   "POST /v1/resources/backfill",
   "POST /v1/resources/:id/locations",

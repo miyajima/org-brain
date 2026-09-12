@@ -1024,6 +1024,7 @@ export async function captureMemoryItems(
     source: string;
     items: LifecycleWriteItem[];
     operation?: MemoryOperation;
+    preserveConfirmedSummary?: boolean;
   }
 ): Promise<{ tenant_id: string; source: string; inserted: number; updated: number; items: LifecycleMutationResult[] }> {
   const dedupedByKey = new Map<string, LifecycleWriteItem>();
@@ -1051,6 +1052,7 @@ export async function captureMemoryItems(
 
   for (const [externalKey, rawItem] of dedupedByKey.entries()) {
     const item = normalizeWriteItem(args.tenantId, args.source, { ...rawItem, external_key: externalKey });
+    if (args.preserveConfirmedSummary) item.summary = rawItem.summary ?? null;
     const existingId = existingByKey.get(externalKey);
     const canonicalExistingId = item.canonical_key ? existingByCanonicalKey.get(item.canonical_key) : null;
     if (!existingId && canonicalExistingId && item.lifecycle_state !== "suppressed") {
@@ -1115,6 +1117,7 @@ export async function captureMemoryItems(
 
   for (const rawItem of anonymousItems) {
     const item = normalizeWriteItem(args.tenantId, args.source, rawItem);
+    if (args.preserveConfirmedSummary) item.summary = rawItem.summary ?? null;
     const canonicalExistingId = item.canonical_key ? existingByCanonicalKey.get(item.canonical_key) : null;
     if (canonicalExistingId && item.lifecycle_state !== "suppressed") {
       const canonicalExisting = await loadMemoryById(env, args.tenantId, canonicalExistingId);

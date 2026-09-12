@@ -228,6 +228,8 @@ export interface MemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEn
   captureMemoryWithInferredRationale: PortFunction;
   captureRequestClaimsVerified: PortFunction;
   confirmProposedMemory: PortFunction;
+  getMemoryConfirmationStatus: PortFunction;
+  listMemoryConfirmationReviews: PortFunction;
   proposeMemoryWithRationale: PortFunction;
   assertPermission: PortFunction;
   assertRetrievalOperator: PortFunction;

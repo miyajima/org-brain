@@ -56,6 +56,7 @@ import {
 import {
   captureMemoryWithInferredRationale,
   confirmProposedMemory,
+  getMemoryConfirmationStatus,
   proposeMemoryWithRationale
 } from "./rationale-service";
 import { assertPermission } from "./rbac-service";
@@ -171,6 +172,7 @@ type ToolHandler<Shape extends z.ZodRawShape> = (
 ) => CallToolResult | Promise<CallToolResult>;
 
 const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
+  orgbrain_memories_confirmation_status: "Read the result of the same confirmation after a timeout. Never infer saved from an answer or resend an in-progress confirmation.",
   orgbrain_memory_quality_audit: "Run the read-only memory-quality-audit/v1 evaluator. Returns aggregate coverage, reason-code samples, and no raw memory content.",
   orgbrain_memory_extraction_enqueue: "Enqueue one review-only, same-provider/model extraction from a redacted TurnEvidenceV1 packet. The hook never calls the provider directly.",
   orgbrain_prompt_recall: "Use before answering an organization-specific question. Return the relevant Decision, rationale, rejected alternatives, constraints, success conditions, metrics, evidence metadata, follow-up, and trace URL. If the answer uses the memory, cite the trace and invite the user to say 範囲が違う, 古い, or 関係ない.",
@@ -734,6 +736,11 @@ class OrgBrainMcpTools {
         source: z.string().optional(),
         actor_type: z.string().optional(),
         actor_id: z.string().optional(),
+        review_context: z.object({
+          candidate_id: z.string().min(1).max(128), candidate_hash: z.string().regex(/^[a-f0-9]{64}$/),
+          source_references: z.array(z.record(z.string(), z.unknown())).max(8),
+          conclusion: z.string().max(2000).optional(), reason_summary: z.string().max(2000).optional(), reuse_rule: z.string().max(2000).optional()
+        }).optional(),
         item: z.object({
           external_key: z.string().max(256).optional(),
           content: z.string().min(1).max(20000),
@@ -766,7 +773,7 @@ class OrgBrainMcpTools {
           tenantId,
           "mcp.orgbrain_memories_propose",
           "memory",
-          () => proposeMemoryWithRationale(this.env, { tenant_id: tenantId, ...payload })
+          () => proposeMemoryWithRationale(this.env, { tenant_id: tenantId, ...payload, actor_type: "principal", actor_id: this.props.principal })
         );
         return toContent(result);
       }
@@ -814,6 +821,10 @@ class OrgBrainMcpTools {
         tenant_id: z.string().optional(),
         confirmation_token: z.string().min(1).max(64),
         approved: z.boolean(),
+        corrected_content: z.string().min(1).max(20000).optional(),
+        corrected_summary: z.string().min(1).max(1000).optional(),
+        review_label: z.enum(["accepted", "corrected", "not_needed", "incorrect", "not_decided", "deferred", "unknown"]).optional(),
+        review_answer: z.string().min(1).max(2000).optional(),
         conclusion: z.string().max(240).optional(),
         reason_summary: z.string().max(500).optional(),
         decision_type: z.enum(["adopt", "reject", "prioritize", "diagnose", "workaround", "policy"]).optional(),
@@ -840,9 +851,19 @@ class OrgBrainMcpTools {
           tenantId,
           "mcp.orgbrain_memories_confirm",
           "memory",
-          () => confirmProposedMemory(this.env, { tenant_id: tenantId, ...payload })
+          () => confirmProposedMemory(this.env, { tenant_id: tenantId, ...payload }, this.props.principal)
         );
         return toContent(result);
+      }
+    );
+
+    registerTool(this.server,
+      "orgbrain_memories_confirmation_status",
+      { tenant_id: z.string().optional(), confirmation_token: z.string().min(1).max(64) },
+      async ({ tenant_id, confirmation_token }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read");
+        return toContent(await getMemoryConfirmationStatus(this.env, { tenant_id: tenantId, confirmation_token }, this.props.principal));
       }
     );
 

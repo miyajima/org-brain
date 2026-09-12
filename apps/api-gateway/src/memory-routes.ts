@@ -52,6 +52,8 @@ import {
   captureMemoryWithInferredRationale,
   captureRequestClaimsVerified,
   confirmProposedMemory,
+  getMemoryConfirmationStatus,
+  listMemoryConfirmationReviews,
   proposeMemoryWithRationale
 } from "./rationale-service";
 import { assertPermission } from "./rbac-service";
@@ -115,6 +117,8 @@ const memoryPort = {
   captureMemoryWithInferredRationale,
   captureRequestClaimsVerified,
   confirmProposedMemory,
+  getMemoryConfirmationStatus,
+  listMemoryConfirmationReviews,
   proposeMemoryWithRationale,
   assertPermission: (env, input) => assertPermission(env, input),
   assignRetrievalGeneration,

@@ -4,6 +4,8 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { isAiConsensusCertified } from "../../../shared/src/memory-contract-judge.mjs";
+import { classifyMemoryReviewAnswer } from "../../../shared/src/memory-usefulness-runtime.mjs";
+import { memoryConfirmationQuestion } from "./memory-confirmation-hints.mjs";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -106,7 +108,9 @@ function redactedValue(value) {
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value)
     .filter(([key]) => !isForbiddenCandidateKey(key))
-    .map(([key, item]) => [key, redactedValue(item)]));
+    .map(([key, item]) => [key, typeof item === "string"
+      && /^(?:(?:sha256:)?[a-f0-9]{64}|memory-confirmation:[a-f0-9]{40}|turn:(?:sha256:)?[a-f0-9]{64}#[A-Za-z0-9._:-]+)$/u.test(item)
+      ? item : redactedValue(item)]));
 }
 
 function redactedJson(value) {
@@ -165,6 +169,36 @@ function questionList(input) {
     options: input.options ?? []
   }];
   return [];
+}
+
+function isMemoryQuestion(question) {
+  return String(question?.id ?? "").startsWith(MEMORY_CONFIRMATION_QUESTION_PREFIX)
+    || /として保存しますか？ 結論:/u.test(question?.question ?? question?.title ?? "");
+}
+
+function isQuestionTool(name) {
+  return !name || /(?:^|[.:/])request_user_input(?:_async)?$/u.test(name);
+}
+
+function toolResultObject(payload) {
+  const result = payload.tool_result ?? payload.tool_response ?? payload.result ?? payload.output ?? payload.tool_output ?? payload.response;
+  let object = unwrap(result);
+  if (Array.isArray(object?.content)) {
+    const content = object.content.find((item) => item?.type === "text")?.text;
+    object = unwrap(content) ?? object;
+  }
+  return { result, object };
+}
+
+function appendMemoryLabel(db, row, label, response, now) {
+  const responseJson = redactedJson(response);
+  const digest = hash(stableJson({ label, answer: JSON.parse(responseJson)?.raw ?? JSON.parse(responseJson)?.label ?? responseJson }));
+  const version = Number(db.prepare("SELECT COALESCE(MAX(version), 0) + 1 AS version FROM memory_review_labels WHERE tenant_id = ? AND candidate_id = ?").get(row.tenant_id, row.id).version);
+  db.prepare(`INSERT INTO memory_review_labels(id, tenant_id, project_id, candidate_id, version, label, response_digest, response_json, candidate_json, created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id, candidate_id, response_digest) DO NOTHING`).run(
+    `review:${hash(`${row.tenant_id}\0${row.id}\0${digest}`).slice(0, 40)}`, row.tenant_id, row.project_id,
+    row.id, version, label, digest, responseJson, row.candidate_json, now
+  );
 }
 
 function questionFingerprint(question) {
@@ -241,7 +275,7 @@ export function semanticQuestionFingerprint(value) {
 
 export function extractTaskCommitments(payloadInput) {
   const { payload, input, toolName } = toolInputFromPayload(payloadInput);
-  if (toolName && !/(?:^|[.:/])request_user_input$/u.test(toolName) && toolName !== "request_user_input") return [];
+  if (!isQuestionTool(toolName)) return [];
   if (!hasTaskIdentity(payload)) return [];
   const questions = questionList(input);
   if (questions.length === 0) return [];
@@ -251,7 +285,8 @@ export function extractTaskCommitments(payloadInput) {
   const projectId = text(payload.project_id ?? payload.projectId ?? (typeof payload.cwd === "string" ? payload.cwd.split(/[\\/]/u).filter(Boolean).at(-1) : ""), 128) || null;
   const evidenceDigest = requestUserInputEvidenceDigest(input, result);
   return questions.slice(0, 16).flatMap((question, index) => {
-    const questionText = text(question?.question ?? question?.prompt ?? question?.label, 1_000);
+    if (isMemoryQuestion(question)) return [];
+    const questionText = text(question?.question ?? question?.title ?? question?.prompt ?? question?.label, 1_000);
     if (!questionText) return [];
     const decisionKey = slug(question?.id ?? question?.header ?? questionText);
     if (decisionKey.startsWith(MEMORY_CONFIRMATION_QUESTION_PREFIX)) return [];
@@ -279,7 +314,7 @@ export function extractTaskCommitments(payloadInput) {
 
 export async function guardCodexQuestion(payloadInput, store, tenantId = "default") {
   const { payload, input, toolName } = toolInputFromPayload(payloadInput);
-  if (toolName && !/(?:^|[.:/])request_user_input$/u.test(toolName) && toolName !== "request_user_input") {
+  if (!isQuestionTool(toolName)) {
     return { allow: true, commitments: [] };
   }
   const questions = questionList(input);
@@ -489,7 +524,32 @@ export class TaskCommitmentStore {
           ON memory_confirmation_prompts(tenant_id, project_id, task_key, state, expires_at);
         CREATE INDEX IF NOT EXISTS idx_memory_confirmation_delivery
           ON memory_confirmation_prompts(tenant_id, delivery_session_key, delivered_at);
+        CREATE TABLE IF NOT EXISTS memory_review_labels (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          project_id TEXT,
+          candidate_id TEXT NOT NULL,
+          version INTEGER NOT NULL,
+          label TEXT NOT NULL,
+          response_digest TEXT NOT NULL,
+          response_json TEXT NOT NULL,
+          candidate_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          UNIQUE(tenant_id, candidate_id, response_digest)
+        );
+        CREATE TABLE IF NOT EXISTS memory_hook_activity (
+          tenant_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          event TEXT NOT NULL,
+          status_json TEXT NOT NULL,
+          occurred_at INTEGER NOT NULL,
+          PRIMARY KEY(tenant_id, project_id, event)
+        );
       `);
+      const confirmationColumns = new Set(db.prepare("PRAGMA table_info(memory_confirmation_prompts)").all().map((column) => column.name));
+      for (const [name, type] of Object.entries({ offered_at: "INTEGER", question_json: "TEXT", question_call_id: "TEXT", answer_label: "TEXT", remote_confirmation_id: "TEXT", save_state: "TEXT", receipt_json: "TEXT" })) {
+        if (!confirmationColumns.has(name)) db.exec(`ALTER TABLE memory_confirmation_prompts ADD COLUMN ${name} ${type}`);
+      }
       const checkpointColumns = db.prepare("PRAGMA table_info(task_context_checkpoints)").all();
       if (!checkpointColumns.some((column) => column.name === "payload_json")) {
         db.exec("ALTER TABLE task_context_checkpoints ADD COLUMN payload_json TEXT NOT NULL DEFAULT '{}'");
@@ -603,7 +663,8 @@ export class TaskCommitmentStore {
       results.push(await this.upsert({ ...commitment, tenant_id: tenantId }));
     }
     const memoryConfirmations = await this.resolveMemoryConfirmationsFromToolResult(payload, tenantId);
-    return { commitments: results, count: results.length, memory_confirmations: memoryConfirmations };
+    const receipt = await this.recordMemoryConfirmationReceipt(payload, tenantId);
+    return { commitments: results, count: results.length, memory_confirmations: memoryConfirmations, ...(receipt ? { memory_receipt: receipt } : {}) };
   }
 
   async queueMemoryConfirmations({ tenantId = "default", projectId = null, taskKey, candidates = [], now = Date.now() } = {}) {
@@ -616,7 +677,7 @@ export class TaskCommitmentStore {
       for (const candidate of candidates.slice(0, 3)) {
         const candidateHash = text(candidate?.candidate_hash, 64);
         if (!/^[a-f0-9]{64}$/u.test(candidateHash)) continue;
-        const id = `memory-confirmation:${candidateHash.slice(0, 40)}`;
+        const id = `memory-confirmation:${hash(`${tenantId}\0${projectId ?? ""}\0${candidateHash}`).slice(0, 40)}`;
         const candidateJson = redactedJson({ ...candidate, id });
         const write = db.prepare(
           `INSERT INTO memory_confirmation_prompts(
@@ -654,9 +715,6 @@ export class TaskCommitmentStore {
         "SELECT 1 FROM memory_confirmation_prompts WHERE tenant_id = ? AND delivery_session_key = ? AND delivered_at IS NOT NULL LIMIT 1"
       ).get(tenantId, deliverySessionKey);
       if (prior) {
-        db.prepare(
-          "UPDATE memory_confirmation_prompts SET state = 'expired', resolved_at = ? WHERE tenant_id = ? AND task_key = ? AND state = 'pending'"
-        ).run(now, tenantId, taskKey);
         db.exec("COMMIT");
         return [];
       }
@@ -667,7 +725,7 @@ export class TaskCommitmentStore {
          ORDER BY created_at ASC, id ASC LIMIT ?`
       ).all(tenantId, taskKey, now, projectId, projectId, projectId, Math.max(1, Math.min(3, Number(limit) || 3)));
       const update = db.prepare(
-        "UPDATE memory_confirmation_prompts SET state = 'delivered', delivery_session_key = ?, delivered_at = ? WHERE id = ? AND state = 'pending'"
+        "UPDATE memory_confirmation_prompts SET delivery_session_key = ?, offered_at = ? WHERE id = ? AND state = 'pending'"
       );
       for (const row of rows) update.run(deliverySessionKey, now, row.id);
       db.exec("COMMIT");
@@ -678,7 +736,8 @@ export class TaskCommitmentStore {
           id: row.id,
           tenant_id: row.tenant_id,
           candidate_hash: row.candidate_hash,
-          project_id: row.project_id
+          project_id: row.project_id,
+          remote_confirmation_id: row.remote_confirmation_id ?? null
         };
       });
     } catch (error) {
@@ -692,35 +751,47 @@ export class TaskCommitmentStore {
 
   async resolveMemoryConfirmationsFromToolResult(payloadInput, tenantId = "default", now = Date.now()) {
     const { payload, input, toolName } = toolInputFromPayload(payloadInput);
-    if (toolName && !/(?:^|[.:/])request_user_input$/u.test(toolName) && toolName !== "request_user_input") return [];
-    const questions = questionList(input);
+    if (!isQuestionTool(toolName) || !hasTaskIdentity(payload)) return [];
+    const questions = questionList(input).map((question, index) => ({ question, index })).filter(({ question }) => isMemoryQuestion(question)).slice(0, 3);
     if (questions.length === 0) return [];
-    const result = payload.tool_result ?? payload.tool_response ?? payload.result ?? payload.output ?? payload.tool_output ?? payload.response;
+    const { result, object } = toolResultObject(payload);
+    if (result == null || object?.isError || object?.error || payload.is_error || ["failed", "rejected"].includes(object?.status)
+      || typeof result === "string" && /^(?:error[: ]|request_user_input.*(?:unavailable|not available))/iu.test(result)) return [];
     const answers = answersFromResult(result);
     await this.init();
     const db = this.open();
     const resolved = [];
     try {
       db.exec("BEGIN IMMEDIATE");
-      for (const [index, question] of questions.entries()) {
-        const questionId = text(question?.id ?? question?.header, 160);
-        if (!questionId.startsWith(MEMORY_CONFIRMATION_QUESTION_PREFIX)) continue;
-        const idSuffix = questionId.slice(MEMORY_CONFIRMATION_QUESTION_PREFIX.length);
-        const row = db.prepare(
-          "SELECT id FROM memory_confirmation_prompts WHERE tenant_id = ? AND id LIKE ? AND state = 'delivered' ORDER BY delivered_at DESC LIMIT 1"
-        ).get(tenantId, `memory-confirmation:${idSuffix}%`);
-        if (!row) continue;
-        const rawAnswer = answerFor(answers, { id: questionId, header: question?.header }, index);
+      const taskKey = taskKeyFromHookPayload(payload);
+      const rows = db.prepare(`SELECT * FROM memory_confirmation_prompts
+        WHERE tenant_id = ? AND (task_key = ? OR delivery_session_key = ?) AND expires_at > ?`).all(tenantId, taskKey, taskKey, now);
+      const alreadyShown = rows.some((row) => row.delivered_at !== null);
+      for (const { index, question } of questions) {
+        const matches = rows.filter((row) => {
+          const expected = memoryConfirmationQuestion({ ...parseObject(row.candidate_json), id: row.id });
+          return question.id ? question.id === expected.id
+            : normalizeCommitmentText(question.title ?? question.question) === normalizeCommitmentText(expected.question);
+        });
+        if (matches.length !== 1) continue;
+        const row = matches[0];
+        if (row.save_state === "saved") continue;
+        if (alreadyShown && !row.delivered_at) continue;
+        const questionId = question.id ?? question.title;
+        db.prepare(`UPDATE memory_confirmation_prompts SET state = CASE WHEN state = 'pending' THEN 'delivered' ELSE state END,
+          delivered_at = COALESCE(delivered_at, ?), delivery_session_key = ?, question_json = ?, question_call_id = ? WHERE id = ?`).run(
+          now, taskKey, redactedJson(question), text(payload.tool_call_id ?? payload.call_id, 256) || null, row.id
+        );
+        const rawAnswer = answerFor(answers, { id: questionId, header: question.header ?? question.title }, index);
         const normalized = normalizeAnswer(rawAnswer, Array.isArray(question?.options) ? question.options : []);
         if (!normalized) continue;
-        const label = normalizeCommitmentText(normalized.label);
-        const state = label.startsWith("保存する") ? "accepted"
-          : label.startsWith("今回は保存しない") ? "rejected"
-            : "corrected";
+        const label = classifyMemoryReviewAnswer(normalized.raw);
+        const state = ["accepted", "corrected"].includes(label) ? label : label === "unknown" ? "delivered" : "rejected";
+        appendMemoryLabel(db, row, label, normalized, now);
         db.prepare(
-          "UPDATE memory_confirmation_prompts SET state = ?, response_json = ?, resolved_at = ? WHERE id = ? AND state = 'delivered'"
-        ).run(state, redactedJson(normalized), now, row.id);
-        resolved.push({ id: row.id, state });
+          "UPDATE memory_confirmation_prompts SET state = ?, response_json = ?, answer_label = ?, resolved_at = ?, save_state = ? WHERE id = ?"
+        ).run(state, redactedJson(normalized), label, now, ["accepted", "corrected"].includes(label) ? "pending" : "not_requested", row.id);
+        resolved.push({ id: row.id, state, label, saved: false });
       }
       db.exec("COMMIT");
       return resolved;
@@ -731,6 +802,100 @@ export class TaskCommitmentStore {
       db.close();
       await secureDatabaseFiles(this.dbPath);
     }
+  }
+
+  async recordMemoryConfirmationReceipt(payloadInput, tenantId = "default", now = Date.now()) {
+    const { payload, input, toolName } = toolInputFromPayload(payloadInput);
+    const operation = toolName.match(/orgbrain_memories_(propose|confirm|confirmation_status)$/u)?.[1];
+    if (!operation || !hasTaskIdentity(payload)) return null;
+    const { object } = toolResultObject(payload);
+    await this.init();
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      const candidateId = object?.candidate_id ?? input.review_context?.candidate_id;
+      const row = candidateId
+        ? db.prepare("SELECT * FROM memory_confirmation_prompts WHERE tenant_id = ? AND id = ?").get(tenantId, candidateId)
+        : input.confirmation_token
+          ? db.prepare("SELECT * FROM memory_confirmation_prompts WHERE tenant_id = ? AND remote_confirmation_id = ?").get(tenantId, input.confirmation_token)
+          : null;
+      if (!row || hasTaskIdentity(payload) && row.task_key !== taskKeyFromHookPayload(payload)
+          && row.delivery_session_key !== taskKeyFromHookPayload(payload)) {
+        db.exec("COMMIT");
+        return null;
+      }
+      if (operation === "propose") {
+        if (object?.confirmation_token && !object.isError && !object.error) {
+          db.prepare("UPDATE memory_confirmation_prompts SET remote_confirmation_id = ? WHERE id = ?").run(object.confirmation_token, row.id);
+        }
+        db.exec("COMMIT");
+        return { candidate_id: row.id, saved: false };
+      }
+      if (row.remote_confirmation_id && input.confirmation_token !== row.remote_confirmation_id) {
+        db.exec("COMMIT");
+        return null;
+      }
+      if (row.save_state === "saved") {
+        db.exec("COMMIT");
+        return { candidate_id: row.id, save_state: "saved", saved: true };
+      }
+      if (object?.status === "expired") {
+        db.prepare("UPDATE memory_confirmation_prompts SET remote_confirmation_id = NULL WHERE id = ?").run(row.id);
+      }
+      const saved = object?.saved === true && typeof object.memory_id === "string";
+      const label = object?.review_label ?? null;
+      const saveState = saved ? "saved" : object?.saved === false && object?.approved === false ? "not_requested"
+        : object?.status === "failed" ? "failed" : "unknown";
+      if (label && typeof object.review_answer === "string" && object.review_answer) {
+        const normalized = normalizeAnswer(object.review_answer, []);
+        appendMemoryLabel(db, row, label, normalized, now);
+      }
+      const state = label === "accepted" || label === "corrected" ? label
+        : label && label !== "unknown" ? "rejected" : row.state;
+      db.prepare(`UPDATE memory_confirmation_prompts SET save_state = ?, receipt_json = ?,
+        state = ?, answer_label = COALESCE(?, answer_label), resolved_at = COALESCE(resolved_at, ?) WHERE id = ?`).run(
+        saveState, redactedJson({ ...object, confirmation_token: undefined }), state, label, now, row.id
+      );
+      db.exec("COMMIT");
+      return { candidate_id: row.id, save_state: saveState, saved };
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      db.close();
+      await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
+  async recordHookActivity({ tenantId = "default", projectId = null, event, status, now = Date.now() }) {
+    await this.init();
+    const db = this.open();
+    try {
+      db.prepare(`INSERT INTO memory_hook_activity(tenant_id, project_id, event, status_json, occurred_at) VALUES(?,?,?,?,?)
+        ON CONFLICT(tenant_id, project_id, event) DO UPDATE SET status_json = excluded.status_json, occurred_at = excluded.occurred_at`).run(
+        tenantId, projectId ?? "", event, redactedJson(status), now
+      );
+    } finally { db.close(); await secureDatabaseFiles(this.dbPath); }
+  }
+
+  async memoryReviewStatus({ tenantId = "default", projectId = null, limit = 100 } = {}) {
+    await this.init();
+    const db = this.open();
+    try {
+      const states = db.prepare(`SELECT state, answer_label, save_state, COUNT(*) AS count,
+        SUM(offered_at IS NOT NULL) AS offered_count, SUM(delivered_at IS NOT NULL) AS shown_count,
+        SUM(answer_label IS NOT NULL) AS answered_count FROM memory_confirmation_prompts
+        WHERE tenant_id = ? AND project_id IS ? GROUP BY state, answer_label, save_state`).all(tenantId, projectId);
+      const activity = db.prepare("SELECT event, status_json, occurred_at FROM memory_hook_activity WHERE tenant_id = ? AND project_id = ?").all(tenantId, projectId ?? "")
+        .map(({ status_json, ...row }) => ({ ...row, status: parseObject(status_json) }));
+      const labels = db.prepare(`SELECT l.*, p.save_state, p.receipt_json FROM memory_review_labels l
+        LEFT JOIN memory_confirmation_prompts p ON p.id = l.candidate_id AND p.tenant_id = l.tenant_id
+        WHERE l.tenant_id = ? AND l.project_id IS ? ORDER BY l.created_at DESC, l.version DESC LIMIT ?`).all(tenantId, projectId, Math.max(1, Math.min(200, Number(limit) || 100)))
+        .map(({ response_json, candidate_json, receipt_json, ...row }) => ({ ...row,
+          response: parseObject(response_json), candidate: parseObject(candidate_json), receipt: parseObject(receipt_json)
+        }));
+      return { contract: "memory-review-feedback/v1", states, activity, labels };
+    } finally { db.close(); }
   }
 
   async list({ tenantId = "default", projectId = null, taskKey = null, now = Date.now() } = {}) {

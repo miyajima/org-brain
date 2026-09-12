@@ -26,7 +26,7 @@ describe("API manifest fixture", () => {
       writeFile(resolve(fixtureDirectory, "api-manifest.json"), serialized, "utf8"),
       writeFile(resolve(fixtureDirectory, "api-manifest.sha256"), `${digest}\n`, "utf8")
     ]);
-    expect(manifest.routes).toHaveLength(197);
+    expect(manifest.routes).toHaveLength(199);
     expect(digest).toMatch(/^[0-9a-f]{64}$/u);
   });
 });

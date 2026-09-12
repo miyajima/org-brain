@@ -64,6 +64,7 @@ type ExtractionInput = {
     routing?: Record<string, unknown> | null;
     existing_memories?: Array<{ id: string; kind: string; text: string }>;
     extraction_profile?: "coverage/v1";
+    refinement_profile?: "a-plus/v1";
     coverage?: { groups?: Array<{ group_id: string; span_ids: string[]; priority: number; important: boolean; latest_order: number; review_signal_score?: number; review_signal_reasons?: string[] }>; pass1_group_ids?: string[]; omitted?: unknown[] };
     coverage_pass?: number;
     accepted_candidates?: unknown[];
@@ -138,6 +139,10 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
   if (packet.session_hash !== value.session_hash || packet.turn_hash !== value.turn_hash) throw new Error("invalid memory extraction input: turn identity mismatch");
   const extractionProfile = packet.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE ? MEMORY_EXTRACTION_COVERAGE_PROFILE : null;
   if (packet.extraction_profile !== undefined && !extractionProfile) throw new Error("invalid memory extraction profile");
+  const refined = packet.refinement_profile === "a-plus/v1";
+  if (packet.refinement_profile !== undefined && !refined) throw new Error("invalid memory refinement profile");
+  if (refined && (packet.schema !== "learning-extraction-proposal/v2" || extractionProfile)) throw new Error("a-plus/v1 requires the one-call v2 contract");
+  if (refined && (!Array.isArray(packet.snippets) || packet.snippets.length < 1 || packet.snippets.length > 3)) throw new Error("a-plus/v1 requires one to three evidence spans");
   if (extractionProfile && packet.schema !== "learning-extraction-proposal/v2") throw new Error("invalid memory extraction profile schema");
   if (limits.input_tokens !== MAX_INPUT_TOKENS || limits.output_tokens !== MAX_OUTPUT_TOKENS || limits.candidates !== MAX_CANDIDATES || limits.calls !== (extractionProfile ? 2 : 1)) {
     throw new Error("invalid memory extraction limits");
@@ -194,6 +199,7 @@ function parseInput(raw: unknown, ctx: CapabilityContext): ExtractionInput {
       rule_proposals: ruleProposals,
       routing: packet.routing && typeof packet.routing === "object" ? asRecord(packet.routing) : null,
       existing_memories: [],
+      ...(refined ? { refinement_profile: "a-plus/v1" as const } : {}),
       ...(extractionProfile ? {
         extraction_profile: extractionProfile,
         coverage: asRecord(packet.coverage) as ExtractionInput["packet"]["coverage"]
@@ -213,6 +219,14 @@ async function readInput(ctx: CapabilityContext): Promise<ExtractionInput> {
   const packetHash = `sha256:${await sha256(JSON.stringify(stableValue(rawPacket)))}`;
   if (packetHash !== input.packet_hash) throw new Error("memory extraction packet hash mismatch");
   if (input.contract_hash !== MEMORY_CONTRACT_V2_CONTRACT_HASH) throw new Error("memory extraction contract hash mismatch");
+  if (input.packet.refinement_profile) {
+    const ids = new Set<string>();
+    for (const span of input.packet.snippets) {
+      if (ids.has(span.span_id) || !["user", "assistant", "tool"].includes(span.role)) throw new Error("a-plus evidence identity invalid");
+      ids.add(span.span_id);
+      if (span.text_hash !== `sha256:${await sha256(span.text)}`) throw new Error("a-plus evidence hash mismatch");
+    }
+  }
   if (input.extraction_profile) {
     const bytes = input.packet.snippets.reduce((sum, snippet) => sum + new TextEncoder().encode(snippet.text).byteLength, 0);
     if (input.packet.snippets.length > 16 || bytes > 16 * 1024) throw new Error("coverage evidence pool exceeds fixed ceiling");

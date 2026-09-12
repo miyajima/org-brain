@@ -106,6 +106,7 @@ export function permissionForOrgBrainRequest(method: string, path: string): OrgP
     path.endsWith("/context") ||
     path.endsWith("/context-preview") ||
     path.endsWith("/review-queue") ||
+    path === "/v1/memories/confirmation-status" ||
     path.startsWith("/v1/context/") ||
     path === "/api/context/enrich"
   ) return "read";

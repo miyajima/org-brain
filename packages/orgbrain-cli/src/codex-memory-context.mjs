@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { assessMemoryUsefulnessV2 } from "../../shared/src/memory-usefulness-runtime.mjs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -20,6 +21,7 @@ import {
 import { previewLocalDomainRecall, recallBundleMarkdown } from "./lib/local-domain-recall.mjs";
 import {
   loadWorkspaceConfig,
+  resolveWorkspaceMapping,
   normalizeWorkspaceRoot,
   autonomyPolicyFromWorkspaceConfig,
   tenantFallbackFromEnv,
@@ -77,7 +79,7 @@ async function workspaceScope(cwdInput, env) {
   const cwd = normalizeWorkspaceRoot(cwdInput);
   if (!cwd) return null;
   const config = await loadWorkspaceConfig(workspacesFileFromEnv(env));
-  const mapped = config.workspaces[cwd] ?? null;
+  const { entry: mapped } = await resolveWorkspaceMapping(config, cwd);
   const mode = resolveMemoryMode(env);
   if (
     (mode.cloudMemoryEnabled || mode.configurationError) &&
@@ -233,16 +235,21 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   }
   const commitmentContext = formatCommitmentContext(commitments);
   contextParts.push(...commitmentContext);
-  if (hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent) {
+  if (hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent && ["on", "shadow", "confirm"].includes(scope.learningMode)) {
     const confirmationSessionKey = memoryConfirmationSessionKey(payload, taskKey);
+    let queueError = null;
     const confirmationCandidates = await commitmentStore.takeMemoryConfirmationBatch({
       tenantId: scope.tenantId,
       projectId: projectIdFromPayload(payload, scope),
       taskKey: confirmationSessionKey,
       deliverySessionKey: confirmationSessionKey
-    }).catch(() => []);
+    }).catch(() => { queueError = "confirmation_queue_read_failed"; return []; });
     const confirmationContext = formatMemoryConfirmationContext(confirmationCandidates);
     if (confirmationContext) contextParts.unshift(confirmationContext);
+    await commitmentStore.recordHookActivity({ tenantId: scope.tenantId, projectId: scope.projectId,
+      event: "UserPromptSubmit", status: { ok: !queueError, offered_count: confirmationCandidates.length,
+        reason: queueError || (confirmationContext ? "offered_not_yet_shown" : confirmationCandidates.length ? "candidate_over_context_budget" : "no_pending_or_session_already_shown") }
+    });
   }
   const learningInstruction = scope.learningMode === "shadow" || scope.learningMode === "on"
     ? VERIFIED_LEARNING_HIDDEN_INSTRUCTION
@@ -261,10 +268,14 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
     });
     const relevant = [];
     for (const result of results) {
+      const assessment = assessMemoryUsefulnessV2({ stage: "use", project_id: result.memory.project_id,
+        task_project_id: scope.projectId, expires_at: result.memory.expires_at,
+        source_available: await sourceHashesAreCurrent(result.memory, normalizeWorkspaceRoot(payload.cwd)) });
+      if (assessment.disposition === "exclude") continue;
+      result.usefulness = assessment;
       if (
         result.score.total >= MIN_TOTAL_SCORE &&
-        Math.max(result.score.lexical, result.score.semantic) >= MIN_COMPONENT_SCORE &&
-        await sourceHashesAreCurrent(result.memory, normalizeWorkspaceRoot(payload.cwd))
+        Math.max(result.score.lexical, result.score.semantic) >= MIN_COMPONENT_SCORE
       ) relevant.push(result);
     }
     if (relevant.length > 0) {

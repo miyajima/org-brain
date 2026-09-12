@@ -2274,6 +2274,33 @@
           "approved": {
             "type": "boolean"
           },
+          "corrected_content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "corrected_summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "review_label": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "corrected",
+              "not_needed",
+              "incorrect",
+              "not_decided",
+              "deferred",
+              "unknown"
+            ]
+          },
+          "review_answer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
           "conclusion": {
             "type": "string",
             "maxLength": 240
@@ -2414,6 +2441,31 @@
       "output_schema": null,
       "permission": "write",
       "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_confirmation_status",
+      "description": "Read the result of the same confirmation after a timeout. Never infer saved from an answer or resend an in-progress confirmation.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "confirmation_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "confirmation_token"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
     },
     {
       "name": "orgbrain_memories_extract",
@@ -2642,6 +2694,49 @@
           },
           "actor_id": {
             "type": "string"
+          },
+          "review_context": {
+            "type": "object",
+            "properties": {
+              "candidate_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "candidate_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "source_references": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "conclusion": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "reason_summary": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "reuse_rule": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "candidate_id",
+              "candidate_hash",
+              "source_references"
+            ],
+            "additionalProperties": false
           },
           "item": {
             "type": "object",
