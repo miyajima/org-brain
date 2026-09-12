@@ -245,14 +245,14 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
       taskKey: confirmationSessionKey,
       deliverySessionKey: confirmationSessionKey
     }).catch(() => { queueError = "confirmation_queue_read_failed"; return []; });
-    const confirmationContext = formatMemoryConfirmationContext(confirmationCandidates);
+    const confirmationContext = formatMemoryConfirmationContext(confirmationCandidates, {backend:scope.localMemoryEnabled?"local":"remote",workType:scope.workType});
     if (confirmationContext) contextParts.unshift(confirmationContext);
     await commitmentStore.recordHookActivity({ tenantId: scope.tenantId, projectId: scope.projectId,
       event: "UserPromptSubmit", status: { ok: !queueError, offered_count: confirmationCandidates.length,
         reason: queueError || (confirmationContext ? "offered_not_yet_shown" : confirmationCandidates.length ? "candidate_over_context_budget" : "no_pending_or_session_already_shown") }
     });
   }
-  const learningInstruction = scope.learningMode === "shadow" || scope.learningMode === "on"
+  const learningInstruction = ["shadow", "on", "confirm"].includes(scope.learningMode)
     ? VERIFIED_LEARNING_HIDDEN_INSTRUCTION
     : null;
   const store = options.store ?? new LocalMemoryStore(env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);

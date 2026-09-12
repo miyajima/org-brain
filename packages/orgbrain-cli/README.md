@@ -35,3 +35,13 @@ mapping. Optional synchronization runs separately through
 flags. Use `orgbrain usage configure --mode off` to roll back the feature while
 retaining history. Full contracts and validation are in the source repository's
 `docs/MEMORY_USE_HISTORY.md`.
+
+### Local confirmation flow
+
+With the local MCP and local Codex hooks configured, set the workspace's
+`memory_learning_mode` to `confirm`. Stop queues source-backed candidates; a later
+substantive prompt offers a bounded confirmation question. Only the actual save
+or correction answer authorizes the local MCP write. `confirmation_status` and
+immutable SQLite receipts make an uncertain reply recoverable without another
+question or duplicate save. Local schema 27 is additive; Cloud data is not copied.
+See `docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md` in the repository for the contract.
