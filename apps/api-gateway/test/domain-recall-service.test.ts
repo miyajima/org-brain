@@ -56,7 +56,7 @@ class Statement {
 
 function fixture() {
   const database = new DatabaseSync(":memory:");
-  for (const migration of ["0029_mcp_client_installations.sql", "0034_domain_pack_platform.sql", "0036_domain_recall.sql"]) {
+  for (const migration of ["0029_mcp_client_installations.sql", "0034_domain_pack_platform.sql", "0036_domain_recall.sql", "0040_memory_confirmation_reviews.sql"]) {
     database.exec(readFileSync(new URL(`../../../migrations/${migration}`, import.meta.url), "utf8"));
   }
   const manifest = JSON.parse(readFileSync(new URL("../../../domain-packs/first-party/sre/manifest.json", import.meta.url), "utf8"));

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   captureMemoryWithInferredRationale,
   confirmProposedMemory,
+  getMemoryConfirmationStatus,
   filterMemorySearchResults,
   proposeMemoryWithRationale
 } from "../src/rationale-service";
@@ -59,6 +60,9 @@ class FakeStatement {
   }
 
   async first<T>() {
+    if (this.sql.includes("FROM memory_confirmation_reviews")) {
+      return (this.db.reviews.find(row => row.tenant_id === this.args[0] && row.confirmation_id === this.args[1]) ?? null) as T | null;
+    }
     if (this.sql.includes("FROM business_categories") && this.sql.includes("tenant_id = ?") && this.sql.includes("id = ?")) {
       const row = this.db.businessCategories.find((item) => item.tenant_id === this.args[0] && item.id === this.args[1]);
       return (row ?? null) as T | null;
@@ -123,6 +127,17 @@ class FakeStatement {
   }
 
   async run() {
+    if (this.sql.startsWith("INSERT INTO memory_confirmation_reviews")) {
+      if (this.db.reviews.some(row => row.confirmation_id === this.args[0])) return { meta: { changes: 0 } };
+      const columns = ["confirmation_id", "tenant_id", "project_id", "owner_principal", "candidate_id", "candidate_hash", "original_json", "source_refs_json", "answer_label", "answer_text", "corrected_json", "assessment_json", "request_hash", "created_at", "updated_at"];
+      this.db.reviews.push({ ...Object.fromEntries(columns.map((name, index) => [name, this.args[index]])), save_state: "processing" });
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith("UPDATE memory_confirmation_reviews SET save_state = ?")) {
+      const row = this.db.reviews.find(row => row.tenant_id === this.args[5] && row.confirmation_id === this.args[6]);
+      if (row) Object.assign(row, { save_state: this.args[0], memory_id: this.args[1], rationale_id: this.args[2], response_json: this.args[3], updated_at: this.args[4] });
+      return { meta: { changes: row ? 1 : 0 } };
+    }
     if (this.sql.startsWith("INSERT OR IGNORE INTO business_categories(")) {
       if (!this.db.businessCategories.some((item) => item.id === this.args[0])) {
         this.db.businessCategories.push({
@@ -307,6 +322,7 @@ class FakeD1 {
   entities: Array<Record<string, unknown>> = [];
   memories: MemoryRecord[] = [];
   memoriesFts: Array<Record<string, unknown>> = [];
+  reviews: Array<Record<string, unknown>> = [];
   memoryVersions: Array<Record<string, unknown>> = [];
   rationales: Array<Record<string, unknown>> = [];
   memoryEntities: Array<Record<string, unknown>> = [];
@@ -367,6 +383,41 @@ describe("rationale service", () => {
     expect(db.memories).toHaveLength(1);
     expect(db.rationales).toHaveLength(1);
     expect(db.memoryEntities).toHaveLength(1);
+  });
+
+  it("replays a completed receipt without a second memory and status recovers a lost response", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as unknown as Parameters<typeof proposeMemoryWithRationale>[0];
+    const proposed = await proposeMemoryWithRationale(env, { tenant_id: "default", source: "codex", actor_id: "owner",
+      item: { content: "旧方針です。", project_id: "org-brain" } });
+    const answer = { tenant_id: "default", confirmation_token: proposed.confirmation_token, approved: true,
+      corrected_content: "新しい方針を使用する。理由は運用を簡潔にするため。", corrected_summary: "新しい方針を使用する" };
+    const first = await confirmProposedMemory(env, answer, "owner");
+    expect(await confirmProposedMemory(env, answer, "owner")).toEqual(first);
+    expect(await getMemoryConfirmationStatus(env, answer, "owner")).toEqual(first);
+    expect(db.memories).toHaveLength(1);
+    expect(db.rationales).toHaveLength(1);
+    expect(db.memories[0].content).toBe(answer.corrected_content);
+    expect(db.memories[0].summary).toBe(answer.corrected_summary);
+    expect(db.memoriesFts[0].content).toContain("新しい方針");
+    await expect(confirmProposedMemory(env, { ...answer, corrected_content: "違う内容" }, "owner")).rejects.toThrow("different answer");
+    await expect(getMemoryConfirmationStatus(env, answer, "other")).rejects.toThrow("another principal");
+  });
+
+  it("does not turn ambiguous or negative review answers into saves", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as unknown as Parameters<typeof proposeMemoryWithRationale>[0];
+    const proposed = await proposeMemoryWithRationale(env, { tenant_id: "default", source: "codex", actor_id: "owner",
+      item: { content: "この方針を採用する。", project_id: "org-brain" },
+      review_context: { candidate_id: "candidate", candidate_hash: "a".repeat(64), source_references: [] } });
+    const answer = { tenant_id: "default", confirmation_token: proposed.confirmation_token, approved: true };
+    await expect(confirmProposedMemory(env, answer, "owner")).rejects.toThrow("actual user answer");
+    await expect(confirmProposedMemory(env, { ...answer, review_answer: "考えておきます" }, "owner")).rejects.toThrow("does not approve");
+    await expect(confirmProposedMemory(env, { ...answer, review_answer: "保存する", corrected_content: "別内容" }, "owner")).rejects.toThrow("does not authorize");
+    const declined = await confirmProposedMemory(env, { ...answer, approved: false, review_answer: "まだ決めていない", review_label: "not_decided" }, "owner");
+    expect(declined.saved).toBe(false);
+    expect(declined.review_label).toBe("not_decided");
+    expect(db.memories).toHaveLength(0);
   });
 
   it("captures non-interactive memories with inferred unconfirmed rationale", async () => {

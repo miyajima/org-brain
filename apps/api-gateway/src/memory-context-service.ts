@@ -1,5 +1,6 @@
 import {
   HttpError,
+  assessMemoryUsefulnessV2,
   answerGuidanceForDisposition,
   buildTenantMemoryProfile,
   deriveEvidenceDisposition,
@@ -220,7 +221,10 @@ export async function retrieveMemoryContext(
         end: unit?.source_span_end ?? null
       },
       score: result.score,
-      extraction_state: unit?.extraction_state ?? "degraded"
+      extraction_state: unit?.extraction_state ?? "degraded",
+      usefulness: assessMemoryUsefulnessV2({ stage: "use",
+        task_project_id: typeof body.project_id === "string" ? body.project_id : null,
+        within_budget: usedChars <= tokenBudget * 4 })
     });
     for (const candidate of units) {
       let metadata: Record<string, unknown> = {};

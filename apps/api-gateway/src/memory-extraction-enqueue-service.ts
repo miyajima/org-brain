@@ -96,6 +96,13 @@ function parseInput(raw: unknown): EnqueueInput {
   }
   const extractionProfile = packet.extraction_profile === MEMORY_EXTRACTION_COVERAGE_PROFILE ? MEMORY_EXTRACTION_COVERAGE_PROFILE : undefined;
   if (packet.extraction_profile !== undefined && !extractionProfile) throw new HttpError(400, "invalid_payload", "unsupported extraction_profile");
+  if (packet.refinement_profile !== undefined) {
+    if (packet.refinement_profile !== "a-plus/v1") throw new HttpError(400, "invalid_payload", "unsupported refinement_profile");
+    if (packet.schema !== SCHEMA_VERSION || extractionProfile) throw new HttpError(400, "invalid_payload", "a-plus/v1 requires the one-call v2 contract");
+    if (!Array.isArray(packet.snippets) || packet.snippets.length < 1 || packet.snippets.length > 3) {
+      throw new HttpError(400, "invalid_payload", "a-plus/v1 requires one to three evidence spans");
+    }
+  }
   if (extractionProfile && packet.schema !== SCHEMA_VERSION) throw new HttpError(400, "invalid_payload", "coverage/v1 requires learning-extraction-proposal/v2");
   const expectedCalls = extractionProfile ? 2 : 1;
   if (limits.input_tokens !== 2_000 || limits.output_tokens !== 800 || limits.candidates !== 3 || limits.calls !== expectedCalls) {

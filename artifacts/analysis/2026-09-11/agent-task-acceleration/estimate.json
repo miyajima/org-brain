@@ -1,0 +1,204 @@
+{
+  "status": "assumption-only sensitivity analysis; no paired agent trial",
+  "formula": "improvement = baseline investigation share * avoided fraction - all added overhead share",
+  "scope": "Incremental benefit over existing memory, skills, RTK and normal prompt caching. Assumes bounded output and rejection of irrelevant evidence; current raw retrieval does not satisfy this assumption.",
+  "overhead_includes": [
+    "retrieval",
+    "additional agent turn",
+    "source verification",
+    "rework",
+    "prefix cache losses",
+    "amortized preparation and capture cost"
+  ],
+  "baseline_distribution": "Weights are assumed workload cost shares, not measured task frequencies; equal-duration/equal-token tasks make them task frequencies too.",
+  "scenarios": [
+    {
+      "id": "applicable-history",
+      "weight": 0.5,
+      "time": {
+        "investigation_share": 0.35,
+        "avoidable_fraction": 0.55,
+        "added_overhead_share": 0.05
+      },
+      "tokens": {
+        "investigation_share": 0.45,
+        "avoidable_fraction": 0.6,
+        "added_overhead_share": 0.05
+      },
+      "bounds": {
+        "time": [
+          [
+            0.25,
+            0.45
+          ],
+          [
+            0.4,
+            0.7
+          ],
+          [
+            0.03,
+            0.08
+          ]
+        ],
+        "tokens": [
+          [
+            0.3,
+            0.6
+          ],
+          [
+            0.4,
+            0.7
+          ],
+          [
+            0.03,
+            0.1
+          ]
+        ]
+      },
+      "time_improvement_pct": 14.25,
+      "total_token_improvement_pct": 22,
+      "time_sensitivity_pct": [
+        2,
+        28.5
+      ],
+      "total_token_sensitivity_pct": [
+        2,
+        39
+      ]
+    },
+    {
+      "id": "changed-conditions",
+      "weight": 0.3,
+      "time": {
+        "investigation_share": 0.22,
+        "avoidable_fraction": 0.2,
+        "added_overhead_share": 0.06
+      },
+      "tokens": {
+        "investigation_share": 0.3,
+        "avoidable_fraction": 0.25,
+        "added_overhead_share": 0.06
+      },
+      "bounds": {
+        "time": [
+          [
+            0.15,
+            0.3
+          ],
+          [
+            0.1,
+            0.3
+          ],
+          [
+            0.04,
+            0.09
+          ]
+        ],
+        "tokens": [
+          [
+            0.2,
+            0.4
+          ],
+          [
+            0.1,
+            0.35
+          ],
+          [
+            0.04,
+            0.1
+          ]
+        ]
+      },
+      "time_improvement_pct": -1.6,
+      "total_token_improvement_pct": 1.5,
+      "time_sensitivity_pct": [
+        -7.5,
+        5
+      ],
+      "total_token_sensitivity_pct": [
+        -8,
+        10
+      ]
+    },
+    {
+      "id": "no-useful-history",
+      "weight": 0.2,
+      "time": {
+        "investigation_share": 0,
+        "avoidable_fraction": 0,
+        "added_overhead_share": 0.025
+      },
+      "tokens": {
+        "investigation_share": 0,
+        "avoidable_fraction": 0,
+        "added_overhead_share": 0.04
+      },
+      "bounds": {
+        "time": [
+          [
+            0,
+            0.05
+          ],
+          [
+            0,
+            0.2
+          ],
+          [
+            0.01,
+            0.05
+          ]
+        ],
+        "tokens": [
+          [
+            0,
+            0.05
+          ],
+          [
+            0,
+            0.2
+          ],
+          [
+            0.01,
+            0.08
+          ]
+        ]
+      },
+      "time_improvement_pct": -2.5,
+      "total_token_improvement_pct": -4,
+      "time_sensitivity_pct": [
+        -5,
+        0
+      ],
+      "total_token_sensitivity_pct": [
+        -8,
+        0
+      ]
+    }
+  ],
+  "portfolio": {
+    "time": {
+      "improvement_pct": 6.15,
+      "sensitivity_pct": [
+        -2.25,
+        15.75
+      ]
+    },
+    "tokens": {
+      "improvement_pct": 10.65,
+      "sensitivity_pct": [
+        -3,
+        22.5
+      ]
+    }
+  },
+  "independent_pair_sample_size_example": {
+    "assumptions": {
+      "target_effect": 0.15,
+      "paired_difference_sd": 0.25,
+      "two_sided_alpha_approx": 0.05,
+      "power_approx": 0.8
+    },
+    "normal_approx_pairs_per_client": 22,
+    "warning": "Planning example only. Small samples, task clusters, skew and quality failures need different analysis; re-estimate from pilot variance."
+  }
+}

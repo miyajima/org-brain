@@ -1,0 +1,97 @@
+---
+const { lang = "ja" } = Astro.props;
+---
+<section id="memory-review-history" data-lang={lang}>
+  <h2>{lang === "ja" ? "記憶の確認履歴" : "Memory review history"}</h2>
+  <p>{lang === "ja" ? "自分の回答と保存結果を確認できます。訂正して保存すると新しい確認履歴が残ります。" : "Review your answers and save receipts. Saving a correction creates a new review."}</p>
+  <button type="button" id="review-export">{lang === "ja" ? "評価用JSONを出力" : "Export JSON"}</button>
+  <p id="review-status" role="status"></p>
+  <div id="review-items"></div>
+  <button type="button" id="review-more" hidden>{lang === "ja" ? "続きを表示" : "Load more"}</button>
+</section>
+<script>
+  const root = document.querySelector<HTMLElement>("#memory-review-history")!;
+  const ja = root.dataset.lang === "ja";
+  const status = root.querySelector<HTMLElement>("#review-status")!;
+  const items = root.querySelector<HTMLElement>("#review-items")!;
+  const more = root.querySelector<HTMLButtonElement>("#review-more")!;
+  const params = new URLSearchParams(location.search);
+  const tenant = params.get("tenant_id") || decodeURIComponent(document.cookie.split("; ").find(v => v.startsWith("orgbrain_tenant="))?.split("=").slice(1).join("=") || "default");
+  type Review = { id: string; candidate_id: string | null; candidate_hash: string | null; label: string; answer: string; save_state: string;
+    original: { memory: { content: string; summary: string; project_id: string | null; external_key: string | null; tags: string[] }; rationale: { conclusion: string; reason_summary: string } };
+    correction: { content?: string; summary?: string } | null; source_references: unknown[] };
+  async function api(route: string, body?: unknown) {
+    const response = await fetch(`/api/v1/${route}`, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {});
+    const result = await response.json() as { ok?: boolean; error?: { message?: string }; data: any };
+    if (!response.ok || result.ok === false) throw new Error(result.error?.message || `HTTP ${response.status}`);
+    return result.data;
+  }
+  let cursor: string | null = null;
+  async function page(after?: string | null) {
+    const query = new URLSearchParams({ tenant_id: tenant, limit: "100" });
+    if (params.get("project_id")) query.set("project_id", params.get("project_id")!);
+    if (after) query.set("cursor", after);
+    return api(`memory-reviews?${query}`);
+  }
+  function render(review: Review) {
+    const article = document.createElement("article");
+    const title = document.createElement("h3");
+    title.textContent = review.correction?.summary || review.original.memory.summary || review.original.rationale.conclusion;
+    const state = document.createElement("p"); state.textContent = `${review.label} · ${review.save_state}`;
+    const details = document.createElement("details");
+    const summary = document.createElement("summary"); summary.textContent = ja ? "原文・回答・原典" : "Original, answer and sources";
+    const source = document.createElement("pre"); source.textContent = JSON.stringify({ original: review.original, answer: review.answer, source_references: review.source_references }, null, 2);
+    details.appendChild(summary); details.appendChild(source);
+    const text = document.createElement("textarea"); text.value = review.correction?.content || review.original.memory.content;
+    text.setAttribute("aria-label", ja ? "訂正する本文" : "Corrected content");
+    const save = document.createElement("button"); save.type = "button"; save.textContent = ja ? "訂正して保存" : "Save correction";
+    let pending: { token: string; body: Record<string, unknown> } | null = null;
+    save.onclick = async () => {
+      if (!text.value.trim()) return;
+      save.disabled = true; status.textContent = "";
+      try {
+        if (!pending) {
+          const digest = review.candidate_hash || Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",
+            new TextEncoder().encode(JSON.stringify(review.original))))).map(byte => byte.toString(16).padStart(2, "0")).join("");
+          const proposal = await api("memories/propose", { tenant_id: tenant, source: "codex", item: { ...review.original.memory, external_key: review.original.memory.external_key || `confirmation:${review.id}` },
+            review_context: { candidate_id: review.candidate_id || `review:${review.id}`, candidate_hash: digest, source_references: review.source_references,
+              conclusion: review.original.rationale.conclusion, reason_summary: review.original.rationale.reason_summary } });
+          pending = { token: proposal.confirmation_token, body: { tenant_id: tenant, confirmation_token: proposal.confirmation_token, approved: true,
+            review_label: "corrected", review_answer: `修正: ${text.value.trim()}`, corrected_content: text.value.trim(), corrected_summary: text.value.trim().slice(0, 240) } };
+        } else {
+          const receipt = await api("memories/confirmation-status", { tenant_id: tenant, confirmation_token: pending.token });
+          if (receipt.saved === true) { text.disabled = true; save.textContent = ja ? "保存済み" : "Saved"; state.textContent = ja ? "保存済み" : "Saved"; return; }
+          if (receipt.status !== "pending" && receipt.status !== "failed") throw new Error(ja ? "保存処理の状態を確認してください。" : "Check the save status before retrying.");
+        }
+        text.readOnly = true;
+        const receipt = await api("memories/confirm", pending.body);
+        if (receipt.saved !== true) throw new Error(ja ? "保存完了を確認できませんでした。" : "Save could not be confirmed.");
+        state.textContent = ja ? "訂正版を保存しました" : "Correction saved"; text.disabled = true; save.textContent = ja ? "保存済み" : "Saved";
+      } catch (error) { status.textContent = ja ? "保存結果を確認できませんでした。再試行すると保存状態を照会します。" : "Save could not be confirmed. Retry to check its status."; }
+      finally { save.disabled = text.disabled; }
+    };
+    [title, state, details, text, save].forEach(node => article.appendChild(node)); items.appendChild(article);
+  }
+  async function load() {
+    try { const data = await page(cursor); data.items.forEach(render); cursor = data.next_cursor; more.hidden = !cursor;
+      status.textContent = items.children.length ? "" : ja ? "確認履歴はありません。" : "No review history.";
+    } catch (error) { status.textContent = String(error); }
+  }
+  more.onclick = load;
+  root.querySelector<HTMLButtonElement>("#review-export")!.onclick = async () => {
+    try {
+      const records: Review[] = []; let next: string | null = null;
+      do { const data = await page(next); records.push(...data.items); next = data.next_cursor; } while (next);
+      const url = URL.createObjectURL(new Blob([JSON.stringify({ contract: "memory-review-feedback/v1", items: records }, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a"); link.href = url; link.download = "memory-review-feedback.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { status.textContent = String(error); }
+  };
+  void load();
+</script>
+<style>
+  section { margin-block: 2rem; } h2 { font-size: 1.5rem; font-weight: 700; }
+  #memory-review-history :global(article) { border-block-start: 1px solid #334155; padding-block: 1rem; }
+  #memory-review-history :global(h3) { font-size: 1.1rem; font-weight: 600; margin-block: .5rem; }
+  #memory-review-history :global(textarea) { display: block; width: 100%; min-height: 7rem; margin-block: 1rem; padding: .75rem; }
+  #memory-review-history :global(pre) { white-space: pre-wrap; overflow-wrap: anywhere; } #memory-review-history :global(button) { padding: .5rem .8rem; }
+</style>

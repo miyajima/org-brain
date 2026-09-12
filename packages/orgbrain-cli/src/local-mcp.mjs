@@ -74,6 +74,8 @@ const TOOL_DEFINITIONS = [
         tenant_id: { type: "string" },
         confirmation_token: { type: "string", minLength: 1, maxLength: 64 },
         approved: { type: "boolean" },
+        corrected_content: { type: "string", maxLength: 20000 },
+        corrected_summary: { type: "string", maxLength: 1000 },
         conclusion: { type: "string", maxLength: 240 },
         reason_summary: { type: "string", maxLength: 500 },
         decision_type: { type: "string", enum: ["adopt", "reject", "prioritize", "diagnose", "workaround", "policy"] },
@@ -645,11 +647,11 @@ async function confirmLocalMemory(store, input) {
     tenant_id: tenantId,
     approved: input.approved,
     buildCaptureInput(payload) {
-      const conclusion = boundedString(input.conclusion, 240, payload.proposed_rationale.conclusion);
+      const conclusion = boundedString(input.conclusion || input.corrected_summary || input.corrected_content, 240, payload.proposed_rationale.conclusion);
       const reason = boundedString(input.reason_summary, 500, payload.proposed_rationale.reason_summary);
       screenInteractiveMemory(conclusion, "conclusion");
       screenInteractiveMemory(reason, "reason_summary");
-      const corrected = conclusion !== payload.proposed_rationale.conclusion ||
+      const corrected = Boolean(input.corrected_content || input.corrected_summary) || conclusion !== payload.proposed_rationale.conclusion ||
         reason !== payload.proposed_rationale.reason_summary ||
         (input.decision_type && input.decision_type !== payload.proposed_rationale.decision_type) ||
         (Array.isArray(input.entities) && input.entities.length > 0) ||
@@ -669,7 +671,8 @@ async function confirmLocalMemory(store, input) {
         actor_type: payload.actor_type,
         actor_id: payload.actor_id,
         kind: "semantic",
-        summary: conclusion,
+        content: input.corrected_content ? screenInteractiveMemory(input.corrected_content, "corrected_content") : corrected ? `${conclusion}\n理由: ${reason}` : payload.proposed_memory.content,
+        summary: input.corrected_summary ? screenInteractiveMemory(input.corrected_summary, "corrected_summary") : conclusion,
         rationale: reason,
         entities: entities.map((entity) => entity.name),
         evidence: [...evidence, {

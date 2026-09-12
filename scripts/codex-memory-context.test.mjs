@@ -477,6 +477,9 @@ test("memory confirmation candidates require complete durable evidence and exclu
 test("Codex delivers durable memory confirmations once per session and records the answer without a task commitment", async () => {
   const ctx = await fixture();
   try {
+    const mapping = JSON.parse(await readFile(ctx.workspacesFile, "utf8"));
+    mapping.workspaces[ctx.workspace].memory_learning_mode = "on";
+    await writeFile(ctx.workspacesFile, JSON.stringify(mapping));
     const commitmentStore = new TaskCommitmentStore(ctx.store.dbPath);
     const [candidate] = prepareMemoryConfirmationCandidates([{
       external_key: "review:failure:one",
@@ -539,6 +542,9 @@ test("Codex delivers durable memory confirmations once per session and records t
 test("memory confirmation answers distinguish corrections from skips", async () => {
   const ctx = await fixture();
   try {
+    const mapping = JSON.parse(await readFile(ctx.workspacesFile, "utf8"));
+    mapping.workspaces[ctx.workspace].memory_learning_mode = "on";
+    await writeFile(ctx.workspacesFile, JSON.stringify(mapping));
     const commitmentStore = new TaskCommitmentStore(ctx.store.dbPath);
     const candidates = prepareMemoryConfirmationCandidates(["alpha", "beta"].map((name) => ({
       external_key: `review:${name}`,
@@ -577,7 +583,7 @@ test("memory confirmation answers distinguish corrections from skips", async () 
       tool_input: { questions },
       tool_result: {
         answers: {
-          [questions[0].id]: "手順を修正版の検証コマンドに変更する",
+          [questions[0].id]: "修正: 手順を修正版の検証コマンドに変更する",
           [questions[1].id]: "今回は保存しない"
         }
       }

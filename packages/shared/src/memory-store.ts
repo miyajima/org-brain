@@ -192,6 +192,7 @@ export type MemoryEvidenceBundleItem = {
   source_span: { start: number | null; end: number | null };
   score: number;
   extraction_state: string;
+  usefulness?: import("./memory-usefulness-runtime.mjs").MemoryUsefulnessV2Assessment;
 };
 
 export type MemoryEvidenceBundle = {

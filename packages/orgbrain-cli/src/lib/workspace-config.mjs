@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { chmod, mkdir, open, readFile, rename, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -23,6 +25,38 @@ export function resolveHomePath(value) {
 export function normalizeWorkspaceRoot(value) {
   const resolved = resolveHomePath(typeof value === "string" ? value.trim() : "");
   return resolved ? path.resolve(resolved) : "";
+}
+
+const execFileAsync = promisify(execFile);
+
+// A worktree belongs to its common Git repository, not to another directory
+// with the same basename. Explicit workspace settings always win.
+export async function resolveWorkspaceMapping(config, cwdInput) {
+  const cwd = normalizeWorkspaceRoot(cwdInput);
+  const direct = config.workspaces[cwd];
+  if (direct) return { entry: direct, root: cwd, source: "workspace" };
+  if (!cwd) return { entry: null, root: null, source: "unmapped" };
+  try {
+    const { stdout } = await execFileAsync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], {
+      timeout: 1_000, maxBuffer: 16_384, windowsHide: true
+    });
+    const [root, common] = stdout.trim().split(/\r?\n/u).map(normalizeWorkspaceRoot);
+    const canonicalEntries = {};
+    for (const [entryRoot, entry] of Object.entries(config.workspaces)) {
+      canonicalEntries[await realpath(entryRoot).catch(() => entryRoot)] = entry;
+    }
+    if (canonicalEntries[root]) return { entry: canonicalEntries[root], root, source: "workspace-root" };
+    if (config.workspaces[root]) return { entry: config.workspaces[root], root, source: "workspace-root" };
+    if (path.basename(common || "") === ".git") {
+      const repositoryRoot = path.dirname(common);
+      if (canonicalEntries[repositoryRoot]) {
+        return { entry: canonicalEntries[repositoryRoot], root: repositoryRoot, source: "git-common-repository" };
+      }
+    }
+  } catch {
+    // Non-Git directories retain the existing exact-mapping behavior.
+  }
+  return { entry: null, root: null, source: "unmapped" };
 }
 
 function normalizeId(value) {
@@ -108,7 +142,7 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
   if (captureV2Mode !== null && !["off", "shadow", "on"].includes(captureV2Mode)) {
     throw new Error(`workspace memory_capture_v2_mode is invalid: ${workspaceRoot}`);
   }
-  if (!["off", "shadow", "on"].includes(learningMode)) {
+  if (!["off", "shadow", "on", "confirm"].includes(learningMode)) {
     throw new Error(`workspace memory_learning_mode is invalid: ${workspaceRoot}`);
   }
   return {
@@ -203,7 +237,6 @@ export async function saveWorkspaceConfig(file, config) {
   const normalized = normalizeWorkspaceConfig(config);
   const directory = path.dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  await chmod(directory, 0o700);
   const staged = path.join(directory, `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
   try {
     await writeFile(staged, `${JSON.stringify(normalized, null, 2)}\n`, {
@@ -228,7 +261,6 @@ async function acquireWorkspaceConfigLock(file, options = {}) {
   const staleMs = options.staleMs ?? 30_000;
   const startedAt = Date.now();
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  await chmod(directory, 0o700);
 
   while (true) {
     try {

@@ -14,6 +14,7 @@ export * from "./memory-extractor";
 export * from "./memory-capture-v2";
 export * from "./memory-repair";
 export * from "./memory-quality";
+export * from "./memory-usefulness-runtime.mjs";
 export * from "./memory-quality-audit";
 export * from "./memory-learning";
 export * from "./memory-extraction-provider-contract";

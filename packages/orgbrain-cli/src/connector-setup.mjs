@@ -373,14 +373,14 @@ export function codexMinimalHooksPlan(options = {}) {
       additionalContextLimit: 8_192
     },
     PreToolUse: {
-      matcher: "request_user_input",
+      matcher: "request_user_input(_async)?",
       type: "command",
       command: hookCommand(baseCommand, envFile, "codex-pre-tool", errorLog),
       timeout: 1,
       statusMessage: "Checking prior OrgBrain decisions"
     },
     PostToolUse: {
-      matcher: "request_user_input",
+      matcher: "request_user_input(_async)?|.*orgbrain_memories_(propose|confirm|confirmation_status)",
       type: "command",
       command: hookCommand(baseCommand, envFile, "codex-post-tool", errorLog),
       timeout: 2,
@@ -542,8 +542,8 @@ export function cloudHooksPlan(agent, options = {}) {
     handlers = {
       SessionStart: { type: "command", command: command("codex-context"), timeout: 2, statusMessage: "Restoring OrgBrain context", additionalContextLimit: 8_192 },
       UserPromptSubmit: { type: "command", command: command("codex-context"), timeout: 3, statusMessage: "Checking OrgBrain context", additionalContextLimit: 8_192 },
-      PreToolUse: { matcher: "request_user_input", type: "command", command: command("codex-pre-tool"), timeout: 1, statusMessage: "Checking prior OrgBrain decisions" },
-      PostToolUse: { matcher: "request_user_input", type: "command", command: command("codex-post-tool"), timeout: 2, statusMessage: "Saving OrgBrain task commitment" },
+      PreToolUse: { matcher: "request_user_input(_async)?", type: "command", command: command("codex-pre-tool"), timeout: 1, statusMessage: "Checking prior OrgBrain decisions" },
+      PostToolUse: { matcher: "request_user_input(_async)?|.*orgbrain_memories_(propose|confirm|confirmation_status)", type: "command", command: command("codex-post-tool"), timeout: 2, statusMessage: "Saving OrgBrain task commitment" },
       PreCompact: { type: "command", command: command("codex-pre-compact"), timeout: 3, statusMessage: "Checkpointing OrgBrain task commitments" },
       PostCompact: { type: "command", command: command("codex-context"), timeout: 2, statusMessage: "Restoring OrgBrain context after compaction", additionalContextLimit: 8_192 },
       Stop: { type: "command", command: command("codex-stop"), timeout: 5, statusMessage: "Saving reusable OrgBrain memory" }

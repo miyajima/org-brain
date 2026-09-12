@@ -13,12 +13,17 @@ This repository owns all memory extraction and quality decisions. The shared Ast
   backwards read capped at 4 MiB), verifies successful observe calls against
   real tool/file/user evidence, and sends at most one batch to the known
   capture tool. It does not invoke an LLM, `tools/list`, or tool discovery.
-- Stop remains silent when it finds a complete durable success, inferred
-  decision, or fully diagnosed failure. It queues at most three redacted
+- Stop remains silent. Fully supported success/failure candidates and source-backed
+  decision questions have separate eligibility gates. Decision questions may
+  explicitly show unknown rationale or reuse conditions; this does not attest a
+  command or adopt the candidate as verified learning. It queues at most three redacted
   confirmation candidates in the private local hook database. The next
   substantive UserPromptSubmit for that task may inject one confirmation batch,
   and no session receives more than one batch.
-- Interactive confirmation uses `request_user_input`. Save and corrected
+- Interactive confirmation uses `request_user_input` in Plan mode and
+  `request_user_input_async` in ordinary work. An offer is not a shown question,
+  and a shown asynchronous question is not an answer. Only successful question
+  events consume the one-batch session slot. Save and corrected
   answers must follow `orgbrain_memories_propose` then
   `orgbrain_memories_confirm`; skip answers perform no memory write. Structured
   user choices already held as task commitments are excluded from this prompt.
@@ -57,3 +62,42 @@ The fixture fixes these behaviors:
 
 The UserPromptSubmit hook supplies the optional internal observe instruction.
 Changing the global harness remains unnecessary and outside this contract.
+
+## Human review feedback
+
+`memory_learning_mode=confirm` is the initial Codex rollout setting. Stop stores
+only local confirmation candidates and never captures memory, writes a cloud
+outbox, or enqueues extraction, even if extraction is enabled in the environment.
+The subsequent interactive Remote MCP write requires the actual human answer.
+
+`memory-review-feedback/v1` links the immutable confirmation ID, candidate hash,
+original source spans/roles/hashes, actual answer, correction, and save receipt.
+`not_needed`, `incorrect`, `not_decided`, `deferred`, and `unknown` are separate
+labels; only `accepted` or an explicit `修正: …` answer authorizes persistence.
+The confirmation API updates body, summary and search text together. Repeating
+the same answered confirmation returns its receipt; a different answer requires
+a new proposal. Read `orgbrain_memories_confirmation_status` after uncertainty.
+Remote schema support is required before asking; no local canonical fallback.
+
+`GET /v1/memory-reviews` returns only the caller's history, optionally scoped by
+project, with a stable cursor. The existing `/reviews` page exposes original
+text, sources, correction and a paginated JSON export. `orgbrain memory reviews`
+shows bounded **local hook observations**, not the canonical cloud history.
+`doctor` exposes effective Git-common-repository mapping, runtime paths, hook
+activity and phase counts without dumping answer text. Exact workspace overrides
+win, including explicit off settings.
+
+`memory-usefulness/v2` uses grounding, applicability, task contribution,
+incremental value and information amount for capture and use. Prediction,
+human confirmation and observed results are distinct. Unknown is never zero;
+a save receipt does not establish task success. Domain Recall feedback persists
+this assessment alongside the existing feedback event.
+
+`ORGBRAIN_MEMORY_REFINEMENT_PROFILE=a-plus/v1` carries the profile and the
+existing one-to-three source snippets through the one-call v2 path. It cannot be
+combined with coverage or v3. Extraction remains off unless separately enabled;
+v3's external execution stop and prior held experiments remain unchanged.
+
+Deploy migration `0040_memory_confirmation_reviews.sql` before the updated API.
+It adds the private review/receipt table and the Domain Recall assessment column.
+Local verification does not establish a deployed, trusted or authenticated hook.

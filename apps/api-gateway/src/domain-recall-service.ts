@@ -1,6 +1,6 @@
 import { domainPackManifestDigest, rankDomainRecallCandidates, type DomainRecallRankingCandidate } from "@org-brain/core";
 import { domainPackManifestSchema, type RecallProfileV1 } from "@org-brain/contracts";
-import { HttpError, ulid } from "@org-brain/shared";
+import { HttpError, ulid, assessMemoryUsefulnessV2 } from "@org-brain/shared";
 import { installDomainPacks } from "./domain-pack-service";
 import type { Env } from "./types";
 
@@ -153,7 +153,10 @@ export async function getDomainRecall(env: Env, raw: unknown, identity: RecallId
     metrics: metricsWithoutStaleValues(row.metrics_json, now),
     evidence: evidenceMetadata(row.evidence_json),
     workflow: row.workflow,
-    follow_up: row.follow_up
+    follow_up: row.follow_up,
+    usefulness: assessMemoryUsefulnessV2({ stage: "use", project_id: row.project_id, task_project_id: projectId,
+      evidence_supported: row.evidence_verified === 1 ? true : null,
+      valid_until: parseJson<{ valid_until?: number }>(row.decision_json, {}).valid_until })
   });
   const ordinary = ranked.filter(({ row }) => row.relation !== "conflict");
   const primary = ordinary[0] ? publicCandidate(ordinary[0], "primary") : null;
@@ -242,8 +245,14 @@ export async function recordDomainRecallFeedback(env: Env, tenantId: string, rec
     `INSERT INTO domain_recall_review_proposals(id, tenant_id, recall_id, candidate_id, proposal_type,
       proposed_by_principal, note, created_at) VALUES(?,?,?,?,?,?,?,?)`
   ).bind(ulid(now + 1), tenantId, recallId, candidateId, feedback, identity.ownerPrincipal, optionalString(body.note, "note", 2_000), now));
+  const usefulness = assessMemoryUsefulnessV2({ stage: "use", basis: "human_confirmation",
+    applicable: ["wrong_scope", "outdated", "not_relevant"].includes(feedback) ? false : null,
+    evidence_supported: feedback === "incorrect_relation" ? false : null,
+    task_contribution: feedback === "useful" ? true : null });
+  statements.push(env.OPEN_BRAIN_DB.prepare("UPDATE domain_recall_feedback SET usefulness_json = ? WHERE tenant_id = ? AND id = ?")
+    .bind(JSON.stringify(usefulness), tenantId, id));
   await env.OPEN_BRAIN_DB.batch(statements);
-  return { id, feedback, effect, assertion_mutated: false };
+  return { id, feedback, effect, assertion_mutated: false, usefulness };
 }
 
 export async function createPortableImport(env: Env, tenantId: string, ownerPrincipal: string, raw: unknown) {

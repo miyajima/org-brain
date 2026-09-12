@@ -401,8 +401,22 @@ routes.post("/v1/memories/capture-rationale", async (c) => {
 routes.post("/v1/memories/confirm", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  const result = await ports.confirmProposedMemory(c.env, body);
+  const result = await ports.confirmProposedMemory(c.env, body, ports.getApiPrincipal(c));
   return ports.jsonOk(c, result);
+});
+
+routes.post("/v1/memories/confirmation-status", async (c) => {
+  const body = await c.req.json<unknown>();
+  ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.getMemoryConfirmationStatus(c.env, body, ports.getApiPrincipal(c)));
+});
+
+routes.get("/v1/memory-reviews", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  return ports.jsonOk(c, await ports.listMemoryConfirmationReviews(c.env, tenantId, {
+    principal: ports.getApiPrincipal(c), projectId: c.req.query("project_id"),
+    limit: Number.parseInt(c.req.query("limit") ?? "50", 10), cursor: c.req.query("cursor")
+  }));
 });
 
 routes.post("/v1/memories/revise", async (c) => {

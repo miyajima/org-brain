@@ -1,7 +1,7 @@
 {
   "contract_version": "orgbrain-api-manifest/v1",
-  "oss_ref": "95effa659c853540ed675e259bb321869844bc9e",
-  "generated_at": "2026-08-29T02:43:52.000Z",
+  "oss_ref": "a616d2ab08afb6671d5878dcaffd77bc81e5dc22",
+  "generated_at": "2026-09-09T12:14:38.000Z",
   "routes": [
     {
       "method": "GET",
@@ -1103,7 +1103,18 @@
       "success_statuses": [
         200
       ],
-      "idempotent": false
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/confirmation-status",
+      "permission": "read",
+      "request_schema": "PostV1MemoriesConfirmationStatusRequest",
+      "response_schema": "PostV1MemoriesConfirmationStatusResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
     },
     {
       "method": "POST",
@@ -1375,6 +1386,17 @@
       "permission": "read",
       "request_schema": "GetV1MemoryQualityRunsRunIdRequest",
       "response_schema": "GetV1MemoryQualityRunsRunIdResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-reviews",
+      "permission": "read",
+      "request_schema": "GetV1MemoryReviewsRequest",
+      "response_schema": "GetV1MemoryReviewsResponse",
       "success_statuses": [
         200
       ],

@@ -1,0 +1,630 @@
+{
+  "kind": "offline-synthetic-contract-diagnostic-not-agent-benchmark",
+  "source_root": "/Users/miyajimakazuhiro/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1",
+  "runtime": "v22.23.2",
+  "node_platform": "darwin",
+  "created_at": "2026-09-11T09:39:46.963Z",
+  "source_files": {
+    "store": {
+      "path": "/Users/miyajimakazuhiro/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/packages/orgbrain-cli/src/lib/local-memory-store.mjs",
+      "sha256": "9595d10590dab04dc10a8e85461463e9e514fe98c11b276797547baa47d5fe4e"
+    },
+    "mcp": {
+      "path": "/Users/miyajimakazuhiro/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/packages/orgbrain-cli/src/local-mcp.mjs",
+      "sha256": "f04fccf20d81363b22de632600b38c7a21ca589768806d68196e661c5ce770a8"
+    },
+    "disposition": {
+      "path": "/Users/miyajimakazuhiro/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/packages/shared/src/evidence-disposition.mjs",
+      "sha256": "48ae72e5ee6227e598e2accfb3218dd31c14180bcf4cec09de54754b406fc04c"
+    },
+    "units": {
+      "path": "/Users/miyajimakazuhiro/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/packages/orgbrain-cli/src/lib/retrieval-units.mjs",
+      "sha256": "4d9b73767169919c37cb80222005771c4a3cf4f514da0de095f0b22b9764d139"
+    },
+    "embedding": {
+      "path": "/Users/miyajimakazuhiro/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/packages/orgbrain-cli/src/lib/local-embedding.mjs",
+      "sha256": "e0f13cd7b2d31266a3845879c24e18c38764a3551cca1ac399b438f07fb9b1e9"
+    }
+  },
+  "fixture_count": 25,
+  "fixture_setup_ms": 434.147708,
+  "model_calls": 0,
+  "live_orgbrain_api_calls": 0,
+  "fetch_attempts": 0,
+  "mcp_transport_verified": false,
+  "model_usage_input_tokens": null,
+  "model_usage_output_tokens": null,
+  "tokenizer": "js-tiktoken 1.0.21 / o200k_base",
+  "tokenizer_limit": "Counts the emitted text under this encoding only. Not Codex/Claude model usage, billing, or a client truncation measurement.",
+  "timing_limit": "One handler observation per distinct input, after fixture setup. Not latency distribution or task completion time.",
+  "observations": [
+    {
+      "id": "short",
+      "query": "決済バッチを並列実行するとDB接続が枯渇する。設定場所と過去の対応方針を確認したい。",
+      "input": {
+        "tenant_id": "offline-evaluation",
+        "project_id": "short",
+        "principal_id": "reader",
+        "query": "決済バッチを並列実行するとDB接続が枯渇する。設定場所と過去の対応方針を確認したい。",
+        "top_k": 3,
+        "token_budget": 1200,
+        "search_mode": "hybrid_v4"
+      },
+      "handler_elapsed_ms_single_observation": 12.300583000000074,
+      "requested_top_k": 3,
+      "returned_result_count": 1,
+      "evidence_count": 1,
+      "evidence_status": "degraded",
+      "abstention_recommended": false,
+      "missing_evidence": [],
+      "degraded_reasons": [
+        "onnx_embedding_not_configured",
+        "cross_encoder_not_configured",
+        "gemini_structured_extractor_not_configured"
+      ],
+      "advertised_token_budget": 1200,
+      "advertised_estimated_tokens": 21,
+      "full_tool_text": {
+        "utf16_code_units": 5362,
+        "utf8_bytes": 6384,
+        "o200k_base_tokens": 1752
+      },
+      "evidence_text_only": {
+        "utf16_code_units": 84,
+        "utf8_bytes": 198,
+        "o200k_base_tokens": 57
+      },
+      "evidence_bundle_json": {
+        "utf16_code_units": 2573,
+        "utf8_bytes": 3307,
+        "o200k_base_tokens": 942
+      },
+      "results_json": {
+        "utf16_code_units": 2053,
+        "utf8_bytes": 2341,
+        "o200k_base_tokens": 681
+      },
+      "current_state_json": {
+        "utf16_code_units": 957,
+        "utf8_bytes": 1303,
+        "o200k_base_tokens": 390
+      },
+      "summaries": [
+        "決済バッチのDB接続枯渇は、worker数とpool上限の組み合わせを確認する。"
+      ],
+      "private_marker_returned": false,
+      "expired_marker_returned": false,
+      "source_reference_fields": [
+        {
+          "ref": "fixture://short-record",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        }
+      ],
+      "result_record_fields": [
+        "id",
+        "tenant_id",
+        "project_id",
+        "business_category_id",
+        "work_type",
+        "kind",
+        "lifecycle_state",
+        "scope_type",
+        "scope_key",
+        "content",
+        "summary",
+        "tags",
+        "entities",
+        "source",
+        "source_references",
+        "external_key",
+        "actor_type",
+        "actor_id",
+        "owner_principal",
+        "created_by_principal",
+        "created_at",
+        "updated_at",
+        "valid_from",
+        "valid_until",
+        "confidence_score",
+        "utility_score",
+        "content_hash",
+        "current_version",
+        "rationale",
+        "reuse_rule",
+        "evidence",
+        "conflicts",
+        "permissions",
+        "canonical_key",
+        "root_memory_id",
+        "expires_at",
+        "deleted_at",
+        "deleted_by_principal",
+        "delete_reason",
+        "capture_origin",
+        "capture_route",
+        "capture_batch_id",
+        "verification_state",
+        "verified_at",
+        "learning",
+        "quality_dimensions"
+      ]
+    },
+    {
+      "id": "long-related",
+      "query": "決済バッチを並列実行するとDB接続が枯渇する。poolとworkerの設定で過去に確認した点を調べたい。",
+      "input": {
+        "tenant_id": "offline-evaluation",
+        "project_id": "pool",
+        "principal_id": "reader",
+        "query": "決済バッチを並列実行するとDB接続が枯渇する。poolとworkerの設定で過去に確認した点を調べたい。",
+        "top_k": 3,
+        "token_budget": 1200,
+        "search_mode": "hybrid_v4"
+      },
+      "handler_elapsed_ms_single_observation": 59.44333299999994,
+      "requested_top_k": 3,
+      "returned_result_count": 20,
+      "evidence_count": 2,
+      "evidence_status": "degraded",
+      "abstention_recommended": false,
+      "missing_evidence": [],
+      "degraded_reasons": [
+        "onnx_embedding_not_configured",
+        "cross_encoder_not_configured",
+        "gemini_structured_extractor_not_configured"
+      ],
+      "advertised_token_budget": 1200,
+      "advertised_estimated_tokens": 1200,
+      "full_tool_text": {
+        "utf16_code_units": 142732,
+        "utf8_bytes": 275358,
+        "o200k_base_tokens": 88043
+      },
+      "evidence_text_only": {
+        "utf16_code_units": 4801,
+        "utf8_bytes": 11325,
+        "o200k_base_tokens": 3813
+      },
+      "evidence_bundle_json": {
+        "utf16_code_units": 23478,
+        "utf8_bytes": 50944,
+        "o200k_base_tokens": 16987
+      },
+      "results_json": {
+        "utf16_code_units": 115880,
+        "utf8_bytes": 221040,
+        "o200k_base_tokens": 70921
+      },
+      "current_state_json": {
+        "utf16_code_units": 16612,
+        "utf8_bytes": 37280,
+        "o200k_base_tokens": 12510
+      },
+      "summaries": [
+        "決済バッチのDB接続枯渇の調査記録 7。",
+        "決済バッチのDB接続枯渇の調査記録 1。",
+        "決済バッチのDB接続枯渇の調査記録 4。"
+      ],
+      "private_marker_returned": false,
+      "expired_marker_returned": false,
+      "source_reference_fields": [
+        {
+          "ref": "fixture://pool-log-7",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        },
+        {
+          "ref": "fixture://pool-log-1",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        }
+      ],
+      "result_record_fields": [
+        "id",
+        "tenant_id",
+        "project_id",
+        "business_category_id",
+        "work_type",
+        "kind",
+        "lifecycle_state",
+        "scope_type",
+        "scope_key",
+        "content",
+        "summary",
+        "tags",
+        "entities",
+        "source",
+        "source_references",
+        "external_key",
+        "actor_type",
+        "actor_id",
+        "owner_principal",
+        "created_by_principal",
+        "created_at",
+        "updated_at",
+        "valid_from",
+        "valid_until",
+        "confidence_score",
+        "utility_score",
+        "content_hash",
+        "current_version",
+        "rationale",
+        "reuse_rule",
+        "evidence",
+        "conflicts",
+        "permissions",
+        "canonical_key",
+        "root_memory_id",
+        "expires_at",
+        "deleted_at",
+        "deleted_by_principal",
+        "delete_reason",
+        "capture_origin",
+        "capture_route",
+        "capture_batch_id",
+        "verification_state",
+        "verified_at",
+        "learning",
+        "quality_dimensions"
+      ]
+    },
+    {
+      "id": "irrelevant-new-task",
+      "query": "OpenTypeフォントの合字描画機能を新規実装したい。適用できる過去の判断はあるか。",
+      "input": {
+        "tenant_id": "offline-evaluation",
+        "project_id": "pool",
+        "principal_id": "reader",
+        "query": "OpenTypeフォントの合字描画機能を新規実装したい。適用できる過去の判断はあるか。",
+        "top_k": 3,
+        "token_budget": 1200,
+        "search_mode": "hybrid_v4"
+      },
+      "handler_elapsed_ms_single_observation": 12.242749999999887,
+      "requested_top_k": 3,
+      "returned_result_count": 20,
+      "evidence_count": 2,
+      "evidence_status": "degraded",
+      "abstention_recommended": false,
+      "missing_evidence": [],
+      "degraded_reasons": [
+        "onnx_embedding_not_configured",
+        "cross_encoder_not_configured",
+        "gemini_structured_extractor_not_configured"
+      ],
+      "advertised_token_budget": 1200,
+      "advertised_estimated_tokens": 1200,
+      "full_tool_text": {
+        "utf16_code_units": 142853,
+        "utf8_bytes": 275395,
+        "o200k_base_tokens": 87985
+      },
+      "evidence_text_only": {
+        "utf16_code_units": 4801,
+        "utf8_bytes": 11241,
+        "o200k_base_tokens": 3765
+      },
+      "evidence_bundle_json": {
+        "utf16_code_units": 23603,
+        "utf8_bytes": 50985,
+        "o200k_base_tokens": 16935
+      },
+      "results_json": {
+        "utf16_code_units": 115876,
+        "utf8_bytes": 221036,
+        "o200k_base_tokens": 70920
+      },
+      "current_state_json": {
+        "utf16_code_units": 16734,
+        "utf8_bytes": 37402,
+        "o200k_base_tokens": 12507
+      },
+      "summaries": [
+        "決済バッチのDB接続枯渇の調査記録 15。",
+        "決済バッチのDB接続枯渇の調査記録 7。",
+        "決済バッチのDB接続枯渇の調査記録 5。"
+      ],
+      "private_marker_returned": false,
+      "expired_marker_returned": false,
+      "source_reference_fields": [
+        {
+          "ref": "fixture://pool-log-15",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        },
+        {
+          "ref": "fixture://pool-log-7",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        }
+      ],
+      "result_record_fields": [
+        "id",
+        "tenant_id",
+        "project_id",
+        "business_category_id",
+        "work_type",
+        "kind",
+        "lifecycle_state",
+        "scope_type",
+        "scope_key",
+        "content",
+        "summary",
+        "tags",
+        "entities",
+        "source",
+        "source_references",
+        "external_key",
+        "actor_type",
+        "actor_id",
+        "owner_principal",
+        "created_by_principal",
+        "created_at",
+        "updated_at",
+        "valid_from",
+        "valid_until",
+        "confidence_score",
+        "utility_score",
+        "content_hash",
+        "current_version",
+        "rationale",
+        "reuse_rule",
+        "evidence",
+        "conflicts",
+        "permissions",
+        "canonical_key",
+        "root_memory_id",
+        "expires_at",
+        "deleted_at",
+        "deleted_by_principal",
+        "delete_reason",
+        "capture_origin",
+        "capture_route",
+        "capture_batch_id",
+        "verification_state",
+        "verified_at",
+        "learning",
+        "quality_dimensions"
+      ]
+    },
+    {
+      "id": "acl-expiry",
+      "query": "接続監視でDB接続待ちを確認する手順を知りたい。",
+      "input": {
+        "tenant_id": "offline-evaluation",
+        "project_id": "acl",
+        "principal_id": "reader",
+        "query": "接続監視でDB接続待ちを確認する手順を知りたい。",
+        "top_k": 3,
+        "token_budget": 1200,
+        "search_mode": "hybrid_v4"
+      },
+      "handler_elapsed_ms_single_observation": 5.917957999999999,
+      "requested_top_k": 3,
+      "returned_result_count": 1,
+      "evidence_count": 1,
+      "evidence_status": "degraded",
+      "abstention_recommended": false,
+      "missing_evidence": [],
+      "degraded_reasons": [
+        "onnx_embedding_not_configured",
+        "cross_encoder_not_configured",
+        "gemini_structured_extractor_not_configured"
+      ],
+      "advertised_token_budget": 1200,
+      "advertised_estimated_tokens": 7,
+      "full_tool_text": {
+        "utf16_code_units": 5093,
+        "utf8_bytes": 5833,
+        "o200k_base_tokens": 1623
+      },
+      "evidence_text_only": {
+        "utf16_code_units": 25,
+        "utf8_bytes": 71,
+        "o200k_base_tokens": 21
+      },
+      "evidence_bundle_json": {
+        "utf16_code_units": 2388,
+        "utf8_bytes": 2918,
+        "o200k_base_tokens": 846
+      },
+      "results_json": {
+        "utf16_code_units": 1969,
+        "utf8_bytes": 2179,
+        "o200k_base_tokens": 644
+      },
+      "current_state_json": {
+        "utf16_code_units": 839,
+        "utf8_bytes": 1049,
+        "o200k_base_tokens": 327
+      },
+      "summaries": [
+        "接続監視の公開手順。DB接続待ちの件数を確認する。"
+      ],
+      "private_marker_returned": false,
+      "expired_marker_returned": false,
+      "source_reference_fields": [
+        {
+          "ref": "fixture://acl-public",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        }
+      ],
+      "result_record_fields": [
+        "id",
+        "tenant_id",
+        "project_id",
+        "business_category_id",
+        "work_type",
+        "kind",
+        "lifecycle_state",
+        "scope_type",
+        "scope_key",
+        "content",
+        "summary",
+        "tags",
+        "entities",
+        "source",
+        "source_references",
+        "external_key",
+        "actor_type",
+        "actor_id",
+        "owner_principal",
+        "created_by_principal",
+        "created_at",
+        "updated_at",
+        "valid_from",
+        "valid_until",
+        "confidence_score",
+        "utility_score",
+        "content_hash",
+        "current_version",
+        "rationale",
+        "reuse_rule",
+        "evidence",
+        "conflicts",
+        "permissions",
+        "canonical_key",
+        "root_memory_id",
+        "expires_at",
+        "deleted_at",
+        "deleted_by_principal",
+        "delete_reason",
+        "capture_origin",
+        "capture_route",
+        "capture_batch_id",
+        "verification_state",
+        "verified_at",
+        "learning",
+        "quality_dimensions"
+      ]
+    },
+    {
+      "id": "changed-environment",
+      "query": "worker.tsを変更してNode 24と設定Bに移した。過去のテスト成功をそのまま今回の確認に使えるか。",
+      "input": {
+        "tenant_id": "offline-evaluation",
+        "project_id": "freshness",
+        "principal_id": "reader",
+        "query": "worker.tsを変更してNode 24と設定Bに移した。過去のテスト成功をそのまま今回の確認に使えるか。",
+        "top_k": 3,
+        "token_budget": 1200,
+        "search_mode": "hybrid_v4"
+      },
+      "handler_elapsed_ms_single_observation": 7.634084000000257,
+      "requested_top_k": 3,
+      "returned_result_count": 1,
+      "evidence_count": 1,
+      "evidence_status": "degraded",
+      "abstention_recommended": false,
+      "missing_evidence": [],
+      "degraded_reasons": [
+        "onnx_embedding_not_configured",
+        "cross_encoder_not_configured",
+        "gemini_structured_extractor_not_configured"
+      ],
+      "advertised_token_budget": 1200,
+      "advertised_estimated_tokens": 20,
+      "full_tool_text": {
+        "utf16_code_units": 6412,
+        "utf8_bytes": 7448,
+        "o200k_base_tokens": 2064
+      },
+      "evidence_text_only": {
+        "utf16_code_units": 78,
+        "utf8_bytes": 166,
+        "o200k_base_tokens": 46
+      },
+      "evidence_bundle_json": {
+        "utf16_code_units": 3552,
+        "utf8_bytes": 4366,
+        "o200k_base_tokens": 1258
+      },
+      "results_json": {
+        "utf16_code_units": 2068,
+        "utf8_bytes": 2290,
+        "o200k_base_tokens": 675
+      },
+      "current_state_json": {
+        "utf16_code_units": 1850,
+        "utf8_bytes": 2302,
+        "o200k_base_tokens": 703
+      },
+      "summaries": [
+        "worker.tsの旧版で、Node 22と設定Aを使ったテストは成功した。"
+      ],
+      "private_marker_returned": false,
+      "expired_marker_returned": false,
+      "source_reference_fields": [
+        {
+          "ref": "fixture://unavailable-old-test-log",
+          "span": {
+            "start": null,
+            "end": null
+          }
+        }
+      ],
+      "result_record_fields": [
+        "id",
+        "tenant_id",
+        "project_id",
+        "business_category_id",
+        "work_type",
+        "kind",
+        "lifecycle_state",
+        "scope_type",
+        "scope_key",
+        "content",
+        "summary",
+        "tags",
+        "entities",
+        "source",
+        "source_references",
+        "external_key",
+        "actor_type",
+        "actor_id",
+        "owner_principal",
+        "created_by_principal",
+        "created_at",
+        "updated_at",
+        "valid_from",
+        "valid_until",
+        "confidence_score",
+        "utility_score",
+        "content_hash",
+        "current_version",
+        "rationale",
+        "reuse_rule",
+        "evidence",
+        "conflicts",
+        "permissions",
+        "canonical_key",
+        "root_memory_id",
+        "expires_at",
+        "deleted_at",
+        "deleted_by_principal",
+        "delete_reason",
+        "capture_origin",
+        "capture_route",
+        "capture_batch_id",
+        "verification_state",
+        "verified_at",
+        "learning",
+        "quality_dimensions"
+      ]
+    }
+  ]
+}

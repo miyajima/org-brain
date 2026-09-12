@@ -37,6 +37,7 @@ Usage:
   orgbrain memory delete <memory-id>
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
+  orgbrain memory reviews [--tenant-id <id>] [--project-id <id>] [--limit <1-200>]
   orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
   orgbrain memory import codex-sessions --plan <path> --expected-plan-hash <sha256> [--apply-report <path>] --execute
   orgbrain category list [--tenant-id <id>] [--include-inactive]
@@ -308,6 +309,13 @@ async function handleMemory(store, action, rest, args) {
     return;
   }
   const tenantId = args.get("--tenant-id", "default");
+  if (action === "reviews") {
+    const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
+    emit({ source: "local_hook_observations", ...await new TaskCommitmentStore(store.dbPath).memoryReviewStatus({
+      tenantId, projectId: args.get("--project-id", null), limit: Number(args.get("--limit", "100"))
+    }) });
+    return;
+  }
   if (action === "capture" || action === "upsert") {
     const payload = await readPayload(args);
     emit(await store.capture({
@@ -720,7 +728,18 @@ async function main() {
         ? `npm install --global ${JSON.stringify(resolve(checkoutRoot))}`
         : null
     };
-    emit({ ...result, cli });
+    const { loadEnvFallbacks, resolveMcpConfig } = await import("./hook-memory-bridge.mjs");
+    const { loadWorkspaceConfig, resolveWorkspaceMapping, workspacesFileFromEnv } = await import("./lib/workspace-config.mjs");
+    const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
+    await loadEnvFallbacks();
+    const workspace = await resolveWorkspaceMapping(await loadWorkspaceConfig(workspacesFileFromEnv()), checkoutRoot || process.cwd());
+    const review = await new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || store.dbPath).memoryReviewStatus({
+      tenantId: workspace.entry?.tenant_id || process.env.ORGBRAIN_TENANT_ID || "default", projectId: workspace.entry?.project_id ?? null
+    });
+    const mcp = resolveMcpConfig();
+    emit({ ...result, cli: { ...cli, executable: process.execPath, entrypoint: process.argv[1] }, workspace,
+      hook_mcp: { configured: mcp.complete, hostname: mcp.url ? new URL(mcp.url).hostname : null, live_connection: "not_checked" },
+      memory_review: { states: review.states, activity: review.activity, recent_label_count: review.labels.length } });
     if (!result.ok) process.exitCode = 1;
   } else if (command === "memory") {
     await handleMemory(store, action, rest, args);
@@ -909,7 +928,10 @@ async function main() {
       return;
     }
     const commitmentStore = new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
-    const tenantId = process.env.ORGBRAIN_TENANT_ID || "default";
+    const { loadWorkspaceConfig, resolveWorkspaceMapping, workspacesFileFromEnv } = await import("./lib/workspace-config.mjs");
+    const mapping = await resolveWorkspaceMapping(await loadWorkspaceConfig(workspacesFileFromEnv()), payload.cwd || process.cwd());
+    const tenantId = mapping.entry?.tenant_id || process.env.ORGBRAIN_TENANT_ID || "default";
+    if (mapping.entry) payload.project_id = mapping.entry.project_id;
     if (action === "codex-pre-tool") {
       const decision = await guardCodexQuestion(payload, commitmentStore, tenantId);
       const configuredMode = String(process.env.ORGBRAIN_MEMORY_COMMITMENTS_MODE || "on").trim().toLowerCase();

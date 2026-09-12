@@ -244,6 +244,19 @@ describe("memory extraction capability", () => {
     expect(() => __memoryExtractionInternals.parseInput(stored, context)).toThrow("v3_routing_invalid");
   });
 
+  it("preserves A+ profile and rejects a second call or coverage combination", async () => {
+    const { bucket, context } = await fixture();
+    const stored = await (await bucket.get("inputs/run-a.json"))!.json<Record<string, unknown> & { packet: Record<string, unknown> }>();
+    stored.packet.schema = "learning-extraction-proposal/v2";
+    stored.packet.refinement_profile = "a-plus/v1";
+    expect(__memoryExtractionInternals.parseInput(stored, context).packet.refinement_profile).toBe("a-plus/v1");
+    stored.packet.limits = { input_tokens: 2000, output_tokens: 800, candidates: 3, calls: 2 };
+    expect(() => __memoryExtractionInternals.parseInput(stored, context)).toThrow();
+    stored.packet.limits = { input_tokens: 2000, output_tokens: 800, candidates: 3, calls: 1 };
+    stored.packet.extraction_profile = "coverage/v1";
+    expect(() => __memoryExtractionInternals.parseInput(stored, context)).toThrow();
+  });
+
   it("settles one review-only candidate, exact usage, and never calls the provider twice", async () => {
     const { database, bucket, context } = await fixture();
     const provider = vi.fn(async () => new Response(JSON.stringify({
