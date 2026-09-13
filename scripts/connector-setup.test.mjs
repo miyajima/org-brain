@@ -195,6 +195,7 @@ test("cloud hook plans target supported lifecycle events", () => {
   assert.equal(codex.handlers.PreToolUse.matcher, "request_user_input(_async)?");
   assert.match(codex.handlers.PostToolUse.matcher, /confirmation_status/u);
   assert.equal(codex.handlers.UserPromptSubmit.additionalContextLimit, 8_192);
+  assert.equal(codex.handlers.PostCompact.additionalContextLimit, undefined);
 
   const plan = cloudHooksPlan("cursor", {
     home: "/tmp/orgbrain-cursor-home",
@@ -363,6 +364,7 @@ test("minimal Codex hook plan uses local commands without MCP, a daemon, or LLM 
   assert.equal(plan.workspace.project_id, "example");
   assert.match(plan.handlers.UserPromptSubmit.command, /hook codex-context/u);
   assert.match(plan.handlers.Stop.command, /hook codex-stop/u);
+  assert.equal(plan.handlers.PostCompact.additionalContextLimit, undefined);
   assert.doesNotMatch(plan.handlers.UserPromptSubmit.command, /\bmcp\b/u);
 });
 
