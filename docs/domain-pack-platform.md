@@ -84,11 +84,19 @@ Snapshots or Connector references. A metric may deliberately remain
 `unknown`. Replaying completion returns the same overlay, installations,
 targets, Snapshots, and source bindings instead of creating duplicates.
 
-`KNOWLEDGE_PACK_ONBOARDING_MODE=preview` permits resumable setup and planning
-but blocks installation. `on` enables completion and still requires
+`KNOWLEDGE_PACK_ONBOARDING_MODE=preview` permits reads, and permits writes only
+for tenant IDs listed in `KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON`. A missing
+allowlist is fail-closed; malformed JSON is a server misconfiguration. `on`
+enables completion for every authorized tenant and still requires
 `DOMAIN_PACKS_MODE=install` and `DOMAIN_METRICS_MODE=on`; `off` returns the
 feature-disabled boundary. Production and remote-D1 profiles remain `off`,
 while the local profile is `on` for end-to-end verification.
+
+The same preview write allowlist applies to the organization dashboard,
+metric import, retrospectives, and improvement actions. Gateway and Runner must
+receive the identical value. `/v1/capabilities?tenant_id=...` exposes a
+tenant-specific `writable` field so Console can omit mutation controls in a
+read-only preview.
 
 ## Custom metrics
 

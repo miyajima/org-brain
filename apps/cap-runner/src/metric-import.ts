@@ -31,7 +31,22 @@ type BindingRow = {
   connection_ref: string | null;
   external_scope_ref: string | null;
   definition_json: string;
+  dimensions_json: string;
 };
+
+function previewWriteTenants(env: Env): Set<string> {
+  if (env.METRIC_IMPORT_MODE === "on") return new Set();
+  let parsed: unknown;
+  try { parsed = JSON.parse(env.KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON ?? "[]"); } catch { throw new Error("knowledge_loop_preview_tenants_invalid"); }
+  if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string" || !value.trim())) {
+    throw new Error("knowledge_loop_preview_tenants_invalid");
+  }
+  return new Set(parsed.map((value) => value.trim()));
+}
+
+function metricImportWritable(env: Env, tenantId: string): boolean {
+  return env.METRIC_IMPORT_MODE === "on" || (env.METRIC_IMPORT_MODE === "preview" && previewWriteTenants(env).has(tenantId));
+}
 
 function connection(env: Env, tenantId: string, reference: string | null): GithubConnection {
   if (!reference) throw new Error("metric_connection_missing");
@@ -146,18 +161,22 @@ export async function queueMetricImportRetry(env: Env, raw: unknown): Promise<vo
 }
 
 export async function recoverExpiredMetricImports(env: Env, now = Date.now()) {
-  if (env.METRIC_IMPORT_MODE !== "on" || !env.METRIC_IMPORT_QUEUE) return { recovered: 0, skipped: true };
+  if (!env.METRIC_IMPORT_MODE || env.METRIC_IMPORT_MODE === "off" || !env.METRIC_IMPORT_QUEUE) return { recovered: 0, skipped: true };
+  const allowedTenants = env.METRIC_IMPORT_MODE === "on" ? [] : [...previewWriteTenants(env)];
+  if (env.METRIC_IMPORT_MODE === "preview" && allowedTenants.length === 0) return { recovered: 0, skipped: true };
   const exhausted = await env.OPEN_BRAIN_DB.prepare(
     `UPDATE metric_source_import_runs SET status='failed', error_code='metric_import_attempts_exhausted',
      error_message='The import worker lease expired after the final attempt', lease_expires_at=NULL,
-     completed_at=?, updated_at=? WHERE status='running' AND lease_expires_at <= ? AND attempt >= 3`
-  ).bind(now, now, now).run();
+     completed_at=?, updated_at=? WHERE status='running' AND lease_expires_at <= ? AND attempt >= 3
+       AND (?=1 OR tenant_id IN (SELECT value FROM json_each(?)))`
+  ).bind(now, now, now, env.METRIC_IMPORT_MODE === "on" ? 1 : 0, JSON.stringify(allowedTenants)).run();
   const expired = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, source_binding_id, queued_at, attempt
      FROM metric_source_import_runs
      WHERE status='running' AND lease_expires_at <= ? AND attempt < 3
+       AND (?=1 OR tenant_id IN (SELECT value FROM json_each(?)))
      ORDER BY lease_expires_at, id LIMIT 100`
-  ).bind(now).all<{ id: string; tenant_id: string; source_binding_id: string; queued_at: number; attempt: number }>();
+  ).bind(now, env.METRIC_IMPORT_MODE === "on" ? 1 : 0, JSON.stringify(allowedTenants)).all<{ id: string; tenant_id: string; source_binding_id: string; queued_at: number; attempt: number }>();
   let recovered = 0;
   for (const run of expired.results) {
     const claim = await env.OPEN_BRAIN_DB.prepare(
@@ -188,8 +207,16 @@ export async function recoverExpiredMetricImports(env: Env, now = Date.now()) {
 }
 
 export async function processMetricImportJob(env: Env, raw: unknown): Promise<void> {
-  if (env.METRIC_IMPORT_MODE !== "on") throw new Error("metric_import_disabled");
   const job = metricImportJobSchema.parse(raw);
+  if (!metricImportWritable(env, job.tenant_id)) {
+    const stoppedAt = Date.now();
+    await env.OPEN_BRAIN_DB.prepare(
+      `UPDATE metric_source_import_runs SET status='failed', error_code='metric_import_disabled',
+       error_message='The import tenant is no longer writable in this Runner revision', completed_at=?, updated_at=?
+       WHERE tenant_id=? AND id=? AND status='queued'`
+    ).bind(stoppedAt, stoppedAt, job.tenant_id, job.run_id).run();
+    return;
+  }
   const now = Date.now();
   const leaseExpiresAt = now + 120_000;
   const claimed = await env.OPEN_BRAIN_DB.prepare(
@@ -207,10 +234,11 @@ export async function processMetricImportJob(env: Env, raw: unknown): Promise<vo
   try {
     const binding = await env.OPEN_BRAIN_DB.prepare(
       `SELECT s.id, s.metric_definition_id, s.metric_binding_id, s.query_template, s.connection_ref,
-              s.external_scope_ref, v.definition_json
+              s.external_scope_ref, v.definition_json, COALESCE(b.dimensions_json, '{}') AS dimensions_json
        FROM metric_source_bindings s
        JOIN metric_definitions d ON d.id=s.metric_definition_id AND d.tenant_id=s.tenant_id
        JOIN metric_definition_versions v ON v.metric_definition_id=d.id AND v.version=d.current_version
+       LEFT JOIN metric_bindings b ON b.id=s.metric_binding_id AND b.tenant_id=s.tenant_id
        WHERE s.tenant_id=? AND s.id=? AND s.adapter_id='github-actions'`
     ).bind(job.tenant_id, job.source_binding_id).first<BindingRow>();
     if (!binding) throw new Error("metric_source_binding_not_found");
@@ -239,17 +267,17 @@ export async function processMetricImportJob(env: Env, raw: unknown): Promise<vo
       owner: config.owner, repo: config.repo, workflow: queryConfig.workflow ?? null,
       branch: config.branch ?? null, window_days: days
     }));
-    await env.OPEN_BRAIN_DB.prepare(
-      `INSERT INTO metric_snapshots(
-         id, tenant_id, metric_definition_id, binding_id, value, state, dimensions_json,
-         observed_at, expires_at, evidence_ref, query_digest, source_binding_id,
-         idempotency_key, recorded_by, created_at
-       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    ).bind(snapshotId, job.tenant_id, binding.metric_definition_id, binding.metric_binding_id,
-      value, state, "{}", now, now + Math.max(1, definition.freshness_seconds ?? 86_400) * 1_000,
-      `github-actions://${config.owner}/${config.repo}`, queryDigest, binding.id, job.run_id,
-      "system:metric-import", now).run();
     await env.OPEN_BRAIN_DB.batch([
+      env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO metric_snapshots(
+           id, tenant_id, metric_definition_id, binding_id, value, state, dimensions_json,
+           observed_at, expires_at, evidence_ref, query_digest, source_binding_id,
+           idempotency_key, recorded_by, created_at
+         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(snapshotId, job.tenant_id, binding.metric_definition_id, binding.metric_binding_id,
+        value, state, binding.dimensions_json, now, now + Math.max(1, definition.freshness_seconds ?? 86_400) * 1_000,
+        `github-actions://${config.owner}/${config.repo}`, queryDigest, binding.id, job.run_id,
+        "system:metric-import", now),
       env.OPEN_BRAIN_DB.prepare(
         `UPDATE metric_source_import_runs SET status='succeeded', snapshot_id=?, error_code=NULL,
          error_message=NULL, lease_expires_at=NULL, completed_at=?, updated_at=? WHERE tenant_id=? AND id=?`

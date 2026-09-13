@@ -95,6 +95,7 @@ export type Env = {
   METRIC_IMPORT_MODE?: "off" | "preview" | "on";
   RETROSPECTIVE_MODE?: "off" | "preview" | "on";
   IMPROVEMENT_ACTIONS_MODE?: "off" | "preview" | "on";
+  KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON?: string;
   GITHUB_METRIC_CONNECTIONS_JSON?: string;
   DOMAIN_RECALL_MODE?: "off" | "shadow" | "on";
   DOMAIN_RECALL_HOOK_MODE?: "off" | "personal" | "team";

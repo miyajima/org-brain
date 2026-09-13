@@ -1,40 +1,51 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
+import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus } from "../lib/knowledge-loop-locale";
+
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const t = knowledgeLoopCopy(lang);
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
 let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
-  const csrf = String(form.get("csrf_token") ?? "");
   const action = String(form.get("action") ?? "start");
+  const groupId = String(form.get("participant_group_id") ?? "").trim() || null;
   const response = await api(action === "schedule" ? "/api/v1/retrospective-schedules" : "/api/v1/retrospectives", {
-    method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf },
+    method: "POST", headers: { "content-type": "application/json", "x-csrf-token": String(form.get("csrf_token") ?? "") },
     body: JSON.stringify(action === "schedule"
-      ? { tenant_id: tenantId, project_id: projectId, cadence_days: Number(form.get("cadence_days")), next_run_at: Date.now() }
-      : { tenant_id: tenantId, project_id: projectId, title: String(form.get("title") ?? "判断軸のふりかえり"), participant_principals: String(form.get("participants") ?? "").split(",").map((v) => v.trim()).filter(Boolean) })
+      ? { tenant_id: tenantId, project_id: projectId, participant_group_id: groupId, cadence_days: Number(form.get("cadence_days")), next_run_at: Date.now() }
+      : { tenant_id: tenantId, project_id: projectId, participant_group_id: groupId, title: String(form.get("title") ?? t.retroTitle), participant_principals: [] })
   });
   const payload: any = await response.json().catch(() => null);
   if (response.ok) return Astro.redirect(action === "schedule" ? `/retrospectives?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}` : `/retrospectives/${encodeURIComponent(payload.data.id)}?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`, 303);
-  error = payload?.error?.message ?? "ふりかえりを開始できませんでした。";
+  error = knowledgeLoopError(lang, payload?.error?.code, payload?.error?.message ?? "Retrospective could not be started");
 }
-const [response, scheduleResponse] = await Promise.all([
-  api(`/api/v1/retrospectives?tenant_id=${encodeURIComponent(tenantId)}`),
-  api(`/api/v1/retrospective-schedules?tenant_id=${encodeURIComponent(tenantId)}`)
+const [sessionResponse, scheduleResponse, groupsResponse, capabilityResponse] = await Promise.all([
+  api(`/api/v1/retrospectives?tenant_id=${encodeURIComponent(tenantId)}`), api(`/api/v1/retrospective-schedules?tenant_id=${encodeURIComponent(tenantId)}`),
+  api(`/api/v1/groups?tenant_id=${encodeURIComponent(tenantId)}`), api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`)
 ]);
-const payload: any = await response.json().catch(() => null);
+const sessionPayload: any = await sessionResponse.json().catch(() => null);
 const schedulePayload: any = await scheduleResponse.json().catch(() => null);
-const sessions = Array.isArray(payload?.data) ? payload.data : [];
+const groupsPayload: any = await groupsResponse.json().catch(() => null);
+const capabilityPayload: any = await capabilityResponse.json().catch(() => null);
+const sessions = Array.isArray(sessionPayload?.data) ? sessionPayload.data : [];
 const schedules = Array.isArray(schedulePayload?.data) ? schedulePayload.data : [];
-if (!response.ok && !error) error = payload?.error?.message ?? "ふりかえりを取得できませんでした。";
+const groups = Array.isArray(groupsPayload?.data?.groups) ? groupsPayload.data.groups : [];
+const writable = capabilityPayload?.data?.retrospective?.writable === true;
+if (!sessionResponse.ok && !error) error = sessionPayload?.error?.message ?? "Retrospectives could not be loaded";
 ---
-<BaseLayout title="判断軸のふりかえり" lang={lang} wide>
+<BaseLayout title={t.retroTitle} lang={lang} wide>
   <section class="space-y-5">
-    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6"><p class="surface-label">7 / 14 DAY REVIEW</p><h1 class="mt-2 text-3xl font-semibold">判断軸のふりかえり</h1><p class="surface-muted mt-2">決定事項・ルール・判断理由を順に読み、採用可否だけを選びます。最終確定は管理者が行います。</p></header>
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6"><p class="surface-label">7 / 14 DAY REVIEW</p><h1 class="mt-2 text-3xl font-semibold">{t.retroTitle}</h1><p class="surface-muted mt-2">{t.retroLead}</p></header>
     {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
-    <div class="grid gap-4 lg:grid-cols-2"><form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5"><input type="hidden" name="csrf_token" class="retro-csrf"/><input type="hidden" name="action" value="start"/><h2 class="font-semibold">今すぐ実施</h2><label><span class="field-label">タイトル</span><input name="title" value="判断軸のふりかえり" required/></label><label><span class="field-label">参加者ID（カンマ区切り）</span><input name="participants" placeholder="user:alice, user:bob"/></label><div><button type="submit">ふりかえりを開始</button></div></form><form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5"><input type="hidden" name="csrf_token" class="retro-csrf"/><input type="hidden" name="action" value="schedule"/><h2 class="font-semibold">定期実施を設定</h2><label><span class="field-label">実施間隔</span><select name="cadence_days"><option value="7">1週間ごと</option><option value="14">2週間ごと</option></select></label><p class="surface-muted">次回のscheduled実行から、管理者を参加者としてセッションを作成します。</p><div><button type="submit">定期実施を有効化</button></div>{schedules.map((schedule: any) => <p class="text-xs text-zinc-500">{schedule.cadence_days}日ごと · {schedule.status} · 次回 {new Date(schedule.next_run_at).toLocaleString(lang)}</p>)}</form></div>
-    <section class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5"><h2 class="text-xl font-semibold">実施履歴</h2><div class="mt-4 space-y-3">{sessions.map((session: any) => <a class="block rounded-xl border border-white/8 bg-black/20 p-4 hover:border-white/20" href={`/retrospectives/${encodeURIComponent(session.id)}?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`}><div class="flex items-center justify-between gap-3"><div><strong>{session.title}</strong><p class="mt-1 text-sm text-zinc-500">{new Date(session.opened_at).toLocaleString(lang)} · {session.item_count}件</p></div><span class="rounded-full bg-white/8 px-2 py-1 text-xs">{session.status}</span></div></a>)}{sessions.length === 0 && <p class="surface-muted">まだ実施されていません。</p>}</div></section>
+    {!writable && <p class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">{t.readOnly}</p>}
+    {writable && <div class="grid gap-4 lg:grid-cols-2">
+      <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5"><input type="hidden" name="csrf_token" class="retro-csrf"/><input type="hidden" name="action" value="start"/><h2 class="font-semibold">{t.startNow}</h2><label><span class="field-label">{t.title}</span><input name="title" value={t.retroTitle} required/></label><label><span class="field-label">{t.group}</span><select name="participant_group_id"><option value="">{t.solo}</option>{groups.map((group: any) => <option value={group.id}>{group.name}</option>)}</select></label><div><button type="submit">{t.start}</button></div></form>
+      <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5"><input type="hidden" name="csrf_token" class="retro-csrf"/><input type="hidden" name="action" value="schedule"/><h2 class="font-semibold">{t.enableSchedule}</h2><label><span class="field-label">{t.group}</span><select name="participant_group_id"><option value="">{t.solo}</option>{groups.map((group: any) => <option value={group.id}>{group.name}</option>)}</select></label><label><span class="field-label">{t.cadence}</span><select name="cadence_days"><option value="7">{t.weekly}</option><option value="14">{t.biweekly}</option></select></label><div><button type="submit">{t.enableSchedule}</button></div>{schedules.map((schedule: any) => <p class="text-xs text-zinc-500">{schedule.cadence_days} · {knowledgeLoopStatus(lang, schedule.status)} · {new Date(schedule.next_run_at).toLocaleString(lang)}</p>)}</form>
+    </div>}
+    <section class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5"><h2 class="text-xl font-semibold">{t.history}</h2><div class="mt-4 space-y-3">{sessions.map((session: any) => <a class="block rounded-xl border border-white/8 bg-black/20 p-4 hover:border-white/20" href={`/retrospectives/${encodeURIComponent(session.id)}?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`}><div class="flex items-center justify-between gap-3"><div><strong>{session.title}</strong><p class="mt-1 text-sm text-zinc-500">{new Date(session.opened_at).toLocaleString(lang)} · {session.item_count} · {t.participants} {session.participant_count ?? 0}</p><p class="mt-1 text-xs text-zinc-500">{t.answered} {session.received_response_count ?? 0} / {session.eligible_response_count ?? 0}</p></div><span class="rounded-full bg-white/8 px-2 py-1 text-xs">{knowledgeLoopStatus(lang, session.status)}</span></div></a>)}{sessions.length === 0 && <p class="surface-muted">{t.history}: 0</p>}</div></section>
   </section>
 </BaseLayout>
 <script>document.querySelectorAll<HTMLInputElement>(".retro-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>

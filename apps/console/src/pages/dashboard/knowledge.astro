@@ -1,0 +1,77 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../../lib/dashboard-page";
+import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus, knowledgeLoopUnit } from "../../lib/knowledge-loop-locale";
+
+const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const t = knowledgeLoopCopy(lang);
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+let message = "";
+let error = "";
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = String(form.get("action") ?? "");
+  const headers = { "content-type": "application/json", "x-csrf-token": String(form.get("csrf_token") ?? ""), "x-idempotency-key": crypto.randomUUID() };
+  const response = action === "import"
+    ? await api(`/api/v1/metric-source-bindings/${encodeURIComponent(String(form.get("source_binding_id")))}/import`, { method: "POST", headers, body: JSON.stringify({ tenant_id: tenantId }) })
+    : await api(`/api/v1/dashboard/organization/knowledge-packs/${encodeURIComponent(String(form.get("installation_id")))}/goals/${encodeURIComponent(String(form.get("goal_link_id")))}/snapshots`, { method: "POST", headers, body: JSON.stringify({ tenant_id: tenantId, value: Number(form.get("value")), observed_at: Date.now(), evidence_ref: String(form.get("evidence_ref") ?? "").trim() || null }) });
+  const result: any = await response.json().catch(() => null);
+  if (response.ok) message = action === "import" ? t.importing : t.recordNew;
+  else error = knowledgeLoopError(lang, result?.error?.code, result?.error?.message ?? "Update failed");
+}
+const scope = `tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`;
+const [dashboardResponse, capabilityResponse] = await Promise.all([api(`/api/v1/dashboard/organization?${scope}`), api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`)]);
+const dashboardPayload: any = await dashboardResponse.json().catch(() => null);
+const capabilityPayload: any = await capabilityResponse.json().catch(() => null);
+const dashboard = dashboardPayload?.data ?? { knowledge: { decisions: 0, rules: 0, rationales: 0 }, summary: { installed_packs: 0, open_retrospectives: 0 }, goals: [] };
+const dashboardWritable = capabilityPayload?.data?.organization_dashboard?.writable === true;
+const importWritable = capabilityPayload?.data?.metric_import?.writable === true;
+if (!dashboardResponse.ok && !error) error = dashboardPayload?.error?.message ?? "Dashboard could not be loaded";
+const format = (value: unknown) => typeof value === "number" ? new Intl.NumberFormat(lang).format(value) : "—";
+const target = (goal: any) => goal.target.direction === "range" ? `${format(goal.target.min)}–${format(goal.target.max)}` : format(goal.target.value);
+const attention = (goal: any) => goal.source.latest_run?.status === "failed" ? 0 : ["queued", "running"].includes(goal.source.latest_run?.status) ? 1 : ["unknown", "stale"].includes(goal.current.state) ? 2 : goal.comparison?.target_state === "off_track" ? 3 : 4;
+const goals = [...(dashboard.goals ?? [])].sort((left: any, right: any) => attention(left) - attention(right));
+---
+<BaseLayout title={t.dashboardTitle} lang={lang} wide>
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6"><p class="surface-label">MEASURE · REVIEW · IMPROVE</p><div class="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 class="text-3xl font-semibold">{t.dashboardHeading}</h1><p class="surface-muted mt-2">{t.dashboardLead}</p></div><div class="flex gap-2"><a class="button-secondary" href={`/retrospectives?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`}>{t.retrospective}</a><a class="button-secondary" href={`/improvement-actions?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`}>{t.actions}</a></div></div></header>
+    {message && <p class="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100">{message}</p>}
+    {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
+    {!dashboardWritable && <p class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">{t.readOnly}</p>}
+    <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {[
+        [t.decisions, dashboard.knowledge_status?.decisions?.total ?? dashboard.knowledge.decisions, `${t.confirmed} ${dashboard.knowledge_status?.decisions?.confirmed ?? 0} · ${t.needsReview} ${dashboard.knowledge_status?.decisions?.needs_review ?? 0}`],
+        [t.rules, dashboard.knowledge_status?.rules?.total ?? dashboard.knowledge.rules, `${t.adopted} ${dashboard.knowledge_status?.rules?.adopted ?? 0} · ${t.pending} ${dashboard.knowledge_status?.rules?.pending ?? 0}`],
+        [t.rationales, dashboard.knowledge_status?.rationales?.total ?? dashboard.knowledge.rationales, ""], [t.packs, dashboard.summary?.installed_packs ?? 0, ""], [t.openRetros, dashboard.summary?.open_retrospectives ?? 0, ""]
+      ].map(([label, value, detail]) => <article class="rounded-[18px] border border-white/8 bg-black/20 p-5"><p class="text-sm text-zinc-400">{label}</p><p class="mt-2 text-3xl font-semibold">{value}</p>{detail && <p class="mt-2 text-xs text-zinc-500">{detail}</p>}</article>)}
+    </section>
+    <section class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+      <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="surface-label">KNOWLEDGE PACK GOALS</p><h2 class="mt-1 text-xl font-semibold">{t.goals}</h2></div><a href={`/knowledge-packs/onboarding?${scope}&lang=${lang}`}>{t.addPack}</a></div>
+      <div class="mt-4 grid gap-4 lg:grid-cols-2">
+        {goals.map((goal: any) => <article id={`goal-${goal.link.id}`} class="rounded-2xl border border-white/8 bg-zinc-950/55 p-5">
+          <div class="flex items-start justify-between gap-3"><div><p class="text-xs text-zinc-500">{goal.pack_title}</p><h3 class="mt-1 font-semibold">{goal.metric_label}</h3></div><div class="flex flex-wrap justify-end gap-1"><span class:list={["rounded-full px-2 py-1 text-xs", goal.current.state === "measured" ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-400/15 text-amber-200"]}>{knowledgeLoopStatus(lang, goal.current.state)}</span>{goal.comparison?.target_state && <span class="rounded-full bg-white/8 px-2 py-1 text-xs">{knowledgeLoopStatus(lang, goal.comparison.target_state)}</span>}{goal.comparison?.trend && goal.comparison.trend !== "unknown" && <span class="rounded-full bg-white/8 px-2 py-1 text-xs">{knowledgeLoopStatus(lang, goal.comparison.trend)}</span>}</div></div>
+          <div class="mt-5 grid grid-cols-2 gap-3"><div><p class="text-xs text-zinc-500">{t.current}</p><p class="mt-1 text-3xl font-semibold">{format(goal.current.value)} <span class="text-sm text-zinc-500">{knowledgeLoopUnit(lang, goal.unit)}</span></p></div><div><p class="text-xs text-zinc-500">{t.target}</p><p class="mt-1 text-2xl font-semibold">{target(goal)} <span class="text-sm text-zinc-500">{knowledgeLoopUnit(lang, goal.unit)}</span></p></div></div>
+          <div class="mt-3 grid grid-cols-2 gap-3 text-sm"><p><span class="text-zinc-500">{t.distance}: </span>{format(goal.comparison?.distance_to_target)}</p><p><span class="text-zinc-500">{t.previous}: </span>{format(goal.comparison?.change_from_previous)}</p></div>
+          {goal.current.observed_at && <p class="mt-2 text-xs text-zinc-500">{t.observed}: {new Date(goal.current.observed_at).toLocaleString(lang)}</p>}
+          {goal.source.latest_run && <div class:list={["mt-4 rounded-xl p-3 text-sm", goal.source.latest_run.status === "failed" ? "bg-rose-400/10 text-rose-100" : "bg-white/[0.04]"]} data-import-run={goal.source.latest_run.id} data-terminal={String(["succeeded", "failed"].includes(goal.source.latest_run.status))}><strong>{knowledgeLoopStatus(lang, goal.source.latest_run.status)}</strong>{goal.source.latest_run.error_message && <p class="mt-1">{goal.source.latest_run.error_code}: {goal.source.latest_run.error_message}</p>}<p class="import-continuing mt-1 hidden text-xs">{t.importContinuing} <a href={Astro.url.pathname + Astro.url.search}>{t.refresh}</a></p></div>}
+          {goal.source.binding_id && importWritable ? <form method="post" class="mt-5"><input type="hidden" name="csrf_token" class="measurement-csrf"/><input type="hidden" name="action" value="import"/><input type="hidden" name="source_binding_id" value={goal.source.binding_id}/><button type="submit">{goal.source.latest_run?.status === "failed" ? t.retryImport : t.import}</button></form> : !goal.source.binding_id && dashboardWritable ? <form method="post" class="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]"><input type="hidden" name="csrf_token" class="measurement-csrf"/><input type="hidden" name="action" value="snapshot"/><input type="hidden" name="installation_id" value={goal.link.knowledge_pack_installation_id}/><input type="hidden" name="goal_link_id" value={goal.link.id}/><label><span class="field-label">{t.recordNew}</span><input name="value" type="number" step="any" required/></label><label><span class="field-label">{t.evidence}</span><input name="evidence_ref"/></label><button class="self-end" type="submit">{t.recordNew}</button></form> : null}
+        </article>)}
+        {goals.length === 0 && <div class="rounded-xl border border-dashed border-white/10 p-8 text-center"><p class="text-zinc-300">{t.noGoals}</p></div>}
+      </div>
+    </section>
+  </section>
+</BaseLayout>
+<script is:inline define:vars={{ tenantId }}>
+  document.querySelectorAll(".measurement-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });
+  document.querySelectorAll("[data-import-run]").forEach((element) => {
+    if (element.dataset.terminal === "true") return;
+    const started = Date.now();
+    const timer = window.setInterval(async () => {
+      if (Date.now() - started > 60_000) { window.clearInterval(timer); element.querySelector(".import-continuing")?.classList.remove("hidden"); return; }
+      const response = await fetch(`/api/v1/metric-import-runs/${encodeURIComponent(element.dataset.importRun)}?tenant_id=${encodeURIComponent(tenantId)}`);
+      const payload = await response.json().catch(() => null);
+      if (response.ok && ["succeeded", "failed"].includes(payload?.data?.status)) { window.clearInterval(timer); window.location.reload(); }
+    }, 2_000);
+  });
+</script>

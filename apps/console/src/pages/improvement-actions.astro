@@ -1,11 +1,18 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
+import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus, knowledgeLoopUnit } from "../lib/knowledge-loop-locale";
+
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const t = knowledgeLoopCopy(lang);
 const cookie = Astro.request.headers.get("cookie") ?? "";
 const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+const sourceSessionId = Astro.url.searchParams.get("retrospective_session_id")?.trim() || null;
+const sourceItemId = Astro.url.searchParams.get("retrospective_item_id")?.trim() || null;
+const sourceTitle = Astro.url.searchParams.get("source_title")?.trim().slice(0, 240) || "";
 let message = "";
 let error = "";
+
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const csrf = String(form.get("csrf_token") ?? "");
@@ -13,25 +20,72 @@ if (Astro.request.method === "POST") {
   const id = String(form.get("id") ?? "");
   const path = action === "create" ? "/api/v1/improvement-actions" : action === "verify" ? `/api/v1/improvement-actions/${encodeURIComponent(id)}/verify` : `/api/v1/improvement-actions/${encodeURIComponent(id)}`;
   const method = action === "create" || action === "verify" ? "POST" : "PATCH";
-  const body = action === "create" ? { tenant_id: tenantId, project_id: projectId, title: String(form.get("title")), description: String(form.get("description") ?? ""), owner_principal: String(form.get("owner_principal") ?? "").trim() || null, due_at: form.get("due_at") ? Date.parse(`${String(form.get("due_at"))}T23:59:59+09:00`) : null, external_issue_url: String(form.get("external_issue_url") ?? "").trim() || null, goal_link_id: String(form.get("goal_link_id") ?? "").trim() || null } : action === "verify" ? { tenant_id: tenantId } : { tenant_id: tenantId, status: String(form.get("status")) };
+  const body = action === "create" ? {
+    tenant_id: tenantId, project_id: projectId,
+    retrospective_session_id: String(form.get("retrospective_session_id") ?? "").trim() || null,
+    retrospective_item_id: String(form.get("retrospective_item_id") ?? "").trim() || null,
+    title: String(form.get("title")), description: String(form.get("description") ?? ""),
+    owner_principal: String(form.get("owner_principal") ?? "").trim() || null,
+    due_at: form.get("due_at") ? Date.parse(`${String(form.get("due_at"))}T23:59:59+09:00`) : null,
+    external_issue_url: String(form.get("external_issue_url") ?? "").trim() || null,
+    goal_link_id: String(form.get("goal_link_id") ?? "").trim() || null
+  } : action === "verify" ? { tenant_id: tenantId } : { tenant_id: tenantId, status: String(form.get("status")) };
   const response = await api(path, { method, headers: { "content-type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify(body) });
   const payload: any = await response.json().catch(() => null);
-  if (response.ok) message = action === "verify" ? `再計測結果: ${payload.data.verification_outcome}` : "改善アクションを更新しました。";
-  else error = payload?.error?.message ?? "改善アクションを更新できませんでした。";
+  if (response.ok) message = action === "verify" ? `${t.verification}: ${knowledgeLoopStatus(lang, payload.data.verification_outcome)}` : t.actionUpdated;
+  else error = knowledgeLoopError(lang, payload?.error?.code, payload?.error?.message ?? t.actionUpdateFailed);
 }
-const [actionsResponse, dashboardResponse] = await Promise.all([api(`/api/v1/improvement-actions?tenant_id=${encodeURIComponent(tenantId)}`), api(`/api/v1/dashboard/organization?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`)]);
+
+const scope = `tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`;
+const [actionsResponse, dashboardResponse, capabilityResponse] = await Promise.all([
+  api(`/api/v1/improvement-actions?tenant_id=${encodeURIComponent(tenantId)}`),
+  api(`/api/v1/dashboard/organization?${scope}`),
+  api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`)
+]);
 const actionsPayload: any = await actionsResponse.json().catch(() => null);
 const dashboardPayload: any = await dashboardResponse.json().catch(() => null);
+const capabilityPayload: any = await capabilityResponse.json().catch(() => null);
 const actions = Array.isArray(actionsPayload?.data) ? actionsPayload.data : [];
 const goals = dashboardPayload?.data?.goals ?? [];
-if (!actionsResponse.ok && !error) error = actionsPayload?.error?.message ?? "改善アクションを取得できませんでした。";
-const nextStatuses: Record<string, Array<[string,string]>> = { open: [["in_progress","着手する"],["cancelled","中止する"]], in_progress: [["awaiting_verification","実装完了・再計測待ち"],["completed","完了"],["cancelled","中止する"]], awaiting_verification: [["in_progress","作業へ戻す"],["cancelled","中止する"]] };
+const writable = capabilityPayload?.data?.improvement_actions?.writable === true;
+if (!actionsResponse.ok && !error) error = actionsPayload?.error?.message ?? t.actionUpdateFailed;
+const format = (value: unknown) => typeof value === "number" ? new Intl.NumberFormat(lang).format(value) : "—";
+const target = (measurement: any) => measurement?.target?.direction === "range" ? `${format(measurement.target.min)}–${format(measurement.target.max)}` : format(measurement?.target?.value);
+const dashboardHref = (goalId: string) => `/dashboard/knowledge?${scope}&lang=${lang}#goal-${encodeURIComponent(goalId)}`;
+const nextStatuses = (item: any): Array<[string, string]> => {
+  if (item.status === "open") return [["in_progress", t.inProgress], ["cancelled", t.cancel]];
+  if (item.status === "in_progress") return item.goal_link_id ? [["awaiting_verification", t.implementationDone], ["cancelled", t.cancel]] : [["awaiting_verification", t.implementationDone], ["completed", t.complete], ["cancelled", t.cancel]];
+  if (item.status === "awaiting_verification") return [["in_progress", t.backToWork], ["cancelled", t.cancel]];
+  return [];
+};
 ---
-<BaseLayout title="改善アクション" lang={lang} wide>
-  <section class="space-y-5"><header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6"><p class="surface-label">IMPROVE · REMEASURE</p><h1 class="mt-2 text-3xl font-semibold">改善アクション</h1><p class="surface-muted mt-2">担当者・期限・外部Issueを軽量に管理し、実装後は同じ目標を再計測して改善を判定します。</p></header>
-    {message && <p class="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100">{message}</p>}{error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
-    <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="create"/><label><span class="field-label">改善内容</span><input name="title" required placeholder="CIの不安定なテストを分離"/></label><label><span class="field-label">担当者ID</span><input name="owner_principal" placeholder="user:alice"/></label><label><span class="field-label">期限</span><input name="due_at" type="date"/></label><label class="md:col-span-2"><span class="field-label">説明</span><input name="description"/></label><label><span class="field-label">GitHub Issue等</span><input name="external_issue_url" type="url" placeholder="https://github.com/…"/></label><label class="md:col-span-2"><span class="field-label">改善を判定する目標（任意）</span><select name="goal_link_id"><option value="">数値検証なし</option>{goals.map((goal: any) => <option value={goal.link.id}>{goal.pack_title} · {goal.metric_label}</option>)}</select></label><div class="self-end"><button type="submit">アクションを追加</button></div></form>
-    <div class="grid gap-4 lg:grid-cols-2">{actions.map((item: any) => <article class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5"><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-semibold">{item.title}</h2><p class="mt-1 text-sm text-zinc-500">{item.owner_principal ?? '未割当'} · {item.due_at ? new Date(item.due_at).toLocaleDateString(lang) : '期限なし'}</p></div><span class="rounded-full bg-white/8 px-2 py-1 text-xs">{item.status}</span></div>{item.description && <p class="mt-4 text-sm leading-6 text-zinc-300">{item.description}</p>}{item.external_issue_url && <a class="mt-3 inline-block text-sm" href={item.external_issue_url} target="_blank" rel="noreferrer">外部Issueを開く ↗</a>}{item.verification_outcome && <p class="mt-4 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-100">再計測: {item.verification_outcome} · {item.comparator_version}</p>}<div class="mt-5 flex flex-wrap gap-2">{(nextStatuses[item.status] ?? []).map(([status,label]) => <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="status"/><input type="hidden" name="id" value={item.id}/><input type="hidden" name="status" value={status}/><button class="button-secondary" type="submit">{label}</button></form>)}{item.status === 'awaiting_verification' && item.goal_link_id && <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="verify"/><input type="hidden" name="id" value={item.id}/><button type="submit">最新値で改善を判定</button></form>}</div></article>)}{actions.length === 0 && <p class="surface-muted">改善アクションはまだありません。</p>}</div>
+
+<BaseLayout title={t.actionTitle} lang={lang} wide>
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6"><p class="surface-label">IMPROVE · REMEASURE</p><h1 class="mt-2 text-3xl font-semibold">{t.actionTitle}</h1><p class="surface-muted mt-2">{t.actionLead}</p></header>
+    {message && <p class="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100">{message}</p>}
+    {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
+    {!writable && <p class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">{t.readOnly}</p>}
+
+    {writable && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3">
+      <input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="create"/>
+      <input type="hidden" name="retrospective_session_id" value={sourceSessionId ?? ""}/><input type="hidden" name="retrospective_item_id" value={sourceItemId ?? ""}/>
+      {sourceSessionId && sourceItemId && <p class="md:col-span-3 rounded-xl bg-white/[0.04] p-3 text-sm text-zinc-300">{t.createdFromRetro}: {sourceSessionId} / {sourceItemId}</p>}
+      <label><span class="field-label">{t.improvement}</span><input name="title" value={sourceTitle} required/></label><label><span class="field-label">{t.owner}</span><input name="owner_principal" placeholder="user:alice"/></label><label><span class="field-label">{t.due}</span><input name="due_at" type="date"/></label>
+      <label class="md:col-span-2"><span class="field-label">{t.description}</span><input name="description"/></label><label><span class="field-label">{t.externalIssue}</span><input name="external_issue_url" type="url" placeholder="https://github.com/…"/></label>
+      <label class="md:col-span-2"><span class="field-label">{t.linkedGoal}</span><select name="goal_link_id"><option value="">{t.noNumericVerification}</option>{goals.map((goal: any) => <option value={goal.link.id}>{goal.pack_title} · {goal.metric_label}</option>)}</select></label><div class="self-end"><button type="submit">{t.addAction}</button></div>
+    </form>}
+
+    <div class="grid gap-4 lg:grid-cols-2">
+      {actions.map((item: any) => <article class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+        <div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-semibold">{item.title}</h2><p class="mt-1 text-sm text-zinc-500">{item.owner_principal ?? t.unassigned} · {item.due_at ? new Date(item.due_at).toLocaleDateString(lang) : t.noDue}</p></div><span class="rounded-full bg-white/8 px-2 py-1 text-xs">{knowledgeLoopStatus(lang, item.status)}</span></div>
+        {item.description && <p class="mt-4 text-sm leading-6 text-zinc-300">{item.description}</p>}{item.external_issue_url && <a class="mt-3 inline-block text-sm" href={item.external_issue_url} target="_blank" rel="noreferrer">{t.externalIssueOpen} ↗</a>}
+        {item.measurement && <section class="mt-4 rounded-xl bg-white/[0.04] p-4"><div class="flex items-start justify-between gap-3"><div><p class="text-xs text-zinc-500">{item.measurement.pack_title}</p><h3 class="font-medium">{item.measurement.metric_label}</h3></div><span class="text-xs text-zinc-400">{knowledgeLoopStatus(lang, item.measurement.verification_state)}</span></div><dl class="mt-3 grid grid-cols-3 gap-2 text-sm"><div><dt class="text-zinc-500">{t.baseline}</dt><dd>{format(item.measurement.baseline.value)} {knowledgeLoopUnit(lang, item.measurement.unit)}</dd></div><div><dt class="text-zinc-500">{t.current}</dt><dd>{format(item.measurement.current.value)} {knowledgeLoopUnit(lang, item.measurement.unit)}</dd></div><div><dt class="text-zinc-500">{t.target}</dt><dd>{target(item.measurement)} {knowledgeLoopUnit(lang, item.measurement.unit)}</dd></div></dl></section>}
+        {item.verification_outcome && <p class="mt-4 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-100">{t.verification}: {knowledgeLoopStatus(lang, item.verification_outcome)}</p>}
+        {writable && <div class="mt-5 flex flex-wrap gap-2">{nextStatuses(item).map(([status, label]) => <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="status"/><input type="hidden" name="id" value={item.id}/><input type="hidden" name="status" value={status}/><button class="button-secondary" type="submit">{label}</button></form>)}{item.status === "awaiting_verification" && item.goal_link_id && <a class="button-secondary" href={dashboardHref(item.goal_link_id)}>{t.measureAgain}</a>}{item.status === "awaiting_verification" && item.measurement?.verification_state === "ready" && <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="verify"/><input type="hidden" name="id" value={item.id}/><button type="submit">{t.verifyNow}</button></form>}</div>}
+      </article>)}
+      {actions.length === 0 && <p class="surface-muted">{t.noActions}</p>}
+    </div>
   </section>
 </BaseLayout>
 <script>document.querySelectorAll<HTMLInputElement>(".action-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });</script>

@@ -294,6 +294,9 @@ Connector取り込みは既存の`metric_source_bindings`と登録済みadapter/
 - `KNOWLEDGE_PACK_ONBOARDING_MODE=off|preview|on`
 - `RETROSPECTIVE_MODE=off|preview|on`
 - `ORGANIZATION_DASHBOARD_MODE=off|preview|on`
+- `METRIC_IMPORT_MODE=off|preview|on`
+- `IMPROVEMENT_ACTIONS_MODE=off|preview|on`
+- `KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON=["<pilot-tenant-id>"]`
 
 `on`にする前に、`DOMAIN_PACKS_MODE=install`、`DOMAIN_METRICS_MODE=on`、
 `DOMAIN_WORKSPACES_MODE=on`の依存を確認する。
@@ -333,14 +336,17 @@ preview、モック、fixture、デプロイ完了だけでは本番成功と扱
 
 ## ロールバック
 
-1. `ORGANIZATION_DASHBOARD_MODE=off`、`RETROSPECTIVE_MODE=off`、
-   `KNOWLEDGE_PACK_ONBOARDING_MODE=off`の順に設定し、新しい導線とpollingを停止する。
-2. 既存の`/domain-packs`の計画・導入、`/domain-workspaces`、`/domain-metrics`、Decision画面を
+1. Gatewayの`KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON=[]`を先に反映し、新規writeとenqueueを停止する。
+   Runner側のallowlistは維持し、停止前に受理済みのqueued/running importを完遂させる。
+2. D1とQueueの未完了が0件になったことを確認してからRunnerの`METRIC_IMPORT_MODE=off`を反映する。
+3. `IMPROVEMENT_ACTIONS_MODE=off`、`RETROSPECTIVE_MODE=off`、
+   `KNOWLEDGE_PACK_ONBOARDING_MODE=off`、`ORGANIZATION_DASHBOARD_MODE=off`の順に設定し、新しい導線とpollingを停止する。
+4. 既存の`/domain-packs`の計画・導入、`/domain-workspaces`、`/domain-metrics`、Decision画面を
    既存モードへ戻す。
-3. セッション、回答、目標、snapshot、監査イベントは削除せず、失敗セッションは再開または管理者が
+5. セッション、回答、目標、snapshot、監査イベントは削除せず、失敗セッションは再開または管理者が
    明示的にcancelできる状態で保持する。
-4. down migrationは実行しない。問題のある集計やindexは、原因確認後に次の前方migrationで修正する。
-5. フラグで復旧しない場合だけ、直前のAPI／Consoleリビジョンへ戻し、同じ読み取り専用live smokeを再実行する。
+6. down migrationは実行しない。問題のある集計やindexは、原因確認後に次の前方migrationで修正する。
+7. フラグで復旧しない場合だけ、直前のAPI／Consoleリビジョンへ戻し、同じ読み取り専用live smokeを再実行する。
 
 ## 最終的な完了定義
 

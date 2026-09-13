@@ -1,0 +1,117 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import { dashboardPageParams } from "../../../lib/dashboard-page";
+import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopSourceType, knowledgeLoopStatus } from "../../../lib/knowledge-loop-locale";
+
+const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const t = knowledgeLoopCopy(lang);
+const id = String(Astro.params.id ?? "");
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+  ...init,
+  headers: { cookie, ...(init.headers ?? {}) }
+});
+let message = "";
+let error = "";
+const capabilities = await api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`);
+const capabilityPayload: any = await capabilities.json().catch(() => null);
+const writable = capabilities.ok && capabilityPayload?.data?.retrospective?.writable === true;
+const actionWritable = capabilities.ok && capabilityPayload?.data?.improvement_actions?.writable === true;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const items = [...form.entries()]
+    .filter(([key]) => key.startsWith("result:"))
+    .map(([key, value]) => ({ item_id: key.slice("result:".length), decision: String(value) }))
+    .filter((entry) => entry.item_id && entry.decision);
+  const response = await api(`/api/v1/retrospectives/${encodeURIComponent(id)}/close`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-csrf-token": String(form.get("csrf_token") ?? ""),
+      "idempotency-key": String(form.get("idempotency_key") ?? "")
+    },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      items,
+      acknowledge_unanswered: form.get("acknowledge_unanswered") === "on"
+    })
+  });
+  const payload: any = await response.json().catch(() => null);
+  if (response.ok) {
+    return Astro.redirect(`/retrospectives/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(tenantId)}&lang=${lang}`, 303);
+  }
+  error = knowledgeLoopError(lang, payload?.error?.code, payload?.error?.message ?? "Retrospective could not be finalized");
+}
+
+const response = await api(`/api/v1/retrospectives/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(tenantId)}`);
+const payload: any = await response.json().catch(() => null);
+const session = payload?.data;
+if (!response.ok && !error) error = payload?.error?.message ?? "Retrospective could not be loaded";
+const query = new URLSearchParams({ tenant_id: tenantId, lang });
+if (projectId) query.set("project_id", projectId);
+---
+
+<BaseLayout title={`${session?.title ?? t.retroTitle} · ${t.adminReview}`} lang={lang} wide>
+  <section class="space-y-5">
+    <header class="rounded-[22px] border border-white/10 bg-white/[0.04] p-6">
+      <a class="text-sm text-zinc-400" href={`/retrospectives/${encodeURIComponent(id)}?${query}`}>← {session?.title ?? t.retroTitle}</a>
+      <div class="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="surface-label">ADMIN REVIEW</p>
+          <h1 class="mt-1 text-3xl font-semibold">{t.adminReview}</h1>
+          <p class="surface-muted mt-2">{t.close}</p>
+        </div>
+        <span class="rounded-full bg-white/8 px-3 py-1 text-sm">{knowledgeLoopStatus(lang, session?.status ?? "open")}</span>
+      </div>
+    </header>
+
+    {message && <p class="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100">{message}</p>}
+    {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
+
+    <dl class="grid gap-3 sm:grid-cols-3">
+      <div class="rounded-xl border border-white/8 bg-white/[0.025] p-4"><dt class="text-xs text-zinc-500">{t.participants}</dt><dd class="mt-1 text-2xl font-semibold">{session?.progress?.participants ?? 0}</dd></div>
+      <div class="rounded-xl border border-white/8 bg-white/[0.025] p-4"><dt class="text-xs text-zinc-500">{t.answered}</dt><dd class="mt-1 text-2xl font-semibold">{session?.progress?.received_responses ?? 0}</dd></div>
+      <div class="rounded-xl border border-white/8 bg-white/[0.025] p-4"><dt class="text-xs text-zinc-500">{t.unanswered}</dt><dd class="mt-1 text-2xl font-semibold">{session?.progress?.unanswered_responses ?? 0}</dd></div>
+    </dl>
+
+    {!writable && <p class="surface-muted">{t.readOnly}</p>}
+    {writable && !session?.viewer?.can_close && session?.status === "open" && <p class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-amber-100">{t.finalizerOnly}</p>}
+
+    <form method="post" class="space-y-4">
+      <input type="hidden" name="csrf_token" class="retro-admin-csrf" />
+      <input type="hidden" name="idempotency_key" class="retro-admin-key" />
+      {(session?.items ?? []).map((item: any) => {
+        const summary = item.response_summary ?? {};
+        const actionQuery = new URLSearchParams(query);
+        actionQuery.set("retrospective_session_id", id);
+        actionQuery.set("retrospective_item_id", item.id);
+        actionQuery.set("source_title", item.title);
+        return <article class="rounded-[22px] border border-white/8 bg-zinc-950/55 p-5">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0 flex-1"><p class="text-xs text-zinc-500">{knowledgeLoopSourceType(lang, item.source_type)}</p><h2 class="mt-1 text-lg font-semibold">{item.title}</h2><p class="mt-2 text-sm leading-6 text-zinc-300">{item.statement}</p></div>
+            {actionWritable && <a class="button-secondary" href={`/improvement-actions?${actionQuery}`}>{t.addAction}</a>}
+          </div>
+          <dl class="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+            <div><dt class="text-zinc-500">{t.participants}</dt><dd>{summary.eligible ?? 0}</dd></div>
+            <div><dt class="text-zinc-500">{t.answered}</dt><dd>{summary.received ?? 0}</dd></div>
+            <div><dt class="text-zinc-500">{t.adopt}</dt><dd>{summary.adopt ?? 0}</dd></div>
+            <div><dt class="text-zinc-500">{t.reject}</dt><dd>{summary.do_not_adopt ?? 0}</dd></div>
+            <div><dt class="text-zinc-500">{t.defer}</dt><dd>{summary.defer ?? 0}</dd></div>
+          </dl>
+          {writable && session?.status === "open" && session?.viewer?.can_close && <label class="mt-4 block"><span class="field-label">{t.chooseResult}</span><select name={`result:${item.id}`} required><option value="">—</option><option value="adopted">{t.adopt}</option><option value="not_adopted">{t.reject}</option><option value="deferred">{t.defer}</option></select></label>}
+        </article>;
+      })}
+
+      {writable && session?.status === "open" && session?.viewer?.can_close && <div class="rounded-[22px] border border-white/8 bg-white/[0.025] p-5">
+        {(session?.progress?.unanswered_responses ?? 0) > 0 && <label class="flex items-start gap-3"><input type="checkbox" name="acknowledge_unanswered" required /><span>{t.acknowledge}</span></label>}
+        <button class="mt-4" type="submit">{t.close}</button>
+      </div>}
+    </form>
+  </section>
+</BaseLayout>
+
+<script>
+  document.querySelectorAll<HTMLInputElement>(".retro-admin-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });
+  document.querySelectorAll<HTMLInputElement>(".retro-admin-key").forEach((input) => { input.value = crypto.randomUUID(); });
+</script>

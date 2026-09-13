@@ -64,8 +64,9 @@ import {
 import { assertDecisionConsoleEnabled, isTenantAdmin, requireIdempotencyKey } from "./route-support";
 import type { Env } from "./types";
 import type { Hono } from "hono";
+import { isKnowledgeLoopWritable } from "./knowledge-loop-feature";
 
-function domainCapabilities(env: Env): Record<string, unknown> {
+function domainCapabilities(env: Env, tenantId: string): Record<string, unknown> {
   return {
     domain_packs: {
       mode: env.DOMAIN_PACKS_MODE ?? "off",
@@ -81,12 +82,13 @@ function domainCapabilities(env: Env): Record<string, unknown> {
     },
     knowledge_pack_onboarding: {
       mode: env.KNOWLEDGE_PACK_ONBOARDING_MODE ?? "off",
-      enabled: env.KNOWLEDGE_PACK_ONBOARDING_MODE !== undefined && env.KNOWLEDGE_PACK_ONBOARDING_MODE !== "off"
+      enabled: env.KNOWLEDGE_PACK_ONBOARDING_MODE !== undefined && env.KNOWLEDGE_PACK_ONBOARDING_MODE !== "off",
+      writable: isKnowledgeLoopWritable(env, "KNOWLEDGE_PACK_ONBOARDING_MODE", tenantId)
     },
-    organization_dashboard: { mode: env.ORGANIZATION_DASHBOARD_MODE ?? "off", enabled: env.ORGANIZATION_DASHBOARD_MODE !== undefined && env.ORGANIZATION_DASHBOARD_MODE !== "off" },
-    metric_import: { mode: env.METRIC_IMPORT_MODE ?? "off", enabled: env.METRIC_IMPORT_MODE !== undefined && env.METRIC_IMPORT_MODE !== "off" },
-    retrospective: { mode: env.RETROSPECTIVE_MODE ?? "off", enabled: env.RETROSPECTIVE_MODE !== undefined && env.RETROSPECTIVE_MODE !== "off" },
-    improvement_actions: { mode: env.IMPROVEMENT_ACTIONS_MODE ?? "off", enabled: env.IMPROVEMENT_ACTIONS_MODE !== undefined && env.IMPROVEMENT_ACTIONS_MODE !== "off" },
+    organization_dashboard: { mode: env.ORGANIZATION_DASHBOARD_MODE ?? "off", enabled: env.ORGANIZATION_DASHBOARD_MODE !== undefined && env.ORGANIZATION_DASHBOARD_MODE !== "off", writable: isKnowledgeLoopWritable(env, "ORGANIZATION_DASHBOARD_MODE", tenantId) },
+    metric_import: { mode: env.METRIC_IMPORT_MODE ?? "off", enabled: env.METRIC_IMPORT_MODE !== undefined && env.METRIC_IMPORT_MODE !== "off", writable: isKnowledgeLoopWritable(env, "METRIC_IMPORT_MODE", tenantId) },
+    retrospective: { mode: env.RETROSPECTIVE_MODE ?? "off", enabled: env.RETROSPECTIVE_MODE !== undefined && env.RETROSPECTIVE_MODE !== "off", writable: isKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId) },
+    improvement_actions: { mode: env.IMPROVEMENT_ACTIONS_MODE ?? "off", enabled: env.IMPROVEMENT_ACTIONS_MODE !== undefined && env.IMPROVEMENT_ACTIONS_MODE !== "off", writable: isKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId) },
     pack_builder: { enabled: false, href: null, edition: "enterprise" }
   };
 }
