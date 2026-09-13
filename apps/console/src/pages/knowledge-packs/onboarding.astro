@@ -209,6 +209,7 @@ const capabilityPayload: any = await capabilityResponse.json().catch(() => null)
 const sessionPayload: any = sessionResponse ? await sessionResponse.json().catch(() => null) : null;
 const packs: any[] = Array.isArray(catalogPayload?.data) ? catalogPayload.data : [];
 const capability = capabilityPayload?.data?.knowledge_pack_onboarding;
+const writable = capability?.writable === true;
 const session: any = sessionPayload?.data ?? null;
 if (requestedSessionId && sessionResponse && !sessionResponse.ok && !error) {
   error = sessionPayload?.error?.message ?? copy.loadError;
@@ -281,7 +282,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
     {error && <div class="kp-error" role="alert" tabindex="-1" data-server-error>
       <strong>{copy.mutationError}</strong>
       <span>{error}</span>
-      {session || capability?.enabled
+      {session || writable
         ? <a href="#knowledge-pack-form">{copy.retryForm}</a>
         : <a href={scopedUrl()}>{copy.retryLoad}</a>}
     </div>}
@@ -291,7 +292,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
       <div>
         <h2>{copy.purposeTitle}</h2>
         <p class="surface-muted">{copy.purposeBody}</p>
-        {capability?.enabled ? <form id="knowledge-pack-form" method="post" class="mt-5" data-guided-form>
+        {writable ? <form id="knowledge-pack-form" method="post" class="mt-5" data-guided-form>
           <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
           <input type="hidden" name="action" value="start" />
           <input type="hidden" name="idempotency_key" value={requestKey} />
@@ -299,6 +300,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
         </form> : <p class="kp-disabled">{copy.disabled}</p>}
       </div>
     </section> : <div class="kp-shell">
+      {!writable && <p class="kp-disabled" role="status">{copy.disabled}</p>}
       <nav class="kp-rail" aria-label={copy.progressLabel}>
         <p class="surface-label">{session.id}</p>
         <div class="kp-mobile-progress">
@@ -323,7 +325,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
       <section class="kp-stage" data-knowledge-pack-step={displayStep} aria-labelledby="knowledge-pack-step-title">
         {displayStep === "purpose" && <>
           <div class="kp-stage-heading" tabindex="-1"><p>01 / 07</p><h2 id="knowledge-pack-step-title">{copy.purposeTitle}</h2><span>{copy.purposeBody}</span></div>
-          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
+          <form hidden={!writable} id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
             <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
             <input type="hidden" name="session_id" value={session.id} />
             <input type="hidden" name="revision" value={session.revision} />
@@ -338,7 +340,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
 
         {displayStep === "template" && <>
           <div class="kp-stage-heading" tabindex="-1"><p>02 / 07</p><h2 id="knowledge-pack-step-title">{copy.templateTitle}</h2><span>{copy.templateBody}</span></div>
-          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form data-auto-advance="selection">
+          <form hidden={!writable} id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form data-auto-advance="selection">
             <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
             <input type="hidden" name="session_id" value={session.id} />
             <input type="hidden" name="revision" value={session.revision} />
@@ -362,7 +364,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
 
         {displayStep === "scope" && <>
           <div class="kp-stage-heading" tabindex="-1"><p>03 / 07</p><h2 id="knowledge-pack-step-title">{copy.scopeTitle}</h2><span>{copy.scopeBody}</span></div>
-          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form data-auto-advance="selection" data-scope-form>
+          <form hidden={!writable} id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form data-auto-advance="selection" data-scope-form>
             <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
             <input type="hidden" name="session_id" value={session.id} />
             <input type="hidden" name="revision" value={session.revision} />
@@ -380,7 +382,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
 
         {displayStep === "goals" && <>
           <div class="kp-stage-heading" tabindex="-1"><p>04 / 07</p><h2 id="knowledge-pack-step-title">{copy.goalsTitle}</h2><span>{copy.goalsBody}</span></div>
-          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
+          <form hidden={!writable} id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
             <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
             <input type="hidden" name="session_id" value={session.id} />
             <input type="hidden" name="revision" value={session.revision} />
@@ -416,7 +418,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
 
         {displayStep === "data_sources" && <>
           <div class="kp-stage-heading" tabindex="-1"><p>05 / 07</p><h2 id="knowledge-pack-step-title">{copy.sourcesTitle}</h2><span>{copy.sourcesBody}</span></div>
-          <form id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
+          <form hidden={!writable} id="knowledge-pack-form" method="post" class="kp-form" data-guided-form data-validation-form>
             <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
             <input type="hidden" name="session_id" value={session.id} />
             <input type="hidden" name="revision" value={session.revision} />
@@ -476,7 +478,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
               {session.plan.data_sources.map((source: any) => <article><span>{copy.sourceMode}</span><strong>{source.metric_key}</strong><small>{source.mode}</small></article>)}
             </div>
             <p class="kp-fixture-note">✓ {copy.fixtureNote}</p>
-            <form method="post" class="kp-complete-form" data-guided-form>
+            <form hidden={!writable} method="post" class="kp-complete-form" data-guided-form>
               <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
               <input type="hidden" name="session_id" value={session.id} />
               <input type="hidden" name="revision" value={session.revision} />
@@ -485,7 +487,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
               <input type="hidden" name="plan_digest" value={session.plan.plan_digest} />
               <button type="submit" data-saving-label={copy.saving}>{copy.install}</button>
             </form>
-          </div> : <form method="post" class="kp-form" data-guided-form>
+          </div> : <form hidden={!writable} method="post" class="kp-form" data-guided-form>
             <input type="hidden" name="csrf_token" class="knowledge-pack-csrf" />
             <input type="hidden" name="session_id" value={session.id} />
             <input type="hidden" name="revision" value={session.revision} />

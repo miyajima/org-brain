@@ -77,7 +77,7 @@ const managementItems: ConsoleNavItem[] = [
   item("memory-impact", "/memory-impact", "knowledge", layoutNavLabels("memory-impact")),
   item("decision-editor", decisionBehavior.enabled ? "/decisions/new" : "/decisions", "knowledge", layoutNavLabels("decision-editor")),
   item("resources", "/resources", "knowledge", layoutNavLabels("resources")),
-  item("knowledge-dashboard", "/knowledge-dashboard", "knowledge", layoutNavLabels("knowledge-dashboard"), starts("/knowledge-dashboard")),
+  item("knowledge-dashboard", "/dashboard/knowledge", "knowledge", layoutNavLabels("knowledge-dashboard"), starts("/dashboard/knowledge")),
   item("retrospectives", "/retrospectives", "knowledge", layoutNavLabels("retrospectives"), starts("/retrospectives")),
   item("improvement-actions", "/improvement-actions", "knowledge", layoutNavLabels("improvement-actions"), starts("/improvement-actions")),
   item("knowledge-pack-onboarding", "/knowledge-packs/onboarding", "knowledge", layoutNavLabels("knowledge-pack-onboarding"), starts("/knowledge-packs")),
@@ -225,6 +225,15 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
       const main = document.querySelector<HTMLElement>("#console-main");
       skipLink?.addEventListener("click", () => {
         requestAnimationFrame(() => main?.focus({ preventScroll: true }));
+      });
+      main?.addEventListener("keydown", (event) => {
+        if (event.key !== "Tab" || event.shiftKey || event.target !== main) return;
+        const first = [...main.querySelectorAll<HTMLElement>(
+          'a[href]:not([hidden]), button:not([disabled]):not([hidden]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([hidden])'
+        )].find((element) => element.getClientRects().length > 0);
+        if (!first) return;
+        event.preventDefault();
+        first.focus();
       });
     </script>
   </body>

@@ -1100,7 +1100,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/capabilities" && request.method === "GET") {
-    json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, knowledge_pack_onboarding: { enabled: true, mode: "on" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
+    json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, knowledge_pack_onboarding: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, organization_dashboard: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, metric_import: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, retrospective: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, improvement_actions: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
     return;
   }
   if (path === "/v1/domain-packs" && request.method === "GET") {
@@ -1112,13 +1112,16 @@ const server = http.createServer(async (request, response) => {
     json(response, 200, ok({
       contract_version: "knowledge-measurement-loop/v1",
       generated_at: now,
+      summary: { installed_packs: 1, open_retrospectives: 1 },
       knowledge: { decisions: 12, rules: 7, rationales: 9 },
+      knowledge_status: { decisions: { total: 12, confirmed: 10, needs_review: 2 }, rules: { total: 7, adopted: 5, pending: 2 }, rationales: { total: 9 } },
       goals: [{
         link: { id: "goal-link-e2e", tenant_id: "default", onboarding_id: "onboarding-e2e", knowledge_pack_installation_id: "installation-e2e", template_pack_id: "function.build-engineering", metric_definition_id: "metric-e2e", metric_binding_id: "binding-e2e", metric_target_id: "target-e2e", metric_source_binding_id: null, metric_key: "build_success_rate", scope_type: "project", scope_id: "org-brain", created_at: now },
         pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent",
         target: { direction: "increase", value: 98, min: null, max: null, due_at: now + 86400000 },
         current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 },
-        source: { binding_id: null, adapter_id: null, status: null, last_success_at: null }
+        comparison: { target_state: "off_track", distance_to_target: 7, previous_value: 89, change_from_previous: 2, trend: "improving" },
+        source: { binding_id: null, adapter_id: null, status: null, last_success_at: null, latest_run: null }
       }]
     }));
     return;
@@ -1128,7 +1131,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/retrospectives" && request.method === "GET") {
-    json(response, 200, ok([{ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, item_count: 1 }]));
+    json(response, 200, ok([{ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, item_count: 1, participant_count: 2, eligible_response_count: 2, received_response_count: 1 }]));
     return;
   }
   if (path === "/v1/retrospectives" && request.method === "POST") {
@@ -1144,7 +1147,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/retrospectives/retro-e2e" && request.method === "GET") {
-    json(response, 200, ok({ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, items: [{ id: "retro-item-e2e", ordinal: 0, source_type: "decision_memory", source_id: "decision-e2e", source_version: String(now), source_digest: "a".repeat(64), title: "CI retry rule", statement: "Retry only infrastructure failures", rationale: "Product failures must remain visible", evidence: [], response: null }] }));
+    json(response, 200, ok({ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, viewer: { role: "admin", can_close: true }, progress: { participants: 2, completed_participants: 1, pending_participants: 1, eligible_responses: 2, received_responses: 1, unanswered_responses: 1 }, close_summary: null, items: [{ id: "retro-item-e2e", ordinal: 0, source_type: "decision_memory", source_id: "decision-e2e", parent_decision_id: "decision-e2e", source_version: String(now), source_digest: "a".repeat(64), title: "CI retry rule", statement: "Retry only infrastructure failures", rationale: "Product failures must remain visible", evidence: ["https://example.com/evidence", "internal:evidence"], response: null, response_summary: { eligible: 2, received: 1, unanswered: 1, adopt: 1, do_not_adopt: 0, defer: 0, adoption_rate: 1 } }] }));
     return;
   }
   if (/^\/v1\/retrospectives\/retro-e2e\/items\/[^/]+\/response$/u.test(path) && request.method === "PUT") {
@@ -1152,11 +1155,16 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/retrospectives/retro-e2e/close" && request.method === "POST") {
+    const body = await readJson(request);
+    if (!body.items?.length || body.items.some((item) => !["adopted", "not_adopted", "deferred"].includes(item.decision))) {
+      json(response, 400, { error: { code: "validation_error", message: "Invalid retrospective result" } });
+      return;
+    }
     json(response, 200, ok({ session_id: "retro-e2e", status: "closed", results: [] }));
     return;
   }
   if (path === "/v1/improvement-actions" && request.method === "GET") {
-    json(response, 200, ok([{ id: "action-e2e", tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now }]));
+    json(response, 200, ok([{ id: "action-e2e", tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now, measurement: { pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent", target: { direction: "increase", value: 98, min: null, max: null }, baseline: { snapshot_id: "snapshot-e2e", value: 89, observed_at: now - 86400000 }, current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 }, verification_state: "waiting_for_measurement" } }]));
     return;
   }
   if (path === "/v1/improvement-actions" && request.method === "POST") {

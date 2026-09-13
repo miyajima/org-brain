@@ -2,6 +2,7 @@ import {
   KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
   METRIC_IMPORT_JOB_CONTRACT_VERSION,
   improvementActionSchema,
+  improvementActionViewSchema,
   knowledgePackGoalLinkSchema,
   metricImportJobSchema,
   metricImportRunSchema,
@@ -17,17 +18,15 @@ import { canonicalJson } from "@org-brain/core";
 import { HttpError, sha256, ulid } from "@org-brain/shared";
 import { z } from "zod";
 import { createMetricSnapshot } from "./domain-metric-service";
+import { assertKnowledgeLoopWritable, isKnowledgeLoopWritable } from "./knowledge-loop-feature";
+import { canReadResourceWithGroups, loadAccessPolicies, loadPrincipalGroupIds } from "./access-policy-service";
+import { compareMetric, type MetricTarget } from "./metric-comparison";
 import type { Env } from "./types";
 
 type FeatureKey = "ORGANIZATION_DASHBOARD_MODE" | "METRIC_IMPORT_MODE" | "RETROSPECTIVE_MODE" | "IMPROVEMENT_ACTIONS_MODE";
 
 function assertReadable(env: Env, key: FeatureKey) {
   if (!env[key] || env[key] === "off") throw new HttpError(404, "feature_disabled", "This measurement feature is disabled");
-}
-
-function assertWritable(env: Env, key: FeatureKey) {
-  assertReadable(env, key);
-  if (env[key] !== "on") throw new HttpError(409, "feature_preview", "This measurement feature is in preview-only mode");
 }
 
 function parse<S extends z.ZodTypeAny>(schema: S, raw: unknown): z.infer<S> {
@@ -78,7 +77,28 @@ type DashboardRow = {
   adapter_id: string | null;
   source_status: "unconfigured" | "configured" | "active" | "error" | "paused" | null;
   last_success_at: number | null;
+  previous_value: number | null;
+  run_id: string | null;
+  run_status: "queued" | "running" | "succeeded" | "failed" | null;
+  run_attempt: number | null;
+  run_error_code: string | null;
+  run_error_message: string | null;
+  run_snapshot_id: string | null;
+  run_queued_at: number | null;
+  run_started_at: number | null;
+  run_lease_expires_at: number | null;
+  run_completed_at: number | null;
+  run_updated_at: number | null;
 };
+
+async function principalCanReadProject(env: Env, tenantId: string, principal: string, projectId: string | null): Promise<boolean> {
+  if (!projectId) return true;
+  const assignment = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT 1 AS allowed FROM principal_role_assignments
+     WHERE tenant_id=? AND principal=? AND (project_id IS NULL OR project_id=?) LIMIT 1`
+  ).bind(tenantId, principal, projectId).first<{ allowed: number }>();
+  return Boolean(assignment);
+}
 
 export async function getOrganizationDashboard(env: Env, tenantId: string, options: {
   principal?: string;
@@ -88,27 +108,32 @@ export async function getOrganizationDashboard(env: Env, tenantId: string, optio
   assertReadable(env, "ORGANIZATION_DASHBOARD_MODE");
   const projectId = options.projectId ?? null;
   const principal = options.principal ?? "";
-  const aclSql = options.includeAll ? "1=1" : `(visibility != 'restricted' OR EXISTS(
-    SELECT 1 FROM json_each(CASE WHEN json_valid(owner_refs_json) THEN owner_refs_json ELSE '[]' END) owner
-    WHERE (owner.type = 'text' AND owner.value = ?) OR
-      (owner.type = 'object' AND json_extract(owner.value, '$.id') = ?)
-  ) OR EXISTS(
-    SELECT 1 FROM json_each(CASE WHEN json_valid(allowed_principals_json) THEN allowed_principals_json ELSE '[]' END)
-    WHERE value = ?
-  ))`;
-  const aclBindings = options.includeAll ? [] : [principal, principal, principal];
-  const [decisionCount, rationaleCount, rows] = await Promise.all([
+  const projectAssignments = options.includeAll ? { results: [] as Array<{ project_id: string | null }> } : await env.OPEN_BRAIN_DB.prepare(
+    "SELECT project_id FROM principal_role_assignments WHERE tenant_id=? AND principal=?"
+  ).bind(tenantId, principal).all<{ project_id: string | null }>();
+  const canReadAllProjects = Boolean(options.includeAll || projectAssignments.results.some((row) => row.project_id === null));
+  const readableProjectIds = new Set(projectAssignments.results.flatMap((row) => row.project_id ? [row.project_id] : []));
+  if (projectId && !canReadAllProjects && !readableProjectIds.has(projectId)) {
+    throw new HttpError(403, "project_access_required", "The principal is not assigned to this project");
+  }
+  const [decisionRows, rationaleRows, rows, installedPacks, openRetrospectives] = await Promise.all([
     env.OPEN_BRAIN_DB.prepare(
-      `SELECT COUNT(*) AS count FROM decision_memories WHERE tenant_id = ?
+      `SELECT id, project_id, title, decision, rationale, constraints_json, source_refs_json, updated_at,
+              confirmation_state, visibility, owner_refs_json, allowed_principals_json
+       FROM decision_memories WHERE tenant_id = ?
        AND (? IS NULL OR project_id IS NULL OR project_id = ?)
-       AND status NOT IN ('retired','superseded') AND ${aclSql}`
-    ).bind(tenantId, projectId, projectId, ...aclBindings).first<{ count: number }>(),
+       AND status NOT IN ('retired','superseded')`
+    ).bind(tenantId, projectId, projectId).all<{
+      id: string; project_id: string | null; title: string; decision: string; rationale: string;
+      constraints_json: string; source_refs_json: string; updated_at: number; confirmation_state: string;
+      visibility: string; owner_refs_json: string; allowed_principals_json: string;
+    }>(),
     env.OPEN_BRAIN_DB.prepare(
-      `SELECT COUNT(*) AS count FROM decision_rationales r
+      `SELECT r.id, r.memory_id FROM decision_rationales r
        JOIN decision_memories d ON d.tenant_id=r.tenant_id AND d.id=r.memory_id
        WHERE r.tenant_id = ? AND (? IS NULL OR r.project_id IS NULL OR r.project_id = ?)
-       AND r.status NOT IN ('retired','superseded') AND ${aclSql}`
-    ).bind(tenantId, projectId, projectId, ...aclBindings).first<{ count: number }>(),
+       AND r.status NOT IN ('retired','superseded')`
+    ).bind(tenantId, projectId, projectId).all<{ id: string; memory_id: string }>(),
     env.OPEN_BRAIN_DB.prepare(
       `SELECT l.id AS link_id, l.onboarding_id, l.knowledge_pack_installation_id AS installation_id,
               l.template_pack_id, l.metric_definition_id, l.metric_binding_id, l.metric_target_id,
@@ -116,7 +141,13 @@ export async function getOrganizationDashboard(env: Env, tenantId: string, optio
               r.manifest_json, v.definition_json, t.direction, t.target_value, t.target_min, t.target_max,
               t.effective_to,
               s.id AS snapshot_id, s.value AS snapshot_value, s.state AS snapshot_state,
-              s.observed_at, s.expires_at, ms.adapter_id, ms.status AS source_status, ms.last_success_at
+              s.observed_at, s.expires_at, previous.value AS previous_value,
+              ms.adapter_id, ms.status AS source_status, ms.last_success_at,
+              run.id AS run_id, run.status AS run_status, run.attempt AS run_attempt,
+              run.error_code AS run_error_code, run.error_message AS run_error_message,
+              run.snapshot_id AS run_snapshot_id, run.queued_at AS run_queued_at,
+              run.started_at AS run_started_at, run.lease_expires_at AS run_lease_expires_at,
+              run.completed_at AS run_completed_at, run.updated_at AS run_updated_at
        FROM knowledge_pack_goal_links l
        JOIN knowledge_pack_goal_reconciliations reconciliation
          ON reconciliation.onboarding_id=l.onboarding_id AND reconciliation.tenant_id=l.tenant_id
@@ -126,24 +157,70 @@ export async function getOrganizationDashboard(env: Env, tenantId: string, optio
        JOIN metric_definitions d ON d.id = l.metric_definition_id AND d.tenant_id = l.tenant_id
        JOIN metric_definition_versions v ON v.metric_definition_id = d.id AND v.version = d.current_version
        JOIN metric_targets t ON t.id = l.metric_target_id AND t.tenant_id = l.tenant_id
+       LEFT JOIN metric_bindings b ON b.id=l.metric_binding_id AND b.tenant_id=l.tenant_id
        LEFT JOIN metric_source_bindings ms ON ms.id = l.metric_source_binding_id AND ms.tenant_id = l.tenant_id
        LEFT JOIN metric_snapshots s ON s.id = (
          SELECT s2.id FROM metric_snapshots s2
          WHERE s2.tenant_id = l.tenant_id AND s2.metric_definition_id = l.metric_definition_id
            AND s2.binding_id IS l.metric_binding_id
-         ORDER BY s2.observed_at DESC, s2.created_at DESC LIMIT 1
+           AND s2.dimensions_json=COALESCE(b.dimensions_json, '{}')
+         ORDER BY s2.observed_at DESC, s2.created_at DESC, s2.id DESC LIMIT 1
+       )
+       LEFT JOIN metric_snapshots previous ON previous.id = (
+         SELECT s3.id FROM metric_snapshots s3
+         WHERE s3.tenant_id=l.tenant_id AND s3.metric_definition_id=l.metric_definition_id
+           AND s3.binding_id IS l.metric_binding_id AND s3.dimensions_json=COALESCE(b.dimensions_json, '{}')
+           AND s3.state='measured'
+         ORDER BY s3.observed_at DESC, s3.created_at DESC, s3.id DESC LIMIT 1 OFFSET 1
+       )
+       LEFT JOIN metric_source_import_runs run ON run.id = (
+         SELECT import_run.id FROM metric_source_import_runs import_run
+         WHERE import_run.tenant_id=l.tenant_id AND import_run.source_binding_id=l.metric_source_binding_id
+         ORDER BY import_run.queued_at DESC, import_run.updated_at DESC, import_run.id DESC LIMIT 1
        )
        WHERE l.tenant_id = ? AND i.state = 'installed'
          AND (? IS NULL OR l.scope_id IS NULL OR l.scope_id = ?)
        ORDER BY r.pack_id, l.metric_key`
-    ).bind(tenantId, projectId, projectId).all<DashboardRow>()
+    ).bind(tenantId, projectId, projectId).all<DashboardRow>(),
+    env.OPEN_BRAIN_DB.prepare(
+      "SELECT COUNT(*) AS count FROM domain_pack_installations WHERE tenant_id=? AND state='installed'"
+    ).bind(tenantId).first<{ count: number }>(),
+    env.OPEN_BRAIN_DB.prepare(
+      "SELECT id, project_id FROM retrospective_sessions WHERE tenant_id=? AND status='open' AND (? IS NULL OR project_id IS NULL OR project_id=?)"
+    ).bind(tenantId, projectId, projectId).all<{ id: string; project_id: string | null }>()
   ]);
+  const groupIds = options.includeAll ? new Set<string>() : await loadPrincipalGroupIds(env, tenantId, principal);
+  const policies = await loadAccessPolicies(env, tenantId, "decision_memory", decisionRows.results.map((row) => row.id));
+  const readableDecisions: typeof decisionRows.results = [];
+  for (const decision of decisionRows.results) {
+    const policy = policies.get(decision.id);
+    const legacyAllowed = decision.visibility !== "restricted" || principalsCanRead(decision, [principal]) || [...groupIds].some((groupId) => principalsCanRead(decision, [groupId]));
+    const canReadProject = decision.project_id === null || canReadAllProjects || readableProjectIds.has(decision.project_id);
+    if (options.includeAll || (canReadProject && (policy
+      ? await canReadResourceWithGroups(env, policy, { tenantId, principal, projectId: canReadProject ? decision.project_id : null, isAdmin: false }, groupIds)
+      : legacyAllowed))) readableDecisions.push(decision);
+  }
+  const readableDecisionIds = new Set(readableDecisions.map((row) => row.id));
+  const readableRationales = rationaleRows.results.filter((row) => readableDecisionIds.has(row.memory_id));
   const now = Date.now();
-  const goals = rows.results.map((row) => {
+  const visibleGoalRows = rows.results.filter((row) => row.scope_type !== "project" || row.scope_id === null || canReadAllProjects || readableProjectIds.has(row.scope_id));
+  const goals = visibleGoalRows.map((row) => {
     const definition = json(row.definition_json, {}) as { label?: string; unit?: string };
     const state = row.snapshot_state === "measured" && row.expires_at !== null && row.expires_at < now
       ? "stale"
       : row.snapshot_state ?? "unknown";
+    const target: MetricTarget = { direction: row.direction, value: row.target_value, min: row.target_min, max: row.target_max };
+    const comparison = state === "measured" && typeof row.snapshot_value === "number"
+      ? compareMetric(row.snapshot_value, typeof row.previous_value === "number" ? row.previous_value : null, target)
+      : { target_state: "unknown" as const, distance_to_target: null, previous_value: null, change_from_previous: null, trend: "unknown" as const };
+    const latestRun = row.run_id ? metricImportRunSchema.parse({
+      contract_version: KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
+      id: row.run_id, tenant_id: tenantId, source_binding_id: row.metric_source_binding_id,
+      status: row.run_status, attempt: row.run_attempt, error_code: row.run_error_code,
+      error_message: row.run_error_message, snapshot_id: row.run_snapshot_id,
+      queued_at: row.run_queued_at, started_at: row.run_started_at,
+      lease_expires_at: row.run_lease_expires_at, completed_at: row.run_completed_at, updated_at: row.run_updated_at
+    }) : null;
     return {
       link: knowledgePackGoalLinkSchema.parse({
         contract_version: KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
@@ -164,7 +241,7 @@ export async function getOrganizationDashboard(env: Env, tenantId: string, optio
       pack_title: (json((row as DashboardRow & { manifest_json?: string }).manifest_json, {}) as { title?: string }).title ?? row.template_pack_id,
       metric_label: definition.label ?? row.metric_key,
       unit: definition.unit ?? "count",
-      target: { direction: row.direction, value: row.target_value, min: row.target_min, max: row.target_max, due_at: row.effective_to },
+      target: { ...target, due_at: row.effective_to },
       current: {
         snapshot_id: row.snapshot_id,
         value: state === "measured" ? row.snapshot_value : null,
@@ -172,27 +249,71 @@ export async function getOrganizationDashboard(env: Env, tenantId: string, optio
         observed_at: row.observed_at,
         expires_at: row.expires_at
       },
+      comparison,
       source: {
         binding_id: row.metric_source_binding_id,
         adapter_id: row.adapter_id,
         status: row.source_status,
-        last_success_at: row.last_success_at
+        last_success_at: row.last_success_at,
+        latest_run: latestRun
       }
     };
   });
-  const rules = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT constraints_json FROM decision_memories
-     WHERE tenant_id = ? AND (? IS NULL OR project_id IS NULL OR project_id = ?)
-       AND status NOT IN ('retired','superseded') AND ${aclSql}`
-  ).bind(tenantId, projectId, projectId, ...aclBindings).all<{ constraints_json: string }>();
-  const ruleCount = new Set(rules.results.flatMap((row) => {
+  const legacyRuleCount = new Set(readableDecisions.flatMap((row) => {
     const values = json(row.constraints_json, []);
     return Array.isArray(values) ? values.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
   })).size;
+  const ruleCandidates = readableDecisions.flatMap((row) => {
+    const constraints = json(row.constraints_json, []);
+    return Array.isArray(constraints) ? constraints.flatMap((constraint, index): Candidate[] => typeof constraint === "string" && constraint.trim() ? [{
+      source_type: "projected_rule", source_id: `rule:${row.id}:${index}`, parent_decision_id: row.id, version: String(row.updated_at), updated_at: row.updated_at,
+      title: `Rule · ${row.title}`, statement: constraint.trim(), rationale: row.rationale,
+      evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : [],
+      visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json
+    }] : []) : [];
+  });
+  const publishedRules = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT i.source_id, i.source_version, i.title, i.statement, i.rationale, i.evidence_json,
+            r.source_digest, r.decision, r.finalized_at, r.id FROM retrospective_results r
+     JOIN retrospective_items i ON i.id=r.item_id AND i.session_id=r.session_id
+     JOIN retrospective_sessions s ON s.id=r.session_id AND s.tenant_id=i.tenant_id
+     WHERE i.tenant_id=? AND r.tenant_id=i.tenant_id AND r.source_digest=i.source_digest
+       AND i.source_type='projected_rule' AND s.status='closed'
+     ORDER BY r.finalized_at DESC, r.id DESC`
+  ).bind(tenantId).all<{ source_id: string; source_version: string; title: string; statement: string; rationale: string; evidence_json: string; source_digest: string; decision: string }>();
+  const latestRuleResults = new Map<string, string>();
+  for (const row of publishedRules.results) {
+    // Normalize legacy version-bearing Rule digests from their immutable item snapshot.
+    const snapshot = { source_type: "projected_rule" as const, source_id: row.source_id,
+      version: row.source_version, title: row.title, statement: row.statement,
+      rationale: row.rationale, evidence: json(row.evidence_json, []) as unknown[] };
+    const digest = await digestCandidate(snapshot);
+    if (row.source_digest !== digest && row.source_digest !== await digestCandidate(snapshot, true)) continue;
+    const key = `${row.source_id}:${digest}`;
+    if (!latestRuleResults.has(key)) latestRuleResults.set(key, row.decision);
+  }
+  let adoptedRules = 0;
+  for (const candidate of ruleCandidates) {
+    if (latestRuleResults.get(`${candidate.source_id}:${await digestCandidate(candidate)}`) === "adopted") adoptedRules += 1;
+  }
+  const confirmedDecisions = readableDecisions.filter((row) => ["user_confirmed", "user_corrected", "reviewed"].includes(row.confirmation_state)).length;
   return organizationDashboardSchema.parse({
     contract_version: KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
     generated_at: now,
-    knowledge: { decisions: Number(decisionCount?.count ?? 0), rules: ruleCount, rationales: Number(rationaleCount?.count ?? 0) },
+    summary: {
+      installed_packs: options.includeAll
+        ? Number(installedPacks?.count ?? 0)
+        : new Set(visibleGoalRows.map((row) => row.installation_id)).size,
+      open_retrospectives: openRetrospectives.results.filter((row) =>
+        row.project_id === null || canReadAllProjects || readableProjectIds.has(row.project_id)
+      ).length
+    },
+    knowledge: { decisions: readableDecisions.length, rules: legacyRuleCount, rationales: readableRationales.length },
+    knowledge_status: {
+      decisions: { total: readableDecisions.length, confirmed: confirmedDecisions, needs_review: readableDecisions.length - confirmedDecisions },
+      rules: { total: ruleCandidates.length, adopted: adoptedRules, pending: ruleCandidates.length - adoptedRules },
+      rationales: { total: readableRationales.length }
+    },
     goals
   });
 }
@@ -212,16 +333,19 @@ export async function recordKnowledgePackGoalSnapshot(
   idempotencyKey: string,
   raw: unknown
 ) {
-  assertWritable(env, "ORGANIZATION_DASHBOARD_MODE");
+  assertKnowledgeLoopWritable(env, "ORGANIZATION_DASHBOARD_MODE", tenantId);
   const body = parse(manualSnapshotSchema, transportBody(raw));
   const row = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT l.metric_key, l.metric_definition_id, l.metric_binding_id, l.scope_type, l.scope_id, v.definition_json
+    `SELECT l.metric_key, l.metric_definition_id, l.metric_binding_id, l.scope_type, l.scope_id,
+            COALESCE(binding.dimensions_json, '{}') AS dimensions_json, v.definition_json
      FROM knowledge_pack_goal_links l
      JOIN metric_definitions d ON d.id = l.metric_definition_id
      JOIN metric_definition_versions v ON v.metric_definition_id = d.id AND v.version = d.current_version
+     LEFT JOIN metric_bindings binding ON binding.tenant_id=l.tenant_id AND binding.id=l.metric_binding_id
      WHERE l.tenant_id = ? AND l.id = ? AND l.knowledge_pack_installation_id = ?`
   ).bind(tenantId, goalLinkId, installationId).first<{
-    metric_key: string; metric_definition_id: string; metric_binding_id: string | null; scope_type: string; scope_id: string | null; definition_json: string;
+    metric_key: string; metric_definition_id: string; metric_binding_id: string | null; scope_type: string; scope_id: string | null;
+    dimensions_json: string; definition_json: string;
   }>();
   if (!row) throw new HttpError(404, "knowledge_pack_goal_not_found", "Knowledge Pack goal not found");
   const definition = json(row.definition_json, {}) as { freshness_seconds?: number };
@@ -230,6 +354,7 @@ export async function recordKnowledgePackGoalSnapshot(
     binding_id: row.metric_binding_id,
     scope_type: row.scope_type,
     scope_id: row.scope_id,
+    dimensions: json(row.dimensions_json, {}),
     value: body.value,
     observed_at: body.observed_at,
     evidence_ref: body.evidence_ref
@@ -260,7 +385,7 @@ export async function recordKnowledgePackGoalSnapshot(
       observed_at: body.observed_at,
       expires_at: body.observed_at + Math.max(1, definition.freshness_seconds ?? 86_400) * 1_000,
       evidence_ref: body.evidence_ref,
-      dimensions: {},
+      dimensions: json(row.dimensions_json, {}),
       source_binding_id: null,
       query_digest: requestDigest,
       idempotency_key: idempotencyKey
@@ -333,7 +458,7 @@ export async function enqueueMetricImport(
   bindingId: string,
   idempotencyKey: string
 ) {
-  assertWritable(env, "METRIC_IMPORT_MODE");
+  assertKnowledgeLoopWritable(env, "METRIC_IMPORT_MODE", tenantId);
   if (!env.METRIC_IMPORT_QUEUE) throw new HttpError(503, "metric_import_queue_unavailable", "Metric import queue is not configured");
   const binding = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, adapter_id, status, connection_ref FROM metric_source_bindings WHERE tenant_id = ? AND id = ?`
@@ -404,6 +529,7 @@ export async function getMetricImportRun(env: Env, tenantId: string, runId: stri
 
 const scheduleCreateSchema = z.object({
   project_id: z.string().trim().min(1).max(128).nullable().default(null),
+  participant_group_id: z.string().trim().min(1).max(128).nullable().default(null),
   cadence_days: z.union([z.literal(7), z.literal(14)]),
   next_run_at: z.number().int().nonnegative().default(() => Date.now())
 }).strict();
@@ -418,16 +544,17 @@ function scheduleFromRow(row: Record<string, unknown>) {
 }
 
 export async function createRetrospectiveSchedule(env: Env, tenantId: string, principal: string, raw: unknown) {
-  assertWritable(env, "RETROSPECTIVE_MODE");
+  assertKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
   const body = parse(scheduleCreateSchema, transportBody(raw));
+  if (body.participant_group_id) await groupParticipants(env, tenantId, body.participant_group_id);
   const now = Date.now();
   const result = retrospectiveScheduleSchema.parse({
     contract_version: KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
     id: ulid(now), tenant_id: tenantId, ...body, status: "active", created_by: principal, created_at: now, updated_at: now
   });
   await env.OPEN_BRAIN_DB.prepare(
-    "INSERT INTO retrospective_schedules(id, tenant_id, project_id, cadence_days, status, next_run_at, created_by, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)"
-  ).bind(result.id, tenantId, result.project_id, result.cadence_days, result.status, result.next_run_at, principal, now, now).run();
+    "INSERT INTO retrospective_schedules(id, tenant_id, project_id, participant_group_id, cadence_days, status, next_run_at, created_by, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)"
+  ).bind(result.id, tenantId, result.project_id, result.participant_group_id, result.cadence_days, result.status, result.next_run_at, principal, now, now).run();
   return result;
 }
 
@@ -440,13 +567,14 @@ export async function listRetrospectiveSchedules(env: Env, tenantId: string) {
 }
 
 export async function materializeDueRetrospectives(env: Env, now = Date.now()) {
-  if (env.RETROSPECTIVE_MODE !== "on") return { created: 0, skipped: true };
+  if (!env.RETROSPECTIVE_MODE || env.RETROSPECTIVE_MODE === "off") return { created: 0, skipped: true };
   const schedules = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM retrospective_schedules WHERE status='active' AND next_run_at <= ?
      ORDER BY next_run_at, id LIMIT 100`
   ).bind(now).all<Record<string, unknown>>();
   let created = 0;
   for (const schedule of schedules.results) {
+    if (!isKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", String(schedule.tenant_id))) continue;
     const previousRunAt = Number(schedule.next_run_at);
     const nextRunAt = previousRunAt + Number(schedule.cadence_days) * 86_400_000;
     const claim = await env.OPEN_BRAIN_DB.prepare(
@@ -456,6 +584,7 @@ export async function materializeDueRetrospectives(env: Env, now = Date.now()) {
     try {
       await createRetrospective(env, String(schedule.tenant_id), String(schedule.created_by), {
         project_id: schedule.project_id ?? null,
+        participant_group_id: schedule.participant_group_id ?? null,
         schedule_id: schedule.id,
         title: `判断軸のふりかえり · ${new Date(previousRunAt).toISOString().slice(0, 10)}`,
         participant_principals: [String(schedule.created_by)]
@@ -472,7 +601,7 @@ export async function materializeDueRetrospectives(env: Env, now = Date.now()) {
 }
 
 export async function updateRetrospectiveSchedule(env: Env, tenantId: string, id: string, raw: unknown) {
-  assertWritable(env, "RETROSPECTIVE_MODE");
+  assertKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
   const body = parse(schedulePatchSchema, transportBody(raw));
   const current = await env.OPEN_BRAIN_DB.prepare(
     "SELECT * FROM retrospective_schedules WHERE tenant_id=? AND id=?"
@@ -488,6 +617,7 @@ export async function updateRetrospectiveSchedule(env: Env, tenantId: string, id
 
 const sessionCreateSchema = z.object({
   project_id: z.string().trim().min(1).max(128).nullable().default(null),
+  participant_group_id: z.string().trim().min(1).max(128).nullable().default(null),
   schedule_id: z.string().trim().min(1).max(128).nullable().default(null),
   title: z.string().trim().min(1).max(240).default("判断軸のふりかえり"),
   participant_principals: z.array(z.string().trim().min(1).max(128)).max(100).default([])
@@ -496,13 +626,31 @@ const sessionCreateSchema = z.object({
 type Candidate = {
   source_type: "decision_memory" | "decision_rationale" | "projected_rule";
   source_id: string;
+  parent_decision_id: string;
   version: string;
   updated_at: number;
   title: string;
   statement: string;
   rationale: string;
   evidence: unknown[];
+  visibility: string;
+  owner_refs_json: string;
+  allowed_principals_json: string;
 };
+
+type EligibleCandidate = Candidate & { eligible_principals: string[]; source_policy_version: number | null };
+
+async function groupParticipants(env: Env, tenantId: string, groupId: string): Promise<string[]> {
+  const group = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT id FROM groups WHERE tenant_id=? AND id=? AND deleted_at IS NULL"
+  ).bind(tenantId, groupId).first();
+  if (!group) throw new HttpError(400, "retrospective_group_invalid", "The participant group must be active and belong to this tenant");
+  const members = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT principal FROM group_members WHERE tenant_id=? AND group_id=? ORDER BY principal"
+  ).bind(tenantId, groupId).all<{ principal: string }>();
+  if (members.results.length === 0) throw new HttpError(409, "retrospective_group_empty", "The participant group has no members");
+  return members.results.map((row) => row.principal);
+}
 
 function principalsCanRead(row: { visibility?: string; owner_refs_json?: string; allowed_principals_json?: string }, principals: string[]) {
   if (row.visibility !== "restricted") return true;
@@ -515,7 +663,14 @@ function principalsCanRead(row: { visibility?: string; owner_refs_json?: string;
   return principals.every((principal) => ids.has(principal));
 }
 
-async function retrospectiveCandidates(env: Env, tenantId: string, projectId: string | null, principals: string[]): Promise<Candidate[]> {
+async function retrospectiveCandidates(
+  env: Env,
+  tenantId: string,
+  projectId: string | null,
+  principals: string[],
+  creator: string,
+  requireGroupMember: boolean
+): Promise<EligibleCandidate[]> {
   const decisions = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, title, decision, rationale, constraints_json, source_refs_json, updated_at, visibility, owner_refs_json, allowed_principals_json
      FROM decision_memories
@@ -523,43 +678,71 @@ async function retrospectiveCandidates(env: Env, tenantId: string, projectId: st
      ORDER BY updated_at DESC, id ASC LIMIT 20`
   ).bind(tenantId, projectId).all<{ id: string; title: string; decision: string; rationale: string; constraints_json: string; source_refs_json: string; updated_at: number; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
   const rationales = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT r.id, r.conclusion, r.reason_summary, r.created_at, d.visibility, d.owner_refs_json, d.allowed_principals_json
+    `SELECT r.id, r.memory_id, r.conclusion, r.reason_summary, r.created_at, d.visibility, d.owner_refs_json, d.allowed_principals_json
      FROM decision_rationales r
      JOIN decision_memories d ON d.tenant_id=r.tenant_id AND d.id=r.memory_id
      WHERE r.tenant_id = ? AND r.project_id IS ? AND r.status NOT IN ('retired','superseded')
      ORDER BY r.created_at DESC, r.id ASC LIMIT 20`
-  ).bind(tenantId, projectId).all<{ id: string; conclusion: string; reason_summary: string; created_at: number; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
-  return [
-    ...decisions.results.filter((row) => principalsCanRead(row, principals)).map((row): Candidate => ({
-      source_type: "decision_memory", source_id: row.id, version: String(row.updated_at), updated_at: row.updated_at,
+  ).bind(tenantId, projectId).all<{ id: string; memory_id: string; conclusion: string; reason_summary: string; created_at: number; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
+  const candidates: Candidate[] = [
+    ...decisions.results.map((row): Candidate => ({
+      source_type: "decision_memory", source_id: row.id, parent_decision_id: row.id, version: String(row.updated_at), updated_at: row.updated_at,
       title: row.title, statement: row.decision, rationale: row.rationale,
-      evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : []
+      evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : [],
+      visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json
     })),
-    ...decisions.results.filter((row) => principalsCanRead(row, principals)).flatMap((row) => {
+    ...decisions.results.flatMap((row) => {
       const constraints = json(row.constraints_json, []);
       return Array.isArray(constraints) ? constraints.flatMap((constraint, index): Candidate[] => typeof constraint === "string" && constraint.trim() ? [{
         source_type: "projected_rule",
         source_id: `rule:${row.id}:${index}`,
+        parent_decision_id: row.id,
         version: String(row.updated_at),
         updated_at: row.updated_at,
         title: `Rule · ${row.title}`,
         statement: constraint.trim(),
         rationale: row.rationale,
-        evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : []
+        evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : [],
+        visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json
       }] : []) : [];
     }),
-    ...rationales.results.filter((row) => principalsCanRead(row, principals)).map((row): Candidate => ({
-      source_type: "decision_rationale", source_id: row.id, version: String(row.created_at), updated_at: row.created_at,
-      title: row.conclusion, statement: row.conclusion, rationale: row.reason_summary, evidence: []
+    ...rationales.results.map((row): Candidate => ({
+      source_type: "decision_rationale", source_id: row.id, parent_decision_id: row.memory_id, version: String(row.created_at), updated_at: row.created_at,
+      title: row.conclusion, statement: row.conclusion, rationale: row.reason_summary, evidence: [],
+      visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json
     }))
-  ].sort((left, right) => right.updated_at - left.updated_at || left.source_type.localeCompare(right.source_type) || left.source_id.localeCompare(right.source_id)).slice(0, 20);
+  ];
+  const policies = await loadAccessPolicies(env, tenantId, "decision_memory", candidates.map((candidate) => candidate.parent_decision_id));
+  const groupIdsByPrincipal = new Map<string, Set<string>>();
+  await Promise.all(principals.map(async (candidatePrincipal) => {
+    groupIdsByPrincipal.set(candidatePrincipal, await loadPrincipalGroupIds(env, tenantId, candidatePrincipal));
+  }));
+  const eligible: EligibleCandidate[] = [];
+  for (const candidate of candidates.sort((left, right) => right.updated_at - left.updated_at || left.source_type.localeCompare(right.source_type) || left.source_id.localeCompare(right.source_id))) {
+    const policy = policies.get(candidate.parent_decision_id);
+    const eligiblePrincipals: string[] = [];
+    for (const candidatePrincipal of principals) {
+      if (candidatePrincipal !== creator && !await principalCanReadProject(env, tenantId, candidatePrincipal, projectId)) continue;
+      const groupIds = groupIdsByPrincipal.get(candidatePrincipal) ?? new Set<string>();
+      const legacyAllowed = candidate.visibility !== "restricted" || principalsCanRead(candidate, [candidatePrincipal]) || [...groupIds].some((groupId) => principalsCanRead(candidate, [groupId]));
+      const readable = policy
+        ? await canReadResourceWithGroups(env, policy, { tenantId, principal: candidatePrincipal, projectId, isAdmin: false }, groupIds)
+        : legacyAllowed;
+      if (readable) eligiblePrincipals.push(candidatePrincipal);
+    }
+    if (!eligiblePrincipals.includes(creator)) continue;
+    if (requireGroupMember && !eligiblePrincipals.some((candidatePrincipal) => candidatePrincipal !== creator)) continue;
+    eligible.push({ ...candidate, eligible_principals: eligiblePrincipals, source_policy_version: policy?.policy_version ?? null });
+    if (eligible.length === 20) break;
+  }
+  return eligible;
 }
 
-async function digestCandidate(candidate: Candidate) {
+async function digestCandidate(candidate: Pick<Candidate, "source_type" | "source_id" | "version" | "title" | "statement" | "rationale" | "evidence">, legacy = false) {
   return sha256(canonicalJson({
     source_type: candidate.source_type,
     source_id: candidate.source_id,
-    version: candidate.version,
+    ...(candidate.source_type === "projected_rule" && !legacy ? {} : { version: candidate.version }),
     title: candidate.title,
     statement: candidate.statement,
     rationale: candidate.rationale,
@@ -568,50 +751,70 @@ async function digestCandidate(candidate: Candidate) {
 }
 
 export async function createRetrospective(env: Env, tenantId: string, principal: string, raw: unknown) {
-  assertWritable(env, "RETROSPECTIVE_MODE");
+  assertKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
   const body = parse(sessionCreateSchema, transportBody(raw));
+  let participantGroupId = body.participant_group_id;
   if (body.schedule_id) {
     const schedule = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id FROM retrospective_schedules WHERE tenant_id=? AND id=? AND status='active'"
-    ).bind(tenantId, body.schedule_id).first();
+      "SELECT id, participant_group_id FROM retrospective_schedules WHERE tenant_id=? AND id=? AND status='active'"
+    ).bind(tenantId, body.schedule_id).first<{ id: string; participant_group_id: string | null }>();
     if (!schedule) throw new HttpError(409, "retrospective_schedule_inactive", "Retrospective schedule is not active");
+    if (participantGroupId !== null && participantGroupId !== schedule.participant_group_id) {
+      throw new HttpError(409, "retrospective_schedule_group_mismatch", "The retrospective group must match its schedule");
+    }
+    participantGroupId = schedule.participant_group_id;
   }
   const now = Date.now();
   const id = ulid(now);
-  const participants = [...new Set([principal, ...body.participant_principals])];
-  const candidates = await retrospectiveCandidates(env, tenantId, body.project_id, participants);
-  await env.OPEN_BRAIN_DB.prepare(
-    `INSERT INTO retrospective_sessions(id, tenant_id, project_id, schedule_id, status, title, created_by, opened_at, created_at, updated_at)
-     VALUES(?,?,?,?,?,?,?,?,?,?)`
-  ).bind(id, tenantId, body.project_id, body.schedule_id, "open", body.title, principal, now, now, now).run();
+  const groupMembers = participantGroupId ? await groupParticipants(env, tenantId, participantGroupId) : [];
+  const participants = [...new Set(participantGroupId
+    ? [principal, ...groupMembers]
+    : [principal, ...body.participant_principals])];
+  const candidates = await retrospectiveCandidates(env, tenantId, body.project_id, participants, principal, Boolean(participantGroupId));
+  if (candidates.length === 0) throw new HttpError(409, "no_eligible_candidates", "No retrospective candidates are readable by the selected participants");
+  const statements: ReturnType<Env["OPEN_BRAIN_DB"]["prepare"]>[] = [env.OPEN_BRAIN_DB.prepare(
+    `INSERT INTO retrospective_sessions(id, tenant_id, project_id, participant_group_id, schedule_id, status, title, created_by, opened_at, created_at, updated_at)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(id, tenantId, body.project_id, participantGroupId, body.schedule_id, "open", body.title, principal, now, now, now)];
   for (const participant of participants) {
-    await env.OPEN_BRAIN_DB.prepare(
+    statements.push(env.OPEN_BRAIN_DB.prepare(
       "INSERT INTO retrospective_participants(session_id, tenant_id, principal, created_at) VALUES(?,?,?,?)"
-    ).bind(id, tenantId, participant, now).run();
+    ).bind(id, tenantId, participant, now));
   }
   for (const [ordinal, candidate] of candidates.entries()) {
-    await env.OPEN_BRAIN_DB.prepare(
+    const itemId = ulid(now + ordinal + 1);
+    statements.push(env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO retrospective_items(
          id, tenant_id, session_id, ordinal, source_type, source_id, source_version,
-         source_digest, title, statement, rationale, evidence_json, created_at
-       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    ).bind(ulid(now + ordinal + 1), tenantId, id, ordinal, candidate.source_type, candidate.source_id,
+         source_digest, title, statement, rationale, evidence_json, parent_decision_id, source_policy_version, created_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(itemId, tenantId, id, ordinal, candidate.source_type, candidate.source_id,
       candidate.version, await digestCandidate(candidate), candidate.title, candidate.statement, candidate.rationale,
-      canonicalJson(candidate.evidence), now).run();
+      canonicalJson(candidate.evidence), candidate.parent_decision_id, candidate.source_policy_version, now));
+    for (const eligiblePrincipal of candidate.eligible_principals) {
+      statements.push(env.OPEN_BRAIN_DB.prepare(
+        `INSERT INTO retrospective_item_eligible_participants(tenant_id, session_id, item_id, principal, created_at)
+         VALUES(?,?,?,?,?)`
+      ).bind(tenantId, id, itemId, eligiblePrincipal, now));
+    }
   }
+  await env.OPEN_BRAIN_DB.batch(statements);
   return getRetrospective(env, tenantId, id, principal, true);
 }
 
 export async function listRetrospectives(env: Env, tenantId: string, principal: string, includeAll = false) {
   assertReadable(env, "RETROSPECTIVE_MODE");
   const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT s.*, COUNT(i.id) AS item_count
-     FROM retrospective_sessions s LEFT JOIN retrospective_items i ON i.session_id=s.id
+    `SELECT s.id FROM retrospective_sessions s
      WHERE s.tenant_id=? AND (?=1 OR EXISTS(
        SELECT 1 FROM retrospective_participants p WHERE p.session_id=s.id AND p.tenant_id=s.tenant_id AND p.principal=?
-     )) GROUP BY s.id ORDER BY s.opened_at DESC LIMIT 100`
+     )) ORDER BY s.opened_at DESC LIMIT 100`
   ).bind(tenantId, includeAll ? 1 : 0, principal).all<Record<string, unknown>>();
-  return rows.results;
+  return Promise.all(rows.results.map(async (row) => {
+    const { items, ...session } = await getRetrospective(env, tenantId, String(row.id), principal, includeAll, false);
+    return { ...session, item_count: items.length, participant_count: session.progress!.participants,
+      eligible_response_count: session.progress!.eligible_responses, received_response_count: session.progress!.received_responses };
+  }));
 }
 
 async function assertParticipant(env: Env, tenantId: string, sessionId: string, principal: string, adminAllowed: boolean) {
@@ -622,22 +825,47 @@ async function assertParticipant(env: Env, tenantId: string, sessionId: string, 
   if (!participant) throw new HttpError(403, "retrospective_participant_required", "You are not a participant in this retrospective");
 }
 
-async function retrospectiveSourceReadable(env: Env, tenantId: string, sourceType: unknown, sourceId: unknown, principal: string) {
+async function retrospectiveSourceReadable(
+  env: Env,
+  tenantId: string,
+  sourceType: unknown,
+  sourceId: unknown,
+  principal: string,
+  projectAdmin = false
+) {
   const projectedDecisionId = sourceType === "projected_rule" ? String(sourceId).split(":").slice(1, -1).join(":") : null;
   const row = sourceType === "decision_rationale"
     ? await env.OPEN_BRAIN_DB.prepare(
-      `SELECT d.visibility, d.owner_refs_json, d.allowed_principals_json
+      `SELECT d.id, d.project_id, d.visibility, d.owner_refs_json, d.allowed_principals_json
        FROM decision_rationales r JOIN decision_memories d ON d.tenant_id=r.tenant_id AND d.id=r.memory_id
        WHERE r.tenant_id=? AND r.id=? AND r.status NOT IN ('retired','superseded')`
-    ).bind(tenantId, sourceId).first<{ visibility: string; owner_refs_json: string; allowed_principals_json: string }>()
+    ).bind(tenantId, sourceId).first<{ id: string; project_id: string | null; visibility: string; owner_refs_json: string; allowed_principals_json: string }>()
     : await env.OPEN_BRAIN_DB.prepare(
-      `SELECT visibility, owner_refs_json, allowed_principals_json FROM decision_memories
+      `SELECT id, project_id, visibility, owner_refs_json, allowed_principals_json FROM decision_memories
        WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')`
-    ).bind(tenantId, projectedDecisionId ?? sourceId).first<{ visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
-  return Boolean(row && principalsCanRead(row, [principal]));
+    ).bind(tenantId, projectedDecisionId ?? sourceId).first<{ id: string; project_id: string | null; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
+  if (!row) return false;
+  if (!projectAdmin && !await principalCanReadProject(env, tenantId, principal, row.project_id)) return false;
+  const [policyMap, groupIds] = await Promise.all([
+    loadAccessPolicies(env, tenantId, "decision_memory", [row.id]),
+    loadPrincipalGroupIds(env, tenantId, principal)
+  ]);
+  const policy = policyMap.get(row.id);
+  if (policy) return canReadResourceWithGroups(env, policy, { tenantId, principal, projectId: row.project_id, isAdmin: false }, groupIds);
+  return principalsCanRead(row, [principal]) || [...groupIds].some((groupId) => principalsCanRead(row, [groupId]));
 }
 
-export async function getRetrospective(env: Env, tenantId: string, id: string, principal: string, adminAllowed = false) {
+async function retrospectiveParentDecisionId(env: Env, tenantId: string, item: Record<string, unknown>): Promise<string | null> {
+  if (item.source_type === "decision_memory") return String(item.source_id);
+  if (item.source_type === "projected_rule") return String(item.source_id).split(":").slice(1, -1).join(":") || null;
+  if (item.source_type !== "decision_rationale") return null;
+  const row = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT memory_id FROM decision_rationales WHERE tenant_id=? AND id=?"
+  ).bind(tenantId, item.source_id).first<{ memory_id: string }>();
+  return row?.memory_id ?? null;
+}
+
+export async function getRetrospective(env: Env, tenantId: string, id: string, principal: string, adminAllowed = false, markViewed = true) {
   assertReadable(env, "RETROSPECTIVE_MODE");
   await assertParticipant(env, tenantId, id, principal, adminAllowed);
   const session = await env.OPEN_BRAIN_DB.prepare(
@@ -647,29 +875,100 @@ export async function getRetrospective(env: Env, tenantId: string, id: string, p
   const items = await env.OPEN_BRAIN_DB.prepare(
     `SELECT i.*, r.decision AS response_decision, r.note AS response_note, r.updated_at AS response_updated_at
      FROM retrospective_items i
+     JOIN retrospective_item_eligible_participants eligible
+       ON eligible.tenant_id=i.tenant_id AND eligible.session_id=i.session_id AND eligible.item_id=i.id AND eligible.principal=?
      LEFT JOIN retrospective_responses r ON r.item_id=i.id AND r.principal=?
      WHERE i.tenant_id=? AND i.session_id=? ORDER BY i.ordinal`
-  ).bind(principal, tenantId, id).all<Record<string, unknown>>();
-  const visibleItems = adminAllowed ? items.results : (await Promise.all(items.results.map(async (item) => ({
+  ).bind(principal, principal, tenantId, id).all<Record<string, unknown>>();
+  const visibleItems = (await Promise.all(items.results.map(async (item) => ({
     item,
-    readable: await retrospectiveSourceReadable(env, tenantId, item.source_type, item.source_id, principal)
+    readable: await retrospectiveSourceReadable(
+      env, tenantId, item.source_type, item.source_id, principal,
+      Boolean(adminAllowed && session.created_by === principal)
+    )
   })))).filter((entry) => entry.readable).map((entry) => entry.item);
+  const summaries = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT eligible.item_id,
+            COUNT(*) AS eligible,
+            COUNT(response.id) AS received,
+            SUM(CASE WHEN response.decision='adopt' THEN 1 ELSE 0 END) AS adopt,
+            SUM(CASE WHEN response.decision='do_not_adopt' THEN 1 ELSE 0 END) AS do_not_adopt,
+            SUM(CASE WHEN response.decision='defer' THEN 1 ELSE 0 END) AS defer
+     FROM retrospective_item_eligible_participants eligible
+     LEFT JOIN retrospective_responses response
+       ON response.tenant_id=eligible.tenant_id AND response.session_id=eligible.session_id
+      AND response.item_id=eligible.item_id AND response.principal=eligible.principal
+     WHERE eligible.tenant_id=? AND eligible.session_id=? GROUP BY eligible.item_id`
+  ).bind(tenantId, id).all<{ item_id: string; eligible: number; received: number; adopt: number; do_not_adopt: number; defer: number }>();
+  const summaryByItem = new Map(summaries.results.map((row) => [row.item_id, row]));
+  const progress = await env.OPEN_BRAIN_DB.prepare(
+    `WITH visible AS (
+       SELECT eligible.principal, response.id AS response_id
+       FROM retrospective_item_eligible_participants eligible
+       LEFT JOIN retrospective_responses response ON response.tenant_id=eligible.tenant_id
+         AND response.session_id=eligible.session_id AND response.item_id=eligible.item_id AND response.principal=eligible.principal
+       WHERE eligible.tenant_id=? AND eligible.session_id=? AND eligible.item_id IN (SELECT value FROM json_each(?))
+     ) SELECT COUNT(DISTINCT principal) AS participants,
+       (SELECT COUNT(*) FROM (SELECT principal FROM visible GROUP BY principal HAVING COUNT(*)=COUNT(response_id))) AS completed_participants,
+       COUNT(*) AS eligible_responses, COUNT(response_id) AS received_responses FROM visible`
+  ).bind(tenantId, id, JSON.stringify(visibleItems.map((item) => item.id))).first<{
+    participants: number; completed_participants: number; eligible_responses: number; received_responses: number;
+  }>();
   const now = Date.now();
-  for (const item of visibleItems) {
-    await env.OPEN_BRAIN_DB.prepare(
-      "INSERT OR IGNORE INTO retrospective_item_viewers(item_id, tenant_id, principal, viewed_at) VALUES(?,?,?,?)"
-    ).bind(item.id, tenantId, principal, now).run();
+  if (markViewed && isKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId)) {
+    for (const item of visibleItems) {
+      await env.OPEN_BRAIN_DB.prepare(
+        "INSERT OR IGNORE INTO retrospective_item_viewers(item_id, tenant_id, principal, viewed_at) VALUES(?,?,?,?)"
+      ).bind(item.id, tenantId, principal, now).run();
+    }
   }
-  const { close_idempotency_key: _closeIdempotencyKey, close_request_digest: _closeRequestDigest, ...publicSession } = session;
+  const {
+    close_idempotency_key: _closeIdempotencyKey,
+    close_request_digest: _closeRequestDigest,
+    close_operation_id: _closeOperationId,
+    participant_count_at_close: _participantCountAtClose,
+    unanswered_response_count_at_close: _unansweredResponseCountAtClose,
+    ...publicSession
+  } = session;
+  const parsedItems = await Promise.all(visibleItems.map(async (item) => {
+    const summary = summaryByItem.get(String(item.id));
+    const received = Number(summary?.received ?? 0);
+    return {
+      id: item.id, ordinal: Number(item.ordinal), source_type: item.source_type, source_id: item.source_id,
+      parent_decision_id: await retrospectiveParentDecisionId(env, tenantId, item),
+      source_version: item.source_version, source_digest: item.source_digest, title: item.title,
+      statement: item.statement, rationale: item.rationale, evidence: json(String(item.evidence_json ?? "[]"), []),
+      response: item.response_decision ? { decision: item.response_decision, note: item.response_note ?? null, updated_at: Number(item.response_updated_at) } : null,
+      response_summary: {
+        eligible: Number(summary?.eligible ?? 0), received,
+        unanswered: Math.max(0, Number(summary?.eligible ?? 0) - received),
+        adopt: Number(summary?.adopt ?? 0), do_not_adopt: Number(summary?.do_not_adopt ?? 0), defer: Number(summary?.defer ?? 0),
+        adoption_rate: received > 0 ? Number(summary?.adopt ?? 0) / received : null
+      }
+    };
+  }));
+  const participants = Number(progress?.participants ?? 0);
+  const completedParticipants = Number(progress?.completed_participants ?? 0);
+  const eligibleResponses = Number(progress?.eligible_responses ?? 0);
+  const receivedResponses = Number(progress?.received_responses ?? 0);
+  const isCreatorAdmin = Boolean(adminAllowed && session.created_by === principal);
+  const canClose = isCreatorAdmin && session.status === "open" && isKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
+  const allItemCount = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT COUNT(*) AS count FROM retrospective_items WHERE tenant_id=? AND session_id=?"
+  ).bind(tenantId, id).first<{ count: number }>();
   return retrospectiveSessionSchema.parse({
     ...publicSession,
     contract_version: KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
-    items: visibleItems.map((item) => ({
-      id: item.id, ordinal: Number(item.ordinal), source_type: item.source_type, source_id: item.source_id,
-      source_version: item.source_version, source_digest: item.source_digest, title: item.title,
-      statement: item.statement, rationale: item.rationale, evidence: json(String(item.evidence_json ?? "[]"), []),
-      response: item.response_decision ? { decision: item.response_decision, note: item.response_note ?? null, updated_at: Number(item.response_updated_at) } : null
-    }))
+    items: parsedItems,
+    viewer: { role: isCreatorAdmin ? "admin" : "participant", can_close: canClose },
+    progress: {
+      participants, completed_participants: completedParticipants, pending_participants: Math.max(0, participants - completedParticipants),
+      eligible_responses: eligibleResponses, received_responses: receivedResponses,
+      unanswered_responses: Math.max(0, eligibleResponses - receivedResponses)
+    },
+    close_summary: session.status === "closed" && session.participant_count_at_close !== null && visibleItems.length === Number(allItemCount?.count)
+      ? { participant_count: Number(session.participant_count_at_close), unanswered_response_count: Number(session.unanswered_response_count_at_close ?? 0) }
+      : null
   });
 }
 
@@ -679,25 +978,38 @@ const responseSchema = z.object({
 }).strict();
 
 export async function putRetrospectiveResponse(env: Env, tenantId: string, sessionId: string, itemId: string, principal: string, raw: unknown) {
-  assertWritable(env, "RETROSPECTIVE_MODE");
+  assertKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
   await assertParticipant(env, tenantId, sessionId, principal, false);
   const body = parse(responseSchema, transportBody(raw));
   const item = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT i.id, i.source_type, i.source_id, s.status FROM retrospective_items i JOIN retrospective_sessions s ON s.id=i.session_id
+    `SELECT i.id, i.source_type, i.source_id, s.status, s.created_by FROM retrospective_items i JOIN retrospective_sessions s ON s.id=i.session_id
+     JOIN retrospective_item_eligible_participants eligible
+       ON eligible.tenant_id=i.tenant_id AND eligible.session_id=i.session_id AND eligible.item_id=i.id AND eligible.principal=?
      WHERE i.tenant_id=? AND i.session_id=? AND i.id=?`
-  ).bind(tenantId, sessionId, itemId).first<{ id: string; status: string }>();
+  ).bind(principal, tenantId, sessionId, itemId).first<{ id: string; status: string; created_by: string }>();
   if (!item) throw new HttpError(404, "retrospective_item_not_found", "Retrospective item not found");
   if (item.status !== "open") throw new HttpError(409, "retrospective_closed", "Responses can only be changed while the retrospective is open");
-  if (!await retrospectiveSourceReadable(env, tenantId, (item as { source_type?: unknown }).source_type, (item as { source_id?: unknown }).source_id, principal)) {
+  if (!await retrospectiveSourceReadable(
+    env, tenantId, (item as { source_type?: unknown }).source_type,
+    (item as { source_id?: unknown }).source_id, principal, item.created_by === principal
+  )) {
     throw new HttpError(403, "retrospective_item_forbidden", "The source is no longer visible to this participant");
   }
   const now = Date.now();
   const id = ulid(now);
-  await env.OPEN_BRAIN_DB.prepare(
+  const persisted = await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO retrospective_responses(id, tenant_id, session_id, item_id, principal, decision, note, created_at, updated_at)
-     VALUES(?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(session_id, item_id, principal) DO UPDATE SET decision=excluded.decision, note=excluded.note, updated_at=excluded.updated_at`
-  ).bind(id, tenantId, sessionId, itemId, principal, body.decision, body.note, now, now).run();
+     SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(
+       SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='open'
+     )
+     ON CONFLICT(session_id, item_id, principal) DO UPDATE SET
+       decision=excluded.decision, note=excluded.note, updated_at=excluded.updated_at
+     WHERE EXISTS(
+       SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='open'
+     )`
+  ).bind(id, tenantId, sessionId, itemId, principal, body.decision, body.note, now, now,
+    tenantId, sessionId, tenantId, sessionId).run();
+  if (!persisted.meta.changes) throw new HttpError(409, "retrospective_closed", "Responses can only be changed while the retrospective is open");
   return { id, session_id: sessionId, item_id: itemId, principal, ...body, updated_at: now };
 }
 
@@ -705,38 +1017,43 @@ async function verifyRetrospectiveSource(env: Env, tenantId: string, item: Recor
   let candidate: Candidate | null = null;
   if (item.source_type === "decision_memory") {
     const row = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id, title, decision, rationale, source_refs_json, updated_at FROM decision_memories WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')"
-    ).bind(tenantId, item.source_id).first<{ id: string; title: string; decision: string; rationale: string; source_refs_json: string; updated_at: number }>();
-    if (row) candidate = { source_type: "decision_memory", source_id: row.id, version: String(row.updated_at), updated_at: row.updated_at, title: row.title, statement: row.decision, rationale: row.rationale, evidence: json(row.source_refs_json, []) as unknown[] };
+      "SELECT id, title, decision, rationale, source_refs_json, updated_at, visibility, owner_refs_json, allowed_principals_json FROM decision_memories WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')"
+    ).bind(tenantId, item.source_id).first<{ id: string; title: string; decision: string; rationale: string; source_refs_json: string; updated_at: number; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
+    if (row) candidate = { source_type: "decision_memory", source_id: row.id, parent_decision_id: row.id, version: String(row.updated_at), updated_at: row.updated_at, title: row.title, statement: row.decision, rationale: row.rationale, evidence: json(row.source_refs_json, []) as unknown[], visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json };
   } else if (item.source_type === "decision_rationale") {
     const row = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id, conclusion, reason_summary, created_at FROM decision_rationales WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')"
-    ).bind(tenantId, item.source_id).first<{ id: string; conclusion: string; reason_summary: string; created_at: number }>();
-    if (row) candidate = { source_type: "decision_rationale", source_id: row.id, version: String(row.created_at), updated_at: row.created_at, title: row.conclusion, statement: row.conclusion, rationale: row.reason_summary, evidence: [] };
+      `SELECT r.id, r.memory_id, r.conclusion, r.reason_summary, r.created_at, d.visibility, d.owner_refs_json, d.allowed_principals_json
+       FROM decision_rationales r JOIN decision_memories d ON d.tenant_id=r.tenant_id AND d.id=r.memory_id
+       WHERE r.tenant_id=? AND r.id=? AND r.status NOT IN ('retired','superseded')`
+    ).bind(tenantId, item.source_id).first<{ id: string; memory_id: string; conclusion: string; reason_summary: string; created_at: number; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
+    if (row) candidate = { source_type: "decision_rationale", source_id: row.id, parent_decision_id: row.memory_id, version: String(row.created_at), updated_at: row.created_at, title: row.conclusion, statement: row.conclusion, rationale: row.reason_summary, evidence: [], visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json };
   } else if (item.source_type === "projected_rule") {
     const parts = String(item.source_id).split(":");
     const index = Number(parts.pop());
     parts.shift();
     const decisionId = parts.join(":");
     const row = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id, title, rationale, constraints_json, source_refs_json, updated_at FROM decision_memories WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')"
-    ).bind(tenantId, decisionId).first<{ id: string; title: string; rationale: string; constraints_json: string; source_refs_json: string; updated_at: number }>();
+      "SELECT id, title, rationale, constraints_json, source_refs_json, updated_at, visibility, owner_refs_json, allowed_principals_json FROM decision_memories WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')"
+    ).bind(tenantId, decisionId).first<{ id: string; title: string; rationale: string; constraints_json: string; source_refs_json: string; updated_at: number; visibility: string; owner_refs_json: string; allowed_principals_json: string }>();
     const constraints = row ? json(row.constraints_json, []) : [];
     const statement = Array.isArray(constraints) && typeof constraints[index] === "string" ? constraints[index] : null;
     if (row && statement) candidate = {
-      source_type: "projected_rule", source_id: String(item.source_id), version: String(row.updated_at), updated_at: row.updated_at,
-      title: `Rule · ${row.title}`, statement, rationale: row.rationale,
-      evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : []
+      source_type: "projected_rule", source_id: String(item.source_id), parent_decision_id: row.id, version: String(row.updated_at), updated_at: row.updated_at,
+      title: `Rule · ${row.title}`, statement: statement.trim(), rationale: row.rationale,
+      evidence: Array.isArray(json(row.source_refs_json, [])) ? json(row.source_refs_json, []) as unknown[] : [],
+      visibility: row.visibility, owner_refs_json: row.owner_refs_json, allowed_principals_json: row.allowed_principals_json
     };
   }
-  return candidate !== null && await digestCandidate(candidate) === item.source_digest;
+  return candidate !== null && candidate.version === String(item.source_version)
+    && (await digestCandidate(candidate) === item.source_digest || await digestCandidate(candidate, true) === item.source_digest);
 }
 
 const closeRetrospectiveSchema = z.object({
   items: z.array(z.object({
     item_id: z.string().trim().min(1).max(128),
     decision: z.enum(["adopted", "not_adopted", "deferred"])
-  }).strict()).min(1).max(20)
+  }).strict()).min(1).max(20),
+  acknowledge_unanswered: z.boolean().default(false)
 }).strict();
 
 export async function closeRetrospective(
@@ -747,16 +1064,18 @@ export async function closeRetrospective(
   idempotencyKey: string,
   raw: unknown
 ) {
-  assertWritable(env, "RETROSPECTIVE_MODE");
+  assertKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
   const body = parse(closeRetrospectiveSchema, transportBody(raw));
   const normalizedItems = [...body.items].sort((left, right) => left.item_id.localeCompare(right.item_id));
-  const requestDigest = await sha256(canonicalJson({ items: normalizedItems }));
+  const requestDigest = await sha256(canonicalJson({ items: normalizedItems, acknowledge_unanswered: body.acknowledge_unanswered }));
+  const legacyRequestDigest = await sha256(canonicalJson({ items: normalizedItems }));
   const session = await env.OPEN_BRAIN_DB.prepare(
-    "SELECT status, close_idempotency_key, close_request_digest FROM retrospective_sessions WHERE tenant_id=? AND id=?"
-  ).bind(tenantId, id).first<{ status: string; close_idempotency_key: string | null; close_request_digest: string | null }>();
+    "SELECT status, created_by, close_idempotency_key, close_request_digest FROM retrospective_sessions WHERE tenant_id=? AND id=?"
+  ).bind(tenantId, id).first<{ status: string; created_by: string; close_idempotency_key: string | null; close_request_digest: string | null }>();
   if (!session) throw new HttpError(404, "retrospective_not_found", "Retrospective not found");
+  if (session.created_by !== principal) throw new HttpError(403, "retrospective_closer_required", "Only the administrator who created this retrospective can close it");
   if (session.status === "closed") {
-    if (session.close_idempotency_key !== idempotencyKey || session.close_request_digest !== requestDigest) {
+    if (session.close_idempotency_key !== idempotencyKey || (session.close_request_digest !== requestDigest && session.close_request_digest !== legacyRequestDigest)) {
       throw new HttpError(409, "idempotency_key_conflict", "The retrospective was already closed with another result set");
     }
     const existing = await env.OPEN_BRAIN_DB.prepare(
@@ -771,19 +1090,35 @@ export async function closeRetrospective(
   if (items.results.length !== normalizedItems.length || items.results.some((item) => !normalizedItems.some((requested) => requested.item_id === item.id))) {
     throw new HttpError(409, "retrospective_results_incomplete", "An explicit result is required for every retrospective item");
   }
-  const participants = await env.OPEN_BRAIN_DB.prepare(
-    "SELECT principal FROM retrospective_participants WHERE tenant_id=? AND session_id=? ORDER BY principal"
-  ).bind(tenantId, id).all<{ principal: string }>();
+  const counts = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM retrospective_item_eligible_participants eligible
+        WHERE eligible.tenant_id=? AND eligible.session_id=? AND NOT EXISTS(
+          SELECT 1 FROM retrospective_responses response
+          WHERE response.tenant_id=eligible.tenant_id AND response.session_id=eligible.session_id
+            AND response.item_id=eligible.item_id AND response.principal=eligible.principal
+        )) AS unanswered_count`
+  ).bind(tenantId, id).first<{ unanswered_count: number }>();
+  const unansweredCount = Number(counts?.unanswered_count ?? 0);
+  if (unansweredCount > 0 && !body.acknowledge_unanswered) {
+    throw new HttpError(409, "retrospective_unanswered_ack_required", "Acknowledge unanswered responses before closing this retrospective");
+  }
   const now = Date.now();
   const results: Array<z.infer<typeof retrospectiveResultSchema>> = [];
+  const closeOperationId = ulid();
   const statements: ReturnType<Env["OPEN_BRAIN_DB"]["prepare"]>[] = [];
   for (const item of items.results) {
     if (!await verifyRetrospectiveSource(env, tenantId, item)) {
       throw new HttpError(409, "retrospective_source_changed", `The source changed after the retrospective opened: ${String(item.id)}`);
     }
-    for (const participant of participants.results) {
-      if (!await retrospectiveSourceReadable(env, tenantId, item.source_type, item.source_id, participant.principal)) {
-        throw new HttpError(409, "retrospective_source_access_changed", `A participant can no longer read the source: ${String(item.id)}`);
+    const eligibleParticipants = await env.OPEN_BRAIN_DB.prepare(
+      "SELECT principal FROM retrospective_item_eligible_participants WHERE tenant_id=? AND session_id=? AND item_id=? ORDER BY principal"
+    ).bind(tenantId, id, item.id).all<{ principal: string }>();
+    for (const participant of eligibleParticipants.results) {
+      if (!await retrospectiveSourceReadable(
+        env, tenantId, item.source_type, item.source_id, participant.principal, participant.principal === principal
+      )) {
+        throw new HttpError(409, "retrospective_eligibility_changed", `An eligible participant can no longer read the source: ${String(item.id)}`);
       }
     }
     const decision = normalizedItems.find((requested) => requested.item_id === item.id)!.decision;
@@ -792,15 +1127,21 @@ export async function closeRetrospective(
       source_digest: item.source_digest, finalized_by: principal, finalized_at: now
     });
     statements.push(env.OPEN_BRAIN_DB.prepare(
-      "INSERT OR IGNORE INTO retrospective_results(id, tenant_id, session_id, item_id, decision, source_digest, finalized_by, finalized_at) VALUES(?,?,?,?,?,?,?,?)"
-    ).bind(result.id, tenantId, id, item.id, decision, item.source_digest, principal, now));
+      `INSERT OR IGNORE INTO retrospective_results(id, tenant_id, session_id, item_id, decision, source_digest, finalized_by, finalized_at)
+       SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(
+         SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='closed'
+           AND close_operation_id=? AND close_request_digest=?
+       )`
+    ).bind(result.id, tenantId, id, item.id, decision, item.source_digest, principal, now,
+      tenantId, id, closeOperationId, requestDigest));
     if (decision === "adopted" && item.source_type === "decision_memory") {
       const note = `Retrospective ${id}で採用`;
       statements.push(env.OPEN_BRAIN_DB.prepare(
         `UPDATE decision_memories SET confirmation_state='reviewed', confirmation_note=?, confirmed_at=?, updated_at=?
          WHERE tenant_id=? AND id=? AND status NOT IN ('retired','superseded')
-           AND EXISTS(SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='open')`
-      ).bind(note, now, now, tenantId, item.source_id, tenantId, id));
+           AND EXISTS(SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='closed'
+             AND close_operation_id=? AND close_request_digest=?)`
+      ).bind(note, now, now, tenantId, item.source_id, tenantId, id, closeOperationId, requestDigest));
       statements.push(env.OPEN_BRAIN_DB.prepare(
         `INSERT INTO decision_memory_versions(
            id, decision_memory_id, tenant_id, operation, snapshot_json, actor_refs_json,
@@ -811,17 +1152,90 @@ export async function closeRetrospective(
              'confirmationNote',?,'confirmedAt',?,'updatedAt',?),
            '[]', json_array(json_object('id',?)), ?, ?, business_category_id, work_type
          FROM decision_memories WHERE tenant_id=? AND id=?
-           AND EXISTS(SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='open')`
-      ).bind(ulid(now + 100 + results.length), note, now, now, principal, note, now, tenantId, item.source_id, tenantId, id));
+           AND EXISTS(SELECT 1 FROM retrospective_sessions WHERE tenant_id=? AND id=? AND status='closed'
+             AND close_operation_id=? AND close_request_digest=?)`
+      ).bind(ulid(now + 100 + results.length), note, now, now, principal, note, now,
+        tenantId, item.source_id, tenantId, id, closeOperationId, requestDigest));
     }
     results.push(result);
   }
-  statements.push(env.OPEN_BRAIN_DB.prepare(
-    `UPDATE retrospective_sessions SET status='closed', closed_at=?, close_idempotency_key=?, close_request_digest=?, updated_at=?
-     WHERE tenant_id=? AND id=? AND status='open'`
-  ).bind(now, idempotencyKey, requestDigest, now, tenantId, id));
+  statements.unshift(env.OPEN_BRAIN_DB.prepare(
+    `UPDATE retrospective_sessions SET status='closed', closed_at=?, close_idempotency_key=?, close_request_digest=?, close_operation_id=?,
+       participant_count_at_close=(
+         SELECT COUNT(*) FROM retrospective_participants participant
+         WHERE participant.tenant_id=retrospective_sessions.tenant_id AND participant.session_id=retrospective_sessions.id
+       ),
+       unanswered_response_count_at_close=(
+         SELECT COUNT(*) FROM retrospective_item_eligible_participants eligible
+         WHERE eligible.tenant_id=retrospective_sessions.tenant_id AND eligible.session_id=retrospective_sessions.id
+           AND NOT EXISTS(
+             SELECT 1 FROM retrospective_responses response
+             WHERE response.tenant_id=eligible.tenant_id AND response.session_id=eligible.session_id
+               AND response.item_id=eligible.item_id AND response.principal=eligible.principal
+           )
+       ), updated_at=?
+     WHERE tenant_id=? AND id=? AND status='open'
+       AND NOT EXISTS(
+         SELECT 1
+         FROM retrospective_items item
+         JOIN retrospective_item_eligible_participants eligible
+           ON eligible.tenant_id=item.tenant_id AND eligible.session_id=item.session_id AND eligible.item_id=item.id
+         LEFT JOIN decision_rationales rationale
+           ON item.source_type='decision_rationale' AND rationale.tenant_id=item.tenant_id AND rationale.id=item.source_id
+         LEFT JOIN decision_memories decision
+           ON decision.tenant_id=item.tenant_id AND decision.id=COALESCE(item.parent_decision_id, rationale.memory_id)
+         LEFT JOIN resource_access_policies policy
+           ON policy.tenant_id=item.tenant_id AND policy.resource_type='decision_memory'
+          AND policy.resource_id=COALESCE(item.parent_decision_id, rationale.memory_id)
+         WHERE item.tenant_id=? AND item.session_id=? AND (
+           (item.source_type IN ('decision_memory','projected_rule') AND (
+             decision.id IS NULL OR decision.status IN ('retired','superseded') OR CAST(decision.updated_at AS TEXT)<>item.source_version
+           ))
+           OR (item.source_type='decision_rationale' AND (
+             rationale.id IS NULL OR rationale.status IN ('retired','superseded') OR CAST(rationale.created_at AS TEXT)<>item.source_version
+           ))
+           OR COALESCE(policy.policy_version, -1)<>COALESCE(item.source_policy_version, -1)
+           OR (eligible.principal<>retrospective_sessions.created_by AND decision.project_id IS NOT NULL AND NOT EXISTS(
+             SELECT 1 FROM principal_role_assignments assignment
+             WHERE assignment.tenant_id=item.tenant_id AND assignment.principal=eligible.principal
+               AND (assignment.project_id IS NULL OR assignment.project_id=decision.project_id)
+           ))
+           OR (policy.id IS NOT NULL AND NOT (
+             policy.owner_principal=eligible.principal OR policy.scope='tenant'
+             OR (policy.scope='project' AND policy.project_id IS retrospective_sessions.project_id)
+             OR (policy.scope IN ('group','restricted') AND EXISTS(
+               SELECT 1 FROM group_members membership
+               WHERE membership.tenant_id=item.tenant_id AND membership.principal=eligible.principal
+                 AND (
+                   membership.group_id IN (SELECT value FROM json_each(policy.group_ids_json))
+                   OR membership.group_id IN (
+                     SELECT json_extract(value, '$.subject_id') FROM json_each(policy.restricted_subjects_json)
+                     WHERE json_extract(value, '$.subject_type')='group'
+                   )
+                 )
+             ))
+             OR (policy.scope='restricted' AND eligible.principal IN (
+               SELECT json_extract(value, '$.subject_id') FROM json_each(policy.restricted_subjects_json)
+               WHERE json_extract(value, '$.subject_type')='principal'
+             ))
+           ))
+           OR (policy.id IS NULL AND decision.visibility='restricted' AND NOT (
+             eligible.principal IN (SELECT value FROM json_each(decision.allowed_principals_json))
+             OR eligible.principal IN (
+               SELECT CASE WHEN type='text' THEN value ELSE json_extract(value, '$.id') END
+               FROM json_each(decision.owner_refs_json)
+             )
+             OR EXISTS(
+               SELECT 1 FROM group_members membership
+               WHERE membership.tenant_id=item.tenant_id AND membership.principal=eligible.principal
+                 AND membership.group_id IN (SELECT value FROM json_each(decision.allowed_principals_json))
+             )
+           ))
+         )
+       )`
+  ).bind(now, idempotencyKey, requestDigest, closeOperationId, now, tenantId, id, tenantId, id));
   const persisted = await env.OPEN_BRAIN_DB.batch(statements);
-  if (!persisted.at(-1)?.meta.changes) {
+  if (!persisted[0]?.meta.changes) {
     const raced = await env.OPEN_BRAIN_DB.prepare(
       "SELECT status, close_idempotency_key, close_request_digest FROM retrospective_sessions WHERE tenant_id=? AND id=?"
     ).bind(tenantId, id).first<{ status: string; close_idempotency_key: string | null; close_request_digest: string | null }>();
@@ -837,7 +1251,7 @@ export async function closeRetrospective(
 }
 
 export async function cancelRetrospective(env: Env, tenantId: string, id: string) {
-  assertWritable(env, "RETROSPECTIVE_MODE");
+  assertKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId);
   const now = Date.now();
   const result = await env.OPEN_BRAIN_DB.prepare(
     "UPDATE retrospective_sessions SET status='cancelled', cancelled_at=?, updated_at=? WHERE tenant_id=? AND id=? AND status='open'"
@@ -850,9 +1264,23 @@ export async function getRetrospectiveResults(env: Env, tenantId: string, id: st
   assertReadable(env, "RETROSPECTIVE_MODE");
   await assertParticipant(env, tenantId, id, principal, includeAll);
   const rows = await env.OPEN_BRAIN_DB.prepare(
-    "SELECT id, session_id, item_id, decision, source_digest, finalized_by, finalized_at FROM retrospective_results WHERE tenant_id=? AND session_id=? ORDER BY finalized_at, item_id"
-  ).bind(tenantId, id).all<Record<string, unknown>>();
-  return rows.results.map((row) => retrospectiveResultSchema.parse(row));
+    `SELECT result.id, result.session_id, result.item_id, result.decision, result.source_digest,
+            result.finalized_by, result.finalized_at, item.source_type, item.source_id
+     FROM retrospective_results result
+     JOIN retrospective_items item ON item.tenant_id=result.tenant_id AND item.session_id=result.session_id AND item.id=result.item_id
+     JOIN retrospective_item_eligible_participants eligible
+       ON eligible.tenant_id=result.tenant_id AND eligible.session_id=result.session_id
+      AND eligible.item_id=result.item_id AND eligible.principal=?
+     WHERE result.tenant_id=? AND result.session_id=? ORDER BY result.finalized_at, result.item_id`
+  ).bind(principal, tenantId, id).all<Record<string, unknown>>();
+  const readable = [];
+  for (const row of rows.results) {
+    if (await retrospectiveSourceReadable(env, tenantId, row.source_type, row.source_id, principal)) readable.push(row);
+  }
+  return readable.map((row) => retrospectiveResultSchema.parse({
+    id: row.id, session_id: row.session_id, item_id: row.item_id, decision: row.decision,
+    source_digest: row.source_digest, finalized_by: row.finalized_by, finalized_at: row.finalized_at
+  }));
 }
 
 const actionCreateSchema = z.object({
@@ -864,14 +1292,20 @@ const actionCreateSchema = z.object({
   description: z.string().trim().max(4_000).default(""),
   owner_principal: z.string().trim().min(1).max(128).nullable().default(null),
   due_at: z.number().int().nonnegative().nullable().default(null),
-  external_issue_url: z.string().url().max(2_048).nullable().default(null)
+  external_issue_url: z.string().url().max(2_048).refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }, "must use http or https").nullable().default(null)
 }).strict();
 const actionPatchSchema = z.object({
   title: z.string().trim().min(1).max(240).optional(),
   description: z.string().trim().max(4_000).optional(),
   owner_principal: z.string().trim().min(1).max(128).nullable().optional(),
   due_at: z.number().int().nonnegative().nullable().optional(),
-  external_issue_url: z.string().url().max(2_048).nullable().optional(),
+  external_issue_url: z.string().url().max(2_048).refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }, "must use http or https").nullable().optional(),
   status: z.enum(["open", "in_progress", "awaiting_verification", "completed", "cancelled"]).optional()
 }).strict().refine((value) => Object.keys(value).length > 0, "at least one field is required");
 
@@ -880,16 +1314,91 @@ function actionFromRow(row: Record<string, unknown>): ImprovementActionV1 {
   return improvementActionSchema.parse({ ...publicRow, contract_version: KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION });
 }
 
+async function actionViewFromRow(env: Env, row: Record<string, unknown>, principal: string, includeAll = false) {
+  const action = actionFromRow(row);
+  if (!action.goal_link_id || !action.baseline_snapshot_id) {
+    return improvementActionViewSchema.parse({ ...action, measurement: null });
+  }
+  const scope = await env.OPEN_BRAIN_DB.prepare(
+    "SELECT scope_type, scope_id FROM knowledge_pack_goal_links WHERE tenant_id=? AND id=?"
+  ).bind(action.tenant_id, action.goal_link_id).first<{ scope_type: string; scope_id: string | null }>();
+  if (!scope || (!includeAll && scope.scope_type === "project"
+    && !await principalCanReadProject(env, action.tenant_id, principal, scope.scope_id))) {
+    return improvementActionViewSchema.parse({ ...action, measurement: null });
+  }
+  const measurement = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT release.manifest_json, version.definition_json,
+            target.direction, target.target_value, target.target_min, target.target_max,
+            baseline.id AS baseline_id, baseline.value AS baseline_value, baseline.observed_at AS baseline_observed_at,
+            current.id AS current_id, current.value AS current_value, current.state AS current_state,
+            current.observed_at AS current_observed_at, current.expires_at AS current_expires_at
+     FROM knowledge_pack_goal_links link
+     JOIN domain_pack_installations installation
+       ON installation.tenant_id=link.tenant_id AND installation.id=link.knowledge_pack_installation_id
+     JOIN domain_pack_releases release ON release.id=installation.release_id
+     JOIN metric_definitions definition ON definition.tenant_id=link.tenant_id AND definition.id=link.metric_definition_id
+     JOIN metric_definition_versions version ON version.metric_definition_id=definition.id AND version.version=definition.current_version
+     JOIN metric_targets target ON target.tenant_id=link.tenant_id AND target.id=link.metric_target_id
+     JOIN metric_snapshots baseline ON baseline.tenant_id=link.tenant_id AND baseline.id=?
+     LEFT JOIN metric_bindings binding ON binding.tenant_id=link.tenant_id AND binding.id=link.metric_binding_id
+     LEFT JOIN metric_snapshots current ON current.id=(
+       SELECT snapshot.id FROM metric_snapshots snapshot
+       WHERE snapshot.tenant_id=link.tenant_id AND snapshot.metric_definition_id=link.metric_definition_id
+         AND snapshot.binding_id IS link.metric_binding_id
+         AND snapshot.dimensions_json=COALESCE(binding.dimensions_json, '{}')
+       ORDER BY snapshot.observed_at DESC, snapshot.created_at DESC, snapshot.id DESC LIMIT 1
+     )
+     WHERE link.tenant_id=? AND link.id=?`
+  ).bind(action.baseline_snapshot_id, action.tenant_id, action.goal_link_id).first<Record<string, unknown>>();
+  if (!measurement || typeof measurement.baseline_value !== "number") {
+    return improvementActionViewSchema.parse({ ...action, measurement: null });
+  }
+  const now = Date.now();
+  const currentState = measurement.current_state === "measured" && Number(measurement.current_expires_at) < now
+    ? "stale"
+    : measurement.current_state === "measured" || measurement.current_state === "unknown" || measurement.current_state === "stale"
+      ? measurement.current_state
+      : "unknown";
+  const definition = json(String(measurement.definition_json ?? "{}"), {}) as { label?: string; unit?: string };
+  const manifest = json(String(measurement.manifest_json ?? "{}"), {}) as { title?: string };
+  const verificationThreshold = Math.max(
+    Number(action.implementation_completed_at ?? 0),
+    Number(measurement.baseline_observed_at ?? 0)
+  );
+  const ready = action.status === "awaiting_verification" && currentState === "measured"
+    && typeof measurement.current_observed_at === "number" && measurement.current_observed_at > verificationThreshold;
+  return improvementActionViewSchema.parse({
+    ...action,
+    measurement: {
+      pack_title: manifest.title ?? "Knowledge Pack",
+      metric_label: definition.label ?? "Metric",
+      unit: definition.unit ?? "count",
+      target: { direction: measurement.direction, value: measurement.target_value, min: measurement.target_min, max: measurement.target_max },
+      baseline: { snapshot_id: measurement.baseline_id, value: measurement.baseline_value, observed_at: measurement.baseline_observed_at },
+      current: {
+        snapshot_id: typeof measurement.current_id === "string" ? measurement.current_id : null,
+        value: currentState === "measured" && typeof measurement.current_value === "number" ? measurement.current_value : null,
+        state: currentState,
+        observed_at: typeof measurement.current_observed_at === "number" ? measurement.current_observed_at : null,
+        expires_at: typeof measurement.current_expires_at === "number" ? measurement.current_expires_at : null
+      },
+      verification_state: action.verification_snapshot_id ? "verified" : ready ? "ready" : "waiting_for_measurement"
+    }
+  });
+}
+
 async function baselineForGoal(env: Env, tenantId: string, goalLinkId: string | null) {
   if (!goalLinkId) return { snapshot_id: null, target_json: null };
   const row = await env.OPEN_BRAIN_DB.prepare(
     `SELECT s.id AS snapshot_id, t.direction, t.target_value, t.target_min, t.target_max
      FROM knowledge_pack_goal_links l
      JOIN metric_targets t ON t.id=l.metric_target_id
+     LEFT JOIN metric_bindings b ON b.tenant_id=l.tenant_id AND b.id=l.metric_binding_id
      LEFT JOIN metric_snapshots s ON s.id=(
        SELECT s2.id FROM metric_snapshots s2 WHERE s2.tenant_id=l.tenant_id
        AND s2.metric_definition_id=l.metric_definition_id AND s2.binding_id IS l.metric_binding_id
-       AND s2.dimensions_json='{}' AND s2.state='measured' AND s2.expires_at >= ? ORDER BY s2.observed_at DESC LIMIT 1
+       AND s2.dimensions_json=COALESCE(b.dimensions_json, '{}') AND s2.state='measured' AND s2.expires_at >= ?
+       ORDER BY s2.observed_at DESC, s2.created_at DESC, s2.id DESC LIMIT 1
      ) WHERE l.tenant_id=? AND l.id=?`
   ).bind(Date.now(), tenantId, goalLinkId).first<Record<string, unknown>>();
   if (!row) throw new HttpError(404, "knowledge_pack_goal_not_found", "Knowledge Pack goal not found");
@@ -903,7 +1412,7 @@ async function baselineForGoal(env: Env, tenantId: string, goalLinkId: string | 
 }
 
 export async function createImprovementAction(env: Env, tenantId: string, principal: string, raw: unknown) {
-  assertWritable(env, "IMPROVEMENT_ACTIONS_MODE");
+  assertKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId);
   const body = parse(actionCreateSchema, transportBody(raw));
   if (body.retrospective_session_id || body.retrospective_item_id) {
     if (!body.retrospective_session_id || !body.retrospective_item_id) {
@@ -954,11 +1463,11 @@ export async function listImprovementActions(env: Env, tenantId: string, query: 
   const rows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM improvement_actions WHERE ${where.join(" AND ")} ORDER BY due_at IS NULL, due_at, created_at DESC LIMIT 200`
   ).bind(...bindings).all<Record<string, unknown>>();
-  return rows.results.map(actionFromRow);
+  return Promise.all(rows.results.map((row) => actionViewFromRow(env, row, query.principal, query.includeAll)));
 }
 
 export async function updateImprovementAction(env: Env, tenantId: string, id: string, principal: string, adminAllowed: boolean, raw: unknown) {
-  assertWritable(env, "IMPROVEMENT_ACTIONS_MODE");
+  assertKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId);
   const body = parse(actionPatchSchema, transportBody(raw));
   const current = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM improvement_actions WHERE tenant_id=? AND id=?")
     .bind(tenantId, id).first<Record<string, unknown>>();
@@ -995,14 +1504,8 @@ export async function updateImprovementAction(env: Env, tenantId: string, id: st
   return actionFromRow(next);
 }
 
-function distance(value: number, target: { direction: string; value: number | null; min: number | null; max: number | null }) {
-  if (target.direction === "range") return value < Number(target.min) ? Number(target.min) - value : value > Number(target.max) ? value - Number(target.max) : 0;
-  if (target.direction === "maintain") return Math.abs(value - Number(target.value));
-  return 0;
-}
-
 export async function verifyImprovementAction(env: Env, tenantId: string, id: string, principal: string, adminAllowed: boolean) {
-  assertWritable(env, "IMPROVEMENT_ACTIONS_MODE");
+  assertKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId);
   const action = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM improvement_actions WHERE tenant_id=? AND id=?")
     .bind(tenantId, id).first<Record<string, unknown>>();
   if (!action) throw new HttpError(404, "improvement_action_not_found", "Improvement action not found");
@@ -1022,22 +1525,18 @@ export async function verifyImprovementAction(env: Env, tenantId: string, id: st
        SELECT s.id FROM metric_snapshots s WHERE s.tenant_id=l.tenant_id
        AND s.metric_definition_id=l.metric_definition_id AND s.binding_id IS l.metric_binding_id
        AND s.dimensions_json=baseline.dimensions_json
-       AND s.state='measured' AND s.observed_at > ? ORDER BY s.observed_at DESC LIMIT 1
+       AND s.state='measured' AND s.observed_at > MAX(?, baseline.observed_at) ORDER BY s.observed_at DESC LIMIT 1
      ) WHERE l.tenant_id=? AND l.id=?`
   ).bind(action.baseline_snapshot_id, action.implementation_completed_at, tenantId, action.goal_link_id).first<Record<string, unknown>>();
   if (!row || typeof row.baseline_value !== "number" || typeof row.verification_value !== "number" || typeof row.verification_snapshot_id !== "string") {
     throw new HttpError(409, "fresh_verification_snapshot_required", "Record a fresh measured value after implementation before verifying");
   }
   if (Number(row.verification_expires_at) < Date.now()) throw new HttpError(409, "fresh_verification_snapshot_required", "The verification value is stale");
-  const target = json(String(action.target_snapshot_json ?? "{}"), {}) as { direction: string; value: number | null; min: number | null; max: number | null };
+  const target = json(String(action.target_snapshot_json ?? "{}"), {}) as MetricTarget;
   const baseline = row.baseline_value;
   const verification = row.verification_value;
-  const epsilon = Math.max(Math.abs(baseline) * 1e-9, 1e-9);
-  let delta: number;
-  if (target.direction === "increase") delta = verification - baseline;
-  else if (target.direction === "decrease") delta = baseline - verification;
-  else delta = distance(baseline, target) - distance(verification, target);
-  const outcome = delta > epsilon ? "improved" : delta < -epsilon ? "regressed" : "unchanged";
+  const trend = compareMetric(verification, baseline, target).trend;
+  const outcome = trend === "improving" ? "improved" : trend === "regressing" ? "regressed" : "unchanged";
   const now = Date.now();
   await env.OPEN_BRAIN_DB.prepare(
     `UPDATE improvement_actions SET status='completed', verification_snapshot_id=?, comparator_version='metric-improvement/v1',

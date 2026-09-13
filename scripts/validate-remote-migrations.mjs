@@ -68,9 +68,9 @@ function shouldSkipSchemaObject(row) {
 
 async function readPendingMigrations() {
   const files = (await readdir(MIGRATION_DIR))
-    .filter((file) => /^(?:0029|0030|0031|0032|0033)_.+\.sql$/u.test(file))
+    .filter((file) => /^(?:0029|0030|0031|0032|0033)_.+\.sql$/u.test(file) || file === "0042_knowledge_loop_pilot.sql")
     .sort();
-  if (files.length !== 7) throw new Error(`expected seven governed migration files, found ${files.length}`);
+  if (files.length !== 8) throw new Error(`expected eight governed migration files, found ${files.length}`);
   return Promise.all(files.map(async (file) => {
     const sql = await readFile(resolve(MIGRATION_DIR, file), "utf8");
     return { file, sha256: sha256(sql), bytes: Buffer.byteLength(sql), sql };
@@ -103,6 +103,68 @@ async function fetchVerifiedLearningGeneration(options) {
     LIMIT 1;
   `);
   return rows[0] ?? null;
+}
+
+async function fetchRemoteKnowledgeLoopIntegrity(options, migrationApplied) {
+  const rows = await runD1Query(options, migrationApplied ? `
+    SELECT
+      (SELECT COUNT(*) FROM retrospective_item_eligible_participants eligible
+       LEFT JOIN retrospective_sessions session ON session.id=eligible.session_id
+       LEFT JOIN retrospective_items item ON item.id=eligible.item_id AND item.session_id=eligible.session_id
+       WHERE session.id IS NULL OR item.id IS NULL) AS orphan_count,
+      (SELECT COUNT(*) FROM retrospective_item_eligible_participants eligible
+       JOIN retrospective_sessions session ON session.id=eligible.session_id
+       JOIN retrospective_items item ON item.id=eligible.item_id AND item.session_id=eligible.session_id
+       WHERE eligible.tenant_id<>session.tenant_id OR eligible.tenant_id<>item.tenant_id) AS tenant_mismatch_count,
+      (SELECT COUNT(*) FROM retrospective_responses response
+       LEFT JOIN retrospective_item_eligible_participants eligible
+         ON eligible.tenant_id=response.tenant_id AND eligible.session_id=response.session_id
+        AND eligible.item_id=response.item_id AND eligible.principal=response.principal
+       WHERE eligible.item_id IS NULL) AS ineligible_response_count,
+      ((SELECT COUNT(*) FROM retrospective_sessions session
+        LEFT JOIN groups participant_group ON participant_group.id=session.participant_group_id
+        WHERE session.participant_group_id IS NOT NULL
+          AND (participant_group.id IS NULL OR participant_group.tenant_id<>session.tenant_id))
+       +
+       (SELECT COUNT(*) FROM retrospective_schedules schedule
+        LEFT JOIN groups participant_group ON participant_group.id=schedule.participant_group_id
+        WHERE schedule.participant_group_id IS NOT NULL
+          AND (participant_group.id IS NULL OR participant_group.tenant_id<>schedule.tenant_id))) AS group_tenant_mismatch_count
+  ` : `
+    SELECT
+      ((SELECT COUNT(*) FROM retrospective_participants participant
+        LEFT JOIN retrospective_sessions session ON session.id=participant.session_id
+        WHERE session.id IS NULL)
+       +
+       (SELECT COUNT(*) FROM retrospective_items item
+        LEFT JOIN retrospective_sessions session ON session.id=item.session_id
+        WHERE session.id IS NULL)) AS orphan_count,
+      ((SELECT COUNT(*) FROM retrospective_participants participant
+        JOIN retrospective_sessions session ON session.id=participant.session_id
+        WHERE participant.tenant_id<>session.tenant_id)
+       +
+       (SELECT COUNT(*) FROM retrospective_items item
+        JOIN retrospective_sessions session ON session.id=item.session_id
+        WHERE item.tenant_id<>session.tenant_id)) AS tenant_mismatch_count,
+      (SELECT COUNT(*) FROM retrospective_responses response
+       LEFT JOIN retrospective_sessions session ON session.id=response.session_id
+       LEFT JOIN retrospective_items item ON item.id=response.item_id AND item.session_id=response.session_id
+       LEFT JOIN retrospective_participants participant
+         ON participant.session_id=response.session_id AND participant.principal=response.principal
+       WHERE session.id IS NULL OR item.id IS NULL OR participant.principal IS NULL
+         OR response.tenant_id<>session.tenant_id OR response.tenant_id<>item.tenant_id
+         OR response.tenant_id<>participant.tenant_id) AS ineligible_response_count,
+      0 AS group_tenant_mismatch_count
+  `);
+  const row = rows[0] ?? {};
+  const result = {
+    mode: migrationApplied ? "post_migration" : "pre_migration_backfill_preconditions",
+    orphan_count: Number(row.orphan_count ?? 0),
+    tenant_mismatch_count: Number(row.tenant_mismatch_count ?? 0),
+    ineligible_response_count: Number(row.ineligible_response_count ?? 0),
+    group_tenant_mismatch_count: Number(row.group_tenant_mismatch_count ?? 0)
+  };
+  return { ...result, passed: Object.entries(result).filter(([key]) => key !== "mode").every(([, value]) => value === 0) };
 }
 
 function applySchemaCopy(db, rows) {
@@ -154,7 +216,38 @@ function runCanonicalGuardContract(db) {
   return { duplicate_active_canonical_rejected: duplicateRejected };
 }
 
-function migrationContract(db, verifiedLearningGeneration) {
+function runKnowledgeLoopIntegrityContract(db) {
+  const orphanEligibility = Number(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM retrospective_item_eligible_participants eligible
+    LEFT JOIN retrospective_sessions session ON session.id=eligible.session_id
+    LEFT JOIN retrospective_items item ON item.id=eligible.item_id AND item.session_id=eligible.session_id
+    WHERE session.id IS NULL OR item.id IS NULL
+  `).get()?.count ?? 0);
+  const tenantMismatch = Number(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM retrospective_item_eligible_participants eligible
+    JOIN retrospective_sessions session ON session.id=eligible.session_id
+    JOIN retrospective_items item ON item.id=eligible.item_id AND item.session_id=eligible.session_id
+    WHERE eligible.tenant_id<>session.tenant_id OR eligible.tenant_id<>item.tenant_id
+  `).get()?.count ?? 0);
+  const ineligibleResponses = Number(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM retrospective_responses response
+    LEFT JOIN retrospective_item_eligible_participants eligible
+      ON eligible.tenant_id=response.tenant_id AND eligible.session_id=response.session_id
+     AND eligible.item_id=response.item_id AND eligible.principal=response.principal
+    WHERE eligible.item_id IS NULL
+  `).get()?.count ?? 0);
+  return {
+    orphan_eligibility_count: orphanEligibility,
+    tenant_mismatch_count: tenantMismatch,
+    ineligible_response_count: ineligibleResponses,
+    passed: orphanEligibility === 0 && tenantMismatch === 0 && ineligibleResponses === 0
+  };
+}
+
+function migrationContract(db, verifiedLearningGeneration, remoteKnowledgeLoopIntegrity) {
   const requiredColumns = {
     memories: [
       "reuse_rule", "owner_principal", "created_by_principal", "deleted_at",
@@ -198,6 +291,14 @@ function migrationContract(db, verifiedLearningGeneration) {
       "id", "tenant_id", "owner_principal", "client_type", "device_label", "purpose", "status",
       "access_subject_hash", "enrollment_token_hash", "enrollment_expires_at", "created_at",
       "activated_at", "last_used_at", "revoked_at"
+    ],
+    retrospective_schedules: ["participant_group_id"],
+    retrospective_sessions: [
+      "participant_group_id", "participant_count_at_close", "unanswered_response_count_at_close"
+    ],
+    retrospective_items: ["parent_decision_id", "source_policy_version"],
+    retrospective_item_eligible_participants: [
+      "tenant_id", "session_id", "item_id", "principal", "created_at"
     ]
   };
   const columnChecks = Object.fromEntries(Object.entries(requiredColumns).map(([table, columns]) => {
@@ -239,7 +340,9 @@ function migrationContract(db, verifiedLearningGeneration) {
     "mcp_client_installations",
     "idx_mcp_client_installations_access_subject",
     "idx_mcp_client_installations_enrollment",
-    "idx_mcp_client_installations_owner"
+    "idx_mcp_client_installations_owner",
+    "retrospective_item_eligible_participants",
+    "idx_retrospective_eligible_session_principal"
   ];
   const objects = new Set([
     ...objectNames(db, "table"),
@@ -248,9 +351,11 @@ function migrationContract(db, verifiedLearningGeneration) {
   ]);
   const objectChecks = Object.fromEntries(requiredObjects.map((name) => [name, objects.has(name)]));
   const guard = runCanonicalGuardContract(db);
+  const knowledgeLoopIntegrity = runKnowledgeLoopIntegrityContract(db);
   const columnsPass = Object.values(columnChecks).every((checks) => Object.values(checks).every(Boolean));
   const objectsPass = Object.values(objectChecks).every(Boolean);
-  const passed = columnsPass && objectsPass && Boolean(verifiedLearningGeneration) && guard.duplicate_active_canonical_rejected;
+  const passed = columnsPass && objectsPass && Boolean(verifiedLearningGeneration) && guard.duplicate_active_canonical_rejected &&
+    knowledgeLoopIntegrity.passed && remoteKnowledgeLoopIntegrity.passed;
   return {
     passed,
     required_columns: columnChecks,
@@ -258,7 +363,9 @@ function migrationContract(db, verifiedLearningGeneration) {
     verified_learning_generation: verifiedLearningGeneration
       ? { present: true, status: verifiedLearningGeneration.status }
       : { present: false },
-    canonical_guard: guard
+    canonical_guard: guard,
+    knowledge_loop_integrity: knowledgeLoopIntegrity,
+    remote_knowledge_loop_integrity: remoteKnowledgeLoopIntegrity
   };
 }
 
@@ -268,14 +375,14 @@ async function main() {
     console.log(usage());
     return;
   }
-  const [schemaRows, governedMigrations, appliedMigrationNames, verifiedLearningGeneration] = await Promise.all([
+  const appliedMigrationNames = await fetchAppliedMigrationNames(options);
+  const [schemaRows, governedMigrations, verifiedLearningGeneration, remoteKnowledgeLoopIntegrity] = await Promise.all([
     fetchSchema(options),
     readPendingMigrations(),
-    fetchAppliedMigrationNames(options),
-    fetchVerifiedLearningGeneration(options)
+    fetchVerifiedLearningGeneration(options),
+    fetchRemoteKnowledgeLoopIntegrity(options, appliedMigrationNames.has("0042_knowledge_loop_pilot.sql"))
   ]);
   const migrations = governedMigrations.filter((migration) => !appliedMigrationNames.has(migration.file));
-  if (migrations.length === 0) throw new Error("no_pending_governed_migrations");
   const db = new DatabaseSync(":memory:");
   let schemaCopy;
   let migrationResults;
@@ -306,7 +413,7 @@ async function main() {
       if (!passed) break;
     }
     const contract = migrationResults.every((migration) => migration.passed)
-      ? migrationContract(db, verifiedLearningGeneration)
+      ? migrationContract(db, verifiedLearningGeneration, remoteKnowledgeLoopIntegrity)
       : { passed: false, reason_code: "migration_apply_failed" };
     const report = {
       schema_version: 1,

@@ -250,5 +250,12 @@ describe("Domain Pack contracts", () => {
       implementation_completed_at: null, baseline_snapshot_id: null, verification_snapshot_id: null,
       comparator_version: null, verification_outcome: null, created_by: "user:admin", created_at: 10, updated_at: 10
     }).status).toBe("open");
+    expect(() => improvementActionSchema.parse({
+      id: "action-2", tenant_id: "tenant-a", project_id: null, retrospective_session_id: null,
+      retrospective_item_id: null, goal_link_id: null, title: "Track externally", description: "",
+      owner_principal: null, due_at: null, status: "open", external_issue_url: "ftp://example.com/issue/1",
+      implementation_completed_at: null, baseline_snapshot_id: null, verification_snapshot_id: null,
+      comparator_version: null, verification_outcome: null, created_by: "user:admin", created_at: 10, updated_at: 10
+    })).toThrow(/http or https/);
   });
 });

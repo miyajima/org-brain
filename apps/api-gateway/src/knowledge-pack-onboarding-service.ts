@@ -30,6 +30,7 @@ import {
   publishTenantOrganizationOverlay
 } from "./domain-pack-service";
 import type { Env } from "./types";
+import { assertKnowledgeLoopWritable } from "./knowledge-loop-feature";
 
 type OnboardingRow = {
   id: string;
@@ -78,11 +79,8 @@ function assertOnboardingEnabled(env: Env) {
   }
 }
 
-function assertOnboardingCompletionEnabled(env: Env) {
-  assertOnboardingEnabled(env);
-  if (env.KNOWLEDGE_PACK_ONBOARDING_MODE !== "on") {
-    throw new HttpError(409, "knowledge_pack_onboarding_preview", "Knowledge Pack onboarding is in preview-only mode");
-  }
+function assertOnboardingCompletionEnabled(env: Env, tenantId: string) {
+  assertKnowledgeLoopWritable(env, "KNOWLEDGE_PACK_ONBOARDING_MODE", tenantId);
 }
 
 function rowToOnboarding(row: OnboardingRow): KnowledgePackOnboardingV1 {
@@ -625,7 +623,7 @@ export async function completeKnowledgePackOnboarding(
   idempotencyKey: string,
   raw: unknown
 ) {
-  assertOnboardingCompletionEnabled(env);
+  assertOnboardingCompletionEnabled(env, tenantId);
   const body = parseSchema(completeSessionSchema, raw);
   const current = await onboardingSession(env, tenantId, id);
   if (body.project_id !== undefined && body.project_id !== current.project_id) {

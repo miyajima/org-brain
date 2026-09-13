@@ -3,6 +3,7 @@ import NervousSystem from "../components/intelligence/NervousSystem.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
 import { intelligencePageCopy } from "../lib/intelligence-locale";
+import { knowledgeLoopCopy } from "../lib/knowledge-loop-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { activityWindowParams, normalizeDashboardActivity, resolveActivityPeriod } from "../lib/nervous-system-ui";
 
@@ -10,8 +11,9 @@ const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processIns
 if (!insightsUiBehavior(insightsMode).enableInsightsRoutes) {
   return Astro.redirect(`/${Astro.url.search}`);
 }
-const { params, apiParams, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
+const { params, apiParams, lang, tenantId, projectId } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = intelligencePageCopy(lang);
+const loopCopy = knowledgeLoopCopy(lang);
 const activityPeriod = resolveActivityPeriod(params.get("period"));
 const activityApiParams = activityWindowParams(apiParams, activityPeriod);
 const initialUrl = `/api/v1/dashboard/activity?${activityApiParams.toString()}`;
@@ -23,8 +25,14 @@ const result = await fetchDashboardData(
 const refreshParams = new URLSearchParams(activityApiParams);
 if (result.data.newest_cursor != null) refreshParams.set("after", String(result.data.newest_cursor));
 const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
+const organizationResponse = await fetch(new URL(`/api/v1/dashboard/organization?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`, Astro.url), { headers: { cookie: Astro.request.headers.get("cookie") ?? "" } });
+const organizationPayload: any = organizationResponse.ok ? await organizationResponse.json().catch(() => null) : null;
+const organization = organizationPayload?.data ?? null;
 ---
 <BaseLayout title={copy.routes.nervousTitle} lang={lang} wide>
+  {organization && <a class="mb-5 block rounded-[22px] border border-white/8 bg-white/[0.025] p-5" href={`/dashboard/knowledge?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}&lang=${lang}`}>
+    <p class="surface-label">MEASURE · REVIEW · IMPROVE</p><div class="mt-3 grid gap-3 sm:grid-cols-4"><div><p class="text-xs text-zinc-500">{loopCopy.packs}</p><strong class="text-2xl">{organization.summary?.installed_packs ?? 0}</strong></div><div><p class="text-xs text-zinc-500">{loopCopy.openRetros}</p><strong class="text-2xl">{organization.summary?.open_retrospectives ?? 0}</strong></div><div><p class="text-xs text-zinc-500">{loopCopy.attentionCount}</p><strong class="text-2xl">{organization.goals?.filter((goal: any) => goal.source?.latest_run?.status === "failed" || ["unknown", "stale"].includes(goal.current.state) || goal.comparison?.target_state === "off_track").length ?? 0}</strong></div><div class="self-center text-right">{loopCopy.dashboardTitle} →</div></div>
+  </a>}
   {result.error && (
     <div class="intelligence-route-alert" role="alert">
       <strong>{copy.routes.activityError}</strong>

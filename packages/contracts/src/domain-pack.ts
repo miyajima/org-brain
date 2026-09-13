@@ -66,6 +66,9 @@ export const RETROSPECTIVE_SESSION_STATES = ["open", "closed", "cancelled"] as c
 export const RETROSPECTIVE_RESPONSE_DECISIONS = ["adopt", "do_not_adopt", "defer"] as const;
 export const RETROSPECTIVE_RESULT_DECISIONS = ["adopted", "not_adopted", "deferred"] as const;
 export const IMPROVEMENT_ACTION_STATES = ["open", "in_progress", "awaiting_verification", "completed", "cancelled"] as const;
+export const METRIC_TARGET_STATES = ["on_track", "off_track", "unknown"] as const;
+export const METRIC_TRENDS = ["improving", "unchanged", "regressing", "unknown"] as const;
+export const IMPROVEMENT_VERIFICATION_STATES = ["waiting_for_measurement", "ready", "verified"] as const;
 
 const identifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u);
 const slug = z.string().trim().min(1).max(128).regex(/^[a-z0-9][a-z0-9._-]*$/u);
@@ -553,6 +556,23 @@ export const organizationDashboardSchema = z.object({
     rules: z.number().int().nonnegative(),
     rationales: z.number().int().nonnegative()
   }).strict(),
+  summary: z.object({
+    installed_packs: z.number().int().nonnegative(),
+    open_retrospectives: z.number().int().nonnegative()
+  }).strict().optional(),
+  knowledge_status: z.object({
+    decisions: z.object({
+      total: z.number().int().nonnegative(),
+      confirmed: z.number().int().nonnegative(),
+      needs_review: z.number().int().nonnegative()
+    }).strict(),
+    rules: z.object({
+      total: z.number().int().nonnegative(),
+      adopted: z.number().int().nonnegative(),
+      pending: z.number().int().nonnegative()
+    }).strict(),
+    rationales: z.object({ total: z.number().int().nonnegative() }).strict()
+  }).strict().optional(),
   goals: z.array(z.object({
     link: knowledgePackGoalLinkSchema,
     pack_title: z.string().trim().min(1).max(160),
@@ -572,11 +592,19 @@ export const organizationDashboardSchema = z.object({
       observed_at: z.number().int().nonnegative().nullable(),
       expires_at: z.number().int().nonnegative().nullable()
     }).strict(),
+    comparison: z.object({
+      target_state: z.enum(METRIC_TARGET_STATES),
+      distance_to_target: z.number().finite().nonnegative().nullable(),
+      previous_value: z.number().finite().nullable(),
+      change_from_previous: z.number().finite().nullable(),
+      trend: z.enum(METRIC_TRENDS)
+    }).strict().optional(),
     source: z.object({
       binding_id: identifier.nullable(),
       adapter_id: identifier.nullable(),
       status: z.enum(METRIC_SOURCE_BINDING_STATES).nullable(),
-      last_success_at: z.number().int().nonnegative().nullable()
+      last_success_at: z.number().int().nonnegative().nullable(),
+      latest_run: z.lazy(() => metricImportRunSchema).nullable().optional()
     }).strict()
   }).strict()).max(512)
 }).strict();
@@ -612,6 +640,7 @@ export const retrospectiveScheduleSchema = z.object({
   id: identifier,
   tenant_id: identifier,
   project_id: identifier.nullable(),
+  participant_group_id: identifier.nullable().default(null),
   cadence_days: z.union([z.literal(7), z.literal(14)]),
   status: z.enum(RETROSPECTIVE_SCHEDULE_STATES),
   next_run_at: z.number().int().nonnegative(),
@@ -625,6 +654,7 @@ export const retrospectiveItemSchema = z.object({
   ordinal: z.number().int().nonnegative().max(19),
   source_type: z.enum(["decision_memory", "decision_rationale", "projected_rule"]),
   source_id: identifier,
+  parent_decision_id: identifier.nullable().default(null),
   source_version: z.string().trim().min(1).max(128),
   source_digest: sha256,
   title: z.string().trim().min(1).max(240),
@@ -635,7 +665,16 @@ export const retrospectiveItemSchema = z.object({
     decision: z.enum(RETROSPECTIVE_RESPONSE_DECISIONS),
     note: z.string().trim().max(2_000).nullable(),
     updated_at: z.number().int().nonnegative()
-  }).strict().nullable()
+  }).strict().nullable(),
+  response_summary: z.object({
+    eligible: z.number().int().nonnegative(),
+    received: z.number().int().nonnegative(),
+    unanswered: z.number().int().nonnegative(),
+    adopt: z.number().int().nonnegative(),
+    do_not_adopt: z.number().int().nonnegative(),
+    defer: z.number().int().nonnegative(),
+    adoption_rate: z.number().min(0).max(1).nullable()
+  }).strict().optional()
 }).strict();
 
 export const retrospectiveSessionSchema = z.object({
@@ -643,6 +682,7 @@ export const retrospectiveSessionSchema = z.object({
   id: identifier,
   tenant_id: identifier,
   project_id: identifier.nullable(),
+  participant_group_id: identifier.nullable().default(null),
   schedule_id: identifier.nullable(),
   status: z.enum(RETROSPECTIVE_SESSION_STATES),
   title: z.string().trim().min(1).max(240),
@@ -651,6 +691,22 @@ export const retrospectiveSessionSchema = z.object({
   closed_at: z.number().int().nonnegative().nullable(),
   cancelled_at: z.number().int().nonnegative().nullable(),
   items: z.array(retrospectiveItemSchema).max(20),
+  viewer: z.object({
+    role: z.enum(["participant", "admin"]),
+    can_close: z.boolean()
+  }).strict().optional(),
+  progress: z.object({
+    participants: z.number().int().nonnegative(),
+    completed_participants: z.number().int().nonnegative(),
+    pending_participants: z.number().int().nonnegative(),
+    eligible_responses: z.number().int().nonnegative(),
+    received_responses: z.number().int().nonnegative(),
+    unanswered_responses: z.number().int().nonnegative()
+  }).strict().optional(),
+  close_summary: z.object({
+    participant_count: z.number().int().nonnegative(),
+    unanswered_response_count: z.number().int().nonnegative()
+  }).strict().nullable().optional(),
   created_at: z.number().int().nonnegative(),
   updated_at: z.number().int().nonnegative()
 }).strict();
@@ -665,6 +721,11 @@ export const retrospectiveResultSchema = z.object({
   finalized_at: z.number().int().nonnegative()
 }).strict();
 
+export const httpUrlSchema = z.string().url().max(2_048).refine((value) => {
+  const protocol = new URL(value).protocol;
+  return protocol === "http:" || protocol === "https:";
+}, "must use http or https");
+
 export const improvementActionSchema = z.object({
   contract_version: z.literal(KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION).default(KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION),
   id: identifier,
@@ -678,7 +739,7 @@ export const improvementActionSchema = z.object({
   owner_principal: z.string().trim().min(1).max(128).nullable(),
   due_at: z.number().int().nonnegative().nullable(),
   status: z.enum(IMPROVEMENT_ACTION_STATES),
-  external_issue_url: z.string().url().max(2_048).nullable(),
+  external_issue_url: httpUrlSchema.nullable(),
   implementation_completed_at: z.number().int().nonnegative().nullable(),
   baseline_snapshot_id: identifier.nullable(),
   verification_snapshot_id: identifier.nullable(),
@@ -687,6 +748,33 @@ export const improvementActionSchema = z.object({
   created_by: z.string().trim().min(1).max(128),
   created_at: z.number().int().nonnegative(),
   updated_at: z.number().int().nonnegative()
+}).strict();
+
+export const improvementActionViewSchema = improvementActionSchema.extend({
+  measurement: z.object({
+    pack_title: z.string().trim().min(1).max(160),
+    metric_label: z.string().trim().min(1).max(160),
+    unit: z.string().trim().min(1).max(64),
+    target: z.object({
+      direction: z.enum(METRIC_TARGET_DIRECTIONS),
+      value: z.number().finite().nullable(),
+      min: z.number().finite().nullable(),
+      max: z.number().finite().nullable()
+    }).strict(),
+    baseline: z.object({
+      snapshot_id: identifier,
+      value: z.number().finite(),
+      observed_at: z.number().int().nonnegative()
+    }).strict(),
+    current: z.object({
+      snapshot_id: identifier.nullable(),
+      value: z.number().finite().nullable(),
+      state: z.enum(METRIC_SNAPSHOT_STATES),
+      observed_at: z.number().int().nonnegative().nullable(),
+      expires_at: z.number().int().nonnegative().nullable()
+    }).strict(),
+    verification_state: z.enum(IMPROVEMENT_VERIFICATION_STATES)
+  }).strict().nullable()
 }).strict();
 
 export type DomainPackManifestV1 = z.infer<typeof domainPackManifestSchema>;
@@ -718,3 +806,4 @@ export type RetrospectiveItemV1 = z.infer<typeof retrospectiveItemSchema>;
 export type RetrospectiveSessionV1 = z.infer<typeof retrospectiveSessionSchema>;
 export type RetrospectiveResultV1 = z.infer<typeof retrospectiveResultSchema>;
 export type ImprovementActionV1 = z.infer<typeof improvementActionSchema>;
+export type ImprovementActionViewV1 = z.infer<typeof improvementActionViewSchema>;

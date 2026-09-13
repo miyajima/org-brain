@@ -278,7 +278,7 @@ export interface DecisionContextPort<TEnv extends RouteAppEnv> extends CommonHtt
 }
 
 export interface DomainPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
-  domainCapabilities(env: TEnv["Bindings"]): Record<string, unknown>;
+  domainCapabilities(env: TEnv["Bindings"], tenantId: string): Record<string, unknown>;
   getDomainContext: PortFunction;
   createDecisionDomainLink: PortFunction;
   createManagedObject: PortFunction;

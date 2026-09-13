@@ -34,6 +34,7 @@ export type Env = {
   MEMORY_EXTRACTION_TIER2_MONTHLY_TOKENS?: string;
   MEMORY_EXTRACTION_TIER3_MONTHLY_TOKENS?: string;
   METRIC_IMPORT_MODE?: "off" | "preview" | "on";
+  KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON?: string;
   /** JSON map configured as a Worker secret; values contain GitHub credentials. */
   GITHUB_METRIC_CONNECTIONS_JSON?: string;
 };
