@@ -396,8 +396,7 @@ export function codexMinimalHooksPlan(options = {}) {
       type: "command",
       command: hookCommand(baseCommand, envFile, "codex-context", errorLog),
       timeout: 2,
-      statusMessage: "Restoring OrgBrain task commitments after compaction",
-      additionalContextLimit: 8_192
+      statusMessage: "Restoring OrgBrain task commitments after compaction"
     },
     Stop: {
       type: "command",
@@ -545,7 +544,7 @@ export function cloudHooksPlan(agent, options = {}) {
       PreToolUse: { matcher: "request_user_input(_async)?", type: "command", command: command("codex-pre-tool"), timeout: 1, statusMessage: "Checking prior OrgBrain decisions" },
       PostToolUse: { matcher: "request_user_input(_async)?|.*orgbrain_memories_(propose|confirm|confirmation_status)", type: "command", command: command("codex-post-tool"), timeout: 2, statusMessage: "Saving OrgBrain task commitment" },
       PreCompact: { type: "command", command: command("codex-pre-compact"), timeout: 3, statusMessage: "Checkpointing OrgBrain task commitments" },
-      PostCompact: { type: "command", command: command("codex-context"), timeout: 2, statusMessage: "Restoring OrgBrain context after compaction", additionalContextLimit: 8_192 },
+      PostCompact: { type: "command", command: command("codex-context"), timeout: 2, statusMessage: "Restoring OrgBrain context after compaction" },
       Stop: { type: "command", command: command("codex-stop"), timeout: 5, statusMessage: "Saving reusable OrgBrain memory" }
     };
   } else if (agent === "claude") {
