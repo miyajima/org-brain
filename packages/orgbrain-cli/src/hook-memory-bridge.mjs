@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { collectMemoryUse } from "./lib/memory-use-collector.mjs";
-import { readMemoryUseTurnRows } from "./lib/memory-learning-transcript.mjs";
-import { taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
+import { extractTaskCommitments, taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
 
 import crypto from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -28,10 +27,12 @@ import {
   MEMORY_CONTRACT_V2_PROMPT_HASH
 } from "../../shared/src/memory-contract-v2-contract.mjs";
 import {
+  readMemoryUseTurnRows,
   collectVerifiedLearningEvents,
   collectVerifiedLearningEventsFromRows
 } from "./lib/memory-learning-transcript.mjs";
 import { prepareMemoryConfirmationCandidates } from "./lib/memory-confirmation-hints.mjs";
+import { buildPlanDecisionMemoryConfirmationCandidates } from "./lib/memory-candidate-admission.mjs";
 import {
   buildLearningExtractionPacket,
   buildTurnEvidenceV1,
@@ -79,6 +80,27 @@ const LEGACY_HOOK_CREDENTIAL_KEYS = new Set([
   "ORGBRAIN_API_BASE",
   "ORGBRAIN_API_KEY"
 ]);
+// A hook command supplies ORGBRAIN_HOOK_ENV_FILES explicitly.  Treat the
+// selected file as the complete runtime-config boundary for backend and
+// capture mode as well as for credentials.  Otherwise a parent process (for
+// example Codex itself) can leak cloud flags into a local-only hook and make
+// the hook contact Remote OrgBrain despite the file saying "false".
+const EXPLICIT_HOOK_MODE_KEYS = new Set([
+  "ORGBRAIN_ENABLE_CLOUD_MEMORY",
+  "ORGBRAIN_ENABLE_ORG_SHARING",
+  "ORGBRAIN_LOCAL_CONTEXT_ENABLED",
+  "ORGBRAIN_LOCAL_HOOK_CAPTURE",
+  "ORGBRAIN_MEMORY_CAPTURE_V2_MODE",
+  "ORGBRAIN_MEMORY_COMMITMENTS_MODE"
+]);
+const EXPLICIT_HOOK_SAFE_DEFAULTS = {
+  ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
+  ORGBRAIN_ENABLE_ORG_SHARING: "false",
+  ORGBRAIN_LOCAL_CONTEXT_ENABLED: "false",
+  ORGBRAIN_LOCAL_HOOK_CAPTURE: "false",
+  ORGBRAIN_MEMORY_CAPTURE_V2_MODE: "off",
+  ORGBRAIN_MEMORY_COMMITMENTS_MODE: "off"
+};
 const validatedMcpConfigurations = new WeakSet();
 const OUTBOX_CLAIM_STALE_MS = 5 * 60 * 1000;
 
@@ -110,6 +132,48 @@ export async function queueMemoryConfirmationCandidates({
   const taskKey = taskKeyFromHookPayload(taskPayload);
   return new TaskCommitmentStore(dbPath || process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB)
     .queueMemoryConfirmations({ tenantId, projectId, taskKey, candidates: prepared });
+}
+
+function hookPayloadFromRow(row) {
+  if (!row || typeof row !== "object") return null;
+  return row.payload && typeof row.payload === "object" && !Array.isArray(row.payload) ? row.payload : row;
+}
+
+function extractPlanTaskCommitments(rows, record, workspace) {
+  const sessionId = firstString(record?.metadata?.sessionId, record?.metadata?.turnId, record?.externalKey);
+  const extracted = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const payload = hookPayloadFromRow(row);
+    if (!payload || typeof payload !== "object") continue;
+    const normalizedPayload = {
+      ...payload,
+      session_id: firstString(payload.session_id, payload.sessionId, sessionId),
+      turn_id: firstString(payload.turn_id, payload.turnId, record?.metadata?.turnId),
+      cwd: firstString(payload.cwd, record?.cwd, workspace?.workspaceRoot),
+      project_id: firstString(payload.project_id, workspace?.projectId)
+    };
+    // Transcript rows use `invocation` + `result`, while the post-tool hook
+    // envelope uses `tool_input` + `tool_result`. Normalize the former before
+    // passing it to the commitment parser; its generic unwrap helper treats a
+    // top-level `result` as an envelope and would otherwise drop task identity.
+    if (normalizedPayload.tool_name === undefined && normalizedPayload.invocation?.tool) {
+      normalizedPayload.tool_name = normalizedPayload.invocation.tool;
+    }
+    if (normalizedPayload.tool_input === undefined && normalizedPayload.invocation?.arguments !== undefined) {
+      normalizedPayload.tool_input = normalizedPayload.invocation.arguments;
+    }
+    if (normalizedPayload.tool_result === undefined && normalizedPayload.result !== undefined) {
+      normalizedPayload.tool_result = normalizedPayload.result;
+      delete normalizedPayload.result;
+    }
+    const commitments = extractTaskCommitments(normalizedPayload);
+    extracted.push(...commitments);
+  }
+  return extracted.filter((commitment, index, all) => all.findIndex((item) =>
+    item.task_key === commitment.task_key &&
+    item.decision_key === commitment.decision_key &&
+    item.evidence?.digest === commitment.evidence?.digest
+  ) === index);
 }
 
 function resolveHome(value) {
@@ -241,6 +305,14 @@ export async function loadEnvFallbacks() {
     // inherit these values when that file is missing, unreadable, or incomplete.
     for (const key of INSTALLATION_CREDENTIAL_KEYS) delete process.env[key];
     for (const key of LEGACY_HOOK_CREDENTIAL_KEYS) delete process.env[key];
+    // The same rule applies to backend/mode switches.  In particular, do not
+    // let ORGBRAIN_ENABLE_CLOUD_MEMORY from the parent process override the
+    // local-only value in hooks.env or credentials.env.
+    for (const key of EXPLICIT_HOOK_MODE_KEYS) delete process.env[key];
+    // A missing or unreadable explicitly selected file must be inert. These
+    // defaults keep the hook from accidentally becoming an enabled local
+    // capture process after the inherited values were removed.
+    Object.assign(process.env, EXPLICIT_HOOK_SAFE_DEFAULTS);
   }
 
   for (const [index, file] of files.entries()) {
@@ -251,6 +323,8 @@ export async function loadEnvFallbacks() {
         if (configured && LEGACY_HOOK_CREDENTIAL_KEYS.has(key)) {
           continue;
         } else if (configured && INSTALLATION_CREDENTIAL_KEYS.has(key)) {
+          if (index === 0) process.env[key] = value;
+        } else if (configured && EXPLICIT_HOOK_MODE_KEYS.has(key)) {
           if (index === 0) process.env[key] = value;
         } else if (!process.env[key]) {
           process.env[key] = value;
@@ -1354,6 +1428,10 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     workspace_root: workspace.workspaceRoot,
     sensitive_policy: workspace.sensitiveMemory
   });
+  const planDecisionCandidates = buildPlanDecisionMemoryConfirmationCandidates(
+    extractPlanTaskCommitments(options.rows, record, workspace),
+    { projectId: workspace.projectId, sensitivePolicy: workspace.sensitiveMemory }
+  );
   // Rule proposals are hints for the one bounded LLM call. They are no longer
   // independently persisted as durable review candidates, because doing so
   // made the prefilter an irreversible final classifier.
@@ -1375,11 +1453,16 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       if (!references.length) return [];
       return [{
         ...draft, project_id: workspace.projectId, confirmation_only: true,
+        confirmation_prompt: "decision_signal",
         source_references: references,
         evidence: references.map((reference) => ({ type: "thread", ref: reference.ref })),
         external_key: `human-review:${draft.event_hash}`
       }];
     });
+  // Plan answers already have exact request_user_input evidence and are
+  // explicit task commitments. Offer them as a separate, low-friction
+  // promotion question without requiring rationale/alternatives up front.
+  const allConfirmationCandidates = [...planDecisionCandidates, ...confirmationCandidates];
   const operational = episodeDiscovery.operational_history;
   const operationalRecords = operational && workspace.projectId
     ? (() => {
@@ -1435,7 +1518,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     records,
     operationalRecords,
     reviewCandidates,
-    confirmationCandidates,
+    confirmationCandidates: allConfirmationCandidates,
     extractionRequest: extractionPacket ? {
       packet: extractionWirePacket,
       packet_hash: extractionPacket.packet_hash,
@@ -1447,8 +1530,8 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     report: {
       candidate_count: records.length,
       review_count: reviewCandidates.length,
-      confirmation_candidate_count: confirmationCandidates.length,
-      no_candidate: records.length === 0 && reviewCandidates.length === 0 && confirmationCandidates.length === 0 && hardExcluded.length === 0,
+      confirmation_candidate_count: allConfirmationCandidates.length,
+      no_candidate: records.length === 0 && reviewCandidates.length === 0 && allConfirmationCandidates.length === 0 && hardExcluded.length === 0,
       hard_excluded_count: hardExcluded.length,
       would_call_llm: Boolean(extractionPacket),
       routing: episodeDiscovery.routing,

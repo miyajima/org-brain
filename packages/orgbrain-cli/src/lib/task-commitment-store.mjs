@@ -173,7 +173,8 @@ function questionList(input) {
 
 function isMemoryQuestion(question) {
   return String(question?.id ?? "").startsWith(MEMORY_CONFIRMATION_QUESTION_PREFIX)
-    || /として保存しますか？ 結論:/u.test(question?.question ?? question?.title ?? "");
+    || /として保存しますか？ 結論:/u.test(question?.question ?? question?.title ?? "")
+    || /決定事項としてOrgBrainに記録しますか[？?]/u.test(question?.question ?? question?.title ?? "");
 }
 
 function isQuestionTool(name) {
