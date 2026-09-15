@@ -39,7 +39,7 @@ export const MEMORY_EXTRACTION_MAX_CANDIDATES = 3;
 const MAX_TRANSCRIPT_LINE_BYTES = 2 * 1024 * 1024;
 const MAX_TURN_BYTES = 8 * 1024 * 1024;
 
-const DECISION_SIGNAL = /\b(?:decid(?:e|ed)|adopt(?:ed)?|choose|chose|selected|standardize|switch(?:ed)?\s+to|will use|must use)\b|(?:決定|採用|選択|選定)(?:した|する|します|しました)|方針(?:とする|にした)|統一(?:する|した|します|しました)|切り替え(?:る|た|ます|ました)|これで進める/iu;
+const DECISION_SIGNAL = /\b(?:decid(?:e|ed)|adopt(?:ed)?|choose|chose|selected|standardize|switch(?:ed)?\s+to|(?:I|we)\s+(?:will|'ll)\s+(?:use|choose|pick|adopt|go\s+with)|will use|must use)\b|(?:決定|採用|選択|選定)(?:した|する|します|しました)|方針(?:とする|にした)|統一(?:する|した|します|しました)|切り替え(?:る|た|ます|ました)|(?:に|で|と)(?:し(?:た|ます|ました)|進め(?:る|ます|ました)|いき(?:ます|ました)|しておき(?:ます|ました))|これで進める/iu;
 const TRANSIENT_CHOICE = /(?:今回だけ|このターン|一時的|ひとまず|今だけ|for now|this time|temporary|one[- ]off)/iu;
 const DURABLE_SCOPE = /\b(?:implementation|architecture|api|schema|policy|governance|repository|project|organization|tenant|default|rule)\b|(?:実装|設計|API|スキーマ|方針|ルール|規約|組織|テナント|プロジェクト|既定|デフォルト)/iu;
 const FAILURE_SIGNAL = /\b(?:fail(?:ed|ure)?|error|regression|timed? out|did not work|broken|root cause)\b|(?:失敗|エラー|不具合|回帰|動かな(?:い|かった)|原因|タイムアウト)/iu;

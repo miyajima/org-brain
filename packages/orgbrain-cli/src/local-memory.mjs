@@ -960,7 +960,8 @@ async function main() {
     if (config.complete) await flushHookCaptureOutbox(config, 100).catch(() => undefined);
     process.stdout.write("{}\n");
   } else if (command === "hook" && ["codex-pre-tool", "codex-post-tool", "codex-pre-compact"].includes(action)) {
-    const { loadEnvFallbacks } = await import("./hook-memory-bridge.mjs");
+    const { loadEnvFallbacks, queueMemoryConfirmationCandidates } = await import("./hook-memory-bridge.mjs");
+    const { buildPlanDecisionMemoryConfirmationCandidates } = await import("./lib/memory-candidate-admission.mjs");
     const {
       TaskCommitmentStore,
       guardCodexQuestion,
@@ -1008,6 +1009,25 @@ async function main() {
       }
     } else if (action === "codex-post-tool") {
       const result = await commitmentStore.ingestToolResult(payload, tenantId);
+      const learningMode = String(mapping.entry?.memory_learning_mode ?? "off").trim().toLowerCase();
+      const localHookCaptureEnabled = process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== "false";
+      if (localHookCaptureEnabled && result.commitments?.length > 0 && ["confirm", "on", "shadow"].includes(learningMode)) {
+        // ingestToolResult returns upsert receipts; the candidate builder needs
+        // the committed task records themselves (the nested `commitment`).
+        const taskCommitments = result.commitments.map((item) => item?.commitment ?? item);
+        const memoryCandidates = buildPlanDecisionMemoryConfirmationCandidates(taskCommitments, {
+          projectId: payload.project_id ?? mapping.entry?.project_id ?? null,
+          sensitivePolicy: mapping.entry?.sensitive_memory ?? { mode: "deny", allowed_principals: [] }
+        });
+        if (memoryCandidates.length > 0) {
+          result.memory_confirmation_queue = await queueMemoryConfirmationCandidates({
+            tenantId,
+            projectId: payload.project_id ?? mapping.entry?.project_id ?? null,
+            taskPayload: payload,
+            candidates: memoryCandidates
+          });
+        }
+      }
       process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
     } else {
       if (!hasTaskIdentity(payload)) {

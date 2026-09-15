@@ -96,12 +96,21 @@ function completeCandidate(candidate) {
       reuseRule = observation.reuse_rule;
     }
   } else {
-    if (["user_choice", "preference"].includes(observation.decision_type)) return null;
+    // A task answer is already an explicit commitment for the current task,
+    // but it may still be worth asking whether it should become a reusable
+    // OrgBrain decision.  Keep ordinary user-choice observations out of this
+    // queue; the explicit confirmation-only lane is the opt-in promotion step.
+    if (["user_choice", "preference"].includes(observation.decision_type) && !decisionReview) return null;
     if (candidate.already_confirmed === true) return null;
     if (!decisionReview && (observation.evidence_selectors ?? []).some((item) => item?.type === "user_statement")) return null;
     const value = observation.selected_value ?? observation.decision ?? observation.conclusion;
     if (!hasText(value) || !decisionReview && !hasText(observation.rationale)) return null;
-    conclusion = value;
+    const sourceQuestion = decisionReview && hasText(candidate.source_question)
+      ? redact(candidate.source_question)
+      : "";
+    conclusion = sourceQuestion
+      ? compact(`質問: ${sourceQuestion}\n回答: ${redact(value)}`, 2_000)
+      : value;
     reason = observation.rationale || "未確認";
     reuseRule = observation.reuse_when || observation.reuse_rule || "未確認（このプロジェクトの判断として確認）";
   }
@@ -113,7 +122,10 @@ function completeCandidate(candidate) {
     reason: redact(reason),
     reuse_rule: redact(reuseRule),
     project_id: candidate.project_id ?? candidate.item?.project_id ?? null,
-    external_key: compact(redact(candidate.external_key ?? candidate.item?.external_key), 256) || null
+    external_key: compact(redact(candidate.external_key ?? candidate.item?.external_key), 256) || null,
+    ...(candidate.confirmation_prompt ? { confirmation_prompt: compact(candidate.confirmation_prompt, 64) } : {}),
+    ...(candidate.source_question ? { source_question: redact(candidate.source_question) } : {}),
+    ...(candidate.source_answer ? { source_answer: redact(candidate.source_answer) } : {})
   };
   if (!safe.conclusion || !safe.reason || !safe.reuse_rule) return null;
   return {
@@ -130,7 +142,10 @@ function completeCandidate(candidate) {
       conclusion: safe.conclusion,
       reason: safe.reason,
       reuse_rule: safe.reuse_rule,
-      project_id: safe.project_id
+      project_id: safe.project_id,
+      confirmation_prompt: safe.confirmation_prompt ?? null,
+      source_question: safe.source_question ?? null,
+      source_answer: safe.source_answer ?? null
     })
   };
 }
@@ -147,10 +162,20 @@ export function prepareMemoryConfirmationCandidates(candidates) {
 }
 
 export function memoryConfirmationQuestion(candidate) {
+  const decisionPrompt = ["decision_signal", "plan_answer"].includes(candidate.confirmation_prompt);
+  const subject = compact(candidate.source_answer || candidate.conclusion, 500);
+  const sourceQuestion = compact(candidate.source_question, 500);
+  const reason = candidate.reason && candidate.reason !== "未確認" ? ` 理由: ${compact(candidate.reason, 500)}` : "";
+  const reuseRule = candidate.reuse_rule && !candidate.reuse_rule.startsWith("未確認")
+    ? ` 再利用条件: ${compact(candidate.reuse_rule, 500)}`
+    : "";
+  const question = decisionPrompt
+    ? `直前の会話の「${subject}」${sourceQuestion ? `（質問: ${sourceQuestion}）` : ""}${reason}${reuseRule}は、決定事項としてOrgBrainに記録しますか？ 組織・プロジェクトの恒久的な方針かは、保存後に確認できます。`
+    : `${candidate.category_label}として保存しますか？ 結論: ${candidate.conclusion} 理由: ${candidate.reason} 再利用条件: ${candidate.reuse_rule} 修正して保存する場合は「修正: 内容」と回答してください。`;
   return {
     header: candidate.category_label.slice(0, 12),
     id: `${MEMORY_CONFIRMATION_QUESTION_PREFIX}${candidate.id.replace(/^memory-confirmation:/u, "").slice(0, 24)}`,
-    question: `${candidate.category_label}として保存しますか？ 結論: ${candidate.conclusion} 理由: ${candidate.reason} 再利用条件: ${candidate.reuse_rule} 修正して保存する場合は「修正: 内容」と回答してください。`,
+    question,
     options: [
       { label: "保存する (Recommended)", description: "表示した結論と理由をOrgBrainへ保存します。" },
       { label: "今回は保存しない", description: "保存せず、同じ候補は再確認しません。内容の誤りとは扱いません。" },
@@ -171,6 +196,11 @@ export function formatMemoryConfirmationContext(candidates, {backend="remote",wo
     work_type: workType,
     external_key: candidate.external_key,
     category: candidate.category,
+    conclusion: candidate.conclusion,
+    reason_summary: candidate.reason,
+    reuse_rule: candidate.reuse_rule,
+    ...(candidate.source_question ? { source_question: candidate.source_question } : {}),
+    ...(candidate.source_answer ? { source_answer: candidate.source_answer } : {}),
     source_references: candidate.source_references ?? [],
     ...(candidate.remote_confirmation_id ? { confirmation_token: candidate.remote_confirmation_id } : {}),
     tags: ["user-confirmed-learning", candidate.category]

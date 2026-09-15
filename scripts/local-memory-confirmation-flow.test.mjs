@@ -8,6 +8,7 @@ import {Client} from '@modelcontextprotocol/client';
 import {StdioClientTransport,getDefaultEnvironment} from '@modelcontextprotocol/client/stdio';
 import {LocalMemoryStore} from '../packages/orgbrain-cli/src/lib/local-memory-store.mjs';
 import {TaskCommitmentStore} from '../packages/orgbrain-cli/src/lib/task-commitment-store.mjs';
+import {memoryConfirmationQuestion} from '../packages/orgbrain-cli/src/lib/memory-confirmation-hints.mjs';
 import {handleLocalMcpRequest} from '../packages/orgbrain-cli/src/local-mcp.mjs';
 
 async function callLocalMcpTool(store,name,input) {
@@ -29,7 +30,7 @@ test('local Stop → prompt → question → approval → durable MCP receipt �
   let connection;
   try {
     const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'empty.env'),transcript=join(root,'turn.jsonl');
-    await writeFile(envFile,'');
+    await writeFile(envFile,'ORGBRAIN_LOCAL_HOOK_CAPTURE=true\n');
     await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',default_work_type:'implementation',memory_learning_mode:'confirm',memory_capture_v2_mode:'on'}}}));
     const networkMarker=join(root,'network-called');
     const guard=join(root,'no-network.mjs');
@@ -126,5 +127,38 @@ test('local review rejects ambiguous approvals, preserves corrections, and never
       assert.equal((await callLocalMcpTool(store,'orgbrain_memories_confirmation_status',{tenant_id:'t',confirmation_token:proposed.confirmation_token})).review_label,label);
     }
     assert.equal((await memories(store,'t')).length,1);
+  } finally {await rm(root,{recursive:true,force:true});}
+});
+
+test('local PostToolUse plan answers queue a broad decision-memory confirmation',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'local-plan-confirmation-'));
+  try {
+    const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'empty.env');
+    await writeFile(envFile,'ORGBRAIN_LOCAL_HOOK_CAPTURE=true\n');
+    await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',default_work_type:'implementation',memory_learning_mode:'confirm',memory_capture_v2_mode:'on'}}}));
+    const env={...getDefaultEnvironment(),ORGBRAIN_HOOK_ENV_FILES:envFile,ORGBRAIN_WORKSPACES_FILE:workspaces,ORGBRAIN_LOCAL_DB:dbPath,
+      ORGBRAIN_ENABLE_CLOUD_MEMORY:'false',ORGBRAIN_ENABLE_ORG_SHARING:'false',ORGBRAIN_MEMORY_EXTRACTION_MODE:'off',ORGBRAIN_USE_SYNC:'off',ORGBRAIN_USE_COLLECT:'off',ORGBRAIN_USE_CONTEXT:'off',ORGBRAIN_USE_RANKING:'off',ORGBRAIN_TENANT_ID:'tenant'};
+    const hook=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'hook','codex-post-tool'],{env,input:JSON.stringify({
+      hook_event_name:'PostToolUse',session_id:'plan-session',turn_id:'plan-turn',cwd:root,
+      tool_name:'request_user_input',
+      tool_input:{questions:[{id:'agent_rollout',question:'どのAgentから認証しますか？',options:[
+        {label:'Codex先行',description:'Codexで先に進めます。'},
+        {label:'Claude先行',description:'Claudeで先に進めます。'}
+      ]}]},
+      tool_result:{answers:{agent_rollout:'Codex先行'}}
+    }),encoding:'utf8'}));
+    assert.equal(hook.ok,true);
+    assert.equal(hook.commitments.length,1);
+    assert.equal(hook.memory_confirmation_queue.length,1);
+    assert.equal(hook.memory_confirmation_queue[0].created,true);
+    const queue=new TaskCommitmentStore(dbPath);
+    const [candidate]=await queue.takeMemoryConfirmationBatch({tenantId:'tenant',projectId:'project',taskKey:'codex:plan-session',deliverySessionKey:'codex:plan-session'});
+    assert.ok(candidate);
+    assert.equal(candidate.confirmation_prompt,'plan_answer');
+    assert.equal(candidate.conclusion,'質問: どのAgentから認証しますか? 回答: Codex先行');
+    assert.equal(candidate.source_question,'どのAgentから認証しますか?');
+    assert.match(memoryConfirmationQuestion(candidate).question,/直前の会話の「Codex先行」.*決定事項としてOrgBrainに記録しますか？/u);
+    assert.match(memoryConfirmationQuestion(candidate).question,/保存後に確認できます。/u);
+    assert.equal((await memories(new LocalMemoryStore(dbPath),'tenant')).length,0);
   } finally {await rm(root,{recursive:true,force:true});}
 });

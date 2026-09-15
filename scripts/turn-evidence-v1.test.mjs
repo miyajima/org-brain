@@ -104,6 +104,24 @@ test("durable implementation decision may omit decision_type only as an explicit
   assert.equal(decision.reason_codes.includes("inferred_unconfirmed"), true);
 });
 
+test("broad Japanese commitment phrasing enters the review queue", async () => {
+  const evidence = await buildTurnEvidenceV1({
+    rows: [
+      message("user", "認証方式はOAuthにします。"),
+      message("assistant", "了解しました。", "final_answer")
+    ],
+    session_hash: "session",
+    turn_hash: "broad-japanese-decision",
+    project_id: "org-brain"
+  });
+  const discovery = await discoverLearningEpisodes(evidence);
+  const decision = discovery.review_drafts.find((item) => item.observation.lesson_type === "decision");
+  assert.ok(decision);
+  assert.equal(discovery.routing.decisions.durable_candidate, true);
+  assert.equal(decision.observation.decision, "認証方式はOAuthにします。");
+  assert.equal(decision.reason_codes.includes("explicit_user_decision_search"), true);
+});
+
 test("temporary task choices and non-durable chatter do not become candidates", async () => {
   const evidence = await buildTurnEvidenceV1({
     rows: [

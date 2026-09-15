@@ -25,6 +25,7 @@ import {
 } from "../packages/orgbrain-cli/src/hook-memory-bridge.mjs";
 import { resolveMemoryMode } from "../packages/orgbrain-cli/src/lib/memory-mode.mjs";
 import { TaskCommitmentStore } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
+import { memoryConfirmationQuestion } from "../packages/orgbrain-cli/src/lib/memory-confirmation-hints.mjs";
 
 describe("hook-memory-bridge promotion", () => {
   it("accepts the shared harness compatibility fixture without a special envelope", async () => {
@@ -524,7 +525,13 @@ describe("hook-memory-bridge promotion", () => {
       "ORGBRAIN_TENANT_ID",
       "ORGBRAIN_API_URL",
       "ORGBRAIN_API_BASE",
-      "ORGBRAIN_API_KEY"
+      "ORGBRAIN_API_KEY",
+      "ORGBRAIN_ENABLE_CLOUD_MEMORY",
+      "ORGBRAIN_ENABLE_ORG_SHARING",
+      "ORGBRAIN_LOCAL_CONTEXT_ENABLED",
+      "ORGBRAIN_LOCAL_HOOK_CAPTURE",
+      "ORGBRAIN_MEMORY_CAPTURE_V2_MODE",
+      "ORGBRAIN_MEMORY_COMMITMENTS_MODE"
     ];
     const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
     Object.assign(process.env, {
@@ -547,6 +554,52 @@ describe("hook-memory-bridge promotion", () => {
         if (previous[key] === undefined) delete process.env[key];
         else process.env[key] = previous[key];
       }
+    }
+  });
+
+  it("prefers explicit hook backend mode over inherited cloud flags", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-mode-priority-"));
+    const envFile = path.join(directory, "hooks.env");
+    const dbPath = path.join(directory, "memory.sqlite");
+    await writeFile(envFile, [
+      "ORGBRAIN_ENABLE_CLOUD_MEMORY=false",
+      "ORGBRAIN_ENABLE_ORG_SHARING=false",
+      "ORGBRAIN_LOCAL_CONTEXT_ENABLED=true",
+      "ORGBRAIN_LOCAL_HOOK_CAPTURE=true",
+      `ORGBRAIN_LOCAL_DB=${dbPath}`
+    ].join("\n"), { mode: 0o600 });
+    const keys = [
+      "ORGBRAIN_HOOK_ENV_FILES",
+      "ORGBRAIN_ENABLE_CLOUD_MEMORY",
+      "ORGBRAIN_ENABLE_ORG_SHARING",
+      "ORGBRAIN_LOCAL_CONTEXT_ENABLED",
+      "ORGBRAIN_LOCAL_HOOK_CAPTURE",
+      "ORGBRAIN_LOCAL_DB"
+    ];
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      ORGBRAIN_HOOK_ENV_FILES: envFile,
+      ORGBRAIN_ENABLE_CLOUD_MEMORY: "1",
+      ORGBRAIN_ENABLE_ORG_SHARING: "1",
+      ORGBRAIN_LOCAL_CONTEXT_ENABLED: "false",
+      ORGBRAIN_LOCAL_HOOK_CAPTURE: "false"
+    });
+    try {
+      await loadEnvFallbacks();
+      expect(resolveMemoryMode(process.env)).toMatchObject({
+        cloudMemoryEnabled: false,
+        orgSharingEnabled: false,
+        scope: "local"
+      });
+      expect(process.env.ORGBRAIN_LOCAL_CONTEXT_ENABLED).toBe("true");
+      expect(process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE).toBe("true");
+      expect(process.env.ORGBRAIN_LOCAL_DB).toBe(dbPath);
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+      await rm(directory, { recursive: true, force: true });
     }
   });
 
@@ -583,6 +636,16 @@ describe("hook-memory-bridge promotion", () => {
       expect(process.env.ORGBRAIN_CLIENT_INSTALLATION_ID).toBeUndefined();
       expect(resolveApiBase(process.env)).toBe("");
       expect(process.env.ORGBRAIN_API_KEY).toBeUndefined();
+      expect(resolveMemoryMode(process.env)).toMatchObject({
+        cloudMemoryEnabled: false,
+        orgSharingEnabled: false,
+        cloudWritesAllowed: false,
+        scope: "local"
+      });
+      expect(process.env.ORGBRAIN_LOCAL_CONTEXT_ENABLED).toBe("false");
+      expect(process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE).toBe("false");
+      expect(process.env.ORGBRAIN_MEMORY_CAPTURE_V2_MODE).toBe("off");
+      expect(process.env.ORGBRAIN_MEMORY_COMMITMENTS_MODE).toBe("off");
     } finally {
       for (const key of keys) {
         if (previous[key] === undefined) delete process.env[key];
@@ -1110,6 +1173,105 @@ describe("hook-memory-bridge promotion", () => {
     expect(prepared.reviewCandidates).toEqual([]);
     expect(prepared.operationalRecords).toHaveLength(1);
     expect(prepared.extractionRequest?.packet.schema).toBe("learning-extraction-proposal/v2");
+  });
+
+  it("offers plan answers as explicit decision-memory confirmations", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-plan-decision-confirmation-"));
+    try {
+      const dbPath = path.join(directory, "memory.sqlite");
+      const input = {
+        questions: [{
+          id: "agent_rollout",
+          question: "どのAgentから認証しますか？",
+          options: [{ id: "codex_first", label: "Codex先行" }, { id: "all", label: "全Agent" }]
+        }]
+      };
+      const record = normalizeRecord("codex-stop", JSON.stringify({
+        hook_event_name: "Stop",
+        cwd: "/tmp/workspaces/org-brain",
+        session_id: "plan-session",
+        turn_id: "plan-turn",
+        last_assistant_message: "回答を反映して進めます。"
+      }));
+      const prepared = await prepareMemoryRecordsV2(record, {
+        tenantId: "default",
+        projectId: "org-brain",
+        businessCategoryId: null,
+        workType: "implementation",
+        workspaceRoot: "/tmp/workspaces/org-brain",
+        sensitiveMemory: { mode: "deny", allowed_principals: [] }
+      }, "default", {
+        rows: [{
+          type: "mcp_tool_call_end",
+          call_id: "request-1",
+          invocation: { tool: "request_user_input", arguments: input },
+          result: { Ok: { answers: { agent_rollout: "Codex先行" } } }
+        }],
+        requireFullTurn: true
+      });
+      expect(prepared.confirmationCandidates).toHaveLength(1);
+      expect(prepared.confirmationCandidates[0]).toMatchObject({
+        confirmation_only: true,
+        confirmation_prompt: "plan_answer",
+        project_id: "org-brain"
+      });
+      const queued = await queueMemoryConfirmationCandidates({
+        dbPath,
+        tenantId: "default",
+        projectId: "org-brain",
+        taskPayload: { session_id: "plan-session" },
+        candidates: prepared.confirmationCandidates
+      });
+      expect(queued).toHaveLength(1);
+      const [candidate] = await new TaskCommitmentStore(dbPath).takeMemoryConfirmationBatch({
+        tenantId: "default",
+        projectId: "org-brain",
+        taskKey: "codex:plan-session",
+        deliverySessionKey: "codex:plan-session"
+      });
+      expect(candidate).toMatchObject({
+        conclusion: "質問: どのAgentから認証しますか? 回答: Codex先行",
+        source_question: "どのAgentから認証しますか?"
+      });
+      expect(memoryConfirmationQuestion(candidate).question).toContain("直前の会話の「Codex先行」");
+      expect(memoryConfirmationQuestion(candidate).question).toContain("決定事項としてOrgBrainに記録しますか？");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not queue plan answers that fail the shared sensitive-memory screen", async () => {
+    const input = {
+      questions: [{
+        id: "credential_choice",
+        question: "どの認証情報を使いますか？",
+        options: [{ label: `sk-proj-${"x".repeat(32)}` }]
+      }]
+    };
+    const record = normalizeRecord("codex-stop", JSON.stringify({
+      hook_event_name: "Stop",
+      cwd: "/tmp/workspaces/org-brain",
+      session_id: "plan-sensitive",
+      turn_id: "plan-sensitive-turn",
+      last_assistant_message: "回答を反映して進めます。"
+    }));
+    const prepared = await prepareMemoryRecordsV2(record, {
+      tenantId: "default",
+      projectId: "org-brain",
+      businessCategoryId: null,
+      workType: "implementation",
+      workspaceRoot: "/tmp/workspaces/org-brain",
+      sensitiveMemory: { mode: "deny", allowed_principals: [] }
+    }, "default", {
+      rows: [{
+        type: "mcp_tool_call_end",
+        call_id: "request-sensitive",
+        invocation: { tool: "request_user_input", arguments: input },
+        result: { Ok: { answers: { credential_choice: input.questions[0].options[0].label } } }
+      }],
+      requireFullTurn: true
+    });
+    expect(prepared.confirmationCandidates).toEqual([]);
   });
 
   it("emits coverage/v1 only when explicitly selected and reserves both passes", async () => {
