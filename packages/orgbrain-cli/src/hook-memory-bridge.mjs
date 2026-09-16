@@ -31,7 +31,7 @@ import {
   collectVerifiedLearningEvents,
   collectVerifiedLearningEventsFromRows
 } from "./lib/memory-learning-transcript.mjs";
-import { prepareMemoryConfirmationCandidates } from "./lib/memory-confirmation-hints.mjs";
+import { memoryConfirmationQuestion, prepareMemoryConfirmationCandidates } from "./lib/memory-confirmation-hints.mjs";
 import { buildPlanDecisionMemoryConfirmationCandidates } from "./lib/memory-candidate-admission.mjs";
 import {
   buildLearningExtractionPacket,
@@ -726,7 +726,8 @@ function buildCodexStopRecord(payloadText, parsed) {
       turnId,
       transcriptPath: firstString(parsed?.transcript_path),
       modelProvider: firstString(parsed?.model_provider, parsed?.provider),
-      model: firstString(parsed?.model)
+      model: firstString(parsed?.model),
+      stopHookActive: parsed?.stop_hook_active === true
     }
   });
 }
@@ -1344,6 +1345,70 @@ export function captureItemPayload(record) {
     ...(record.verification ? { verification: record.verification } : {}),
     ...(record.qualityDimensions ? { quality_dimensions: record.qualityDimensions } : {})
   };
+}
+
+function deterministicRecordConfirmationCandidate(record) {
+  if (!record || typeof record !== "object") return null;
+  const evidence = Array.isArray(record.evidence) ? record.evidence.slice(0, 3) : [];
+  if (!record.content || !record.rationale || !record.reuseRule || evidence.length === 0) return null;
+  const common = {
+    external_key: record.externalKey,
+    project_id: record.projectId,
+    verification: { state: "verified", evidence },
+    evidence,
+    source_references: Array.isArray(record.sourceReferences) ? record.sourceReferences.slice(0, 3) : [],
+    observation: {
+      schema_version: 2,
+      capture_intent: "verify",
+      evidence_selectors: evidence,
+      gaps: []
+    }
+  };
+  if (record.kind === "procedure") {
+    return {
+      ...common,
+      observation: {
+        ...common.observation,
+        lesson_type: "success",
+        procedure: record.content,
+        why_it_worked: record.rationale,
+        observed_outcome: record.summary || record.content,
+        reuse_when: record.reuseRule
+      }
+    };
+  }
+  if (record.kind === "pitfall") {
+    return {
+      ...common,
+      observation: {
+        ...common.observation,
+        lesson_type: "failure",
+        symptom: record.summary || record.content,
+        failed_approach: record.summary || record.content,
+        root_cause: record.rationale,
+        correction: record.content,
+        verified_outcome: record.summary || record.content,
+        avoidance_rule: record.reuseRule
+      }
+    };
+  }
+  return {
+    ...common,
+    confirmation_only: true,
+    observation: {
+      ...common.observation,
+      lesson_type: "decision",
+      decision_type: record.kind === "preference" ? "preference" : "policy",
+      selected_value: record.content,
+      rationale: record.rationale,
+      reuse_when: record.reuseRule
+    }
+  };
+}
+
+function isMemoryConfirmationFlowArtifact(candidate) {
+  const value = JSON.stringify(candidate ?? {});
+  return /orgbrain_memory_confirmation_|<hook_prompt>|OrgBrainに記録しますか[？?]|保存する \(Recommended\)/u.test(value);
 }
 
 export async function prepareMemoryRecordsV2(record, workspace, tenantId, options = {}) {
@@ -2020,7 +2085,8 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
       await new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB).recordHookActivity({
         ...activityScope, event: inputSourceName, status: { memory_use:memoryUseReport, ok: result.ok, mode: result.mode ?? null, skipped: result.skipped ?? null,
-          confirmation_candidates: result.confirmation_candidates ?? confirmationQueue.length }
+          confirmation_candidates: result.confirmation_candidates ?? confirmationQueue.length,
+          continuation_requested: result.confirmation_continuation === true }
       });
     }
     if (options.emit !== false) console.log(JSON.stringify(result));
@@ -2039,7 +2105,11 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const normalizedRecord = normalizeRecord(inputSourceName, payloadText);
   const prepared = prepareMemoryRecordForUpsert(inputSourceName, payloadText);
   const workspaceRecord = prepared.action === "promote" ? prepared.record : normalizedRecord;
-  const workspace = await resolveWorkspaceContext(workspaceRecord, { memoryMode });
+  const nonInteractiveHook = ["codex-stop", "claude", "cursor"].includes(inputSourceName);
+  const workspace = await resolveWorkspaceContext(workspaceRecord, {
+    memoryMode,
+    ...(nonInteractiveHook ? { prompt: false } : {})
+  });
   tenantId = workspace.tenantId;
   activityScope = { tenantId, projectId: workspace.projectId };
   if (inputSourceName === "codex-stop") {
@@ -2062,11 +2132,18 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let confirmationQueue = [];
   const queueConfirmations = async () => {
     if (inputSourceName !== "codex-stop") return [];
+    const deterministicCandidates = workspace.memoryLearningMode === "confirm"
+      ? (extractionPrepared?.records ?? []).map(deterministicRecordConfirmationCandidate).filter(Boolean)
+      : [];
     return queueMemoryConfirmationCandidates({
       tenantId,
       projectId: workspace.projectId,
       taskPayload: normalizedRecord.metadata ?? normalizedRecord,
-      candidates: [...learningReviewCandidates, ...(extractionPrepared?.confirmationCandidates ?? [])]
+      candidates: [
+        ...learningReviewCandidates,
+        ...(extractionPrepared?.confirmationCandidates ?? []),
+        ...deterministicCandidates
+      ].filter((candidate) => !isMemoryConfirmationFlowArtifact(candidate))
     });
   };
   const extractionMode = workspace.memoryLearningMode === "confirm" ? "off" : process.env.ORGBRAIN_MEMORY_EXTRACTION_MODE ?? "off";
@@ -2145,10 +2222,23 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     // automatic memory capture or provider enqueue. A later human answer
     // authorizes the interactive Remote MCP write separately.
     confirmationQueue = await queueConfirmations();
+    const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+    const { TaskCommitmentStore, taskKeyFromHookPayload } = await import("./lib/task-commitment-store.mjs");
+    const confirmationStore = new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+    const taskKey = taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord);
+    const confirmationBatch = await confirmationStore.takeMemoryConfirmationBatch({
+      tenantId,
+      projectId: workspace.projectId,
+      taskKey,
+      deliverySessionKey: taskKey
+    });
+    const confirmationContinuation = confirmationBatch.length > 0 && normalizedRecord.metadata?.stopHookActive !== true;
     return finish({ ok: true, source: sourceName, tenant_id: tenantId,
       mode: "confirmation-only", inserted: 0,
-      confirmation_candidates: confirmationQueue.length,
-      confirmation_queue_count: confirmationQueue.filter((item) => item.created).length });
+      confirmation_candidates: confirmationBatch.length,
+      confirmation_questions: confirmationBatch.map(memoryConfirmationQuestion),
+      confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
+      confirmation_continuation: confirmationContinuation });
   }
   if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "on") {
     const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");

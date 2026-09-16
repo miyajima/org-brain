@@ -13,12 +13,16 @@ This repository owns all memory extraction and quality decisions. The shared Ast
   backwards read capped at 4 MiB), verifies successful observe calls against
   real tool/file/user evidence, and sends at most one batch to the known
   capture tool. It does not invoke an LLM, `tools/list`, or tool discovery.
-- Stop remains silent. Fully supported success/failure candidates and source-backed
+- Stop remains silent when no confirmation candidate exists. When confirm mode
+  queues at least one candidate, Codex Stop returns one blocking continuation so
+  the same turn can present the confirmation; `stop_hook_active` suppresses any
+  second continuation. Fully supported success/failure candidates and source-backed
   decision questions have separate eligibility gates. Decision questions may
   explicitly show unknown rationale or reuse conditions; this does not attest a
   command or adopt the candidate as verified learning. It queues at most three redacted
-  confirmation candidates in the private local hook database. The next
-  substantive UserPromptSubmit for that task may inject one confirmation batch,
+  confirmation candidates in the private local hook database. The automatic
+  continuation or next substantive UserPromptSubmit for that task may inject
+  one confirmation batch,
   and no session receives more than one batch.
 - Interactive confirmation uses `request_user_input` in Plan mode and
   `request_user_input_async` in ordinary work. An offer is not a shown question,
