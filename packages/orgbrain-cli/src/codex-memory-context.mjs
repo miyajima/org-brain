@@ -206,6 +206,18 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   const commitmentStore = options.commitmentStore ?? new TaskCommitmentStore(
     options.commitmentDbPath || options.store?.dbPath || env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB
   );
+  const directReviewResolutions = hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent
+    ? await commitmentStore.resolveMemoryConfirmationsFromPrompt({
+      tenantId: scope.tenantId,
+      projectId: projectIdFromPayload(payload, scope),
+      taskKey: memoryConfirmationSessionKey(payload, taskKey),
+      deliverySessionKey: memoryConfirmationSessionKey(payload, taskKey),
+      prompt
+    }).catch(() => [])
+    : [];
+  if (directReviewResolutions.length > 0) {
+    contextParts.push("OrgBrain memory confirmation: the user's explicit negative or not-decided answer was recorded locally. Do not ask the same memory question again, and do not save the candidate.");
+  }
   let localCommitments = taskIdentityPresent ? await commitmentStore.list({
     tenantId: scope.tenantId,
     projectId: projectIdFromPayload(payload, scope),
@@ -239,7 +251,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   if (hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent && ["on", "shadow", "confirm"].includes(scope.learningMode)) {
     const confirmationSessionKey = memoryConfirmationSessionKey(payload, taskKey);
     let queueError = null;
-    const confirmationCandidates = await commitmentStore.takeMemoryConfirmationBatch({
+    const confirmationCandidates = directReviewResolutions.length > 0 ? [] : await commitmentStore.takeMemoryConfirmationBatch({
       tenantId: scope.tenantId,
       projectId: projectIdFromPayload(payload, scope),
       taskKey: confirmationSessionKey,

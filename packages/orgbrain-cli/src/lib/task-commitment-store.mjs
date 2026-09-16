@@ -750,6 +750,45 @@ export class TaskCommitmentStore {
     }
   }
 
+  async resolveMemoryConfirmationsFromPrompt({
+    tenantId = "default", projectId = null, taskKey, deliverySessionKey = taskKey, prompt, now = Date.now(), limit = 3
+  } = {}) {
+    if (!taskKey || !deliverySessionKey) return [];
+    const normalized = normalizeAnswer(prompt, []);
+    if (!normalized) return [];
+    const label = classifyMemoryReviewAnswer(normalized.raw);
+    if (!["not_needed", "not_decided"].includes(label)) return [];
+    await this.init();
+    const db = this.open();
+    const resolved = [];
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      const rows = db.prepare(`SELECT * FROM memory_confirmation_prompts
+        WHERE tenant_id = ? AND state IN ('pending','delivered') AND offered_at IS NOT NULL AND expires_at > ?
+          AND (task_key = ? OR delivery_session_key = ?)
+          AND ((? IS NULL AND project_id IS NULL) OR (? IS NOT NULL AND project_id = ?))
+        ORDER BY created_at ASC, id ASC LIMIT ?`).all(
+        tenantId, now, taskKey, deliverySessionKey, projectId, projectId, projectId,
+        Math.max(1, Math.min(3, Number(limit) || 3))
+      );
+      for (const row of rows) {
+        appendMemoryLabel(db, row, label, normalized, now);
+        db.prepare(`UPDATE memory_confirmation_prompts SET state = 'rejected', response_json = ?, answer_label = ?,
+          delivered_at = COALESCE(delivered_at, offered_at, ?), resolved_at = ?, save_state = 'not_requested'
+          WHERE id = ?`).run(redactedJson(normalized), label, now, now, row.id);
+        resolved.push({ id: row.id, state: "rejected", label, saved: false });
+      }
+      db.exec("COMMIT");
+      return resolved;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      db.close();
+      await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
   async resolveMemoryConfirmationsFromToolResult(payloadInput, tenantId = "default", now = Date.now()) {
     const { payload, input, toolName } = toolInputFromPayload(payloadInput);
     if (!isQuestionTool(toolName) || !hasTaskIdentity(payload)) return [];

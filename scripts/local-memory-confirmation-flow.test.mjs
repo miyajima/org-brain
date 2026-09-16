@@ -45,7 +45,12 @@ test('local Stop → prompt → question → approval → durable MCP receipt �
       {type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'認証APIはOAuthを使う方針です。'}]}}
     ];
     await writeFile(transcript,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
-    assert.deepEqual(hook('codex-stop',{turn_id:'turn-review',transcript_path:transcript,last_assistant_message:'認証APIはOAuthを使う方針です。'}),{});
+    const stopOutput=hook('codex-stop',{turn_id:'turn-review',transcript_path:transcript,last_assistant_message:'認証APIはOAuthを使う方針です。'});
+    assert.equal(stopOutput.decision,'block');
+    assert.match(stopOutput.reason,/保存確認待ち/);
+    assert.match(stopOutput.reason,/通常のassistant本文/);
+    assert.match(stopOutput.reason,/OAuth/);
+    assert.doesNotMatch(stopOutput.reason,/利用できる質問ツール/);
     const store=new LocalMemoryStore(dbPath);
     assert.equal((await memories(store,'tenant')).length,0);
     const queue=new TaskCommitmentStore(dbPath);
@@ -127,6 +132,23 @@ test('local review rejects ambiguous approvals, preserves corrections, and never
       assert.equal((await callLocalMcpTool(store,'orgbrain_memories_confirmation_status',{tenant_id:'t',confirmation_token:proposed.confirmation_token})).review_label,label);
     }
     assert.equal((await memories(store,'t')).length,1);
+  } finally {await rm(root,{recursive:true,force:true});}
+});
+
+test('plain-text negative answer resolves offered confirmations without a question tool',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'local-plain-decline-'));
+  try {
+    const queue=new TaskCommitmentStore(join(root,'memory.sqlite'));
+    await queue.queueMemoryConfirmations({tenantId:'tenant',projectId:'project',taskKey:'codex:session',candidates:[{
+      candidate_hash:'b'.repeat(64),category:'decision',conclusion:'テスト候補',reason:'テスト',reuse_rule:'テスト時',source_references:[]
+    }]});
+    await queue.takeMemoryConfirmationBatch({tenantId:'tenant',projectId:'project',taskKey:'codex:session',deliverySessionKey:'codex:session'});
+    const resolved=await queue.resolveMemoryConfirmationsFromPrompt({tenantId:'tenant',projectId:'project',taskKey:'codex:session',prompt:'今回は保存しない'});
+    assert.equal(resolved.length,1);
+    assert.equal(resolved[0].label,'not_needed');
+    const status=await queue.memoryReviewStatus({tenantId:'tenant',projectId:'project'});
+    assert.equal(status.states[0].state,'rejected');
+    assert.equal(status.states[0].save_state,'not_requested');
   } finally {await rm(root,{recursive:true,force:true});}
 });
 

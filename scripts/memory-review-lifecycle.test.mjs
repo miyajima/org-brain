@@ -83,9 +83,16 @@ test('confirmation-only Stop queues a decision without automatic writes even wit
     await writeFile(workspaceFile, JSON.stringify({ version: 3, workspaces: { [root]: { tenant_id: 'tenant', project_id: 'project', memory_learning_mode: 'confirm', memory_capture_v2_mode: 'on' } } }));
     const env = { ...process.env, ORGBRAIN_HOOK_ENV_FILES: envFile, ORGBRAIN_WORKSPACES_FILE: workspaceFile,
       ORGBRAIN_LOCAL_DB: path.join(root, 'state.db'), ORGBRAIN_ENABLE_CLOUD_MEMORY: 'true', ORGBRAIN_ENABLE_ORG_SHARING: 'true', ORGBRAIN_MEMORY_EXTRACTION_MODE: 'on', ORGBRAIN_MCP_URL: 'https://must-not-contact.invalid/mcp', ORGBRAIN_MCP_CLIENT_ID: 'test-client', ORGBRAIN_MCP_CLIENT_SECRET: 'fixture-secret', ORGBRAIN_TENANT_ID: 'tenant' };
+    const hookInput = { session_id: 'session', turn_id: 'turn-review', cwd: root, transcript_path: transcript, last_assistant_message: '認証APIはOAuthを使う方針です。' };
     const output = execFileSync(process.execPath, ['--no-warnings', 'packages/orgbrain-cli/src/local-memory.mjs', 'hook', 'codex-stop'], { env,
-      input: JSON.stringify({ session_id: 'session', turn_id: 'turn-review', cwd: root, transcript_path: transcript, last_assistant_message: '認証APIはOAuthを使う方針です。' }), encoding: 'utf8' });
-    assert.deepEqual(JSON.parse(output), {});
+      input: JSON.stringify(hookInput), encoding: 'utf8' });
+    assert.equal(JSON.parse(output).decision, 'block');
+    assert.match(JSON.parse(output).reason, /保存確認待ち/);
+    assert.match(JSON.parse(output).reason, /通常のassistant本文/);
+    assert.match(JSON.parse(output).reason, /OAuth/);
+    const continuedOutput = execFileSync(process.execPath, ['--no-warnings', 'packages/orgbrain-cli/src/local-memory.mjs', 'hook', 'codex-stop'], { env,
+      input: JSON.stringify({ ...hookInput, stop_hook_active: true }), encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(continuedOutput), {});
     const store = new TaskCommitmentStore(env.ORGBRAIN_LOCAL_DB);
     const report = await store.memoryReviewStatus({ tenantId: 'tenant', projectId: 'project' });
     assert.equal(report.activity[0].event, 'codex-stop');
@@ -96,5 +103,56 @@ test('confirmation-only Stop queues a decision without automatic writes even wit
     assert.equal(batch[0].reason, '未確認');
     assert.equal(batch[0].source_references[0].role, 'user');
     assert.match(batch[0].source_references[0].content_hash, /^sha256:[a-f0-9]{64}$/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('confirmation-only Stop offers deterministic durable records without an observe tool call', async () => {
+  const { writeFile } = await import('node:fs/promises');
+  const root = await mkdtemp(path.join(tmpdir(), 'review-deterministic-stop-'));
+  try {
+    const transcript = path.join(root, 'turn.jsonl');
+    const answer = [
+      '## Conclusion',
+      'ORGBRAIN_API_URLを唯一の正規API環境変数として採用する。',
+      '',
+      '## Reason',
+      'connectorとhookの接続先が分岐しないため。',
+      '',
+      '## Reuse',
+      '新しいconnectorまたはhookを追加するとき。',
+      '',
+      '## Evidence',
+      'docs/SPEC.md'
+    ].join('\n');
+    await writeFile(transcript, [
+      { type: 'turn_context', payload: { turn_id: 'turn-deterministic', cwd: root } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '接続先の方針を整理してください。' }] } },
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: answer }] } }
+    ].map(row => JSON.stringify(row)).join('\n') + '\n');
+    const envFile = path.join(root, 'empty.env'); await writeFile(envFile, '');
+    const workspaceFile = path.join(root, 'workspaces.json');
+    await writeFile(workspaceFile, JSON.stringify({ version: 3, workspaces: { [root]: { tenant_id: 'tenant', project_id: 'project', memory_learning_mode: 'confirm', memory_capture_v2_mode: 'on' } } }));
+    const env = { ...process.env, ORGBRAIN_HOOK_ENV_FILES: envFile, ORGBRAIN_WORKSPACES_FILE: workspaceFile,
+      ORGBRAIN_LOCAL_DB: path.join(root, 'state.db'), ORGBRAIN_ENABLE_CLOUD_MEMORY: 'false', ORGBRAIN_ENABLE_ORG_SHARING: 'false', ORGBRAIN_TENANT_ID: 'tenant' };
+    const output = execFileSync(process.execPath, ['--no-warnings', 'packages/orgbrain-cli/src/local-memory.mjs', 'hook', 'codex-stop'], { env,
+      input: JSON.stringify({ session_id: 'session', turn_id: 'turn-deterministic', cwd: root, transcript_path: transcript, last_assistant_message: answer }), encoding: 'utf8' });
+    assert.equal(JSON.parse(output).decision, 'block');
+    const report = await new TaskCommitmentStore(env.ORGBRAIN_LOCAL_DB).memoryReviewStatus({ tenantId: 'tenant', projectId: 'project' });
+    assert.equal(report.activity[0].status.continuation_requested, true);
+    assert.equal(report.activity[0].status.confirmation_candidates, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Codex Stop never opens a TTY while resolving an unmapped workspace', async () => {
+  const { writeFile } = await import('node:fs/promises');
+  const root = await mkdtemp(path.join(tmpdir(), 'review-noninteractive-stop-'));
+  try {
+    const envFile = path.join(root, 'empty.env'); await writeFile(envFile, '');
+    const workspaceFile = path.join(root, 'workspaces.json'); await writeFile(workspaceFile, JSON.stringify({ version: 3, workspaces: {} }));
+    const env = { ...process.env, ORGBRAIN_HOOK_ENV_FILES: envFile, ORGBRAIN_WORKSPACES_FILE: workspaceFile,
+      ORGBRAIN_LOCAL_DB: path.join(root, 'state.db'), ORGBRAIN_ENABLE_CLOUD_MEMORY: 'false', ORGBRAIN_ENABLE_ORG_SHARING: 'false' };
+    const output = execFileSync(process.execPath, ['--no-warnings', 'packages/orgbrain-cli/src/local-memory.mjs', 'hook', 'codex-stop'], { env,
+      input: JSON.stringify({ session_id: 'session', turn_id: 'turn-unmapped', cwd: root, last_assistant_message: '完了しました。' }), encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), {});
   } finally { await rm(root, { recursive: true, force: true }); }
 });
