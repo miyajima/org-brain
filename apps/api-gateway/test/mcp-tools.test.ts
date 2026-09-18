@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const registeredTools = vi.hoisted(() => [] as string[]);
+const registeredToolConfigs = vi.hoisted(() => [] as Array<{ name: string; config: Record<string, unknown> }>);
 
 vi.mock("@modelcontextprotocol/server", () => {
   class MockMcpServer {
-    registerTool(name: string) {
+    registerTool(name: string, config: Record<string, unknown>) {
       registeredTools.push(name);
+      registeredToolConfigs.push({ name, config });
     }
   }
   return { McpServer: MockMcpServer };
@@ -14,6 +16,7 @@ vi.mock("@modelcontextprotocol/server", () => {
 describe("OrgBrainMCP tool surface", () => {
   beforeEach(() => {
     registeredTools.length = 0;
+    registeredToolConfigs.length = 0;
   });
 
   it("registers context and decision memory tools for agent preflight", async () => {
@@ -45,5 +48,11 @@ describe("OrgBrainMCP tool surface", () => {
     expect(registeredTools).toContain("orgbrain_messages_get");
     expect(registeredTools).toContain("orgbrain_messages_read");
     expect(registeredTools).toContain("orgbrain_messages_ack");
+    const contextTool = registeredToolConfigs.find(({ name }) => name === "orgbrain_context_enrich")?.config;
+    expect(contextTool?.title).toBe("OrgBrain");
+    expect(contextTool?._meta).toEqual({
+      "openai/toolInvocation/invoking": "OrgBrainを使用しています…",
+      "openai/toolInvocation/invoked": "OrgBrainを使用しました"
+    });
   });
 });

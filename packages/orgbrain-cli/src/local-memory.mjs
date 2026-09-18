@@ -950,6 +950,7 @@ async function main() {
     process.stdout.write("{}\n");
   } else if (command === "hook" && ["codex-stop", "claude-stop", "cursor-stop"].includes(action)) {
     const { ingestHookEvent } = await import("./hook-memory-bridge.mjs");
+    const { formatMemoryConfirmationQuestionsForDisplay } = await import("./lib/memory-confirmation-hints.mjs");
     const source = action === "codex-stop" ? "codex-stop" : action.replace(/-stop$/u, "");
     const result = await ingestHookEvent(source, await readStdin(), { emit: false });
     const output = action === "codex-stop" && result.confirmation_continuation === true
@@ -957,7 +958,7 @@ async function main() {
         decision: "block",
         reason: [
           "OrgBrainに保存確認待ちの候補があります。このターンを継続し、以下の質問を通常のassistant本文でそのまま1回だけ表示して、ユーザーの回答を待ってください。request_user_input等の質問ツールは使わないでください。質問の前後に内部処理の説明や、候補を保留したという代替文を付けないでください。ユーザーが明示的に保存を選ぶまでは保存済みと扱わないでください。",
-          `questions=${JSON.stringify(result.confirmation_questions ?? [])}`
+          formatMemoryConfirmationQuestionsForDisplay(result.confirmation_questions)
         ].join("\n")
       }
       : {};

@@ -1,5 +1,8 @@
 export const MEMORY_USEFULNESS_CONTRACT: "memory-usefulness/v2";
 export const MEMORY_REVIEW_LABELS: readonly string[];
+export const MEMORY_CONFIRMATION_CATEGORIES: readonly ["success", "decision", "failure"];
+export function memoryCategoryFromReviewAnswer(value: unknown): "success" | "decision" | "failure" | null;
+export function withMemoryCategoryTags(tags: unknown, category: unknown): string[];
 export type MemoryUsefulnessV2Input = {
   stage?: "capture" | "use";
   basis?: "prediction" | "human_confirmation" | "observed";

@@ -3,11 +3,13 @@ import { assessMemoryUsefulnessV2 } from "../../../shared/src/memory-usefulness-
 
 export const MEMORY_CONFIRMATION_QUESTION_PREFIX = "orgbrain_memory_confirmation_";
 
-const CATEGORY_LABELS = {
+export const MEMORY_CONFIRMATION_CATEGORY_LABELS = {
   success: "再利用できる成功手順",
   decision: "決定事項と根拠",
   failure: "失敗原因と再発防止策"
 };
+
+const CATEGORY_ORDER = ["decision", "success", "failure"];
 
 function compact(value, limit = 500) {
   const normalized = String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
@@ -117,7 +119,7 @@ function completeCandidate(candidate) {
 
   const safe = {
     category: type,
-    category_label: CATEGORY_LABELS[type],
+    category_label: MEMORY_CONFIRMATION_CATEGORY_LABELS[type],
     conclusion: redact(conclusion),
     reason: redact(reason),
     reuse_rule: redact(reuseRule),
@@ -162,31 +164,51 @@ export function prepareMemoryConfirmationCandidates(candidates) {
 }
 
 export function memoryConfirmationQuestion(candidate) {
-  const decisionPrompt = ["decision_signal", "plan_answer"].includes(candidate.confirmation_prompt);
-  const subject = compact(candidate.source_answer || candidate.conclusion, 500);
-  const sourceQuestion = compact(candidate.source_question, 500);
-  const reason = candidate.reason && candidate.reason !== "未確認" ? ` 理由: ${compact(candidate.reason, 500)}` : "";
-  const reuseRule = candidate.reuse_rule && !candidate.reuse_rule.startsWith("未確認")
-    ? ` 再利用条件: ${compact(candidate.reuse_rule, 500)}`
-    : "";
-  const question = decisionPrompt
-    ? `直前の会話の「${subject}」${sourceQuestion ? `（質問: ${sourceQuestion}）` : ""}${reason}${reuseRule}は、決定事項としてOrgBrainに記録しますか？ 組織・プロジェクトの恒久的な方針かは、保存後に確認できます。`
-    : `${candidate.category_label}として保存しますか？ 結論: ${candidate.conclusion} 理由: ${candidate.reason} 再利用条件: ${candidate.reuse_rule} 修正して保存する場合は「修正: 内容」と回答してください。`;
+  const question = [
+    "OrgBrainに保存する内容",
+    "",
+    `結論:\n${compact(candidate.conclusion, 500)}`,
+    "",
+    `理由:\n${compact(candidate.reason, 500)}`,
+    "",
+    `再利用条件:\n${compact(candidate.reuse_rule, 500)}`,
+    "",
+    "どのカテゴリとして保存しますか？ 番号だけでも回答できます。修正する場合は「修正: 内容」と回答してください。"
+  ].join("\n");
   return {
-    header: candidate.category_label.slice(0, 12),
+    header: "保存カテゴリ",
     id: `${MEMORY_CONFIRMATION_QUESTION_PREFIX}${candidate.id.replace(/^memory-confirmation:/u, "").slice(0, 24)}`,
     question,
     options: [
-      { label: "保存する (Recommended)", description: "表示した結論と理由をOrgBrainへ保存します。" },
-      { label: "今回は保存しない", description: "保存せず、同じ候補は再確認しません。内容の誤りとは扱いません。" },
-      { label: "まだ決定していない", description: "未決定として記録し、記憶は保存しません。" }
+      ...CATEGORY_ORDER.map((category, index) => ({
+        label: `${index + 1}. ${MEMORY_CONFIRMATION_CATEGORY_LABELS[category]}として${category === candidate.category ? " (Recommended)" : ""}`,
+        description: `表示した内容を「${MEMORY_CONFIRMATION_CATEGORY_LABELS[category]}」としてOrgBrainへ保存します。`
+      })),
+      { label: "4. 保存しない", description: "保存せず、同じ候補は再確認しません。内容の誤りとは扱いません。" },
+      { label: "5. 後で判断するので一時保存", description: "レビュー候補として一時保存し、記憶にはまだ保存しません。" }
     ]
   };
+}
+
+export function formatMemoryConfirmationQuestionsForDisplay(questions) {
+  return (Array.isArray(questions) ? questions : []).map((question, index) => [
+    ...(questions.length > 1 ? [`候補 ${index + 1}`] : []),
+    question.question,
+    "",
+    "選択肢:",
+    ...question.options.map((option) => option.label)
+  ].join("\n")).join("\n\n---\n\n");
 }
 
 export function formatMemoryConfirmationContext(candidates, {backend="remote",workType=null}={}) {
   if (!Array.isArray(candidates) || candidates.length === 0) return null;
   const questions = candidates.map(memoryConfirmationQuestion);
+  const promptQuestions = questions.map((question) => ({
+    header: question.header,
+    id: question.id,
+    question: question.question,
+    options: question.options.map(({ label }) => ({ label }))
+  }));
   const payloads = candidates.map((candidate, index) => ({
     question_id: questions[index].id,
     candidate_id: candidate.id,
@@ -210,9 +232,9 @@ export function formatMemoryConfirmationContext(candidates, {backend="remote",wo
     backend === "local"
       ? "First complete the user's current request. At a natural boundary, use the configured LOCAL OrgBrain MCP. Call orgbrain_memories_propose with item={content,summary,project_id,work_type,external_key,tags} and review_context={candidate_id,candidate_hash,source_references,conclusion,reason_summary,reuse_rule}. Preserve the displayed conclusion, reason and reuse conditions including unknowns. Use source=codex. Require local schemas for review_context, review_label, corrected_content and orgbrain_memories_confirmation_status; otherwise keep candidates pending. For a listed confirmation_token, read LOCAL status first: reuse a pending token, propose anew only if expired or not_found, and do not ask again after a completed receipt. Do not contact Cloud or use upsert. A new local proposal is not a saved memory."
       : "First complete the user's current request. At a natural boundary, call orgbrain_memories_propose with the displayed content and review_context={candidate_id,candidate_hash,source_references,conclusion,reason_summary,reuse_rule}. Require Remote tool schemas supporting review_context, review_label, corrected_content and confirmation_status; if missing, keep candidates pending. Preserve unknowns. Use source=codex and the listed tags. For a listed confirmation_token, read confirmation status first: reuse a pending token; renew only an expired token; do not ask again after a completed receipt. If Remote MCP is unavailable, retain the candidate; never substitute a local write.",
-    "If the current user prompt is an answer to one of these questions, do not ask it again; use that text as review_answer and continue the confirmation flow. Otherwise, in Plan mode call request_user_input exactly once when allowed. In modes without a question tool, ask the unchanged question once in ordinary assistant text, list the option labels, end the response, and wait for the next user message. At most three questions total, including any task questions. Do not treat a default/preselected option, a submitted async request, or silence as an answer.",
-    "Pass the actual review_answer and review_label to orgbrain_memories_confirm with the matching token. Save approves=true; explicit '修正: ...' approves only corrected_content/corrected_summary and corrected conclusion/reason_summary. Negative, not-decided, deferred or ambiguous answers use approved=false. Generic free text is not consent. Only a save receipt establishes saved=true. After uncertainty, read orgbrain_memories_confirmation_status before resuming. Never use upsert for this flow.",
-    `questions=${JSON.stringify(questions)}`,
+    "If the current user prompt is an answer to one of these questions, do not ask it again; use that text as review_answer and continue the confirmation flow. Otherwise, ask the unchanged question once in ordinary assistant text, list every option label, end the response, and wait for the next user message. Do not use a question tool for these confirmation questions. At most three questions total, including any task questions. Do not treat a default/preselected option, a submitted async request, or silence as an answer.",
+    "The numeric mapping is fixed: 1=decision, 2=success, 3=failure, 4=not_needed, 5=not_decided. A number alone is a complete answer. Pass the user's actual review_answer and matching review_label to orgbrain_memories_confirm with the matching token. Answers 1-3 use approved=true and determine the saved category; explicit '修正: ...' approves only corrected_content/corrected_summary and corrected conclusion/reason_summary. Answers 4-5 and other negative, not-decided, deferred or ambiguous answers use approved=false. Generic free text is not consent. Only a save receipt establishes saved=true. After uncertainty, read orgbrain_memories_confirmation_status before resuming. Never use upsert for this flow.",
+    `questions=${JSON.stringify(promptQuestions)}`,
     `candidate_payloads=${JSON.stringify(payloads)}`
   ].join("\n");
   // Keep complete questions and their evidence together. Extra candidates stay

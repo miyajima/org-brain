@@ -516,8 +516,9 @@ test("Codex delivers durable memory confirmations once per session and records t
     const first = await buildCodexMemoryContext(payload, { ...ctx, commitmentStore });
     const context = first.hookSpecificOutput.additionalContext;
     assert.match(context, /OrgBrain memory confirmation/u);
-    assert.match(context, /失敗原因と再発防止策として保存しますか/u);
-    assert.match(context, /request_user_input exactly once/u);
+    assert.match(context, /OrgBrainに保存する内容/u);
+    assert.match(context, /どのカテゴリとして保存しますか/u);
+    assert.match(context, /Do not use a question tool/u);
     assert.match(context, /orgbrain_memories_propose/u);
     assert.match(context, /orgbrain_memories_confirm/u);
 
@@ -527,7 +528,7 @@ test("Codex delivers durable memory confirmations once per session and records t
       hook_event_name: "PostToolUse",
       tool_name: "request_user_input",
       tool_input: { questions },
-      tool_result: { answers: { [questions[0].id]: "保存する (Recommended)" } }
+      tool_result: { answers: { [questions[0].id]: "1" } }
     }, "default");
     assert.equal(saved.count, 0);
     assert.deepEqual(saved.memory_confirmations.map((item) => item.state), ["accepted"]);

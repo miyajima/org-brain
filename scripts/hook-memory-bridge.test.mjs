@@ -1233,8 +1233,8 @@ describe("hook-memory-bridge promotion", () => {
         conclusion: "質問: どのAgentから認証しますか? 回答: Codex先行",
         source_question: "どのAgentから認証しますか?"
       });
-      expect(memoryConfirmationQuestion(candidate).question).toContain("直前の会話の「Codex先行」");
-      expect(memoryConfirmationQuestion(candidate).question).toContain("決定事項としてOrgBrainに記録しますか？");
+      expect(memoryConfirmationQuestion(candidate).question).toContain("質問: どのAgentから認証しますか? 回答: Codex先行");
+      expect(memoryConfirmationQuestion(candidate).question).toContain("どのカテゴリとして保存しますか？");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

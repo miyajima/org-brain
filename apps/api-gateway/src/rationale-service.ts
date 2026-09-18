@@ -129,6 +129,27 @@ type ConfirmMemoryRequest = {
   review_answer?: string;
 };
 
+type MemoryConfirmationCategory = "success" | "decision" | "failure";
+
+function memoryCategoryFromConfirmationAnswer(value: unknown): MemoryConfirmationCategory | null {
+  const normalized = String(value ?? "").normalize("NFKC").trim();
+  if (normalized === "1") return "decision";
+  if (normalized === "2") return "success";
+  if (normalized === "3") return "failure";
+  const answer = normalized.replace(/^[1-3][.)、:：]\s*/u, "");
+  if (/^(?:再利用できる)?成功手順として(?:保存(?:する)?)?(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "success";
+  if (/^決定事項(?:と|・)根拠として(?:保存(?:する)?)?(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "decision";
+  if (/^失敗(?:原因と|・)再発防止策として(?:保存(?:する)?)?(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "failure";
+  return null;
+}
+
+function withConfirmedMemoryCategory(tags: string[], category: MemoryConfirmationCategory | null): string[] {
+  if (!category) return tags;
+  const categories = new Set<MemoryConfirmationCategory>(["success", "decision", "failure"]);
+  const replaced = tags.filter((tag) => !categories.has(tag as MemoryConfirmationCategory) && !tag.startsWith("memory-category:"));
+  return [...new Set([...replaced, category, `memory-category:${category}`])];
+}
+
 type CaptureMemoryWithRationaleRequest = ProposeMemoryRequest;
 
 type CaptureCandidateResult = {
@@ -1199,7 +1220,7 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
     external_key: payload.proposed_memory.external_key ?? `confirmation:${request.confirmationToken}`,
     content: screenMemoryWriteText(textCorrected ? correctedText : payload.proposed_memory.content, "confirmed_content"),
     summary: screenOptionalMemoryWriteText(request.correctedSummary ?? (textCorrected ? conclusion : payload.proposed_memory.summary), "confirmed_summary"),
-    tags: payload.proposed_memory.tags,
+    tags: withConfirmedMemoryCategory(payload.proposed_memory.tags, memoryCategoryFromConfirmationAnswer(request.reviewAnswer)),
     created_at: payload.proposed_memory.created_at,
     project_id: payload.proposed_memory.project_id,
     business_category_id: payload.proposed_memory.business_category_id,
@@ -1302,7 +1323,8 @@ export async function confirmProposedMemory(env: Env, rawBody: unknown, principa
   const { row: confirmation, payload } = await loadConfirmation(env, request.tenantId, request.confirmationToken, true);
   if (principal && payload.actor_id && payload.actor_id !== principal) throw new HttpError(403, "confirmation_owner_mismatch", "Confirmation belongs to another principal");
   const answer = request.reviewAnswer === null ? null : screenMemoryWriteText(request.reviewAnswer, "review_answer");
-  const answerLabel = answer === null ? null : classifyMemoryReviewAnswer(answer);
+  const selectedCategory = memoryCategoryFromConfirmationAnswer(answer);
+  const answerLabel = selectedCategory ? "accepted" : answer === null ? null : classifyMemoryReviewAnswer(answer);
   const modified = Boolean(request.correctedContent || request.correctedSummary
     || request.conclusion && request.conclusion !== payload.proposed_rationale.conclusion
     || request.reasonSummary && request.reasonSummary !== payload.proposed_rationale.reason_summary);
@@ -1348,7 +1370,8 @@ export async function confirmProposedMemory(env: Env, rawBody: unknown, principa
   try {
     const saved = await persistConfirmedMemory(env, request, payload);
     const result = { ...saved, candidate_id: payload.review_context?.candidate_id ?? null,
-      review_id: request.confirmationToken, review_label: label, review_answer: answer ?? "", usefulness: assessment };
+      review_id: request.confirmationToken, review_label: label, review_answer: answer ?? "",
+      memory_category: selectedCategory, usefulness: assessment };
     await env.OPEN_BRAIN_DB.prepare(`UPDATE memory_confirmation_reviews SET save_state = ?, memory_id = ?, rationale_id = ?,
       response_json = ?, updated_at = ? WHERE tenant_id = ? AND confirmation_id = ?`).bind(
         saved.saved ? "saved" : "not_requested", "memory_id" in saved ? saved.memory_id : null,
