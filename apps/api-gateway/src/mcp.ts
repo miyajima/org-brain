@@ -185,6 +185,14 @@ const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
   orgbrain_domain_recall_feedback: "Record the user's correction without mutating the underlying Decision. Map 範囲が違う to wrong_scope, 古い to outdated, 関係ない to not_relevant, 関係が違う to incorrect_relation, and この会話では使わない to dismiss_for_session. Call this when the user corrects a recalled memory."
 };
 
+const ORGBRAIN_TOOL_PRESENTATION = {
+  title: "OrgBrain",
+  _meta: {
+    "openai/toolInvocation/invoking": "OrgBrainを使用しています…",
+    "openai/toolInvocation/invoked": "OrgBrainを使用しました"
+  }
+} as const;
+
 function registerTool<Shape extends z.ZodRawShape>(
   server: McpServer,
   name: string,
@@ -199,7 +207,11 @@ function registerTool<Shape extends z.ZodRawShape>(
   });
   return server.registerTool(
     name,
-    { ...(MCP_TOOL_DESCRIPTIONS[name] ? { description: MCP_TOOL_DESCRIPTIONS[name] } : {}), inputSchema: z.object(inputShape) },
+    {
+      ...ORGBRAIN_TOOL_PRESENTATION,
+      ...(MCP_TOOL_DESCRIPTIONS[name] ? { description: MCP_TOOL_DESCRIPTIONS[name] } : {}),
+      inputSchema: z.object(inputShape)
+    },
     handler
   );
 }

@@ -1,5 +1,26 @@
 export const MEMORY_USEFULNESS_CONTRACT = "memory-usefulness/v2";
 export const MEMORY_REVIEW_LABELS = ["accepted", "corrected", "not_needed", "incorrect", "not_decided", "deferred", "unknown"];
+export const MEMORY_CONFIRMATION_CATEGORIES = ["success", "decision", "failure"];
+
+export function memoryCategoryFromReviewAnswer(value) {
+  const normalized = String(value ?? "").normalize("NFKC").trim();
+  if (normalized === "1") return "decision";
+  if (normalized === "2") return "success";
+  if (normalized === "3") return "failure";
+  const answer = normalized.replace(/^[1-3][.)、:：]\s*/u, "");
+  if (/^(?:再利用できる)?成功手順として(?:保存(?:する)?)?(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "success";
+  if (/^決定事項(?:と|・)根拠として(?:保存(?:する)?)?(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "decision";
+  if (/^失敗(?:原因と|・)再発防止策として(?:保存(?:する)?)?(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "failure";
+  return null;
+}
+
+export function withMemoryCategoryTags(tags, category) {
+  const current = Array.isArray(tags) ? tags : [];
+  if (!MEMORY_CONFIRMATION_CATEGORIES.includes(category)) return [...current];
+  const replaced = current.filter((tag) => !MEMORY_CONFIRMATION_CATEGORIES.includes(tag)
+    && !String(tag).startsWith("memory-category:"));
+  return [...new Set([...replaced, category, `memory-category:${category}`])];
+}
 
 // A human's willingness to save is not evidence that a task succeeded. The
 // same five dimensions are used for capture predictions and observed use;
@@ -51,10 +72,14 @@ export function assessMemoryUsefulnessV2(input = {}) {
 
 export function classifyMemoryReviewAnswer(value) {
   const answer = String(value ?? "").normalize("NFKC").trim();
+  if (answer === "4") return "not_needed";
+  if (answer === "5") return "not_decided";
   if (/保存しない|保存不要|覚えなくて|do not save|don't save|not needed|^skip$/iu.test(answer)) return "not_needed";
+  if (/後で.{0,8}(?:判断|決定).{0,8}一時保存/iu.test(answer)) return "not_decided";
   if (/まだ.{0,8}(?:決め|決定)|未決定|決定.{0,4}(?:していない|ではない|じゃない)|not decided/iu.test(answer)) return "not_decided";
   if (/保留|後で|あとで|今は.{0,6}(?:やめ|不要)|later|defer/iu.test(answer)) return "deferred";
   if (/^(?:内容が違う|間違い|誤り|違います|incorrect|wrong)[。.!！\s]*$/iu.test(answer)) return "incorrect";
+  if (memoryCategoryFromReviewAnswer(answer)) return "accepted";
   if (/^(?:保存する|この内容で保存する|合っているので保存する|save)(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "accepted";
   // Only explicit corrections carry approval under the displayed question.
   // Generic yes/no, a new task, and ambiguous free text are not consent.

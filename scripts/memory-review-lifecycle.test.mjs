@@ -7,7 +7,7 @@ import path from 'node:path';
 import { TaskCommitmentStore } from '../packages/orgbrain-cli/src/lib/task-commitment-store.mjs';
 import { memoryConfirmationQuestion } from '../packages/orgbrain-cli/src/lib/memory-confirmation-hints.mjs';
 import { resolveWorkspaceMapping } from '../packages/orgbrain-cli/src/lib/workspace-config.mjs';
-import { assessMemoryUsefulnessV2, classifyMemoryReviewAnswer } from '../packages/shared/src/memory-usefulness-runtime.mjs';
+import { assessMemoryUsefulnessV2, classifyMemoryReviewAnswer, memoryCategoryFromReviewAnswer } from '../packages/shared/src/memory-usefulness-runtime.mjs';
 
 test('worktree inherits only its Git common repository and explicit off wins', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'review-mapping-'));
@@ -64,6 +64,28 @@ test('unknown is not zero and saving is not evidence of task improvement', () =>
   assert.equal(assessMemoryUsefulnessV2({ stage: 'use', expires_at: 1 }).disposition, 'exclude');
   assert.equal(classifyMemoryReviewAnswer('まだ決めていない'), 'not_decided');
   assert.equal(classifyMemoryReviewAnswer('保存しない'), 'not_needed');
+  assert.equal(classifyMemoryReviewAnswer('決定事項と根拠として (Recommended)'), 'accepted');
+  assert.equal(classifyMemoryReviewAnswer('再利用できる成功手順として'), 'accepted');
+  assert.equal(classifyMemoryReviewAnswer('失敗原因と再発防止策として'), 'accepted');
+  assert.equal(classifyMemoryReviewAnswer('1'), 'accepted');
+  assert.equal(classifyMemoryReviewAnswer('2'), 'accepted');
+  assert.equal(classifyMemoryReviewAnswer('3'), 'accepted');
+  assert.equal(classifyMemoryReviewAnswer('4'), 'not_needed');
+  assert.equal(classifyMemoryReviewAnswer('5'), 'not_decided');
+  assert.equal(classifyMemoryReviewAnswer('5. 後で判断するので一時保存'), 'not_decided');
+  assert.equal(memoryCategoryFromReviewAnswer('1'), 'decision');
+  assert.equal(memoryCategoryFromReviewAnswer('2'), 'success');
+  assert.equal(memoryCategoryFromReviewAnswer('3'), 'failure');
+  assert.equal(memoryCategoryFromReviewAnswer('３． 失敗原因と再発防止策として (Recommended)'), 'failure');
+  const question = memoryConfirmationQuestion({ id: 'memory-confirmation:numeric', category: 'failure', conclusion: '原因を記録する', reason: '再発防止', reuse_rule: '障害対応時' });
+  assert.match(question.question, /番号だけでも回答できます/u);
+  assert.deepEqual(question.options.map(({ label }) => label), [
+    '1. 決定事項と根拠として',
+    '2. 再利用できる成功手順として',
+    '3. 失敗原因と再発防止策として (Recommended)',
+    '4. 保存しない',
+    '5. 後で判断するので一時保存'
+  ]);
   assert.equal(classifyMemoryReviewAnswer('はい'), 'unknown');
 });
 
@@ -90,6 +112,8 @@ test('confirmation-only Stop queues a decision without automatic writes even wit
     assert.match(JSON.parse(output).reason, /保存確認待ち/);
     assert.match(JSON.parse(output).reason, /通常のassistant本文/);
     assert.match(JSON.parse(output).reason, /OAuth/);
+    assert.match(JSON.parse(output).reason, /どのカテゴリとして保存しますか/);
+    assert.doesNotMatch(JSON.parse(output).reason, /questions=\[/);
     const continuedOutput = execFileSync(process.execPath, ['--no-warnings', 'packages/orgbrain-cli/src/local-memory.mjs', 'hook', 'codex-stop'], { env,
       input: JSON.stringify({ ...hookInput, stop_hook_active: true }), encoding: 'utf8' });
     assert.deepEqual(JSON.parse(continuedOutput), {});

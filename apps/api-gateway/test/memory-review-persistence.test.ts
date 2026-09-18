@@ -54,4 +54,20 @@ describe('human review persistence', () => {
       await expect(confirmProposedMemory(env, { ...request, corrected_content: '異なる回答' }, 'user:alice')).rejects.toThrow('different answer');
     } finally { sql.close(); }
   });
+
+  it('persists the category selected in the human confirmation answer', async () => {
+    const { sql, env } = fixture();
+    try {
+      const proposed = await proposeMemoryWithRationale(env, { tenant_id: 'default', actor_id: 'user:alice', source: 'codex',
+        item: { content: '再発時は原因を記録する', project_id: 'org-brain', tags: ['user-confirmed-learning', 'decision'] },
+        review_context: { candidate_id: 'candidate-category', candidate_hash: 'c'.repeat(64), source_references: [],
+          conclusion: '再発時は原因を記録する', reason_summary: '同じ障害を避けるため', reuse_rule: '障害対応時' } });
+      const receipt = await confirmProposedMemory(env, { tenant_id: 'default', confirmation_token: proposed.confirmation_token,
+        approved: true, review_label: 'accepted', review_answer: '3' }, 'user:alice');
+      expect(receipt.memory_category).toBe('failure');
+      const memory = sql.prepare('SELECT tags_json FROM memories WHERE id = ?').get(receipt.memory_id);
+      expect(JSON.parse(memory.tags_json)).toEqual(expect.arrayContaining(['failure', 'memory-category:failure']));
+      expect(JSON.parse(memory.tags_json)).not.toContain('decision');
+    } finally { sql.close(); }
+  });
 });

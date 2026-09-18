@@ -1,5 +1,10 @@
 import { observeMemoryUse } from "./lib/memory-use-collector.mjs";
-import { classifyMemoryReviewAnswer, MEMORY_REVIEW_LABELS } from "../../shared/src/memory-usefulness-runtime.mjs";
+import {
+  classifyMemoryReviewAnswer,
+  memoryCategoryFromReviewAnswer,
+  MEMORY_REVIEW_LABELS,
+  withMemoryCategoryTags
+} from "../../shared/src/memory-usefulness-runtime.mjs";
 import { useHash } from "../../shared/src/memory-use-history-runtime.mjs";
 import { randomUUID } from "node:crypto";
 import {
@@ -35,6 +40,13 @@ import {
 const LOCAL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 export const LOCAL_MCP_PROTOCOL_VERSION = "2026-07-28";
 export const LOCAL_MCP_COMPAT_PROTOCOL_VERSION = "2025-11-25";
+const ORGBRAIN_TOOL_PRESENTATION = Object.freeze({
+  title: "OrgBrain",
+  _meta: Object.freeze({
+    "openai/toolInvocation/invoking": "OrgBrainを使用しています…",
+    "openai/toolInvocation/invoked": "OrgBrainを使用しました"
+  })
+});
 
 const TOOL_DEFINITIONS = [
   {name:"orgbrain_memories_confirmation_status",description:"Read a local proposal or durable save receipt after an uncertain response. Does not save or ask again.",inputSchema:{type:"object",required:["confirmation_token"],properties:{tenant_id:{type:"string"},confirmation_token:{type:"string",minLength:1,maxLength:64}}}},
@@ -698,6 +710,7 @@ async function confirmLocalMemory(store, input) {
   let confirmationState = null;
   let reviewLabel=null;
   const answer=input.review_answer==null?null:screenInteractiveMemory(input.review_answer,'review_answer');
+  const selectedCategory=memoryCategoryFromReviewAnswer(answer);
   const consumed = await store.consumeMcpConfirmation({
     token,
     tenant_id: tenantId,
@@ -724,7 +737,8 @@ async function confirmLocalMemory(store, input) {
     buildReceipt(payload,saved) {
       return {tenant_id:tenantId,approved:input.approved,saved:input.approved===true,
         ...(saved?{memory_id:saved.memory_id,rationale_id:rationaleId,confirmation_state:confirmationState}:{}),
-        candidate_id:payload.review_context?.candidate_id??null,review_label:reviewLabel,review_answer:answer??''};
+        candidate_id:payload.review_context?.candidate_id??null,review_label:reviewLabel,review_answer:answer??'',
+        memory_category:selectedCategory};
     },
     buildCaptureInput(payload) {
       const conclusion = boundedString(input.conclusion || input.corrected_summary || input.corrected_content, 240, payload.proposed_rationale.conclusion);
@@ -752,6 +766,7 @@ async function confirmLocalMemory(store, input) {
         actor_type: payload.actor_type,
         actor_id: payload.actor_id,
         kind: "semantic",
+        tags: withMemoryCategoryTags(payload.proposed_memory.tags, selectedCategory),
         content: input.corrected_content ? screenInteractiveMemory(input.corrected_content, "corrected_content") : corrected ? `${conclusion}\n理由: ${reason}` : payload.proposed_memory.content,
         summary: input.corrected_summary ? screenInteractiveMemory(input.corrected_summary, "corrected_summary") : conclusion,
         rationale: reason,
@@ -1163,6 +1178,7 @@ export function createLocalMcpServer(store, {
     server.registerTool(
       definition.name,
       {
+        ...ORGBRAIN_TOOL_PRESENTATION,
         description: definition.description,
         inputSchema: fromJsonSchema(definition.inputSchema)
       },
