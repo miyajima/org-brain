@@ -37,7 +37,7 @@ test("friction breaks ties without displacing higher-priority corrections", () =
   assert.equal(selected.groups.length, 3);
 });
 
-test("turn adapter annotates a human correction after a miss only in coverage mode", async () => {
+test("turn adapter annotates a human correction after a miss in every capture mode", async () => {
   const input = { project_id: "p", rows: [
     call("s", "orgbrain_memories_search", { project_id: "p" }), result("s", { results: [] }),
     { payload: { type: "user_message", message: "違います。APIの設定を訂正してください。" } }
@@ -45,8 +45,9 @@ test("turn adapter annotates a human correction after a miss only in coverage mo
   const coverage = await buildTurnEvidenceV1(input, { preserve_snippet_text: true });
   assert.ok(coverage.snippets.find((s) => s.role === "user").review_signal_reasons.includes("recall_gap_and_friction"));
   const legacy = await buildTurnEvidenceV1(input);
-  assert.equal(legacy.snippets[0].review_signal_score, undefined);
-  assert.equal(legacy.review_diagnostics, undefined);
+  assert.ok(legacy.snippets.find((s) => s.role === "user").review_signal_reasons.includes("recall_gap_and_friction"));
+  assert.equal(legacy.review_diagnostics.recall_misses, 1);
+  assert.ok(!JSON.stringify(legacy.review_diagnostics).includes("private query"));
 });
 
 test("a later search hit clears the pending gap and duplicate result rows do not add failures", () => {
