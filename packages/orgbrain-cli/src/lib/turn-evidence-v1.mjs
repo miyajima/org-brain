@@ -43,7 +43,7 @@ const DECISION_SIGNAL = /\b(?:decid(?:e|ed)|adopt(?:ed)?|choose|chose|selected|s
 const TRANSIENT_CHOICE = /(?:今回だけ|このターン|一時的|ひとまず|今だけ|for now|this time|temporary|one[- ]off)/iu;
 const DURABLE_SCOPE = /\b(?:implementation|architecture|api|schema|policy|governance|repository|project|organization|tenant|default|rule)\b|(?:実装|設計|API|スキーマ|方針|ルール|規約|組織|テナント|プロジェクト|既定|デフォルト)/iu;
 const FAILURE_SIGNAL = /\b(?:fail(?:ed|ure)?|error|regression|timed? out|did not work|broken|root cause)\b|(?:失敗|エラー|不具合|回帰|動かな(?:い|かった)|原因|タイムアウト)/iu;
-const CORRECTION_SIGNAL = /\b(?:fix(?:ed)?|correct(?:ed)?|changed?|switch(?:ed)?|retry|retract(?:ed)?|withdraw|workaround|prevent(?:ed)?)\b|(?:修正|訂正|変更|撤回|取り下げ|切り替え|対処|解消|回避|再実行|やり直|再発防止)/iu;
+const CORRECTION_SIGNAL = /\b(?:fix(?:ed)?|correct(?:ed|ion)?|changed?|switch(?:ed)?|retry|retract(?:ed)?|withdraw|workaround|prevent(?:ed)?|instead|must not|never|except|unless|prohibit(?:ed)?)\b|(?:違います|そうではなく|ではなく|修正|訂正|変更|撤回|取り下げ|切り替え|対処|解消|回避|再実行|やり直|再発防止|禁止|例外|ただし)/iu;
 const SUCCESS_SIGNAL = /\b(?:pass(?:ed)?|succeed(?:ed)?|success|resolved|verified|exit[_ ]?code\s*[=:]?\s*0|2\d\d)\b|(?:成功|通った|解消|確認(?:した|できた|済み)|検証済み|終了コード\s*0)/iu;
 const REASON_SIGNAL = /\b(?:because|since|reason|root cause|caused by)\b|(?:理由|なぜなら|原因)/iu;
 const REUSE_SIGNAL = /\b(?:when|whenever|next time|reuse|avoid)\b|(?:場合|次回|再利用|回避策|再発時)/iu;
@@ -303,6 +303,17 @@ function linearProbability(features, model) {
   return { score, probability: sigmoid(score) };
 }
 
+function findVerifiedRecoveryEvent(events, failedEvent) {
+  if (!failedEvent) return null;
+  const failedIndex = events.indexOf(failedEvent);
+  if (failedIndex < 0 || !failedEvent.name || !failedEvent.argument_hash) return null;
+  return events.find((event, index) => index > failedIndex
+    && event.status === "completed"
+    && event.name === failedEvent.name
+    && event.argument_hash === failedEvent.argument_hash
+    && (event.exit_code === 0 || event.http_status >= 200 && event.http_status < 300)) ?? null;
+}
+
 function routerContext(turnEvidence, v3 = false) {
   const routingSnippets = [
     ...(turnEvidence?.context_snippets ?? []).map((snippet) => ({ ...snippet, context_only: true })),
@@ -316,8 +327,15 @@ function routerContext(turnEvidence, v3 = false) {
   const explicitDecisionSearchSpans = explicitUserDecisionSpans(supportable);
   const allText = meaningful.map((span) => span.text).join("\n");
   const userText = userSpans.map((span) => span.text).join("\n");
+  const reviewSignals = Array.isArray(turnEvidence?.review_diagnostics?.signals)
+    ? turnEvidence.review_diagnostics.signals
+    : [];
+  const hasReviewSignal = (reason) => reviewSignals.some((signal) => signal.reason === reason);
+  const humanCorrection = hasReviewSignal("human_correction_or_interruption");
   const failed = FAILURE_SIGNAL.test(allText) || events.some((event) => event.status === "failed");
-  const corrected = CORRECTION_SIGNAL.test(allText);
+  const failedEvent = events.find((event) => event.status === "failed") ?? null;
+  const verifiedRecoveryEvent = findVerifiedRecoveryEvent(events, failedEvent);
+  const corrected = CORRECTION_SIGNAL.test(allText) || humanCorrection;
   const verified = SUCCESS_SIGNAL.test(allText) || events.some((event) =>
     event.status === "completed" && (event.exit_code === 0 || event.http_status >= 200 && event.http_status < 300));
   const explicitDecision = (explicitDecisionSearchSpans.length > 0
@@ -368,6 +386,11 @@ function routerContext(turnEvidence, v3 = false) {
       reusable,
       proposalOnly,
       reviewOnly,
+      humanCorrection,
+      repeatedToolFailure: hasReviewSignal("repeated_tool_failure"),
+      toolRejected: hasReviewSignal("tool_rejected"),
+      recallGap: reviewSignals.some((signal) => signal.recall_miss_id),
+      verifiedRecovery: Boolean(verifiedRecoveryEvent),
       eventCompleted,
       operational
     },
@@ -388,7 +411,7 @@ function routerContext(turnEvidence, v3 = false) {
       explicitly_transient: TRANSIENT_CHOICE.test(allText) ? 1 : 0,
       assistant_only: meaningful.length > 0 && userSpans.length === 0 ? 1 : 0,
       span_density: Math.min(meaningful.length, 8) / 8,
-      causal_closure: failed && corrected && verified ? 1 : 0,
+      causal_closure: failed && corrected && (features.ordered_causal_chain || Boolean(verifiedRecoveryEvent)) ? 1 : 0,
       user_span_ratio: meaningful.length === 0 ? 0 : userSpans.length / meaningful.length,
       operational_span_ratio: meaningful.length === 0 ? 0 : operationalSpans.length / meaningful.length,
       structural_noise_ratio: spans.length === 0 ? 0 : structuralNoiseCount / spans.length,
@@ -452,18 +475,7 @@ function routeTurnEvidenceV2(turnEvidence, options = {}) {
   const operational = linearProbability(features, { ...model.operational_history, feature_names: model.feature_names });
   const durableCandidate = signals.explicitDecisionSearch || durable.probability >= model.durable_candidate.threshold;
   const operationalHistory = operational.probability >= model.operational_history.threshold;
-  const reasons = [];
-  if (signals.explicitDecision) reasons.push("explicit_user_decision");
-  if (signals.explicitDecisionSearch) reasons.push("explicit_user_decision_search");
-  if (signals.preference) reasons.push("explicit_user_preference");
-  if (signals.constraint) reasons.push("explicit_user_constraint");
-  if (features.failure_correction) reasons.push("failure_correction_chain");
-  if (features.durable_scope) reasons.push("durable_scope");
-  if (signals.reusable) reasons.push("reusable_or_causal");
-  if (signals.proposalOnly) reasons.push("proposal_not_adopted");
-  if (signals.reviewOnly) reasons.push("review_report_not_adopted");
-  if (features.explicitly_transient) reasons.push("explicitly_transient");
-  if (operationalHistory) reasons.push(signals.verified ? "verified_current_outcome" : "current_task_status");
+  const reasons = routerReasonCodes(context, operationalHistory);
 
   const durableSupport = supportable.filter((span) =>
     isExplicitUserDecisionText(span.text)
@@ -509,6 +521,11 @@ function routerReasonCodes(context, operationalHistory) {
   if (signals.proposalOnly) reasons.push("proposal_not_adopted");
   if (signals.reviewOnly) reasons.push("review_report_not_adopted");
   if (features.explicitly_transient) reasons.push("explicitly_transient");
+  if (signals.humanCorrection) reasons.push("human_correction_or_interruption");
+  if (signals.repeatedToolFailure) reasons.push("repeated_tool_failure");
+  if (signals.toolRejected) reasons.push("tool_rejected");
+  if (signals.recallGap) reasons.push("recall_gap_and_friction");
+  if (signals.verifiedRecovery) reasons.push("verified_same_operation_recovery");
   if (operationalHistory) reasons.push(signals.verified ? "verified_current_outcome" : "current_task_status");
   return reasons;
 }
@@ -530,11 +547,11 @@ function rankedSupport(context, primaryRoute) {
       if (FAILURE_SIGNAL.test(span.text) || CORRECTION_SIGNAL.test(span.text)) score += 2;
       if (TRANSIENT_CHOICE.test(span.text)) score += 1;
     }
-    return { span, score, index };
+    return { span, score, reviewScore: Math.max(0, Number(span.review_signal_score) || 0), index };
   });
   const positive = scored.filter((item) => item.score > 0);
   return (positive.length > 0 ? positive : scored)
-    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .sort((left, right) => right.score - left.score || right.reviewScore - left.reviewScore || left.index - right.index)
     .slice(0, 8)
     .map((item) => item.span);
 }
@@ -714,7 +731,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
         messageSpanByKey.set(messageKey, spanId);
         snippets.push({
           span_id: spanId,
-          ...(options.preserve_snippet_text === true ? { source_order: sourceOrder } : {}),
+          source_order: sourceOrder,
           role: message.role,
           kind: message.role === "assistant" ? "assistant_final" : "user_message",
           text,
@@ -744,7 +761,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
 
   const events = [...eventsByCall.values()].map((event, index) => ({
     event_id: `e${index + 1}`,
-    ...(options.preserve_snippet_text === true ? { call_id: event.call_id } : {}),
+    call_id: event.call_id,
     type: event.type ?? "tool_execution",
     name: event.name ?? "tool",
     status: event.status ?? "unknown",
@@ -759,6 +776,9 @@ export async function buildTurnEvidenceV1(input, options = {}) {
   const retainedSpanIds = new Set(retainedSnippets.map((snippet) => snippet.span_id));
   const retainedAliases = Object.fromEntries(Object.entries(snippetAliases)
     .filter(([alias, target]) => Number(alias.slice(1)) <= retainedSnippetLimit && retainedSpanIds.has(target)));
+  const reviewDiagnostics = hardExclusion
+    ? { schema: "coverage-review-signals/v1", recall_hits: 0, recall_misses: 0, signals: [] }
+    : collectCoverageReviewSignals(rows, input?.project_id);
   const turnEvidence = {
     schema: TURN_EVIDENCE_V1_SCHEMA,
     session_hash: input?.session_hash ?? null,
@@ -766,8 +786,8 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     project_id: input?.project_id ?? null,
     provider,
     model,
-    snippets: options.preserve_snippet_text === true ? annotateCoverageReviewSignals(retainedSnippets, collectCoverageReviewSignals(rows, input?.project_id)) : retainedSnippets,
-    ...(options.preserve_snippet_text === true && !hardExclusion ? { review_diagnostics: collectCoverageReviewSignals(rows, input?.project_id) } : {}),
+    snippets: annotateCoverageReviewSignals(retainedSnippets, reviewDiagnostics),
+    ...(!hardExclusion ? { review_diagnostics: reviewDiagnostics } : {}),
     snippet_aliases: hardExclusion ? {} : retainedAliases,
     events: hardExclusion ? [] : events.slice(0, 24),
     hard_exclusion_reason: hardExclusion,
@@ -801,7 +821,7 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
   const correctionIndex = findIndex(spans, correction);
   const textualSuccess = spans.find((span, index) => index > failureIndex && SUCCESS_SIGNAL.test(span.text)) ?? null;
   const failedEvent = events.find((event) => event.status === "failed") ?? null;
-  const successfulEvent = events.find((event, index) => event.status === "completed" && index > events.indexOf(failedEvent)) ?? null;
+  const successfulEvent = findVerifiedRecoveryEvent(events, failedEvent);
   if ((failure || failedEvent) && (correction || successfulEvent)) {
     const support = [failure, correction, textualSuccess].filter(Boolean);
     const fields = {
@@ -809,7 +829,7 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
       failed_approach: null,
       root_cause: clause(spans, REASON_SIGNAL),
       correction: correction?.text ?? null,
-      verified_outcome: textualSuccess?.text ?? null,
+      verified_outcome: textualSuccess?.text ?? (successfulEvent ? `${successfulEvent.name} completed successfully after the failed attempt.` : null),
       avoidance_rule: clause(spans, REUSE_SIGNAL)
     };
     const gaps = missingGaps(fields);
@@ -828,7 +848,7 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
       ...support.map((item) => item.span_id),
       ...(failedEvent ? [failedEvent.event_id] : []),
       ...(successfulEvent ? [successfulEvent.event_id] : [])
-    ], ["episode_failure_detected"], options);
+    ], ["episode_failure_detected", ...(successfulEvent ? ["verified_same_operation_recovery"] : [])], options);
     if (proposal) proposals.push(proposal);
   }
 

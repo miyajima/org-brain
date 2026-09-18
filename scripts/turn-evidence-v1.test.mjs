@@ -48,6 +48,14 @@ function message(role, text, phase = undefined) {
   };
 }
 
+function call(id, name, args = {}) {
+  return { payload: { type: "function_call", call_id: id, name, arguments: JSON.stringify(args) } };
+}
+
+function result(id, value) {
+  return { payload: { type: "function_call_output", call_id: id, output: JSON.stringify(value) } };
+}
+
 test("deduplicates dual final-answer rows and preserves old span ids as aliases", async () => {
   const text = "実装方針としてSQLiteを採用しました。";
   const evidence = await buildTurnEvidenceV1({
@@ -84,6 +92,31 @@ test("full-turn state machine keeps incomplete failure and success episodes in r
   assert.equal(discovery.review_drafts[0].gaps.includes("failed_approach_missing"), true);
   assert.equal(discovery.review_drafts[0].observation.capture_intent, "review");
   assert.equal(discovery.review_drafts.every((item) => item.support_span_ids.length > 0), true);
+});
+
+test("only the same operation can close a tool failure without textual success evidence", async () => {
+  const baseRows = [
+    message("user", "ビルド失敗を訂正して同じ検査を再実行してください。"),
+    call("failed", "exec_command", { cmd: "pnpm test" }),
+    result("failed", { exit_code: 1 }),
+    call("unrelated", "exec_command", { cmd: "pnpm lint" }),
+    result("unrelated", { exit_code: 0 })
+  ];
+  const unrelated = await buildTurnEvidenceV1({ rows: baseRows, project_id: "org-brain" });
+  assert.equal(extractMemoryRouterFeatures(unrelated).causal_closure, 0);
+  const unrelatedDiscovery = await discoverLearningEpisodes(unrelated, { router_model: modelWithThresholds(0, 1) });
+  const unrelatedFailure = unrelatedDiscovery.review_drafts.find((item) => item.observation.lesson_type === "failure");
+  assert.equal(unrelatedFailure?.observation.verified_outcome ?? null, null);
+
+  const recovered = await buildTurnEvidenceV1({
+    rows: [...baseRows, call("retry", "exec_command", { cmd: "pnpm test" }), result("retry", { exit_code: 0 })],
+    project_id: "org-brain"
+  });
+  assert.equal(extractMemoryRouterFeatures(recovered).causal_closure, 1);
+  const recoveredDiscovery = await discoverLearningEpisodes(recovered, { router_model: modelWithThresholds(0, 1) });
+  const recoveredFailure = recoveredDiscovery.review_drafts.find((item) => item.observation.lesson_type === "failure");
+  assert.match(recoveredFailure.observation.verified_outcome, /exec_command completed successfully/u);
+  assert.ok(recoveredFailure.reason_codes.includes("verified_same_operation_recovery"));
 });
 
 test("durable implementation decision may omit decision_type only as an explicit review gap", async () => {
