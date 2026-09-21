@@ -2555,6 +2555,16 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         ...memoryModeFields(memoryMode)
       });
     }
+    const { enqueueJudgmentCapture } = await import("./lib/local-memory-judge-queue.mjs");
+    const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
+    const judgmentQueue = await enqueueJudgmentCapture({
+      dbPath: process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB,
+      tenantId, projectId: workspace.projectId, source: sourceName, records
+    }).catch(() => ({ queued: false, reason_code: "capture_queue_unavailable" }));
+    if (judgmentQueue.queued && judgmentQueue.mode === "active") {
+      return finish({ ok: true, source: sourceName, tenant_id: tenantId, mode: "jev-capture-queued", inserted: 0,
+        judgment_queue_id: judgmentQueue.id, ...memoryModeFields(memoryMode) });
+    }
     const results = await captureLocalMemories(sourceName, tenantId, records);
     return finish({
       ok: true,

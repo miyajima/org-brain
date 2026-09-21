@@ -1178,7 +1178,7 @@ export class TaskCommitmentStore {
    * left behind; callers can run the AI evaluator again on the remaining
    * quarantine rows in a later cycle.
    */
-  async maintainLearningCandidates({ tenantId = "default", now = Date.now(), evaluate = null, promote = null, limit = 100, policyHash = null, expireAfterDays = null, reevaluateIntervalHours = null } = {}) {
+  async maintainLearningCandidates({ tenantId = "default", now = Date.now(), evaluate = null, promote = null, judgeBatch = null, limit = 100, policyHash = null, expireAfterDays = null, reevaluateIntervalHours = null } = {}) {
     await this.init();
     const db = this.open();
     const ttlMs = Number.isInteger(Number(expireAfterDays)) && Number(expireAfterDays) > 0
@@ -1216,7 +1216,7 @@ export class TaskCommitmentStore {
         promoted_memory_count: 0,
         promoted_candidates: []
       };
-      if (typeof evaluate !== "function" || rows.length === 0) return base;
+      if ((typeof evaluate !== "function" && typeof judgeBatch !== "function") || rows.length === 0) return base;
       const due = rows.filter((row) => {
         const payload = parseObject(row.payload_json) ?? {};
         const autonomy = parseObject(payload.autonomy) ?? {};
@@ -1224,10 +1224,19 @@ export class TaskCommitmentStore {
           Number(autonomy.next_evaluation_at ?? row.created_at) <= now;
       });
       const updates = [];
+      let selection = null;
+      if (typeof judgeBatch === "function") {
+        try { selection = await judgeBatch(due, tenantId); }
+        catch { base.memory_judgments = [{ status: "fallback", reason_code: "judgment_unavailable" }]; }
+      }
+      if (selection) base.memory_judgments = selection.reports;
+      if (typeof evaluate !== "function") return base;
       for (const row of due) {
         let outcome;
         try {
-          outcome = await evaluate({
+          outcome = selection?.omitted.includes(row.id)
+            ? { route: "quarantine", reason_codes: ["jev_current_batch_omitted"] }
+            : await evaluate({
             id: row.id,
             external_key: row.external_key,
             project_id: row.project_id,

@@ -1,0 +1,45 @@
+{
+  "schema": "memory-judgment-replay-report/v1",
+  "status": "inconclusive",
+  "reason": "task_outcomes_not_measured",
+  "scope": "selection_policy_only; not runtime retrieval, budget control or parent task execution",
+  "evaluator": "live_jev_stage_replay",
+  "threshold": 0.98,
+  "cases": 12,
+  "model_calls": 24,
+  "transport_calls": 24,
+  "cache_hits": 24,
+  "fallback_count": 0,
+  "provider_cost": 0.0012063660000000002,
+  "parent_usage": null,
+  "task_success": null,
+  "task_elapsed_ms": null,
+  "activation_qualified": false,
+  "arms": {
+    "no_memory": {
+      "holdout_cases": 6,
+      "required_memory_missing": 6,
+      "irrelevant_memory_included": 0
+    },
+    "baseline": {
+      "holdout_cases": 6,
+      "required_memory_missing": 0,
+      "irrelevant_memory_included": 6
+    },
+    "capture_only": {
+      "holdout_cases": 6,
+      "required_memory_missing": 0,
+      "irrelevant_memory_included": 6
+    },
+    "use_only": {
+      "holdout_cases": 6,
+      "required_memory_missing": 0,
+      "irrelevant_memory_included": 5
+    },
+    "both": {
+      "holdout_cases": 6,
+      "required_memory_missing": 0,
+      "irrelevant_memory_included": 5
+    }
+  }
+}

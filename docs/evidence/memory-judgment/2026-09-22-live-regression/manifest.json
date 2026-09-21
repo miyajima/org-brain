@@ -1,0 +1,54 @@
+{
+  "schema": "memory-judgment-experiment/v1",
+  "policy_version": "memory-judgment/v1",
+  "model": "typesafe/jev-1.13",
+  "threshold": 0.98,
+  "policy_hash": "24b6714738f1414ab4932095b7c73d6a1203ef31d457d97215da095614f5fc75",
+  "dataset_hash": "054a871b7a8d9c3955d5c8adbc8cdadc22ccef690b31b7fbb6d07b95a3cceda6",
+  "runtime_hash": "92154ab7854c5971c483031f70185aa48273da102c34dfb2e04cf3af89ed8a32",
+  "implementation_hash": "de82502b399bcfbc62a96a31debde897b8abbc73a3ef3c723dd839ce3bad2947",
+  "evaluator": "live_jev_stage_replay",
+  "created_at": "2026-09-21T16:18:33.260Z",
+  "dev_conversations": [
+    "negation",
+    "units",
+    "conditional",
+    "correction",
+    "proposal",
+    "failure"
+  ],
+  "holdout_conversations": [
+    "holdout-negation",
+    "holdout-units",
+    "holdout-conditional",
+    "holdout-correction",
+    "holdout-proposal",
+    "holdout-injection"
+  ],
+  "holdout_cases": [
+    {
+      "id": "holdout-negation",
+      "conversation_id": "holdout-negation"
+    },
+    {
+      "id": "holdout-units",
+      "conversation_id": "holdout-units"
+    },
+    {
+      "id": "holdout-conditional",
+      "conversation_id": "holdout-conditional"
+    },
+    {
+      "id": "holdout-correction",
+      "conversation_id": "holdout-correction"
+    },
+    {
+      "id": "holdout-proposal",
+      "conversation_id": "holdout-proposal"
+    },
+    {
+      "id": "holdout-injection",
+      "conversation_id": "holdout-injection"
+    }
+  ]
+}

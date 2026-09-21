@@ -1,4 +1,5 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
+import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
 import { createHash, randomUUID } from "node:crypto";
@@ -3237,6 +3238,7 @@ function rebuildExecutionImpactDay(db, tenantId, projectId, day) {
 export class LocalMemoryStore {
   constructor(dbPath = DEFAULT_LOCAL_DB, options = {}) {
     this.dbPath = resolve(dbPath);
+    this.memoryJudge = options.memoryJudge ?? createLocalMemoryJudge({ dbPath: this.dbPath, env: options.env ?? process.env });
     this.initialization = null;
     this.denseEmbeddingProvider = options.denseEmbeddingProvider === undefined
       ? localDenseEmbeddingProviderFromEnvironment()
@@ -5638,12 +5640,13 @@ export class LocalMemoryStore {
     minimum_total_score: minimumTotalScore = null,
     token_budget = 8_000,
     principal_id: principalId = null,
-    at = Date.now(),
+    at: queryAt = null,
     search_mode: searchMode = "hybrid_v4"
   }) {
+    const at = queryAt ?? Date.now();
     const safeTokenBudget = Math.max(512, Math.min(16_000, Number(token_budget) || 8_000));
     const safeTopK = Math.max(1, Math.min(50, Number(top_k) || 5));
-    const results = await this.search({
+    let results = await this.search({
       tenant_id: tenantId,
       project_id: projectId,
       business_category_id: businessCategoryId,
@@ -5656,11 +5659,46 @@ export class LocalMemoryStore {
       at,
       search_mode: searchMode
     });
+    const eligibleForJudgment = (memory, currentAt = at) => (!projectId || memory.project_id == null || memory.project_id === projectId)
+      && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
+      && (memory.valid_from == null || memory.valid_from <= currentAt)
+      && (memory.valid_until == null || memory.valid_until > currentAt)
+      && (memory.expires_at == null || memory.expires_at > currentAt);
+    const judgmentCandidates = results.filter(({ memory }) => eligibleForJudgment(memory)).map(({ memory }) => memoryJudgmentCandidate(memory));
+    let judgment = await this.memoryJudge({ stage: "use",
+      context: { tenant_id: tenantId, project_id: projectId, principal_id: principalId || "local", query, use_context: useContext ?? null },
+      candidates: judgmentCandidates });
+    if (judgment.mode !== "off") {
+      // Recheck authorization, expiry, and canonical versions after asynchronous
+      // inference (also on a cache hit). A changed source invalidates this batch.
+      const refreshed = [];
+      let changed = false;
+      for (const result of results) {
+        const memory = await this.get(tenantId, result.memory.id);
+        if (!memory || !eligibleForJudgment(memory, queryAt ?? Date.now())) { changed = true; continue; }
+        if (JSON.stringify(memoryJudgmentCandidate(memory)) !== JSON.stringify(memoryJudgmentCandidate(result.memory))) changed = true;
+        refreshed.push({ ...result, memory });
+      }
+      results = refreshed;
+      if (changed) judgment = { ...judgment, applied: false, status: "fallback", reason_code: "source_changed" };
+    }
     await this.init();
     const db = this.open({ readOnly: true });
     try {
-      const selected = results.slice(0, safeTopK);
       const charBudget = safeTokenBudget * 4;
+      const decisionById = new Map(judgment.decisions.map((item) => [item.id, item]));
+      const protectedResults = results.filter(({ memory }) => {
+        const candidate = memoryJudgmentCandidate(memory);
+        return candidate.protected_reasons.length || candidate.conflicts.length
+          || decisionById.get(memory.id)?.reason_codes?.includes("conflicting_evidence");
+      });
+      const fullText = (memory) => [memory.content, memory.rationale, memory.reuse_rule].filter(Boolean).join("\n");
+      if (judgment.applied && (protectedResults.length > safeTopK || protectedResults.reduce((sum, item) => sum + JSON.stringify(item.memory).length + fullText(item.memory).length, 0) > charBudget)) {
+        judgment = { ...judgment, applied: false, status: "fallback", reason_code: "protected_budget_exceeded" };
+      }
+      const ranked = judgment.applied ? [...protectedResults, ...results.filter((item) => !protectedResults.includes(item))]
+        .filter((item) => decisionById.get(item.memory.id)?.action !== "omit") : results;
+      const selected = ranked.slice(0, safeTopK);
       let usedChars = 0;
       const evidence = [];
       const timeline = [];
@@ -5696,28 +5734,32 @@ export class LocalMemoryStore {
           )
         ) ?? units[0];
         const remaining = Math.max(0, charBudget - usedChars);
-        const span = String(chosen?.text ?? memory.content).slice(0, Math.min(remaining, 4_000));
-        usedChars += span.length;
+        const span = judgment.applied ? fullText(memory) : String(chosen?.text ?? memory.content).slice(0, Math.min(remaining, 4_000));
+        const cost = judgment.applied ? span.length + JSON.stringify(memory).length : span.length;
+        // Never truncate a condition or an evidence block to squeeze it in.
+        if (judgment.applied && cost > remaining) continue;
+        usedChars += cost;
         let sourceReference = memory.source_references[0] ?? null;
         try {
-          sourceReference = chosen?.source_ref_json ? JSON.parse(chosen.source_ref_json) : sourceReference;
+          sourceReference = !judgment.applied && chosen?.source_ref_json ? JSON.parse(chosen.source_ref_json) : sourceReference;
         } catch {
           // Preserve the canonical source reference when a projection row is malformed.
         }
         evidence.push({
           memory_id: memory.id,
           text: span,
-          speaker: chosen?.speaker ?? null,
-          session_date: chosen?.event_at ?? sourceReference?.captured_at ?? memory.created_at,
+          speaker: judgment.applied ? null : chosen?.speaker ?? null,
+          session_date: (judgment.applied ? null : chosen?.event_at) ?? sourceReference?.captured_at ?? memory.created_at,
           source_reference: sourceReference,
           source_span: {
-            start: chosen?.source_span_start ?? null,
-            end: chosen?.source_span_end ?? null
+            start: judgment.applied ? null : chosen?.source_span_start ?? null,
+            end: judgment.applied ? null : chosen?.source_span_end ?? null
           },
           score: result.score.total,
-          extraction_state: chosen?.extraction_state ?? "degraded"
+          extraction_state: chosen?.extraction_state ?? "degraded",
+          ...(judgment.applied ? { judgment: decisionById.get(memory.id), text_basis: "canonical_memory_with_conditions" } : {})
         });
-        for (const unit of units) {
+        for (const unit of judgment.applied ? [] : units) {
           let metadata = {};
           try {
             metadata = JSON.parse(unit.metadata_json || "{}");
@@ -5751,6 +5793,9 @@ export class LocalMemoryStore {
         for (const conflict of memory.conflicts) {
           conflicts.push({ memory_id: memory.id, conflict });
         }
+        if (judgment.applied && decisionById.get(memory.id)?.reason_codes?.includes("conflicting_evidence")) {
+          conflicts.push({ memory_id: memory.id, conflict: "Jev predicted conflicting evidence; verify both sources before use.", basis: "prediction" });
+        }
       }
       const multiEvidence = requiresMultipleEvidenceSources(query);
       const disposition = deriveEvidenceDisposition({
@@ -5761,7 +5806,8 @@ export class LocalMemoryStore {
         requiresMultipleSources: multiEvidence,
         conflictCount: conflicts.length,
         hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
-        hasLowConfidence: selected.some((item) => Number(item.memory.confidence_score ?? 0.5) < 0.5),
+        hasLowConfidence: selected.some((item) => Number(item.memory.confidence_score ?? 0.5) < 0.5)
+          || (judgment.applied && evidence.some((item) => item.judgment?.requires_review)),
         degradedReasons: ["onnx_embedding_not_configured", "cross_encoder_not_configured"]
       });
       const template = evidenceAnswerTemplate(disposition, {
@@ -5795,8 +5841,9 @@ export class LocalMemoryStore {
         }))
       });
       return {
-        results,
+        results: judgment.applied ? results.filter((item) => evidence.some((entry) => entry.memory_id === item.memory.id)) : results,
         meta: {
+          ...(judgment.mode !== "off" ? { memory_judgment: judgment } : {}),
           usage_id: usage.usage_id,
           usage_item_ids: usage.usage_item_ids,
           usage_items:usage.usage_items,
