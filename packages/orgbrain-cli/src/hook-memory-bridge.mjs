@@ -1429,7 +1429,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
   const category = buildProjectCategoryIdentity(tenantId, workspace.projectId, categoryDigest);
   const businessCategoryId = record.businessCategoryId ?? workspace.businessCategoryId ?? category.id;
   const workType = record.workType ?? workspace.workType ?? "other";
-  const records = extraction.drafts.map((draft) => {
+  const recordFromDraft = (draft, extras = {}) => {
     const canonicalKey = sha256(`${tenantId}\0${workspace.projectId || "global"}\0${draft.kind}\0${draft.canonical_text}`);
     return {
       externalKey: `v2:${sha256(`${record.externalKey}\0${canonicalKey}`)}`,
@@ -1462,10 +1462,12 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       qualityScore: draft.quality_score,
       captureProfileId: draft.capture_profile_id,
       captureRoute: "realtime_hook",
+      ...extras,
       actorType: "system",
       actorId: buildActorId(record)
     };
-  });
+  };
+  const records = extraction.drafts.map((draft) => recordFromDraft(draft));
   const evidenceRows = Array.isArray(options.rows) && (options.rows.length > 0 || options.requireFullTurn === true)
     ? options.rows
     : [{
@@ -1493,6 +1495,42 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     workspace_root: workspace.workspaceRoot,
     sensitive_policy: workspace.sensitiveMemory
   });
+  const eagerActionEvidence = (turnEvidence.review_diagnostics?.successful_actions_after_miss ?? []).map((item) => ({
+    type: "external",
+    ref: `turn:${turnEvidence.turn_hash ?? turnEvidence.evidence_hash}#call:${item.call_id}`,
+    note: [
+      `tool=${item.tool}`,
+      `result_hash=${item.result_hash}`,
+      Number.isInteger(item.exit_code) ? `exit_code=${item.exit_code}` : null,
+      Number.isInteger(item.http_status) ? `http_status=${item.http_status}` : null
+    ].filter(Boolean).join("; "),
+    weight: 1,
+    contentHash: item.result_hash,
+    observedAt: record.createdAt,
+    attestationRef: turnEvidence.evidence_hash
+  }));
+  const evidenceOnlyReasons = new Set([
+    "quality_missing_evidence",
+    "quality_invalid_evidence",
+    "quality_insufficient_evidence"
+  ]);
+  const eagerReviewDrafts = (extraction.review_drafts ?? []).filter((draft) => {
+    const reasons = draft.review_reason_codes ?? [];
+    return reasons.length > 0 &&
+      reasons.every((reason) => evidenceOnlyReasons.has(reason)) &&
+      typeof draft.rationale === "string" && draft.rationale.trim().length >= MEMORY_CAPTURE_HOOK_PROFILE.minimum_rationale_characters &&
+      typeof draft.reuse_rule === "string" && draft.reuse_rule.trim().length >= MEMORY_CAPTURE_HOOK_PROFILE.minimum_reuse_rule_characters;
+  });
+  const eagerRetrievalMiss = turnEvidence.review_diagnostics?.latest_retrieval === "miss";
+  const eagerRecords = eagerRetrievalMiss && eagerActionEvidence.length > 0 && !turnEvidence.hard_exclusion_reason
+    ? [...extraction.drafts, ...eagerReviewDrafts].slice(0, MEMORY_CAPTURE_HOOK_PROFILE.max_candidates).map((draft) => recordFromDraft({
+        ...draft,
+        evidence: [...(draft.evidence ?? []), ...eagerActionEvidence].slice(0, 8),
+        tags: [...new Set([...(draft.tags ?? []), "eager-learning", "retrieval-gap-closed"])]
+      }, {
+        captureOrigin: "retrieval-gap"
+      }))
+    : [];
   const planDecisionCandidates = buildPlanDecisionMemoryConfirmationCandidates(
     extractPlanTaskCommitments(options.rows, record, workspace),
     { projectId: workspace.projectId, sensitivePolicy: workspace.sensitiveMemory }
@@ -1581,6 +1619,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
     : null;
   return {
     records,
+    eagerRecords,
     operationalRecords,
     reviewCandidates,
     confirmationCandidates: allConfirmationCandidates,
@@ -1610,6 +1649,11 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       capture_profile_id: MEMORY_CAPTURE_HOOK_PROFILE.profile_id,
       capture_profile_source_hash: MEMORY_CAPTURE_HOOK_PROFILE.source_dataset_sha256,
       quality_scores: records.map((candidate) => candidate.qualityScore ?? null),
+      eager_candidate_count: eagerRecords.length,
+      recall_miss_count: Number(turnEvidence.review_diagnostics?.recall_misses ?? 0),
+      recall_hit_count: Number(turnEvidence.review_diagnostics?.recall_hits ?? 0),
+      latest_retrieval: turnEvidence.review_diagnostics?.latest_retrieval ?? null,
+      successful_actions_after_miss: eagerActionEvidence.length,
       excluded_reasons: [...new Set([
         ...extraction.excluded.map((item) => item.reason),
         ...episodeDiscovery.excluded.map((item) => item.reason)
@@ -2086,7 +2130,12 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       await new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB).recordHookActivity({
         ...activityScope, event: inputSourceName, status: { memory_use:memoryUseReport, ok: result.ok, mode: result.mode ?? null, skipped: result.skipped ?? null,
           confirmation_candidates: result.confirmation_candidates ?? confirmationQueue.length,
-          continuation_requested: result.confirmation_continuation === true }
+          continuation_requested: result.confirmation_continuation === true,
+          created: Number(result.created ?? 0),
+          review_count: Number(result.review_count ?? 0),
+          reason_code: result.reason_code ?? null,
+          reason_codes: Array.isArray(result.reason_codes) ? result.reason_codes.slice(0, 12) : [],
+          turn_evidence_error: result.capture_v2_shadow?.turn_evidence_error ?? null }
       });
     }
     if (options.emit !== false) console.log(JSON.stringify(result));
@@ -2159,7 +2208,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const refinementProfile = refinementProfileValue === "a-plus/v1" ? refinementProfileValue : undefined;
   let evidenceRows = [];
   let evidenceLoadError = null;
-  if (inputSourceName === "codex-stop" && (extractionMode !== "off" || ["on", "shadow", "confirm"].includes(workspace.memoryLearningMode))) {
+  if (inputSourceName === "codex-stop" && (extractionMode !== "off" || ["on", "shadow", "confirm", "eager"].includes(workspace.memoryLearningMode))) {
     evidenceRows = await loadTurnEvidenceRows({
       transcript_path: normalizedRecord.metadata?.transcriptPath,
       turn_id: normalizedRecord.metadata?.turnId
@@ -2239,6 +2288,30 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       confirmation_questions: confirmationBatch.map(memoryConfirmationQuestion),
       confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
       confirmation_continuation: confirmationContinuation });
+  }
+  if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "eager") {
+    const eagerRecords = extractionPrepared?.eagerRecords ?? [];
+    if (eagerRecords.length === 0) {
+      const reasonCode = shadowReport?.latest_retrieval !== "miss"
+        ? "eager-no-retrieval-miss"
+        : Number(shadowReport?.successful_actions_after_miss ?? 0) === 0
+          ? "eager-no-verified-work-after-miss"
+          : shadowReport?.sensitivity_reason
+            ? `eager-${shadowReport.sensitivity_reason}`
+            : "eager-no-safe-durable-candidate";
+      return finish({
+        ok: true,
+        source: sourceName,
+        tenant_id: tenantId,
+        mode: "eager",
+        inserted: 0,
+        skipped: reasonCode,
+        reason_code: reasonCode,
+        ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
+        ...memoryModeFields(memoryMode)
+      });
+    }
+    records = eagerRecords;
   }
   if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "on") {
     const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
@@ -2487,7 +2560,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       ok: true,
       source: sourceName,
       tenant_id: tenantId,
-      mode: "local",
+      mode: workspace.memoryLearningMode === "eager" ? "eager" : "local",
       ...hookCaptureLogFields(
         captureV2Mode,
         records,
@@ -2523,7 +2596,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     });
   }
 
-  const batchRequired = captureV2Mode === "on" || workspace.memoryLearningMode === "on";
+  const batchRequired = captureV2Mode === "on" || ["on", "eager"].includes(workspace.memoryLearningMode);
   const captureInput = records.length === 1 && !batchRequired ? records[0] : records;
   let result;
   if (mcp.complete) {
@@ -2558,6 +2631,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     ok: true,
     source: sourceName,
     tenant_id: tenantId,
+    ...(workspace.memoryLearningMode === "eager" ? { mode: "eager" } : {}),
     ...hookCaptureLogFields(captureV2Mode, records, shadowReport),
     inserted: Number(result?.inserted ?? 0),
     updated: Number(result?.updated ?? 0),
