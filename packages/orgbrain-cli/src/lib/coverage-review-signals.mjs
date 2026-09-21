@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 // Current-turn diagnostics only. A retrieval miss is not proof that knowledge
 // does not exist; intervention signals never attest a decision or an outcome.
 function object(value) {
@@ -5,14 +7,46 @@ function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function cryptoHash(value) {
+  const serialized = typeof value === "string" ? value : JSON.stringify(value ?? null);
+  return crypto.createHash("sha256").update(serialized).digest("hex");
+}
+
 function resultObject(value) {
   const parsed = object(value);
+  if (parsed.Ok !== undefined) return resultObject(parsed.Ok);
+  if (parsed.data !== undefined) return resultObject(parsed.data);
   if (parsed.structuredContent) return object(parsed.structuredContent);
   if (Array.isArray(parsed.content)) {
     const text = parsed.content.filter((item) => item.type === "text").map((item) => item.text).join("\n");
     return object(text);
   }
   return parsed;
+}
+
+function retrievalState(call, result, projectId) {
+  const name = String(call?.name ?? "").split("__").at(-1);
+  if (!projectId || call?.args?.project_id !== projectId) return null;
+  if (/^orgbrain_(?:memory_search|memories_search|memory_retrieve_context|memories_retrieve_context|decision_memories_search)$/u.test(name)) {
+    if (!Array.isArray(result.results)) return null;
+    return result.results.length === 0 ? "miss" : "hit";
+  }
+  if (name !== "orgbrain_context_enrich") return null;
+  const bundle = object(result.evidence_bundle);
+  if (bundle.abstention_recommended === true || bundle.evidence_status === "insufficient") return "miss";
+  if (Array.isArray(bundle.evidence)) return bundle.evidence.length === 0 ? "miss" : "hit";
+  if (Array.isArray(result.results)) return result.results.length === 0 ? "miss" : "hit";
+  return null;
+}
+
+function isWorkAction(call) {
+  const name = String(call?.name ?? "").split("__").at(-1);
+  if (!name || name.startsWith("orgbrain_") || /(?:request_user_input|read_thread|list_threads|wait_threads)$/u.test(name)) return false;
+  if (["exec", "exec_command"].includes(name)) {
+    const command = String(call?.args?.cmd ?? call?.args?.command ?? "");
+    return /(?:^|[\s/])(?:test|check|verify|doctor|lint|build|install|configure|migrate|deploy|publish|curl|node|npm|pnpm|yarn|bun|cargo|go|make|bundle|rspec)(?:\s|$)/iu.test(command);
+  }
+  return /(?:apply_patch|create|update|write|edit|install|configure|migrate|deploy|publish|execute|submit|build|verify|test)/iu.test(name);
 }
 
 export function collectCoverageReviewSignals(rows, projectId) {
@@ -23,6 +57,8 @@ export function collectCoverageReviewSignals(rows, projectId) {
   let misses = 0;
   let hits = 0;
   let pendingMiss = null;
+  let latestRetrieval = null;
+  const successfulActionsAfterMiss = [];
   for (const [order, row] of rows.entries()) {
     const p = row?.payload ?? row;
     const id = p.call_id ?? p.id;
@@ -45,10 +81,25 @@ export function collectCoverageReviewSignals(rows, projectId) {
       const failed = p.is_error === true || object(raw).isError === true || result.isError === true || result.is_error === true
         || (Number.isInteger(result.exit_code) && result.exit_code !== 0) || (exitMatch !== null && Number(exitMatch[1]) !== 0);
       const rejected = result.status === "rejected" || result.status === "denied";
-      if (call && /(?:^|__)orgbrain_(?:memories|decision_memories)_search$/u.test(call.name ?? "")
-        && projectId && call.args.project_id === projectId && !failed && !rejected && Array.isArray(result.results)) {
-        if (result.results.length === 0) { misses++; pendingMiss = { order, event_id: String(id) }; }
-        else { hits++; pendingMiss = null; }
+      const state = call && !failed && !rejected ? retrievalState(call, result, projectId) : null;
+      if (state === "miss") {
+        misses++;
+        latestRetrieval = "miss";
+        pendingMiss = { order, event_id: String(id) };
+        successfulActionsAfterMiss.length = 0;
+      } else if (state === "hit") {
+        hits++;
+        latestRetrieval = "hit";
+        pendingMiss = null;
+        successfulActionsAfterMiss.length = 0;
+      } else if (call && pendingMiss && call.order > pendingMiss.order && !failed && !rejected && isWorkAction(call)) {
+        successfulActionsAfterMiss.push({
+          call_id: String(id),
+          tool: String(call.name ?? "tool").split("__").at(-1).slice(0, 128),
+          result_hash: `sha256:${cryptoHash(raw)}`,
+          ...(Number.isInteger(result.exit_code) ? { exit_code: result.exit_code } : {}),
+          ...(Number.isInteger(result.http_status) ? { http_status: result.http_status } : {})
+        });
       }
       if (call && !failed && !rejected) failures.delete(JSON.stringify([call.name, call.args]));
       if (call && (failed || rejected)) {
@@ -60,7 +111,14 @@ export function collectCoverageReviewSignals(rows, projectId) {
       }
     }
   }
-  return { schema: "coverage-review-signals/v1", recall_hits: hits, recall_misses: misses, signals };
+  return {
+    schema: "coverage-review-signals/v1",
+    recall_hits: hits,
+    recall_misses: misses,
+    latest_retrieval: latestRetrieval,
+    successful_actions_after_miss: successfulActionsAfterMiss.slice(0, 4),
+    signals
+  };
 }
 
 export function annotateCoverageReviewSignals(snippets, diagnostics) {

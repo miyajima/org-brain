@@ -150,6 +150,22 @@ describe("workspace-config", () => {
     })).rejects.toThrow(/memory_capture_v2_mode is invalid/u);
   });
 
+  it("accepts eager learning mode", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "org-brain-workspaces-eager-"));
+    const file = path.join(root, "workspaces.json");
+    await saveWorkspaceConfig(file, {
+      version: 3,
+      workspaces: {
+        "/tmp/workspaces/eager": {
+          tenant_id: "default",
+          project_id: "eager",
+          memory_learning_mode: "eager"
+        }
+      }
+    });
+    expect((await loadWorkspaceConfig(file)).workspaces["/tmp/workspaces/eager"].memory_learning_mode).toBe("eager");
+  });
+
   it("filters roots by tenant and omits ambiguous project ids", () => {
     const roots = projectRootsFromWorkspaceConfig(
       {

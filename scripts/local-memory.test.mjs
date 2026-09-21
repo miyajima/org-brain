@@ -991,6 +991,12 @@ test("local MCP exposes capture and search over the same MemoryStore", async () 
     assert.ok(tools.tools.some((tool) => tool.name === "orgbrain_memory_capture"));
     const searchTool = tools.tools.find((tool) => tool.name === "orgbrain_memory_search");
     assert.equal(searchTool.inputSchema.properties.minimum_total_score.minimum, 0);
+    const contextTool = tools.tools.find((tool) => tool.name === "orgbrain_context_enrich");
+    assert.equal(contextTool.inputSchema.properties.minimum_total_score.minimum, 0);
+    assert.equal(contextTool.inputSchema.properties.task_id.maxLength, 128);
+    const effectTool = tools.tools.find((tool) => tool.name === "orgbrain_memory_effect_record");
+    assert.equal(effectTool.inputSchema.properties.verification_ref_type.maxLength, 128);
+    assert.equal(effectTool.inputSchema.properties.verification_ref_id.maxLength, 500);
     const captured = await handleLocalMcpRequest(store, {
       method: "tools/call",
       params: {
@@ -998,8 +1004,11 @@ test("local MCP exposes capture and search over the same MemoryStore", async () 
         arguments: {
           tenant_id: "personal",
           project_id: "orgbrain",
+          work_type: "implementation",
           kind: "constraint",
-          content: "Local MCP must never send memory to an external service."
+          content: "Local MCP must never send memory to an external service.",
+          confidence_score: 0.95,
+          utility_score: 0.9
         }
       }
     });
@@ -1013,6 +1022,58 @@ test("local MCP exposes capture and search over the same MemoryStore", async () 
     });
     assert.equal(searched.isError, false);
     assert.match(searched.content[0].text, /Local MCP/);
+    const relevantContext = await handleLocalMcpRequest(store, {
+      method: "tools/call",
+      params: {
+        name: "orgbrain_context_enrich",
+        arguments: {
+          tenant_id: "personal",
+          project_id: "orgbrain",
+          query: "Local MCP external service",
+          task_id: "context-test",
+          work_type: "implementation",
+          minimum_total_score: 0
+        }
+      }
+    });
+    const relevantPayload = JSON.parse(relevantContext.content[0].text);
+    assert.equal(relevantPayload.results.length, 1);
+    assert.equal(relevantPayload.results[0].memory.work_type, "implementation");
+    const verifiedEffect = await handleLocalMcpRequest(store, {
+      method: "tools/call",
+      params: {
+        name: "orgbrain_memory_effect_record",
+        arguments: {
+          tenant_id: "personal",
+          usage_event_id: relevantPayload.meta.usage_id,
+          idempotency_key: "mcp-effect:verified",
+          evidence_level: "verified",
+          verification_ref_type: "test",
+          verification_ref_id: "local-mcp-context-test",
+          effect_outcome: "neutral",
+          avoided_lookup_categories: ["none"]
+        }
+      }
+    });
+    assert.equal(verifiedEffect.isError, false);
+    assert.equal(JSON.parse(verifiedEffect.content[0].text).created, true);
+    const irrelevantContext = await handleLocalMcpRequest(store, {
+      method: "tools/call",
+      params: {
+        name: "orgbrain_context_enrich",
+        arguments: {
+          tenant_id: "personal",
+          project_id: "orgbrain",
+          query: "unrelated galactic bakery payroll",
+          task_id: "context-test",
+          work_type: "implementation"
+        }
+      }
+    });
+    const irrelevantPayload = JSON.parse(irrelevantContext.content[0].text);
+    assert.deepEqual(irrelevantPayload.results, []);
+    assert.equal(irrelevantPayload.evidence_bundle.abstention_recommended, true);
+    assert.deepEqual(irrelevantPayload.evidence_bundle.missing_evidence, ["no_relevant_evidence"]);
   } finally {
     await ctx.cleanup();
   }

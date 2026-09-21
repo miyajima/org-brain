@@ -76,3 +76,44 @@ test("MCP error envelope cannot establish a recall miss", () => {
     result("s", { isError: true, content: [{ type: "text", text: '{"results":[]}' }] })], "p");
   assert.equal(diagnostics.recall_misses, 0);
 });
+
+test("context enrichment abstention becomes an eager gap only after later successful work", () => {
+  const rows = [
+    call("ctx", "mcp__orgbrain__orgbrain_context_enrich", { project_id: "p", query: "OpenRouter setup" }),
+    result("ctx", { evidence_bundle: { evidence_status: "insufficient", evidence: [], abstention_recommended: true } }),
+    call("patch", "apply_patch", { patch: "*** Update File: config/runtime.env" }),
+    result("patch", { ok: true }),
+    call("verify", "exec_command", { cmd: "typesafe-ai doctor" }),
+    result("verify", { exit_code: 0 })
+  ];
+  const diagnostics = collectCoverageReviewSignals(rows, "p");
+  assert.equal(diagnostics.recall_misses, 1);
+  assert.equal(diagnostics.latest_retrieval, "miss");
+  assert.deepEqual(diagnostics.successful_actions_after_miss.map((item) => item.tool), ["apply_patch", "exec_command"]);
+  assert.ok(diagnostics.successful_actions_after_miss.every((item) => /^sha256:[a-f0-9]{64}$/u.test(item.result_hash)));
+  assert.ok(!JSON.stringify(diagnostics).includes("OpenRouter setup"));
+});
+
+test("a later context hit clears eager gap actions", () => {
+  const rows = [
+    call("miss", "orgbrain_context_enrich", { project_id: "p" }),
+    result("miss", { evidence_bundle: { evidence_status: "insufficient", abstention_recommended: true } }),
+    call("work", "exec_command"), result("work", { exit_code: 0 }),
+    call("hit", "orgbrain_context_enrich", { project_id: "p" }),
+    result("hit", { evidence_bundle: { evidence_status: "sufficient", evidence: [{ memory_id: "m" }], abstention_recommended: false } })
+  ];
+  const diagnostics = collectCoverageReviewSignals(rows, "p");
+  assert.equal(diagnostics.latest_retrieval, "hit");
+  assert.deepEqual(diagnostics.successful_actions_after_miss, []);
+});
+
+test("read-only discovery after a miss is not verified eager work", () => {
+  const diagnostics = collectCoverageReviewSignals([
+    call("miss", "orgbrain_context_enrich", { project_id: "p" }),
+    result("miss", { evidence_bundle: { evidence_status: "insufficient", abstention_recommended: true } }),
+    call("read", "exec_command", { cmd: "rg -n OpenRouter packages" }),
+    result("read", { exit_code: 0 })
+  ], "p");
+  assert.equal(diagnostics.latest_retrieval, "miss");
+  assert.deepEqual(diagnostics.successful_actions_after_miss, []);
+});

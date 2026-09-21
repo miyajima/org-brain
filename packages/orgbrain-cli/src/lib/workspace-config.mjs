@@ -142,7 +142,7 @@ function normalizeWorkspaceEntry(raw, workspaceRoot) {
   if (captureV2Mode !== null && !["off", "shadow", "on"].includes(captureV2Mode)) {
     throw new Error(`workspace memory_capture_v2_mode is invalid: ${workspaceRoot}`);
   }
-  if (!["off", "shadow", "on", "confirm"].includes(learningMode)) {
+  if (!["off", "shadow", "on", "confirm", "eager"].includes(learningMode)) {
     throw new Error(`workspace memory_learning_mode is invalid: ${workspaceRoot}`);
   }
   return {

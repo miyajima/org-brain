@@ -26,12 +26,15 @@ async function fixture() {
   await store.capture({
     tenant_id: "default",
     project_id: "org-brain",
+    work_type: "other",
     kind: "decision",
     content: "Use the Codex notify and prompt hooks with a short-lived Node CLI. Avoid a resident MCP server and do not call an LLM from either hook.",
     summary: "Use short-lived Codex hooks instead of resident MCP or extra LLM calls. Contact user@example.com.",
     tags: ["codex", "hooks"],
     source: "test",
-    external_key: "codex-hook-design"
+    external_key: "codex-hook-design",
+    confidence_score: 0.9,
+    utility_score: 0.8
   });
   return {
     workspace,
@@ -63,6 +66,24 @@ test("Codex prompt hook injects only a bounded local summary for a relevant prom
     assert.match(result.hookSpecificOutput.additionalContext, /### 回答契約/u);
     assert.match(result.hookSpecificOutput.additionalContext, /結論を最初の2文以内/u);
     assert.ok(result.hookSpecificOutput.additionalContext.length < 2_000);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("Codex prompt hook provides complete use-tracking context when the workspace has no default work type", async () => {
+  const ctx = await fixture();
+  try {
+    await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "measured-context-session",
+      cwd: ctx.workspace,
+      prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?"
+    }, ctx);
+    assert.match(result.hookSpecificOutput.additionalContext, /orgbrain_memory_observe/u);
+    assert.match(result.hookSpecificOutput.additionalContext, /task_id=codex:measured-context-session/u);
+    assert.match(result.hookSpecificOutput.additionalContext, /work_type=other/u);
   } finally {
     await ctx.cleanup();
   }
@@ -139,6 +160,36 @@ test("Codex prompt hook injects the hidden observe contract for continuation tur
     assert.match(result.hookSpecificOutput.additionalContext, /orgbrain_memory_observe/u);
     assert.match(result.hookSpecificOutput.additionalContext, /at most three times/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /memory_id=/u);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("Codex prompt hook explains eager gap capture without authorizing secret storage", async () => {
+  const ctx = await fixture();
+  try {
+    await writeFile(ctx.workspacesFile, JSON.stringify({
+      version: 3,
+      workspaces: {
+        [ctx.workspace]: {
+          tenant_id: "default",
+          project_id: "org-brain",
+          memory_learning_mode: "eager"
+        }
+      }
+    }));
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "eager-context",
+      cwd: ctx.workspace,
+      prompt: "Install TypeSafe AI and configure OpenRouter"
+    }, ctx);
+    const context = result.hookSpecificOutput.additionalContext;
+    assert.match(context, /OrgBrain eager learning is enabled/u);
+    assert.match(context, /returns no relevant memory or recommends abstention/u);
+    assert.match(context, /lifecycle hook record a safe reusable memory after verified completion/u);
+    assert.match(context, /Never include API keys, tokens, passwords/u);
+    assert.match(context, /do not perform an interactive memory write/u);
   } finally {
     await ctx.cleanup();
   }

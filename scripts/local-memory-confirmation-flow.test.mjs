@@ -25,6 +25,70 @@ async function memories(store,tenant) {
 
 const cli=process.env.ORGBRAIN_TEST_CLI||resolve('packages/orgbrain-cli/src/local-memory.mjs');
 
+test('eager mode closes a context-enrichment miss with one verified secret-safe memory',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'local-eager-flow-'));
+  try {
+    const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'empty.env'),transcript=join(root,'turn.jsonl');
+    await writeFile(envFile,'ORGBRAIN_LOCAL_HOOK_CAPTURE=true\n');
+    await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',default_work_type:'implementation',memory_learning_mode:'eager',memory_capture_v2_mode:'on'}}}));
+    const secret=`sk-or-v1-${'x'.repeat(32)}`;
+    const finalText=[
+      '## Conclusion',
+      'OpenRouter authentication is configured as the `OPENROUTER_API_KEY` environment variable for TypeSafe AI.',
+      '## Reason',
+      'The TypeSafe AI setup reads this named environment variable, so future installs can reuse the same binding without copying any credential value.',
+      '## Reuse Rule',
+      'When reinstalling or diagnosing TypeSafe AI, verify that `OPENROUTER_API_KEY` is present and non-empty, then run the health check without printing its value.'
+    ].join('\n');
+    const rows=[
+      {type:'turn_context',payload:{turn_id:'turn-eager',cwd:root}},
+      {type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:'TypeSafe AIをOpenRouterで使えるように設定してください。'}]}},
+      {type:'response_item',payload:{type:'function_call',call_id:'context',name:'mcp__orgbrain__orgbrain_context_enrich',arguments:JSON.stringify({project_id:'project',query:'TypeSafe AI OpenRouter setup'})}},
+      {type:'response_item',payload:{type:'function_call_output',call_id:'context',output:JSON.stringify({evidence_bundle:{evidence_status:'insufficient',evidence:[],abstention_recommended:true}})}},
+      {type:'response_item',payload:{type:'function_call',call_id:'configure',name:'exec_command',arguments:JSON.stringify({cmd:`OPENROUTER_API_KEY=${secret} typesafe-ai configure`})}},
+      {type:'response_item',payload:{type:'function_call_output',call_id:'configure',output:JSON.stringify({exit_code:0,status:'succeeded'})}},
+      {type:'response_item',payload:{type:'function_call',call_id:'verify',name:'exec_command',arguments:JSON.stringify({cmd:'typesafe-ai doctor'})}},
+      {type:'response_item',payload:{type:'function_call_output',call_id:'verify',output:JSON.stringify({exit_code:0,status:'succeeded'})}},
+      {type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:finalText}]}}
+    ];
+    await writeFile(transcript,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
+    const env={...getDefaultEnvironment(),ORGBRAIN_HOOK_ENV_FILES:envFile,ORGBRAIN_WORKSPACES_FILE:workspaces,ORGBRAIN_LOCAL_DB:dbPath,
+      ORGBRAIN_ENABLE_CLOUD_MEMORY:'false',ORGBRAIN_ENABLE_ORG_SHARING:'false',ORGBRAIN_MEMORY_EXTRACTION_MODE:'off',ORGBRAIN_TENANT_ID:'tenant'};
+    const output=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'session-eager',turn_id:'turn-eager',cwd:root,transcript_path:transcript,last_assistant_message:finalText}),encoding:'utf8'}));
+    assert.equal(output.ok,true);
+    assert.equal(output.created,1,JSON.stringify(output));
+    assert.equal(output.capture_v2_shadow.latest_retrieval,'miss');
+    assert.equal(output.capture_v2_shadow.successful_actions_after_miss,2);
+    const stored=await memories(new LocalMemoryStore(dbPath),'tenant');
+    assert.equal(stored.length,1);
+    assert.match(stored[0].content,/OPENROUTER_API_KEY/u);
+    assert.doesNotMatch(JSON.stringify(stored),new RegExp(secret,'u'));
+    const found=await callLocalMcpTool(new LocalMemoryStore(dbPath),'orgbrain_memory_search',{tenant_id:'tenant',project_id:'project',query:'TypeSafe AI OpenRouter environment variable',limit:5});
+    assert.ok(found.results.length>0,JSON.stringify(found));
+  } finally {await rm(root,{recursive:true,force:true});}
+});
+
+test('eager mode saves nothing without a retrieval miss or a safe durable candidate',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'local-eager-negative-'));
+  try {
+    const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'empty.env'),transcript=join(root,'turn.jsonl');
+    await writeFile(envFile,'ORGBRAIN_LOCAL_HOOK_CAPTURE=true\n');
+    await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',memory_learning_mode:'eager',memory_capture_v2_mode:'on'}}}));
+    const env={...getDefaultEnvironment(),ORGBRAIN_HOOK_ENV_FILES:envFile,ORGBRAIN_WORKSPACES_FILE:workspaces,ORGBRAIN_LOCAL_DB:dbPath,
+      ORGBRAIN_ENABLE_CLOUD_MEMORY:'false',ORGBRAIN_ENABLE_ORG_SHARING:'false',ORGBRAIN_MEMORY_EXTRACTION_MODE:'off',ORGBRAIN_TENANT_ID:'tenant'};
+    const durable='OpenRouter authentication is configured as `OPENROUTER_API_KEY` because the installer reads that binding.\nWhen reinstalling TypeSafe AI, verify the variable is present without printing the value.';
+    let rows=[{type:'turn_context',payload:{turn_id:'no-miss'}},{type:'response_item',payload:{type:'function_call',call_id:'work',name:'exec_command',arguments:'{}'}},{type:'response_item',payload:{type:'function_call_output',call_id:'work',output:JSON.stringify({exit_code:0})}},{type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:durable}]}}];
+    let file=join(root,'no-miss.jsonl');await writeFile(file,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
+    let output=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'s',turn_id:'no-miss',cwd:root,transcript_path:file,last_assistant_message:durable}),encoding:'utf8'}));
+    assert.equal(output.skipped,'eager-no-retrieval-miss',JSON.stringify(output));
+    rows=[{type:'turn_context',payload:{turn_id:'no-candidate'}},{type:'response_item',payload:{type:'function_call',call_id:'ctx',name:'orgbrain_context_enrich',arguments:JSON.stringify({project_id:'project'})}},{type:'response_item',payload:{type:'function_call_output',call_id:'ctx',output:JSON.stringify({evidence_bundle:{evidence_status:'insufficient',abstention_recommended:true}})}},{type:'response_item',payload:{type:'function_call',call_id:'work2',name:'exec_command',arguments:JSON.stringify({cmd:'typesafe-ai doctor'})}},{type:'response_item',payload:{type:'function_call_output',call_id:'work2',output:JSON.stringify({exit_code:0})}},{type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'完了しました。'}]}}];
+    file=join(root,'no-candidate.jsonl');await writeFile(file,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
+    output=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'s',turn_id:'no-candidate',cwd:root,transcript_path:file,last_assistant_message:'完了しました。'}),encoding:'utf8'}));
+    assert.equal(output.skipped,'eager-no-safe-durable-candidate');
+    assert.equal((await memories(new LocalMemoryStore(dbPath),'tenant')).length,0);
+  } finally {await rm(root,{recursive:true,force:true});}
+});
+
 test('local Stop → prompt → question → approval → durable MCP receipt → search, with no network',async()=>{
   const root=await mkdtemp(join(tmpdir(),'local-confirm-flow-'));
   let connection;

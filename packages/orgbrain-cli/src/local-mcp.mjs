@@ -38,6 +38,8 @@ import {
 } from "./lib/local-domain-recall.mjs";
 
 const LOCAL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
+// Calibrated for the high-precision bridge; explicit callers may lower it.
+const DEFAULT_CONTEXT_MINIMUM_TOTAL_SCORE = 0.065;
 export const LOCAL_MCP_PROTOCOL_VERSION = "2026-07-28";
 export const LOCAL_MCP_COMPAT_PROTOCOL_VERSION = "2025-11-25";
 const ORGBRAIN_TOOL_PRESENTATION = Object.freeze({
@@ -117,6 +119,10 @@ const TOOL_DEFINITIONS = [
       properties: {
         query: { type: "string" }, tenant_id: { type: "string" }, project_id: { type: ["string", "null"] },
         principal_id: { type: ["string", "null"] }, include_domain_recall: { type: "boolean" },
+        task_title: { type: ["string", "null"], maxLength: 500 }, task_description: { type: ["string", "null"], maxLength: 4000 },
+        task_id: { type: "string", maxLength: 128 }, work_type: { type: "string", enum: ["implementation", "review", "debug", "proposal", "support", "research", "operations", "other"] },
+        use_context: { type: "object", properties: { task: { type: "string", maxLength: 4000 }, target: { type: "string", maxLength: 1000 }, constraints: { type: "string", maxLength: 4000 }, conditions: { type: "string", maxLength: 4000 } } },
+        minimum_total_score: { type: ["number", "null"], minimum: 0 }, top_k: { type: "integer", minimum: 1, maximum: 10 }, token_budget: { type: "integer", minimum: 512, maximum: 16000 },
         object_type_key: { type: ["string", "null"] }, object_id: { type: ["string", "null"] }, scope: { type: "object" }
       }
     }
@@ -475,7 +481,14 @@ const TOOL_DEFINITIONS = [
         action_changed: { type: "boolean" },
         alternative_executed: { type: "boolean" },
         failure_avoided: { type: "boolean" },
-        failure_saved_tokens_estimate: { type: "number" }
+        failure_saved_tokens_estimate: { type: "number" },
+        verification_ref_type: { type: "string", maxLength: 128 },
+        verification_ref_id: { type: "string", maxLength: 500 },
+        supersedes_effect_id: { type: "string", maxLength: 128 },
+        failure_pattern_id: { type: "string", maxLength: 128 },
+        attributions: { type: "array", maxItems: 50, items: { type: "object" } },
+        use_evaluation: { type: "object" },
+        created_at: { type: "number" }
       }
     }
   },
@@ -822,7 +835,25 @@ async function callTool(store, name, input) {
   if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
   if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
-    const memory = await store.retrieveContext({ tenant_id: tenantId, project_id: input.project_id ?? null, query: input.query, top_k: 5, token_budget: 6_000, principal_id: input.principal_id ?? null, search_mode: "hybrid_v4" });
+    const useContext = input.use_context ?? {
+      task: input.task_description ?? input.task_title ?? input.query,
+      target: input.task_title ?? input.project_id ?? "OrgBrain context enrichment",
+      constraints: "Use only relevant durable memory and abstain when evidence is insufficient.",
+      conditions: "Current workspace and task scope must match."
+    };
+    const memory = await store.retrieveContext({
+      tenant_id: tenantId,
+      project_id: input.project_id ?? null,
+      work_type: input.work_type ?? "other",
+      task_id: boundedString(input.task_id ?? input.task_title, 128) ?? "context-enrich",
+      use_context: useContext,
+      query: input.query,
+      top_k: input.top_k ?? 5,
+      token_budget: input.token_budget ?? 6_000,
+      minimum_total_score: input.minimum_total_score ?? DEFAULT_CONTEXT_MINIMUM_TOTAL_SCORE,
+      principal_id: input.principal_id ?? null,
+      search_mode: "hybrid_v4"
+    });
     const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
     return { ...memory, ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
   }

@@ -35,6 +35,13 @@ const MIN_COMPONENT_SCORE = 0.02;
 const MAX_RESULTS = 2;
 const MAX_SUMMARY_CHARS = 320;
 export const VERIFIED_LEARNING_HIDDEN_INSTRUCTION = MEMORY_CONTRACT_V2_PROMPT;
+export const EAGER_MEMORY_HIDDEN_INSTRUCTION = [
+  "OrgBrain eager learning is enabled for this workspace.",
+  "If a current-turn OrgBrain search or context enrichment returns no relevant memory or recommends abstention, briefly tell the user that you will continue the work and let the lifecycle hook record a safe reusable memory after verified completion.",
+  "Do not claim that a memory was saved before the Stop hook runs, and do not perform an interactive memory write for this automatic path.",
+  "In the final answer, state the reusable configuration location or procedure, why it worked, the verification outcome, and when to reuse it.",
+  "Never include API keys, tokens, passwords, client secrets, bearer values, or other credential values; retain only setting names, safe locations, presence checks, and verification conditions."
+].join(" ");
 
 function compact(value, limit = MAX_SUMMARY_CHARS) {
   const normalized = String(value ?? "").replace(/\s+/gu, " ").trim();
@@ -93,7 +100,9 @@ async function workspaceScope(cwdInput, env) {
     tenantId,
     projectId: mapped?.project_id ?? (path.basename(cwd) || null),
     businessCategoryId: mapped?.business_category_id ?? null,
-    workType: mapped?.default_work_type ?? null,
+    // A missing workspace default must not disable use tracking. Keep the
+    // generic bucket explicit so retrievals can be measured and corrected.
+    workType: mapped?.default_work_type ?? "other",
     learningMode: mapped?.memory_learning_mode ?? "off",
     autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config),
     localMemoryEnabled: !mode.cloudMemoryEnabled
@@ -248,7 +257,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   }
   const commitmentContext = formatCommitmentContext(commitments);
   contextParts.push(...commitmentContext);
-  if (hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent && ["on", "shadow", "confirm"].includes(scope.learningMode)) {
+  if (hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent && ["on", "shadow", "confirm", "eager"].includes(scope.learningMode)) {
     const confirmationSessionKey = memoryConfirmationSessionKey(payload, taskKey);
     let queueError = null;
     const confirmationCandidates = directReviewResolutions.length > 0 ? [] : await commitmentStore.takeMemoryConfirmationBatch({
@@ -264,9 +273,10 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         reason: queueError || (confirmationContext ? "offered_not_yet_shown" : confirmationCandidates.length ? "candidate_over_context_budget" : "no_pending_or_session_already_shown") }
     });
   }
-  const learningInstruction = ["shadow", "on", "confirm"].includes(scope.learningMode)
+  const learningInstruction = ["shadow", "on", "confirm", "eager"].includes(scope.learningMode)
     ? VERIFIED_LEARNING_HIDDEN_INSTRUCTION
     : null;
+  const eagerInstruction = scope.learningMode === "eager" ? EAGER_MEMORY_HIDDEN_INSTRUCTION : null;
   const store = options.store ?? new LocalMemoryStore(env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
   const useStatus = await store.useHistory("status");
   if (useStatus.flags.collect && taskKey && scope.projectId && scope.workType) contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}, work_type=${scope.workType}.`);
@@ -342,6 +352,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
     }
   }
   if (learningInstruction) contextParts.push(learningInstruction);
+  if (eagerInstruction) contextParts.push(eagerInstruction);
   if (contextParts.length === 0) return null;
   return {
     hookSpecificOutput: {
