@@ -1,0 +1,30 @@
+{
+  "status": "calibrated",
+  "threshold": 0.98,
+  "rows": [
+    {
+      "threshold": 0.8,
+      "required_loss": 0,
+      "predicted_false_application": 0,
+      "reviews": 8
+    },
+    {
+      "threshold": 0.9,
+      "required_loss": 0,
+      "predicted_false_application": 0,
+      "reviews": 12
+    },
+    {
+      "threshold": 0.95,
+      "required_loss": 0,
+      "predicted_false_application": 0,
+      "reviews": 14
+    },
+    {
+      "threshold": 0.98,
+      "required_loss": 0,
+      "predicted_false_application": 0,
+      "reviews": 17
+    }
+  ]
+}

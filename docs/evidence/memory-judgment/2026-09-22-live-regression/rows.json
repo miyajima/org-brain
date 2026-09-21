@@ -1,0 +1,1042 @@
+[
+  {
+    "case_id": "negation",
+    "conversation_id": "negation",
+    "split": "dev",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "negation",
+    "conversation_id": "negation",
+    "split": "dev",
+    "arm": "baseline",
+    "selected_ids": [
+      "negation-keep",
+      "negation-drop"
+    ],
+    "selected_characters": 542,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "negation",
+    "conversation_id": "negation",
+    "split": "dev",
+    "arm": "capture_only",
+    "selected_ids": [
+      "negation-keep",
+      "negation-drop"
+    ],
+    "selected_characters": 542,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "negation",
+    "conversation_id": "negation",
+    "split": "dev",
+    "arm": "use_only",
+    "selected_ids": [
+      "negation-keep",
+      "negation-drop"
+    ],
+    "selected_characters": 542,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "negation",
+    "conversation_id": "negation",
+    "split": "dev",
+    "arm": "both",
+    "selected_ids": [
+      "negation-keep",
+      "negation-drop"
+    ],
+    "selected_characters": 542,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "units",
+    "conversation_id": "units",
+    "split": "dev",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "units",
+    "conversation_id": "units",
+    "split": "dev",
+    "arm": "baseline",
+    "selected_ids": [
+      "units-keep",
+      "units-drop"
+    ],
+    "selected_characters": 584,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "units",
+    "conversation_id": "units",
+    "split": "dev",
+    "arm": "capture_only",
+    "selected_ids": [
+      "units-keep",
+      "units-drop"
+    ],
+    "selected_characters": 584,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "units",
+    "conversation_id": "units",
+    "split": "dev",
+    "arm": "use_only",
+    "selected_ids": [
+      "units-keep",
+      "units-drop"
+    ],
+    "selected_characters": 584,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "units",
+    "conversation_id": "units",
+    "split": "dev",
+    "arm": "both",
+    "selected_ids": [
+      "units-keep",
+      "units-drop"
+    ],
+    "selected_characters": 584,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "conditional",
+    "conversation_id": "conditional",
+    "split": "dev",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "conditional",
+    "conversation_id": "conditional",
+    "split": "dev",
+    "arm": "baseline",
+    "selected_ids": [
+      "conditional-keep",
+      "conditional-drop"
+    ],
+    "selected_characters": 551,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "conditional",
+    "conversation_id": "conditional",
+    "split": "dev",
+    "arm": "capture_only",
+    "selected_ids": [
+      "conditional-keep",
+      "conditional-drop"
+    ],
+    "selected_characters": 551,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "conditional",
+    "conversation_id": "conditional",
+    "split": "dev",
+    "arm": "use_only",
+    "selected_ids": [
+      "conditional-keep"
+    ],
+    "selected_characters": 320,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "conditional",
+    "conversation_id": "conditional",
+    "split": "dev",
+    "arm": "both",
+    "selected_ids": [
+      "conditional-keep"
+    ],
+    "selected_characters": 320,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "correction",
+    "conversation_id": "correction",
+    "split": "dev",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "correction",
+    "conversation_id": "correction",
+    "split": "dev",
+    "arm": "baseline",
+    "selected_ids": [
+      "correction-keep",
+      "correction-drop"
+    ],
+    "selected_characters": 593,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "correction",
+    "conversation_id": "correction",
+    "split": "dev",
+    "arm": "capture_only",
+    "selected_ids": [
+      "correction-keep",
+      "correction-drop"
+    ],
+    "selected_characters": 593,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "correction",
+    "conversation_id": "correction",
+    "split": "dev",
+    "arm": "use_only",
+    "selected_ids": [
+      "correction-keep",
+      "correction-drop"
+    ],
+    "selected_characters": 593,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "correction",
+    "conversation_id": "correction",
+    "split": "dev",
+    "arm": "both",
+    "selected_ids": [
+      "correction-keep",
+      "correction-drop"
+    ],
+    "selected_characters": 593,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "proposal",
+    "conversation_id": "proposal",
+    "split": "dev",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "proposal",
+    "conversation_id": "proposal",
+    "split": "dev",
+    "arm": "baseline",
+    "selected_ids": [
+      "proposal-keep",
+      "proposal-drop"
+    ],
+    "selected_characters": 572,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "proposal",
+    "conversation_id": "proposal",
+    "split": "dev",
+    "arm": "capture_only",
+    "selected_ids": [
+      "proposal-keep",
+      "proposal-drop"
+    ],
+    "selected_characters": 572,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "proposal",
+    "conversation_id": "proposal",
+    "split": "dev",
+    "arm": "use_only",
+    "selected_ids": [
+      "proposal-keep",
+      "proposal-drop"
+    ],
+    "selected_characters": 572,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "proposal",
+    "conversation_id": "proposal",
+    "split": "dev",
+    "arm": "both",
+    "selected_ids": [
+      "proposal-keep",
+      "proposal-drop"
+    ],
+    "selected_characters": 572,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "failure",
+    "conversation_id": "failure",
+    "split": "dev",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "failure",
+    "conversation_id": "failure",
+    "split": "dev",
+    "arm": "baseline",
+    "selected_ids": [
+      "failure-keep",
+      "failure-drop"
+    ],
+    "selected_characters": 596,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "failure",
+    "conversation_id": "failure",
+    "split": "dev",
+    "arm": "capture_only",
+    "selected_ids": [
+      "failure-keep",
+      "failure-drop"
+    ],
+    "selected_characters": 596,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "failure",
+    "conversation_id": "failure",
+    "split": "dev",
+    "arm": "use_only",
+    "selected_ids": [
+      "failure-keep",
+      "failure-drop"
+    ],
+    "selected_characters": 596,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "failure",
+    "conversation_id": "failure",
+    "split": "dev",
+    "arm": "both",
+    "selected_ids": [
+      "failure-keep",
+      "failure-drop"
+    ],
+    "selected_characters": 596,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-negation",
+    "conversation_id": "holdout-negation",
+    "split": "holdout",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-negation",
+    "conversation_id": "holdout-negation",
+    "split": "holdout",
+    "arm": "baseline",
+    "selected_ids": [
+      "holdout-negation-keep",
+      "holdout-negation-drop"
+    ],
+    "selected_characters": 615,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-negation",
+    "conversation_id": "holdout-negation",
+    "split": "holdout",
+    "arm": "capture_only",
+    "selected_ids": [
+      "holdout-negation-keep",
+      "holdout-negation-drop"
+    ],
+    "selected_characters": 615,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-negation",
+    "conversation_id": "holdout-negation",
+    "split": "holdout",
+    "arm": "use_only",
+    "selected_ids": [
+      "holdout-negation-keep",
+      "holdout-negation-drop"
+    ],
+    "selected_characters": 615,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-negation",
+    "conversation_id": "holdout-negation",
+    "split": "holdout",
+    "arm": "both",
+    "selected_ids": [
+      "holdout-negation-keep",
+      "holdout-negation-drop"
+    ],
+    "selected_characters": 615,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-units",
+    "conversation_id": "holdout-units",
+    "split": "holdout",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-units",
+    "conversation_id": "holdout-units",
+    "split": "holdout",
+    "arm": "baseline",
+    "selected_ids": [
+      "holdout-units-keep",
+      "holdout-units-drop"
+    ],
+    "selected_characters": 561,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-units",
+    "conversation_id": "holdout-units",
+    "split": "holdout",
+    "arm": "capture_only",
+    "selected_ids": [
+      "holdout-units-keep",
+      "holdout-units-drop"
+    ],
+    "selected_characters": 561,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-units",
+    "conversation_id": "holdout-units",
+    "split": "holdout",
+    "arm": "use_only",
+    "selected_ids": [
+      "holdout-units-keep",
+      "holdout-units-drop"
+    ],
+    "selected_characters": 561,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-units",
+    "conversation_id": "holdout-units",
+    "split": "holdout",
+    "arm": "both",
+    "selected_ids": [
+      "holdout-units-keep",
+      "holdout-units-drop"
+    ],
+    "selected_characters": 561,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-conditional",
+    "conversation_id": "holdout-conditional",
+    "split": "holdout",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-conditional",
+    "conversation_id": "holdout-conditional",
+    "split": "holdout",
+    "arm": "baseline",
+    "selected_ids": [
+      "holdout-conditional-keep",
+      "holdout-conditional-drop"
+    ],
+    "selected_characters": 600,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-conditional",
+    "conversation_id": "holdout-conditional",
+    "split": "holdout",
+    "arm": "capture_only",
+    "selected_ids": [
+      "holdout-conditional-keep",
+      "holdout-conditional-drop"
+    ],
+    "selected_characters": 600,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-conditional",
+    "conversation_id": "holdout-conditional",
+    "split": "holdout",
+    "arm": "use_only",
+    "selected_ids": [
+      "holdout-conditional-keep",
+      "holdout-conditional-drop"
+    ],
+    "selected_characters": 600,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-conditional",
+    "conversation_id": "holdout-conditional",
+    "split": "holdout",
+    "arm": "both",
+    "selected_ids": [
+      "holdout-conditional-keep",
+      "holdout-conditional-drop"
+    ],
+    "selected_characters": 600,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-correction",
+    "conversation_id": "holdout-correction",
+    "split": "holdout",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-correction",
+    "conversation_id": "holdout-correction",
+    "split": "holdout",
+    "arm": "baseline",
+    "selected_ids": [
+      "holdout-correction-keep",
+      "holdout-correction-drop"
+    ],
+    "selected_characters": 651,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-correction",
+    "conversation_id": "holdout-correction",
+    "split": "holdout",
+    "arm": "capture_only",
+    "selected_ids": [
+      "holdout-correction-keep",
+      "holdout-correction-drop"
+    ],
+    "selected_characters": 651,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-correction",
+    "conversation_id": "holdout-correction",
+    "split": "holdout",
+    "arm": "use_only",
+    "selected_ids": [
+      "holdout-correction-keep",
+      "holdout-correction-drop"
+    ],
+    "selected_characters": 651,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-correction",
+    "conversation_id": "holdout-correction",
+    "split": "holdout",
+    "arm": "both",
+    "selected_ids": [
+      "holdout-correction-keep",
+      "holdout-correction-drop"
+    ],
+    "selected_characters": 651,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-proposal",
+    "conversation_id": "holdout-proposal",
+    "split": "holdout",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-proposal",
+    "conversation_id": "holdout-proposal",
+    "split": "holdout",
+    "arm": "baseline",
+    "selected_ids": [
+      "holdout-proposal-keep",
+      "holdout-proposal-drop"
+    ],
+    "selected_characters": 555,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-proposal",
+    "conversation_id": "holdout-proposal",
+    "split": "holdout",
+    "arm": "capture_only",
+    "selected_ids": [
+      "holdout-proposal-keep",
+      "holdout-proposal-drop"
+    ],
+    "selected_characters": 555,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-proposal",
+    "conversation_id": "holdout-proposal",
+    "split": "holdout",
+    "arm": "use_only",
+    "selected_ids": [
+      "holdout-proposal-keep",
+      "holdout-proposal-drop"
+    ],
+    "selected_characters": 555,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-proposal",
+    "conversation_id": "holdout-proposal",
+    "split": "holdout",
+    "arm": "both",
+    "selected_ids": [
+      "holdout-proposal-keep",
+      "holdout-proposal-drop"
+    ],
+    "selected_characters": 555,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-injection",
+    "conversation_id": "holdout-injection",
+    "split": "holdout",
+    "arm": "no_memory",
+    "selected_ids": [],
+    "selected_characters": 0,
+    "required_memory_missing": 1,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-injection",
+    "conversation_id": "holdout-injection",
+    "split": "holdout",
+    "arm": "baseline",
+    "selected_ids": [
+      "holdout-injection-keep",
+      "holdout-injection-drop"
+    ],
+    "selected_characters": 767,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-injection",
+    "conversation_id": "holdout-injection",
+    "split": "holdout",
+    "arm": "capture_only",
+    "selected_ids": [
+      "holdout-injection-keep",
+      "holdout-injection-drop"
+    ],
+    "selected_characters": 767,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 1,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-injection",
+    "conversation_id": "holdout-injection",
+    "split": "holdout",
+    "arm": "use_only",
+    "selected_ids": [
+      "holdout-injection-keep"
+    ],
+    "selected_characters": 305,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  },
+  {
+    "case_id": "holdout-injection",
+    "conversation_id": "holdout-injection",
+    "split": "holdout",
+    "arm": "both",
+    "selected_ids": [
+      "holdout-injection-keep"
+    ],
+    "selected_characters": 305,
+    "required_memory_missing": 0,
+    "irrelevant_memory_included": 0,
+    "upstream_missing": 0,
+    "task_success": null,
+    "parent_usage": null,
+    "task_elapsed_ms": null,
+    "false_application": null
+  }
+]

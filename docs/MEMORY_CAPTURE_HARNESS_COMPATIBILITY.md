@@ -37,6 +37,10 @@ This repository owns all memory extraction and quality decisions. The shared Ast
 - The optional `coverage/v1` extraction profile changes provider work inside
   that same batch to at most two calls. The Stop hook still invokes no LLM and
   sends at most one batch. See `MEMORY_EXTRACTION_COVERAGE_V1.md`.
+- Optional Jev capture selection runs only in local candidate maintenance or
+  the separate capture queue worker. Stop performs no Jev inference. Capture
+  and retrieval default independently to OFF; verification, confirmation and
+  consensus remain authoritative. See [MEMORY_JUDGMENT_JEV.md](MEMORY_JUDGMENT_JEV.md).
 - `Status`, `Conclusion`, `Evidence`, and `Gaps` headings are optional hints,
   not a required wire format. Responses without headings follow the same path.
 - `Conclusion` and `Evidence` remain useful fallback hints, but final-answer

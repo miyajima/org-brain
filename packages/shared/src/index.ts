@@ -15,6 +15,7 @@ export * from "./memory-capture-v2";
 export * from "./memory-repair";
 export * from "./memory-quality";
 export * from "./memory-usefulness-runtime.mjs";
+export * from "./memory-judgment-runtime.mjs";
 export * from "./memory-use-history-runtime.mjs";
 export * from "./memory-quality-audit";
 export * from "./memory-learning";

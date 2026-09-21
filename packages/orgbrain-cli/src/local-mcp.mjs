@@ -113,7 +113,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "orgbrain_context_enrich",
-    description: "Retrieve local memory context and optional Domain Recall without network access.",
+    description: "Retrieve local memory context and optional Domain Recall. Network-free by default; explicitly enabled Jev judgment sends bounded redacted evidence to OpenRouter.",
     inputSchema: {
       type: "object", required: ["query"],
       properties: {

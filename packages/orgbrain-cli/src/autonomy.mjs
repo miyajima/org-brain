@@ -26,6 +26,8 @@ import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs
 import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
 import { runPersonalMaintenance } from "./personal-maintenance.mjs";
 import { captureLocalMemories, loadEnvFallbacks } from "./hook-memory-bridge.mjs";
+import { drainJudgmentCapture } from "./lib/local-memory-judge-queue.mjs";
+import { createLearningCandidateJudge } from "./lib/local-memory-judge.mjs";
 import {
   applyCodexSessionImportPlan,
   attachAutonomousConsensus,
@@ -496,6 +498,10 @@ export async function runAutonomyMaintenance(options = {}) {
       };
     } : null;
   }
+  const captureJudgments = inspectOnly ? { skipped: "dry-run" } : await drainJudgmentCapture({
+    dbPath: options.dbPath ?? options.store?.dbPath ?? process.env.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB,
+    tenantId: status.tenant_id, projectId: status.project_id, env: options.env ?? process.env, allowActiveCapture: !shadowMode
+  }).catch(() => ({ status: "held", reason_code: "capture_queue_unavailable", processed: 0, captured: 0 }));
   let candidateMaintenance;
   let candidateMaintenanceFailed = false;
   if (inspectOnly) {
@@ -509,6 +515,10 @@ export async function runAutonomyMaintenance(options = {}) {
           expireAfterDays: status.policy.quarantine.expire_after_days,
           reevaluateIntervalHours: status.policy.quarantine.reevaluate_interval_hours,
           evaluate: quarantineEvaluator,
+          judgeBatch: createLearningCandidateJudge({
+            dbPath: options.dbPath ?? options.store?.dbPath ?? process.env.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB,
+            env: options.env ?? process.env, shadowOnly: shadowMode
+          }),
           promote: async ({ candidate, outcome }) => {
             const source = candidate?.item && typeof candidate.item === "object" ? candidate.item : candidate;
             const record = {
@@ -542,6 +552,7 @@ export async function runAutonomyMaintenance(options = {}) {
     failed_operations: postApplyObservation.failed_operations ?? (result.ok === true && !candidateMaintenanceFailed && !sessionApplyFailed ? 0 : 1)
   }, status.policy);
   const run = {
+    capture_judgments: captureJudgments,
     schema_version: 1,
     run_id: runId,
     workspace: status.workspace,

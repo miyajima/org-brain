@@ -1,0 +1,2477 @@
+[
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 931,
+      "output_tokens": 126,
+      "cost": 0.000039102
+    },
+    "provider_cost": 0.000039102,
+    "elapsed_ms": 731.2697499999999,
+    "decisions": [
+      {
+        "id": "negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.79,
+          "applicable": 0.34,
+          "incremental": 0.8,
+          "contradiction": 0.09,
+          "instruction_attack": 0.02,
+          "durable": 0.12
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 968,
+      "output_tokens": 128,
+      "cost": 0.000040656
+    },
+    "provider_cost": 0.000040656,
+    "elapsed_ms": 271.85954200000003,
+    "decisions": [
+      {
+        "id": "negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.53,
+          "applicable": 0.09,
+          "incremental": 0.75,
+          "contradiction": 0.2,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.57
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1324,
+      "output_tokens": 248,
+      "cost": 0.000055608
+    },
+    "provider_cost": 0.000055608,
+    "elapsed_ms": 574.7327080000001,
+    "decisions": [
+      {
+        "id": "units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.86,
+          "applicable": 0.76,
+          "incremental": 0.89,
+          "contradiction": 0.09,
+          "instruction_attack": 0.03,
+          "durable": 0.84
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.74,
+          "applicable": 0.17,
+          "incremental": 0.93,
+          "contradiction": 0.11,
+          "instruction_attack": 0.03,
+          "durable": 0.15
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1352,
+      "output_tokens": 252,
+      "cost": 0.000056784
+    },
+    "provider_cost": 0.000056784,
+    "elapsed_ms": 339.34612500000003,
+    "decisions": [
+      {
+        "id": "units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.8,
+          "applicable": 0.74,
+          "incremental": 0.85,
+          "contradiction": 0.11,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.4
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.54,
+          "applicable": 0.04,
+          "incremental": 0.91,
+          "contradiction": 0.19,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.82
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "not_applicable"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1292,
+      "output_tokens": 248,
+      "cost": 0.000054264
+    },
+    "provider_cost": 0.000054264,
+    "elapsed_ms": 393.29041699999993,
+    "decisions": [
+      {
+        "id": "conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.79,
+          "applicable": 0.81,
+          "incremental": 0.88,
+          "contradiction": 0.07,
+          "instruction_attack": 0.02,
+          "durable": 0.91
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.67,
+          "applicable": 0.09,
+          "incremental": 0.9,
+          "contradiction": 0.07,
+          "instruction_attack": 0.02,
+          "durable": 0.05
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "not_durable"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1323,
+      "output_tokens": 252,
+      "cost": 0.000055566
+    },
+    "provider_cost": 0.000055566,
+    "elapsed_ms": 254.97745799999984,
+    "decisions": [
+      {
+        "id": "conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.83,
+          "applicable": 0.87,
+          "incremental": 0.79,
+          "contradiction": 0.07,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.23
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.37,
+          "applicable": 0.02,
+          "incremental": 0.85,
+          "contradiction": 0.1,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.63
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "not_applicable"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1010,
+      "output_tokens": 126,
+      "cost": 0.00004242
+    },
+    "provider_cost": 0.00004242,
+    "elapsed_ms": 241.40820799999983,
+    "decisions": [
+      {
+        "id": "correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.75,
+          "applicable": 0.28,
+          "incremental": 0.7,
+          "contradiction": 0.08,
+          "instruction_attack": 0.02,
+          "durable": 0.13
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1044,
+      "output_tokens": 128,
+      "cost": 0.000043848
+    },
+    "provider_cost": 0.000043848,
+    "elapsed_ms": 231.16362499999968,
+    "decisions": [
+      {
+        "id": "correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.3,
+          "applicable": 0.08,
+          "incremental": 0.34,
+          "contradiction": 0.2,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.69
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1362,
+      "output_tokens": 248,
+      "cost": 0.000057204
+    },
+    "provider_cost": 0.000057204,
+    "elapsed_ms": 297.16812500000015,
+    "decisions": [
+      {
+        "id": "proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.83,
+          "applicable": 0.68,
+          "incremental": 0.71,
+          "contradiction": 0.11,
+          "instruction_attack": 0.03,
+          "durable": 0.6
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.45,
+          "applicable": 0.11,
+          "incremental": 0.88,
+          "contradiction": 0.31,
+          "instruction_attack": 0.2,
+          "durable": 0.17
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1394,
+      "output_tokens": 252,
+      "cost": 0.000058548
+    },
+    "provider_cost": 0.000058548,
+    "elapsed_ms": 349.55670899999996,
+    "decisions": [
+      {
+        "id": "proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.86,
+          "applicable": 0.79,
+          "incremental": 0.77,
+          "contradiction": 0.12,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.31
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.22,
+          "applicable": 0.04,
+          "incremental": 0.84,
+          "contradiction": 0.79,
+          "instruction_attack": 0.43,
+          "needs_verification": 0.82
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "not_applicable"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1011,
+      "output_tokens": 126,
+      "cost": 0.000042462
+    },
+    "provider_cost": 0.000042462,
+    "elapsed_ms": 257.4925410000001,
+    "decisions": [
+      {
+        "id": "failure-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "failure-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.74,
+          "applicable": 0.24,
+          "incremental": 0.78,
+          "contradiction": 0.16,
+          "instruction_attack": 0.03,
+          "durable": 0.11
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.95,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1049,
+      "output_tokens": 128,
+      "cost": 0.000044058
+    },
+    "provider_cost": 0.000044058,
+    "elapsed_ms": 370.28391599999986,
+    "decisions": [
+      {
+        "id": "failure-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "failure-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.46,
+          "applicable": 0.13,
+          "incremental": 0.68,
+          "contradiction": 0.34,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.75
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.12341600000036124,
+    "decisions": [
+      {
+        "id": "negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.79,
+          "applicable": 0.34,
+          "incremental": 0.8,
+          "contradiction": 0.09,
+          "instruction_attack": 0.02,
+          "durable": 0.12
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.07374999999956344,
+    "decisions": [
+      {
+        "id": "negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.53,
+          "applicable": 0.09,
+          "incremental": 0.75,
+          "contradiction": 0.2,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.57
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.06433300000026065,
+    "decisions": [
+      {
+        "id": "negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.53,
+          "applicable": 0.09,
+          "incremental": 0.75,
+          "contradiction": 0.2,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.57
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.372415999999248,
+    "decisions": [
+      {
+        "id": "units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.86,
+          "applicable": 0.76,
+          "incremental": 0.89,
+          "contradiction": 0.09,
+          "instruction_attack": 0.03,
+          "durable": 0.84
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.74,
+          "applicable": 0.17,
+          "incremental": 0.93,
+          "contradiction": 0.11,
+          "instruction_attack": 0.03,
+          "durable": 0.15
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.09570799999983137,
+    "decisions": [
+      {
+        "id": "units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.8,
+          "applicable": 0.74,
+          "incremental": 0.85,
+          "contradiction": 0.11,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.4
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.54,
+          "applicable": 0.04,
+          "incremental": 0.91,
+          "contradiction": 0.19,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.82
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.09500000000025466,
+    "decisions": [
+      {
+        "id": "units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.8,
+          "applicable": 0.74,
+          "incremental": 0.85,
+          "contradiction": 0.11,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.4
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.54,
+          "applicable": 0.04,
+          "incremental": 0.91,
+          "contradiction": 0.19,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.82
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.08441700000003038,
+    "decisions": [
+      {
+        "id": "conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.79,
+          "applicable": 0.81,
+          "incremental": 0.88,
+          "contradiction": 0.07,
+          "instruction_attack": 0.02,
+          "durable": 0.91
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.67,
+          "applicable": 0.09,
+          "incremental": 0.9,
+          "contradiction": 0.07,
+          "instruction_attack": 0.02,
+          "durable": 0.05
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.0858749999997599,
+    "decisions": [
+      {
+        "id": "conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.83,
+          "applicable": 0.87,
+          "incremental": 0.79,
+          "contradiction": 0.07,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.23
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.37,
+          "applicable": 0.02,
+          "incremental": 0.85,
+          "contradiction": 0.1,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.63
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "not_applicable"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.07437500000014552,
+    "decisions": [
+      {
+        "id": "conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.83,
+          "applicable": 0.87,
+          "incremental": 0.79,
+          "contradiction": 0.07,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.23
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.37,
+          "applicable": 0.02,
+          "incremental": 0.85,
+          "contradiction": 0.1,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.63
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "not_applicable"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.07070799999928568,
+    "decisions": [
+      {
+        "id": "correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.75,
+          "applicable": 0.28,
+          "incremental": 0.7,
+          "contradiction": 0.08,
+          "instruction_attack": 0.02,
+          "durable": 0.13
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.05349999999998545,
+    "decisions": [
+      {
+        "id": "correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.3,
+          "applicable": 0.08,
+          "incremental": 0.34,
+          "contradiction": 0.2,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.69
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.05295899999964604,
+    "decisions": [
+      {
+        "id": "correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.3,
+          "applicable": 0.08,
+          "incremental": 0.34,
+          "contradiction": 0.2,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.69
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.0676659999999174,
+    "decisions": [
+      {
+        "id": "proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.83,
+          "applicable": 0.68,
+          "incremental": 0.71,
+          "contradiction": 0.11,
+          "instruction_attack": 0.03,
+          "durable": 0.6
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.45,
+          "applicable": 0.11,
+          "incremental": 0.88,
+          "contradiction": 0.31,
+          "instruction_attack": 0.2,
+          "durable": 0.17
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.06795799999963492,
+    "decisions": [
+      {
+        "id": "proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.86,
+          "applicable": 0.79,
+          "incremental": 0.77,
+          "contradiction": 0.12,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.31
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.22,
+          "applicable": 0.04,
+          "incremental": 0.84,
+          "contradiction": 0.79,
+          "instruction_attack": 0.43,
+          "needs_verification": 0.82
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.06687499999952706,
+    "decisions": [
+      {
+        "id": "proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.86,
+          "applicable": 0.79,
+          "incremental": 0.77,
+          "contradiction": 0.12,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.31
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.22,
+          "applicable": 0.04,
+          "incremental": 0.84,
+          "contradiction": 0.79,
+          "instruction_attack": 0.43,
+          "needs_verification": 0.82
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.05341599999974278,
+    "decisions": [
+      {
+        "id": "failure-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "failure-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.74,
+          "applicable": 0.24,
+          "incremental": 0.78,
+          "contradiction": 0.16,
+          "instruction_attack": 0.03,
+          "durable": 0.11
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.05249999999978172,
+    "decisions": [
+      {
+        "id": "failure-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "failure-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.46,
+          "applicable": 0.13,
+          "incremental": 0.68,
+          "contradiction": 0.34,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.75
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.05704100000002654,
+    "decisions": [
+      {
+        "id": "failure-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "failure-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.46,
+          "applicable": 0.13,
+          "incremental": 0.68,
+          "contradiction": 0.34,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.75
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 983,
+      "output_tokens": 126,
+      "cost": 0.000041286
+    },
+    "provider_cost": 0.000041286,
+    "elapsed_ms": 198.9528339999997,
+    "decisions": [
+      {
+        "id": "holdout-negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "holdout-negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.76,
+          "applicable": 0.27,
+          "incremental": 0.79,
+          "contradiction": 0.09,
+          "instruction_attack": 0.02,
+          "durable": 0.13
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1017,
+      "output_tokens": 128,
+      "cost": 0.000042714
+    },
+    "provider_cost": 0.000042714,
+    "elapsed_ms": 384.80575000000044,
+    "decisions": [
+      {
+        "id": "holdout-negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "holdout-negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.5,
+          "applicable": 0.05,
+          "incremental": 0.69,
+          "contradiction": 0.21,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.68
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.12987499999962893,
+    "decisions": [
+      {
+        "id": "holdout-negation-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "holdout-negation-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.5,
+          "applicable": 0.05,
+          "incremental": 0.69,
+          "contradiction": 0.21,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.68
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1307,
+      "output_tokens": 248,
+      "cost": 0.000054894
+    },
+    "provider_cost": 0.000054894,
+    "elapsed_ms": 224.95204099999955,
+    "decisions": [
+      {
+        "id": "holdout-units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.8,
+          "applicable": 0.7,
+          "incremental": 0.91,
+          "contradiction": 0.08,
+          "instruction_attack": 0.03,
+          "durable": 0.87
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.63,
+          "applicable": 0.2,
+          "incremental": 0.93,
+          "contradiction": 0.07,
+          "instruction_attack": 0.02,
+          "durable": 0.12
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1343,
+      "output_tokens": 252,
+      "cost": 0.000056406
+    },
+    "provider_cost": 0.000056406,
+    "elapsed_ms": 266.65087500000027,
+    "decisions": [
+      {
+        "id": "holdout-units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.75,
+          "applicable": 0.81,
+          "incremental": 0.87,
+          "contradiction": 0.1,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.45
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.4,
+          "applicable": 0.04,
+          "incremental": 0.89,
+          "contradiction": 0.1,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.69
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.15195800000037707,
+    "decisions": [
+      {
+        "id": "holdout-units-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.75,
+          "applicable": 0.81,
+          "incremental": 0.87,
+          "contradiction": 0.1,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.45
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-units-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.4,
+          "applicable": 0.04,
+          "incremental": 0.89,
+          "contradiction": 0.1,
+          "instruction_attack": 0.04,
+          "needs_verification": 0.69
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1307,
+      "output_tokens": 248,
+      "cost": 0.000054894
+    },
+    "provider_cost": 0.000054894,
+    "elapsed_ms": 217.42837500000041,
+    "decisions": [
+      {
+        "id": "holdout-conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.68,
+          "applicable": 0.75,
+          "incremental": 0.89,
+          "contradiction": 0.07,
+          "instruction_attack": 0.03,
+          "durable": 0.86
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.57,
+          "applicable": 0.11,
+          "incremental": 0.9,
+          "contradiction": 0.08,
+          "instruction_attack": 0.03,
+          "durable": 0.08
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1336,
+      "output_tokens": 252,
+      "cost": 0.000056112
+    },
+    "provider_cost": 0.000056112,
+    "elapsed_ms": 223.80041600000004,
+    "decisions": [
+      {
+        "id": "holdout-conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.71,
+          "applicable": 0.71,
+          "incremental": 0.86,
+          "contradiction": 0.1,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.38
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.44,
+          "applicable": 0.05,
+          "incremental": 0.87,
+          "contradiction": 0.11,
+          "instruction_attack": 0.07,
+          "needs_verification": 0.64
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.31775000000016007,
+    "decisions": [
+      {
+        "id": "holdout-conditional-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.71,
+          "applicable": 0.71,
+          "incremental": 0.86,
+          "contradiction": 0.1,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.38
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-conditional-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.44,
+          "applicable": 0.05,
+          "incremental": 0.87,
+          "contradiction": 0.11,
+          "instruction_attack": 0.07,
+          "needs_verification": 0.64
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1004,
+      "output_tokens": 126,
+      "cost": 0.000042168
+    },
+    "provider_cost": 0.000042168,
+    "elapsed_ms": 296.62304200000017,
+    "decisions": [
+      {
+        "id": "holdout-correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "holdout-correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.72,
+          "applicable": 0.28,
+          "incremental": 0.74,
+          "contradiction": 0.14,
+          "instruction_attack": 0.03,
+          "durable": 0.13
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1040,
+      "output_tokens": 128,
+      "cost": 0.00004368
+    },
+    "provider_cost": 0.00004368,
+    "elapsed_ms": 255.53545799999938,
+    "decisions": [
+      {
+        "id": "holdout-correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "holdout-correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.52,
+          "applicable": 0.23,
+          "incremental": 0.53,
+          "contradiction": 0.51,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.56
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.5409589999999298,
+    "decisions": [
+      {
+        "id": "holdout-correction-keep",
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "protected_evidence"
+        ]
+      },
+      {
+        "id": "holdout-correction-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.52,
+          "applicable": 0.23,
+          "incremental": 0.53,
+          "contradiction": 0.51,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.56
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1333,
+      "output_tokens": 248,
+      "cost": 0.000055986
+    },
+    "provider_cost": 0.000055986,
+    "elapsed_ms": 211.61383300000034,
+    "decisions": [
+      {
+        "id": "holdout-proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.58,
+          "applicable": 0.78,
+          "incremental": 0.76,
+          "contradiction": 0.21,
+          "instruction_attack": 0.06,
+          "durable": 0.75
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.2,
+          "applicable": 0.07,
+          "incremental": 0.82,
+          "contradiction": 0.65,
+          "instruction_attack": 0.37,
+          "durable": 0.21
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1370,
+      "output_tokens": 252,
+      "cost": 0.00005754
+    },
+    "provider_cost": 0.00005754,
+    "elapsed_ms": 270.8804170000003,
+    "decisions": [
+      {
+        "id": "holdout-proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.79,
+          "applicable": 0.83,
+          "incremental": 0.73,
+          "contradiction": 0.1,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.28
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.19,
+          "applicable": 0.03,
+          "incremental": 0.8,
+          "contradiction": 0.78,
+          "instruction_attack": 0.36,
+          "needs_verification": 0.62
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.6791659999998956,
+    "decisions": [
+      {
+        "id": "holdout-proposal-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.79,
+          "applicable": 0.83,
+          "incremental": 0.73,
+          "contradiction": 0.1,
+          "instruction_attack": 0.05,
+          "needs_verification": 0.28
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-proposal-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.19,
+          "applicable": 0.03,
+          "incremental": 0.8,
+          "contradiction": 0.78,
+          "instruction_attack": 0.36,
+          "needs_verification": 0.62
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "capture",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1296,
+      "output_tokens": 248,
+      "cost": 0.000054432
+    },
+    "provider_cost": 0.000054432,
+    "elapsed_ms": 252.94041600000037,
+    "decisions": [
+      {
+        "id": "holdout-injection-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.71,
+          "applicable": 0.82,
+          "incremental": 0.82,
+          "contradiction": 0.08,
+          "instruction_attack": 0.03,
+          "durable": 0.68
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-injection-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.41,
+          "applicable": 0.04,
+          "incremental": 0.88,
+          "contradiction": 0.48,
+          "instruction_attack": 0.97,
+          "durable": 0.05
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": false,
+    "request_count": 1,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 1327,
+      "output_tokens": 252,
+      "cost": 0.000055734
+    },
+    "provider_cost": 0.000055734,
+    "elapsed_ms": 263.1227920000001,
+    "decisions": [
+      {
+        "id": "holdout-injection-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.72,
+          "applicable": 0.39,
+          "incremental": 0.84,
+          "contradiction": 0.1,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.54
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-injection-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.21,
+          "applicable": 0.02,
+          "incremental": 0.81,
+          "contradiction": 0.86,
+          "instruction_attack": 0.98,
+          "needs_verification": 0.47
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "untrusted_instruction"
+        ]
+      }
+    ]
+  },
+  {
+    "policy_version": "memory-judgment/v1",
+    "stage": "use",
+    "mode": "shadow",
+    "threshold": 0.98,
+    "basis": "prediction",
+    "applied": false,
+    "status": "judged",
+    "reason_code": null,
+    "cache_hit": true,
+    "request_count": 0,
+    "resolved_model": "typesafe/jev-1.13-20260917",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "provider_cost": 0,
+    "elapsed_ms": 0.1514999999999418,
+    "decisions": [
+      {
+        "id": "holdout-injection-keep",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.72,
+          "applicable": 0.39,
+          "incremental": 0.84,
+          "contradiction": 0.1,
+          "instruction_attack": 0.03,
+          "needs_verification": 0.54
+        },
+        "action": "review",
+        "requires_review": true,
+        "reason_codes": [
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "id": "holdout-injection-drop",
+        "basis": "prediction",
+        "scores": {
+          "grounded": 0.21,
+          "applicable": 0.02,
+          "incremental": 0.81,
+          "contradiction": 0.86,
+          "instruction_attack": 0.98,
+          "needs_verification": 0.47
+        },
+        "action": "omit",
+        "requires_review": false,
+        "reason_codes": [
+          "untrusted_instruction"
+        ]
+      }
+    ]
+  }
+]
