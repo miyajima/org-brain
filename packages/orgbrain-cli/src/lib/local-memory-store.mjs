@@ -2947,10 +2947,21 @@ function searchRetrievalUnitsV4(db, options) {
       });
     }
   }
-  const ranked = candidateIds.flatMap((id) => {
+  // SQLite unicode61 can join Japanese particles to adjacent ASCII words,
+  // so FTS prefix matching misses API in "稼働中APIの応答". Restore the exact
+  // channel only when every subject term occurs in an already bounded candidate.
+  const cjkTerms = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(query)
+    ? retrievalSubjectQueryTokens(query).slice(0, 16) : [];
+  const exactIds = new Set(exactRows.map((row) => row.memory_id));
+  const ranked = candidateIds.flatMap((id, index) => {
     const entry = baseById.get(id);
     if (!entry) return [];
-    const total = scores.get(id) ?? 0;
+    let total = scores.get(id) ?? 0;
+    if (cjkTerms.length >= 2 && !exactIds.has(id)) {
+      const text = [entry.memory.content, entry.memory.summary, entry.memory.rationale, entry.memory.reuse_rule]
+        .filter(Boolean).join("\n").normalize("NFKC").toLowerCase();
+      if (cjkTerms.every((term) => text.includes(term))) total += 3 / (60 + index + 1);
+    }
     const denseMatch = denseRows.find((row) => row.memory_id === id);
     if (minimumTotalScore !== null && total < minimumTotalScore) return [];
     return [{
@@ -5638,6 +5649,7 @@ export class LocalMemoryStore {
     use_snapshot_id: useSnapshotId = null,
     minimum_total_score: minimumTotalScore = null,
     token_budget = 8_000,
+    context_format = "full",
     principal_id: principalId = null,
     at: queryAt = null,
     search_mode: searchMode = "hybrid_v4"
@@ -5681,6 +5693,24 @@ export class LocalMemoryStore {
       }
       results = refreshed;
       if (changed) judgment = { ...judgment, applied: false, status: "fallback", reason_code: "source_changed" };
+    }
+    if (context_format === "compact") {
+      const { buildCompactMemoryContext } = await import("./compact-memory-context.mjs");
+      const usageId = randomUUID();
+      const protectedIds = judgment.applied ? results.filter(({ memory }) => {
+        const candidate = memoryJudgmentCandidate(memory);
+        return candidate.protected_reasons.length || candidate.conflicts.length;
+      }).map(({ memory }) => memory.id) : [];
+      const candidates = judgment.applied ? results.filter(({ memory }) => protectedIds.includes(memory.id)
+        || judgment.decisions.find((item) => item.id === memory.id)?.action !== "omit")
+        .sort((a, b) => Number(protectedIds.includes(b.memory.id)) - Number(protectedIds.includes(a.memory.id))) : results;
+      const packed = buildCompactMemoryContext({ results: candidates, query, topK: safeTopK,
+        tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds });
+      await this.recordUsage({ id: usageId, tenant_id: tenantId, project_id: projectId, task_id: taskId,
+        actor_principal: principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
+        capability: "memory_retrieve_context", access_path: "context", request_source: "local",
+        requested_business_category_id: businessCategoryId, requested_work_type: workType, items: packed.items });
+      return packed.response;
     }
     await this.init();
     const db = this.open({ readOnly: true });

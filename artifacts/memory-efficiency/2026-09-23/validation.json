@@ -1,0 +1,70 @@
+{
+  "checks": [
+    {
+      "name": "affected Node suites",
+      "log_sha256": "bb6c475360fbde7be2f93225c9949cb4d0f313a5c0fd4fae0b2e2b90b945f473",
+      "tests": 99,
+      "pass": 99,
+      "fail": 0
+    },
+    {
+      "name": "affected Vitest suites",
+      "log_sha256": "8c8d83bc8feacb40692a6e761a22a66c8d7029c6725f7315e95b2688a62f5a38",
+      "tests": 69,
+      "pass": 69,
+      "fail": 0,
+      "files": 4
+    },
+    {
+      "name": "latest boundary suites",
+      "log_sha256": "6f0900cd2f5759abd679fd629bd1dd108579e8c47b9bd870c765ef38cac18e1f",
+      "tests": 60,
+      "pass": 60,
+      "fail": 0
+    },
+    {
+      "name": "built CLI integration",
+      "log_sha256": "e55bccfcf06224e4e27b15880bf38ba059865c612b2660b2d8ac481a595b6ed7",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    },
+    {
+      "name": "installed MCP CLI integration",
+      "log_sha256": "14c2aeeb174442045def0ab4a91a1097fbe03d4c2328b4f4de0470570a763500",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    },
+    {
+      "name": "installed hook CLI integration",
+      "log_sha256": "fae87359cee522745ec3e126e76fd3199e35e0d01b754e83860d8bb3c1163408",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    }
+  ],
+  "counts_overlap_do_not_sum": true,
+  "lint": "passed",
+  "standalone_build": "passed",
+  "diff_check": "passed",
+  "remote_CI": "not_run",
+  "independent_review": {
+    "request_id": "orgbrain-memory-efficiency-2026-09-23",
+    "verdict": "pass",
+    "unresolved_findings": [],
+    "scope": "local code, contract compatibility, component evidence; installed runtime checked separately"
+  },
+  "source_sha256": {
+    "package.json": "c95a49227ee98898e3313b250786cc19d3a480dae46369039a65a5f36226e2ab",
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "2ec0d32e7a2ac026bb0f484bf50d71786994c9fcc8d690e7168742f088c46904",
+    "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "2a21f435cb4f4ba1d9c0cbe362026cfeab3525c5969d60d40bf23bdf6d9a27a9",
+    "packages/orgbrain-cli/src/lib/coverage-review-signals.mjs": "3f2253b9e0ae0929d65163bbc75f61f13eab4c95c8656733ebb076be95a1561e",
+    "packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs": "cccac238330ea2be5ce7eef7ff4b176a4ffde15630535475893a7933073ded10",
+    "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "4937a00b578ce1237d87fb92de52472a85705a247951923bb704eca9a9a3ec57",
+    "packages/orgbrain-cli/src/local-mcp.mjs": "e4b6e2c3fce18a42a12d294502956289b0a8ce36efcd635291aaff7a7ede45aa",
+    "packages/shared/src/memory-capture-v2-runtime.mjs": "85198f47a2402b34e3904a14d2ae27263a42a00b65a2c08d39bb2baa732edb30",
+    "scripts/memory-efficiency.test.mjs": "1fddea98f6f42fcaf737d05234c6628bf86f361d1b6c35e2a9630d7c6eb6de2f",
+    "scripts/memory-efficiency-evaluate.mjs": "fed8ae4c3fd056e43442ad817afe277b0c3ad60de314ed2c1288d07c29fd3120"
+  }
+}

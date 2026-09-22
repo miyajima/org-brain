@@ -1,0 +1,46 @@
+{
+  "schema": "memory-efficiency-publication/v1",
+  "raw_artifacts_retained_locally": true,
+  "local_archive": "$HOME/.org-brain/experiments/memory-efficiency-2026-09-23-72af",
+  "archive_receipt_sha256": "f22f00dda2b4e5fce1803e43950a02cca0fb064ca2d0ce8190ee36ab5640edf7",
+  "original_summary_sha256": {
+    "component-replay.json": "6ede4f06f838aa9679669bd398580ec741d8693329019fe728a0a3853858b18d",
+    "evidence-assessment.json": "205e56fa8b8540bb9f14d6a4595906ea4c3a1b39bea241ae898ea80ff4eabdc8",
+    "installed-smoke.json": "1c5896c13c1ca8e636bae90a50d74ffa4e2da082a844c0e501ed968f9b2cc090",
+    "live-codex/acceptance-review.json": "cf8dc2a75656b3cb378febb4e83e643ab752dbb848daf9d17956809e06685d7a",
+    "live-codex/answer.schema.json": "2c8ae05850f00eb20e668f5766817ec949e16e5e843ac33525ba472295c6bee0",
+    "live-codex/attempts-before-continuation.json": "4751b4a641f327d1602670cd940a704f761f9262d33cdc02490e78ae3d8c551c",
+    "live-codex/attempts.json": "feea382be444badfd30236b9e8b948c3cd8cd85300baaf4910a9dcecfa36515c",
+    "live-codex/context-size-audit.json": "c40ce3329260710e7abddd31e81634581ee1f68b1d836cad8f390b3164a5eb9b",
+    "live-codex/continuation.json": "8069c1713cf8236017e7b58b50475c18938009972eef367d2b975c5bfcfbcb23",
+    "live-codex/manifest.json": "039dea477b5e963ad75479c13b459e1bc9ebaf58aa8f6cdb179d457a2186a6ce",
+    "live-codex/partial-usage-recovery.json": "e994e74a14de682d720dc306af93ec50cf5eadbb1eda17331209c3ec4f518711",
+    "live-codex/protocol-errata.json": "c9ebcfcc24b7cab4b4267cd57d6a34674bd21c9e41e510ca6f882a827095c7d3",
+    "live-codex/report.json": "69acfb52bb95a9b83c4f7e1e169356bc1341459955fc31031812e287936ce1b4",
+    "live-codex/retrieval-source-audit.json": "7d375584deb52be65c752fcdeed085d482eb0a1e60b53a406012c54088c9b864",
+    "live-codex/runner-provenance.json": "625c614b3ae74c911d5b0821e6c3dd6f543068e47822d80502873a506c5e5584",
+    "live-codex/validation.json": "c96a557c16f69ab51d542d3a28635f98e202c71c720246faa094f4bb10c6c0b0",
+    "local-audit.json": "c888cae714cb18f7bdd6d1ddeeafc9e980e7f524a851055f3e20af8b3dfbbf89",
+    "local-rollout-plan.json": "3472af3af5c65893994cf8e7497a603c7432ecd9921f083542ba0cd7679fdf60",
+    "validation.json": "7fbb05c1b27403925836c13d6b135f79824bf466a52062cb0369206c0e18af3d"
+  },
+  "excluded_from_git": {
+    "raw_run_artifacts": 118,
+    "path": "live-codex/runs",
+    "contents": [
+      "native event logs",
+      "answers",
+      "prompts",
+      "retrieval contexts",
+      "stderr",
+      "synthetic SQLite databases including WAL and SHM"
+    ]
+  },
+  "path_placeholders": [
+    "$WORKTREE",
+    "$RUNTIME_ROOT",
+    "$BASELINE_ROOT",
+    "$HOME"
+  ],
+  "meaning": "Published JSON records retain measurement and acceptance values; only local absolute path prefixes were replaced. Artifact hashes refer to the original local evidence. Fresh hash and source audits require the original raw archive."
+}

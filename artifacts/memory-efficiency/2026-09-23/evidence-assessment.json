@@ -1,0 +1,47 @@
+{
+  "operation": "assess-evidence",
+  "model": "typesafe/jev-1.13-20260917",
+  "usage": {
+    "input_tokens": 1383,
+    "output_tokens": 185,
+    "cost": 5.8086e-05
+  },
+  "api_elapsed_ms": 456,
+  "criteria": [
+    {
+      "id": "capture",
+      "assessment": "supported",
+      "current_evidence": true,
+      "evidence_ids": [
+        "node",
+        "vitest"
+      ]
+    },
+    {
+      "id": "context",
+      "assessment": "supported",
+      "current_evidence": true,
+      "evidence_ids": [
+        "node"
+      ]
+    },
+    {
+      "id": "compatibility",
+      "assessment": "insufficient",
+      "current_evidence": true,
+      "evidence_ids": [
+        "node",
+        "vitest"
+      ]
+    },
+    {
+      "id": "measurement",
+      "assessment": "supported",
+      "current_evidence": true,
+      "evidence_ids": [
+        "replay"
+      ]
+    }
+  ],
+  "limitation": "Evidence assessment is advisory; compatibility uncertainty is resolved by the recorded full MCP profile tests and independent source review. This fee is separate from parent task usage."
+}

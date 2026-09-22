@@ -1,0 +1,17 @@
+{
+  "attempts": 18,
+  "unique_attempt_ids": 18,
+  "accepted": 16,
+  "timeouts": 2,
+  "source_unchanged": true,
+  "successful_artifact_hashes_valid": true,
+  "same_requested_model_and_effort": true,
+  "citation_failures": [],
+  "unexpected_item_types": [],
+  "question_or_prompt_mismatch": [],
+  "known_total_tokens": 3834752,
+  "usage_unknown_attempts": [
+    "usage-1-full",
+    "capture-2-full"
+  ]
+}

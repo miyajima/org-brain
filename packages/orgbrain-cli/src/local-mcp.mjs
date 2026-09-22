@@ -1,4 +1,5 @@
 import { observeMemoryUse } from "./lib/memory-use-collector.mjs";
+import { answerGuidanceForDisposition } from "../../shared/src/evidence-disposition.mjs";
 import {
   classifyMemoryReviewAnswer,
   memoryCategoryFromReviewAnswer,
@@ -123,6 +124,7 @@ const TOOL_DEFINITIONS = [
         task_id: { type: "string", maxLength: 128 }, work_type: { type: "string", enum: ["implementation", "review", "debug", "proposal", "support", "research", "operations", "other"] },
         use_context: { type: "object", properties: { task: { type: "string", maxLength: 4000 }, target: { type: "string", maxLength: 1000 }, constraints: { type: "string", maxLength: 4000 }, conditions: { type: "string", maxLength: 4000 } } },
         minimum_total_score: { type: ["number", "null"], minimum: 0 }, top_k: { type: "integer", minimum: 1, maximum: 10 }, token_budget: { type: "integer", minimum: 512, maximum: 16000 },
+        context_format: { type: "string", enum: ["compact", "full"], description: "Compact preserves complete lessons and reuse conditions within the complete response budget; full includes historical projections." },
         object_type_key: { type: ["string", "null"] }, object_id: { type: ["string", "null"] }, scope: { type: "object" }
       }
     }
@@ -829,12 +831,16 @@ function captureDefaults(input) {
   };
 }
 
-async function callTool(store, name, input) {
+async function callTool(store, name, input, toolProfile = "default") {
   const tenantId = input.tenant_id || "default";
   if (name === "orgbrain_memories_confirmation_status") return store.mcpConfirmationStatus({token:boundedString(input.confirmation_token,64),tenant_id:tenantId});
   if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
   if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
+    const contextFormat = input.context_format ?? (input.include_domain_recall || toolProfile === "answer-ux-readonly" ? "full" : "compact");
+    if (!["compact", "full"].includes(contextFormat)) throw new Error("invalid_context_format");
+    if (contextFormat === "compact" && toolProfile === "answer-ux-readonly") throw new Error("compact_context_requires_default_profile");
+    if (contextFormat === "compact" && input.include_domain_recall) throw new Error("compact_context_requires_separate_domain_recall");
     const useContext = input.use_context ?? {
       task: input.task_description ?? input.task_title ?? input.query,
       target: input.task_title ?? input.project_id ?? "OrgBrain context enrichment",
@@ -849,7 +855,8 @@ async function callTool(store, name, input) {
       use_context: useContext,
       query: input.query,
       top_k: input.top_k ?? 5,
-      token_budget: input.token_budget ?? 6_000,
+      token_budget: input.token_budget ?? (contextFormat === "full" ? 6_000 : 1_500),
+      context_format: contextFormat,
       minimum_total_score: input.minimum_total_score ?? DEFAULT_CONTEXT_MINIMUM_TOTAL_SCORE,
       principal_id: input.principal_id ?? null,
       search_mode: "hybrid_v4"
@@ -1128,11 +1135,15 @@ export function sanitizeAnswerUxToolResult(name, result) {
           summary: summaryByMemoryId.get(item?.memory_id) ?? boundedString(item?.text, 500),
           source_ref: boundedString(item?.source_reference?.ref, 500)
         })),
-        conflicts_count: Array.isArray(bundle.conflicts) ? bundle.conflicts.length : 0,
+        conflicts_count: Number.isInteger(bundle.conflicts_count) ? bundle.conflicts_count
+          : Array.isArray(bundle.conflicts) ? bundle.conflicts.length : 0,
         missing_evidence: Array.isArray(bundle.missing_evidence) ? bundle.missing_evidence : [],
         abstention_recommended: bundle.abstention_recommended === true,
         degraded_reasons: Array.isArray(bundle.degraded_reasons) ? bundle.degraded_reasons : [],
-        answer_guidance: bundle.answer_guidance ?? null
+        answer_guidance: bundle.answer_guidance ?? answerGuidanceForDisposition(
+          { evidence_status: bundle.evidence_status ?? "insufficient" },
+          (bundle.evidence ?? []).map((item) => item.source_reference)
+        )
       },
       ...(typeof result?.domain_recall_markdown === "string" && result.domain_recall_markdown
         ? { domain_recall_markdown: result.domain_recall_markdown }
@@ -1177,7 +1188,7 @@ export async function handleLocalMcpRequest(store, request, options = {}) {
     }
     const input = request.params?.arguments || {};
     try {
-      const result = await callTool(store, name, input);
+      const result = await callTool(store, name, input, toolProfile);
       return { content: content(profileToolResult(toolProfile, name, result)), isError: false };
     } catch (error) {
       return {
@@ -1215,7 +1226,7 @@ export function createLocalMcpServer(store, {
       },
       async (input) => {
         try {
-          const result = await callTool(store, definition.name, input);
+          const result = await callTool(store, definition.name, input, toolProfile);
           return { content: content(profileToolResult(toolProfile, definition.name, result)), isError: false };
         } catch (error) {
           return {

@@ -6,6 +6,6 @@ import { judgmentHash } from "../../../shared/src/memory-judgment-runtime.mjs";
 export async function localJudgmentImplementationHash() {
   const files = ["../../../shared/src/memory-judgment-runtime.mjs", "../../../shared/src/memory-judgment-evaluation.mjs",
     "./local-memory-judge.mjs", "./local-memory-judge-queue.mjs", "./local-memory-store.mjs", "./task-commitment-store.mjs",
-    "../autonomy.mjs", "../hook-memory-bridge.mjs", "./local-memory-judgment-binding.mjs"];
+    "../autonomy.mjs", "../hook-memory-bridge.mjs", "./local-memory-judgment-binding.mjs", "./compact-memory-context.mjs"];
   return judgmentHash(await Promise.all(files.map(async (file) => [file, await readFile(new URL(file, import.meta.url), "utf8")])));
 }

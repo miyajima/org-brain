@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "protocol": "legacy",
+  "database": "isolated temporary fixture",
+  "context_format": "compact",
+  "returned": 1,
+  "estimated_tokens": 559,
+  "token_budget": 1500,
+  "reuse_conditions_preserved": true,
+  "existing_process_reconnected": false
+}
