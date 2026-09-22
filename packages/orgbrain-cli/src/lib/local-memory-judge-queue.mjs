@@ -48,7 +48,8 @@ export async function drainJudgmentCapture({ dbPath, tenantId = "default", proje
           const expiry = record.valid_until ?? record.validUntil ?? record.expires_at;
           return expiry == null || expiry > (suppliedNow ?? Date.now());
         };
-        const candidates = records.map((r, index) => ({ record: r, candidate: memoryJudgmentCandidate(r, `candidate-${index}`) }))
+        const includeCaptureAssessment = localJudgmentPolicy("capture", projectId, env).capture_assessment_mode === "shadow";
+        const candidates = records.map((r, index) => ({ record: r, candidate: memoryJudgmentCandidate(r, `candidate-${index}`, { includeCaptureAssessment }) }))
           .filter(({ record }) => stillValid(record)).map(({ candidate }) => candidate);
         const judgment = await ask({ stage: "capture", context: { tenant_id: tenantId, project_id: projectId, purpose: "Future reuse within this project; preserve candidate conditions." }, candidates });
         const decisions = new Map(judgment.decisions.map((item) => [item.id, item]));
