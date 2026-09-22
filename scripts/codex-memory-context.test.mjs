@@ -221,9 +221,12 @@ test("Codex prompt hook explains eager gap capture without authorizing secret st
       prompt: "Install TypeSafe AI and configure OpenRouter"
     }, ctx);
     const context = result.hookSpecificOutput.additionalContext;
+    assert.equal(result.systemMessage, "OrgBrain: 関連記憶なし");
+    assert.doesNotMatch(context, /OrgBrain: 関連記憶なし/u);
     assert.match(context, /OrgBrain eager learning is enabled/u);
-    assert.match(context, /returns no relevant memory or recommends abstention/u);
-    assert.match(context, /lifecycle hook record a safe reusable memory after verified completion/u);
+    assert.match(context, /treat that as an internal status/u);
+    assert.match(context, /do not narrate the miss/u);
+    assert.doesNotMatch(context, /briefly tell the user/u);
     assert.match(context, /Never include API keys, tokens, passwords/u);
     assert.match(context, /do not perform an interactive memory write/u);
   } finally {
