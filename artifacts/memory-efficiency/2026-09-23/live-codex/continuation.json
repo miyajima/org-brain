@@ -1,0 +1,10 @@
+{
+  "recorded_at": 1790093380.71933,
+  "original_stopping_rule": "Stop after any 240-second task timeout",
+  "continuation_rule": "Preserve completed and timed-out attempts unchanged. Resume only the 14 unattempted slots, retaining the same source, prompts, model, order and 240-second limit. No retries. Later task timeouts are retained as failures; infrastructure errors still stop.",
+  "reason": "The timeout contains 21 completed source-inspection commands and no final answer. This is an observed task failure, not evidence that the independent remaining conditions cannot run.",
+  "prior_attempts_sha256": "4751b4a641f327d1602670cd940a704f761f9262d33cdc02490e78ae3d8c551c",
+  "runner_sha256": "36aafca3a1141c893e51ac7bc17221b70aeede129a751277cce6cb9c82dd6c68",
+  "first_timeout_returncode": -15,
+  "additional_run_bound": 14
+}

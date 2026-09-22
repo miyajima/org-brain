@@ -1,0 +1,39 @@
+{
+  "status": "installed_verified_hash",
+  "source": "$WORKTREE/packages/orgbrain-cli/dist/orgbrain.mjs",
+  "source_sha256": "9b36e8dc594454a2ee61bd463e692f7a8d1c583ac7311c29e6378e08eb0f72ac",
+  "targets": [
+    {
+      "path": "$HOME/.local/lib/node_modules/orgbrain/dist/orgbrain.mjs",
+      "sha256": "4ad689aa79ec0005bf7d6370db25e1b380d1fc4c5b206aa6e31bbae55be823e6",
+      "mode": 493,
+      "resolved": "$HOME/.local/lib/node_modules/orgbrain/dist/orgbrain.mjs"
+    },
+    {
+      "path": "$HOME/.org-brain/runtimes/31fe672/node_modules/orgbrain/dist/orgbrain.mjs",
+      "sha256": "4ad689aa79ec0005bf7d6370db25e1b380d1fc4c5b206aa6e31bbae55be823e6",
+      "mode": 493,
+      "resolved": "$HOME/.org-brain/runtimes/31fe672/node_modules/orgbrain/dist/orgbrain.mjs"
+    }
+  ],
+  "preserves": [
+    "hook commands and trust settings",
+    "MCP protocol and env settings",
+    "all existing memories"
+  ],
+  "activation_limit": "Already running MCP processes need reconnect; desktop hook execution remains unverified.",
+  "installed_at": "2026-09-22T15:39:59.905948+00:00",
+  "backup_directory": "$HOME/.org-brain/backups/memory-efficiency-20260922T153959Z",
+  "rollback": [
+    {
+      "target": "$HOME/.local/lib/node_modules/orgbrain/dist/orgbrain.mjs",
+      "backup": "$HOME/.org-brain/backups/memory-efficiency-20260922T153959Z/bundle-0.mjs",
+      "mode": 493
+    },
+    {
+      "target": "$HOME/.org-brain/runtimes/31fe672/node_modules/orgbrain/dist/orgbrain.mjs",
+      "backup": "$HOME/.org-brain/backups/memory-efficiency-20260922T153959Z/bundle-1.mjs",
+      "mode": 493
+    }
+  ]
+}

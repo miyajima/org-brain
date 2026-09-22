@@ -1,0 +1,125 @@
+{
+  "basis": "local o200k_base over complete recorded MCP text; not provider task usage",
+  "rows": [
+    {
+      "id": "workspace-1-full",
+      "variant": "full",
+      "task": "workspace",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 2259,
+      "reported_estimate": 743,
+      "budget": 6000
+    },
+    {
+      "id": "workspace-1-compact",
+      "variant": "compact",
+      "task": "workspace",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 1013,
+      "reported_estimate": 1013,
+      "budget": 1500
+    },
+    {
+      "id": "usage-1-full",
+      "variant": "full",
+      "task": "usage",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 2528,
+      "reported_estimate": 982,
+      "budget": 6000
+    },
+    {
+      "id": "usage-1-compact",
+      "variant": "compact",
+      "task": "usage",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 1080,
+      "reported_estimate": 1080,
+      "budget": 1500
+    },
+    {
+      "id": "capture-1-compact",
+      "variant": "compact",
+      "task": "capture",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 1047,
+      "reported_estimate": 1047,
+      "budget": 1500
+    },
+    {
+      "id": "capture-1-full",
+      "variant": "full",
+      "task": "capture",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 2548,
+      "reported_estimate": 976,
+      "budget": 6000
+    },
+    {
+      "id": "workspace-2-compact",
+      "variant": "compact",
+      "task": "workspace",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 1018,
+      "reported_estimate": 1018,
+      "budget": 1500
+    },
+    {
+      "id": "workspace-2-full",
+      "variant": "full",
+      "task": "workspace",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 2303,
+      "reported_estimate": 743,
+      "budget": 6000
+    },
+    {
+      "id": "usage-2-compact",
+      "variant": "compact",
+      "task": "usage",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 1071,
+      "reported_estimate": 1071,
+      "budget": 1500
+    },
+    {
+      "id": "usage-2-full",
+      "variant": "full",
+      "task": "usage",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 2518,
+      "reported_estimate": 982,
+      "budget": 6000
+    },
+    {
+      "id": "capture-2-full",
+      "variant": "full",
+      "task": "capture",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 2566,
+      "reported_estimate": 976,
+      "budget": 6000
+    },
+    {
+      "id": "capture-2-compact",
+      "variant": "compact",
+      "task": "capture",
+      "returned": 2,
+      "all_lesson_facts_preserved": true,
+      "complete_response_tokens": 1054,
+      "reported_estimate": 1054,
+      "budget": 1500
+    }
+  ]
+}

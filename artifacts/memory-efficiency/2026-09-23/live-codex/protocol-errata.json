@@ -1,0 +1,13 @@
+{
+  "recorded_at": 1790093010.772862,
+  "completed_at_correction": [
+    "workspace-1-none",
+    "workspace-1-full",
+    "workspace-1-compact"
+  ],
+  "task": "usage",
+  "criterion_index": 1,
+  "original": "Collector requires retrieval, action, outcome and observation evidence",
+  "corrected": "Collector requires observed retrieval and action plus an accepted use_observation. A structured outcome is required for confirmed outcome/effect evaluation, not for merely recording verified action use.",
+  "reason": "Parent inspected memory-use-collector.mjs and memory-use-history-runtime.mjs before observing any usage-task answer. Outcome_call_id is optional; verified action evidence can create a context. No task prompt, treatment, or runtime code changes."
+}

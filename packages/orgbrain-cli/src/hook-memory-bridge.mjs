@@ -1653,6 +1653,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       recall_miss_count: Number(turnEvidence.review_diagnostics?.recall_misses ?? 0),
       recall_hit_count: Number(turnEvidence.review_diagnostics?.recall_hits ?? 0),
       latest_retrieval: turnEvidence.review_diagnostics?.latest_retrieval ?? null,
+      opaque_tool_wrappers: Number(turnEvidence.review_diagnostics?.opaque_tool_wrappers ?? 0),
       successful_actions_after_miss: eagerActionEvidence.length,
       excluded_reasons: [...new Set([
         ...extraction.excluded.map((item) => item.reason),
@@ -2293,7 +2294,8 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     const eagerRecords = extractionPrepared?.eagerRecords ?? [];
     if (eagerRecords.length === 0) {
       const reasonCode = shadowReport?.latest_retrieval !== "miss"
-        ? "eager-no-retrieval-miss"
+        ? shadowReport?.latest_retrieval == null && shadowReport?.opaque_tool_wrappers > 0
+          ? "eager-native-tool-evidence-unavailable" : "eager-no-retrieval-miss"
         : Number(shadowReport?.successful_actions_after_miss ?? 0) === 0
           ? "eager-no-verified-work-after-miss"
           : shadowReport?.sensitivity_reason

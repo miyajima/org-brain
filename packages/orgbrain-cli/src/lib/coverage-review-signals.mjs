@@ -33,6 +33,10 @@ function retrievalState(call, result, projectId) {
   }
   if (name !== "orgbrain_context_enrich") return null;
   const bundle = object(result.evidence_bundle);
+  // Abstention can mean evidence exists but cannot safely be used. It is not
+  // a knowledge gap and must also clear any earlier miss in this turn.
+  if (bundle.evidence_status === "conflicted" || bundle.budget_limited === true
+      || (Array.isArray(bundle.missing_evidence) ? bundle.missing_evidence : []).some((reason) => ["context_budget_exhausted", "insufficient_independent_sessions"].includes(reason))) return "blocked";
   if (bundle.abstention_recommended === true || bundle.evidence_status === "insufficient") return "miss";
   if (Array.isArray(bundle.evidence)) return bundle.evidence.length === 0 ? "miss" : "hit";
   if (Array.isArray(result.results)) return result.results.length === 0 ? "miss" : "hit";
@@ -58,6 +62,7 @@ export function collectCoverageReviewSignals(rows, projectId) {
   let hits = 0;
   let pendingMiss = null;
   let latestRetrieval = null;
+  let opaqueToolWrappers = 0;
   const successfulActionsAfterMiss = [];
   for (const [order, row] of rows.entries()) {
     const p = row?.payload ?? row;
@@ -70,7 +75,11 @@ export function collectCoverageReviewSignals(rows, projectId) {
         ...(pendingMiss ? { recall_miss_id: pendingMiss.event_id } : {}) });
     }
     if (["function_call", "custom_tool_call", "mcp_tool_call", "mcp_tool_call_end"].includes(p.type)) {
-      calls.set(id, { name: invocation.tool ?? p.name ?? p.tool_name, args: object(invocation.arguments ?? p.arguments ?? p.input), order });
+      const name = invocation.tool ?? p.name ?? p.tool_name;
+      const args = object(invocation.arguments ?? p.arguments ?? p.input);
+      if (p.type === "custom_tool_call" && String(name).split(".").at(-1) === "exec"
+          && typeof p.input === "string" && /\btools\./u.test(p.input)) opaqueToolWrappers++;
+      calls.set(id, { name, args, order });
     }
     if (["function_call_output", "custom_tool_call_output", "tool_result", "mcp_tool_call_end"].includes(p.type) && id && !seenResults.has(id)) {
       seenResults.add(id);
@@ -87,9 +96,9 @@ export function collectCoverageReviewSignals(rows, projectId) {
         latestRetrieval = "miss";
         pendingMiss = { order, event_id: String(id) };
         successfulActionsAfterMiss.length = 0;
-      } else if (state === "hit") {
-        hits++;
-        latestRetrieval = "hit";
+      } else if (state === "hit" || state === "blocked") {
+        if (state === "hit") hits++;
+        latestRetrieval = state;
         pendingMiss = null;
         successfulActionsAfterMiss.length = 0;
       } else if (call && pendingMiss && call.order > pendingMiss.order && !failed && !rejected && isWorkAction(call)) {
@@ -116,6 +125,7 @@ export function collectCoverageReviewSignals(rows, projectId) {
     recall_hits: hits,
     recall_misses: misses,
     latest_retrieval: latestRetrieval,
+    opaque_tool_wrappers: opaqueToolWrappers,
     successful_actions_after_miss: successfulActionsAfterMiss.slice(0, 4),
     signals
   };

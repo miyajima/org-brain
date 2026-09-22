@@ -1,7 +1,7 @@
 // Runtime-neutral capture policy shared by Node hooks and Cloudflare Workers.
 // Hashing and persistence remain adapter responsibilities.
 
-import { enforceMemoryCaptureHookProfile } from "./memory-capture-profile-runtime.mjs";
+import { assessMemoryCaptureDraft, enforceMemoryCaptureHookProfile } from "./memory-capture-profile-runtime.mjs";
 
 export const DURABLE_MEMORY_KINDS = [
   "fact",
@@ -481,10 +481,6 @@ export function extractDurableMemoryDrafts(input, options = {}) {
       continue;
     }
     seen.add(`${classification.kind}:${canonicalText}`);
-    if (drafts.length >= maxCandidates) {
-      excluded.push({ reason: "candidate_limit", preview: clip(block, 80), disposition: "no_candidate" });
-      continue;
-    }
     const candidateContext = structuredInput
       ? `${evidenceSection}\n${block}`
       : ordinaryCandidateContext(candidateBlocks, blockIndex, screened.text);
@@ -523,11 +519,27 @@ export function extractDurableMemoryDrafts(input, options = {}) {
     });
   }
 
+  // Apply the limit after assessing all candidates. An early incomplete note
+  // must not crowd out a later lesson with a reason, reuse conditions and sources.
+  let selectedDrafts = drafts;
+  if (drafts.length > maxCandidates) {
+    const ranked = drafts.map((draft, index) => {
+      const assessment = options.capture_profile ? assessMemoryCaptureDraft(draft, options.capture_profile) : null;
+      return { draft, index, accepted: assessment?.accepted ? 1 : 0,
+        completeness: Number(Boolean(draft.rationale)) + Number(Boolean(draft.reuse_rule)),
+        evidence: (assessment?.verifiable_evidence ?? draft.evidence.filter(hasDurableEvidence)).length };
+    }).sort((a, b) => b.accepted - a.accepted || b.completeness - a.completeness
+      || b.evidence - a.evidence || b.draft.utility_score - a.draft.utility_score || a.index - b.index);
+    selectedDrafts = ranked.slice(0, maxCandidates).sort((a, b) => a.index - b.index).map(({ draft }) => draft);
+    excluded.push(...ranked.slice(maxCandidates).map(({ draft }) => ({
+      reason: "candidate_limit", preview: clip(draft.content, 80), disposition: "no_candidate"
+    })));
+  }
   const result = {
-    drafts,
+    drafts: selectedDrafts,
     review_drafts: [],
     excluded,
-    no_candidate: drafts.length === 0,
+    no_candidate: selectedDrafts.length === 0,
     sensitivity: screened,
     raw_transcript_persisted: false
   };

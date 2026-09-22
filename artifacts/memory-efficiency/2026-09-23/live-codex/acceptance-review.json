@@ -1,0 +1,236 @@
+[
+  {
+    "id": "workspace-1-none",
+    "answer_sha256": "db269d4845df490755b21acaa7ec117f63b5cf2dff72fb11aa324be4fe9757ba",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "Exact cwd priority, repository root/common Git mapping, no basename-only inheritance, and unmapped fallback all match the frozen workspace-config source. Quoted evidence is valid."
+  },
+  {
+    "id": "workspace-1-full",
+    "answer_sha256": "5abec83e41d14b0e884485b9dfea7912bbb133a82a22d79cdc95ab4a029c091f",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "Exact cwd priority, repository root/common Git mapping, no basename-only inheritance, and unmapped fallback all match the frozen workspace-config source. Quoted evidence is valid."
+  },
+  {
+    "id": "workspace-1-compact",
+    "answer_sha256": "e4a5105752e09da2d3a9b1bb4a9beb028e8da771df52fcb99e004115200afd62",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four workspace resolution criteria match the source; the answer also distinguishes basename fallback in the caller from workspace inheritance."
+  },
+  {
+    "id": "usage-1-full",
+    "answer_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "accepted": false,
+    "criterion_results": [
+      null,
+      null,
+      null,
+      null
+    ],
+    "review_type": "parent_source_review",
+    "reason": "No completed final answer before the uniform 240-second limit. Usage was not returned; the failed run cannot be counted as a completed low-cost task."
+  },
+  {
+    "id": "usage-1-compact",
+    "answer_sha256": "086dae18c0c2e2585f0e4eebed71f71c44c68fac3e7989c364ee4419d78292eb",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "Separates retrieval, manual reported used state, action/decision proof, and effect evaluation; requires matching observed calls and validates scope/version/hash. It treats outcome proof as additional support for effect evaluation and preserves unknown instead of inferring benefit. Matches the corrected criterion in protocol-errata.json."
+  },
+  {
+    "id": "usage-1-none",
+    "answer_sha256": "938785397ea98af3b7d366b043fc46b126292a89c1970e67229830f83dfbefbe",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four stages are distinguished. Observed retrieval, completed action and accepted observation are separated from additional outcome/assessment proofs for effects; version/scope/hash validation and unverified/unknown outcomes match the source."
+  },
+  {
+    "id": "capture-1-compact",
+    "answer_sha256": "529af062af68c00f20af2030f0c732419e89858adde8222890f0af01662394b1",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "Correctly identifies opaque wrappers, the conditional eager diagnostic, same-project miss followed by recognized work and a safe draft, and clearing of gaps on blocked evidence. Accurately notes that the signal parser does not always require an explicit zero exit code."
+  },
+  {
+    "id": "capture-1-none",
+    "answer_sha256": "6b3cd16b814d8665c3036fb0fb8b5da5bce12ca7c5476721a7a784523023d30e",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All eager-capture criteria match the source: wrappers are opaque, the special skip reason is conditional on missing retrieval state, accepted work must follow a same-project miss, and blocked retrieval clears the pending gap."
+  },
+  {
+    "id": "capture-1-full",
+    "answer_sha256": "99e04894f5ca0b5cf44a79a4c392369c3e9e72296c7f5c1b48ecae033a37aa7b",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four capture criteria are supported, including the no-candidate/unknown-retrieval condition on the special skip reason, blocked-state precedence, and the limits of the successful-work signal."
+  },
+  {
+    "id": "workspace-2-compact",
+    "answer_sha256": "b9eb743f178c1c43d4b5df2460c43f33cfef3049543bfb2dd167e0e71e01a080",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four workspace criteria are present and accurate, including explicit worktree precedence, realpath/common Git checks, failure fallback, and the separate project-ID basename fallback in the caller."
+  },
+  {
+    "id": "workspace-2-full",
+    "answer_sha256": "ea65d9e4d7c7c9acf3165c2d11cc9cbb22d07ef0ec1060becb37e7a43d44a171",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All workspace mapping criteria and the distinct caller fallback are accurately supported by source quotations."
+  },
+  {
+    "id": "workspace-2-none",
+    "answer_sha256": "888b87ed0f5157b797a3332134f4ef6edeffe5030128388780fcb4fffceafb9f",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four criteria match the frozen mapping function; the answer also accurately identifies caller fallback and the session-import path that does not use common-repository mapping."
+  },
+  {
+    "id": "usage-2-none",
+    "answer_sha256": "9277a431f15958a4c94992179aedcec909deb11a83b5343a2cf6b4822f126a1e",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "Accurately separates returned/reported usage from verified action contexts and evaluated effects, identifies real observed calls and scope/version/hash checks, and preserves unverified/unknown results when proof is insufficient."
+  },
+  {
+    "id": "usage-2-compact",
+    "answer_sha256": "1acc1cf82e6e3a8e6d1eebc814c6af09d8d826cdaac69d776978fea2559e9905",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All usage criteria are correct. Additional distinction between evaluation_count and the legacy sampled verified_count was checked against local-memory-store.mjs and is supported."
+  },
+  {
+    "id": "usage-2-full",
+    "answer_sha256": "bdc2101f802e517c7af097d7e973490b03cc034ebfe2dcbaaa55b53aaad1fa29",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All usage criteria match the source. Action-context verification is separate from result/assessment-based usefulness, and incomplete proof remains unverified or unknown rather than inferred benefit."
+  },
+  {
+    "id": "capture-2-full",
+    "answer_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "accepted": false,
+    "criterion_results": [
+      null,
+      null,
+      null,
+      null
+    ],
+    "review_type": "parent_source_review",
+    "reason": "No final answer within the uniform 240-second limit. This is a failed completion; native task usage was not returned and remains unknown."
+  },
+  {
+    "id": "capture-2-none",
+    "answer_sha256": "ec86e402f14119e9fe4077ad03f9d6fa1880a1f5628d4907dcffa78ffef7868b",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four source-based capture criteria match the implementation. It distinguishes static inspection from observing actual saves and notes the limits of the successful-work recognizer."
+  },
+  {
+    "id": "capture-2-compact",
+    "answer_sha256": "aa1d8fc23b311f4320c50d9217b947e6bb0ec499ff41c854eda4f7d028547a01",
+    "accepted": true,
+    "criterion_results": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "review_type": "parent_source_review",
+    "reason": "All four criteria match current source, including genuine same-project miss, paired recognized work, safe reusable candidate, and blocked evidence overriding an earlier miss. Quoted evidence is valid."
+  }
+]

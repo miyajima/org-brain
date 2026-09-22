@@ -1,0 +1,90 @@
+{
+  "schema": "memory-efficiency-local-audit/v1",
+  "observed_at": "2026-09-22T15:33:25.951Z",
+  "database_access": "read-only",
+  "live_memory_mutations": 0,
+  "memory_counts": [
+    {
+      "project_id": "org-brain",
+      "verification_state": "unverified",
+      "lifecycle_state": "active",
+      "count": 1
+    },
+    {
+      "project_id": "org-brain",
+      "verification_state": "verified",
+      "lifecycle_state": "suppressed",
+      "count": 1
+    }
+  ],
+  "usage_counts": {
+    "memory_usage_events": 314,
+    "memory_usage_items": 418,
+    "memory_use_contexts": 0,
+    "memory_use_evaluations": 0
+  },
+  "latest_project_hook_activity": [
+    {
+      "event": "UserPromptSubmit",
+      "occurred_at": 1789722978908
+    },
+    {
+      "event": "codex-stop",
+      "occurred_at": 1789722934839
+    }
+  ],
+  "transcripts": [
+    {
+      "label": "prior-session-1",
+      "rows": 14,
+      "completed_answers": 1,
+      "opaque_tool_wrappers": 0,
+      "recognized_retrieval_hits": 0,
+      "recognized_retrieval_misses": 0,
+      "eligible_rule_drafts": 0,
+      "review_drafts": 0,
+      "exclusion_reasons": [
+        "low_signal"
+      ]
+    },
+    {
+      "label": "prior-session-2",
+      "rows": 26,
+      "completed_answers": 2,
+      "opaque_tool_wrappers": 0,
+      "recognized_retrieval_hits": 0,
+      "recognized_retrieval_misses": 0,
+      "eligible_rule_drafts": 0,
+      "review_drafts": 0,
+      "exclusion_reasons": [
+        "low_signal"
+      ]
+    },
+    {
+      "label": "prior-session-3",
+      "rows": 74,
+      "completed_answers": 6,
+      "opaque_tool_wrappers": 0,
+      "recognized_retrieval_hits": 0,
+      "recognized_retrieval_misses": 0,
+      "eligible_rule_drafts": 0,
+      "review_drafts": 0,
+      "exclusion_reasons": [
+        "low_signal",
+        "transient"
+      ]
+    },
+    {
+      "label": "current-session",
+      "rows": 507,
+      "completed_answers": 0,
+      "opaque_tool_wrappers": 51,
+      "recognized_retrieval_hits": 0,
+      "recognized_retrieval_misses": 0,
+      "eligible_rule_drafts": 0,
+      "review_drafts": 0,
+      "exclusion_reasons": []
+    }
+  ],
+  "interpretation": "Extraction counts are diagnostics, not ground-truth precision or recall. Opaque code-mode wrappers do not prove nested retrieval, execution, or outcomes. No drafts were saved."
+}

@@ -1,0 +1,12 @@
+{
+  "scope": "read-only provenance observed while live run is executing",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "node": "v22.23.2",
+  "source_sha256": {
+    "scripts/memory-efficiency-live.py": "bc03d2506d84e4d3b9e324c8b8c30d2a3df378ceaf57eb1123a6acaee6ecc36b",
+    "scripts/memory-efficiency-live-context.mjs": "3d4ea2befdd90ec2c5bd7b9c65977fbf65524fb4934ff5691f19f7b8007c2485",
+    "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "4937a00b578ce1237d87fb92de52472a85705a247951923bb704eca9a9a3ec57",
+    "packages/orgbrain-cli/src/local-mcp.mjs": "e4b6e2c3fce18a42a12d294502956289b0a8ce36efcd635291aaff7a7ede45aa",
+    "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "2a21f435cb4f4ba1d9c0cbe362026cfeab3525c5969d60d40bf23bdf6d9a27a9"
+  }
+}

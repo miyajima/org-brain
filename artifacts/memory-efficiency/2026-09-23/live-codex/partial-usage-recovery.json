@@ -1,0 +1,25 @@
+{
+  "basis": "read-only native state lookup, not a billing ledger",
+  "rows": [
+    {
+      "run": "workspace-1-none",
+      "state_tokens_used": null,
+      "has_native_thread_row": false
+    },
+    {
+      "run": "workspace-1-full",
+      "state_tokens_used": null,
+      "has_native_thread_row": false
+    },
+    {
+      "run": "workspace-1-compact",
+      "state_tokens_used": null,
+      "has_native_thread_row": false
+    },
+    {
+      "run": "usage-1-full",
+      "state_tokens_used": null,
+      "has_native_thread_row": false
+    }
+  ]
+}
