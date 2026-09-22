@@ -45,6 +45,7 @@ export type MemoryRow = {
 };
 
 export type MemorySearchRequest = {
+  scope?: "mine" | "org";
   use_context?: { task?: string; target?: string; constraints?: string; conditions?: string };
   tenant_id?: string;
   project_id?: string | null;
@@ -66,6 +67,7 @@ export type MemorySearchRequest = {
 };
 
 export type MemoryProfileRequest = {
+  scope?: "mine" | "org";
   tenant_id?: string;
   project_id?: string | null;
   q?: string;
@@ -78,6 +80,7 @@ export type MemoryProfileRequest = {
 };
 
 export type PrincipalActorOptions = {
+  allowedProjectId?: string | null;
   actorPrincipal?: string | null;
   recordUsage?: boolean;
   canManageAll?: boolean;

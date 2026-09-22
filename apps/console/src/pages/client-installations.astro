@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ConfirmationDialog from "../components/admin/ConfirmationDialog.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
@@ -15,7 +17,7 @@ const api = async (path: string, init: RequestInit = {}) => {
   const headers = new Headers(init.headers);
   if (accessJwt) headers.set("cf-access-jwt-assertion", accessJwt);
   headers.set("cookie", cookie);
-  return fetch(new URL(path, Astro.url), {
+  return serverApi(new URL(path, Astro.url), {
     ...init,
     headers
   });

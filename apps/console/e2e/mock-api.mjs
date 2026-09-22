@@ -1100,7 +1100,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/capabilities" && request.method === "GET") {
-    json(response, 200, ok({ domain_packs: { enabled: true, mode: "install" }, domain_metrics: { enabled: true, mode: "on" }, domain_workspaces: { enabled: true, mode: "on" }, knowledge_pack_onboarding: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, organization_dashboard: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, metric_import: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, retrospective: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, improvement_actions: { enabled: true, mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly" }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
+    json(response, 200, ok({ domain_packs: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "install" }, domain_metrics: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on" }, domain_workspaces: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on" }, knowledge_pack_onboarding: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, organization_dashboard: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, metric_import: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, retrospective: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, improvement_actions: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
     return;
   }
   if (path === "/v1/domain-packs" && request.method === "GET") {
@@ -1109,6 +1109,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/dashboard/organization" && request.method === "GET") {
+    if (url.searchParams.get("tenant_id") === "dashboard-unavailable") { json(response, 503, { ok: false, error: { code: "unavailable", message: "Dashboard unavailable" } }); return; }
     json(response, 200, ok({
       contract_version: "knowledge-measurement-loop/v1",
       generated_at: now,
@@ -1155,6 +1156,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/retrospectives/retro-e2e/close" && request.method === "POST") {
+    if (!request.headers["x-idempotency-key"]) { json(response, 400, { error: { code: "idempotency_key_required" } }); return; }
     const body = await readJson(request);
     if (!body.items?.length || body.items.some((item) => !["adopted", "not_adopted", "deferred"].includes(item.decision))) {
       json(response, 400, { error: { code: "validation_error", message: "Invalid retrospective result" } });
@@ -1164,7 +1166,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/improvement-actions" && request.method === "GET") {
-    json(response, 200, ok([{ id: "action-e2e", tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now, measurement: { pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent", target: { direction: "increase", value: 98, min: null, max: null }, baseline: { snapshot_id: "snapshot-e2e", value: 89, observed_at: now - 86400000 }, current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 }, verification_state: "waiting_for_measurement" } }]));
+    json(response, 200, ok([{ id: "action-e2e", allowed_actions: ["awaiting_verification", "cancelled"], tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now, measurement: { pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent", target: { direction: "increase", value: 98, min: null, max: null }, baseline: { snapshot_id: "snapshot-e2e", value: 89, observed_at: now - 86400000 }, current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 }, verification_state: "waiting_for_measurement" } }]));
     return;
   }
   if (path === "/v1/improvement-actions" && request.method === "POST") {

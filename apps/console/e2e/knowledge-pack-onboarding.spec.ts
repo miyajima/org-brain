@@ -172,7 +172,7 @@ test("focuses an initial server error and offers a working recovery target", asy
 });
 
 test("completes the installation with keyboard input only", async ({ page }, testInfo) => {
-  const tenantId = `knowledge-pack-keyboard-${testInfo.retry}`;
+  const tenantId = `knowledge-pack-keyboard-${testInfo.repeatEachIndex}-${testInfo.retry}`;
   await page.goto(`/knowledge-packs/onboarding?tenant_id=${tenantId}&lang=ja`);
 
   await page.keyboard.press("Tab");

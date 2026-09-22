@@ -5,6 +5,10 @@ export * from "./domain-recall.js";
 export * from "./auth.js";
 export * from "./api-manifest.js";
 
+export const MEMORY_READ_SCOPES = ["mine", "org"] as const;
+export const memoryReadScopeSchema = z.enum(MEMORY_READ_SCOPES);
+export type MemoryReadScope = z.infer<typeof memoryReadScopeSchema>;
+
 export const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
 
 export const IDENTITY_CONTRACT_VERSION = "identity/v1" as const;

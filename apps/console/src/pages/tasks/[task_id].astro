@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
 import AdminStatePanel from "../../components/admin/AdminStatePanel.astro";
@@ -12,8 +14,8 @@ const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.reque
 const taskParams = new URLSearchParams({ tenant_id: tenantId, lang });
 if (projectId) taskParams.set("project_id", projectId);
 const [taskResponse, eventResponse] = await Promise.all([
-  fetch(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}?${taskParams.toString()}`, Astro.url)),
-  fetch(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}/events?${taskParams.toString()}&limit=200`, Astro.url))
+  serverApi(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}?${taskParams.toString()}`, Astro.url)),
+  serverApi(new URL(`/api/v1/tasks/${encodeURIComponent(taskId)}/events?${taskParams.toString()}&limit=200`, Astro.url))
 ]);
 const taskPayload: any = await taskResponse.json().catch(() => null);
 const eventPayload: any = await eventResponse.json().catch(() => null);

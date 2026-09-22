@@ -6,7 +6,7 @@ test.skip(!process.env.UPDATE_IMPROVED_UX_SCREENSHOTS, "Set UPDATE_IMPROVED_UX_S
 
 const outputDirectory = resolve(
   process.cwd(),
-  "artifacts/ux-audit/2026-08-22/improved-state/screenshots"
+  process.env.ORGBRAIN_IMPROVED_SCREENSHOT_DIR ?? "artifacts/ux-audit/2026-08-22/improved-state/screenshots"
 );
 
 test("captures personal and team console evidence at required view sizes", async ({ page }) => {

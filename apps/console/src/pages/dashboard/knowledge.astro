@@ -1,12 +1,14 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus, knowledgeLoopUnit } from "../../lib/knowledge-loop-locale";
 
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const t = knowledgeLoopCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+
+const api = (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
 let message = "";
 let error = "";
 if (Astro.request.method === "POST") {
@@ -24,14 +26,14 @@ const scope = `tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_
 const [dashboardResponse, capabilityResponse] = await Promise.all([api(`/api/v1/dashboard/organization?${scope}`), api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`)]);
 const dashboardPayload: any = await dashboardResponse.json().catch(() => null);
 const capabilityPayload: any = await capabilityResponse.json().catch(() => null);
-const dashboard = dashboardPayload?.data ?? { knowledge: { decisions: 0, rules: 0, rationales: 0 }, summary: { installed_packs: 0, open_retrospectives: 0 }, goals: [] };
-const dashboardWritable = capabilityPayload?.data?.organization_dashboard?.writable === true;
-const importWritable = capabilityPayload?.data?.metric_import?.writable === true;
-if (!dashboardResponse.ok && !error) error = dashboardPayload?.error?.message ?? "Dashboard could not be loaded";
+const dashboard = dashboardResponse.ok ? dashboardPayload?.data : null;
+const dashboardWritable = capabilityPayload?.data?.organization_dashboard?.allowed_actions?.includes("manage") === true;
+const importWritable = capabilityPayload?.data?.metric_import?.allowed_actions?.includes("manage") === true;
+if (!dashboardResponse.ok && !error) error = dashboardPayload?.error?.message ?? t.dashboardLoadFailed;
 const format = (value: unknown) => typeof value === "number" ? new Intl.NumberFormat(lang).format(value) : "—";
 const target = (goal: any) => goal.target.direction === "range" ? `${format(goal.target.min)}–${format(goal.target.max)}` : format(goal.target.value);
 const attention = (goal: any) => goal.source.latest_run?.status === "failed" ? 0 : ["queued", "running"].includes(goal.source.latest_run?.status) ? 1 : ["unknown", "stale"].includes(goal.current.state) ? 2 : goal.comparison?.target_state === "off_track" ? 3 : 4;
-const goals = [...(dashboard.goals ?? [])].sort((left: any, right: any) => attention(left) - attention(right));
+const goals = [...(dashboard?.goals ?? [])].sort((left: any, right: any) => attention(left) - attention(right));
 ---
 <BaseLayout title={t.dashboardTitle} lang={lang} wide>
   <section class="space-y-5">
@@ -39,6 +41,7 @@ const goals = [...(dashboard.goals ?? [])].sort((left: any, right: any) => atten
     {message && <p class="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100">{message}</p>}
     {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
     {!dashboardWritable && <p class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">{t.readOnly}</p>}
+    {dashboard && <>
     <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {[
         [t.decisions, dashboard.knowledge_status?.decisions?.total ?? dashboard.knowledge.decisions, `${t.confirmed} ${dashboard.knowledge_status?.decisions?.confirmed ?? 0} · ${t.needsReview} ${dashboard.knowledge_status?.decisions?.needs_review ?? 0}`],
@@ -60,6 +63,8 @@ const goals = [...(dashboard.goals ?? [])].sort((left: any, right: any) => atten
         {goals.length === 0 && <div class="rounded-xl border border-dashed border-white/10 p-8 text-center"><p class="text-zinc-300">{t.noGoals}</p></div>}
       </div>
     </section>
+    </>}
+    {!dashboard && <a class="button-secondary" href={Astro.url.pathname + Astro.url.search}>{t.refresh}</a>}
   </section>
 </BaseLayout>
 <script is:inline define:vars={{ tenantId }}>

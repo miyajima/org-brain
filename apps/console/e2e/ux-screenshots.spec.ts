@@ -5,7 +5,7 @@ import { auditUrl, routeAuditCases } from "./route-audit-cases";
 
 test.skip(!process.env.UPDATE_UX_SCREENSHOTS, "Set UPDATE_UX_SCREENSHOTS=1 to refresh the post-implementation UX evidence.");
 
-const outputDirectory = resolve(process.cwd(), "../../artifacts/ux-audit/2026-08-18/target-96");
+const outputDirectory = resolve(process.cwd(), process.env.ORGBRAIN_UX_SCREENSHOT_DIR ?? "../../artifacts/ux-audit/2026-08-18/target-96");
 const scope = "tenant_id=default&project_id=org-brain&lang=ja";
 
 test("captures the full desktop and mobile administration route matrix", async ({ page }) => {
@@ -30,7 +30,7 @@ test("captures the full desktop and mobile administration route matrix", async (
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(`/memories/constellation?${scope}`);
-  await expect(page.locator(".memory-map-accessible-picker")).toBeVisible();
+  await expect(page.getByRole("region", { name: "ノードを検索・選択", exact: true })).toBeVisible();
   expect(await page.evaluate(() => {
     const canvas = document.createElement("canvas");
     return Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));

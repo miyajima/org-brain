@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
 const recallId = decodeURIComponent(Astro.params.recallId ?? "");
@@ -7,7 +9,7 @@ const language = Astro.url.searchParams.get("lang") === "ja" ? "ja" : "ja";
 const requestedReturnTo = Astro.url.searchParams.get("return_to")?.trim() || "";
 const returnTo = requestedReturnTo.startsWith("/domain-workspaces/") ? requestedReturnTo : `/domain-workspaces?tenant_id=${encodeURIComponent(tenantId)}&lang=${language}`;
 const cookie = Astro.request.headers.get("cookie") ?? "";
-const response = await fetch(new URL(`/api/v1/domain-recalls/${encodeURIComponent(recallId)}?tenant_id=${encodeURIComponent(tenantId)}`, Astro.url), { headers: { cookie } });
+const response = await serverApi(new URL(`/api/v1/domain-recalls/${encodeURIComponent(recallId)}?tenant_id=${encodeURIComponent(tenantId)}`, Astro.url), { headers: { cookie } });
 const payload: any = await response.json().catch(() => null);
 const recall: any = payload?.data ?? null;
 const candidates = recall ? [recall.primary, ...(recall.supporting ?? []), ...(recall.conflicts ?? [])].filter(Boolean) : [];

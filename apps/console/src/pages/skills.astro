@@ -1,7 +1,8 @@
 ---
+const fetchDashboardData = createDashboardFetcher(Astro.request);
 import AccessDrawer from "../components/decision/AccessDrawer.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { dashboardApiPath, dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { dashboardApiPath, dashboardPageParams, createDashboardFetcher } from "../lib/dashboard-page";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { normalizeSkillAssets, scopedHref } from "../lib/decision-console-ui";
 

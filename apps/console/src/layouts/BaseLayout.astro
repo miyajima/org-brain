@@ -1,4 +1,6 @@
 ---
+import { capabilityPaths, loadConsoleCapabilities } from "../lib/capabilities";
+import { createServerApi } from "../lib/server-api";
 import "../styles/global.css";
 import brandMark from "../../../../assets/brand/org-brain-avatar.png";
 import { dashboardTenantFromCookie } from "../lib/dashboard-page";
@@ -105,7 +107,7 @@ try {
   if (projectId) identityUrl.searchParams.set("project_id", projectId);
   const cookie = Astro.request.headers.get("cookie");
   const accessJwt = Astro.request.headers.get("cf-access-jwt-assertion");
-  const response = await fetch(identityUrl, {
+  const response = await createServerApi(Astro.request)(identityUrl, {
     headers: {
       ...(cookie ? { cookie } : {}),
       ...(accessJwt ? { "cf-access-jwt-assertion": accessJwt } : {})
@@ -120,7 +122,10 @@ try {
 }
 const teamSetupLabels = layoutNavLabels("team-setup");
 const hiddenForPersonal = new Set(["groups", "users", "organization", "categories"]);
+const capabilities = await loadConsoleCapabilities(Astro.request);
 const visibleManagementItems = managementItems.filter((navItem) => {
+  const capability = capabilityPaths[navItem.href.split("?")[0]];
+  if (capability && capabilities?.[capability]?.enabled !== true) return false;
   if (!consoleContext) return true;
   if (consoleContext.mode === "personal" && hiddenForPersonal.has(navItem.id)) return false;
   if (navItem.id === "users" && !consoleContext.can_manage_users) return false;
@@ -223,8 +228,13 @@ const groupedItems = (["knowledge", "organization", "system"] as const).map((gro
     <script>
       const skipLink = document.querySelector<HTMLAnchorElement>("[data-console-skip-link]");
       const main = document.querySelector<HTMLElement>("#console-main");
-      skipLink?.addEventListener("click", () => {
-        requestAnimationFrame(() => main?.focus({ preventScroll: true }));
+      skipLink?.addEventListener("click", (event) => {
+        if (!main) return;
+        event.preventDefault();
+        // Focus before the next key press; a deferred focus can steal it back
+        // after the user has already tabbed to the first control.
+        main.focus({ preventScroll: true });
+        main.scrollIntoView({ block: "start" });
       });
       main?.addEventListener("keydown", (event) => {
         if (event.key !== "Tab" || event.shiftKey || event.target !== main) return;

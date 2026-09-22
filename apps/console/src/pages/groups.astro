@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
 import LiveNotice from "../components/admin/LiveNotice.astro";
@@ -21,12 +23,12 @@ type Group = {
 const url = Astro.url;
 const { tenantId, projectId, lang } = dashboardPageParams(url, Astro.request.headers.get("cookie"));
 const copy = groupsCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
+
 let message = "";
 let error = "";
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
-  const response = await fetch(new URL(path, url), { ...init, headers: { cookie, ...(init?.headers ?? {}) } });
+  const response = await serverApi(new URL(path, url), { ...init, headers: init?.headers });
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) return payload ?? { ok: false, error: { message: `HTTP ${response.status}` } };
   return payload;

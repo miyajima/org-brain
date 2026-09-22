@@ -116,6 +116,7 @@ routes.get("/v1/admin/memory-quality/audit/memories/:memoryId", async (c) => {
 routes.get("/v1/memories", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const scope = c.req.query("scope") === "mine" ? "mine" : "org";
+  const readAccess = { allowedProjectId: ports.getApiAuthContext(c).projectId, principal: ports.getApiPrincipal(c), isAdmin: await ports.isTenantAdmin(c, tenantId) };
   const source = c.req.query("source");
   const projectId = c.req.query("project_id");
   const businessCategoryId = c.req.query("business_category_id");
@@ -143,11 +144,15 @@ routes.get("/v1/memories", async (c) => {
   const view = c.req.query("view");
   if (cursor || view) {
     const page = await ports.listMemoriesCursorPage(c.env, tenantId, {
+      readAccess,
       limit: Number.isNaN(limit) ? (view === "compact" ? 500 : 100) : limit,
       source,
       projectId,
       businessCategoryId,
       workType,
+      ownerPrincipal, createdByPrincipal, lifecycle, includeTrashed, attention,
+      from: Number.isFinite(fromValue) ? fromValue : null,
+      to: Number.isFinite(toValue) ? toValue : null,
       cursor,
       view: view as "full" | "compact" | undefined
     });
@@ -155,6 +160,7 @@ routes.get("/v1/memories", async (c) => {
   }
   if (paginated) {
     const page = await ports.listMemoriesPage(c.env, tenantId, {
+      readAccess,
       limit: Number.isNaN(limit) ? 24 : limit,
       offset: Number.isNaN(offset) ? 0 : offset,
       source,
@@ -174,6 +180,7 @@ routes.get("/v1/memories", async (c) => {
   }
 
   const memories = await ports.listMemories(c.env, tenantId, {
+    readAccess,
     limit: Number.isNaN(limit) ? 100 : limit,
     offset: Number.isNaN(offset) ? 0 : offset,
     source,
@@ -534,6 +541,8 @@ routes.post("/v1/memories/search", async (c) => {
     return ports.jsonOk(c, await ports.searchDecisionMemories(c.env, body, { principal: ports.getApiPrincipal(c) }));
   }
   const evidence = await ports.searchMemories(c.env, body, {
+    allowedProjectId: ports.getApiAuthContext(c).projectId,
+    canManageAll: await ports.isTenantAdmin(c, ports.tenantFromBody(body) ?? "default"),
     actorPrincipal: ports.getApiPrincipal(c),
     recordUsage: scope !== "both"
   });
@@ -619,13 +628,19 @@ routes.post("/v1/memories/retrieve-context", async (c) => {
 routes.post("/v1/memories/profile", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  const result = await ports.getMemoryProfile(c.env, body, { actorPrincipal: ports.getApiPrincipal(c) });
+  const result = await ports.getMemoryProfile(c.env, body, {
+    allowedProjectId: ports.getApiAuthContext(c).projectId,
+    canManageAll: await ports.isTenantAdmin(c, ports.tenantFromBody(body) ?? "default"),
+    actorPrincipal: ports.getApiPrincipal(c)
+  });
   return ports.jsonOk(c, result);
 });
 
 routes.get("/v1/memories/:memoryId/details", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const result = await ports.getMemoryDetails(c.env, tenantId, c.req.param("memoryId"), {
+    allowedProjectId: ports.getApiAuthContext(c).projectId,
+    canManageAll: await ports.isTenantAdmin(c, tenantId),
     actorPrincipal: ports.getApiPrincipal(c)
   });
   return ports.jsonOk(c, result);

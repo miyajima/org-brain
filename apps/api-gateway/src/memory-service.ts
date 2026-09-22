@@ -1,4 +1,16 @@
-import { HttpError, MEMORY_KINDS, MEMORY_LIFECYCLE_STATES, MEMORY_SCOPE_TYPES, parseTagsJson, type MemoryKind, type MemoryLifecycleState, type MemoryScopeType, type MemoryWorkType } from "@org-brain/shared";
+import {
+  memoryReadAccessSql,
+  type MemoryReadAccess,
+  HttpError,
+  MEMORY_KINDS,
+  MEMORY_LIFECYCLE_STATES,
+  MEMORY_SCOPE_TYPES,
+  parseTagsJson,
+  type MemoryKind,
+  type MemoryLifecycleState,
+  type MemoryScopeType,
+  type MemoryWorkType
+} from "@org-brain/shared";
 import { captureMemoryItems, deleteMemory, loadExistingMemoryIdsByExternalKeys, refreshMemory, restoreSuppressedMemory, reviseMemory, runBatchChunks, suppressMemory } from "./memory-lifecycle-service";
 import { removeMemoryIdsFromV3SemanticIndex, removeMemoryIdsFromV4SemanticIndex, removeMemoryIdsFromSemanticIndex, syncMemoryIdsToSemanticIndexes } from "./retrieval-index-service";
 import { assertMemoryNotOnLegalHold } from "./retention-service";
@@ -132,6 +144,7 @@ type RestoreMemoryRequest = {
 };
 
 type ListMemoriesOptions = {
+  readAccess?: MemoryReadAccess;
   limit?: number;
   offset?: number;
   source?: string;
@@ -581,6 +594,7 @@ function parseJsonObject(raw: string | null | undefined): Record<string, unknown
 }
 
 function buildMemoryListFilterSql(options: {
+  readAccess?: MemoryReadAccess;
   source?: string;
   projectId?: string | null;
   businessCategoryId?: string | null;
@@ -594,7 +608,7 @@ function buildMemoryListFilterSql(options: {
   attention?: "critical" | "warning" | "blocked" | "healthy" | "all";
   evaluatedAt?: number;
 }) {
-  const clauses: string[] = [];
+  const clauses: string[] = [memoryReadAccessSql("memories", options.readAccess)];
   const bindings: unknown[] = [];
 
   if (typeof options.source === "string" && options.source.trim().length > 0) {
@@ -915,6 +929,7 @@ export async function listMemoriesPage(env: Env, tenantId: string, options: List
   const evaluatedAt = options.evaluatedAt ?? Date.now();
   const filter = buildMemoryListFilterSql({ ...options, evaluatedAt });
   const items = await listMemories(env, tenantId, {
+    readAccess: options.readAccess,
     limit: safeLimit,
     offset: safeOffset,
     source: options.source,
@@ -1000,10 +1015,12 @@ export async function getMemoryDetails(
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
             reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json
      FROM memories
-     WHERE tenant_id = ? AND id = ?`
+     WHERE tenant_id = ? AND id = ? AND ${memoryReadAccessSql("memories", options.actorPrincipal ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll } : undefined)}`
   )
     .bind(tenantId, memoryId)
     .first<MemoryRow>();
+
+  if (!memory) return { tenant_id: tenantId, memory_id: memoryId, memory: null, versions: [], rationales: [] };
 
   const versions = await env.OPEN_BRAIN_DB.prepare(
     `SELECT version, operation, summary, kind, lifecycle_state, actor_type, actor_id, created_at

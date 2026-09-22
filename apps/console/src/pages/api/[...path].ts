@@ -90,19 +90,19 @@ export function stripProxyHeaders(headers: Headers): Headers {
 
 export function applyProxyAuthentication(
   headers: Headers,
-  path: string,
+  _path: string,
   accessJwt: string | null,
   internalApiKey: string | undefined
 ): Headers {
   const next = new Headers(headers);
-  if (path.startsWith("v1/mcp-client-installations") && accessJwt) {
-    // Client installations belong to the signed-in human, not the Console
+  if (accessJwt) {
+    // API requests belong to the signed-in human, not the Console
     // service principal. The JWT has already been verified at this boundary;
     // the API verifies it again before resolving the Org Brain user identity.
     next.set("cf-access-jwt-assertion", accessJwt);
     return next;
   }
-  if (internalApiKey) next.set("x-api-key", internalApiKey);
+  if (internalApiKey && !/(?:^|;\s*)__Host-orgbrain_session=/.test(next.get("cookie") ?? "") && !next.has("authorization")) next.set("x-api-key", internalApiKey);
   return next;
 }
 
@@ -123,6 +123,7 @@ export function normalizeFallbackResponse(response: Response): Response {
 function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string): URL {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
   const fallbackUrl = new URL(path, baseUrl);
+  if (fallbackUrl.origin !== new URL(baseUrl).origin) throw new Error("API proxy target must remain on the configured origin");
   fallbackUrl.search = new URL(requestUrl).search;
   return fallbackUrl;
 }
@@ -130,7 +131,7 @@ function buildFallbackUrl(path: string, requestUrl: string, apiBaseUrl: string):
 export const ALL: APIRoute = async ({ params, request }) => {
   const runtimeEnv = await getRuntimeEnv();
   const accessJwt = request.headers.get("cf-access-jwt-assertion")?.trim() || null;
-  if (accessJwtRequired(runtimeEnv)) {
+  if (accessJwtRequired(runtimeEnv) || accessJwt) {
     if (!accessJwt) return jsonError(401, "unauthorized", "Missing Cloudflare Access JWT");
     try {
       await verifyConsoleAccessJwt(runtimeEnv, accessJwt);
@@ -142,7 +143,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
     }
   }
   const apiBaseUrl = typeof runtimeEnv?.API_BASE_URL === "string" ? runtimeEnv.API_BASE_URL.trim() : "";
-  if ((!runtimeEnv?.API && !apiBaseUrl) || (!runtimeEnv?.INTERNAL_API_KEY && runtimeEnv.SESSION_ONLY_API !== "true")) {
+  if ((!runtimeEnv?.API && !apiBaseUrl) || (!accessJwt && !runtimeEnv?.INTERNAL_API_KEY && runtimeEnv.SESSION_ONLY_API !== "true")) {
     return jsonError(500, "misconfigured", "Missing API binding/API_BASE_URL or API authentication mode");
   }
 
@@ -154,11 +155,13 @@ export const ALL: APIRoute = async ({ params, request }) => {
     stripProxyHeaders(request.headers),
     path,
     accessJwt,
-    runtimeEnv.INTERNAL_API_KEY
+    runtimeEnv.ACCESS_JWT_REQUIRED === "false" && runtimeEnv.SESSION_ONLY_API !== "true"
+      ? runtimeEnv.INTERNAL_API_KEY : undefined
   );
 
   const init = {
     method: request.method,
+    redirect: "manual" as const,
     headers,
     body: ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer()
   };

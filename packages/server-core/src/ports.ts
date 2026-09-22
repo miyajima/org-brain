@@ -13,6 +13,7 @@ export type RouteApp<TEnv extends RouteAppEnv> = Hono<TEnv>;
 export type RouteContext<TEnv extends RouteAppEnv> = Context<TEnv>;
 
 export type SharedAuthContext = {
+  projectId?: string | null;
   principal: string;
   defaultRole: string;
   tenantId?: string | null;
@@ -278,7 +279,7 @@ export interface DecisionContextPort<TEnv extends RouteAppEnv> extends CommonHtt
 }
 
 export interface DomainPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
-  domainCapabilities(env: TEnv["Bindings"], tenantId: string): Record<string, unknown>;
+  domainCapabilities(env: TEnv["Bindings"], tenantId: string, adminAllowed?: boolean): Record<string, unknown>;
   getDomainContext: PortFunction;
   createDecisionDomainLink: PortFunction;
   createManagedObject: PortFunction;

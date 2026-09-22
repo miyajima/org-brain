@@ -1,9 +1,11 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
 const cookie = Astro.request.headers.get("cookie") ?? "";
-const response = await fetch(new URL(`/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`, Astro.url), { headers: { cookie } });
+const response = await serverApi(new URL(`/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`, Astro.url), { headers: { cookie } });
 const payload: any = await response.json().catch(() => null);
 const packs = (payload?.data ?? []).filter((entry: any) => entry.installation?.state === "installed");
 const scope = new URLSearchParams({ tenant_id: tenantId, lang: "ja" });

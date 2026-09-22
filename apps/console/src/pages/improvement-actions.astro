@@ -1,12 +1,14 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
 import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus, knowledgeLoopUnit } from "../lib/knowledge-loop-locale";
 
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const t = knowledgeLoopCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+
+const api = (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
 const sourceSessionId = Astro.url.searchParams.get("retrospective_session_id")?.trim() || null;
 const sourceItemId = Astro.url.searchParams.get("retrospective_item_id")?.trim() || null;
 const sourceTitle = Astro.url.searchParams.get("source_title")?.trim().slice(0, 240) || "";
@@ -53,10 +55,8 @@ const format = (value: unknown) => typeof value === "number" ? new Intl.NumberFo
 const target = (measurement: any) => measurement?.target?.direction === "range" ? `${format(measurement.target.min)}–${format(measurement.target.max)}` : format(measurement?.target?.value);
 const dashboardHref = (goalId: string) => `/dashboard/knowledge?${scope}&lang=${lang}#goal-${encodeURIComponent(goalId)}`;
 const nextStatuses = (item: any): Array<[string, string]> => {
-  if (item.status === "open") return [["in_progress", t.inProgress], ["cancelled", t.cancel]];
-  if (item.status === "in_progress") return item.goal_link_id ? [["awaiting_verification", t.implementationDone], ["cancelled", t.cancel]] : [["awaiting_verification", t.implementationDone], ["completed", t.complete], ["cancelled", t.cancel]];
-  if (item.status === "awaiting_verification") return [["in_progress", t.backToWork], ["cancelled", t.cancel]];
-  return [];
+  const labels: Record<string, string> = { in_progress: t.inProgress, awaiting_verification: t.implementationDone, completed: t.complete, cancelled: t.cancel };
+  return (item.allowed_actions ?? []).filter((status: string) => labels[status]).map((status: string) => [status, labels[status]]);
 };
 ---
 
@@ -67,7 +67,7 @@ const nextStatuses = (item: any): Array<[string, string]> => {
     {error && <p class="rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">{error}</p>}
     {!writable && <p class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">{t.readOnly}</p>}
 
-    {writable && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3">
+    {capabilityPayload?.data?.improvement_actions?.allowed_actions?.includes("create") && <form method="post" class="grid gap-4 rounded-[22px] border border-white/8 bg-zinc-950/50 p-5 md:grid-cols-3">
       <input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="create"/>
       <input type="hidden" name="retrospective_session_id" value={sourceSessionId ?? ""}/><input type="hidden" name="retrospective_item_id" value={sourceItemId ?? ""}/>
       {sourceSessionId && sourceItemId && <p class="md:col-span-3 rounded-xl bg-white/[0.04] p-3 text-sm text-zinc-300">{t.createdFromRetro}: {sourceSessionId} / {sourceItemId}</p>}
@@ -82,7 +82,7 @@ const nextStatuses = (item: any): Array<[string, string]> => {
         {item.description && <p class="mt-4 text-sm leading-6 text-zinc-300">{item.description}</p>}{item.external_issue_url && <a class="mt-3 inline-block text-sm" href={item.external_issue_url} target="_blank" rel="noreferrer">{t.externalIssueOpen} ↗</a>}
         {item.measurement && <section class="mt-4 rounded-xl bg-white/[0.04] p-4"><div class="flex items-start justify-between gap-3"><div><p class="text-xs text-zinc-500">{item.measurement.pack_title}</p><h3 class="font-medium">{item.measurement.metric_label}</h3></div><span class="text-xs text-zinc-400">{knowledgeLoopStatus(lang, item.measurement.verification_state)}</span></div><dl class="mt-3 grid grid-cols-3 gap-2 text-sm"><div><dt class="text-zinc-500">{t.baseline}</dt><dd>{format(item.measurement.baseline.value)} {knowledgeLoopUnit(lang, item.measurement.unit)}</dd></div><div><dt class="text-zinc-500">{t.current}</dt><dd>{format(item.measurement.current.value)} {knowledgeLoopUnit(lang, item.measurement.unit)}</dd></div><div><dt class="text-zinc-500">{t.target}</dt><dd>{target(item.measurement)} {knowledgeLoopUnit(lang, item.measurement.unit)}</dd></div></dl></section>}
         {item.verification_outcome && <p class="mt-4 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-100">{t.verification}: {knowledgeLoopStatus(lang, item.verification_outcome)}</p>}
-        {writable && <div class="mt-5 flex flex-wrap gap-2">{nextStatuses(item).map(([status, label]) => <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="status"/><input type="hidden" name="id" value={item.id}/><input type="hidden" name="status" value={status}/><button class="button-secondary" type="submit">{label}</button></form>)}{item.status === "awaiting_verification" && item.goal_link_id && <a class="button-secondary" href={dashboardHref(item.goal_link_id)}>{t.measureAgain}</a>}{item.status === "awaiting_verification" && item.measurement?.verification_state === "ready" && <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="verify"/><input type="hidden" name="id" value={item.id}/><button type="submit">{t.verifyNow}</button></form>}</div>}
+        {writable && <div class="mt-5 flex flex-wrap gap-2">{nextStatuses(item).map(([status, label]) => <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="status"/><input type="hidden" name="id" value={item.id}/><input type="hidden" name="status" value={status}/><button class="button-secondary" type="submit">{label}</button></form>)}{item.status === "awaiting_verification" && item.goal_link_id && <a class="button-secondary" href={dashboardHref(item.goal_link_id)}>{t.measureAgain}</a>}{item.allowed_actions?.includes("verify") && <form method="post"><input type="hidden" name="csrf_token" class="action-csrf"/><input type="hidden" name="action" value="verify"/><input type="hidden" name="id" value={item.id}/><button type="submit">{t.verifyNow}</button></form>}</div>}
       </article>)}
       {actions.length === 0 && <p class="surface-muted">{t.noActions}</p>}
     </div>

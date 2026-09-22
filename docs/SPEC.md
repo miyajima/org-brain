@@ -462,3 +462,39 @@ tenant boundaries, or bypassing deterministic and hard-guardrail checks.
 - Complete adversarial poisoning, multilingual PII, and redaction evaluation
 - Raw agent transcript stores への直接書き込み統合
 - Code graph construction, repository ingestion, and local-only Skill storage
+
+
+### Console authentication and memory reads
+
+Console SSR and its same-origin API proxy preserve session cookies and verified
+Access JWTs. Invalid human credentials fail closed. A service-key fallback is
+limited to configurations that explicitly disable Access JWT requirements and do
+not select session-only mode; it never replaces a supplied session or bearer token.
+SSR mutations validate the incoming browser Origin and forward the CSRF token.
+The read-only `POST /v1/memories/search`, `/v1/memories/profile`, and
+`/v1/decision-memories/search` contracts retain
+Origin and authentication checks but do not require a CSRF token, allowing SSR GET
+pages to load them without access to browser sessionStorage. Other mutations keep
+both checks.
+
+Memory list, detail, search, profile and memory analytics apply canonical resource
+policies before pagination and counts, with legacy memory ACLs used only when no
+canonical policy exists. Project access comes from stored role assignments or the
+verified credential's project restriction, never from a requested project alone.
+An inaccessible detail has the same empty response as an absent memory, including
+empty version and rationale arrays. The optional `scope` field accepts `mine` or
+`org` on list/search/profile (HTTP and MCP); omission preserves the existing scope.
+`mine` resolves the owner from the authenticated principal.
+
+Capabilities keep `enabled`, `mode` and `writable` as feature configuration facts.
+The additive `allowed_actions` field represents the current user's permitted
+operations. Improvement action views additionally expose allowed status transitions
+and `verify` when measurement verification is ready. Server-side authorization is
+still required for every operation. Disabled features have no navigation entry and
+show an unavailable page on direct access; failed dashboard reads show an error
+and retry link rather than fabricated zero counts.
+
+Retrospective close uses `x-idempotency-key`. The Console retains the key for a
+retry of the same form payload and creates a new one when the payload changes.
+Provisioning includes the metric import queue and its dead-letter queue. Tests
+validate the queue inventory against the deployed Worker configurations.

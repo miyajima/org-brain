@@ -1,14 +1,16 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
 import { domainPacksCopy } from "../lib/console-locale";
 
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = domainPacksCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+
+const api = async (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), {
   ...init,
-  headers: { cookie, ...(init.headers ?? {}) }
+  headers: init.headers
 });
 
 let message = "";

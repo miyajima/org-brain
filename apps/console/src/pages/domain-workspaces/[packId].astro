@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
 const packId = decodeURIComponent(Astro.params.packId ?? "");
@@ -12,7 +14,7 @@ const apiQuery = new URLSearchParams({ tenant_id: tenantId });
 if (selectedScope) apiQuery.set("scope_id", selectedScope);
 if (fromValue && Number.isFinite(Date.parse(fromValue))) apiQuery.set("from", String(Date.parse(`${fromValue}T00:00:00Z`)));
 if (toValue && Number.isFinite(Date.parse(toValue))) apiQuery.set("to", String(Date.parse(`${toValue}T23:59:59Z`)));
-const api = (path: string) => fetch(new URL(path, Astro.url), { headers: { cookie } });
+const api = (path: string) => serverApi(new URL(path, Astro.url), { headers: { cookie } });
 const [workspaceResponse, catalogResponse] = await Promise.all([
   api(`/api/v1/domain-packs/${encodeURIComponent(packId)}/workspace?${apiQuery}`),
   api(`/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`)

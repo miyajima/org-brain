@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
 import LiveNotice from "../../components/admin/LiveNotice.astro";
@@ -10,10 +12,10 @@ import { adminUserStatusLabel, groupAdminCopy } from "../../lib/admin-copy";
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = groupAdminCopy(lang);
 const groupId = Astro.params.groupId ?? "";
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+
+const api = async (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), {
   ...init,
-  headers: { cookie, ...(init.headers ?? {}) }
+  headers: init.headers
 });
 let message = "";
 let error = "";

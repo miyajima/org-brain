@@ -66,8 +66,8 @@ import type { Env } from "./types";
 import type { Hono } from "hono";
 import { isKnowledgeLoopWritable } from "./knowledge-loop-feature";
 
-function domainCapabilities(env: Env, tenantId: string): Record<string, unknown> {
-  return {
+export function domainCapabilities(env: Env, tenantId: string, adminAllowed = false): Record<string, unknown> {
+  const capabilities = {
     domain_packs: {
       mode: env.DOMAIN_PACKS_MODE ?? "off",
       enabled: env.DOMAIN_PACKS_MODE !== undefined && env.DOMAIN_PACKS_MODE !== "off"
@@ -91,6 +91,10 @@ function domainCapabilities(env: Env, tenantId: string): Record<string, unknown>
     improvement_actions: { mode: env.IMPROVEMENT_ACTIONS_MODE ?? "off", enabled: env.IMPROVEMENT_ACTIONS_MODE !== undefined && env.IMPROVEMENT_ACTIONS_MODE !== "off", writable: isKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId) },
     pack_builder: { enabled: false, href: null, edition: "enterprise" }
   };
+  return Object.fromEntries(Object.entries(capabilities).map(([key, value]) => [key, {
+    ...value,
+    allowed_actions: "writable" in value && value.writable && adminAllowed ? ["create", "update", "manage"] : []
+  }]));
 }
 
 const domainPort = {

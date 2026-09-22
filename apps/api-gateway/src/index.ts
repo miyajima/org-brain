@@ -104,7 +104,10 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
         if (!allowedOrigin) throw new HttpError(500, "misconfigured", "SESSION_ALLOWED_ORIGIN is required for session mutations");
         if (c.req.header("origin") !== allowedOrigin) throw new HttpError(403, "origin_failed", "Request origin is not allowed");
       }
-      await assertSessionCsrf(auth, c.req.header("x-csrf-token"));
+      // These read-only POST contracts also serve SSR GET pages, which cannot read
+      // the browser sessionStorage CSRF token. Origin and authentication still apply.
+      const readOnlyPost = c.req.method === "POST" && ["/v1/memories/search", "/v1/memories/profile", "/v1/decision-memories/search"].includes(c.req.path);
+      if (!readOnlyPost) await assertSessionCsrf(auth, c.req.header("x-csrf-token"));
     }
     await assertRequestRateLimit(c.env, {
       tenantId,

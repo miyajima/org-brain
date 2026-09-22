@@ -406,7 +406,9 @@ export async function getMemoryProfile(
 ): Promise<MemoryProfileResponse> {
   const request = parseProfileRequest(rawBody);
   await validateBusinessClassification(env, request.tenantId, request.businessCategoryId, request.workType, { required: false });
-  let profile = await buildTenantMemoryProfile(env.OPEN_BRAIN_DB, request);
+  const scope = (rawBody as { scope?: "mine" | "org" }).scope;
+  if (scope !== undefined && scope !== "mine" && scope !== "org") throw new HttpError(400, "invalid_scope", "scope must be mine or org");
+  let profile = await buildTenantMemoryProfile(env.OPEN_BRAIN_DB, { ...request, readAccess: options.actorPrincipal ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll, scope } : undefined });
   if (request.businessCategoryId || request.workType) {
     const ids = [...new Set([
       ...profile.durable.map((item) => item.id),

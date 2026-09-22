@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 import AccessDrawer from "../components/decision/AccessDrawer.astro";
@@ -361,7 +363,7 @@ function makeHref(overrides: Record<string, string | null | undefined>): string 
 }
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
-  const response = await fetch(new URL(path, url), init);
+  const response = await serverApi(new URL(path, url), init);
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) {
     return {
@@ -594,6 +596,7 @@ const searchPayload =
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           tenant_id: tenantId,
+          scope,
           project_id: projectId || null,
           q: query,
           limit: 12,
@@ -615,6 +618,7 @@ const profilePayload = await fetchApi<ProfileResponse>("/api/v1/memories/profile
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
     tenant_id: tenantId,
+          scope,
     project_id: projectId || null,
     limit_durable: 8,
     limit_recent: 8,

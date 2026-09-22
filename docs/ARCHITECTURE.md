@@ -3,7 +3,7 @@ title: Org Brain architecture
 doc_type: architecture
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-20
+last_updated: 2026-09-23
 ---
 
 # Org Brain architecture
@@ -24,8 +24,9 @@ second authority for shared Skills or Agent Loadouts.
 
 - Astro on Cloudflare Pages provides the Console and same-origin API proxy.
 - Hono on Cloudflare Workers provides the API Gateway. A dedicated `apps/mcp`
-  Worker is the public Remote MCP edge and forwards Access-authenticated MCP
-  requests to the Gateway over a service binding.
+  Worker is the public Remote MCP edge and forwards OAuth bearer requests
+  to the Gateway over a service binding. A separate hook edge uses Access
+  service authentication.
 - D1 stores decisions, policies, immutable version metadata, named Agents,
   Loadouts, tasks, audit events, and usage facts.
 - R2 stores Skill file bodies. D1 stores each object's R2 key, SHA-256 hash,
@@ -40,7 +41,8 @@ second authority for shared Skills or Agent Loadouts.
 ```text
 Browser -> Console Pages -> API Gateway -> D1
                                   |       -> R2
-Agent -> Cloudflare Access -> MCP edge -> API Gateway
+Agent -> OAuth bearer -> MCP edge -> API Gateway
+Hook  -> Access Service Auth -> hook edge -> API Gateway
                                   |       -> Queue -> capability runner
 ```
 
@@ -55,15 +57,25 @@ Local session -> scene/rule extractor -> signed VerifiedKnowledgeBundleV1
 The collector owns private-key custody. D1 stores only the registered public
 key, principal, tenant, state, and expiry. The Gateway performs signature,
 event-chain, tenant, and permission checks; it does not call a server-side LLM.
-Migration 0035 is additive and leaves the existing capture and AI-review paths
+Migration 0037 is additive and leaves the existing capture and AI-review paths
 available for rollback.
 
 The Console, MCP, and direct API surfaces converge on the same Gateway services
 and unified authorization decision. Provider credentials remain server-side.
 The MCP edge does not accept a Console `/api` proxy route, persist OAuth tokens,
-or create Access policies. Managed OAuth discovery and browser authorization
-are owned by Cloudflare Access; the Gateway verifies the signed Access JWT and
-its configured audience before tenant or project authorization.
+or create Access policies. The Gateway owns OAuth discovery, authorization and token endpoints. Access
+protects the upstream user login at `/oauth/authorize`; it does not issue the
+OrgBrain OAuth bearer token. The Gateway verifies the Access JWT and audience
+before resolving the user and applying tenant, project and resource permissions.
+The Console preserves session cookies and verified Access JWTs through its proxy.
+
+Implemented features are not necessarily enabled: production knowledge-loop and
+loadout flags remain off unless explicitly configured. Console capabilities expose
+availability separately from the signed-in user's allowed actions.
+
+The retired orchestrator retains its HTTP 410 compatibility response. MailboxDO
+is still written by the capability runner; external pull consumers have not been
+verified. Both remain removal candidates, not confirmed unused components.
 
 ## Major components
 

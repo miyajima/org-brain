@@ -22,6 +22,13 @@ describe("Console API proxy headers", () => {
     });
   });
 
+  it("never replaces session or bearer credentials with a service key", () => {
+    for (const headers of [new Headers({ cookie: "__Host-orgbrain_session=invalid" }), new Headers({ authorization: "Bearer invalid" })]) {
+      expect(applyProxyAuthentication(headers, "v1/memories", null, "service").has("x-api-key")).toBe(false);
+    }
+    expect(applyProxyAuthentication(new Headers({ cookie: "theme=dark" }), "v1/memories", null, "service").get("x-api-key")).toBe("service");
+  });
+
   it("removes stale compression metadata from decoded fallback responses", async () => {
     const response = normalizeFallbackResponse(new Response('{"ok":true}', {
       headers: {
@@ -37,7 +44,7 @@ describe("Console API proxy headers", () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
-  it("forwards the verified Access identity only for client installation ownership", () => {
+  it("forwards the verified Access identity for every endpoint", () => {
     const installationHeaders = applyProxyAuthentication(
       new Headers({ accept: "application/json" }),
       "v1/mcp-client-installations",
@@ -53,7 +60,7 @@ describe("Console API proxy headers", () => {
       "verified-access-jwt",
       "internal-key"
     );
-    expect(regularHeaders.has("cf-access-jwt-assertion")).toBe(false);
-    expect(regularHeaders.get("x-api-key")).toBe("internal-key");
+    expect(regularHeaders.get("cf-access-jwt-assertion")).toBe("verified-access-jwt");
+    expect(regularHeaders.has("x-api-key")).toBe(false);
   });
 });
