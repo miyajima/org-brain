@@ -19,8 +19,13 @@ import { parseMemorySearchMode, parseOptionalBoolean, parseOptionalInteger, pars
 import type { MemoryProfileRequest, PrincipalActorOptions } from "./memory-service-types";
 import { bestEffortMarkMemoryResultsAccessed, searchMemories } from "./memory-search-service";
 
+type MemorySearchHit = Awaited<ReturnType<typeof searchMemories>>["results"][number];
+
 type RetrieveMemoryContextResponse = {
-  results: Awaited<ReturnType<typeof searchMemories>>["results"];
+  results: Array<Pick<
+    MemorySearchHit,
+    "kind" | "id" | "score" | "memory_kind" | "lifecycle_state" | "current_version" | "source_references"
+  >>;
   meta: Awaited<ReturnType<typeof searchMemories>>["meta"] & {
     usage_id: string;
     verification_sampled: boolean;
@@ -29,6 +34,16 @@ type RetrieveMemoryContextResponse = {
     evidence: Array<Record<string, unknown>>;
   };
 };
+
+// The answer guidance contract is always returned, so its characters are held
+// back from the evidence budget instead of being spent on excerpts.
+const ANSWER_GUIDANCE_CHAR_RESERVE = 600;
+
+function hasRetrievalSignal(result: MemorySearchHit): boolean {
+  const breakdown = result.score_breakdown;
+  if (!breakdown) return true;
+  return Number(breakdown.lexical) !== 0 || Number(breakdown.semantic) !== 0;
+}
 
 function parseProfileRequest(raw: unknown): {
   tenantId: string;
@@ -80,12 +95,14 @@ export async function retrieveMemoryContext(
     {
       ...body,
       tenant_id: tenantId,
-      limit: Math.max(topK, Number(body.limit) || 50),
+      limit: Math.min(50, topK * 2),
       search_mode: body.search_mode ?? "hybrid_v4"
     },
     { ...options, recordUsage: false }
   );
-  const selected = search.results.filter((result) => result.kind === "memory").slice(0, topK);
+  const selected = search.results
+    .filter((result) => result.kind === "memory" && hasRetrievalSignal(result))
+    .slice(0, topK);
   const ids = selected.map((result) => result.id);
   const selectedGenerationId = search.meta.retrieval?.generation_id ?? null;
   const unitRows = ids.length === 0
@@ -191,7 +208,7 @@ export async function retrieveMemoryContext(
   const confidenceById = new Map(
     confidenceRows.results.map((row) => [row.id, Number(row.confidence_score ?? 0.5)])
   );
-  const charBudget = tokenBudget * 4;
+  const charBudget = Math.max(0, tokenBudget * 4 - ANSWER_GUIDANCE_CHAR_RESERVE);
   let usedChars = 0;
   const evidence: Array<Record<string, unknown>> = [];
   const currentState: Array<Record<string, unknown>> = [];
@@ -224,7 +241,7 @@ export async function retrieveMemoryContext(
       extraction_state: unit?.extraction_state ?? "degraded",
       usefulness: assessMemoryUsefulnessV2({ stage: "use",
         task_project_id: typeof body.project_id === "string" ? body.project_id : null,
-        within_budget: usedChars <= tokenBudget * 4 })
+        within_budget: usedChars <= charBudget })
     });
     for (const candidate of units) {
       let metadata: Record<string, unknown> = {};
@@ -234,20 +251,28 @@ export async function retrieveMemoryContext(
         metadata = {};
       }
       if (candidate.unit_type === "profile" || candidate.unit_type === "ledger") {
-        currentState.push({
+        const entry = {
           memory_id: result.id,
           current: candidate.text,
           previous_values: (previousValues.get(result.id) ?? []).slice(1),
           ...metadata
-        });
+        };
+        const cost = JSON.stringify(entry).length;
+        if (usedChars + cost > charBudget) continue;
+        usedChars += cost;
+        currentState.push(entry);
       }
       if (candidate.unit_type === "timeline") {
-        timeline.push({
+        const entry = {
           memory_id: result.id,
           event_at: candidate.event_at,
           delta_from_question_ms: candidate.event_at === null ? null : queryAt - candidate.event_at,
           ...metadata
-        });
+        };
+        const cost = JSON.stringify(entry).length;
+        if (usedChars + cost > charBudget) continue;
+        usedChars += cost;
+        timeline.push(entry);
       }
     }
     for (const conflict of result.conflicts ?? []) conflicts.push({ memory_id: result.id, conflict });
@@ -279,11 +304,17 @@ export async function retrieveMemoryContext(
   const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
   const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
   const effectiveAbstention = shadowMode ? legacyAbstention : disposition.abstention_recommended;
+  // Abstaining means nothing is auto-injected; the wide candidate set stays
+  // reachable through the explicit search tool.
+  const injectedEvidence = effectiveAbstention ? [] : evidence;
+  const injectedCurrentState = effectiveAbstention ? [] : currentState;
+  const injectedTimeline = effectiveAbstention ? [] : timeline;
+  const injectedChars = effectiveAbstention ? 0 : usedChars;
   const answerGuidance = answerGuidanceForDisposition(
     effectiveAbstention && !["insufficient", "conflicted"].includes(disposition.evidence_status)
       ? { ...disposition, evidence_status: "insufficient", abstention_recommended: true }
       : disposition,
-    evidence.map((item) => {
+    injectedEvidence.map((item) => {
       const reference = item.source_reference;
       if (!reference || typeof reference !== "object") return null;
       const ref = (reference as { ref?: unknown }).ref;
@@ -315,7 +346,7 @@ export async function retrieveMemoryContext(
     retrieval_generation_id: selectedGenerationId,
     ranking_profile_id: search.meta.retrieval?.ranking_profile_id ?? null,
     actor_principal: options.actorPrincipal ?? null,
-    items: evidence.map((item, index) => ({
+    items: injectedEvidence.map((item, index) => ({
       source_type: "memory" as const,
       source_id: String(item.memory_id),
       source_version:selected.find(source=>source.id===item.memory_id)?.current_version ?? null,
@@ -326,8 +357,23 @@ export async function retrieveMemoryContext(
       injected_token_estimate: Math.ceil(String(item.text ?? "").length / 4)
     }))
   });
+  const selectedById = new Map(selected.map((result) => [result.id, result]));
   return {
     ...search,
+    results: injectedEvidence.flatMap((item) => {
+      const result = selectedById.get(String(item.memory_id));
+      return result
+        ? [{
+          kind: result.kind,
+          id: result.id,
+          score: result.score,
+          memory_kind: result.memory_kind,
+          lifecycle_state: result.lifecycle_state,
+          current_version: result.current_version,
+          source_references: result.source_references
+        }]
+        : [];
+    }),
     meta: {
       ...search.meta,
       usage_id: contextUsage.usage_id,
@@ -338,12 +384,12 @@ export async function retrieveMemoryContext(
     evidence_bundle: {
       query_at: queryAt,
       token_budget: tokenBudget,
-      estimated_tokens: Math.ceil(usedChars / 4),
+      estimated_tokens: Math.ceil((injectedChars + answerGuidance.instructions.length) / 4),
       evidence_status: disposition.evidence_status,
       answer_template: shadowMode && legacyAbstention ? "abstention" : answerTemplate,
-      evidence,
-      current_state: currentState,
-      timeline,
+      evidence: injectedEvidence,
+      current_state: injectedCurrentState,
+      timeline: injectedTimeline,
       conflicts,
       missing_evidence: shadowMode ? legacyMissingEvidence : disposition.missing_evidence,
       abstention_recommended: effectiveAbstention,

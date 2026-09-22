@@ -145,20 +145,6 @@ function clip(value, limit) {
   return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1))}…`;
 }
 
-function clipUtf8Prefix(value, limitBytes) {
-  const text = String(value ?? "");
-  if (Buffer.byteLength(text, "utf8") <= limitBytes) return text;
-  let bytes = 0;
-  let output = "";
-  for (const character of text) {
-    const next = Buffer.byteLength(character, "utf8");
-    if (bytes + next > limitBytes) break;
-    output += character;
-    bytes += next;
-  }
-  return output;
-}
-
 function contentText(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -1137,13 +1123,12 @@ export function buildLearningExtractionPacket(turnEvidence, discovery, options =
     };
     return { ...finalizedPacket, packet_hash: `sha256:${sha256(stableJson(finalizedPacket))}` };
   }
+  // The byte ceiling leaves only a few hundred bytes after the v2 prompt envelope.
+  // A retrieval reserve large enough to matter drops every snippet, so existing
+  // memories stay bounded later against the same ceiling.
   const packed = packet.schema === LEARNING_EXTRACTION_PROPOSAL_V3_SCHEMA
     ? packMemoryExtractionSnippets(packet, evidenceCandidates, { reserve_bytes: 512, max_snippets: 8 })
-    : { packet: { ...packet, snippets: evidenceCandidates.slice(0, 3).map((item, index) => {
-        const remaining = 320 - evidenceCandidates.slice(0, index).reduce((sum, candidate) => sum + Buffer.byteLength(candidate.text, "utf8"), 0);
-        const text = clipUtf8Prefix(item.text, Math.max(0, remaining)).trim();
-        return { ...item, text, text_hash: `sha256:${sha256(text)}` };
-      }).filter((item) => item.text) } };
+    : packMemoryExtractionSnippets(packet, evidenceCandidates, { reserve_bytes: 0, max_snippets: 8 });
   const finalizedPacket = {
     ...packed.packet,
     snippets: packed.packet.snippets.map((item) => ({ ...item, text_hash: `sha256:${sha256(item.text)}` }))

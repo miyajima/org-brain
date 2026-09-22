@@ -140,7 +140,7 @@ test("answer UX MCP profile exposes only the exact read-only context surface", a
       content: "The internal raw memory body must not be returned by the answer UX profile.",
       summary: "Two reviewers are required before the read-only smoke check.",
       tags: ["approval"], source: "test", source_references: [{ type: "document", ref: "RUNBOOK-SAFE" }],
-      external_key: "answer-ux:safe", actor_type: "principal", actor_id: "test", confidence_score: 0.9
+      external_key: "answer-ux:safe", work_type: "other", actor_type: "principal", actor_id: "test", confidence_score: 0.9
     });
     connection = await connect(ctx.dbPath, { toolProfile: "answer-ux-readonly" });
     const catalog = await connection.client.listTools();
@@ -154,7 +154,7 @@ test("answer UX MCP profile exposes only the exact read-only context surface", a
     }));
     const enriched = await connection.client.callTool({
       name: "orgbrain_context_enrich",
-      arguments: { tenant_id: "default", project_id: "answer-ux", query: "reviewers and read-only smoke" }
+      arguments: { tenant_id: "default", project_id: "answer-ux", query: "reviewers read-only smoke check" }
     });
     const text = enriched.content[0].text;
     const payload = JSON.parse(text);
