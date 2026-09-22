@@ -39,11 +39,12 @@ const CONTINUATION_PROMPT = /(?:^|\s)(?:上記|前述|その|それ|これ|続�
 export const VERIFIED_LEARNING_HIDDEN_INSTRUCTION = MEMORY_CONTRACT_V2_PROMPT;
 export const EAGER_MEMORY_HIDDEN_INSTRUCTION = [
   "OrgBrain eager learning is enabled for this workspace.",
-  "If a current-turn OrgBrain search or context enrichment returns no relevant memory or recommends abstention, briefly tell the user that you will continue the work and let the lifecycle hook record a safe reusable memory after verified completion.",
+  "If a current-turn OrgBrain search or context enrichment returns no relevant memory or recommends abstention, treat that as an internal status, continue from the current repository and available skills, and do not narrate the miss.",
   "Do not claim that a memory was saved before the Stop hook runs, and do not perform an interactive memory write for this automatic path.",
   "In the final answer, state the reusable configuration location or procedure, why it worked, the verification outcome, and when to reuse it.",
   "Never include API keys, tokens, passwords, client secrets, bearer values, or other credential values; retain only setting names, safe locations, presence checks, and verification conditions."
 ].join(" ");
+const NO_RELEVANT_MEMORY_SYSTEM_MESSAGE = "OrgBrain: 関連記憶なし";
 
 function compact(value, limit = MAX_SUMMARY_CHARS) {
   const normalized = String(value ?? "").replace(/\s+/gu, " ").trim();
@@ -355,6 +356,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   const eagerInstruction = scope.learningMode === "eager" ? EAGER_MEMORY_HIDDEN_INSTRUCTION : null;
   const store = options.store ?? new LocalMemoryStore(env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
   const useStatus = await store.useHistory("status");
+  let systemMessage = null;
   if (useStatus.flags.collect && taskKey && scope.projectId && scope.workType) contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}, work_type=${scope.workType}.`);
   if (scope.localMemoryEnabled) {
     const results = await store.search({
@@ -379,6 +381,12 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         result.score.total >= MIN_TOTAL_SCORE &&
         Math.max(result.score.lexical ?? 0, result.score.semantic ?? 0, result.use_history?.examples?.length ? result.use_history.base_score : 0) >= MIN_COMPONENT_SCORE
       ) relevant.push(result);
+    }
+    if (hookEventName(payload) === "UserPromptSubmit" && ["shadow", "on", "confirm", "eager"].includes(scope.learningMode) && relevant.length === 0) {
+      // Keep a retrieval miss in Codex's UI status channel. Putting this in
+      // additionalContext makes the model repeat an operational detail as a
+      // user-facing paragraph.
+      systemMessage = NO_RELEVANT_MEMORY_SYSTEM_MESSAGE;
     }
     if (relevant.length > 0) {
       const useReceipt = useStatus.flags.collect ? await store.recordUsage({tenant_id:scope.tenantId,project_id:scope.projectId,
@@ -434,6 +442,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   if (eagerInstruction) contextParts.push(eagerInstruction);
   if (contextParts.length === 0) return null;
   return {
+    ...(systemMessage ? { systemMessage } : {}),
     hookSpecificOutput: {
       hookEventName: hookEventName(payload),
       additionalContext: boundedContext(contextParts)
