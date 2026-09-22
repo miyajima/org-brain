@@ -1,10 +1,9 @@
 import { readDecisionMemoryForUse } from './context-engine-service';
-import { MemoryUseHistory, memoryUseFlags, verifyMemoryUseAttestation, HttpError, type UseRow } from '@org-brain/shared';
+import { MemoryUseHistory, memoryReadAccessSql, type MemoryReadAccess, memoryUseFlags, verifyMemoryUseAttestation, HttpError, type UseRow } from '@org-brain/shared';
 import { authorizePermission } from './rbac-service';
-import { stableResultReadable } from './memory-search-service';
 import type { Env } from './types';
 
-export function memoryUseService(env: Env, tenantId: string, principal: string | null, now=Date.now,filters:{projectId?:string|null;workType?:string|null;businessCategoryId?:string|null}={}) {
+export function memoryUseService(env: Env, tenantId: string, principal: string | null, now=Date.now,filters:{readAccess?:MemoryReadAccess;projectId?:string|null;workType?:string|null;businessCategoryId?:string|null}={}) {
   if (!principal) throw new HttpError(403,'use_principal_required','Authenticated principal required');
   const db = env.OPEN_BRAIN_DB;
   const permissionCache = new Map<string,boolean>();
@@ -19,10 +18,10 @@ export function memoryUseService(env: Env, tenantId: string, principal: string |
     resolveSource:async(type,id)=>{
       if(type==='decision_memory') {const source=await readDecisionMemoryForUse(env,tenantId,id,principal);return source&&await readable(source.project_id)?source:null;}
       if(type!=='memory') return null;
-      const row=await db.prepare('SELECT * FROM memories WHERE tenant_id=? AND id=?').bind(tenantId,id).first<UseRow>();
+      const row=await db.prepare(`SELECT * FROM memories WHERE tenant_id=? AND id=? AND ${memoryReadAccessSql("memories", filters.readAccess ?? { principal })}`).bind(tenantId,id).first<UseRow>();
       if(row&&((filters.workType&&row.work_type!==filters.workType)||(filters.businessCategoryId&&row.business_category_id!==filters.businessCategoryId)||(filters.projectId&&row.project_id&&row.project_id!==filters.projectId))) return null;
       if(!row || row.deleted_at || row.lifecycle_state==='suppressed' || (row.valid_until!=null&&row.valid_until<=now()) || (row.valid_from!=null&&row.valid_from>now())
-        || !stableResultReadable(row.permissions_json,principal) || !await readable(row.project_id)) return null;
+        ) return null;
       return {id:row.id,kind:'memory',memory_kind:row.kind,current_version:row.current_version,source:row.source,
         summary:row.summary,content_preview:row.content.slice(0,600),created_at:row.created_at,project_id:row.project_id};
     },

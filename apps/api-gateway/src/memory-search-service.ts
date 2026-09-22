@@ -1,6 +1,21 @@
+import {
+  memoryReadAccessSql,
+  type MemoryReadAccess,
+  memoryUseFlags,
+  type UseContext,
+  HttpError,
+  searchTenantMemories,
+  searchTenantRetrievalUnitsV3,
+  searchTenantRetrievalUnitsV4,
+  sha256,
+  type MemoryKind,
+  type MemoryLifecycleState,
+  type MemorySearchResponse,
+  type MemorySearchMode,
+  type MemorySourceReference,
+  type MemoryWorkType
+} from "@org-brain/shared";
 import { memoryUseService } from "./memory-use-service";
-import { memoryUseFlags, type UseContext } from "@org-brain/shared";
-import { HttpError, searchTenantMemories, searchTenantRetrievalUnitsV3, searchTenantRetrievalUnitsV4, sha256, type MemoryKind, type MemoryLifecycleState, type MemorySearchResponse, type MemorySearchMode, type MemorySourceReference, type MemoryWorkType } from "@org-brain/shared";
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import { rerankV3MemoryCandidates, searchRetrievalGenerationSemanticIndex, searchSemanticIndex, searchV3SemanticIndex, searchV4SemanticIndex } from "./retrieval-index-service";
 import type { Env } from "./types";
@@ -60,6 +75,7 @@ export function resolveRetrievalProfileSearchMode(
 }
 
 function parseSearchRequest(raw: unknown): {
+  readAccess?: MemoryReadAccess;
   tenantId: string;
   projectId: string | null;
   q: string;
@@ -197,6 +213,7 @@ async function searchStableRetrievalUnits(
        WHERE u.generation_id = ? AND u.tenant_id = ?
          AND u.source_type = 'memory' AND retrieval_units_fts MATCH ?
          ${projectSql}${categorySql}${workSql}
+         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = u.tenant_id AND m.id = u.source_id AND ${memoryReadAccessSql("m", request.readAccess)})
        ORDER BY bm25(retrieval_units_fts), u.created_at DESC
        LIMIT 200`
     ).bind(...bindings).all<StableUnitCandidate>()).results;
@@ -209,6 +226,7 @@ async function searchStableRetrievalUnits(
        FROM retrieval_units u
        WHERE u.generation_id = ? AND u.tenant_id = ? AND u.source_type = 'memory'
          ${projectSql}${categorySql}${workSql}
+         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = u.tenant_id AND m.id = u.source_id AND ${memoryReadAccessSql("m", request.readAccess)})
        ORDER BY u.created_at DESC LIMIT 200`
     ).bind(...bindings).all<StableUnitCandidate>()).results;
   }
@@ -251,7 +269,8 @@ async function searchStableRetrievalUnits(
       `SELECT id, source_id, unit_type, text, NULL AS raw_rank
        FROM retrieval_units
        WHERE generation_id = ? AND tenant_id = ? AND id IN (${chunk.map(() => "?").join(",")})
-         AND source_type = 'memory'`
+         AND source_type = 'memory'
+         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = retrieval_units.tenant_id AND m.id = retrieval_units.source_id AND ${memoryReadAccessSql("m", request.readAccess)})`
     ).bind(generation.id, request.tenantId, ...chunk.map((item) => item.id)).all<StableUnitCandidate>()).results;
     semanticRows.push(...rows);
   }
@@ -315,7 +334,7 @@ async function searchStableRetrievalUnits(
   const byId = new Map(memoryRows.map((row) => [row.id, row]));
   const results = ids.flatMap((id) => {
     const row = byId.get(id);
-    if (!row || !stableResultReadable(row.permissions_json, principalId)) return [];
+    if (!row || (!request.readAccess && !stableResultReadable(row.permissions_json, principalId))) return [];
     if (request.projectId && row.project_id !== null && row.project_id !== request.projectId) return [];
     if (request.businessCategoryId && row.business_category_id !== request.businessCategoryId) return [];
     if (request.workType && row.work_type !== request.workType) return [];
@@ -387,6 +406,9 @@ export async function searchMemories(
   options: PrincipalActorOptions = {}
 ): Promise<MemorySearchResponse> {
   const parsedRequest = parseSearchRequest(rawBody);
+  const scope = (rawBody as { scope?: string }).scope;
+  if (scope !== undefined && scope !== "mine" && scope !== "org") throw new HttpError(400, "invalid_scope", "scope must be mine or org");
+  if (options.actorPrincipal) parsedRequest.readAccess = { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll, scope };
   const useFlags = memoryUseFlags(env as unknown as Record<string, unknown>);
   if(parsedRequest.includeHistory || parsedRequest.includeSuppressed) {useFlags.context=false;useFlags.ranking=false;}
   const publicLimit = parsedRequest.limit;

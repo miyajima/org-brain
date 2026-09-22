@@ -1,7 +1,8 @@
 ---
+const fetchDashboardData = createDashboardFetcher(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import LegacyTaskDashboard from "../../components/LegacyTaskDashboard.astro";
-import { dashboardApiPath, dashboardTaskPageParams, fetchDashboardData, normalizeDashboardTasks } from "../../lib/dashboard-page";
+import { dashboardApiPath, dashboardTaskPageParams, createDashboardFetcher, normalizeDashboardTasks } from "../../lib/dashboard-page";
 import { taskListTitle } from "../../lib/console-locale";
 
 const cookieHeader = Astro.request.headers.get("cookie");

@@ -64,3 +64,16 @@ test("CI starts the API integration Worker with remote bindings disabled", async
   assert.match(startBlock, /API_TENANT_POLICY_JSON:/u);
   assert.match(startBlock, /"role":"tenant_admin"/u);
 });
+
+
+test("provisioning includes every deployed producer, consumer and dead-letter queue", async () => {
+  const { buildCloudProvisionPlan } = await import("../packages/orgbrain-cli/src/cloud-operations.mjs");
+  const plan = buildCloudProvisionPlan();
+  const planned = new Set(plan.steps.filter((step) => step.id.startsWith("ensure_queue_")).map((step) => step.id.slice("ensure_queue_".length)));
+  const configured = new Set();
+  for (const app of ["api-gateway", "org-router", "cap-runner", "retrieval-projector"]) {
+    const source = await readFile(new URL(`../apps/${app}/wrangler.toml`, import.meta.url), "utf8");
+    for (const key of ["queue", "dead_letter_queue"]) for (const queue of quotedValues(source, key)) configured.add(queue);
+  }
+  assert.deepEqual([...planned].sort(), [...configured].sort());
+});

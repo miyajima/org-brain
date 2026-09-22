@@ -1,12 +1,14 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
 import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus } from "../lib/knowledge-loop-locale";
 
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const t = knowledgeLoopCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+
+const api = (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
 let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -33,7 +35,7 @@ const capabilityPayload: any = await capabilityResponse.json().catch(() => null)
 const sessions = Array.isArray(sessionPayload?.data) ? sessionPayload.data : [];
 const schedules = Array.isArray(schedulePayload?.data) ? schedulePayload.data : [];
 const groups = Array.isArray(groupsPayload?.data?.groups) ? groupsPayload.data.groups : [];
-const writable = capabilityPayload?.data?.retrospective?.writable === true;
+const writable = capabilityPayload?.data?.retrospective?.allowed_actions?.includes("manage") === true;
 if (!sessionResponse.ok && !error) error = sessionPayload?.error?.message ?? "Retrospectives could not be loaded";
 ---
 <BaseLayout title={t.retroTitle} lang={lang} wide>

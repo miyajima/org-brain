@@ -1,3 +1,4 @@
+import manifest from "../../../packages/mcp-core/fixtures/tool-manifest.json";
 import {
   capturedMcpToolContracts,
   resetCapturedMcpToolContracts
@@ -20,8 +21,8 @@ describe("MCP tool contract", () => {
       authSource: "access-service"
     });
     const tools = capturedMcpToolContracts();
-    expect(tools).toHaveLength(51);
-    expect(new Set(tools.map((tool) => tool.name)).size).toBe(51);
+    expect(tools).toEqual(manifest.tools);
+    expect(new Set(tools.map((tool) => tool.name)).size).toBe(tools.length);
     expect(tools.find((tool) => tool.name === "orgbrain_memory_quality_audit")).toMatchObject({
       permission: "read",
       scope: "orgbrain:read"

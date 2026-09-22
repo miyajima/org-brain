@@ -1,7 +1,8 @@
 ---
+const fetchDashboardData = createDashboardFetcher(Astro.request);
 import MemoryStrata from "../../components/intelligence/MemoryStrata.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import { dashboardPageParams, fetchDashboardData } from "../../lib/dashboard-page";
+import { dashboardPageParams, createDashboardFetcher } from "../../lib/dashboard-page";
 import { intelligencePageCopy } from "../../lib/intelligence-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../../lib/insights-ui-mode";
 import {

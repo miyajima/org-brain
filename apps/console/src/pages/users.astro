@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
 import AdminSection from "../components/admin/AdminSection.astro";
@@ -9,13 +11,13 @@ import { dashboardPageParams } from "../lib/dashboard-page";
 
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = userAdminCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
+
 const query = Astro.url.searchParams.get("q")?.trim() ?? "";
 const statusFilter = Astro.url.searchParams.get("status") ?? "";
 const roleFilter = Astro.url.searchParams.get("role") ?? "";
 const page = Math.max(1, Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10) || 1);
 const pageSize = 25;
-const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+const api = async (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
 let message = "";
 let error = "";
 if (Astro.request.method === "POST") {

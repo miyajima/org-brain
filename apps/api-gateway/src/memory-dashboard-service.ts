@@ -1,8 +1,10 @@
+import { memoryReadAccessSql } from "@org-brain/shared";
 import type { Env } from "./types";
 
 export type MemoryAnalyticsOptions = {
   tenantId: string;
   principal: string;
+  isAdmin?: boolean;
   scope: "mine" | "org";
   perspective: "work" | "spread";
   projectId?: string | null;
@@ -16,6 +18,7 @@ export type MemoryAnalyticsOptions = {
 export type MemoryMapOptions = {
   tenantId: string;
   principal: string;
+  isAdmin?: boolean;
   scope: "mine" | "org";
   display?: "top" | "cluster" | "all";
   projectId?: string | null;
@@ -41,10 +44,10 @@ function numeric(value: unknown): number {
 }
 
 function memoryFilter(
-  options: Pick<MemoryAnalyticsOptions, "tenantId" | "scope" | "perspective" | "principal" | "projectId" | "ownerPrincipal"> & { alias?: string }
+  options: Pick<MemoryAnalyticsOptions, "isAdmin" | "tenantId" | "scope" | "perspective" | "principal" | "projectId" | "ownerPrincipal"> & { alias?: string }
 ) {
   const alias = options.alias ?? "m";
-  const clauses = [`${alias}.tenant_id = ?`, `${alias}.deleted_at IS NULL`, `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`];
+  const clauses = [memoryReadAccessSql(alias, { principal: options.principal, isAdmin: options.isAdmin }), `${alias}.tenant_id = ?`, `${alias}.deleted_at IS NULL`, `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`];
   const bindings: unknown[] = [options.tenantId];
   if (options.projectId) {
     clauses.push(`${alias}.project_id = ?`);
@@ -395,6 +398,7 @@ export async function getMemoryAnalytics(env: Env, options: MemoryAnalyticsOptio
 
 function mapMemoryFilter(options: MemoryMapOptions) {
   const clauses = [
+    memoryReadAccessSql("m", { principal: options.principal, isAdmin: options.isAdmin }),
     "m.tenant_id = ?",
     "m.deleted_at IS NULL",
     "(m.lifecycle_state IS NULL OR m.lifecycle_state != 'suppressed')"

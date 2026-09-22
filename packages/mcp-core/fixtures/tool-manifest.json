@@ -2564,6 +2564,13 @@
           "tenant_id": {
             "type": "string"
           },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "mine",
+              "org"
+            ]
+          },
           "source": {
             "type": "string"
           },
@@ -2599,6 +2606,13 @@
         "properties": {
           "tenant_id": {
             "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "mine",
+              "org"
+            ]
           },
           "project_id": {
             "anyOf": [
@@ -3082,6 +3096,13 @@
         "properties": {
           "tenant_id": {
             "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "mine",
+              "org"
+            ]
           },
           "project_id": {
             "anyOf": [

@@ -195,10 +195,11 @@ test("readLocalMemories refuses a non-current schema before any initialization",
     const store = new LocalMemoryStore(ctx.dbPath);
     await store.capture(captureInput());
     const database = store.open();
+    const currentVersion = database.prepare("PRAGMA user_version").get().user_version;
     try { database.exec("PRAGMA user_version = 23"); } finally { database.close(); }
     assert.throws(
       () => readLocalMemories({ dbPath: ctx.dbPath, tenantId: "default", projectId: "aima" }),
-      /schema version 23 != 25/u
+      new RegExp(`schema version 23 != ${currentVersion}`, "u")
     );
   } finally {
     await ctx.cleanup();

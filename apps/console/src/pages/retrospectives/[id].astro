@@ -1,12 +1,14 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus } from "../../lib/knowledge-loop-locale";
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const t = knowledgeLoopCopy(lang);
 const id = String(Astro.params.id ?? "");
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+
+const api = (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
 let error = "";
 const capabilities = await api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`);
 const capabilityPayload: any = await capabilities.json().catch(() => null);

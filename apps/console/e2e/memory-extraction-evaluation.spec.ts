@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
@@ -195,10 +196,26 @@ test.describe("direct-only memory extraction evaluation", () => {
     await expect(page).toHaveURL(/\/admin\/memory-extraction-evaluation$/u);
   });
 
-  test("loads the locally generated 500-case bundle without exposing predictions", async ({ page }) => {
-    test.skip(!realEvaluationBundlePath, "ORGBRAIN_EVALUATION_BUNDLE is not set");
+  test("loads a 500-case bundle without exposing predictions", async ({ page }) => {
+    // Keep the scale regression reproducible without private local evaluation data.
+    // An explicit bundle still exercises the same assertions when supplied.
+    const bundle = realEvaluationBundlePath
+      ? JSON.parse(readFileSync(realEvaluationBundlePath, "utf8"))
+      : {
+          ...evaluationBundle,
+          set_id: "synthetic-500-case-e2e",
+          cases: Array.from({ length: 500 }, (_, index) => ({
+            ...evaluationBundle.cases[index < 75 ? 0 : 1],
+            id: `synthetic-case-${index}`,
+            source_hash: `sha256:synthetic-case-${index}`
+          }))
+        };
     await page.goto("/admin/memory-extraction-evaluation");
-    await page.locator("[data-bundle-input]").setInputFiles(realEvaluationBundlePath!);
+    await page.locator("[data-bundle-input]").setInputFiles({
+      name: "500-case-evaluation.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(bundle))
+    });
 
     await expect(page.locator("[data-progress-count]")).toHaveText("0 / 500");
     await expect(page.locator("[data-case-list] button")).toHaveCount(500);
@@ -209,9 +226,9 @@ test.describe("direct-only memory extraction evaluation", () => {
 
     await page.locator('input[name="outcome"][value="no_candidate"]').check();
     await page.locator('input[name="confidence"][value="medium"]').check();
-    const stored = await page.evaluate(() => localStorage.getItem(
-      "orgbrain:memory-extraction-evaluation:v1:local-real-evaluation-2026-09-03"
-    ));
+    const stored = await page.evaluate((setId) => localStorage.getItem(
+      `orgbrain:memory-extraction-evaluation:v1:${setId}`
+    ), bundle.set_id);
     expect(stored).toContain('"outcome":"no_candidate"');
 
     const downloadPromise = page.waitForEvent("download");

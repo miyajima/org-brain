@@ -1,3 +1,4 @@
+import { memoryReadAccessSql, type MemoryReadAccess } from "./memory-read-access";
 import { buildKnowledgeFtsQuery } from "./knowledge-docs";
 import { normalizeLifecycleState, normalizeMemoryKind, type MemoryKind, type MemoryLifecycleState } from "./memory-lifecycle-types";
 import {
@@ -199,6 +200,7 @@ export type MemoryProfileResponse = {
 };
 
 export type MemorySearchOptions = {
+  readAccess?: MemoryReadAccess;
   tenantId: string;
   projectId?: string | null;
   q: string;
@@ -216,6 +218,7 @@ export type MemorySearchOptions = {
 };
 
 export type MemoryProfileOptions = {
+  readAccess?: MemoryReadAccess;
   tenantId: string;
   projectId?: string | null;
   q?: string;
@@ -460,15 +463,15 @@ function bindProjectArgs(projectId: string | null | undefined): unknown[] {
 
 function searchableFilterSql(
   alias: string,
-  options: { at?: number; includeSuppressed?: boolean } = {}
+  options: { at?: number; includeSuppressed?: boolean; readAccess?: MemoryReadAccess } = {}
 ): string {
-  return `${retrievalSearchableFilterSql(alias, options.at ?? Date.now(), options.includeSuppressed ?? false)}
+  return `${retrievalSearchableFilterSql(alias, options.at ?? Date.now(), options.includeSuppressed ?? false, options.readAccess)}
     AND (${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"compacted"%')`;
 }
 
-function retrievalSearchableFilterSql(alias: string, at: number, includeSuppressed: boolean): string {
+function retrievalSearchableFilterSql(alias: string, at: number, includeSuppressed: boolean, readAccess?: MemoryReadAccess): string {
   const timestamp = Math.trunc(Number.isFinite(at) ? at : Date.now());
-  return `${includeSuppressed ? "1 = 1" : `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`}
+  return `${memoryReadAccessSql(alias, readAccess)} AND ${alias}.deleted_at IS NULL AND ${includeSuppressed ? "1 = 1" : `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`}
     AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > ${timestamp})
     AND (${alias}.valid_from IS NULL OR ${alias}.valid_from <= ${timestamp})
     AND (${alias}.valid_until IS NULL OR ${alias}.valid_until > ${timestamp})
@@ -487,7 +490,7 @@ async function searchMemoryVariant(
   projectId: string | null | undefined,
   ftsQuery: string,
   limit: number,
-  options: { at?: number; includeSuppressed?: boolean } = {}
+  options: { at?: number; includeSuppressed?: boolean; readAccess?: MemoryReadAccess } = {}
 ): Promise<MemoryCandidateRow[]> {
   const result = await db.prepare(
     `SELECT m.id, m.tenant_id, m.project_id, m.content, m.summary, m.tags_json, m.source, m.external_key, m.created_at,
@@ -519,7 +522,7 @@ async function loadRecentHistoryRows(
   tenantId: string,
   projectId: string | null | undefined,
   limit: number,
-  options: { at?: number; includeSuppressed?: boolean } = {}
+  options: { at?: number; includeSuppressed?: boolean; readAccess?: MemoryReadAccess } = {}
 ): Promise<StoredMemory[]> {
   const result = await db.prepare(
     `SELECT id, tenant_id, project_id, content, summary, tags_json, source, external_key, created_at,
@@ -728,7 +731,7 @@ async function loadMemoryRowsByIds(
   db: D1Database,
   tenantId: string,
   ids: string[],
-  options: { at?: number; includeSuppressed?: boolean } = {}
+  options: { at?: number; includeSuppressed?: boolean; readAccess?: MemoryReadAccess } = {}
 ): Promise<MemoryCandidateRow[]> {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
@@ -740,7 +743,7 @@ async function loadMemoryRowsByIds(
      WHERE tenant_id = ? AND id IN (${placeholders}) AND ${retrievalSearchableFilterSql(
        "memories",
        options.at ?? Date.now(),
-       options.includeSuppressed ?? false
+       options.includeSuppressed ?? false, options.readAccess
      )}`
   )
     .bind(tenantId, ...ids)
@@ -805,7 +808,7 @@ export async function searchTenantRetrievalUnitsV3(
          WHERE memory_retrieval_units_fts.tenant_id = ?
            AND memory_retrieval_units_fts.text MATCH ?
            AND (? IS NULL OR u.project_id = ?)
-           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
            AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
            AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
          ORDER BY bm25(memory_retrieval_units_fts) ASC,
@@ -834,7 +837,7 @@ export async function searchTenantRetrievalUnitsV3(
            WHERE memory_retrieval_units_fts.tenant_id = ?
              AND memory_retrieval_units_fts.text MATCH ?
              AND (? IS NULL OR u.project_id = ?)
-             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
              AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
              AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
            ORDER BY bm25(memory_retrieval_units_fts) ASC,
@@ -871,7 +874,7 @@ export async function searchTenantRetrievalUnitsV3(
            WHERE memory_retrieval_units_fts.tenant_id = ?
              AND memory_retrieval_units_fts.text MATCH ?
              AND (? IS NULL OR u.project_id = ?)
-             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
              AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
              AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
              AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
@@ -911,7 +914,7 @@ export async function searchTenantRetrievalUnitsV3(
            WHERE memory_retrieval_units_fts.tenant_id = ?
              AND memory_retrieval_units_fts.text MATCH ?
              AND (? IS NULL OR u.project_id = ?)
-             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+             AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
              AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
              AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
              AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
@@ -948,7 +951,7 @@ export async function searchTenantRetrievalUnitsV3(
          WHERE u.tenant_id = ?
            AND u.unit_type = 'session'
            AND (? IS NULL OR u.project_id = ?)
-           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
            AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
            AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
          ORDER BY ABS(COALESCE(u.event_at, u.created_at) - ?) ASC
@@ -971,7 +974,7 @@ export async function searchTenantRetrievalUnitsV3(
        JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
        WHERE u.tenant_id = ? AND u.id IN (${placeholders})
          AND (? IS NULL OR u.project_id = ?)
-         AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+         AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
          AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
          AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})`
     )
@@ -1079,7 +1082,7 @@ export async function searchTenantRetrievalUnitsV3(
     const row = rowById.get(memoryId);
     if (!row) return [];
     const candidate = toMemorySearchCandidate(row);
-    if (!candidateAllowed(candidate, options.principalId)) return [];
+    if (!options.readAccess && !candidateAllowed(candidate, options.principalId)) return [];
     const units = parentUnitScores.get(memoryId) ?? [];
     const eventAt = Math.max(...units.map(({ unit }) => unit.event_at ?? 0));
     const temporal =
@@ -1214,7 +1217,7 @@ export async function searchTenantRetrievalUnitsV4(
          WHERE memory_retrieval_units_v4_fts.tenant_id = ?
            AND memory_retrieval_units_v4_fts.text MATCH ?
            AND (? IS NULL OR u.project_id = ?)
-           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
          ORDER BY bm25(memory_retrieval_units_v4_fts), u.content_hash
          LIMIT 200`
       )
@@ -1232,7 +1235,7 @@ export async function searchTenantRetrievalUnitsV4(
          JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
          WHERE u.tenant_id = ? AND u.id IN (${semanticHits.map(() => "?").join(",")})
            AND (? IS NULL OR u.project_id = ?)
-           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed)}`
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}`
       ).bind(options.tenantId, ...semanticHits.map((hit) => hit.id), projectId, projectId)
         .all<{ id: string; memory_id: string }>();
   const semanticParentByUnit = new Map(
@@ -1332,7 +1335,7 @@ export async function searchTenantMemories(
   for (const variant of variants) {
     const rows = await searchMemoryVariant(db, tenantId, projectId, variant.ftsQuery, lexicalFetchLimit, {
       at: options.at,
-      includeSuppressed: options.includeSuppressed
+      readAccess: options.readAccess, includeSuppressed: options.includeSuppressed
     });
     for (const row of rows) {
       const existing = lexicalById.get(row.id);
@@ -1355,7 +1358,7 @@ export async function searchTenantMemories(
       .slice(0, lexicalFetchLimit);
     const projectionRows = await loadMemoryRowsByIds(db, tenantId, projectionIds, {
       at: options.at,
-      includeSuppressed: options.includeSuppressed
+      readAccess: options.readAccess, includeSuppressed: options.includeSuppressed
     });
     for (const row of projectionRows) {
       candidateById.set(row.id, toMemorySearchCandidate(row));
@@ -1374,7 +1377,7 @@ export async function searchTenantMemories(
         utility: candidate.utility_score,
         authority:
           candidate.memory_kind === "decision" || candidate.source === "curated" ? 1 : 0.7,
-        allowed: candidateAllowed(candidate, options.principalId)
+        allowed: Boolean(options.readAccess) || candidateAllowed(candidate, options.principalId)
       })),
       {
         availability: {
@@ -1399,7 +1402,7 @@ export async function searchTenantMemories(
       });
   }
 
-  const shouldSearchDocs = searchMode === "hybrid" && q.length > 0 && lexicalResultCount < 3;
+  const shouldSearchDocs = options.readAccess?.scope !== "mine" && searchMode === "hybrid" && q.length > 0 && lexicalResultCount < 3;
   const docCandidates: SearchCandidate[] = [];
   if (shouldSearchDocs) {
     const docById = new Map<string, KnowledgeDocCandidateRow>();
@@ -1428,7 +1431,7 @@ export async function searchTenantMemories(
       tenantId,
       projectId,
       Math.max(HISTORY_FETCH_LIMIT_FLOOR, limit * 4),
-      { at: options.at, includeSuppressed: options.includeSuppressed }
+      { at: options.at, readAccess: options.readAccess, includeSuppressed: options.includeSuppressed }
     );
     for (const row of historyRows) {
       if (baseIds.has(row.id)) continue;
@@ -1530,7 +1533,7 @@ export async function buildTenantMemoryProfile(
   const limitRecent = Math.max(1, Math.min(16, options.limitRecent ?? 8));
   const now = options.now ?? Date.now();
 
-  const rows = await loadRecentHistoryRows(db, tenantId, projectId, PROFILE_SCAN_LIMIT, { at: now });
+  const rows = await loadRecentHistoryRows(db, tenantId, projectId, PROFILE_SCAN_LIMIT, { at: now, readAccess: options.readAccess });
   const durableCutoff = now - DAY_MS;
   const recentCutoff = now - RECENT_WINDOW_DAYS * DAY_MS;
   const durableSeen = new Set<string>();
@@ -1590,6 +1593,7 @@ export async function buildTenantMemoryProfile(
         tenantId,
         projectId,
         q: options.q,
+        readAccess: options.readAccess,
         limit: 5,
         rewriteQuery: options.rewriteQuery ?? false,
         searchMode,

@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 import { adminLocale } from "../lib/admin-copy";
@@ -62,7 +64,7 @@ const from = now - days * 24 * 60 * 60 * 1000;
 const to = now;
 
 async function fetchApi<T>(path: string): Promise<ApiResponse<T> | null> {
-  const response = await fetch(new URL(path, url));
+  const response = await serverApi(new URL(path, url));
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) return { ok: false, error: { message: `HTTP ${response.status}` } };
   return payload;

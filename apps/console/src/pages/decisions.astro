@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AdminStatePanel from "../components/admin/AdminStatePanel.astro";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
@@ -447,7 +449,7 @@ const freshnessLabel = (value: string | null | undefined) => decisionFreshnessLa
 const operationLabel = (value: string | null | undefined) => decisionOperationLabel(value, locale);
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
-  const response = await fetch(new URL(path, url), init);
+  const response = await serverApi(new URL(path, url), init);
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) {
     return {

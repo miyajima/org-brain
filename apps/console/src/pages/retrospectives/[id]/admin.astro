@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../../../lib/dashboard-page";
 import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopSourceType, knowledgeLoopStatus } from "../../../lib/knowledge-loop-locale";
@@ -6,17 +8,17 @@ import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopSourceType, knowled
 const { tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const t = knowledgeLoopCopy(lang);
 const id = String(Astro.params.id ?? "");
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+
+const api = (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), {
   ...init,
-  headers: { cookie, ...(init.headers ?? {}) }
+  headers: init.headers
 });
 let message = "";
 let error = "";
 const capabilities = await api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`);
 const capabilityPayload: any = await capabilities.json().catch(() => null);
-const writable = capabilities.ok && capabilityPayload?.data?.retrospective?.writable === true;
-const actionWritable = capabilities.ok && capabilityPayload?.data?.improvement_actions?.writable === true;
+const writable = capabilities.ok && capabilityPayload?.data?.retrospective?.allowed_actions?.includes("manage") === true;
+const actionWritable = capabilities.ok && capabilityPayload?.data?.improvement_actions?.allowed_actions?.includes("manage") === true;
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -29,7 +31,7 @@ if (Astro.request.method === "POST") {
     headers: {
       "content-type": "application/json",
       "x-csrf-token": String(form.get("csrf_token") ?? ""),
-      "idempotency-key": String(form.get("idempotency_key") ?? "")
+      "x-idempotency-key": String(form.get("idempotency_key") ?? "")
     },
     body: JSON.stringify({
       tenant_id: tenantId,
@@ -113,5 +115,16 @@ if (projectId) query.set("project_id", projectId);
 
 <script>
   document.querySelectorAll<HTMLInputElement>(".retro-admin-csrf").forEach((input) => { input.value = sessionStorage.getItem("orgbrain_csrf") ?? ""; });
-  document.querySelectorAll<HTMLInputElement>(".retro-admin-key").forEach((input) => { input.value = crypto.randomUUID(); });
+  document.querySelectorAll<HTMLInputElement>(".retro-admin-key").forEach((input) => {
+    input.form?.addEventListener("submit", () => {
+      const fields = [...new FormData(input.form!).entries()].filter(([name]) => !["csrf_token", "idempotency_key"].includes(name));
+      const payload = JSON.stringify(fields.sort(([a], [b]) => a.localeCompare(b)));
+      const storageKey = `orgbrain:retrospective-close:${location.pathname}:${location.search}`;
+      let previous: { payload: string; key: string } | null = null;
+      try { previous = JSON.parse(sessionStorage.getItem(storageKey) ?? "null"); } catch { /* New operation. */ }
+      const key = previous?.payload === payload ? previous.key : crypto.randomUUID();
+      input.value = key;
+      sessionStorage.setItem(storageKey, JSON.stringify({ payload, key }));
+    });
+  });
 </script>

@@ -148,6 +148,7 @@ routes.get("/v1/dashboard/memory-analytics", async (c) => {
     ? true
     : await ports.isTenantAdmin(c, tenantId);
   return ports.jsonOk(c, await ports.getMemoryAnalytics(c.env, {
+    isAdmin: await ports.isTenantAdmin(c, tenantId),
     tenantId,
     principal: ports.getApiPrincipal(c),
     scope,
@@ -179,6 +180,7 @@ routes.get("/v1/dashboard/memory-map", async (c) => {
   const limit = Number.parseInt(c.req.query("limit") ?? "1500", 10);
   const display = c.req.query("display") === "top" ? "top" : c.req.query("display") === "cluster" ? "cluster" : c.req.query("display") === "all" ? "all" : undefined;
   return ports.jsonOk(c, await ports.getMemoryMap(c.env, {
+    isAdmin: await ports.isTenantAdmin(c, tenantId),
     tenantId,
     principal: ports.getApiPrincipal(c),
     scope,

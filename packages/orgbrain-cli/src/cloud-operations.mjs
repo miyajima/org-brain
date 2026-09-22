@@ -15,7 +15,9 @@ const QUEUES = [
   "cap-plan",
   "cap-plan-dlq",
   "orgbrain-retrieval-projection-v3",
-  "orgbrain-retrieval-projection-v3-dlq"
+  "orgbrain-retrieval-projection-v3-dlq",
+  "orgbrain-metric-import-v1",
+  "orgbrain-metric-import-v1-dlq"
 ];
 const D1_CONFIGS = [
   "apps/api-gateway/wrangler.toml",

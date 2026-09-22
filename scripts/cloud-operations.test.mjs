@@ -21,7 +21,9 @@ test("cf provision defaults to an inspectable non-mutating plan", async () => {
     "cap-plan",
     "cap-plan-dlq",
     "orgbrain-retrieval-projection-v3",
-    "orgbrain-retrieval-projection-v3-dlq"
+    "orgbrain-retrieval-projection-v3-dlq",
+    "orgbrain-metric-import-v1",
+    "orgbrain-metric-import-v1-dlq"
   ]);
   assert.equal(plan.resources.vectorize, "orgbrain-memory-units-v3-1024");
   assert.ok(plan.steps.some((step) => step.id === "apply_migrations"));

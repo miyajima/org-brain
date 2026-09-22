@@ -1316,15 +1316,25 @@ function actionFromRow(row: Record<string, unknown>): ImprovementActionV1 {
 
 async function actionViewFromRow(env: Env, row: Record<string, unknown>, principal: string, includeAll = false) {
   const action = actionFromRow(row);
+  const transitions: Record<string, string[]> = {
+    open: ["in_progress", "cancelled"],
+    in_progress: ["awaiting_verification", ...(action.goal_link_id ? [] : ["completed"]), "cancelled"],
+    awaiting_verification: ["in_progress", "cancelled"]
+  };
+  const writable = isKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", action.tenant_id);
+  const allowedActions = writable && (includeAll || action.owner_principal === principal)
+    ? (transitions[action.status] ?? []).filter((status) => includeAll || ["in_progress", "awaiting_verification"].includes(status))
+    : [];
+  const view = (value: unknown) => ({ ...improvementActionViewSchema.parse(value), allowed_actions: allowedActions });
   if (!action.goal_link_id || !action.baseline_snapshot_id) {
-    return improvementActionViewSchema.parse({ ...action, measurement: null });
+    return view({ ...action, measurement: null });
   }
   const scope = await env.OPEN_BRAIN_DB.prepare(
     "SELECT scope_type, scope_id FROM knowledge_pack_goal_links WHERE tenant_id=? AND id=?"
   ).bind(action.tenant_id, action.goal_link_id).first<{ scope_type: string; scope_id: string | null }>();
   if (!scope || (!includeAll && scope.scope_type === "project"
     && !await principalCanReadProject(env, action.tenant_id, principal, scope.scope_id))) {
-    return improvementActionViewSchema.parse({ ...action, measurement: null });
+    return view({ ...action, measurement: null });
   }
   const measurement = await env.OPEN_BRAIN_DB.prepare(
     `SELECT release.manifest_json, version.definition_json,
@@ -1351,7 +1361,7 @@ async function actionViewFromRow(env: Env, row: Record<string, unknown>, princip
      WHERE link.tenant_id=? AND link.id=?`
   ).bind(action.baseline_snapshot_id, action.tenant_id, action.goal_link_id).first<Record<string, unknown>>();
   if (!measurement || typeof measurement.baseline_value !== "number") {
-    return improvementActionViewSchema.parse({ ...action, measurement: null });
+    return view({ ...action, measurement: null });
   }
   const now = Date.now();
   const currentState = measurement.current_state === "measured" && Number(measurement.current_expires_at) < now
@@ -1367,7 +1377,8 @@ async function actionViewFromRow(env: Env, row: Record<string, unknown>, princip
   );
   const ready = action.status === "awaiting_verification" && currentState === "measured"
     && typeof measurement.current_observed_at === "number" && measurement.current_observed_at > verificationThreshold;
-  return improvementActionViewSchema.parse({
+  if (ready && writable && (includeAll || action.owner_principal === principal)) allowedActions.push("verify");
+  return view({
     ...action,
     measurement: {
       pack_title: manifest.title ?? "Knowledge Pack",

@@ -1,9 +1,10 @@
 ---
+const fetchDashboardData = createDashboardFetcher(Astro.request);
 import NervousSystem from "../components/intelligence/NervousSystem.astro";
 import LegacyTaskDashboard from "../components/LegacyTaskDashboard.astro";
 import DecisionBriefing from "../components/decision/DecisionBriefing.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { dashboardApiPath, dashboardPageParams, dashboardTaskPageParams, fetchDashboardData, normalizeDashboardTasks, type DashboardTask } from "../lib/dashboard-page";
+import { dashboardApiPath, dashboardPageParams, dashboardTaskPageParams, createDashboardFetcher, normalizeDashboardTasks, type DashboardTask } from "../lib/dashboard-page";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { emptyDecisionBriefing, normalizeDecisionBriefing } from "../lib/decision-console-ui";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";

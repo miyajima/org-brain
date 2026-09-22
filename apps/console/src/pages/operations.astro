@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams } from "../lib/dashboard-page";
 import { dashboardLabel, dashboardStatusTone } from "../lib/dashboard-copy";
@@ -7,7 +9,7 @@ import { scopedAdminHref } from "../lib/admin-ui";
 
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const opsParams = new URLSearchParams({ tenant_id: tenantId });
-const response = await fetch(new URL(dashboardApiPath("/api/v1/ops/status", opsParams), Astro.url));
+const response = await serverApi(new URL(dashboardApiPath("/api/v1/ops/status", opsParams), Astro.url));
 const payload: any = response.ok ? await response.json() : { ok: false, data: null };
 const status = payload.ok ? payload.data : null;
 const scheduledJobs = Array.isArray(status?.scheduled_jobs) ? status.scheduled_jobs : [];

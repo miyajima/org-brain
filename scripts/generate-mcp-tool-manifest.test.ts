@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import {
   capturedMcpToolContracts,
   resetCapturedMcpToolContracts
@@ -27,11 +27,14 @@ test("generate the MCP tool manifest fixture", async () => {
   }, null, 2)}\n`;
   const digest = createHash("sha256").update(serialized).digest("hex");
   const directory = new URL("../packages/mcp-core/fixtures/", import.meta.url);
-  await mkdir(directory, { recursive: true });
-  await Promise.all([
-    writeFile(new URL("tool-manifest.json", directory), serialized, "utf8"),
-    writeFile(new URL("tool-manifest.sha256", directory), `${digest}\n`, "utf8")
-  ]);
-  expect(tools).toHaveLength(55);
+  if (process.env.ORGBRAIN_GENERATE_MANIFEST === "1") {
+    await mkdir(directory, { recursive: true });
+    await Promise.all([
+      writeFile(new URL("tool-manifest.json", directory), serialized, "utf8"),
+      writeFile(new URL("tool-manifest.sha256", directory), `${digest}\n`, "utf8")
+    ]);
+  }
+  expect(await readFile(new URL("tool-manifest.json", directory), "utf8")).toBe(serialized);
+  expect((await readFile(new URL("tool-manifest.sha256", directory), "utf8")).trim()).toBe(digest);
   expect(digest).toMatch(/^[0-9a-f]{64}$/u);
 });

@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
 
@@ -40,14 +42,14 @@ const copy = {
   ja: { identity: "本人情報", title: "プロフィール", displayName: "表示名", fullName: "氏名", email: "メール", company: "会社名", avatar: "アバターURL", save: "保存", saved: "保存しました", saveError: "プロフィールを保存できませんでした", loadError: "プロフィールを取得できませんでした", ownership: "メモリの所有者", mapping: "記録者 → 所有者の対応", mappingBody: "このprincipalが記録したメモリの業務上の所有者を指定します。未設定の場合は記録者本人が所有者になります。", owner: "所有者principal", saveMapping: "対応を保存", mappingSaved: "所有者の対応を保存しました", mappingError: "所有者の対応を保存できませんでした", mappingLoadError: "所有者の対応を取得できませんでした", producer: "記録者", updated: "更新" },
   zh: { identity: "身份", title: "个人资料", displayName: "显示名称", fullName: "姓名", email: "邮箱", company: "公司名称", avatar: "头像 URL", save: "保存", saved: "已保存", saveError: "无法保存个人资料", loadError: "无法加载个人资料", ownership: "记忆所有权", mapping: "记录者 → 所有者映射", mappingBody: "指定此 principal 所记录记忆的业务负责人。未设置时，记录者本人仍为所有者。", owner: "所有者 principal", saveMapping: "保存映射", mappingSaved: "已保存所有权映射", mappingError: "无法保存所有权映射", mappingLoadError: "无法加载所有权映射", producer: "记录者", updated: "更新于" }
 }[lang];
-const cookie = Astro.request.headers.get("cookie") ?? "";
+
 let message = "";
 let error = "";
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
-  const response = await fetch(new URL(path, url), {
+  const response = await serverApi(new URL(path, url), {
     ...init,
-    headers: { cookie, ...(init?.headers ?? {}) }
+    headers: init?.headers
   });
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok) return payload ?? { ok: false, error: { message: `HTTP ${response.status}` } };

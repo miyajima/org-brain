@@ -1,7 +1,10 @@
 ---
+const fetchDashboardData = createDashboardFetcher(Astro.request);
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import NervousSystem from "../components/intelligence/NervousSystem.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { dashboardPageParams, fetchDashboardData } from "../lib/dashboard-page";
+import { dashboardPageParams, createDashboardFetcher } from "../lib/dashboard-page";
 import { intelligencePageCopy } from "../lib/intelligence-locale";
 import { knowledgeLoopCopy } from "../lib/knowledge-loop-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
@@ -25,7 +28,7 @@ const result = await fetchDashboardData(
 const refreshParams = new URLSearchParams(activityApiParams);
 if (result.data.newest_cursor != null) refreshParams.set("after", String(result.data.newest_cursor));
 const refreshUrl = `/api/v1/dashboard/activity?${refreshParams.toString()}`;
-const organizationResponse = await fetch(new URL(`/api/v1/dashboard/organization?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`, Astro.url), { headers: { cookie: Astro.request.headers.get("cookie") ?? "" } });
+const organizationResponse = await serverApi(new URL(`/api/v1/dashboard/organization?tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`, Astro.url), { headers: { cookie: Astro.request.headers.get("cookie") ?? "" } });
 const organizationPayload: any = organizationResponse.ok ? await organizationResponse.json().catch(() => null) : null;
 const organization = organizationPayload?.data ?? null;
 ---

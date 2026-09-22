@@ -10,7 +10,7 @@ export function registerDomainRoutes<TEnv extends RouteAppEnv>(
 const routes = withRouteContracts(app, "domain");
 routes.get("/v1/capabilities", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  return ports.jsonOk(c, ports.domainCapabilities(c.env, tenantId));
+  return ports.jsonOk(c, ports.domainCapabilities(c.env, tenantId, await ports.isTenantAdmin(c, tenantId)));
 });
 
 routes.get("/v1/domain-packs", async (c) => {

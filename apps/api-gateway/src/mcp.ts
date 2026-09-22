@@ -1,6 +1,6 @@
-import { observeMemoryUse } from "@org-brain/shared";
-import { memoryUseOperation } from "./memory-use-service";
 import {
+  observeMemoryUse,
+  MEMORY_READ_SCOPES,
   HttpError,
   sha256,
   validateMemoryContractV2Event,
@@ -10,6 +10,8 @@ import {
   type OrgBrainOAuthScope,
   type OrgRole
 } from "@org-brain/shared";
+import { memoryUseOperation } from "./memory-use-service";
+
 import { permissionsForScopes } from "@org-brain/core";
 import type { Hono } from "hono";
 import {
@@ -617,15 +619,17 @@ class OrgBrainMcpTools {
       "orgbrain_memories_list",
       {
         tenant_id: z.string().optional(),
+        scope: z.enum(MEMORY_READ_SCOPES).optional(),
         source: z.string().optional(),
         limit: z.number().int().min(1).max(500).optional(),
         cursor: z.string().max(512).optional(),
         view: z.enum(["full", "compact"]).optional()
       },
-      async ({ tenant_id, source, limit, cursor, view }) => {
+      async ({ scope, tenant_id, source, limit, cursor, view }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read");
         const memories = await listMemoriesCursorPage(this.env, tenantId, {
+          readAccess: { principal: this.props.principal, scope, isAdmin: this.props.defaultRole === "tenant_admin" },
           limit: limit ?? (view === "compact" ? 500 : 100),
           source,
           cursor,
@@ -929,6 +933,7 @@ class OrgBrainMcpTools {
       "orgbrain_memories_search",
       {
         tenant_id: z.string().optional(),
+        scope: z.enum(MEMORY_READ_SCOPES).optional(),
         project_id: z.string().nullable().optional(),
         business_category_id: z.string().max(128).nullable().optional(),
         work_type: workTypeSchema.nullable().optional(),
@@ -953,11 +958,12 @@ class OrgBrainMcpTools {
         trace_id: z.string().max(128).nullable().optional(),
         external_run_id: z.string().max(256).nullable().optional()
       },
-      async ({ tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, use_context, use_snapshot_id, trace_id, external_run_id }) => {
+      async ({ scope, tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, use_context, use_snapshot_id, trace_id, external_run_id }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, generation_id || ranking_profile_id ? "admin" : "read", project_id);
         const request = {
           tenant_id: tenantId,
+          scope,
           project_id,
           business_category_id,
           work_type,
@@ -1087,6 +1093,7 @@ class OrgBrainMcpTools {
       "orgbrain_memories_profile",
       {
         tenant_id: z.string().optional(),
+        scope: z.enum(MEMORY_READ_SCOPES).optional(),
         project_id: z.string().nullable().optional(),
         business_category_id: z.string().max(128).nullable().optional(),
         work_type: workTypeSchema.nullable().optional(),
@@ -1096,11 +1103,12 @@ class OrgBrainMcpTools {
         rewrite_query: z.boolean().optional(),
         search_mode: z.enum(["memories", "hybrid", "hybrid_v2", "hybrid_v3", "hybrid_v4"]).optional()
       },
-      async ({ tenant_id, project_id, business_category_id, work_type, q, limit_durable, limit_recent, rewrite_query, search_mode }) => {
+      async ({ scope, tenant_id, project_id, business_category_id, work_type, q, limit_durable, limit_recent, rewrite_query, search_mode }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", project_id);
         const result = await getMemoryProfile(this.env, {
           tenant_id: tenantId,
+          scope,
           project_id,
           business_category_id,
           work_type,

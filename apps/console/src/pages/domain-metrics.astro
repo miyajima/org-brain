@@ -1,9 +1,11 @@
 ---
+import { createServerApi } from "../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), { ...init, headers: { cookie, ...(init.headers ?? {}) } });
+
+const api = async (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
 let message = "";
 let error = "";
 if (Astro.request.method === "POST") {

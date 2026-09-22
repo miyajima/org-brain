@@ -751,6 +751,7 @@ export const improvementActionSchema = z.object({
 }).strict();
 
 export const improvementActionViewSchema = improvementActionSchema.extend({
+  allowed_actions: z.array(z.enum(["in_progress", "awaiting_verification", "completed", "cancelled", "verify"])).optional(),
   measurement: z.object({
     pack_title: z.string().trim().min(1).max(160),
     metric_label: z.string().trim().min(1).max(160),

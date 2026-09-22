@@ -1,3 +1,4 @@
+import { createServerApi } from "./server-api";
 export type DashboardFetchResult<T> = {
   data: T;
   error: string | null;
@@ -208,10 +209,11 @@ export function dashboardApiPath(
 export async function fetchDashboardData<T>(
   url: URL,
   normalize: (value: unknown) => T,
-  fallback: T
+  fallback: T,
+  request?: Request
 ): Promise<DashboardFetchResult<T>> {
   try {
-    const response = await fetchDashboardResponse(url);
+    const response = await (request ? createServerApi(request)(url) : fetchDashboardResponse(url));
     const payload = await response.json() as ApiEnvelope<unknown>;
     if (!response.ok || payload.ok !== true || !("data" in payload)) {
       return {
@@ -226,4 +228,8 @@ export async function fetchDashboardData<T>(
       error: error instanceof Error ? error.message : "Dashboard API request failed"
     };
   }
+}
+
+export function createDashboardFetcher(request: Request) {
+  return <T>(url: URL, normalize: (value: unknown) => T, fallback: T) => fetchDashboardData(url, normalize, fallback, request);
 }

@@ -61,3 +61,18 @@ test("keeps the Knowledge Loop usable at 390px in ja, en, and zh", async ({ page
     expect(accessibility.violations).toEqual([]);
   }
 });
+
+
+test("hides disabled features and explains direct access", async ({ page }) => {
+  await page.goto("/profile?tenant_id=features-off&lang=en");
+  await expect(page.locator('a[href*="/dashboard/knowledge"]')).toHaveCount(0);
+  const response = await page.goto("/dashboard/knowledge?tenant_id=features-off&lang=en");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "Feature unavailable" })).toBeVisible();
+});
+
+test("does not turn a failed dashboard into zero counts", async ({ page }) => {
+  await page.goto("/dashboard/knowledge?tenant_id=dashboard-unavailable&lang=en");
+  await expect(page.getByText("Dashboard unavailable", { exact: true })).toBeVisible();
+  await expect(page.locator("article")).toHaveCount(0);
+});

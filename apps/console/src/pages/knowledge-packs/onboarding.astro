@@ -1,4 +1,6 @@
 ---
+import { createServerApi } from "../../lib/server-api";
+const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { knowledgePackOnboardingCopy } from "../../lib/console-locale";
@@ -8,10 +10,10 @@ const { tenantId, projectId, lang } = dashboardPageParams(
   Astro.request.headers.get("cookie")
 );
 const copy = knowledgePackOnboardingCopy(lang);
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const api = async (path: string, init: RequestInit = {}) => fetch(new URL(path, Astro.url), {
+
+const api = async (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), {
   ...init,
-  headers: { cookie, ...(init.headers ?? {}) }
+  headers: init.headers
 });
 const jsonMutation = async (
   path: string,
@@ -209,7 +211,7 @@ const capabilityPayload: any = await capabilityResponse.json().catch(() => null)
 const sessionPayload: any = sessionResponse ? await sessionResponse.json().catch(() => null) : null;
 const packs: any[] = Array.isArray(catalogPayload?.data) ? catalogPayload.data : [];
 const capability = capabilityPayload?.data?.knowledge_pack_onboarding;
-const writable = capability?.writable === true;
+const writable = capability?.allowed_actions?.includes("manage") === true;
 const session: any = sessionPayload?.data ?? null;
 if (requestedSessionId && sessionResponse && !sessionResponse.ok && !error) {
   error = sessionPayload?.error?.message ?? copy.loadError;
