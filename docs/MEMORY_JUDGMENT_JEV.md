@@ -27,6 +27,48 @@ export ORGBRAIN_JEV_THRESHOLD=0.95
 
 ローカル DB の隣に `.jev.sqlite`（判定キャッシュと抽出キュー）、`.jev-metrics.jsonl`（本文なしの予測・費用・時間）を権限 0600 で保存する。キューの保留状態には復旧のため原文が残る。キューは 7 日後に保存対象として失効する。完了済みの期限切れ行は drain 時に削除する。保留行は自動再送しない。
 
+## 分類・有用度・登録推奨の比較運用
+
+追加の `memory-capture-assessment/v1` は既定 `off`。以下の設定で、capture の
+既存6質問と分類・有用度の2質問を、同じリクエストで独立に評価する。
+この設定例は明示的な有効化用であり、コード更新だけでは外部送信は始まらない。
+
+```sh
+export ORGBRAIN_JEV_PROJECTS=org-brain
+export ORGBRAIN_JEV_CAPTURE_MODE=shadow
+export ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE=shadow
+```
+
+- `lesson_type` は Choice の `decision / success / failure / unknown`。
+  根拠は候補に付属する証拠であり、4番目の学習種別ではない。
+- `utility` は将来の適用条件が再び成立した場合の貢献予測。Score の4段階は、
+  0: 再利用による貢献が確認できない、1: 小さな便宜・注意喚起、
+  2: 具体的な再調査・手戻りを省く、3: 重大な再発や繰り返しの停滞を防ぐ。
+  今の作業で不要でも、それだけで低く評価しない。
+- `registration` は追加の予測であり、既存の `decision.action` を置き換えない。
+  既存判定が review/omit ならその結果を維持する。retain でも分類不明・既存分類との
+  不一致・有用度不明・有用度2未満なら review を推奨する。有用度だけで omit にはしない。
+  閾値2と既存の confidence 閾値は比較運用の初期値であり、実データでの校正済み値ではない。
+- 応答の元の確率・confidence・score を保持する。confidence が閾値未満なら分類は
+  `effective_label=unknown`、有用度は `value=null`。不明を0点にしない。
+- 記録するのは `capture_assessment` 内の `basis=prediction, applied=false` のみ。
+  既存の lesson_type、kind、utility_score、検証状態、利用実績、保存可否を変更しない。
+  保護候補は引き続き評価対象外で、他の候補の根拠としてのみ参照する。
+- `use`、`active`、`off` では追加評価を実行しない。追加設定を `off` に戻せば、
+  capture shadow の既存質問だけに戻る。Stop での推論も追加しない。
+- 保存済み学習情報がある場合、候補アダプターは既存 lesson_type と、手順・観測結果・
+  症状・原因・修正・回避条件の許可済み項目を添える。既存ラベルは正解として扱わない。
+  追加情報も既存の伏字化・サイズ上限を通す。キャッシュとメトリクスに原文は残さない
+  （復旧用キューの原文保持は既存契約のまま）。
+- Choice/Score の型、選択肢、確率分布、confidence、score を検証する。
+  不正応答は比較値を残さず既存経路へ戻り、再試行しない。未知の説明文やlegendは保存しない。
+
+`pnpm test:memory-judgment` は追加の混在型応答、保護・保留、キャッシュ、ログ、キューの
+非変更性をモックで検証する。日本語分類精度や有用性の改善は測定しない。
+既存の12ケースの評価器は選別ポリシー用で、この追加評価を有効化しない。
+実運用への適用には新たな人手確認済みの会話単位テストと、誤登録・重要記憶欠落・
+実タスク貢献の検証が必要。コード・ポリシーハッシュ変更により旧 qualification は無効になる。
+
 ```sh
 pnpm memory:judgment:queue status --project org-brain
 pnpm memory:judgment:queue drain --project org-brain

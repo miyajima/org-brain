@@ -32,12 +32,17 @@ export function localJudgmentPolicy(stage, projectId, env = process.env) {
   const projects = String(env.ORGBRAIN_JEV_PROJECTS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return normalizeJudgmentPolicy({
     mode: projectId && projects.includes(projectId) ? env[`ORGBRAIN_JEV_${stage.toUpperCase()}_MODE`] : "off",
+    capture_assessment_mode: stage === "capture" ? env.ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE : "off",
     threshold: env.ORGBRAIN_JEV_THRESHOLD
   });
 }
 
-export function memoryJudgmentCandidate(memory, id = memory.id) {
-  const learning = memory.learning ?? memory.learning_json ?? memory.observation ?? {};
+export function memoryJudgmentCandidate(memory, id = memory.id, { includeCaptureAssessment = false } = {}) {
+  let learning = memory.learning ?? memory.learning_json ?? memory.observation ?? {};
+  if (includeCaptureAssessment && typeof learning === "string") {
+    try { learning = JSON.parse(learning); } catch { learning = {}; }
+  }
+  if (!learning || Array.isArray(learning)) learning = {};
   const kind = memory.kind ?? memory.memory_kind;
   const protectedReasons = [];
   if (kind === "constraint") protectedReasons.push("constraint");
@@ -50,6 +55,13 @@ export function memoryJudgmentCandidate(memory, id = memory.id) {
     rationale: memory.rationale ?? learning.rationale ?? null,
     reuse_rule: memory.reuse_rule ?? memory.reuseRule ?? learning.reuse_when ?? null,
     source_text: memory.source_text ?? learning.source_text ?? null,
+    ...(includeCaptureAssessment ? {
+      lesson_type: ["decision", "success", "failure"].includes(learning.lesson_type) ? learning.lesson_type : null,
+      lesson_context: Object.fromEntries(["procedure", "why_it_worked", "observed_outcome", "decision", "selected_value",
+      "symptom", "failed_approach", "root_cause", "correction", "verified_outcome", "avoidance_rule"]
+      .filter((key) => typeof learning[key] === "string" && learning[key].trim())
+      .map((key) => [key, learning[key]]))
+    } : {}),
     evidence: memory.evidence ?? [], source_references: memory.source_references ?? memory.sourceReferences ?? [],
     project_id: memory.project_id ?? memory.projectId ?? null,
     version: memory.current_version ?? memory.version ?? null,
@@ -136,12 +148,14 @@ export function createLearningCandidateJudge(options) {
   return async (rows, tenantId) => {
     const projects = new Map();
     for (const row of rows) {
-      if (localJudgmentPolicy("capture", row.project_id, options.env ?? process.env).mode === "off") continue;
+      const policy = localJudgmentPolicy("capture", row.project_id, options.env ?? process.env);
+      if (policy.mode === "off") continue;
       const group = projects.get(row.project_id) ?? [];
       let payload;
       try { payload = JSON.parse(row.payload_json); } catch { continue; }
       group.push(memoryJudgmentCandidate({ ...payload, ...(payload.item ?? {}),
-        project_id: row.project_id, valid_until: row.expires_at }, row.id));
+        project_id: row.project_id, valid_until: row.expires_at }, row.id,
+      { includeCaptureAssessment: policy.capture_assessment_mode === "shadow" }));
       projects.set(row.project_id, group);
     }
     const reports = [];

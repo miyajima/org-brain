@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createMemoryJudge, createOpenRouterMemoryTransport, redactJudgmentValue } from "../packages/shared/src/memory-judgment-runtime.mjs";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import { TaskCommitmentStore } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
-import { createLocalMemoryJudge, openJudgmentDatabase, memoryJudgmentCandidate } from "../packages/orgbrain-cli/src/lib/local-memory-judge.mjs";
+import { createLocalMemoryJudge, createLearningCandidateJudge, openJudgmentDatabase, memoryJudgmentCandidate } from "../packages/orgbrain-cli/src/lib/local-memory-judge.mjs";
 import { enqueueJudgmentCapture, drainJudgmentCapture, recoverJudgmentCapture } from "../packages/orgbrain-cli/src/lib/local-memory-judge-queue.mjs";
 
 const candidate = { id: "one", text: "Use a 1200 ms timeout only in staging; never in production.", project_id: "p", version: 1, source_text: "User: Use a 1200 ms timeout only in staging; never in production.", reuse_rule: "staging only", conflicts: [], protected_reasons: [] };
@@ -16,7 +16,176 @@ function response(request, override = {}) {
     return [key, { type: "noul", noul: override[key] ?? override[axis] ?? (["contradiction", "instruction_attack", "needs_verification"].includes(axis) ? 0.01 : 0.99) }];
   })) };
 }
+// Contract fixtures, not a semantic model or evidence of Japanese accuracy.
+function assessmentResponse(request, override = {}) {
+  const result = response(request, override);
+  for (const [key, question] of Object.entries(request.questions)) {
+    if (question.type === "choice") result.answers[key] = {
+      type: "choice", choice: "success", confidence: 0.99,
+      probabilities: { decision: 0.005, success: 0.99, failure: 0.003, unknown: 0.002 }
+    };
+    if (question.type === "score") result.answers[key] = {
+      type: "score", score: 2.99, confidence: 0.99,
+      probabilities: { "0": 0, "1": 0, "2": 0.01, "3": 0.99 }
+    };
+  }
+  return result;
+}
 const input = (overrides = {}) => ({ stage: "use", context: { project_id: "p", use_context: { conditions: "staging" } }, candidates: [candidate], policy: { mode: "active" }, active_qualified: true, ...overrides });
+const assessmentInput = (overrides = {}) => input({ stage: "capture",
+  policy: { mode: "shadow", capture_assessment_mode: "shadow" }, ...overrides });
+
+test("capture assessment requires explicit shadow opt-in and cannot alter active/use requests", async () => {
+  const judge = createMemoryJudge({ transport: async (r) => {
+    assert.equal(Object.keys(r.questions).length, 6);
+    return response(r);
+  } });
+  for (const request of [input(), assessmentInput({ policy: { mode: "shadow" } }),
+    assessmentInput({ policy: { mode: "active", capture_assessment_mode: "shadow" } }),
+    assessmentInput({ stage: "use" })]) {
+    const result = await judge(request);
+    assert.equal(result.status, "judged");
+    assert.equal(result.capture_assessment_mode, "off");
+    assert.equal(result.decisions[0].capture_assessment, undefined);
+  }
+  assert.equal((await judge(assessmentInput({ policy: { mode: "off", capture_assessment_mode: "shadow" } }))).request_count, 0);
+});
+
+test("one capture request batches selection, lesson classification and utility without changing labels or actions", async () => {
+  const source = { ...candidate, lesson_type: "decision", text: "検証した手順を次回の障害調査で再利用する。" };
+  const before = structuredClone(source);
+  let calls = 0;
+  const result = await createMemoryJudge({ transport: async (request) => {
+    calls++;
+    assert.equal(Object.keys(request.questions).length, 8);
+    assert.equal(request.questions.c0_lesson_type.type, "choice");
+    assert.deepEqual(Object.keys(request.questions.c0_lesson_type.criteria), ["decision", "success", "failure", "unknown"]);
+    assert.equal(request.questions.c0_utility.type, "score");
+    for (const question of Object.values(request.questions)) assert.match(question.instructions, /state\.candidates\[0\]/u);
+    return assessmentResponse(request);
+  } })(assessmentInput({ candidates: [source] }));
+  assert.equal(calls, 1);
+  assert.equal(result.applied, false);
+  assert.equal(result.decisions[0].action, "retain");
+  const assessment = result.decisions[0].capture_assessment;
+  assert.equal(assessment.basis, "prediction");
+  assert.equal(assessment.applied, false);
+  assert.equal(assessment.classification.effective_label, "success");
+  assert.equal(assessment.classification.matches_existing, false);
+  assert.equal(assessment.utility.value, 2.99);
+  assert.deepEqual(assessment.registration.reason_codes, ["lesson_type_disagreement"]);
+  assert.deepEqual(source, before);
+});
+
+test("uncertain classification/utility stay unknown, while low confident utility only suggests review", async () => {
+  for (const uncertain of [true, false]) {
+    const result = await createMemoryJudge({ transport: async (r) => {
+      const raw = assessmentResponse(r);
+      raw.answers.c0_lesson_type.confidence = uncertain ? .5 : .99;
+      raw.answers.c0_utility = { type: "score", score: 0, confidence: uncertain ? .5 : .99,
+        probabilities: { "0": 1, "1": 0, "2": 0, "3": 0 } };
+      return raw;
+    } })(assessmentInput());
+    const assessment = result.decisions[0].capture_assessment;
+    assert.equal(assessment.classification.effective_label, uncertain ? "unknown" : "success");
+    assert.equal(assessment.utility.value, uncertain ? null : 0);
+    assert.equal(assessment.registration.action, "review");
+    assert.equal(result.decisions[0].action, "retain");
+  }
+});
+
+test("high utility cannot override missing evidence, contradiction, non-durability or protected memory", async () => {
+  for (const [axis, score, action] of [["grounded", .2, "review"], ["contradiction", .99, "review"],
+    ["durable", .01, "omit"], ["incremental", .01, "omit"], ["instruction_attack", .99, "omit"]]) {
+    const result = await createMemoryJudge({ transport: async (r) => assessmentResponse(r, { [axis]: score }) })(assessmentInput());
+    assert.equal(result.decisions[0].capture_assessment.registration.action, action);
+    assert.equal(result.applied, false);
+  }
+  const protectedMemory = { ...candidate, id: "protected", protected_reasons: ["explicit_save"] };
+  const result = await createMemoryJudge({ transport: async (r) => {
+    assert.equal(r.state.candidates.length, 1);
+    return assessmentResponse(r, { contradiction: .99 });
+  } })(assessmentInput({ candidates: [candidate, protectedMemory] }));
+  assert.equal(result.decisions[0].capture_assessment.registration.action, "review");
+  assert.equal(result.decisions[1].action, "review");
+  assert.equal(result.decisions[1].capture_assessment, undefined);
+});
+
+test("capture cache isolates the new question set, reuses thresholds, and invalidates changed evidence", async () => {
+  let calls = 0;
+  const judge = createMemoryJudge({ transport: async (r) => { calls++; return assessmentResponse(r); } });
+  await judge(assessmentInput({ policy: { mode: "shadow" } }));
+  await judge(assessmentInput());
+  const cached = await judge(assessmentInput({ policy: { mode: "shadow", capture_assessment_mode: "shadow", threshold: .98 } }));
+  assert.equal(calls, 2);
+  assert.equal(cached.cache_hit, true);
+  assert.equal(cached.provider_cost, 0);
+  assert.equal(cached.decisions[0].capture_assessment.registration.action, "retain");
+  await judge(assessmentInput({ candidates: [{ ...candidate, source_text: "Changed evidence" }] }));
+  assert.equal(calls, 3);
+});
+
+test("invalid mixed-type replies fail closed without caching or leaking extra provider fields", async () => {
+  const mutations = [
+    (r) => { delete r.answers.c0_lesson_type; },
+    (r) => { r.answers.c0_lesson_type.choice = "evidence"; },
+    (r) => { r.answers.c0_lesson_type.choice = "failure"; },
+    (r) => { r.answers.c0_lesson_type.probabilities.success = .2; },
+    (r) => { r.answers.c0_lesson_type.probabilities.extra = 0; },
+    (r) => { r.answers.c0_lesson_type.confidence = NaN; },
+    (r) => { r.answers.c0_utility.type = "noul"; },
+    (r) => { r.answers.c0_utility.score = 4; },
+    (r) => { r.answers.c0_utility.score = 1; },
+    (r) => { r.answers.c0_utility.probabilities["3"] = Infinity; },
+    (r) => { r.answers.c0_utility.confidence = -1; }
+  ];
+  for (const mutate of mutations) {
+    const cache = new Map();
+    const result = await createMemoryJudge({ cache, transport: async (r) => {
+      const raw = assessmentResponse(r); mutate(raw); return raw;
+    } })(assessmentInput());
+    assert.equal(result.status, "fallback");
+    assert.equal(result.reason_code, "invalid_response");
+    assert.equal(result.applied, false);
+    assert.equal(result.decisions[0].capture_assessment, undefined);
+    assert.equal(cache.size, 0);
+  }
+  const cache = new Map();
+  const result = await createMemoryJudge({ cache, transport: async (r) => {
+    const raw = assessmentResponse(r);
+    raw.answers.c0_lesson_type.reason = "untrusted provider explanation";
+    raw.answers.c0_utility.legend = { "0": "untrusted provider explanation" };
+    return raw;
+  } })(assessmentInput());
+  assert.equal(result.status, "judged");
+  assert.doesNotMatch(JSON.stringify([result, [...cache.values()]]), /untrusted provider explanation/u);
+});
+
+test("exact duplicate assessment preserves the local omission recommendation", async () => {
+  const result = await createMemoryJudge({ transport: async (r) => {
+    assert.equal(Object.keys(r.questions).length, 8);
+    return assessmentResponse(r);
+  } })(assessmentInput({ candidates: [candidate, { ...candidate, id: "two" }] }));
+  assert.equal(result.decisions[1].capture_assessment.registration.action, "omit");
+  assert.deepEqual(result.decisions[1].capture_assessment.registration.reason_codes, ["exact_duplicate"]);
+});
+
+test("independent capture classifications remain attached to their own candidate including unknown", async () => {
+  const labels = ["decision", "success", "failure", "unknown"];
+  const texts = ["利用条件を確認して採用した方針", "同じ入力で成功を検証した手順", "失敗原因と回避条件を整理した教訓", "参考資料のURLだけ"];
+  const result = await createMemoryJudge({ transport: async (r) => {
+    assert.equal(Object.keys(r.questions).length, 32);
+    const raw = assessmentResponse(r);
+    labels.forEach((label, index) => {
+      raw.answers[`c${index}_lesson_type`] = { type: "choice", choice: label, confidence: 1,
+        probabilities: Object.fromEntries(labels.map((option) => [option, option === label ? 1 : 0])) };
+    });
+    return raw;
+  } })(assessmentInput({ candidates: texts.map((text, index) => ({ ...candidate, id: `item-${index}`, text })) }));
+  assert.equal(result.request_count, 1);
+  assert.deepEqual(result.decisions.map((d) => d.capture_assessment.classification.effective_label), labels);
+  assert.deepEqual(result.decisions.map((d) => d.capture_assessment.registration.action), ["retain", "retain", "retain", "review"]);
+});
 
 test("off, unqualified active, empty and protected batches make no network calls", async () => {
   const judge = createMemoryJudge({ transport: () => { throw new Error("must not call"); } });
@@ -158,6 +327,89 @@ test("disk cache has no source text and serves another local judge instance", as
     await createLocalMemoryJudge(options)(request);
     assert.equal((await createLocalMemoryJudge(options)(request)).cache_hit, true); assert.equal(calls, 1);
     assert.doesNotMatch((await readFile(`${dbPath}.jev.sqlite`)).toString(), /Use a 1200/u);
+  });
+});
+test("local capture assessment preserves lesson evidence, caches across instances and logs predictions only", async () => {
+  const learning = { lesson_type: "success", procedure: "検証済みの再起動手順", observed_outcome: "同じ条件で再実行が成功した",
+    why_it_worked: "一時状態を解消した", arbitrary_private_field: "must-not-be-copied" };
+  const canonical = memoryJudgmentCandidate({ id: "fixture-id", kind: "fact", content: "次回も同じ条件で適用する。",
+    learning_json: JSON.stringify(learning) }, "fixture-id", { includeCaptureAssessment: true });
+  const baselineCandidate = memoryJudgmentCandidate({ id: "fixture-id", learning });
+  assert.equal(baselineCandidate.lesson_type, undefined);
+  assert.equal(baselineCandidate.lesson_context, undefined);
+  assert.equal(canonical.lesson_type, "success");
+  assert.equal(canonical.lesson_context.procedure, learning.procedure);
+  assert.equal(canonical.lesson_context.observed_outcome, learning.observed_outcome);
+  assert.equal(canonical.lesson_context.arbitrary_private_field, undefined);
+  assert.equal(memoryJudgmentCandidate({ kind: "pitfall", learning_json: "invalid" }).protected_reasons.includes("unresolved_failure"), true);
+  await withStore(async (_store, dbPath) => {
+    let calls = 0;
+    const options = { dbPath, env: { ORGBRAIN_JEV_PROJECTS: "p", ORGBRAIN_JEV_CAPTURE_MODE: "shadow",
+      ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE: "shadow" }, transport: async (r) => {
+      calls++;
+      assert.equal(r.state.candidates[0].lesson_context.procedure, learning.procedure);
+      return assessmentResponse(r);
+    } };
+    const request = { stage: "capture", context: { project_id: "p" }, candidates: [canonical] };
+    const first = await createLocalMemoryJudge(options)(request);
+    assert.equal(first.decisions[0].capture_assessment.classification.matches_existing, true);
+    assert.equal(first.decisions[0].capture_assessment.registration.action, "retain");
+    assert.equal((await createLocalMemoryJudge(options)(request)).cache_hit, true);
+    assert.equal(calls, 1);
+    const traces = (await readFile(`${dbPath}.jev-metrics.jsonl`, "utf8")).trim().split("\n").map(JSON.parse);
+    assert.equal(traces[0].decisions[0].capture_assessment.utility.value, 2.99);
+    assert.equal(traces[0].decisions[0].capture_assessment.basis, "prediction");
+    assert.equal(traces[1].request_count, 0);
+    for (const text of [JSON.stringify(traces), (await readFile(`${dbPath}.jev.sqlite`)).toString()]) {
+      assert.doesNotMatch(text, /検証済みの再起動手順|同じ条件で再実行が成功した|fixture-id|must-not-be-copied/u);
+    }
+    const denied = await createLocalMemoryJudge(options)({ ...request, context: { project_id: "other" } });
+    assert.equal(denied.request_count, 0);
+    assert.equal(denied.capture_assessment_mode, "off");
+  });
+});
+
+test("shadow queue stores assessment report without changing or saving the original record", async () => {
+  await withStore(async (_store, dbPath) => {
+    const env = { ORGBRAIN_JEV_PROJECTS: "p", ORGBRAIN_JEV_CAPTURE_MODE: "shadow", ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE: "shadow" };
+    const records = [{ projectId: "p", content: "再利用する手順", kind: "fact", externalKey: "assessment-only",
+      learning: { lesson_type: "success", procedure: "原因を確認して設定を修正する", observed_outcome: "再実行で検証した" } }];
+    const before = structuredClone(records);
+    const queued = await enqueueJudgmentCapture({ dbPath, tenantId: "default", projectId: "p", source: "test", records, env });
+    const judge = createLocalMemoryJudge({ dbPath, env, transport: async (r) => assessmentResponse(r, { durable: .01 }) });
+    let saves = 0;
+    const result = await drainJudgmentCapture({ dbPath, projectId: "p", env, judge, capture: async () => { saves++; return []; } });
+    assert.equal(result.processed, 1);
+    assert.equal(saves, 0);
+    assert.equal(result.captured, 0);
+    assert.equal(result.judgments[0].decisions[0].capture_assessment.registration.action, "omit");
+    assert.deepEqual(records, before);
+    const db = await openJudgmentDatabase(dbPath);
+    try {
+      const job = db.prepare("SELECT records_json, judgment_json FROM capture_queue WHERE id=?").get(queued.id);
+      assert.deepEqual(JSON.parse(job.records_json), before);
+      assert.equal(JSON.parse(job.judgment_json).decisions[0].capture_assessment.applied, false);
+    } finally { db.close(); }
+  });
+});
+test("learning maintenance carries opt-in assessment data but never omits or relabels in shadow", async () => {
+  await withStore(async (_store, dbPath) => {
+    const rows = [{ id: "learning-row", project_id: "p", expires_at: Date.now() + 60_000,
+      payload_json: JSON.stringify({ item: { content: "再利用する手順", kind: "fact" },
+        learning: { lesson_type: "success", procedure: "失敗しない手順を検証した", observed_outcome: "再実行が成功した" } }) }];
+    const before = structuredClone(rows);
+    const judge = createLearningCandidateJudge({ dbPath,
+      env: { ORGBRAIN_JEV_PROJECTS: "p", ORGBRAIN_JEV_CAPTURE_MODE: "shadow", ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE: "shadow" },
+      transport: async (r) => {
+        assert.equal(r.state.candidates[0].lesson_type, "success");
+        assert.equal(r.state.candidates[0].lesson_context.observed_outcome, "再実行が成功した");
+        return assessmentResponse(r, { durable: .01 });
+      } });
+    const result = await judge(rows, "default");
+    assert.equal(result.reports[0].status, "judged");
+    assert.equal(result.reports[0].decisions[0].capture_assessment.registration.action, "omit");
+    assert.deepEqual(result.omitted, []);
+    assert.deepEqual(rows, before);
   });
 });
 test("capture queue never judges in Stop; shadow never persists again; failures restore baseline", async () => {
