@@ -428,10 +428,12 @@ export async function installCodexMinimalHooks(plan, options = {}) {
   const mergedEnv = mergeLocalOnlyEnv(envRaw, plan.files.db, options.force === true);
   const mergedHooks = mergeCodexHooks(hooksRaw, plan.handlers);
   const workspaces = await loadWorkspaceConfig(plan.files.workspaces);
+  const existingWorkspace = workspaces.workspaces[plan.workspace.path] ?? {};
   workspaces.workspaces[plan.workspace.path] = {
+    ...existingWorkspace,
     tenant_id: plan.workspace.tenant_id,
     project_id: plan.workspace.project_id,
-    autonomy: normalizeAutonomyPolicy(DEFAULT_AUTONOMY_POLICY)
+    autonomy: normalizeAutonomyPolicy(existingWorkspace.autonomy ?? DEFAULT_AUTONOMY_POLICY)
   };
   await mkdir(path.dirname(plan.files.env), { recursive: true, mode: 0o700 });
   await mkdir(path.dirname(plan.files.hooks), { recursive: true, mode: 0o700 });

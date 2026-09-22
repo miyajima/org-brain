@@ -223,12 +223,17 @@ function toolInputFromPayload(payloadInput) {
 
 export function taskKeyFromHookPayload(payloadInput) {
   const payload = unwrap(payloadInput) ?? {};
-  const sessionId = text(
+  const explicitSessionId = text(
     payload.task_key ?? payload.task_id ?? payload.session_id ?? payload.thread_id ?? payload["thread-id"] ??
-    payload["session-id"] ?? payload["turn-id"] ?? payload.sessionId ?? payload.threadId ?? payload.metadata?.sessionId ?? payload.metadata?.turnId ??
-    payload.turn_id ?? payload.turnId,
+    payload["session-id"] ?? payload.sessionId ?? payload.threadId ?? payload.metadata?.sessionId,
     256
   );
+  const transcriptPath = text(
+    payload.transcript_path ?? payload.transcriptPath ?? payload.metadata?.transcript_path ?? payload.metadata?.transcriptPath,
+    4_096
+  );
+  const turnId = text(payload["turn-id"] ?? payload.metadata?.turnId ?? payload.metadata?.turn_id ?? payload.turn_id ?? payload.turnId, 256);
+  const sessionId = explicitSessionId || (transcriptPath ? `transcript:${hash(transcriptPath)}` : turnId);
   return `codex:${sessionId || `workspace:${slug(payload.cwd ?? payload.project_id ?? "unknown", "unknown")}`}`.slice(0, 256);
 }
 
@@ -237,7 +242,8 @@ export function hasTaskIdentity(payloadInput) {
   return Boolean(text(
     payload.task_key ?? payload.task_id ?? payload.session_id ?? payload.thread_id ?? payload["thread-id"] ??
     payload["session-id"] ?? payload["turn-id"] ?? payload.sessionId ?? payload.threadId ?? payload.metadata?.sessionId ?? payload.metadata?.turnId ??
-    payload.turn_id ?? payload.turnId,
+    payload.turn_id ?? payload.turnId ?? payload.transcript_path ?? payload.transcriptPath ??
+    payload.metadata?.transcript_path ?? payload.metadata?.transcriptPath,
     256
   ));
 }
