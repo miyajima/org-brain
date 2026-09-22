@@ -89,6 +89,42 @@ test("Codex prompt hook provides complete use-tracking context when the workspac
   }
 });
 
+test("Codex prompt hook uses bounded transcript context and identity for a continuation prompt", async () => {
+  const ctx = await fixture();
+  try {
+    await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+    const transcriptPath = path.join(path.dirname(ctx.workspacesFile), "session.jsonl");
+    const rows = [
+      { type: "session_meta", payload: { id: "session-from-transcript" } },
+      { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Codex hooks should use a short-lived Node CLI without resident MCP or extra LLM calls." }] } },
+      { type: "turn_context", payload: { turn_id: "turn-two", cwd: ctx.workspace } },
+      { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "上記改善を実施して" }] } }
+    ];
+    await writeFile(transcriptPath, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit",
+      cwd: ctx.workspace,
+      prompt: "上記改善を実施して",
+      transcript_path: transcriptPath,
+      metadata: { turnId: "turn-two" }
+    }, ctx);
+    const context = result.hookSpecificOutput.additionalContext;
+    assert.match(context, /short-lived Codex hooks/u);
+    assert.match(context, /task_id=codex:transcript:[a-f0-9]{64}/u);
+    assert.match(context, /Use tracking: receipt/u);
+    assert.match(context, /materially informs a subsequent tool action/u);
+    const db = ctx.store.open();
+    const usage = db.prepare(
+      "SELECT task_id, trace_id FROM memory_usage_events WHERE capability = 'hook_context' ORDER BY created_at DESC LIMIT 1"
+    ).get();
+    db.close();
+    assert.match(usage.task_id, /^codex:transcript:[a-f0-9]{64}$/u);
+    assert.equal(usage.trace_id, "turn-two");
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("Codex prompt hook injects a business-readable Recall contract and visible provenance rule", async () => {
   const ctx = await fixture();
   try {

@@ -459,6 +459,35 @@ test("minimal Codex hook installer preserves existing hooks and is idempotent", 
   assert.equal((await stat(plan.files.db)).mode & 0o777, 0o600);
 });
 
+test("minimal Codex hook installer preserves eager learning and capture settings", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "orgbrain-minimal-hooks-settings-"));
+  const workspace = path.join(home, "workspace");
+  const configDirectory = path.join(home, ".config", "org-brain");
+  await mkdir(workspace, { recursive: true });
+  await mkdir(configDirectory, { recursive: true });
+  await writeFile(path.join(configDirectory, "workspaces.json"), `${JSON.stringify({
+    version: 3,
+    defaults: { autonomy: { mode: "shadow", target_mode: "autonomous" } },
+    workspaces: {
+      [workspace]: {
+        tenant_id: "default",
+        project_id: "org-brain",
+        default_work_type: "implementation",
+        memory_capture_v2_mode: "on",
+        memory_learning_mode: "eager",
+        sensitive_memory: { mode: "deny", allowed_principals: [] }
+      }
+    }
+  }, null, 2)}\n`);
+  const plan = codexMinimalHooksPlan({ home, workspace, projectId: "org-brain", tenantId: "default" });
+  await installCodexMinimalHooks(plan);
+  const mapping = JSON.parse(await readFile(plan.files.workspaces, "utf8")).workspaces[workspace];
+  assert.equal(mapping.default_work_type, "implementation");
+  assert.equal(mapping.memory_capture_v2_mode, "on");
+  assert.equal(mapping.memory_learning_mode, "eager");
+  assert.deepEqual(mapping.sensitive_memory, { mode: "deny", allowed_principals: [] });
+});
+
 test("minimal Codex hook installer refuses to overwrite cloud mode without force", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "orgbrain-minimal-hooks-conflict-"));
   const envFile = path.join(home, ".config", "org-brain", "hooks.env");
