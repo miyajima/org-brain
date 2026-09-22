@@ -127,6 +127,25 @@ describe("memory extraction coverage/v1", () => {
     expect(result).toEqual({ valid: true, reason_codes: [] });
   });
 
+
+  it("a-plus reads refinement_profile from the packet when top-level input omits it", async () => {
+    const packet = {
+      schema: "learning-extraction-proposal/v2",
+      refinement_profile: "a-plus/v1" as const,
+      snippets: [{ span_id: "s", role: "user", source: "user", text: "APIを必ず使う。" }],
+      events: []
+    };
+    const result = await verifiedCandidates({ packet, project_id: "org-brain", run_id: "packet-refined" }, [{
+      lesson_type: "decision", support_span_ids: ["s"], gaps: [], fields: [
+        { name: "decision", values: ["APIを必ず使う。"] },
+        { name: "question", values: ["どのAPIを使うか"] }
+      ]
+    }]);
+    expect(result.accepted_indices).toEqual([0]);
+    expect(result.candidates[0].reason_codes).toContain("unsupported_provider_fields_omitted");
+    expect(result.candidates[0].observation.question).toBeNull();
+  });
+
   it("a-plus omits unsupported optional provider fields before normalization", async () => {
     const packet = { schema: "learning-extraction-proposal/v2", snippets: [{ span_id: "s", role: "user", source: "user", text: "APIを必ず使う。" }], events: [] };
     const result = await verifiedCandidates({ packet, project_id: "org-brain", run_id: "refined", refinement_profile: "a-plus/v1" }, [{

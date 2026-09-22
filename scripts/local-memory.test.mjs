@@ -494,7 +494,7 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
     assert.ok(context.evidence_bundle.current_state.length >= 1);
     assert.equal(context.evidence_bundle.evidence_status, "degraded");
     assert.equal(context.evidence_bundle.abstention_recommended, false);
-    assert.equal(context.evidence_bundle.answer_template, "timeline");
+    assert.equal(context.evidence_bundle.answer_template, "profile");
     assert.deepEqual(context.evidence_bundle.missing_evidence, []);
     assert.equal(context.evidence_bundle.answer_guidance.response_mode, "answer_with_warning");
     assert.deepEqual(context.evidence_bundle.answer_guidance.required_elements, [
@@ -504,6 +504,11 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
     assert.equal(context.evidence_bundle.degraded_reasons.includes(
       "gemini_structured_extractor_not_configured"
     ), true);
+
+    assert.ok(context.results.length <= 5);
+    for (const result of context.results) {
+      assert.equal("content" in result.memory, false);
+    }
 
     const verification = await store.verify();
     assert.equal(verification.ok, true);

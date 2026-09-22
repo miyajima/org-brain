@@ -14,7 +14,7 @@ test("PrecisionMem bridge keeps scorer labels out of capture and search", async 
       return {
         results: [{
           score: { total: 0.9 },
-          memory: { id: "belief-1", content: "Redis is the session store." }
+          memory: { id: "belief-1", summary: "Redis is the session store." }
         }],
         evidence_bundle: { estimated_tokens: 10 }
       };

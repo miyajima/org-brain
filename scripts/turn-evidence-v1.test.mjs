@@ -10,6 +10,10 @@ import {
 import { MEMORY_EXTRACTION_ROUTER_MODEL_V2 } from "../packages/orgbrain-cli/src/lib/memory-extraction-router-model-v2.mjs";
 import { MEMORY_EXTRACTION_ROUTER_MODEL_V3 } from "../packages/orgbrain-cli/src/lib/memory-extraction-router-model-v3.mjs";
 import { explicitUserDecisionSpans, isExplicitUserDecisionText } from "../packages/orgbrain-cli/src/lib/explicit-user-decision-search.mjs";
+import {
+  buildMemoryExtractionPrompt,
+  memoryExtractionProviderInputUpperBound
+} from "../packages/shared/src/memory-extraction-provider-contract-runtime.mjs";
 
 function modelWithThresholds(durable, operational) {
   return {
@@ -297,7 +301,7 @@ test("a-plus/v1 keeps the legacy one-pass packet and promotes signaled support w
   const discovery = { routing: { schema: "memory-extraction-router/v2", support_span_ids: ["s1.1", "s2.1", "s3.1", "s4.1"] }, review_drafts: [] };
   const legacy = buildLearningExtractionPacket(evidence, discovery);
   const refined = buildLearningExtractionPacket(evidence, discovery, { refinement_profile: "a-plus/v1" });
-  assert.deepEqual(legacy.snippets.map((item) => item.span_id), ["s1.1", "s2.1", "s3.1"]);
+  assert.deepEqual(legacy.snippets.map((item) => item.span_id), ["s1.1", "s2.1", "s3.1", "s4.1"]);
   assert.deepEqual(refined.snippets.map((item) => item.span_id), ["s1.1", "s2.1", "s4.1"]);
   assert.equal(refined.refinement_profile, "a-plus/v1");
   assert.equal(refined.limits.calls, 1);
@@ -578,4 +582,32 @@ test("v3 packs ranked evidence chronologically under one shared token ceiling", 
   assert.ok(packet.snippets.length > 0 && packet.snippets.length <= 8);
   assert.deepEqual(packet.snippets.map((item) => item.span_id), [...packet.snippets.map((item) => item.span_id)].sort((left, right) => Number(left.split(".")[1]) - Number(right.split(".")[1])));
   for (const snippet of packet.snippets) assert.match(snippet.text_hash, /^sha256:[a-f0-9]{64}$/u);
+});
+
+test("default v2 extraction packet stays within provider input ceiling without truncating snippet text", async () => {
+  const evidence = await buildTurnEvidenceV1({
+    rows: [
+      message("user", "APIはv2.1を必ず使う。ただし障害時だけCLIを使う。"),
+      message("assistant", "旧方式は失敗した。設定を修正してテストは通った。", "final_answer")
+    ],
+    session_hash: "session",
+    turn_hash: "legacy-packet-ceiling",
+    project_id: "org-brain",
+    provider: "openai",
+    model: "gpt-5.6-sol"
+  });
+  const discovery = await discoverLearningEpisodes(evidence, { router_model: modelWithThresholds(0, 0) });
+  const packet = buildLearningExtractionPacket(evidence, discovery);
+  assert.equal(packet.extraction_profile, undefined);
+  assert.ok(packet.snippets.length > 0 && packet.snippets.length <= 8);
+  assert.ok(memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(packet)) <= 2_000);
+  const sourceBySpan = new Map(
+    (evidence.snippets ?? []).flatMap((snippet) =>
+      (snippet.sentences ?? [{ span_id: `${snippet.span_id}.1`, text: snippet.text }]).map((span) => [span.span_id ?? `${snippet.span_id}.1`, span.text])
+    )
+  );
+  for (const snippet of packet.snippets) {
+    const sourceText = sourceBySpan.get(snippet.span_id);
+    if (sourceText) assert.equal(snippet.text, sourceText);
+  }
 });

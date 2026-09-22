@@ -79,6 +79,7 @@ export async function verifiedCandidates(input, candidates) {
     const v3 = input.packet.schema === "learning-extraction-proposal/v3";
     if (v3 && candidates.length > MAX_CANDIDATES)
         throw new Error("provider_failed:candidate_count_exceeded");
+    const refinementProfile = input.refinement_profile ?? input.packet?.refinement_profile ?? null;
     const snippetIds = new Set(input.packet.snippets.map((item) => item.span_id));
     const eventIds = new Set(input.packet.events.map((item) => String(item.event_id ?? "")).filter(Boolean));
     const resolvesSupportId = (id) => eventIds.has(id) || snippetIds.has(id);
@@ -89,7 +90,7 @@ export async function verifiedCandidates(input, candidates) {
         rejections.push({ candidate_index: candidateIndex, reason_codes: [...new Set(reasonCodes)].sort() });
     };
     for (const [index, providerCandidate] of candidates.entries()) {
-        const refined = input.refinement_profile ? sanitizeRefinedCandidate(providerCandidate, input.packet) : { candidate: providerCandidate, omitted: false };
+        const refined = refinementProfile ? sanitizeRefinedCandidate(providerCandidate, input.packet) : { candidate: providerCandidate, omitted: false };
         const raw = refined.candidate;
         if (raw?.lesson_type === "failure") {
             const failureFields = providerFields(raw);
@@ -100,7 +101,7 @@ export async function verifiedCandidates(input, candidates) {
                 continue;
             }
         }
-        if (input.extraction_profile || input.refinement_profile) {
+        if (input.extraction_profile || refinementProfile) {
             const coverageValidation = validateCoverageCandidate(raw, input.packet);
             if (!coverageValidation.valid) {
                 reject(index, coverageValidation.reason_codes);

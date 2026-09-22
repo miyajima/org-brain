@@ -123,8 +123,8 @@ export function createPrecisionMemOperations({ store, reset, minimumScore = 0.06
       const limit = Number.isInteger(requestedLimit)
         ? Math.max(0, Math.min(50, requestedLimit))
         : 20;
-      const results = query.trim() && limit > 0
-        ? (await store.retrieveContext({
+      const context = query.trim() && limit > 0
+        ? await store.retrieveContext({
           tenant_id: userId,
           project_id: scope,
           principal_id: `precisionmembench:${userId}`,
@@ -134,14 +134,18 @@ export function createPrecisionMemOperations({ store, reset, minimumScore = 0.06
           token_budget: 8_000,
           search_mode: "hybrid_v4",
           minimum_total_score: minimumScore
-        })).results.slice(0, limit)
-        : [];
+        })
+        : { results: [], evidence_bundle: { evidence: [] } };
+      const evidenceTextById = new Map(
+        (context.evidence_bundle?.evidence ?? []).map((item) => [item.memory_id, item.text])
+      );
+      const results = context.results.slice(0, limit);
       return {
         status: 200,
         body: {
           results: results.map((result) => ({
             id: result.memory.id,
-            memory: result.memory.content,
+            memory: result.memory.summary ?? evidenceTextById.get(result.memory.id) ?? "",
             metadata: { beliefId: result.memory.id },
             score: Number(result.score?.total ?? result.score ?? 0)
           }))

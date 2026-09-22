@@ -5632,7 +5632,6 @@ export class LocalMemoryStore {
     business_category_id: businessCategoryId = null,
     work_type: workType = null,
     query,
-    limit = 50,
     top_k = 5,
     task_id: taskId = null,
     use_context: useContext = undefined,
@@ -5654,11 +5653,12 @@ export class LocalMemoryStore {
       query,
       task_id: taskId, use_context: useContext,use_snapshot_id:useSnapshotId,
       minimum_total_score: minimumTotalScore,
-      limit: Math.max(safeTopK, Math.min(50, Number(limit) || 50)),
+      limit: Math.min(50, safeTopK * 2),
       principal_id: principalId,
       at,
       search_mode: searchMode
     });
+    results = results.filter((result) => Number(result.score?.lexical) !== 0 || Number(result.score?.semantic) !== 0);
     const eligibleForJudgment = (memory, currentAt = at) => (!projectId || memory.project_id == null || memory.project_id === projectId)
       && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
       && (memory.valid_from == null || memory.valid_from <= currentAt)
@@ -5685,7 +5685,7 @@ export class LocalMemoryStore {
     await this.init();
     const db = this.open({ readOnly: true });
     try {
-      const charBudget = safeTokenBudget * 4;
+      const charBudget = Math.max(0, safeTokenBudget * 4 - 600);
       const decisionById = new Map(judgment.decisions.map((item) => [item.id, item]));
       const protectedResults = results.filter(({ memory }) => {
         const candidate = memoryJudgmentCandidate(memory);
@@ -5767,15 +5767,20 @@ export class LocalMemoryStore {
             metadata = {};
           }
           if (unit.unit_type === "timeline") {
-            timeline.push({
+            const entry = {
               memory_id: memory.id,
               event_at: unit.event_at,
               delta_from_question_ms: unit.event_at === null ? null : at - unit.event_at,
               ...metadata
-            });
+            };
+            const cost = JSON.stringify(entry).length;
+            if (usedChars + cost <= charBudget) {
+              usedChars += cost;
+              timeline.push(entry);
+            }
           }
           if (unit.unit_type === "profile" || unit.unit_type === "ledger") {
-            state.push({
+            const entry = {
               memory_id: memory.id,
               current: unit.text,
               previous_values: versions.slice(1).flatMap((version) => {
@@ -5787,7 +5792,12 @@ export class LocalMemoryStore {
                 }
               }),
               ...metadata
-            });
+            };
+            const cost = JSON.stringify(entry).length;
+            if (usedChars + cost <= charBudget) {
+              usedChars += cost;
+              state.push(entry);
+            }
           }
         }
         for (const conflict of memory.conflicts) {
@@ -5815,9 +5825,13 @@ export class LocalMemoryStore {
         hasCurrentState: state.length > 0,
         requiresMultipleSources: multiEvidence
       });
+      const injectedEvidence = disposition.abstention_recommended ? [] : evidence;
+      const injectedState = disposition.abstention_recommended ? [] : state;
+      const injectedTimeline = disposition.abstention_recommended ? [] : timeline;
+      const injectedChars = disposition.abstention_recommended ? 0 : usedChars;
       const answerGuidance = answerGuidanceForDisposition(
         disposition,
-        evidence.map((item) => item.source_reference)
+        injectedEvidence.map((item) => item.source_reference)
       );
       const usage = await this.recordUsage({
         tenant_id: tenantId,
@@ -5829,7 +5843,7 @@ export class LocalMemoryStore {
         request_source: "local",
         requested_business_category_id: businessCategoryId,
         requested_work_type: workType,
-        items: evidence.map((item, index) => ({
+        items: injectedEvidence.map((item, index) => ({
           source_type: "memory",
           source_id: item.memory_id,
           source_version: selected.find(x=>x.memory.id===item.memory_id)?.memory.current_version ?? null,
@@ -5840,8 +5854,22 @@ export class LocalMemoryStore {
           injected_token_estimate: Math.ceil(item.text.length / 4)
         }))
       });
+      const injectedIds = new Set(injectedEvidence.map((item) => item.memory_id));
       return {
-        results: judgment.applied ? results.filter((item) => evidence.some((entry) => entry.memory_id === item.memory.id)) : results,
+        results: selected.filter((item) => injectedIds.has(item.memory.id)).map((item) => ({
+          memory: {
+            id: item.memory.id,
+            project_id: item.memory.project_id,
+            summary: item.memory.summary,
+            kind: item.memory.kind,
+            work_type: item.memory.work_type,
+            business_category_id: item.memory.business_category_id,
+            lifecycle_state: item.memory.lifecycle_state,
+            current_version: item.memory.current_version,
+            source_references: item.memory.source_references
+          },
+          score: item.score
+        })),
         meta: {
           ...(judgment.mode !== "off" ? { memory_judgment: judgment } : {}),
           usage_id: usage.usage_id,
@@ -5860,12 +5888,12 @@ export class LocalMemoryStore {
         evidence_bundle: {
           query_at: at,
           token_budget: safeTokenBudget,
-          estimated_tokens: Math.ceil(usedChars / 4),
+          estimated_tokens: Math.ceil((injectedChars + answerGuidance.instructions.length) / 4),
           evidence_status: disposition.evidence_status,
           answer_template: template,
-          evidence,
-          current_state: state,
-          timeline,
+          evidence: injectedEvidence,
+          current_state: injectedState,
+          timeline: injectedTimeline,
           conflicts,
           missing_evidence: disposition.missing_evidence,
           abstention_recommended: disposition.abstention_recommended,
