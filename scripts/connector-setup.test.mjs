@@ -193,7 +193,9 @@ test("cloud hook plans target supported lifecycle events", () => {
   assert.deepEqual(Object.keys(codex.handlers), [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact", "PostCompact", "Stop"
   ]);
-  assert.equal(codex.handlers.PreToolUse.matcher, "request_user_input(_async)?");
+  assert.match(codex.handlers.PreToolUse.matcher, /request_user_input\(_async\)/u);
+  assert.match(codex.handlers.PreToolUse.matcher, /exec_command/u);
+  assert.match(codex.handlers.PostToolUse.matcher, /apply_patch/u);
   assert.match(codex.handlers.PostToolUse.matcher, /confirmation_status/u);
   assert.equal(codex.handlers.UserPromptSubmit.additionalContextLimit, 8_192);
   assert.equal(codex.handlers.PostCompact.additionalContextLimit, undefined);

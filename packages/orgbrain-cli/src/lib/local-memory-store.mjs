@@ -1,6 +1,7 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
+import { ATTEMPT_SCHEMA_SQL, attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, rename, stat, unlink } from "node:fs/promises";
@@ -39,7 +40,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 27;
+export const MEMORY_SCHEMA_VERSION = 29;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -2259,6 +2260,7 @@ function migrateSchema(db) {
     upgradeMemoryUsageEvents(db);
     upgradeMemoryUsageItems(db);
     db.exec(MEMORY_USE_SCHEMA_SQL);
+    db.exec(ATTEMPT_SCHEMA_SQL);
     db.exec(LOCAL_USE_SCHEMA);
     addIndexes(db);
     rebuildFts(db);
@@ -3323,6 +3325,11 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_impact_daily_metrics") ||
         !hasTable(db, "memory_usage_events") ||
         !hasTable(db, "memory_effect_events") ||
+        !hasTable(db, "action_attempts") ||
+        !hasTable(db, "action_hook_coverage") ||
+        !hasTable(db, "action_attempt_use_events") ||
+        !hasTable(db, "action_attempt_pattern_links") ||
+        !hasTable(db, "action_attempt_metric_events") ||
         !hasTable(db, "local_mcp_confirmations") ||
         !hasTable(db, "retrieval_generations") ||
         !hasTable(db, "retrieval_units") ||
@@ -3871,6 +3878,256 @@ export class LocalMemoryStore {
     } finally {
       db.close();
     }
+  }
+
+  async recordAttempt(tenantId, input, { principal = null, trusted = false } = {}) {
+    await this.init();
+    const row = normalizeAttempt(input, { tenantId, principal, trusted });
+    const db = this.open();
+    let inTransaction = false;
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      inTransaction = true;
+      const previous = db.prepare("SELECT * FROM action_attempts WHERE tenant_id=? AND source_key=?")
+        .get(tenantId, row.source_key);
+      if (previous) {
+        const comparable = Object.keys(row).filter((key) => key !== "created_at");
+        if (comparable.some((key) => previous[key] !== row[key])) throw new Error("attempt_source_key_conflict");
+        db.exec("COMMIT");
+        inTransaction = false;
+        return { ...publicAttempt(previous), deduplicated: true };
+      }
+      if (row.supersedes_id) {
+        const prior = db.prepare("SELECT id,project_id FROM action_attempts WHERE tenant_id=? AND id=?")
+          .get(tenantId, row.supersedes_id);
+        if (!prior || prior.project_id !== row.project_id) throw new Error("superseded_attempt_not_found");
+        const replacement = db.prepare("SELECT id FROM action_attempts WHERE tenant_id=? AND supersedes_id=?")
+          .get(tenantId, row.supersedes_id);
+        if (replacement) throw new Error("attempt_already_superseded");
+      }
+      const fields = Object.keys(row);
+      db.prepare(`INSERT INTO action_attempts(${fields.join(",")}) VALUES(${fields.map(() => "?").join(",")})`)
+        .run(...Object.values(row));
+      if (row.verification_state === "verified" && row.attempt_type === "intervention"
+          && row.outcome === "failure" && row.failure_kind === "deterministic" && row.conditions_hash) {
+        const patternKey = `attempt:${hashContent(`${row.project_id}\0${row.action_key}\0${row.conditions_hash}`).slice(0, 48)}`;
+        db.prepare(`INSERT OR IGNORE INTO memory_failure_patterns(
+          id,tenant_id,project_id,business_category_id,work_type,pattern_key,label,
+          action_fingerprint,failure_fingerprint,is_active,created_at,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+          randomUUID(), tenantId, row.project_id, null, null, patternKey, row.action_label,
+          hashContent(row.action_key), hashContent(row.result_summary), 1, row.created_at, row.created_at
+        );
+        const pattern = db.prepare("SELECT id FROM memory_failure_patterns WHERE tenant_id=? AND pattern_key=?")
+          .get(tenantId, patternKey);
+        db.prepare("INSERT INTO action_attempt_pattern_links(tenant_id,attempt_id,pattern_id) VALUES(?,?,?)")
+          .run(tenantId, row.id, pattern.id);
+        const laterSuccess = db.prepare(`SELECT 1 FROM action_attempts a
+          WHERE a.tenant_id=? AND a.project_id=? AND a.action_key=? AND a.conditions_hash=?
+            AND a.verification_state='verified' AND a.outcome='success' AND a.performed_at>=?
+            AND NOT EXISTS (SELECT 1 FROM action_attempts next WHERE next.tenant_id=a.tenant_id AND next.supersedes_id=a.id)
+          LIMIT 1`).get(tenantId, row.project_id, row.action_key, row.conditions_hash, row.performed_at);
+        db.prepare("UPDATE memory_failure_patterns SET is_active=?,updated_at=? WHERE tenant_id=? AND id=?")
+          .run(laterSuccess ? 0 : 1, row.created_at, tenantId, pattern.id);
+      }
+      if (row.verification_state === "verified" && row.outcome === "success" && row.conditions_hash) {
+        const patternKey = `attempt:${hashContent(`${row.project_id}\0${row.action_key}\0${row.conditions_hash}`).slice(0, 48)}`;
+        const laterFailure = db.prepare(`SELECT 1 FROM action_attempts a
+          WHERE a.tenant_id=? AND a.project_id=? AND a.action_key=? AND a.conditions_hash=?
+            AND a.verification_state='verified' AND a.attempt_type='intervention'
+            AND a.outcome='failure' AND a.failure_kind='deterministic' AND a.performed_at>?
+            AND NOT EXISTS (SELECT 1 FROM action_attempts next WHERE next.tenant_id=a.tenant_id AND next.supersedes_id=a.id)
+          LIMIT 1`).get(tenantId, row.project_id, row.action_key, row.conditions_hash, row.performed_at);
+        if (!laterFailure) db.prepare("UPDATE memory_failure_patterns SET is_active=0,updated_at=? WHERE tenant_id=? AND pattern_key=?")
+          .run(row.created_at, tenantId, patternKey);
+      }
+      if (row.supersedes_id) {
+        const links = db.prepare("SELECT pattern_id FROM action_attempt_pattern_links WHERE tenant_id=? AND attempt_id=?")
+          .all(tenantId, row.supersedes_id);
+        for (const link of links) {
+          const unresolved = db.prepare(`SELECT COUNT(*) AS count FROM action_attempt_pattern_links l
+            JOIN action_attempts a ON a.tenant_id=l.tenant_id AND a.id=l.attempt_id
+            WHERE l.tenant_id=? AND l.pattern_id=? AND a.outcome='failure'
+              AND NOT EXISTS (SELECT 1 FROM action_attempts next WHERE next.tenant_id=a.tenant_id AND next.supersedes_id=a.id)`)
+            .get(tenantId, link.pattern_id);
+          if (unresolved.count === 0) db.prepare("UPDATE memory_failure_patterns SET is_active=0,updated_at=? WHERE tenant_id=? AND id=?")
+            .run(row.created_at, tenantId, link.pattern_id);
+        }
+      }
+      db.exec("COMMIT");
+      inTransaction = false;
+      return publicAttempt(row);
+    } catch (error) {
+      if (inTransaction) db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      db.close();
+    }
+  }
+
+  async recordAttemptUse(tenantId, input, { trusted = false } = {}) {
+    await this.init();
+    const row = normalizeAttemptUse(input, { tenantId, trusted });
+    const db = this.open();
+    try {
+      const attempt = db.prepare("SELECT id FROM action_attempts WHERE tenant_id=? AND project_id=? AND id=?")
+        .get(tenantId, row.project_id, row.attempt_id);
+      if (!attempt) throw new Error("attempt_not_found");
+      const existing = db.prepare("SELECT * FROM action_attempt_use_events WHERE tenant_id=? AND id=?")
+        .get(tenantId, row.id);
+      if (existing) {
+        if (Object.keys(row).some((key) => key !== "created_at" && existing[key] !== row[key])) throw new Error("attempt_use_id_conflict");
+        return { ...existing, evidence: JSON.parse(existing.evidence_json), deduplicated: true };
+      }
+      const fields = Object.keys(row);
+      db.prepare(`INSERT INTO action_attempt_use_events(${fields.join(",")}) VALUES(${fields.map(() => "?").join(",")})`)
+        .run(...Object.values(row));
+      return { ...row, evidence: JSON.parse(row.evidence_json) };
+    } finally { db.close(); }
+  }
+
+  async attemptUseReport(tenantId, projectId) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return db.prepare("SELECT stage,verification_state,COUNT(*) AS count FROM action_attempt_use_events WHERE tenant_id=? AND project_id=? GROUP BY stage,verification_state ORDER BY stage,verification_state")
+        .all(tenantId, normalizedIdentifier(projectId, "project_id", true));
+    } finally { db.close(); }
+  }
+
+  async recordAttemptMetricEvent(tenantId, input, { trusted = false } = {}) {
+    await this.init();
+    const row = normalizeAttemptMetricEvent(input, { tenantId, trusted });
+    const db = this.open();
+    try {
+      if (row.kind === "feedback") {
+        const prior = db.prepare(`SELECT id,decision FROM action_attempt_metric_events
+          WHERE tenant_id=? AND project_id=? AND id=? AND kind='preflight'`)
+          .get(tenantId, row.project_id, row.related_event_id);
+        if (!prior || prior.decision !== "block") throw new Error("blocked_preflight_event_not_found");
+      }
+      const previous = db.prepare("SELECT * FROM action_attempt_metric_events WHERE tenant_id=? AND id=?")
+        .get(tenantId, row.id);
+      if (previous) {
+        if (Object.keys(row).some((key) => key !== "created_at" && previous[key] !== row[key])) throw new Error("attempt_metric_id_conflict");
+        return { ...previous, evidence: JSON.parse(previous.evidence_json), deduplicated: true };
+      }
+      const fields = Object.keys(row);
+      db.prepare(`INSERT INTO action_attempt_metric_events(${fields.join(",")}) VALUES(${fields.map(() => "?").join(",")})`)
+        .run(...Object.values(row));
+      return { ...row, evidence: JSON.parse(row.evidence_json) };
+    } finally { db.close(); }
+  }
+
+  async actionAttemptMetricsReport(tenantId, projectId) {
+    await this.init();
+    const project = normalizedIdentifier(projectId, "project_id", true);
+    const db = this.open({ readOnly: true });
+    try {
+      const eventCounts = db.prepare(`SELECT
+        SUM(kind='context_query') AS context_queries,
+        SUM(kind='context_query' AND returned_count>0) AS context_queries_with_history,
+        SUM(kind='preflight') AS preflight_checks,
+        SUM(kind='preflight' AND decision='block') AS preflight_blocks,
+        SUM(kind='feedback' AND feedback_verdict='false_block' AND verification_state='reported') AS false_blocks_reported,
+        SUM(kind='feedback' AND feedback_verdict='false_block' AND verification_state='verified') AS false_blocks_verified
+        FROM action_attempt_metric_events WHERE tenant_id=? AND project_id=?`).get(tenantId, project);
+      const coverage = db.prepare(`SELECT coverage,SUM(count) AS count FROM action_hook_coverage
+        WHERE tenant_id=? AND project_id=? GROUP BY coverage`).all(tenantId, project);
+      const usage = db.prepare(`SELECT stage,verification_state,COUNT(*) AS count FROM action_attempt_use_events
+        WHERE tenant_id=? AND project_id=? GROUP BY stage,verification_state`).all(tenantId, project);
+      const repeated = db.prepare(`SELECT COUNT(*) AS count FROM action_attempts a
+        WHERE a.tenant_id=? AND a.project_id=? AND a.attempt_type='intervention'
+          AND a.conditions_hash IS NOT NULL AND EXISTS (
+            SELECT 1 FROM action_attempts prior WHERE prior.tenant_id=a.tenant_id AND prior.project_id=a.project_id
+              AND prior.action_key=a.action_key AND prior.conditions_hash=a.conditions_hash
+              AND prior.verification_state='verified' AND prior.attempt_type='intervention'
+              AND prior.outcome='failure' AND prior.failure_kind='deterministic'
+              AND prior.performed_at<a.performed_at
+              AND NOT EXISTS (SELECT 1 FROM action_attempts correction
+                WHERE correction.tenant_id=prior.tenant_id AND correction.supersedes_id=prior.id)
+          )`).get(tenantId, project);
+      const counts = Object.fromEntries(Object.entries(eventCounts).map(([key, value]) => [key, Number(value ?? 0)]));
+      const coverageCounts = Object.fromEntries(coverage.map((row) => [row.coverage, Number(row.count)]));
+      const checked = Number(coverageCounts.checked ?? 0) + Number(coverageCounts.blocked ?? 0);
+      const opaque = Number(coverageCounts.opaque ?? 0);
+      const returned = usage.filter((row) => row.stage === "returned")
+        .reduce((sum, row) => sum + Number(row.count), 0);
+      const verifiedAdoptions = usage.filter((row) => row.stage === "adopted" && row.verification_state === "verified")
+        .reduce((sum, row) => sum + Number(row.count), 0);
+      return { project_id: project, ...counts, confirmed_same_condition_reexecutions: Number(repeated.count),
+        history_return_rate: counts.context_queries ? counts.context_queries_with_history / counts.context_queries : null,
+        verified_adoption_rate: returned ? verifiedAdoptions / returned : null,
+        opaque_operation_rate: checked + opaque ? opaque / (checked + opaque) : null,
+        coverage: coverageCounts, usage };
+    } finally { db.close(); }
+  }
+
+  async searchAttempts(tenantId, { project_id, action_key = null, query = null, limit = 20 } = {}) {
+    await this.init();
+    const projectId = normalizedIdentifier(project_id, "project_id", true);
+    const actionKey = normalizedIdentifier(action_key, "action_key");
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+    const db = this.open({ readOnly: true });
+    try {
+      const rows = db.prepare(
+        `SELECT a.* FROM action_attempts a
+         WHERE a.tenant_id=? AND a.project_id=?
+           AND (? IS NULL OR a.action_key=?)
+           AND NOT EXISTS (SELECT 1 FROM action_attempts next
+                           WHERE next.tenant_id=a.tenant_id AND next.supersedes_id=a.id)
+         ORDER BY a.performed_at DESC,a.id DESC LIMIT 500`
+      ).all(tenantId, projectId, actionKey, actionKey);
+      const ranked = rankAttempts(rows, query, safeLimit);
+      for (const attempt of ranked) {
+        if (attempt.verification_state !== "verified" || attempt.executed_by_type !== "principal" || !attempt.executed_by) continue;
+        const profile = db.prepare("SELECT display_name FROM user_profiles WHERE tenant_id=? AND principal=? AND status='active'")
+          .get(tenantId, attempt.executed_by);
+        if (profile?.display_name) attempt.executed_by_name = profile.display_name;
+      }
+      for (const attempt of ranked) attempt.summary_ja = attemptSummaryJa(attempt);
+      return ranked;
+    } finally {
+      db.close();
+    }
+  }
+
+  async preflightAction(tenantId, input, { source = "mcp" } = {}) {
+    const projectId = normalizedIdentifier(input.project_id, "project_id", true);
+    const actionKey = normalizedIdentifier(input.action_key, "action_key", true);
+    const condition = normalizeAttemptConditions(input.conditions);
+    const attempts = await this.searchAttempts(tenantId, { project_id: projectId, action_key: actionKey, limit: 100 });
+    const hypothesis = nullableString(input.change_hypothesis, 500);
+    const decision = preflightAttempt(attempts, { action_key: actionKey, conditions_hash: condition.conditions_hash, change_hypothesis: hypothesis });
+    const alternatives = Array.isArray(input.alternatives) ? input.alternatives.slice(0, 5) : [];
+    const db = this.open({ readOnly: true });
+    let alternative_candidates;
+    try {
+      alternative_candidates = alternatives.flatMap((candidate) => {
+        const key = normalizedIdentifier(candidate.action_key, "action_key", true);
+        const exists = db.prepare("SELECT 1 FROM action_attempts WHERE tenant_id=? AND project_id=? AND action_key=? LIMIT 1")
+          .get(tenantId, projectId, key);
+        return exists ? [] : [{ action_key: key, label: nullableString(candidate.label, 240) || key, status: "no_accessible_prior_attempt" }];
+      });
+    } finally { db.close(); }
+    const event = await this.recordAttemptMetricEvent(tenantId, {
+      project_id: projectId, kind: "preflight", source, action_key: actionKey,
+      conditions_hash: condition.conditions_hash, decision: decision.decision, reason: decision.reason,
+      matched_attempt_id: decision.prior_attempts[0]?.id ?? null
+    });
+    return { ...decision, alternative_candidates, preflight_event_id: event.id };
+  }
+
+  async recordActionHookCoverage(tenantId, projectId, toolName, coverage) {
+    await this.init();
+    if (!["checked", "opaque", "recorded", "blocked"].includes(coverage)) throw new Error("invalid_action_hook_coverage");
+    const day = new Date().toISOString().slice(0, 10);
+    const db = this.open();
+    try {
+      db.prepare(`INSERT INTO action_hook_coverage(day,tenant_id,project_id,tool_name,coverage,count)
+        VALUES(?,?,?,?,?,1) ON CONFLICT(day,tenant_id,project_id,tool_name,coverage)
+        DO UPDATE SET count=count+1`).run(day, tenantId, projectId, String(toolName).slice(0, 128), coverage);
+    } finally { db.close(); }
   }
 
   async listFailurePatterns(tenantId, { projectId = null } = {}) {
@@ -5423,7 +5680,7 @@ export class LocalMemoryStore {
         });
         return results.filter(({ memory }) =>
           (businessCategoryId === null || memory.business_category_id === businessCategoryId) &&
-          (workType === null || memory.work_type === workType)
+          (workType === null || memory.work_type === workType || memory.work_type === "other")
         );
       } finally {
         db.close();
@@ -5577,7 +5834,7 @@ export class LocalMemoryStore {
         .filter((row) =>
           (projectId === null || row.project_id === projectId) &&
           (businessCategoryId === null || row.business_category_id === businessCategoryId) &&
-          (workType === null || row.work_type === workType) &&
+          (workType === null || row.work_type === workType || row.work_type === "other") &&
           (include_suppressed || row.lifecycle_state !== "suppressed") &&
           (row.valid_from === null || row.valid_from <= at) &&
           (row.valid_until === null || row.valid_until > at)

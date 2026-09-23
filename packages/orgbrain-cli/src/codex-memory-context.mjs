@@ -355,10 +355,22 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
     : null;
   const eagerInstruction = scope.learningMode === "eager" ? EAGER_MEMORY_HIDDEN_INSTRUCTION : null;
   const store = options.store ?? new LocalMemoryStore(env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
+  let injectedAttempts = [];
   const useStatus = await store.useHistory("status");
   let systemMessage = null;
   if (useStatus.flags.collect && taskKey && scope.projectId && scope.workType) contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}, work_type=${scope.workType}.`);
   if (scope.localMemoryEnabled) {
+    const priorAttempts = scope.projectId
+      ? await store.searchAttempts(scope.tenantId, { project_id: scope.projectId, query: retrievalQuery, limit: 2 })
+      : [];
+    injectedAttempts = priorAttempts;
+    if (priorAttempts.length > 0) {
+      contextParts.push("OrgBrain past attempts (cite the evidence; a tool exit is not by itself a conclusion about a strategy):");
+      contextParts.push(...priorAttempts.map((attempt) => {
+        const proof = attempt.evidence[0]?.ref_id ?? "none";
+        return `- ${compact(redactHookMemoryText(attempt.summary_ja), 320)} evidence=${proof}; type=${attempt.attempt_type}; verification=${attempt.verification_state}`;
+      }));
+    }
     const results = await store.search({
       tenant_id: scope.tenantId,
       project_id: scope.projectId,
@@ -382,7 +394,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         Math.max(result.score.lexical ?? 0, result.score.semantic ?? 0, result.use_history?.examples?.length ? result.use_history.base_score : 0) >= MIN_COMPONENT_SCORE
       ) relevant.push(result);
     }
-    if (hookEventName(payload) === "UserPromptSubmit" && ["shadow", "on", "confirm", "eager"].includes(scope.learningMode) && relevant.length === 0) {
+    if (hookEventName(payload) === "UserPromptSubmit" && ["shadow", "on", "confirm", "eager"].includes(scope.learningMode) && relevant.length === 0 && priorAttempts.length === 0) {
       // Keep a retrieval miss in Codex's UI status channel. Putting this in
       // additionalContext makes the model repeat an operational detail as a
       // user-facing paragraph.
@@ -441,11 +453,16 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   if (learningInstruction) contextParts.push(learningInstruction);
   if (eagerInstruction) contextParts.push(eagerInstruction);
   if (contextParts.length === 0) return null;
+  const additionalContext = boundedContext(contextParts);
+  await Promise.all(injectedAttempts.filter((attempt) => additionalContext.includes(attempt.evidence[0]?.ref_id ?? "__no_ref__"))
+    .map((attempt) => store.recordAttemptUse(scope.tenantId, {
+      project_id: scope.projectId, attempt_id: attempt.id, task_id: taskKey, stage: "injected"
+    }))).catch(() => undefined);
   return {
     ...(systemMessage ? { systemMessage } : {}),
     hookSpecificOutput: {
       hookEventName: hookEventName(payload),
-      additionalContext: boundedContext(contextParts)
+      additionalContext
     }
   };
 }

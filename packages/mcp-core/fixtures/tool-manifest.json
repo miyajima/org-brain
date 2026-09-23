@@ -3,6 +3,454 @@
   "protocol_version": "2026-07-28",
   "tools": [
     {
+      "name": "orgbrain_action_preflight",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "action_key": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "conditions": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "change_hypothesis": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "alternatives": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action_key": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 240
+                }
+              },
+              "required": [
+                "action_key",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "project_id",
+          "action_key"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_action_preflight_feedback",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "preflight_event_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "false_block",
+              "correct_block"
+            ]
+          },
+          "evidence": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref_type": {
+                  "type": "string"
+                },
+                "ref_id": {
+                  "type": "string"
+                },
+                "content_hash": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref_type",
+                "ref_id",
+                "content_hash"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "project_id",
+          "preflight_event_id",
+          "verdict"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_attempt_metrics_report",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_attempt_record",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "project_id": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "action_key": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "action_label": {
+                "type": "string",
+                "maxLength": 240
+              },
+              "attempt_type": {
+                "type": "string",
+                "enum": [
+                  "intervention",
+                  "tool_result"
+                ]
+              },
+              "target": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "conditions": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "failure",
+                  "inconclusive"
+                ]
+              },
+              "result_summary": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "failure_kind": {
+                "type": "string",
+                "enum": [
+                  "deterministic",
+                  "transient",
+                  "unknown"
+                ]
+              },
+              "performed_at": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "change_hypothesis": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "executed_by_type": {
+                "type": "string",
+                "enum": [
+                  "principal",
+                  "agent",
+                  "unknown"
+                ]
+              },
+              "executed_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidence": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ref_type": {
+                      "type": "string"
+                    },
+                    "ref_id": {
+                      "type": "string"
+                    },
+                    "content_hash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ref_type",
+                    "ref_id",
+                    "content_hash"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "source": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "source_key": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "supersedes_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "project_id",
+              "action_key",
+              "action_label",
+              "target",
+              "outcome",
+              "result_summary",
+              "performed_at",
+              "evidence",
+              "source",
+              "source_key"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "attempt"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_attempt_use_record",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "attempt_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "task_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "adopted",
+              "executed",
+              "result_checked"
+            ]
+          },
+          "evidence": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref_type": {
+                  "type": "string"
+                },
+                "ref_id": {
+                  "type": "string"
+                },
+                "content_hash": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ref_type",
+                "ref_id",
+                "content_hash"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "project_id",
+          "attempt_id",
+          "stage"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_attempt_use_report",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_attempts_search",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "action_key": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
       "name": "orgbrain_business_categories_create",
       "description": null,
       "input_schema": {
@@ -184,6 +632,10 @@
               }
             },
             "additionalProperties": false
+          },
+          "task_id": {
+            "type": "string",
+            "maxLength": 128
           },
           "max_tokens": {
             "type": "integer",
