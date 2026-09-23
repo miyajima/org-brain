@@ -41,6 +41,8 @@ Usage:
   orgbrain memory reviews [--tenant-id <id>] [--project-id <id>] [--limit <1-200>]
   orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
   orgbrain memory import codex-sessions --plan <path> --expected-plan-hash <sha256> [--apply-report <path>] --execute
+  orgbrain memory import codex-attempts --workspace <path> [--sessions-root <path>] [--output <path>]
+  orgbrain memory import codex-attempts --workspace <path> --plan <path> --expected-plan-hash <sha256> --execute
   orgbrain category list [--tenant-id <id>] [--include-inactive]
   orgbrain category create --slug <slug> --label <label> [--description <text>]
   orgbrain category update <category-id> [--slug <slug>] [--label <label>] [--active true|false]
@@ -1011,7 +1013,29 @@ async function main() {
     const mapping = await resolveWorkspaceMapping(await loadWorkspaceConfig(workspacesFileFromEnv()), payload.cwd || process.cwd());
     const tenantId = mapping.entry?.tenant_id || process.env.ORGBRAIN_TENANT_ID || "default";
     if (mapping.entry) payload.project_id = mapping.entry.project_id;
+    const attemptHookProjects = String(process.env.ORGBRAIN_ATTEMPT_HOOK_PROJECTS || "")
+      .split(",").map((item) => item.trim()).filter(Boolean);
+    const attemptHookEnabled = payload.project_id && attemptHookProjects.includes(payload.project_id);
     if (action === "codex-pre-tool") {
+      if (attemptHookEnabled) {
+        const { preflightHookAction } = await import("./lib/action-attempt-hook.mjs");
+        const attemptDecision = await preflightHookAction(payload, store, tenantId, payload.project_id).catch(() => ({ decision: "warn", reason: "attempt_preflight_unavailable" }));
+        if (attemptDecision?.decision === "block") {
+          process.stdout.write(`${JSON.stringify({ hookSpecificOutput: {
+            hookEventName: "PreToolUse", permissionDecision: "deny",
+            permissionDecisionReason: `OrgBrain: ${attemptDecision.reason}; evidence=${attemptDecision.prior_attempts?.[0]?.evidence?.[0]?.ref_id ?? "unknown"}`,
+            additionalContext: "同じ条件で確認済みの失敗です。実行条件や仮説を変更した別案を検討してください。"
+          } })}\n`);
+          return;
+        }
+        if (attemptDecision?.decision === "warn") {
+          process.stdout.write(`${JSON.stringify({ hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            additionalContext: `OrgBrain action preflight: ${attemptDecision.reason}. Check prior evidence before retrying; an opaque operation cannot be certified as new.`
+          } })}\n`);
+          return;
+        }
+      }
       const decision = await guardCodexQuestion(payload, commitmentStore, tenantId);
       const configuredMode = String(process.env.ORGBRAIN_MEMORY_COMMITMENTS_MODE || "on").trim().toLowerCase();
       const mode = ["off", "shadow", "on"].includes(configuredMode) ? configuredMode : "on";
@@ -1037,6 +1061,11 @@ async function main() {
         process.stdout.write("{}\n");
       }
     } else if (action === "codex-post-tool") {
+      const attemptResult = attemptHookEnabled
+        ? await import("./lib/action-attempt-hook.mjs")
+          .then(({ recordHookActionResult }) => recordHookActionResult(payload, store, tenantId, payload.project_id))
+          .catch(() => ({ recorded: false, reason: "attempt_record_unavailable" }))
+        : null;
       const result = await commitmentStore.ingestToolResult(payload, tenantId);
       const learningMode = String(mapping.entry?.memory_learning_mode ?? "off").trim().toLowerCase();
       const localHookCaptureEnabled = process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== "false";
@@ -1057,7 +1086,7 @@ async function main() {
           });
         }
       }
-      process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+      process.stdout.write(`${JSON.stringify({ ok: true, ...result, ...(attemptResult ? { attempt: attemptResult } : {}) })}\n`);
     } else {
       if (!hasTaskIdentity(payload)) {
         process.stdout.write('{"ok":true,"skipped":"task_identity_missing"}\n');

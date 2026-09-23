@@ -71,6 +71,27 @@ test("Codex prompt hook injects only a bounded local summary for a relevant prom
   }
 });
 
+test("Codex prompt hook marks attempt injection only when its evidence is in context", async () => {
+  const ctx = await fixture();
+  try {
+    await ctx.store.recordAttempt("default", {
+      id: "hook-attempt", project_id: "org-brain", action_key: "hooks:update",
+      action_label: "Codex hooks を更新", target: "Codex hook", conditions: { version: "v1" },
+      outcome: "failure", result_summary: "hook command が失敗", failure_kind: "transient",
+      performed_at: Date.parse("2026-08-25T00:00:00Z"), executed_by_type: "agent", executed_by: "codex",
+      evidence: [{ ref_type: "task_event", ref_id: "event:hook-failure", content_hash: "a".repeat(64) }],
+      source: "fixture", source_key: "hook-failure"
+    }, { trusted: true });
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit", session_id: "attempt-session", cwd: ctx.workspace,
+      prompt: "Codex hooks の更新失敗を調べて"
+    }, ctx);
+    assert.match(result.hookSpecificOutput.additionalContext, /event:hook-failure/u);
+    const usage = await ctx.store.attemptUseReport("default", "org-brain");
+    assert.deepEqual(usage.map((item) => [item.stage, item.verification_state, item.count]), [["injected", "observed", 1]]);
+  } finally { await ctx.cleanup(); }
+});
+
 test("Codex prompt hook provides complete use-tracking context when the workspace has no default work type", async () => {
   const ctx = await fixture();
   try {

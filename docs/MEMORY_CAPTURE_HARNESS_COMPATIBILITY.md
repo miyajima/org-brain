@@ -173,3 +173,41 @@ configured local MCP before it can execute the local tools.
 and strict local MCP across restarts with network access replaced by a failing
 sentinel. Question answers in this test are fixtures, not evidence that a live
 Codex user has seen or accepted a question.
+
+## Action attempt history (Local schema 29 / Cloud migration 0043)
+
+Action attempts are append-only records separate from extracted memories and
+confirmation candidates. A record has an action and target, normalized conditions,
+actual time and outcome, distinct requester and executor fields, and references to
+the source event and its hash. Corrections append a new record with `supersedes_id`;
+the original remains available for audit. Only a trusted collector with a source
+result can mark an attempt verified. Public MCP reports stay reported and cannot
+assert another person's identity. Imported Codex tool results are verified as
+*tool outcomes*, not as failed interventions; they have unknown failure kind and
+never create deterministic failure patterns by themselves. The ConsentSide
+import first writes a private, hashed dry-run plan and checks that plan again
+before applying it. Raw command output and full conversation text are excluded.
+
+`orgbrain_context_enrich` returns a bounded, independently searched
+`prior_attempts` list in addition to memories. Its `returned` event is separate
+from the optional injection event and from later adoption, execution and checked
+result. Each context query records whether history was returned. Preflight
+decisions retain an event ID for correct/false block feedback. Reported feedback
+and source-verified false blocks are separate counts. The project report also
+exposes confirmed same-condition reexecutions, verified adoption and opaque hook coverage; rates
+remain unknown when their denominator is zero. Only source-backed, verified uses
+may establish an actual effect.
+`orgbrain_action_preflight` shares the same decision code between Local and Cloud:
+a verified deterministic intervention failure with identical known conditions
+blocks until later verified success or correction; changed conditions require a
+stated hypothesis. Missing conditions, reported failures and opaque tool actions
+warn instead. "No accessible prior attempt" describes only visible records.
+
+The Codex PreToolUse/PostToolUse adapter covers direct supported tools and a
+statically inspectable subset of wrapper calls. It records a structured failed
+tool result immediately, even if the task later succeeds. Opaque operations are
+counted as coverage gaps, not counted as prevented failures. This adapter does
+not change Stop capture, the global Astra Harness, or interactive memory
+confirmation. It is enabled only for project IDs explicitly listed in the local
+`ORGBRAIN_ATTEMPT_HOOK_PROJECTS` environment setting. Cloud activation requires a trusted event collector, migration,
+permission checks and a successful local pilot before deployment.

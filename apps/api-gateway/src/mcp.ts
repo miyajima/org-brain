@@ -11,6 +11,7 @@ import {
   type OrgRole
 } from "@org-brain/shared";
 import { memoryUseOperation } from "./memory-use-service";
+import { actionAttemptMetricsReport, actionAttemptUseReport, preflightAction, recordActionAttempt, recordActionAttemptMetricEvent, recordActionAttemptUse, searchActionAttempts } from "./action-attempt-service";
 
 import { permissionsForScopes } from "@org-brain/core";
 import type { Hono } from "hono";
@@ -150,6 +151,7 @@ const contextEnrichInputShape = {
     target_files: z.array(z.string().max(256)).max(32).optional(),
     related_issue_ids: z.array(z.string().max(128)).max(32).optional()
   }),
+  task_id: z.string().max(128).optional(),
   max_tokens: z.number().int().min(500).max(32000).optional(),
   include_sources: z.boolean().optional(),
   include_conflicts: z.boolean().optional(),
@@ -1135,7 +1137,21 @@ class OrgBrainMcpTools {
           agent_id: agent_id ?? principal,
           ...payload
         }, { principal });
-        if (payload.include_domain_recall !== true) return toContent(result);
+        const priorAttempts = payload.project_id
+          ? await searchActionAttempts(this.env, tenantId, {
+              project_id: payload.project_id,
+              query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
+              limit: 3
+            })
+          : [];
+        if (payload.project_id) await recordActionAttemptMetricEvent(this.env, tenantId, {
+          project_id: payload.project_id, kind: "context_query", source: "mcp", returned_count: priorAttempts.length
+        });
+        const attemptUse = await Promise.allSettled(priorAttempts.map((attempt) => recordActionAttemptUse(this.env, tenantId, {
+          project_id: payload.project_id, attempt_id: attempt.id, task_id: payload.task_id, stage: "returned"
+        })));
+        const attemptUsageIds = attemptUse.flatMap((item) => item.status === "fulfilled" ? [item.value.id] : []);
+        if (payload.include_domain_recall !== true) return toContent({ ...result, prior_attempts: priorAttempts, attempt_usage_ids: attemptUsageIds });
         const recall = await getDomainRecall(this.env, {
           tenant_id: tenantId,
           project_id: payload.project_id,
@@ -1149,7 +1165,7 @@ class OrgBrainMcpTools {
           clientInstallationId: this.props.clientInstallationId,
           clientName: this.props.clientType ?? "mcp"
         });
-        return toContent({ ...result, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } });
+        return toContent({ ...result, prior_attempts: priorAttempts, attempt_usage_ids: attemptUsageIds, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } });
       }
     );
 
@@ -1272,6 +1288,91 @@ class OrgBrainMcpTools {
       }
     );
 
+    registerTool(this.server,
+      "orgbrain_attempt_record",
+      { tenant_id: z.string().optional(), attempt: z.object({
+        id: z.string().max(128), project_id: z.string().max(128), action_key: z.string().max(128),
+        action_label: z.string().max(240), attempt_type: z.enum(["intervention", "tool_result"]).optional(), target: z.string().max(160), conditions: z.record(z.string(), z.string()).optional(),
+        outcome: z.enum(["success", "failure", "inconclusive"]), result_summary: z.string().max(500),
+        failure_kind: z.enum(["deterministic", "transient", "unknown"]).optional(), performed_at: z.number().int(), change_hypothesis: z.string().max(500).optional(),
+        executed_by_type: z.enum(["principal", "agent", "unknown"]).optional(), executed_by: z.string().nullable().optional(),
+        evidence: z.array(z.object({ ref_type: z.string(), ref_id: z.string(), content_hash: z.string() })).max(8),
+        source: z.string().max(128), source_key: z.string().max(128), supersedes_id: z.string().nullable().optional()
+      }) },
+      async ({ tenant_id, attempt }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", attempt.project_id);
+        return toContent(await this.auditedMutation(
+          tenantId, "mcp.orgbrain_attempt_record", "action_attempt",
+          () => recordActionAttempt(this.env, tenantId, this.props.principal, attempt)
+        ));
+      }
+    );
+    registerTool(this.server,
+      "orgbrain_attempts_search",
+      { tenant_id: z.string().optional(), project_id: z.string().max(128), action_key: z.string().max(128).optional(), query: z.string().max(1000).optional(), limit: z.number().int().min(1).max(100).optional() },
+      async ({ tenant_id, ...input }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", input.project_id);
+        return toContent(await searchActionAttempts(this.env, tenantId, input));
+      }
+    );
+    registerTool(this.server,
+      "orgbrain_attempt_use_record",
+      { tenant_id: z.string().optional(), id: z.string().max(128).optional(), project_id: z.string().max(128),
+        attempt_id: z.string().max(128), task_id: z.string().max(128).optional(),
+        stage: z.enum(["adopted", "executed", "result_checked"]),
+        evidence: z.array(z.object({ ref_type: z.string(), ref_id: z.string(), content_hash: z.string() })).max(8).optional() },
+      async ({ tenant_id, ...input }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", input.project_id);
+        return toContent(await this.auditedMutation(tenantId, "mcp.orgbrain_attempt_use_record", "action_attempt_use",
+          () => recordActionAttemptUse(this.env, tenantId, input)));
+      }
+    );
+    registerTool(this.server,
+      "orgbrain_attempt_use_report",
+      { tenant_id: z.string().optional(), project_id: z.string().max(128) },
+      async ({ tenant_id, project_id }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", project_id);
+        return toContent(await actionAttemptUseReport(this.env, tenantId, project_id));
+      }
+    );
+    registerTool(this.server,
+      "orgbrain_attempt_metrics_report",
+      { tenant_id: z.string().optional(), project_id: z.string().max(128) },
+      async ({ tenant_id, project_id }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", project_id);
+        return toContent(await actionAttemptMetricsReport(this.env, tenantId, project_id));
+      }
+    );
+    registerTool(this.server,
+      "orgbrain_action_preflight_feedback",
+      { tenant_id: z.string().optional(), id: z.string().max(128).optional(), project_id: z.string().max(128),
+        preflight_event_id: z.string().max(128), verdict: z.enum(["false_block", "correct_block"]),
+        evidence: z.array(z.object({ ref_type: z.string(), ref_id: z.string(), content_hash: z.string() })).max(8).optional() },
+      async ({ tenant_id, ...input }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", input.project_id);
+        return toContent(await this.auditedMutation(tenantId, "mcp.orgbrain_action_preflight_feedback", "action_preflight_feedback",
+          () => recordActionAttemptMetricEvent(this.env, tenantId, {
+            id: input.id, project_id: input.project_id, kind: "feedback", source: "mcp",
+            related_event_id: input.preflight_event_id, feedback_verdict: input.verdict, evidence: input.evidence
+          })));
+      }
+    );
+    registerTool(this.server,
+      "orgbrain_action_preflight",
+      { tenant_id: z.string().optional(), project_id: z.string().max(128), action_key: z.string().max(128), conditions: z.record(z.string(), z.string()).optional(),
+        change_hypothesis: z.string().max(500).optional(), alternatives: z.array(z.object({ action_key: z.string().max(128), label: z.string().max(240) })).max(5).optional() },
+      async ({ tenant_id, ...input }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", input.project_id);
+        return toContent(await preflightAction(this.env, tenantId, input));
+      }
+    );
     registerTool(this.server, 
       "orgbrain_memory_failure_patterns_list",
       {

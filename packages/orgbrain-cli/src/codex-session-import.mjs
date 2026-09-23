@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import { chmod, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import { promisify } from "node:util";
 import {
@@ -28,6 +29,7 @@ import {
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 import { buildProjectCategoryIdentity } from "../../shared/src/memory-capture-v2-runtime.mjs";
+import { safeAttemptActionLabel } from "../../shared/src/attempt-history-runtime.mjs";
 import { autonomyPolicyHash, DEFAULT_AUTONOMY_POLICY, evaluateAutonomyConsensus, normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -981,6 +983,7 @@ export function importOptionsFromCli(args) {
 }
 
 export async function runCodexSessionImportCommand({ store, args, rest = [] }) {
+  if (rest[0] === "codex-attempts") return runCodexAttemptImportCommand({ store, args });
   if (rest[0] !== "codex-sessions") throw new Error("memory import requires codex-sessions");
   const options = importOptionsFromCli(args);
   if (options.execute) {
@@ -998,6 +1001,203 @@ export async function runCodexSessionImportCommand({ store, args, rest = [] }) {
     summary: report.summary,
     output: path.resolve(output)
   };
+}
+
+// Attempt import shares the session/workspace authority checks above, but keeps
+// tool outcomes separate from durable-memory extraction. Opaque wrapper output
+// is excluded; a final assistant statement never verifies a tool result.
+function parsedToolOutput(raw) {
+  const parsed = safeJson(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (Number.isInteger(parsed.exit_code)) return { failed: parsed.exit_code !== 0, summary: `exit code ${parsed.exit_code}` };
+  if (parsed.isError === true || parsed.is_error === true) return { failed: true, summary: "tool error" };
+  if (parsed.isError === false || parsed.is_error === false) return { failed: false, summary: "tool succeeded" };
+  return null;
+}
+
+function staticToolDescriptor(call) {
+  const name = String(call.name ?? "");
+  let args = safeJson(call.arguments);
+  let tool = name;
+  if (name === "exec" && typeof call.input === "string") {
+    const invocations = [...call.input.matchAll(/tools\.exec_command\(\s*(\{[^\n]*\})\s*\)/gu)];
+    if (invocations.length !== 1 || (call.input.match(/\btools\.[a-zA-Z_]+\s*\(/gu) ?? []).length !== 1) return null;
+    args = safeJson(invocations[0][1]);
+    tool = "exec_command";
+  }
+  if (!args || typeof args !== "object" || Array.isArray(args)) return null;
+  if (!["exec_command", "apply_patch"].includes(tool)) return null;
+  const operation = typeof args.cmd === "string" ? args.cmd : typeof args.input === "string" ? args.input : "";
+  if (!operation) return null;
+  const actionLabel = safeAttemptActionLabel(operation, tool);
+  return { tool, operation_hash: hash(operation), action_label: actionLabel };
+}
+
+function commandDescriptor(rawCommand) {
+  const command = Array.isArray(rawCommand) && rawCommand.length >= 3 && rawCommand.at(-2) === "-lc"
+    ? rawCommand.at(-1) : rawCommand;
+  if (typeof command !== "string" || !command.trim()) return null;
+  // A no-match exit is a search result, not an implementation failure.
+  if (/^\s*(?:rg|grep|find|git\s+diff\s+--exit-code)(?:\s|$)/u.test(command)) return null;
+  return {
+    tool: "exec_command",
+    operation_hash: hash(command),
+    action_label: safeAttemptActionLabel(command, "exec_command")
+  };
+}
+
+async function scanAttemptSession(file, context, options, workspaceCache) {
+  const before = await stat(file);
+  const lines = readline.createInterface({ input: createReadStream(file, { encoding: "utf8" }), crlfDelay: Infinity });
+  const calls = new Map();
+  const candidates = [];
+  const exclusions = {};
+  let meta = null;
+  let eligible = null;
+  const exclude = (reason) => { exclusions[reason] = (exclusions[reason] ?? 0) + 1; };
+  for await (const line of lines) {
+    if (!line || REASONING_ROW.test(line)) continue;
+    if (Buffer.byteLength(line) > DEFAULT_MAX_LINE_BYTES) { exclude("line_size_limit"); continue; }
+    if (!meta && !line.includes('"session_meta"')) continue;
+    if (meta && !/(?:function_call|custom_tool_call|mcp_tool_call_end|item_completed)/u.test(line)) continue;
+    const row = safeJson(line);
+    if (!row) { exclude("malformed_row"); continue; }
+    if (!meta) {
+      meta = sessionMeta(row);
+      if (!meta) continue;
+      eligible = ["user", "subagent", "agent_created_thread"].includes(meta.threadSource)
+        && await sameWorkspace(meta.cwd, context.workspaceIdentity, workspaceCache);
+      continue;
+    }
+    if (!eligible) continue;
+    const item = rowPayload(row);
+    if (item?.type === "item_completed" && item.item?.type === "CommandExecution") {
+      const execution = item.item;
+      if (!Number.isInteger(execution.exit_code) || !execution.id) { exclude("unverifiable_command_result"); continue; }
+      const executionCwd = typeof execution.cwd === "string" && execution.cwd.startsWith("file://")
+        ? fileURLToPath(execution.cwd) : execution.cwd;
+      if (executionCwd && !await sameWorkspace(executionCwd, context.workspaceIdentity, workspaceCache)) {
+        exclude("command_other_workspace"); continue;
+      }
+      const descriptor = commandDescriptor(execution.command);
+      if (!descriptor) { exclude("search_or_unsupported_command"); continue; }
+      const performedAt = Number(item.completed_at_ms) || Date.parse(row.timestamp);
+      if (!Number.isFinite(performedAt) || performedAt < options.since || performedAt > options.until) continue;
+      const sourceKey = hash(`${meta.id}\0${execution.id}`);
+      candidates.push({
+        id: sourceKey, project_id: context.project_id, action_key: `tool:${descriptor.tool}:${descriptor.operation_hash.slice(0, 48)}`,
+        action_label: descriptor.action_label, attempt_type: "tool_result", target: context.project_id,
+        conditions: {}, outcome: execution.exit_code === 0 ? "success" : "failure",
+        result_summary: `exit code ${execution.exit_code}`, failure_kind: execution.exit_code === 0 ? undefined : "unknown",
+        performed_at: performedAt, executed_by_type: "agent", executed_by: "codex",
+        evidence: [{ ref_type: "codex_tool_result", ref_id: `${meta.id}:${execution.id}`,
+          content_hash: hash(stableJson({ command: execution.command, exit_code: execution.exit_code,
+            stdout: execution.stdout, stderr: execution.stderr, status: execution.status })) }],
+        source: "codex_session_import", source_key: sourceKey
+      });
+      continue;
+    }
+    const callId = String(item?.call_id ?? "");
+    if (!callId) continue;
+    if (["function_call", "custom_tool_call"].includes(item.type)) {
+      calls.set(callId, staticToolDescriptor(item));
+      continue;
+    }
+    if (!["function_call_output", "custom_tool_call_output"].includes(item.type)) continue;
+    const descriptor = calls.get(callId);
+    calls.delete(callId);
+    if (!descriptor) { exclude("opaque_or_unsupported_tool"); continue; }
+    const result = parsedToolOutput(item.output);
+    if (!result) { exclude("unverifiable_tool_result"); continue; }
+    const performedAt = Date.parse(row.timestamp);
+    if (!Number.isFinite(performedAt) || performedAt < options.since || performedAt > options.until) continue;
+    const sourceKey = hash(`${meta.id}\0${callId}`);
+    candidates.push({
+      id: sourceKey, project_id: context.project_id, action_key: `tool:${descriptor.tool}:${descriptor.operation_hash.slice(0, 48)}`,
+      action_label: descriptor.action_label, attempt_type: "tool_result", target: context.project_id,
+      conditions: {}, outcome: result.failed ? "failure" : "success",
+      result_summary: result.summary, failure_kind: result.failed ? "unknown" : undefined,
+      performed_at: performedAt, executed_by_type: "agent", executed_by: "codex",
+      evidence: [{ ref_type: "codex_tool_result", ref_id: `${meta.id}:${callId}`, content_hash: hash(item.output) }],
+      source: "codex_session_import", source_key: sourceKey
+    });
+  }
+  const after = await stat(file);
+  if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) return { eligible: false, reason: "session_changed_during_scan", candidates: [], exclusions };
+  const failedActionKeys = new Set(candidates.filter((candidate) => candidate.outcome === "failure").map((candidate) => candidate.action_key));
+  const relevantCandidates = candidates.filter((candidate) => failedActionKeys.has(candidate.action_key));
+  return { eligible: Boolean(eligible), reason: eligible ? null : "workspace_mismatch_or_non_user_session",
+    source: eligible ? { path_hash: hash(path.resolve(file)), size: after.size, mtime_ms: Math.floor(after.mtimeMs) } : null,
+    candidates: relevantCandidates, exclusions };
+}
+
+export async function buildCodexAttemptImportReport(options = {}) {
+  const context = await resolveImportContext(options.workspaceRoot ?? process.cwd(), options.env ?? process.env);
+  if (context.mode.cloudWritesAllowed) throw new Error("attempt_backfill_local_only");
+  const files = Array.isArray(options.sessionFiles) ? options.sessionFiles : await listJsonlFiles(options.sessionsRoot ?? DEFAULT_SESSIONS_ROOT);
+  const sources = [];
+  const candidates = [];
+  const excluded = {};
+  const cache = new Map();
+  for (const file of files) {
+    const scanned = await scanAttemptSession(file, context, {
+      since: options.since ?? Number.NEGATIVE_INFINITY,
+      until: options.until ?? Number.POSITIVE_INFINITY
+    }, cache);
+    if (!scanned.eligible) { excluded[scanned.reason] = (excluded[scanned.reason] ?? 0) + 1; continue; }
+    sources.push(scanned.source);
+    candidates.push(...scanned.candidates);
+    for (const [reason, count] of Object.entries(scanned.exclusions)) excluded[reason] = (excluded[reason] ?? 0) + count;
+  }
+  candidates.sort((a, b) => a.performed_at - b.performed_at || a.id.localeCompare(b.id));
+  const plan = { schema_version: 1, source: "codex-attempts", target: {
+    tenant_id: context.tenant_id, project_id: context.project_id, fingerprint: context.target_fingerprint
+  }, sources, candidates, excluded, privacy: { raw_transcript_persisted: false, command_output_persisted: false, reasoning_read: false } };
+  return { mode: "dry-run", plan_hash: attemptPlanDigest(plan), summary: {
+    sessions_scanned: files.length, sessions_matched: sources.length, candidates: candidates.length,
+    nonzero_tool_exits: candidates.filter((item) => item.outcome === "failure").length, excluded
+  }, plan };
+}
+
+function attemptPlanDigest(plan) {
+  // Unrelated sessions can be created between dry-run and apply. Bind only the
+  // matching source snapshots and exact candidate writes, not exclusion counts.
+  const { excluded: _excluded, ...bound } = plan;
+  return hash(stableJson(bound));
+}
+
+export async function applyCodexAttemptImportReport(report, options = {}) {
+  const plan = report?.plan;
+  if (plan?.source !== "codex-attempts" || plan.schema_version !== 1) throw new Error("invalid_attempt_import_plan");
+  const actualHash = attemptPlanDigest(plan);
+  if (!options.expectedPlanHash || options.expectedPlanHash !== actualHash) throw new Error("plan_hash_mismatch");
+  const context = await resolveImportContext(options.workspaceRoot ?? process.cwd(), options.env ?? process.env);
+  if (context.mode.cloudWritesAllowed || context.target_fingerprint !== plan.target.fingerprint) throw new Error("import_target_changed");
+  const current = await buildCodexAttemptImportReport({ ...options, sessionFiles: options.sessionFiles });
+  if (current.plan_hash !== actualHash) throw new Error("import_source_changed");
+  const store = options.store ?? new LocalMemoryStore(options.dbPath ?? process.env.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB);
+  let created = 0;
+  let deduplicated = 0;
+  for (const candidate of plan.candidates) {
+    const result = await store.recordAttempt(context.tenant_id, candidate, { trusted: true });
+    if (result.deduplicated) deduplicated++;
+    else created++;
+  }
+  return { created, deduplicated, plan_hash: actualHash };
+}
+
+async function runCodexAttemptImportCommand({ store, args }) {
+  const options = importOptionsFromCli(args);
+  if (options.execute) {
+    if (!options.planPath) throw new Error("plan_required_for_execute");
+    const report = JSON.parse(await readFile(options.planPath, "utf8"));
+    const result = await applyCodexAttemptImportReport(report, { ...options, store });
+    return { ok: true, mode: "applied", ...result };
+  }
+  const report = await buildCodexAttemptImportReport(options);
+  const output = options.outputPath ?? defaultOutputPath(`${report.plan.target.project_id}-attempts`);
+  await writePrivateJson(output, report);
+  return { ok: true, mode: "dry-run", plan_hash: report.plan_hash, summary: report.summary, output: path.resolve(output) };
 }
 
 export const codexSessionImportInternals = {

@@ -30,6 +30,7 @@ import {
 } from "../../shared/src/memory-contract-v2-contract.mjs";
 import { isAiConsensusCertified } from "../../shared/src/memory-contract-judge.mjs";
 import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
+import { loadWorkspaceConfig, resolveWorkspaceMapping, workspacesFileFromEnv } from "./lib/workspace-config.mjs";
 import {
   previewLocalDomainRecall,
   queryLocalMetrics,
@@ -41,6 +42,20 @@ import {
 const LOCAL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 // Calibrated for the high-precision bridge; explicit callers may lower it.
 const DEFAULT_CONTEXT_MINIMUM_TOTAL_SCORE = 0.065;
+
+async function canonicalLocalProjectId(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const requested = value.trim();
+  const config = await loadWorkspaceConfig(workspacesFileFromEnv());
+  const ids = [...new Set(Object.values(config.workspaces ?? {}).map((entry) => entry?.project_id).filter(Boolean))];
+  if (ids.includes(requested)) return requested;
+  if (requested.startsWith("/")) {
+    const mapped = await resolveWorkspaceMapping(config, requested);
+    if (mapped.entry?.project_id) return mapped.entry.project_id;
+  }
+  const matches = ids.filter((id) => id.toLocaleLowerCase() === requested.toLocaleLowerCase());
+  return matches.length === 1 ? matches[0] : requested;
+}
 export const LOCAL_MCP_PROTOCOL_VERSION = "2026-07-28";
 export const LOCAL_MCP_COMPAT_PROTOCOL_VERSION = "2025-11-25";
 const ORGBRAIN_TOOL_PRESENTATION = Object.freeze({
@@ -395,6 +410,45 @@ const TOOL_DEFINITIONS = [
         is_active: { type: "boolean" }
       }
     }
+  },
+  {
+    name: "orgbrain_attempt_record",
+    description: "Record one action attempt with source evidence. Public calls remain reported until a trusted collector verifies the evidence.",
+    inputSchema: { type: "object", required: ["attempt"], properties: { tenant_id: { type: "string" }, attempt: { type: "object" } } }
+  },
+  {
+    name: "orgbrain_attempts_search",
+    description: "Search evidence-backed attempts in one project. Absence means no accessible matching record, not that the action has never been tried.",
+    inputSchema: { type: "object", required: ["project_id"], properties: {
+      tenant_id: { type: "string" }, project_id: { type: "string" }, action_key: { type: "string" }, query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 }
+    } }
+  },
+  {
+    name: "orgbrain_attempt_use_record",
+    description: "Report adoption, execution, or result checking for an existing attempt with a bounded evidence reference. A public report is not verified use.",
+    inputSchema: { type: "object", required: ["project_id", "attempt_id", "stage"], properties: {
+      tenant_id: { type: "string" }, id: { type: "string" }, project_id: { type: "string" }, attempt_id: { type: "string" },
+      task_id: { type: "string" }, stage: { type: "string", enum: ["adopted", "executed", "result_checked"] },
+      evidence: { type: "array", maxItems: 8, items: { type: "object" } }
+    } }
+  },
+  { name: "orgbrain_attempt_use_report", description: "Read separate returned, injected, adopted, executed, and result-checked counts for one project.",
+    inputSchema: { type: "object", required: ["project_id"], properties: { tenant_id: { type: "string" }, project_id: { type: "string" } } } },
+  { name: "orgbrain_attempt_metrics_report", description: "Read history return, preflight, false-block feedback, repeated failure, and opaque-operation metrics for one project.",
+    inputSchema: { type: "object", required: ["project_id"], properties: { tenant_id: { type: "string" }, project_id: { type: "string" } } } },
+  { name: "orgbrain_action_preflight_feedback", description: "Report whether a recorded block was correct or false. Public feedback remains unverified until source evidence is checked.",
+    inputSchema: { type: "object", required: ["project_id", "preflight_event_id", "verdict"], properties: {
+      tenant_id: { type: "string" }, id: { type: "string" }, project_id: { type: "string" },
+      preflight_event_id: { type: "string" }, verdict: { type: "string", enum: ["false_block", "correct_block"] },
+      evidence: { type: "array", maxItems: 8, items: { type: "object" } }
+    } } },
+  {
+    name: "orgbrain_action_preflight",
+    description: "Check whether a proposed action repeats a verified deterministic failure under the same conditions.",
+    inputSchema: { type: "object", required: ["project_id", "action_key"], properties: {
+      tenant_id: { type: "string" }, project_id: { type: "string" }, action_key: { type: "string" }, conditions: { type: "object" },
+      change_hypothesis: { type: "string", maxLength: 500 }, alternatives: { type: "array", maxItems: 5, items: { type: "object", required: ["action_key", "label"], properties: { action_key: { type: "string" }, label: { type: "string" } } } }
+    } }
   },
   {
     name: "orgbrain_memory_failure_patterns_list",
@@ -847,9 +901,10 @@ async function callTool(store, name, input, toolProfile = "default") {
       constraints: "Use only relevant durable memory and abstain when evidence is insufficient.",
       conditions: "Current workspace and task scope must match."
     };
+    const projectId = await canonicalLocalProjectId(input.project_id);
     const memory = await store.retrieveContext({
       tenant_id: tenantId,
-      project_id: input.project_id ?? null,
+      project_id: projectId,
       work_type: input.work_type ?? "other",
       task_id: boundedString(input.task_id ?? input.task_title, 128) ?? "context-enrich",
       use_context: useContext,
@@ -862,7 +917,16 @@ async function callTool(store, name, input, toolProfile = "default") {
       search_mode: "hybrid_v4"
     });
     const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
-    return { ...memory, ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
+    const prior_attempts = projectId
+      ? await store.searchAttempts(tenantId, { project_id: projectId, query: input.query, limit: 3 })
+      : [];
+    if (projectId) await store.recordAttemptMetricEvent(tenantId, {
+      project_id: projectId, kind: "context_query", source: "mcp", returned_count: prior_attempts.length
+    });
+    const attempt_usage = await Promise.all(prior_attempts.map((attempt) => store.recordAttemptUse(tenantId, {
+      project_id: projectId, attempt_id: attempt.id, task_id: input.task_id ?? null, stage: "returned"
+    })));
+    return { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
   }
   if (name === "orgbrain_domain_context") return previewLocalDomainRecall(store, { ...input, prompt: input.query });
   if (name === "orgbrain_managed_object_search") return searchLocalManagedObjects(store, input);
@@ -1092,6 +1156,18 @@ async function callTool(store, name, input, toolProfile = "default") {
     const { category_id: categoryId, tenant_id: _tenant, ...update } = input;
     return store.updateBusinessCategory(tenantId, categoryId, update);
   }
+  if (name === "orgbrain_attempt_record") return store.recordAttempt(tenantId,
+    { ...input.attempt, executed_by_type: "unknown", executed_by: null },
+    { principal: process.env.ORGBRAIN_USE_PRINCIPAL || process.env.USER || "local" });
+  if (name === "orgbrain_attempts_search") return store.searchAttempts(tenantId, { ...input, project_id: await canonicalLocalProjectId(input.project_id) });
+  if (name === "orgbrain_attempt_use_record") return store.recordAttemptUse(tenantId, { ...input, project_id: await canonicalLocalProjectId(input.project_id) });
+  if (name === "orgbrain_attempt_use_report") return store.attemptUseReport(tenantId, await canonicalLocalProjectId(input.project_id));
+  if (name === "orgbrain_attempt_metrics_report") return store.actionAttemptMetricsReport(tenantId, await canonicalLocalProjectId(input.project_id));
+  if (name === "orgbrain_action_preflight_feedback") return store.recordAttemptMetricEvent(tenantId, {
+    id: input.id, project_id: await canonicalLocalProjectId(input.project_id), kind: "feedback", source: "mcp",
+    related_event_id: input.preflight_event_id, feedback_verdict: input.verdict, evidence: input.evidence
+  });
+  if (name === "orgbrain_action_preflight") return store.preflightAction(tenantId, { ...input, project_id: await canonicalLocalProjectId(input.project_id) });
   if (name === "orgbrain_memory_failure_patterns_list") {
     return store.listFailurePatterns(tenantId, { projectId: input.project_id ?? null });
   }
@@ -1145,6 +1221,18 @@ export function sanitizeAnswerUxToolResult(name, result) {
           (bundle.evidence ?? []).map((item) => item.source_reference)
         )
       },
+      prior_attempts: (result?.prior_attempts ?? []).slice(0, 3).map((attempt) => ({
+        summary_ja: attempt.summary_ja,
+        action: attempt.action_label,
+        target: attempt.target,
+        performed_at: attempt.performed_at,
+        executed_by_type: attempt.executed_by_type,
+        executed_by: attempt.executed_by,
+        outcome: attempt.outcome,
+        result_summary: attempt.result_summary,
+        verification_state: attempt.verification_state,
+        evidence: attempt.evidence
+      })),
       ...(typeof result?.domain_recall_markdown === "string" && result.domain_recall_markdown
         ? { domain_recall_markdown: result.domain_recall_markdown }
         : {})
