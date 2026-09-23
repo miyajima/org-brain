@@ -30,6 +30,7 @@ Usage:
   orgbrain version [--json]
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>] [--root <checkout>]
+  orgbrain workspace resolve [--root <checkout>]
   orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type implementation|review|debug|proposal|support|research|operations|other] [--tag <tag>]
   orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
@@ -729,6 +730,24 @@ async function main() {
     rest = action ? [action, ...rest] : rest;
     action = command;
     command = "memory";
+  }
+
+  if (command === "workspace" && action === "resolve") {
+    const { loadWorkspaceConfig, resolveWorkspaceMapping, workspacesFileFromEnv } = await import("./lib/workspace-config.mjs");
+    const mapping = await resolveWorkspaceMapping(
+      await loadWorkspaceConfig(workspacesFileFromEnv()),
+      args.get("--root", process.cwd())
+    );
+    const projectId = mapping.entry?.project_id ?? null;
+    emit({
+      found: Boolean(projectId),
+      project_id: projectId,
+      tenant_id: mapping.entry?.tenant_id ?? null,
+      workspace_root: mapping.root,
+      source: mapping.source
+    });
+    if (!projectId) process.exitCode = 2;
+    return;
   }
 
   const store = new LocalMemoryStore(args.get("--db", process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB));

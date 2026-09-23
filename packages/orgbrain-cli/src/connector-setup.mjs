@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   loadWorkspaceConfig,
   normalizeWorkspaceRoot,
+  resolveWorkspaceMapping,
   saveWorkspaceConfig
 } from "./lib/workspace-config.mjs";
 import { DEFAULT_AUTONOMY_POLICY, normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
@@ -792,6 +793,26 @@ export async function assertCursorUserHooksSupported(versionOutput) {
   }
 }
 
+async function configuredWorkspaceIdentity(args) {
+  const workspace = args.get("--workspace", process.cwd());
+  const mapping = await resolveWorkspaceMapping(await loadWorkspaceConfig(), workspace);
+  const projectId = args.get("--project-id", null);
+  const tenantId = args.get("--tenant-id", null);
+  if (mapping.source === "project-file") {
+    if (projectId && projectId !== mapping.entry.project_id) {
+      throw new Error("--project-id conflicts with .orgbrain.local.json");
+    }
+    if (tenantId && tenantId !== mapping.entry.tenant_id) {
+      throw new Error("--tenant-id conflicts with .orgbrain.local.json");
+    }
+  }
+  return {
+    workspace,
+    projectId: projectId ?? mapping.entry?.project_id ?? null,
+    tenantId: tenantId ?? mapping.entry?.tenant_id ?? null
+  };
+}
+
 export async function runConnectorCommand(action, rest, args, runtime = {}) {
   if (action !== "setup") throw new Error(`unknown connector command: ${action || "(missing)"}`);
   const agent = rest[0]?.toLowerCase();
@@ -802,9 +823,10 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     : requestedCliPath;
   const runCommand = runtime.runCommand ?? run;
   if (mode === "remote-mcp") {
+    const identity = await configuredWorkspaceIdentity(args);
     const plan = remoteMcpPlan(agent, {
       url: args.get("--url", null),
-      tenantId: args.get("--tenant-id", "default"),
+      tenantId: identity.tenantId ?? "default",
       scope: args.get("--scope", "user"),
       mcpProtocol: args.get("--mcp-protocol", "modern")
     });
@@ -820,12 +842,13 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     if (!["codex", "claude", "cursor"].includes(agent)) {
       throw new Error("--mode cloud-hooks is supported only for codex, claude, or cursor");
     }
+    const identity = await configuredWorkspaceIdentity(args);
     if (!args.flags.has("--execute")) {
       const preview = cloudHooksPlan(agent, {
         installationId: "pending-installation",
-        tenantId: args.get("--tenant-id", "default"),
-        workspace: args.get("--workspace", process.cwd()),
-        projectId: args.get("--project-id", null),
+        tenantId: identity.tenantId ?? "default",
+        workspace: identity.workspace,
+        projectId: identity.projectId,
         dbPath: args.get("--db", null),
         command: args.get("--command", null),
         cliPath: validatedCliPath
@@ -837,8 +860,9 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
           agent,
           mode,
           url: remoteUrl(url, null),
-          tenant_id: args.get("--tenant-id", "default"),
-          workspace: normalizeWorkspaceRoot(args.get("--workspace", process.cwd())),
+          tenant_id: preview.workspace.tenant_id,
+          project_id: preview.workspace.project_id,
+          workspace: preview.workspace.path,
           llm_calls: 0,
           writes: [
             "~/.config/org-brain/clients/<installation-id>/credentials.env",
@@ -861,9 +885,9 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     }
     const preflightPlan = cloudHooksPlan(agent, {
       installationId: "preflight",
-      tenantId: args.get("--tenant-id", "default"),
-      workspace: args.get("--workspace", process.cwd()),
-      projectId: args.get("--project-id", null),
+      tenantId: identity.tenantId ?? "default",
+      workspace: identity.workspace,
+      projectId: identity.projectId,
       dbPath: args.get("--db", null),
       command: args.get("--command", null),
       cliPath: validatedCliPath
@@ -884,12 +908,18 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
       enrollmentCode,
       clientType: agent
     });
+    if (identity.tenantId && installation.tenant_id !== identity.tenantId) {
+      throw new Error(
+        `Client installation ${installation.id} is active, but its tenant does not match the configured workspace identity. ` +
+        "Revoke this installation in Org Brain and use an enrollment for the configured tenant."
+      );
+    }
     const plan = cloudHooksPlan(agent, {
       installationId: installation.id,
       url: mcpUrl,
       tenantId: installation.tenant_id,
-      workspace: args.get("--workspace", process.cwd()),
-      projectId: args.get("--project-id", null),
+      workspace: identity.workspace,
+      projectId: identity.projectId,
       dbPath: args.get("--db", null),
       command: args.get("--command", null),
       cliPath: validatedCliPath
@@ -909,12 +939,13 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
     if (agent !== "codex") throw new Error("--mode minimal-hooks is currently supported only for codex");
     const maintenance = args.get("--maintenance", "daily");
     if (!["daily", "off"].includes(maintenance)) throw new Error("--maintenance must be daily or off");
+    const identity = await configuredWorkspaceIdentity(args);
     const plan = codexMinimalHooksPlan({
       command: args.get("--command", null),
       cliPath: validatedCliPath,
-      workspace: args.get("--workspace", process.cwd()),
-      projectId: args.get("--project-id", null),
-      tenantId: args.get("--tenant-id", null),
+      workspace: identity.workspace,
+      projectId: identity.projectId,
+      tenantId: identity.tenantId,
       dbPath: args.get("--db", null)
     });
     if (maintenance === "daily") {

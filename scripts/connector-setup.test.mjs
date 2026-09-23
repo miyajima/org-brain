@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -410,6 +411,50 @@ test("minimal Codex setup can omit background maintenance", async () => {
   });
   assert.equal(result.dry_run, true);
   assert.equal(result.plan.maintenance, undefined);
+});
+
+test("hook setup reads an ordinary project's private identity without duplicate ID flags", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "orgbrain-project-identity-"));
+  execFileSync("git", ["init", "-q", workspace]);
+  await mkdir(path.join(workspace, "src"));
+  const identityFile = path.join(workspace, ".orgbrain.local.json");
+  await writeFile(identityFile, JSON.stringify({
+    version: 1, tenant_id: "team-one", project_id: "product-one"
+  }), { mode: 0o600 });
+  const values = new Map([
+    ["--workspace", path.join(workspace, "src")],
+    ["--mode", "minimal-hooks"],
+    ["--maintenance", "off"]
+  ]);
+  const args = {
+    flags: new Set(),
+    get: (name, fallback) => values.get(name) ?? fallback
+  };
+  const minimal = await runConnectorCommand("setup", ["codex"], args);
+  assert.equal(minimal.plan.workspace.project_id, "product-one");
+  assert.equal(minimal.plan.workspace.tenant_id, "team-one");
+
+  values.set("--mode", "cloud-hooks");
+  values.set("--url", "https://mcp.example.test/mcp");
+  const cloud = await runConnectorCommand("setup", ["codex"], args);
+  assert.equal(cloud.plan.project_id, "product-one");
+  assert.equal(cloud.plan.tenant_id, "team-one");
+
+  values.set("--mode", "remote-mcp");
+  const remote = await runConnectorCommand("setup", ["codex"], args);
+  assert.match(remote.plan.args.at(-1), /tenant_id=team-one/u);
+
+  values.set("--project-id", "another-project");
+  await assert.rejects(
+    runConnectorCommand("setup", ["codex"], args),
+    /--project-id conflicts with \.orgbrain\.local\.json/u
+  );
+  values.delete("--project-id");
+  values.set("--tenant-id", "another-tenant");
+  await assert.rejects(
+    runConnectorCommand("setup", ["codex"], args),
+    /--tenant-id conflicts with \.orgbrain\.local\.json/u
+  );
 });
 
 test("minimal Codex hook installer preserves existing hooks and is idempotent", async () => {

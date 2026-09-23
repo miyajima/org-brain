@@ -6,6 +6,10 @@ This repository owns all memory extraction and quality decisions. The shared Ast
 
 - A harness does not emit a dedicated JSON memory envelope and does not call a
   memory API.
+- Workspace identity is resolved by project code from the explicit private
+  workspace map, then a private repository-root `.orgbrain.local.json` containing only
+  `version`, `tenant_id`, and `project_id`. The harness does not read or invent
+  this identity; an unmapped project stays unmapped until configured.
 - When durable learning occurs, the agent may call the stateless
   `orgbrain_memory_observe` tool up to three times. This is an internal tool
   event, not a user-facing JSON envelope and not a persisted memory write.
