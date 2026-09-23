@@ -296,7 +296,8 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - OpenClaw local DB (`~/.openclaw/memory/main.sqlite`) is cache/index only
 - Local agent hooks and sync scripts do not write to Cloudflare unless `ORGBRAIN_ENABLE_CLOUD_MEMORY=true`; organization sharing additionally requires `ORGBRAIN_ENABLE_ORG_SHARING=true`.
 - Agent hook連携はAPI (`/v1/memories*`) + hook bridge (`packages/orgbrain-cli/src/hook-memory-bridge.mjs`) で行う
-- hook bridge は新しい workspace で最初に reusable memory を保存する際、`~/.config/org-brain/workspaces.json` に `tenant_id` と `project_id` を一体で保存する。project の既定値は `basename(cwd)` とし、organization sharing では workspace mapping と `ORGBRAIN_TENANT_ID` のどちらからも tenant を解決できない場合は fail closed とする
+- 通常の Git プロジェクトはリポジトリルートの `.orgbrain.local.json` に `version: 1`、`tenant_id`、`project_id` だけを置き、Git に含めず Unix では `0600` にする。資格情報や個人用ポリシーは入れない。明示的な個人用 `~/.config/org-brain/workspaces.json` が優先し、未登録時だけプロジェクトの設定を使う。OrgBrain 自身は既存の個人用設定を使える
+- hook bridge は両設定に登録のない新しい workspace で最初に reusable memory を保存する際、`~/.config/org-brain/workspaces.json` に `tenant_id` と `project_id` を一体で保存する。project の既定値は `basename(cwd)` とし、organization sharing では workspace mapping、プロジェクトの設定、`ORGBRAIN_TENANT_ID` のいずれからも tenant を解決できない場合は fail closed とする
 - local-only で tenant が明示されていない場合、runtime は互換上 `default` scope を使うが mapping には `tenant_id: null` を保存する。これにより後日 organization sharing を有効化した際に暗黙の `default` が明示 tenant より優先されることを防ぐ
 - 旧 `project-names.json` は最初の対象 hook で tenant fallback を付与して移行し、元ファイルは削除・変更しない。workspace 設定は directory `0700` / file `0600`、lock-serialized read-modify-write、atomic replace で保存する
 - Hook bridge は low-signal な会話終了ログを原則保存せず、再利用価値のある内容だけを distilled memory として upsert する

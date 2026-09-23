@@ -19,7 +19,9 @@ Use this skill when the user asks to read/write OrgBrain memory, create tasks, o
    use the configured local MCP for retrieval and propose/confirm/status. Do not
    switch to Cloud or treat local mode as an automatic fallback for Cloud errors.
 2. Never use local `~/.openclaw/memory/main.sqlite` as source of truth.
-3. Use `tenant_id="default"` unless the user explicitly specifies another tenant.
+3. Use the tenant ID resolved from the workspace identity or private mapping,
+   or the user's explicit selection. Use `tenant_id="default"` only for a
+   local single-tenant workspace without another configured tenant.
 4. For OpenClaw-derived memory writes, set `source="openclaw"` and stable `external_key`.
 5. For interactive memory saves, do not write directly with `orgbrain_memories_upsert`. Call `orgbrain_memories_propose`, show the inferred `結論` and `理由`, confirm they are correct, and only then call `orgbrain_memories_confirm`.
 6. If the user corrects the inferred conclusion or reason, pass the corrected fields to `orgbrain_memories_confirm` so the stored rationale is marked as corrected.
@@ -70,7 +72,21 @@ ORGBRAIN_TENANT_ID=default
 ```
 
    The actual path is `~/.config/org-brain/clients/<installation-id>/credentials.env` with mode `0600`.
-6. Keep workspace-to-project routing in `~/.config/org-brain/workspaces.json`; never add repository paths to credential or audit metadata.
+6. For an ordinary Git project, place an untracked `.orgbrain.local.json` at its
+   root with only
+   `{"version":1,"tenant_id":"default","project_id":"<id>"}`. Do not put
+   credentials or personal policy in that file. Keep it private (`chmod 600` on
+   Unix) and add its name to the local exclude file given by
+   `git rev-parse --git-path info/exclude`. An explicit private mapping in
+   `~/.config/org-brain/workspaces.json` takes precedence; OrgBrain's own repo
+   can keep using that private mapping. `connector setup` reads the identity
+   automatically for Remote MCP tenant routing and for hook mappings; do not
+   repeat ID flags unless explicitly overriding a private workspace mapping. Resolve the
+   effective ID with
+   `orgbrain workspace resolve --root <checkout>` before a remote MCP call that
+   needs `project_id`. If it reports `found:false`, do not infer an ID from the
+   directory name. Never inspect bundled `orgbrain.mjs` for routine routing.
+   Never add repository paths to credential or audit metadata.
 7. Verify interactive OAuth with discovery and a read-only call. Verify automatic hooks by calling only the known `orgbrain_memories_capture_rationale` and `orgbrain_memory_extraction_enqueue` tools; the hook identity must be rejected from every other tool. Verify extraction first in `shadow`, where no provider call is allowed, then in an explicitly enabled canary.
 8. Never print the client secret or enrollment code. Report only presence, installation ID, client type, and MCP hostname.
 

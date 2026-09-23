@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { chmod, mkdir, open, readFile, rename, realpath, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, rename, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -14,6 +14,7 @@ export const WORK_TYPES = new Set([
 ]);
 export const DEFAULT_WORKSPACES_FILE = "~/.config/org-brain/workspaces.json";
 export const DEFAULT_LEGACY_PROJECT_NAMES_FILE = "~/.config/org-brain/project-names.json";
+export const PROJECT_IDENTITY_FILE = ".orgbrain.local.json";
 
 export function resolveHomePath(value) {
   if (!value) return value;
@@ -36,11 +37,13 @@ export async function resolveWorkspaceMapping(config, cwdInput) {
   const direct = config.workspaces[cwd];
   if (direct) return { entry: direct, root: cwd, source: "workspace" };
   if (!cwd) return { entry: null, root: null, source: "unmapped" };
+  let projectRoot = cwd;
   try {
     const { stdout } = await execFileAsync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], {
       timeout: 1_000, maxBuffer: 16_384, windowsHide: true
     });
     const [root, common] = stdout.trim().split(/\r?\n/u).map(normalizeWorkspaceRoot);
+    projectRoot = root || cwd;
     const canonicalEntries = {};
     for (const [entryRoot, entry] of Object.entries(config.workspaces)) {
       canonicalEntries[await realpath(entryRoot).catch(() => entryRoot)] = entry;
@@ -54,7 +57,15 @@ export async function resolveWorkspaceMapping(config, cwdInput) {
       }
     }
   } catch {
-    // Non-Git directories retain the existing exact-mapping behavior.
+    // Non-Git directories can use an exact mapping or a private file at cwd.
+  }
+  const projectIdentity = await loadProjectIdentity(projectRoot);
+  if (projectIdentity) {
+    return {
+      entry: normalizeWorkspaceEntry(projectIdentity, projectRoot),
+      root: projectRoot,
+      source: "project-file"
+    };
   }
   return { entry: null, root: null, source: "unmapped" };
 }
@@ -211,6 +222,45 @@ export async function loadWorkspaceConfig(file = workspacesFileFromEnv()) {
     if (error?.code === "ENOENT") return emptyWorkspaceConfig();
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid Org Brain workspace config at ${file}: ${detail}`);
+  }
+}
+
+// A private file at the project root declares only its non-secret identity.
+// User-specific policy, credentials, and overrides remain in the home config.
+export async function loadProjectIdentity(rootInput) {
+  const root = normalizeWorkspaceRoot(rootInput);
+  if (!root) return null;
+  const file = path.join(root, PROJECT_IDENTITY_FILE);
+  let raw;
+  try {
+    const details = await lstat(file);
+    if (!details.isFile() || details.size > 4_096) {
+      throw new Error("must be a regular JSON file of at most 4096 bytes");
+    }
+    if (process.platform !== "win32" && (details.mode & 0o077) !== 0) {
+      throw new Error("must be private (chmod 600)");
+    }
+    const tracked = await execFileAsync("git", ["-C", root, "ls-files", "--", PROJECT_IDENTITY_FILE], {
+      timeout: 1_000, maxBuffer: 4_096, windowsHide: true
+    }).then(({ stdout }) => Boolean(stdout.trim())).catch(() => false);
+    if (tracked) throw new Error("must not be tracked by Git");
+    raw = JSON.parse(await readFile(file, "utf8"));
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || raw.version !== 1) {
+      throw new Error("version must be 1");
+    }
+    const unknown = Object.keys(raw).filter((key) => !["version", "tenant_id", "project_id"].includes(key));
+    if (unknown.length) throw new Error(`unsupported fields: ${unknown.join(", ")}`);
+    const projectId = typeof raw.project_id === "string" ? raw.project_id.trim() : "";
+    const tenantId = raw.tenant_id === null ? null : typeof raw.tenant_id === "string" ? raw.tenant_id.trim() : "";
+    if (!projectId || projectId.length > 128) throw new Error("project_id must be 1-128 characters");
+    if (tenantId !== null && (!tenantId || tenantId.length > 128)) {
+      throw new Error("tenant_id must be null or 1-128 characters");
+    }
+    return { project_id: projectId, tenant_id: tenantId };
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid OrgBrain project identity at ${file}: ${detail}`);
   }
 }
 
