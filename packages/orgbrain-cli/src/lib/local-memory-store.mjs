@@ -5536,6 +5536,39 @@ export class LocalMemoryStore {
     }
   }
 
+  async getVersionByExternalKey({ tenant_id: tenantId = "default", source, external_key: externalKey, version = null }) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const current = db.prepare(
+        "SELECT id, current_version FROM memories WHERE tenant_id = ? AND source = ? AND external_key = ?"
+      ).get(tenantId, source, externalKey);
+      if (!current) throw new Error("memory_not_found");
+      const requestedVersion = version ?? Number(current.current_version);
+      const historical = db.prepare(
+        `SELECT version, operation, snapshot_json, content_hash, created_at
+         FROM memory_versions
+         WHERE tenant_id = ? AND memory_id = ? AND version = ?`
+      ).get(tenantId, current.id, requestedVersion);
+      if (!historical) throw new Error("memory_version_not_found");
+      return {
+        tenant_id: tenantId,
+        source,
+        external_key: externalKey,
+        memory_id: current.id,
+        version: Number(historical.version),
+        current_version: Number(current.current_version),
+        is_current: Number(historical.version) === Number(current.current_version),
+        operation: historical.operation,
+        content_hash: historical.content_hash,
+        created_at: historical.created_at,
+        memory: JSON.parse(historical.snapshot_json)
+      };
+    } finally {
+      db.close();
+    }
+  }
+
   async syncMemoryUse({apiBase, apiKey, limit=50, tenantId='default', attestationKey=process.env.ORGBRAIN_USE_ATTESTATION_KEY, fetchImpl=fetch}={}) {
     await this.init();
     const db=this.open();
