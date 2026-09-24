@@ -42,7 +42,8 @@ const ANSWER_GUIDANCE_CHAR_RESERVE = 600;
 function hasRetrievalSignal(result: MemorySearchHit): boolean {
   const breakdown = result.score_breakdown;
   if (!breakdown) return true;
-  return Number(breakdown.lexical) !== 0 || Number(breakdown.semantic) !== 0;
+  return [breakdown.lexical, breakdown.semantic, breakdown.graph]
+    .some((score) => typeof score === "number" && Number.isFinite(score) && score > 0);
 }
 
 function parseProfileRequest(raw: unknown): {
