@@ -1,0 +1,4 @@
+interface:
+  display_name: "OrgBrain LLM Wiki Import"
+  short_description: "Import confirmed Wiki decisions into OrgBrain"
+  default_prompt: "Use $org-brain-llm-wiki-import to extract and propose compact confirmed decisions from my configured LLM Wiki."

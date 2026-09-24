@@ -2177,6 +2177,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let shadowReport = null;
   let learningReport = null;
   let learningReviewCandidates = [];
+  let verifiedObservedRecords = [];
   let extractionPrepared = null;
   let extractionEnqueue = null;
   let confirmationQueue = [];
@@ -2257,11 +2258,13 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       }
     }
   }
-  if (inputSourceName === "codex-stop" && ["shadow", "on", "confirm"].includes(workspace.memoryLearningMode)) {
+  if (inputSourceName === "codex-stop" && ["shadow", "on", "confirm", "eager"].includes(workspace.memoryLearningMode)) {
     const observed = await prepareObservedLearningRecords(normalizedRecord, workspace, tenantId, {
-      ...(evidenceRows.length ? { rows: evidenceRows } : {})
+      ...(evidenceRows.length ? { rows: evidenceRows } : {}),
+      includeDeterministicReviewCandidates: workspace.memoryLearningMode !== "eager"
     });
     learningReport = observed.report;
+    verifiedObservedRecords = observed.records ?? [];
     learningReviewCandidates = [...(observed.reviewCandidates ?? []), ...learningReviewCandidates]
       .filter((candidate, index, all) => all.findIndex((item) => item.external_key === candidate.external_key) === index)
       .slice(0, 3);
@@ -2291,9 +2294,16 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       confirmation_continuation: confirmationContinuation });
   }
   if (inputSourceName === "codex-stop" && workspace.memoryLearningMode === "eager") {
-    const eagerRecords = extractionPrepared?.eagerRecords ?? [];
+    const eagerRecords = [...verifiedObservedRecords, ...(extractionPrepared?.eagerRecords ?? [])]
+      .filter((item, index, all) => all.findIndex((candidate) =>
+        (candidate.canonicalKey && candidate.canonicalKey === item.canonicalKey)
+        || candidate.externalKey === item.externalKey
+      ) === index)
+      .slice(0, MEMORY_CAPTURE_HOOK_PROFILE.max_candidates);
     if (eagerRecords.length === 0) {
-      const reasonCode = shadowReport?.latest_retrieval !== "miss"
+      const reasonCode = Number(learningReport?.observed_count ?? 0) > 0
+        ? "eager-no-verified-observation"
+        : shadowReport?.latest_retrieval !== "miss"
         ? shadowReport?.latest_retrieval == null && shadowReport?.opaque_tool_wrappers > 0
           ? "eager-native-tool-evidence-unavailable" : "eager-no-retrieval-miss"
         : Number(shadowReport?.successful_actions_after_miss ?? 0) === 0

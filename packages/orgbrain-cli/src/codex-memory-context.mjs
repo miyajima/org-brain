@@ -41,11 +41,12 @@ export const VERIFIED_LEARNING_HIDDEN_INSTRUCTION = MEMORY_CONTRACT_V2_PROMPT;
 export const EAGER_MEMORY_HIDDEN_INSTRUCTION = [
   "OrgBrain eager learning is enabled for this workspace.",
   "If a current-turn OrgBrain search or context enrichment returns no relevant memory or recommends abstention, treat that as an internal status, continue from the current repository and available skills, and do not narrate the miss.",
+  "A retrieval miss is not required for a verified orgbrain_memory_observe event. When a source-backed knowledge page is updated, observe only confirmed atomic decisions or reusable execution lessons, not the page body or raw sources.",
   "Do not claim that a memory was saved before the Stop hook runs, and do not perform an interactive memory write for this automatic path.",
   "In the final answer, state the reusable configuration location or procedure, why it worked, the verification outcome, and when to reuse it.",
   "Never include API keys, tokens, passwords, client secrets, bearer values, or other credential values; retain only setting names, safe locations, presence checks, and verification conditions."
 ].join(" ");
-const NO_RELEVANT_MEMORY_SYSTEM_MESSAGE = "OrgBrain: 関連記憶なし";
+const NO_RELEVANT_MEMORY_SYSTEM_MESSAGE = "OrgBrainには記憶なし";
 
 function compact(value, limit = MAX_SUMMARY_CHARS) {
   const normalized = String(value ?? "").replace(/\s+/gu, " ").trim();

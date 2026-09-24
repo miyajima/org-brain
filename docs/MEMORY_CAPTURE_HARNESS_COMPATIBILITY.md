@@ -13,6 +13,17 @@ This repository owns all memory extraction and quality decisions. The shared Ast
 - When durable learning occurs, the agent may call the stateless
   `orgbrain_memory_observe` tool up to three times. This is an internal tool
   event, not a user-facing JSON envelope and not a persisted memory write.
+- `memory_learning_mode=eager` consumes verified `orgbrain_memory_observe`
+  events even when no retrieval miss occurred. This is the preferred generic
+  bridge for source-backed knowledge maintenance: observe only an atomic
+  confirmed decision or reusable execution lesson with rationale, reuse
+  conditions and current-turn evidence. Never mirror the page body or raw source
+  corpus into OrgBrain. Existing evidence verification, sensitivity screening,
+  deduplication and the three-candidate turn limit remain mandatory.
+- Optional LLM Wiki backfill is isolated in the `org-brain-llm-wiki-import`
+  skill. Its discovery helper is read-only and returns a successful no-op when
+  LLM Wiki is not configured, disabled or its vault is unavailable. Neither
+  OrgBrain runtime nor LLM Wiki runtime imports or invokes the other.
 - The Stop hook scans only the current turn of the existing transcript (from a
   backwards read capped at 4 MiB), verifies successful observe calls against
   real tool/file/user evidence, and sends at most one batch to the known
