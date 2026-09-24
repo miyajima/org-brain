@@ -34,6 +34,37 @@ principal with an active profile. An agent or unknown executor is labelled
 accordingly. The project ID must resolve to the same workspace mapping used
 for capture.
 
+### Turn-start failure context
+
+The existing local Codex prompt hook supplies at most two failure entries across
+lessons and execution history. Complete verified lessons come first and retain
+their applicability, failed approach, cause, correction, verified outcome, reuse
+rule and evidence. Legacy or incomplete lessons are explicitly labelled as
+reference material; an unknown tool failure never becomes a prohibition or an
+inferred diagnosis. A dated failure does not establish that it remains unresolved.
+The agent checks current conditions and subsequent success before retrying.
+
+Entries sharing an explicit event/hash reference are deduplicated. Among retrieved
+attempts with the same action, target, attempt type, known conditions and verification level, only the
+latest result is presented. This is a bounded retrieval view, not an exhaustive
+resolution of the action's history; existing action preflight remains separate.
+
+Confirmed commitments and lifecycle instructions retain budget priority. Each
+history entry is packed atomically, including its complete conditions; oversized
+entries are omitted rather than truncated. The complete context, answer guidance
+and usage receipt stay within 7,168 UTF-8 bytes. Only selected entries receive an
+injection record. This means inclusion in hook output, not verified host delivery,
+agent adoption or demonstrated failure avoidance. The Astra wrapper's existing
+transcript-backed reuse remains unchanged.
+
+Run `node --test scripts/hook-failure-context.test.mjs` for the focused checks.
+To include the packaged hook subprocess test, build the standalone CLI and set
+`ORGBRAIN_TEST_BUNDLE` to its absolute path when running that test file. The test
+uses a private temporary database and fixture workspace, never the user's memory
+database. Confirm native session delivery separately before claiming live use.
+Optionally set `ORGBRAIN_TEST_CONTEXT_WRAPPER` to the configured Astra
+`context_hook.py` to check the same packaged output through that adapter.
+
 Before a proposed action, call `orgbrain_action_preflight` with a stable
 `action_key`, project ID and concrete conditions. The result is one of:
 

@@ -84,6 +84,13 @@ The fixture fixes these behaviors:
 The UserPromptSubmit hook supplies the optional internal observe instruction.
 Changing the global harness remains unnecessary and outside this contract.
 
+The local prompt hook formats relevant failure lessons and past attempts inside
+the existing context budget. Verified lessons preserve complete reuse conditions;
+legacy lessons and tool exits remain historical references. Packing precedes use
+receipts, so omitted entries are not marked injected. No new harness instruction,
+LLM call, capture boundary or persistence schema is introduced. See
+[turn-start failure context](ACTION_ATTEMPT_HISTORY.md#turn-start-failure-context).
+
 ## Human review feedback
 
 `memory_learning_mode=confirm` is the initial Codex rollout setting. Stop stores
