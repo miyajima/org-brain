@@ -356,6 +356,63 @@ test("local sparse embeddings retrieve a synonym without external services", asy
   }
 });
 
+test("legacy context retrieval keeps a graph-linked memory without lexical or semantic matches", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath);
+    const seed = await store.capture(captureInput({
+      external_key: "graph:seed",
+      content: "Photonic orrery calibration is required.",
+      summary: "Photonic orrery calibration",
+      rationale: null,
+      reuse_rule: null,
+      tags: [],
+      entities: []
+    }));
+    const linked = await store.capture(captureInput({
+      external_key: "graph:linked",
+      content: "The cobalt teapot belongs in the archive.",
+      summary: "Cobalt teapot archive",
+      rationale: null,
+      reuse_rule: null,
+      tags: [],
+      entities: []
+    }));
+    const db = new DatabaseSync(ctx.dbPath);
+    try {
+      db.prepare(`INSERT INTO memory_edges
+        (id, tenant_id, from_memory_id, to_memory_id, relation, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run("graph-test-edge", "personal", seed.memory_id, linked.memory_id, "related_to", Date.now());
+    } finally {
+      db.close();
+    }
+
+    const results = await store.search({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "photonic orrery",
+      search_mode: "hybrid_v2"
+    });
+    const graphHit = results.find((result) => result.memory.id === linked.memory_id);
+    assert.ok(graphHit);
+    assert.equal(graphHit.score.lexical, 0);
+    assert.equal(graphHit.score.semantic, 0);
+    assert.ok(graphHit.score.graph > 0);
+
+    const context = await store.retrieveContext({
+      tenant_id: "personal",
+      project_id: "orgbrain",
+      query: "photonic orrery",
+      search_mode: "hybrid_v2",
+      top_k: 5
+    });
+    assert.ok(context.results.some((result) => result.memory.id === linked.memory_id));
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test("hybrid_v3 searches derived units, preserves ACLs, and rebuilds projections", async () => {
   const ctx = await fixture();
   try {
