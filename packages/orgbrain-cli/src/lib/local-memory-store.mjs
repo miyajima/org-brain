@@ -5658,7 +5658,11 @@ export class LocalMemoryStore {
       at,
       search_mode: searchMode
     });
-    results = results.filter((result) => Number(result.score?.lexical) !== 0 || Number(result.score?.semantic) !== 0);
+    results = results.filter((result) => {
+      const score = result.score;
+      return [score?.lexical, score?.semantic, score?.graph]
+        .some((value) => typeof value === "number" && Number.isFinite(value) && value > 0);
+    });
     const eligibleForJudgment = (memory, currentAt = at) => (!projectId || memory.project_id == null || memory.project_id === projectId)
       && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
       && (memory.valid_from == null || memory.valid_from <= currentAt)
