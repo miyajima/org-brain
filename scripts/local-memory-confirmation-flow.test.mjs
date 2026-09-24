@@ -68,6 +68,58 @@ test('eager mode closes a context-enrichment miss with one verified secret-safe 
   } finally {await rm(root,{recursive:true,force:true});}
 });
 
+test('eager mode persists a verified explicit observation without requiring a retrieval miss',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'local-eager-observation-'));
+  try {
+    const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'empty.env'),transcript=join(root,'turn.jsonl');
+    await writeFile(envFile,'ORGBRAIN_LOCAL_HOOK_CAPTURE=true\n');
+    await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',default_work_type:'implementation',memory_learning_mode:'eager',memory_capture_v2_mode:'on'}}}));
+    const userDecision='LLM Wikiの全文ではなく、確定した決定・理由・再利用条件だけをOrgBrainへ保存します。';
+    const observation={
+      record_type:'learning_observation',schema_version:2,lesson_type:'decision',capture_intent:'verify',
+      trigger:'source-backed knowledge maintenance completed',
+      applicability:{target_files:[],components:['llm-wiki-memory-index']},
+      decision_type:'implementation',decision_key:'llm-wiki-memory-index',
+      question:'LLM Wikiの知識をOrgBrainへどの粒度で保存しますか？',
+      decision:'LLM Wikiの全文ではなく、確定した決定・理由・再利用条件だけをOrgBrainへ保存する。',
+      rationale:'Wikiは説明と原資料を保持し、OrgBrainは再利用可能な判断索引に限定すると重複と検索ノイズを抑えられる。',
+      reuse_when:'Source-backed knowledge maintenance confirms a durable decision or execution lesson.',
+      constraints:['Do not copy page bodies or raw sources.'],
+      alternatives:[{alternative:'Mirror the full Wiki page into OrgBrain.',reason_rejected:'Duplicates source content and expands retrieval noise.'}],
+      evidence_selectors:[
+        {type:'user_statement',ref:userDecision,supports:['decision','rationale']},
+        {type:'command',ref:'node --version',supports:['observed_outcome']}
+      ],
+      gaps:[]
+    };
+    const observed=await callLocalMcpTool(new LocalMemoryStore(dbPath),'orgbrain_memory_observe',observation);
+    assert.equal(observed.accepted,true,JSON.stringify(observed));
+    const rows=[
+      {type:'turn_context',payload:{turn_id:'turn-eager-observation',cwd:root}},
+      {type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:userDecision}]}},
+      {type:'response_item',payload:{type:'function_call',call_id:'verify',name:'exec_command',arguments:JSON.stringify({cmd:'node --version'})}},
+      {type:'response_item',payload:{type:'function_call_output',call_id:'verify',output:JSON.stringify({exit_code:0,status:'succeeded'})}},
+      {type:'response_item',payload:{type:'function_call',call_id:'observe',name:'orgbrain_memory_observe',arguments:JSON.stringify(observation)}},
+      {type:'response_item',payload:{type:'function_call_output',call_id:'observe',output:JSON.stringify(observed)}},
+      {type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'決定事項だけを軽量に保存する方式へ更新しました。'}]}}
+    ];
+    await writeFile(transcript,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
+    const env={...getDefaultEnvironment(),ORGBRAIN_HOOK_ENV_FILES:envFile,ORGBRAIN_WORKSPACES_FILE:workspaces,ORGBRAIN_LOCAL_DB:dbPath,
+      ORGBRAIN_ENABLE_CLOUD_MEMORY:'false',ORGBRAIN_ENABLE_ORG_SHARING:'false',ORGBRAIN_MEMORY_EXTRACTION_MODE:'off',ORGBRAIN_TENANT_ID:'tenant'};
+    const output=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'session-eager-observation',turn_id:'turn-eager-observation',cwd:root,transcript_path:transcript,last_assistant_message:'決定事項だけを軽量に保存する方式へ更新しました。'}),encoding:'utf8'}));
+    assert.equal(output.ok,true);
+    assert.equal(output.created,1,JSON.stringify(output));
+    assert.equal(output.capture_v2_shadow.latest_retrieval,null);
+    assert.equal(output.verified_learning_shadow.observed_count,1);
+    const stored=await memories(new LocalMemoryStore(dbPath),'tenant');
+    assert.equal(stored.length,1);
+    assert.equal(stored[0].content,observation.decision);
+    assert.equal(stored[0].rationale,observation.rationale);
+    assert.equal(stored[0].reuse_rule,observation.reuse_when);
+    assert.doesNotMatch(stored[0].content,/page body|raw source/iu);
+  } finally {await rm(root,{recursive:true,force:true});}
+});
+
 test('eager mode saves nothing without a retrieval miss or a safe durable candidate',async()=>{
   const root=await mkdtemp(join(tmpdir(),'local-eager-negative-'));
   try {
