@@ -35,6 +35,24 @@ const input = (overrides = {}) => ({ stage: "use", context: { project_id: "p", u
 const assessmentInput = (overrides = {}) => input({ stage: "capture",
   policy: { mode: "shadow", capture_assessment_mode: "shadow" }, ...overrides });
 
+test("capture accepts independently rounded API probabilities and score, but rejects larger errors", async () => {
+  for (const [score, probabilities, accepted] of [
+    [2.07, { "0": 0, "1": 0, "2": .92, "3": .08 }, true],
+    [2.07, { "0": .01, "1": .01, "2": .88, "3": .10 }, true],
+    [2.20, { "0": 0, "1": 0, "2": .92, "3": .08 }, false],
+    [2.07, { "0": 0, "1": 0, "2": .82, "3": .08 }, false]
+  ]) {
+    const result = await createMemoryJudge({ transport: async (request) => {
+      const raw = assessmentResponse(request);
+      raw.answers.c0_lesson_type.probabilities = { decision: .01, success: .98, failure: .01, unknown: .01 };
+      raw.answers.c0_utility = { type: "score", score, probabilities, confidence: .92 };
+      return raw;
+    } })(assessmentInput());
+    assert.equal(result.reason_code === "invalid_response", !accepted);
+    if (accepted) assert.equal(result.decisions[0].capture_assessment.utility.score, score);
+  }
+});
+
 test("capture assessment requires explicit shadow opt-in and cannot alter active/use requests", async () => {
   const judge = createMemoryJudge({ transport: async (r) => {
     assert.equal(Object.keys(r.questions).length, 6);
@@ -360,6 +378,12 @@ test("local capture assessment preserves lesson evidence, caches across instance
     assert.equal(traces[0].decisions[0].capture_assessment.utility.value, 2.99);
     assert.equal(traces[0].decisions[0].capture_assessment.basis, "prediction");
     assert.equal(traces[1].request_count, 0);
+    assert.equal(traces[0].telemetry_version, "memory-judgment-telemetry/v2");
+    assert.ok(Number.isFinite(traces[0].recorded_at));
+    assert.notEqual(traces[0].event_id, traces[1].event_id);
+    assert.match(traces[0].project_hash, /^[a-f0-9]{64}$/);
+    assert.match(traces[0].policy_hash, /^[a-f0-9]{64}$/);
+    assert.equal(traces[0].decisions[0].candidate_snapshot_hash, traces[1].decisions[0].candidate_snapshot_hash);
     for (const text of [JSON.stringify(traces), (await readFile(`${dbPath}.jev.sqlite`)).toString()]) {
       assert.doesNotMatch(text, /検証済みの再起動手順|同じ条件で再実行が成功した|fixture-id|must-not-be-copied/u);
     }
