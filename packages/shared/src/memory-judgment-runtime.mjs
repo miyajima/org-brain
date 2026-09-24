@@ -119,10 +119,14 @@ export function validateJudgmentResponse(raw, questions) {
     }
     if (!["choice", "score"].includes(question.type) || !probability(answer.confidence)) throw new Error("invalid_response");
     const labels = Object.keys(question.criteria);
+    // OpenRouter Decisions rounds each probability and score to two decimals.
+    // Bound accumulated rounding error without normalizing the reported values.
+    const rounding = 0.005;
+    const epsilon = 1e-12;
     const probabilities = answer.probabilities;
     if (!probabilities || Array.isArray(probabilities) || Object.keys(probabilities).sort().join("\0") !== [...labels].sort().join("\0")
       || !Object.values(probabilities).every(probability)
-      || Math.abs(Object.values(probabilities).reduce((a, b) => a + b, 0) - 1) > 0.001) throw new Error("invalid_response");
+      || Math.abs(Object.values(probabilities).reduce((a, b) => a + b, 0) - 1) > labels.length * rounding + epsilon) throw new Error("invalid_response");
     const distribution = Object.fromEntries(labels.map((label) => [label, probabilities[label]]));
     if (question.type === "choice") {
       if (!labels.includes(answer.choice) || probabilities[answer.choice] + 0.001 < Math.max(...Object.values(probabilities))) throw new Error("invalid_response");
@@ -130,7 +134,7 @@ export function validateJudgmentResponse(raw, questions) {
     } else {
       const expected = labels.reduce((sum, label) => sum + Number(label) * probabilities[label], 0);
       if (typeof answer.score !== "number" || !Number.isFinite(answer.score) || answer.score < 0 || answer.score > labels.length - 1
-        || Math.abs(answer.score - expected) > 0.01) throw new Error("invalid_response");
+        || Math.abs(answer.score - expected) > rounding * (1 + labels.reduce((sum, label) => sum + Number(label), 0)) + epsilon) throw new Error("invalid_response");
       // Never persist provider-generated legend text or arbitrary extra fields.
       answers[key] = { type: "score", score: answer.score, confidence: answer.confidence, probabilities: distribution };
     }

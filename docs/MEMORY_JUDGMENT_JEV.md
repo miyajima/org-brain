@@ -79,6 +79,28 @@ recover は整合性・期限を検査し、既存保存経路を復元する。
 
 ## 評価
 
+### 継続的な振り返り
+
+`memory-judgment-telemetry/v2` は本文を追加保存せず、判定日時・イベントID・
+プロジェクト/テナントのハッシュ・候補ID/入力全体のハッシュ・ポリシー/ビルド情報を
+既存の0600メトリクスへ記録する。候補入力のハッシュは後日の同一版照合用であり、
+原文を復元できない。元データが消失・変更した場合は内容評価を未検証にする。
+
+```sh
+node scripts/memory-judgment-report.mjs --file /absolute/path/memory.sqlite.jev-metrics.jsonl --project org-brain --days 7 --out /absolute/path/new-report.json
+```
+
+APIを呼ばず、直近7日とその前の7日を集計する。モデル・ポリシー・ビルド・判断点が
+異なるものは分離する。費用不明を0にせず、キャッシュとAPI時間を分離する。
+旧ログは日時やプロジェクトを推測せず集計対象外とする。出力先は新規ファイルのみ。
+判定回数と候補の異なる版の件数を区別し、食い違い・除外推奨の照合用ハッシュを最大10件出す。
+ログ欠落はデータ不足であり、正常稼働や効果ゼロの証拠ではない。
+
+保留率・分類不一致・費用は運用指標であって精度ではない。既存ラベルも正解ではない。
+精度には元の同一版と人手評価、タスク改善には条件を揃えた比較と成果物が必要。
+shadow中の作業成果をJevの効果とみなさず、レポートの精度・成功率改善はnullを維持する。
+定期確認でも自動の閾値変更・active化・再API評価・記憶書き換えは行わない。
+
 ```sh
 pnpm test:memory-judgment
 pnpm memory:judgment:evaluate --dataset scripts/fixtures/memory-judgment-v1.json --out /tmp/jev-fixture-new

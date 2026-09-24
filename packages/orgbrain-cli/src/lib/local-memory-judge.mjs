@@ -1,6 +1,6 @@
 import { appendFile, chmod, lstat, mkdir, open, readFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import {
   createMemoryJudge, createOpenRouterMemoryTransport, MEMORY_JUDGMENT_MODEL,
@@ -8,6 +8,7 @@ import {
 } from "../../../shared/src/memory-judgment-runtime.mjs";
 import { qualifyMemoryJudgment } from "../../../shared/src/memory-judgment-evaluation.mjs";
 import { localJudgmentImplementationHash } from "./local-memory-judgment-binding.mjs";
+import { CLI_BUILD_INFO } from "../build-info.mjs";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -129,10 +130,13 @@ export function createLocalMemoryJudge({ dbPath, env = process.env, transport, s
     const result = await judge({ stage, context, candidates, policy, active_qualified: activeQualified });
     if (policy.mode !== "off") {
       // No prompt, original ID, text, credentials, or provider error bodies.
-      const trace = { ...result, decisions: result.decisions.map(({ id, duplicate_of, scores, ...decision }) => ({ ...decision, candidate_hash: null, scores })) };
-      for (let index = 0; index < trace.decisions.length; index++) trace.decisions[index].candidate_hash = await judgmentHash(candidates[index].id);
       const file = `${dbPath}.jev-metrics.jsonl`;
       try {
+        const trace = { ...result, telemetry_version: "memory-judgment-telemetry/v2", event_id: randomUUID(), recorded_at: Date.now(), build: CLI_BUILD_INFO,
+          project_hash: await judgmentHash(context.project_id), tenant_hash: await judgmentHash(context.tenant_id ?? "default"),
+          policy_hash: await memoryJudgmentPolicyHash(policy.threshold),
+          decisions: await Promise.all(result.decisions.map(async ({ id, duplicate_of, ...decision }, index) => ({ ...decision,
+            candidate_hash: await judgmentHash(id), candidate_snapshot_hash: await judgmentHash(candidates[index]) }))) };
         try { const info = await lstat(file); if (!info.isFile() || info.isSymbolicLink()) return result; }
         catch (error) { if (error.code !== "ENOENT") return result; }
         await appendFile(file, `${JSON.stringify(trace)}\n`, { mode: 0o600 });
