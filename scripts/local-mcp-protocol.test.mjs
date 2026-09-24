@@ -96,6 +96,74 @@ test("strict local MCP negotiates 2026-07-28 and survives a process restart betw
   }
 });
 
+test("local MCP reads an exact external-key version and confirmation replay does not duplicate writes", async () => {
+  const ctx = await fixture();
+  let connection;
+  try {
+    connection = await connect(ctx.dbPath);
+    const propose = async (content) => {
+      const response = await connection.client.callTool({
+        name: "orgbrain_memories_propose",
+        arguments: {
+          tenant_id: "default",
+          source: "myclone",
+          item: {
+            external_key: "judgment-profile",
+            content,
+            summary: "MyClone judgment profile",
+            project_id: "myclone",
+            tags: ["judgment-profile"]
+          }
+        }
+      });
+      return JSON.parse(response.content[0].text);
+    };
+    const confirm = async (token) => {
+      const response = await connection.client.callTool({
+        name: "orgbrain_memories_confirm",
+        arguments: { tenant_id: "default", confirmation_token: token, approved: true }
+      });
+      return JSON.parse(response.content[0].text);
+    };
+    const getVersion = async (version) => {
+      const response = await connection.client.callTool({
+        name: "orgbrain_memory_version_get",
+        arguments: {
+          tenant_id: "default",
+          source: "myclone",
+          external_key: "judgment-profile",
+          ...(version == null ? {} : { version })
+        }
+      });
+      return JSON.parse(response.content[0].text);
+    };
+
+    const firstProposal = await propose('{"schemaVersion":1,"rules":{"value":"v1"}}');
+    const first = await confirm(firstProposal.confirmation_token);
+    assert.equal(first.memory_version, 1);
+    const replayed = await confirm(firstProposal.confirmation_token);
+    assert.deepEqual(replayed, first);
+
+    const secondProposal = await propose('{"schemaVersion":1,"rules":{"value":"v2"}}');
+    const second = await confirm(secondProposal.confirmation_token);
+    assert.equal(second.memory_id, first.memory_id);
+    assert.equal(second.memory_version, 2);
+
+    const historical = await getVersion(1);
+    const current = await getVersion(null);
+    assert.equal(historical.version, 1);
+    assert.equal(historical.current_version, 2);
+    assert.equal(historical.is_current, false);
+    assert.ok(historical.memory.content.includes('"v1"'));
+    assert.equal(current.version, 2);
+    assert.equal(current.is_current, true);
+    assert.ok(current.memory.content.includes('"v2"'));
+  } finally {
+    if (connection) await close(connection);
+    await ctx.cleanup();
+  }
+});
+
 test("legacy local MCP is explicit and deadline bounded", async () => {
   const ctx = await fixture();
   let connection;

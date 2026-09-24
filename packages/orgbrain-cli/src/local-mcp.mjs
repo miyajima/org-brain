@@ -69,6 +69,20 @@ const ORGBRAIN_TOOL_PRESENTATION = Object.freeze({
 const TOOL_DEFINITIONS = [
   {name:"orgbrain_memories_confirmation_status",description:"Read a local proposal or durable save receipt after an uncertain response. Does not save or ask again.",inputSchema:{type:"object",required:["confirmation_token"],properties:{tenant_id:{type:"string"},confirmation_token:{type:"string",minLength:1,maxLength:64}}}},
   {
+    name: "orgbrain_memory_version_get",
+    description: "Read one exact local memory version by tenant, source, and external key. Omit version only when the current version is explicitly wanted.",
+    inputSchema: {
+      type: "object",
+      required: ["source", "external_key"],
+      properties: {
+        tenant_id: { type: "string" },
+        source: { type: "string", minLength: 1, maxLength: 64 },
+        external_key: { type: "string", minLength: 1, maxLength: 256 },
+        version: { type: "integer", minimum: 1 }
+      }
+    }
+  },
+  {
     name: "orgbrain_memories_propose",
     description: "Propose one local memory and inferred rationale without persisting it. Show the conclusion and reason to the user before confirming.",
     inputSchema: {
@@ -805,7 +819,7 @@ async function confirmLocalMemory(store, input) {
     },
     buildReceipt(payload,saved) {
       return {tenant_id:tenantId,approved:input.approved,saved:input.approved===true,
-        ...(saved?{memory_id:saved.memory_id,rationale_id:rationaleId,confirmation_state:confirmationState}:{}),
+        ...(saved?{memory_id:saved.memory_id,memory_version:saved.version,deduplicated:saved.deduplicated===true,rationale_id:rationaleId,confirmation_state:confirmationState}:{}),
         candidate_id:payload.review_context?.candidate_id??null,review_label:reviewLabel,review_answer:answer??'',
         memory_category:selectedCategory};
     },
@@ -888,6 +902,18 @@ function captureDefaults(input) {
 async function callTool(store, name, input, toolProfile = "default") {
   const tenantId = input.tenant_id || "default";
   if (name === "orgbrain_memories_confirmation_status") return store.mcpConfirmationStatus({token:boundedString(input.confirmation_token,64),tenant_id:tenantId});
+  if (name === "orgbrain_memory_version_get") {
+    const source = boundedString(input.source, 64);
+    const externalKey = boundedString(input.external_key, 256);
+    if (!source || !externalKey) throw new Error("source_and_external_key_required");
+    if (input.version != null && (!Number.isInteger(input.version) || input.version < 1)) throw new Error("invalid_memory_version");
+    return store.getVersionByExternalKey({
+      tenant_id: tenantId,
+      source,
+      external_key: externalKey,
+      version: input.version ?? null
+    });
+  }
   if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
   if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
