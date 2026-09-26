@@ -176,6 +176,14 @@ export async function evaluateMemoryQualityAuditV1(input = {}) {
     now,
     workspace_root: input.workspace_root ?? null
   })));
+  const readableIds = new Set(items.map((item) => item.memory_id));
+  const issueInput = input.integrity_issues && typeof input.integrity_issues === "object" ? input.integrity_issues : {};
+  const feedback = (Array.isArray(issueInput.feedback) ? issueInput.feedback : [])
+    .filter((entry) => readableIds.has(String(entry.memory_id)));
+  const pendingFeedback = feedback.filter((entry) => entry.status === "reported");
+  const confirmedStale = feedback.filter((entry) => entry.status === "confirmed" && entry.kind === "stale");
+  const contradictions = (Array.isArray(issueInput.contradictions) ? issueInput.contradictions : [])
+    .filter((entry) => readableIds.has(String(entry.from_memory_id)) && readableIds.has(String(entry.to_memory_id)));
   const duplicateGroups = new Map();
   for (const [index, row] of rows.entries()) {
     if (!items[index].active || !text(row.canonical_key)) continue;
@@ -200,6 +208,9 @@ export async function evaluateMemoryQualityAuditV1(input = {}) {
     decisions_confirmed: decisions.filter((item) => item.active && item.confirmed).length,
     decisions_inferred: decisions.filter((item) => item.active && !item.confirmed).length
   };
+  counts.pending_feedback = pendingFeedback.length;
+  counts.confirmed_stale = confirmedStale.length;
+  counts.unresolved_contradictions = contradictions.length;
   const coverageKeys = active[0] ? Object.keys(active[0].coverage) : [
     "learning_v2", "rationale", "reuse_rule", "evidence", "source_references", "applicability",
     "owner", "creator", "category", "work_type", "content_hash", "canonical_key", "ttl", "provenance", "acl", "observed", "verified"
@@ -220,6 +231,12 @@ export async function evaluateMemoryQualityAuditV1(input = {}) {
   };
   for (const item of items) for (const reason of item.reason_codes) addSample(reason, item.memory_id);
   for (const item of decisions) for (const reason of item.reason_codes) addSample(reason, item.decision_memory_id);
+  for (const entry of pendingFeedback) addSample("pending_feedback", String(entry.memory_id));
+  for (const entry of confirmedStale) addSample("confirmed_stale", String(entry.memory_id));
+  for (const entry of contradictions) {
+    addSample("unresolved_contradiction", String(entry.from_memory_id));
+    addSample("unresolved_contradiction", String(entry.to_memory_id));
+  }
   const projects = new Map();
   for (const item of items) {
     const key = item.project_id ?? "unassigned";

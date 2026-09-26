@@ -1,6 +1,8 @@
 import { collectCoverageReviewSignals, annotateCoverageReviewSignals } from "./coverage-review-signals.mjs";
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import readline from "node:readline";
 import {
   normalizeMemoryPaths,
@@ -169,6 +171,80 @@ function messageFromRow(row) {
   return null;
 }
 
+function patchPaths(argumentsValue) {
+  let value = argumentsValue;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { /* A raw patch is also valid. */ }
+  }
+  const patch = typeof value === "string" ? value : value?.patch ?? value?.input ?? "";
+  if (typeof patch !== "string") return [];
+  return [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete|Move to) File:\s*(.+)$/gmu)]
+    .map((match) => match[1].trim().replaceAll("\\", "/"));
+}
+
+function fileToolPaths(row) {
+  const payload = rowPayload(row);
+  const invocation = payload?.invocation && typeof payload.invocation === "object" ? payload.invocation : {};
+  const name = String(invocation.tool ?? invocation.name ?? payload?.name ?? payload?.tool_name ?? "");
+  if (!/(?:^|\.)apply_patch$/u.test(name)) return [];
+  return patchPaths(invocation.arguments ?? invocation.input ?? payload?.arguments ?? payload?.input ?? payload?.params);
+}
+
+function globMatches(value, pattern) {
+  if (pattern.endsWith("/**")) {
+    const base = pattern.slice(0, -3);
+    if (value === base || value.startsWith(`${base}/`)) return true;
+  }
+  let expression = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === "*" && pattern[index + 1] === "*") {
+      if (pattern[index + 2] === "/") { expression += "(?:.*/)?"; index += 2; }
+      else { expression += ".*"; index += 1; }
+    } else if (char === "*") expression += "[^/]*";
+    else if (char === "?") expression += "[^/]";
+    else expression += char.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  }
+  return new RegExp(`^${expression}$`, "u").test(value);
+}
+
+async function captureExclusionPolicy(workspaceRoot) {
+  const empty = { exclude_paths: [], include_paths: [] };
+  if (!workspaceRoot) return empty;
+  const file = path.join(workspaceRoot, ".orgbrain", "capture-exclusions.json");
+  let raw;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return empty;
+    throw error;
+  }
+  if (Buffer.byteLength(raw) > 16_384) throw new Error("capture_exclusions_too_large");
+  let policy;
+  try { policy = JSON.parse(raw); } catch { throw new Error("capture_exclusions_invalid"); }
+  const validPatterns = (items) => Array.isArray(items) && items.length <= 64
+    && items.every((item) => typeof item === "string" && item && !item.startsWith("/")
+      && !item.includes("..") && !item.includes("\\"));
+  if (policy?.version !== 1 || !validPatterns(policy.exclude_paths)
+    || !validPatterns(policy.include_paths ?? [])) {
+    throw new Error("capture_exclusions_invalid");
+  }
+  return { exclude_paths: policy.exclude_paths, include_paths: policy.include_paths ?? [] };
+}
+
+function excludedFilePath(filePath, policy, workspaceRoot) {
+  let normalized = filePath.replace(/^\.\//u, "").replaceAll("\\", "/");
+  if (normalized.startsWith("/") && workspaceRoot) {
+    normalized = path.relative(workspaceRoot, normalized).replaceAll("\\", "/");
+  }
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").includes("..")) return true;
+  const segments = normalized.split("/");
+  if (segments.some((segment) => segment === ".ssh" || segment === "secrets" || segment === ".env" || segment.startsWith(".env."))) return true;
+  if (/\.(?:key|pem|p12|pfx)$/iu.test(normalized)) return true;
+  if (policy.include_paths.length > 0 && !policy.include_paths.some((pattern) => globMatches(normalized, pattern))) return true;
+  return policy.exclude_paths.some((pattern) => globMatches(normalized, pattern));
+}
+
 function toolCallFromRow(row, workspaceRoot) {
   const payload = rowPayload(row);
   const type = payload?.type;
@@ -177,11 +253,10 @@ function toolCallFromRow(row, workspaceRoot) {
   const name = clip(invocation.tool ?? invocation.name ?? payload.name ?? payload.tool_name ?? payload.server ?? "tool", 128);
   const effectiveArguments = invocation.arguments ?? invocation.input ?? payload.arguments ?? payload.input ?? payload.params ?? {};
   const effectiveResult = invocation.result ?? payload.result;
-  const serializedArguments = stableJson(effectiveArguments);
-  const normalizedArguments = normalizeMemoryPaths(serializedArguments, workspaceRoot ?? null);
-  const changedPaths = name === "apply_patch"
-    ? [...normalizedArguments.matchAll(/\*\*\* (?:Add|Update|Delete) File:\s*([^\\"\n]+)/gu)]
-        .map((match) => clip(match[1], 512))
+  const changedPaths = /(?:^|\.)apply_patch$/u.test(name)
+    ? patchPaths(effectiveArguments)
+        .map((item) => workspaceRoot && item.startsWith("/") ? path.relative(workspaceRoot, item) : item)
+        .map((item) => clip(item, 512))
         .filter((path) => path && !path.startsWith("/") && !path.split("/").includes(".."))
         .slice(0, 32)
     : [];
@@ -189,7 +264,7 @@ function toolCallFromRow(row, workspaceRoot) {
     call_id: String(payload.call_id ?? payload.id ?? sha256(stableJson(payload)).slice(0, 24)),
     type: name === "request_user_input"
       ? "user_input_request"
-      : name === "apply_patch"
+      : /(?:^|\.)apply_patch$/u.test(name)
         ? "file_change"
         : name === "exec" || name === "exec_command"
           ? "command"
@@ -674,7 +749,10 @@ async function normalizeProposal(observation, supportSpanIds, reasonCodes, optio
 
 export async function buildTurnEvidenceV1(input, options = {}) {
   const rows = Array.isArray(input?.rows) ? input.rows : [];
+  const exclusionPatterns = await captureExclusionPolicy(options.workspace_root);
   const snippets = [];
+  const eligibleRows = [];
+  const excludedCallIds = new Set();
   const snippetAliases = {};
   const messageSpanByKey = new Map();
   const eventsByCall = new Map();
@@ -686,6 +764,13 @@ export async function buildTurnEvidenceV1(input, options = {}) {
 
   for (const [sourceOrder, row] of rows.entries()) {
     const payload = rowPayload(row);
+    const callId = String(payload?.call_id ?? payload?.id ?? "");
+    if (callId && excludedCallIds.has(callId)) continue;
+    if (fileToolPaths(row).some((filePath) => excludedFilePath(filePath, exclusionPatterns, options.workspace_root))) {
+      if (callId) excludedCallIds.add(callId);
+      continue;
+    }
+    eligibleRows.push(row);
     if (payload?.type === "turn_context") model ||= clip(payload.model, 128) || null;
     if (row?.type === "session_meta") provider ||= clip(row.payload?.model_provider, 64) || null;
 
@@ -764,7 +849,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     .filter(([alias, target]) => Number(alias.slice(1)) <= retainedSnippetLimit && retainedSpanIds.has(target)));
   const reviewDiagnostics = hardExclusion
     ? { schema: "coverage-review-signals/v1", recall_hits: 0, recall_misses: 0, signals: [] }
-    : collectCoverageReviewSignals(rows, input?.project_id);
+    : collectCoverageReviewSignals(eligibleRows, input?.project_id);
   const turnEvidence = {
     schema: TURN_EVIDENCE_V1_SCHEMA,
     session_hash: input?.session_hash ?? null,

@@ -19,6 +19,7 @@ export * from "./memory-judgment-runtime.mjs";
 export * from "./memory-use-history-runtime.mjs";
 export * from "./attempt-history-runtime.mjs";
 export * from "./memory-quality-audit";
+export * from "./episodic-aging";
 export * from "./memory-learning";
 export * from "./memory-extraction-provider-contract";
 export * from "./memory-contract-v2";

@@ -99,6 +99,7 @@ type RetrievalUnitCandidateRow = {
 
 export type MemorySearchResult = {
   use_history?: Record<string, unknown>;
+  integrity_warnings?: Array<"unresolved_contradiction">;
   kind: MemorySearchKind;
   id: string;
   summary: string | null;

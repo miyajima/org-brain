@@ -1,7 +1,7 @@
 {
   "contract_version": "orgbrain-api-manifest/v1",
-  "oss_ref": "ac88f3867698177bad7f0dc3d9056073c6b70632",
-  "generated_at": "2026-09-22T17:11:22.000Z",
+  "oss_ref": "0e9a3cebe51f8cf6292e2cb9cbb09b3f1cf1f388",
+  "generated_at": "2026-09-24T09:29:51.000Z",
   "routes": [
     {
       "method": "GET",
@@ -1261,6 +1261,28 @@
     },
     {
       "method": "POST",
+      "path": "/v1/memories/feedback",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesFeedbackRequest",
+      "response_schema": "PostV1MemoriesFeedbackResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/feedback/:feedbackId/review",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesFeedbackFeedbackIdReviewRequest",
+      "response_schema": "PostV1MemoriesFeedbackFeedbackIdReviewResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/memories/profile",
       "permission": "read",
       "request_schema": "PostV1MemoriesProfileRequest",
@@ -1287,6 +1309,28 @@
       "permission": "write",
       "request_schema": "PostV1MemoriesRefreshRequest",
       "response_schema": "PostV1MemoriesRefreshResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/relations",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesRelationsRequest",
+      "response_schema": "PostV1MemoriesRelationsResponse",
+      "success_statuses": [
+        201
+      ],
+      "idempotent": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/relations/:relationId/review",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesRelationsRelationIdReviewRequest",
+      "response_schema": "PostV1MemoriesRelationsRelationIdReviewResponse",
       "success_statuses": [
         200
       ],
@@ -1492,10 +1536,32 @@
     },
     {
       "method": "GET",
+      "path": "/v1/memory-quality/aging-plan",
+      "permission": "read",
+      "request_schema": "GetV1MemoryQualityAgingPlanRequest",
+      "response_schema": "GetV1MemoryQualityAgingPlanResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/memory-quality/audit",
       "permission": "read",
       "request_schema": "GetV1MemoryQualityAuditRequest",
       "response_schema": "GetV1MemoryQualityAuditResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory-quality/issues",
+      "permission": "read",
+      "request_schema": "GetV1MemoryQualityIssuesRequest",
+      "response_schema": "GetV1MemoryQualityIssuesResponse",
       "success_statuses": [
         200
       ],

@@ -126,7 +126,7 @@ export async function getMemoryQualityAudit(env: Env, tenantId: string, options:
   }
   const projectClause = options.scope === "project" ? " AND project_id = ?" : "";
   const bindings = options.scope === "project" ? [tenantId, projectId] : [tenantId];
-  const [memoryRows, decisionRows] = await Promise.all([
+  const [memoryRows, decisionRows, feedbackRows, contradictionRows] = await Promise.all([
     env.OPEN_BRAIN_DB.prepare(
       `SELECT ${auditMemoryColumns} FROM memories WHERE tenant_id = ?${projectClause} ORDER BY id`
     ).bind(...bindings).all<Record<string, unknown>>(),
@@ -134,7 +134,18 @@ export async function getMemoryQualityAudit(env: Env, tenantId: string, options:
       `SELECT id, project_id, business_category_id, work_type, status, rationale, source_refs_json,
               confirmation_state, confirmed_at, valid_until, visibility, allowed_principals_json
        FROM decision_memories WHERE tenant_id = ?${projectClause} ORDER BY id`
-    ).bind(...bindings).all<Record<string, unknown>>()
+    ).bind(...bindings).all<Record<string, unknown>>(),
+    env.OPEN_BRAIN_DB.prepare(`SELECT f.memory_id,f.kind,f.status FROM memory_quality_feedback f
+      JOIN memories m ON m.tenant_id=f.tenant_id AND m.id=f.memory_id
+      WHERE f.tenant_id=? AND (f.status='reported' OR (f.status='confirmed' AND f.kind='stale'))
+        AND m.current_version=f.memory_version${options.scope === "project" ? " AND m.project_id=?" : ""}`)
+      .bind(...bindings).all<{ memory_id: string; kind: string; status: string }>(),
+    env.OPEN_BRAIN_DB.prepare(`SELECT r.from_memory_id,r.to_memory_id FROM memory_integrity_relations r
+      JOIN memories a ON a.tenant_id=r.tenant_id AND a.id=r.from_memory_id
+      JOIN memories b ON b.tenant_id=r.tenant_id AND b.id=r.to_memory_id
+      WHERE r.tenant_id=? AND r.status='confirmed' AND r.relation='contradicts'
+        AND a.current_version=r.from_version AND b.current_version=r.to_version${options.scope === "project" ? " AND a.project_id=? AND b.project_id=?" : ""}`)
+      .bind(...(options.scope === "project" ? [tenantId, projectId, projectId] : [tenantId])).all<{ from_memory_id: string; to_memory_id: string }>()
   ]);
   let readableMemories = memoryRows.results;
   let readableDecisions = decisionRows.results;
@@ -162,6 +173,7 @@ export async function getMemoryQualityAudit(env: Env, tenantId: string, options:
     scope: options.scope,
     memory_rows: readableMemories,
     decision_rows: readableDecisions,
+    integrity_issues: { feedback: feedbackRows.results, contradictions: contradictionRows.results },
     now: options.now
   });
 }

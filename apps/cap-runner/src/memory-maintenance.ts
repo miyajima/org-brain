@@ -134,6 +134,7 @@ type MaintenancePlan = {
 
 type NormalizedMemoryRow = {
   id: string;
+  kind: string | null;
   project_id: string | null;
   source: string;
   tags: string[];
@@ -463,6 +464,7 @@ function buildCanonicalSearchSummary(projectId: string | null, category: string,
 
 function canDigestRow(row: NormalizedMemoryRow, cutoffTimestamp: number): boolean {
   return (
+    row.kind !== "episodic" &&
     row.created_at <= cutoffTimestamp &&
     row.source !== "org-brain" &&
     row.tags.includes("hook") &&
@@ -510,6 +512,7 @@ function canCanonicalizeRow(row: NormalizedMemoryRow, cutoffTimestamp: number): 
 
 function canDedupeRow(row: NormalizedMemoryRow, cutoffTimestamp: number): boolean {
   return (
+    row.kind !== "episodic" &&
     row.created_at <= cutoffTimestamp &&
     !row.tags.includes("compacted") &&
     !row.tags.includes("memory-digest") &&
@@ -528,6 +531,7 @@ export function planMemoryMaintenance(rows: RawMemoryRow[], options: { tenantId?
     const rawSummary = stripJapanesePoliteness(pickReusableGuidance(row));
     return {
       id: row.id,
+      kind: row.kind ?? null,
       project_id: row.project_id ?? null,
       source: row.source,
       tags,

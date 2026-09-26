@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildLearningExtractionPacket,
   buildTurnEvidenceV1,
@@ -59,6 +62,53 @@ function call(id, name, args = {}) {
 function result(id, value) {
   return { payload: { type: "function_call_output", call_id: id, output: JSON.stringify(value) } };
 }
+
+test("file capture exclusions remove matching calls and results before turn evidence is persisted", async () => {
+  const root = await mkdtemp(join(tmpdir(), "orgbrain-exclusions-"));
+  try {
+    await mkdir(join(root, ".orgbrain"));
+    await writeFile(join(root, ".orgbrain", "capture-exclusions.json"), JSON.stringify({
+      version: 1,
+      exclude_paths: ["private/**"]
+    }));
+    const rows = [
+      call("secret", "apply_patch", { patch: "*** Begin Patch\n*** Update File: private/plan.md\n+hidden\n*** End Patch" }),
+      result("secret", { output: "private content" }),
+      call("env", "apply_patch", { patch: "*** Begin Patch\n*** Update File: .env\n+TOKEN=hidden\n*** End Patch" }),
+      result("env", { output: "env content" }),
+      call("safe", "apply_patch", { patch: "*** Begin Patch\n*** Update File: README.md\n+safe\n*** End Patch" }),
+      result("safe", { output: "safe result" })
+    ];
+    const evidence = await buildTurnEvidenceV1({ rows, project_id: "org-brain" }, {
+      workspace_root: root,
+      preserve_snippet_text: true
+    });
+    assert.deepEqual(evidence.events.map((item) => item.call_id), ["safe"]);
+    assert.deepEqual(evidence.events[0].changed_paths, ["README.md"]);
+    assert.equal(evidence.snippets.some((item) => /private content|env content/u.test(item.text)), false);
+    assert.equal(evidence.snippets.some((item) => item.text.includes("safe result")), true);
+    assert.doesNotMatch(JSON.stringify(evidence), /private\/plan|TOKEN=hidden|env content/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("file capture allow paths exclude unlisted file operations before persistence", async () => {
+  const root = await mkdtemp(join(tmpdir(), "orgbrain-allow-paths-"));
+  try {
+    await mkdir(join(root, ".orgbrain"));
+    await writeFile(join(root, ".orgbrain", "capture-exclusions.json"), JSON.stringify({
+      version: 1, include_paths: ["src/**"], exclude_paths: ["src/private/**"]
+    }));
+    const evidence = await buildTurnEvidenceV1({ rows: [
+      call("readme", "apply_patch", { patch: "*** Update File: README.md\n+secret" }), result("readme", "hidden"),
+      call("private", "apply_patch", { patch: "*** Update File: src/private/a.ts\n+secret" }), result("private", "hidden"),
+      call("safe", "apply_patch", { patch: "*** Update File: src/a.ts\n+safe" }), result("safe", "safe")
+    ], project_id: "org-brain" }, { workspace_root: root });
+    assert.deepEqual(evidence.events.map((event) => event.call_id), ["safe"]);
+    assert.doesNotMatch(JSON.stringify(evidence), /README|private|hidden/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("deduplicates dual final-answer rows and preserves old span ids as aliases", async () => {
   const text = "実装方針としてSQLiteを採用しました。";

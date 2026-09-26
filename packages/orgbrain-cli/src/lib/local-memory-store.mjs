@@ -1,6 +1,8 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
+import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-runtime.mjs";
+import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
 import { ATTEMPT_SCHEMA_SQL, attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
 import { createHash, randomUUID } from "node:crypto";
@@ -40,7 +42,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 29;
+export const MEMORY_SCHEMA_VERSION = 30;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -514,6 +516,40 @@ function createCanonicalTables(db) {
       relation TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS memory_quality_feedback (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      memory_id TEXT NOT NULL,
+      memory_version INTEGER NOT NULL,
+      kind TEXT NOT NULL CHECK(kind IN ('stale', 'wrong')),
+      reason TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      reporter_principal TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'reported' CHECK(status IN ('reported', 'confirmed', 'rejected')),
+      reviewer_principal TEXT,
+      reviewed_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_memory_quality_feedback_memory
+      ON memory_quality_feedback(tenant_id, memory_id, memory_version, status);
+    CREATE TABLE IF NOT EXISTS memory_integrity_relations (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      from_memory_id TEXT NOT NULL,
+      from_version INTEGER NOT NULL,
+      to_memory_id TEXT NOT NULL,
+      to_version INTEGER NOT NULL,
+      relation TEXT NOT NULL CHECK(relation IN ('contradicts', 'fixes')),
+      evidence_json TEXT NOT NULL,
+      proposer_principal TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'proposed' CHECK(status IN ('proposed', 'confirmed', 'rejected', 'resolved')),
+      reviewer_principal TEXT,
+      reviewed_at INTEGER,
+      resolved_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_memory_integrity_relations_pair
+      ON memory_integrity_relations(tenant_id, from_memory_id, to_memory_id, status);
     CREATE TABLE IF NOT EXISTS memory_deletions (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,
@@ -3302,6 +3338,8 @@ export class LocalMemoryStore {
         currentVersion !== MEMORY_SCHEMA_VERSION ||
         hasLegacyFtsTriggers(db) ||
         !hasTable(db, "memory_versions") ||
+        !hasTable(db, "memory_quality_feedback") ||
+        !hasTable(db, "memory_integrity_relations") ||
         !hasTable(db, "memories_fts") ||
         !hasTable(db, "memory_embeddings") ||
         !hasTable(db, "memory_embedding_features") ||
@@ -5236,6 +5274,205 @@ export class LocalMemoryStore {
     }));
   }
 
+  async restoreMemoryVersion(tenantId, memoryId, version, reviewer) {
+    await this.init();
+    if (!Number.isInteger(version) || version < 1 || !reviewer) throw new Error("invalid_restore_request");
+    const db = this.open({ readOnly: true });
+    let snapshot;
+    try {
+      const current = db.prepare("SELECT lifecycle_state,owner_principal,actor_id FROM memories WHERE tenant_id=? AND id=?")
+        .get(tenantId, memoryId);
+      if (!current || current.lifecycle_state !== "suppressed") throw new Error("memory_not_suppressed");
+      if (reviewer !== (current.owner_principal || current.actor_id || "local")) throw new Error("reviewer_not_authorized");
+      const historical = db.prepare("SELECT snapshot_json FROM memory_versions WHERE tenant_id=? AND memory_id=? AND version=?")
+        .get(tenantId, memoryId, version);
+      if (!historical) throw new Error("memory_version_not_found");
+      snapshot = JSON.parse(historical.snapshot_json);
+      if (snapshot.lifecycle_state === "suppressed") throw new Error("restore_version_suppressed");
+    } finally { db.close(); }
+    return this.mutate(tenantId, memoryId, "restore", (current) => ({
+      ...current, ...snapshot, id: current.id, tenant_id: current.tenant_id,
+      source: current.source, external_key: current.external_key, created_at: current.created_at,
+      project_id: current.project_id, scope_type: current.scope_type, scope_key: current.scope_key,
+      permissions: current.permissions, owner_principal: current.owner_principal,
+      lifecycle_state: "active", actor_type: "principal", actor_id: reviewer
+    }));
+  }
+
+  async reportMemoryFeedback(input) {
+    await this.init();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const memoryId = nullableString(input.memory_id, 128);
+    const version = Number(input.memory_version);
+    const reporter = nullableString(input.reporter_principal, 128);
+    const reason = nullableString(input.reason, 1000);
+    if (!memoryId || !Number.isInteger(version) || version < 1 || !reporter || !reason
+      || !["stale", "wrong"].includes(input.kind)) throw new Error("invalid_memory_feedback");
+    const evidence = Array.isArray(input.evidence) ? input.evidence.slice(0, 16).map((item) => ({
+      type: nullableString(item?.type, 32), ref: nullableString(item?.ref, 256)
+    })).filter((item) => item.type && item.ref) : [];
+    if (evidence.length === 0) throw new Error("memory_feedback_evidence_required");
+    if (!screenSensitiveMemory(JSON.stringify({ reason, evidence })).allowed) throw new Error("sensitive_memory_denied");
+    const db = this.open();
+    try {
+      const memory = db.prepare("SELECT current_version FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, memoryId);
+      const historical = db.prepare("SELECT 1 FROM memory_versions WHERE tenant_id = ? AND memory_id = ? AND version = ?")
+        .get(tenantId, memoryId, version);
+      if (!memory || (Number(memory.current_version) !== version && !historical)) throw new Error("memory_version_not_found");
+      const report = { id: randomUUID(), tenant_id: tenantId, memory_id: memoryId, memory_version: version,
+        kind: input.kind, reason, evidence, reporter_principal: reporter, status: "reported", created_at: Date.now() };
+      db.prepare(`INSERT INTO memory_quality_feedback(id,tenant_id,memory_id,memory_version,kind,reason,evidence_json,reporter_principal,status,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)`).run(report.id, tenantId, memoryId, version, report.kind, reason,
+        JSON.stringify(evidence), reporter, report.status, report.created_at);
+      return report;
+    } finally { db.close(); }
+  }
+
+  async reviewMemoryFeedback(input) {
+    await this.init();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const reviewer = nullableString(input.reviewer_principal, 128);
+    if (!reviewer || !["confirm", "reject"].includes(input.decision)) throw new Error("invalid_memory_feedback_review");
+    const db = this.open();
+    let feedback;
+    try {
+      feedback = db.prepare("SELECT * FROM memory_quality_feedback WHERE tenant_id = ? AND id = ?")
+        .get(tenantId, input.feedback_id);
+      if (!feedback || feedback.status !== "reported") throw new Error("memory_feedback_not_reported");
+      const memory = db.prepare("SELECT owner_principal, actor_id, current_version FROM memories WHERE tenant_id = ? AND id = ?")
+        .get(tenantId, feedback.memory_id);
+      if (!memory) throw new Error("memory_not_found");
+      if (reviewer !== (memory.owner_principal || memory.actor_id || "local")) throw new Error("reviewer_not_authorized");
+      const status = input.decision === "confirm" ? "confirmed" : "rejected";
+      const reviewedAt = Date.now();
+      if (status === "confirmed" && feedback.kind === "wrong" && Number(memory.current_version) === feedback.memory_version) {
+        // A failed suppression must leave the report pending for a safe retry.
+        await this.mutate(tenantId, feedback.memory_id, "suppress", (current) => ({
+          ...current, lifecycle_state: "suppressed", actor_type: "principal", actor_id: reviewer
+        }));
+      }
+      db.prepare("UPDATE memory_quality_feedback SET status = ?, reviewer_principal = ?, reviewed_at = ? WHERE tenant_id = ? AND id = ?")
+        .run(status, reviewer, reviewedAt, tenantId, feedback.id);
+      feedback = { ...feedback, status, reviewer_principal: reviewer, reviewed_at: reviewedAt };
+      return feedback;
+    } finally { db.close(); }
+  }
+
+  async proposeMemoryRelation(input) {
+    await this.init();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const fromId = nullableString(input.from_memory_id, 128);
+    const toId = nullableString(input.to_memory_id, 128);
+    const fromVersion = Number(input.from_version);
+    const toVersion = Number(input.to_version);
+    const proposer = nullableString(input.proposer_principal, 128);
+    if (!fromId || !toId || fromId === toId || !Number.isInteger(fromVersion) || !Number.isInteger(toVersion)
+      || fromVersion < 1 || toVersion < 1 || !proposer || !["contradicts", "fixes"].includes(input.relation)) {
+      throw new Error("invalid_memory_relation");
+    }
+    const evidence = Array.isArray(input.evidence) ? input.evidence.slice(0, 16).map((item) => ({
+      type: nullableString(item?.type, 32), ref: nullableString(item?.ref, 256)
+    })).filter((item) => item.type && item.ref) : [];
+    if (evidence.length === 0) throw new Error("memory_relation_evidence_required");
+    if (!screenSensitiveMemory(JSON.stringify(evidence)).allowed) throw new Error("sensitive_memory_denied");
+    const db = this.open();
+    try {
+      const rows = [[fromId, fromVersion], [toId, toVersion]].map(([memoryId, version]) => {
+        const row = db.prepare("SELECT current_version,project_id FROM memories WHERE tenant_id = ? AND id = ?")
+          .get(tenantId, memoryId);
+        if (!row || Number(row.current_version) !== version) throw new Error("memory_version_not_found");
+        return row;
+      });
+      if (rows[0].project_id !== rows[1].project_id) throw new Error("relation_scope_or_version_mismatch");
+      const relation = { id: randomUUID(), tenant_id: tenantId, from_memory_id: fromId, from_version: fromVersion,
+        to_memory_id: toId, to_version: toVersion, relation: input.relation, evidence,
+        proposer_principal: proposer, status: "proposed", created_at: Date.now() };
+      db.prepare(`INSERT INTO memory_integrity_relations(id,tenant_id,from_memory_id,from_version,to_memory_id,to_version,relation,evidence_json,proposer_principal,status,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(relation.id, tenantId, fromId, fromVersion, toId, toVersion,
+        relation.relation, JSON.stringify(evidence), proposer, relation.status, relation.created_at);
+      return relation;
+    } finally { db.close(); }
+  }
+
+  async reviewMemoryRelation(input) {
+    await this.init();
+    const tenantId = nullableString(input.tenant_id, 128) || "default";
+    const reviewer = nullableString(input.reviewer_principal, 128);
+    if (!reviewer || !["confirm", "reject", "resolve"].includes(input.decision)) throw new Error("invalid_memory_relation_review");
+    const db = this.open();
+    try {
+      const relation = db.prepare("SELECT * FROM memory_integrity_relations WHERE tenant_id = ? AND id = ?")
+        .get(tenantId, input.relation_id);
+      if (!relation) throw new Error("memory_relation_not_found");
+      const owners = db.prepare("SELECT owner_principal, actor_id FROM memories WHERE tenant_id = ? AND id IN (?,?)")
+        .all(tenantId, relation.from_memory_id, relation.to_memory_id);
+      if (owners.length !== 2 || owners.some((row) => reviewer !== (row.owner_principal || row.actor_id || "local"))) {
+        throw new Error("reviewer_not_authorized");
+      }
+      if (input.decision === "resolve" ? relation.status !== "confirmed" : relation.status !== "proposed") {
+        throw new Error("memory_relation_invalid_state");
+      }
+      if (input.decision === "confirm") {
+        const current = db.prepare("SELECT id,current_version FROM memories WHERE tenant_id=? AND id IN (?,?)")
+          .all(tenantId, relation.from_memory_id, relation.to_memory_id);
+        if (current.length !== 2 || current.some((row) => Number(row.current_version) !== Number(
+          row.id === relation.from_memory_id ? relation.from_version : relation.to_version
+        ))) throw new Error("relation_version_changed");
+      }
+      const status = input.decision === "resolve" ? "resolved" : input.decision === "confirm" ? "confirmed" : "rejected";
+      const now = Date.now();
+      db.prepare("UPDATE memory_integrity_relations SET status = ?, reviewer_principal = ?, reviewed_at = ?, resolved_at = ? WHERE tenant_id = ? AND id = ?")
+        .run(status, reviewer, now, status === "resolved" ? now : null, tenantId, relation.id);
+      return { ...relation, status, reviewer_principal: reviewer, reviewed_at: now };
+    } finally { db.close(); }
+  }
+
+  async listMemoryIntegrityIssues(tenantId, projectId = null) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const feedback = db.prepare(`SELECT f.id,f.memory_id,f.memory_version,f.kind,f.status,f.created_at
+        FROM memory_quality_feedback f JOIN memories m ON m.tenant_id=f.tenant_id AND m.id=f.memory_id
+        WHERE f.tenant_id=? AND (f.status='reported' OR (f.status='confirmed' AND f.kind='stale'))
+          AND m.current_version=f.memory_version
+          AND (? IS NULL OR m.project_id=?)`).all(tenantId, projectId, projectId);
+      const contradictions = db.prepare(`SELECT r.id,r.from_memory_id,r.to_memory_id,r.relation,r.status,r.created_at FROM memory_integrity_relations r
+        JOIN memories a ON a.tenant_id = r.tenant_id AND a.id = r.from_memory_id
+        JOIN memories b ON b.tenant_id = r.tenant_id AND b.id = r.to_memory_id
+        WHERE r.tenant_id = ? AND r.status = 'confirmed' AND r.relation = 'contradicts'
+          AND a.current_version = r.from_version AND b.current_version = r.to_version
+          AND (? IS NULL OR (a.project_id = ? AND b.project_id = ?))`).all(tenantId, projectId, projectId, projectId);
+      return { feedback, contradictions };
+    } finally { db.close(); }
+  }
+
+  async planEpisodicAging(tenantId = "default", projectId = null, now = Date.now()) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const rows = db.prepare(`SELECT m.id,m.kind,m.lifecycle_state,m.current_version,m.created_at,m.deleted_at,
+          m.expires_at,m.valid_until,
+          COALESCE((SELECT p.legal_hold FROM retention_policies p WHERE p.tenant_id=m.tenant_id
+            AND (p.project_id=m.project_id OR p.project_id IS NULL) ORDER BY (p.project_id IS NOT NULL) DESC LIMIT 1),0) AS legal_hold,
+          (SELECT MAX(e.created_at) FROM memory_use_contexts c
+            JOIN memory_use_evaluations e ON e.tenant_id=c.tenant_id AND e.context_id=c.id
+            WHERE c.tenant_id=m.tenant_id AND c.source_type='memory' AND c.source_id=m.id
+              AND c.source_version=m.current_version AND c.revoked_at IS NULL
+              AND c.verification_state='verified' AND e.verification_state='verified'
+              AND e.outcome IN ('positive','negative')
+              AND NOT EXISTS(SELECT 1 FROM memory_use_contexts newer WHERE newer.tenant_id=c.tenant_id AND newer.supersedes_id=c.id)
+              AND NOT EXISTS(SELECT 1 FROM memory_use_evaluations newer WHERE newer.tenant_id=e.tenant_id AND newer.supersedes_id=e.id)) AS last_verified_use_at,
+          (EXISTS(SELECT 1 FROM memory_quality_feedback f WHERE f.tenant_id=m.tenant_id AND f.memory_id=m.id
+            AND f.memory_version=m.current_version AND f.status IN ('reported','confirmed'))
+           OR EXISTS(SELECT 1 FROM memory_integrity_relations r WHERE r.tenant_id=m.tenant_id AND r.status='confirmed'
+             AND r.relation='contradicts' AND ((r.from_memory_id=m.id AND r.from_version=m.current_version)
+               OR (r.to_memory_id=m.id AND r.to_version=m.current_version)))) AS unresolved_integrity
+        FROM memories m WHERE m.tenant_id=? AND (? IS NULL OR m.project_id=?) ORDER BY m.id`)
+        .all(tenantId, projectId, projectId);
+      return planEpisodicAging(rows, { now });
+    } finally { db.close(); }
+  }
+
   async delete(tenantId, memoryId, actor = {}) {
     await this.init();
     const db = this.open();
@@ -5653,18 +5890,29 @@ export class LocalMemoryStore {
       const historical = input.include_history === true || input.include_suppressed === true;
       const enabled = (flags.context || flags.ranking) && !historical;
       const base = await this.searchBase({ ...input, query, limit: enabled ? 50 : input.limit });
-      if (!enabled) return base;
+      const explainIntegrity = (results) => results.map((item) => {
+        const row = db.prepare(`SELECT 1 FROM memory_integrity_relations r
+          JOIN memories a ON a.tenant_id=r.tenant_id AND a.id=r.from_memory_id
+          JOIN memories b ON b.tenant_id=r.tenant_id AND b.id=r.to_memory_id
+          WHERE r.tenant_id=? AND r.status='confirmed' AND r.relation='contradicts'
+            AND a.current_version=r.from_version AND b.current_version=r.to_version
+            AND ((r.from_memory_id=? AND r.from_version=?) OR (r.to_memory_id=? AND r.to_version=?)) LIMIT 1`)
+          .get(input.tenant_id || "default", item.memory.id, item.memory.current_version,
+            item.memory.id, item.memory.current_version);
+        return row ? { ...item, integrity_warnings: ["unresolved_contradiction"] } : item;
+      });
+      if (!enabled) return explainIntegrity(base);
       const service = localUseService(db, input.tenant_id || "default", input.principal_id || process.env.ORGBRAIN_USE_PRINCIPAL || "local", () => input.at ?? Date.now(), input);
       const result = await service.search({query,project_id:input.project_id,work_type:input.work_type,task_id:input.task_id,
         context:input.use_context,snapshot_id:input.use_snapshot_id,context_enabled:flags.context,ranking_enabled:flags.ranking,limit:input.limit || 10,at:input.at,
         base:base.map(x=>({id:x.memory.id,kind:"memory",memory_kind:x.memory.kind,current_version:x.memory.current_version,score:x.score.total}))});
-      return result.results.flatMap(row=>{
+      return explainIntegrity(result.results.flatMap(row=>{
         const original = base.find(x=>x.memory.id===row.id);
         const memory = original?.memory ?? (()=>{const raw=db.prepare("SELECT * FROM memories WHERE tenant_id=? AND id=?").get(input.tenant_id || "default",row.id);return raw?memoryFromRow(raw):null;})();
         if (input.minimum_total_score != null && row.score < Number(input.minimum_total_score)) return [];
         if (!memory || (input.business_category_id && memory.business_category_id !== input.business_category_id)) return [];
         return [{memory,score:{...(original?.score??{}),total:row.score},use_history:row.use_history,use_history_meta:result.meta}];
-      });
+      }));
     } finally { db.close(); }
   }
 

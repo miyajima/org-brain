@@ -408,6 +408,14 @@ describe("memory maintenance", () => {
     expect(plan.compactions.find((item) => item.id === "recent")).toBeUndefined();
   });
 
+  it("keeps explicitly typed episodic memories out of legacy age-based compaction during shadow aging", () => {
+    const now = Date.parse("2026-03-30T00:00:00.000Z");
+    const rows = baseRows().map((row) => row.id.startsWith("raw-") || row.id === "dup-old"
+      ? { ...row, kind: "episodic" } : row);
+    const plan = planMemoryMaintenance(rows, { tenantId: "default", now });
+    expect(plan.compactions.filter((item) => ["raw-1", "raw-2", "raw-3", "raw-4", "dup-old"].includes(item.id))).toHaveLength(0);
+  });
+
   it("applies digest creation and compaction directly through D1", async () => {
     const db = new FakeD1(baseRows());
     const now = Date.parse("2026-03-30T00:00:00.000Z");

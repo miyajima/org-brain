@@ -86,6 +86,8 @@ import { reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
 import { getDomainContext, queryMetrics, searchManagedObjects } from "./domain-metric-service";
 import { getDomainRecall, recordDomainRecallFeedback } from "./domain-recall-service";
 import { getMemoryQualityAudit } from "./memory-quality-service";
+import { listMemoryIntegrityIssues, proposeMemoryRelation, reportMemoryFeedback, reviewMemoryFeedback, reviewMemoryRelation } from "./memory-integrity-service";
+import { getMemoryAgingPlan } from "./memory-aging-service";
 import { ingestVerifiedKnowledgeBundle } from "./verified-ingestion-service";
 import { enqueueMemoryExtraction } from "./memory-extraction-enqueue-service";
 import {
@@ -184,6 +186,12 @@ const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
   orgbrain_memory_use_revoke: "Revoke an existing use. payload requires id. Invalidates its context search and ranking contributions without editing the original memory.",
   orgbrain_memories_confirmation_status: "Read the result of the same confirmation after a timeout. Never infer saved from an answer or resend an in-progress confirmation.",
   orgbrain_memory_quality_audit: "Run the read-only memory-quality-audit/v1 evaluator. Returns aggregate coverage, reason-code samples, and no raw memory content.",
+  orgbrain_memory_feedback_report: "Report stale or wrong information for an exact memory version with evidence. Reporting does not change retrieval.",
+  orgbrain_memory_feedback_review: "Confirm or reject a version-scoped report. A confirmed wrong report suppresses only the matching current memory version.",
+  orgbrain_memory_relation_propose: "Propose a version-scoped contradicts or fixes relationship with evidence. Proposal alone does not change retrieval.",
+  orgbrain_memory_relation_review: "Confirm, reject, or resolve a proposed relationship. Review is permission checked.",
+  orgbrain_memory_integrity_issues: "List pending feedback and confirmed unresolved contradictions in a project.",
+  orgbrain_memory_aging_plan: "Read-only episodic aging candidates based on verified use history. No memory is changed.",
   orgbrain_memory_extraction_enqueue: "Enqueue one review-only, same-provider/model extraction from a redacted TurnEvidenceV1 packet. The hook never calls the provider directly.",
   orgbrain_prompt_recall: "Use before answering an organization-specific question. Return the relevant Decision, rationale, rejected alternatives, constraints, success conditions, metrics, evidence metadata, follow-up, and trace URL. If the answer uses the memory, cite the trace and invite the user to say 範囲が違う, 古い, or 関係ない.",
   orgbrain_domain_recall_feedback: "Record the user's correction without mutating the underlying Decision. Map 範囲が違う to wrong_scope, 古い to outdated, 関係ない to not_relevant, 関係が違う to incorrect_relation, and この会話では使わない to dismiss_for_session. Call this when the user corrects a recalled memory."
@@ -666,6 +674,53 @@ class OrgBrainMcpTools {
         }));
       }
     );
+
+    registerTool(this.server, "orgbrain_memory_feedback_report", {
+      tenant_id: z.string().optional(), memory_id: z.string(), memory_version: z.number().int().positive(),
+      kind: z.enum(["stale", "wrong"]), reason: z.string(),
+      evidence: z.array(z.object({ type: z.string(), ref: z.string() })).min(1)
+    }, async ({ tenant_id, ...payload }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "write");
+      return toContent(await reportMemoryFeedback(this.env, tenantId, payload, this.props.principal));
+    });
+    registerTool(this.server, "orgbrain_memory_feedback_review", {
+      tenant_id: z.string().optional(), feedback_id: z.string(), decision: z.enum(["confirm", "reject"])
+    }, async ({ tenant_id, feedback_id, decision }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "write");
+      return toContent(await reviewMemoryFeedback(this.env, tenantId, feedback_id, decision, this.props.principal));
+    });
+    registerTool(this.server, "orgbrain_memory_relation_propose", {
+      tenant_id: z.string().optional(), from_memory_id: z.string(), from_version: z.number().int().positive(),
+      to_memory_id: z.string(), to_version: z.number().int().positive(), relation: z.enum(["contradicts", "fixes"]),
+      evidence: z.array(z.object({ type: z.string(), ref: z.string() })).min(1)
+    }, async ({ tenant_id, ...payload }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "write");
+      return toContent(await proposeMemoryRelation(this.env, tenantId, payload, this.props.principal));
+    });
+    registerTool(this.server, "orgbrain_memory_relation_review", {
+      tenant_id: z.string().optional(), relation_id: z.string(), decision: z.enum(["confirm", "reject", "resolve"])
+    }, async ({ tenant_id, relation_id, decision }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "write");
+      return toContent(await reviewMemoryRelation(this.env, tenantId, relation_id, decision, this.props.principal));
+    });
+    registerTool(this.server, "orgbrain_memory_integrity_issues", {
+      tenant_id: z.string().optional(), project_id: z.string().min(1)
+    }, async ({ tenant_id, project_id }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "read", project_id);
+      return toContent(await listMemoryIntegrityIssues(this.env, tenantId, project_id, this.props.principal));
+    });
+    registerTool(this.server, "orgbrain_memory_aging_plan", {
+      tenant_id: z.string().optional(), project_id: z.string().min(1)
+    }, async ({ tenant_id, project_id }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "read", project_id);
+      return toContent(await getMemoryAgingPlan(this.env, tenantId, project_id));
+    });
 
     registerTool(this.server,
       "orgbrain_memory_extraction_enqueue",
