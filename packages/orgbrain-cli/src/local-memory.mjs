@@ -39,6 +39,13 @@ Usage:
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
   orgbrain memory reviews [--tenant-id <id>] [--project-id <id>] [--limit <1-200>]
+  orgbrain memory feedback report [json-payload]
+  orgbrain memory feedback review <feedback-id> --decision confirm|reject
+  orgbrain memory relation propose [json-payload]
+  orgbrain memory relation review <relation-id> --decision confirm|reject|resolve
+  orgbrain memory issues [--tenant-id <id>] [--project-id <id>]
+  orgbrain memory aging-plan [--tenant-id <id>] [--project-id <id>]
+  orgbrain memory restore-version <memory-id> --version <n>
   orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
   orgbrain memory import codex-sessions --plan <path> --expected-plan-hash <sha256> [--apply-report <path>] --execute
   orgbrain memory import codex-attempts --workspace <path> [--sessions-root <path>] [--output <path>]
@@ -320,6 +327,35 @@ async function handleMemory(store, action, rest, args) {
     return;
   }
   const tenantId = args.get("--tenant-id", "default");
+  const principal = process.env.USER || "local-user";
+  if (action === "feedback" && rest[0] === "report") {
+    emit(await store.reportMemoryFeedback({...await readPayload(args),tenant_id:tenantId,reporter_principal:principal}));
+    return;
+  }
+  if (action === "feedback" && rest[0] === "review") {
+    emit(await store.reviewMemoryFeedback({tenant_id:tenantId,feedback_id:rest[1],decision:args.get("--decision"),reviewer_principal:principal}));
+    return;
+  }
+  if (action === "relation" && rest[0] === "propose") {
+    emit(await store.proposeMemoryRelation({...await readPayload(args),tenant_id:tenantId,proposer_principal:principal}));
+    return;
+  }
+  if (action === "relation" && rest[0] === "review") {
+    emit(await store.reviewMemoryRelation({tenant_id:tenantId,relation_id:rest[1],decision:args.get("--decision"),reviewer_principal:principal}));
+    return;
+  }
+  if (action === "issues") {
+    emit(await store.listMemoryIntegrityIssues(tenantId,args.get("--project-id",null)));
+    return;
+  }
+  if (action === "aging-plan") {
+    emit(await store.planEpisodicAging(tenantId,args.get("--project-id",null)));
+    return;
+  }
+  if (action === "restore-version") {
+    emit(await store.restoreMemoryVersion(tenantId,rest[0],Number(args.get("--version")),principal));
+    return;
+  }
   if (action === "reviews") {
     const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
     emit({ source: "local_hook_observations", ...await new TaskCommitmentStore(store.dbPath).memoryReviewStatus({

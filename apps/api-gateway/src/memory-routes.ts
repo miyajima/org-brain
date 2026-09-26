@@ -26,6 +26,8 @@ import {
 import { extractMemoryCandidates } from "./memory-extraction-service";
 import { getMemoryImpactExecution, getMemoryImpactSummary, reportMemoryImpact, startMemoryImpact } from "./memory-impact-service";
 import { getPrincipalOwnerMapping, listPrincipalOwnerMappings, upsertOwnPrincipalOwnerMapping, upsertPrincipalOwnerMapping } from "./memory-ownership-service";
+import { listMemoryIntegrityIssues, proposeMemoryRelation, reportMemoryFeedback, reviewMemoryFeedback, reviewMemoryRelation } from "./memory-integrity-service";
+import { getMemoryAgingPlan } from "./memory-aging-service";
 import {
   getMemoryQualityAudit,
   getMemoryQualityAuditDetail,
@@ -101,6 +103,12 @@ const memoryPort = {
   getMemoryQualityAudit,
   getMemoryQualityAuditDetail,
   listMemoryQualityRuns,
+  reportMemoryFeedback,
+  reviewMemoryFeedback,
+  proposeMemoryRelation,
+  reviewMemoryRelation,
+  listMemoryIntegrityIssues,
+  getMemoryAgingPlan,
   captureMemories,
   deleteMemoryById,
   getMemoryDetails,

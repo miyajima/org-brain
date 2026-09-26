@@ -67,6 +67,12 @@ const ORGBRAIN_TOOL_PRESENTATION = Object.freeze({
 });
 
 const TOOL_DEFINITIONS = [
+  {name:"orgbrain_memory_feedback_report",description:"Report stale or wrong information for an exact version; requires evidence and does not change retrieval.",inputSchema:{type:"object",required:["payload"],properties:{tenant_id:{type:"string"},payload:{type:"object"}}}},
+  {name:"orgbrain_memory_feedback_review",description:"Confirm or reject a memory feedback report as its owner.",inputSchema:{type:"object",required:["feedback_id","decision"],properties:{tenant_id:{type:"string"},feedback_id:{type:"string"},decision:{type:"string",enum:["confirm","reject"]},reviewer_principal:{type:"string"}}}},
+  {name:"orgbrain_memory_relation_propose",description:"Propose an evidence-backed contradicts or fixes relationship between exact current versions.",inputSchema:{type:"object",required:["payload"],properties:{tenant_id:{type:"string"},payload:{type:"object"}}}},
+  {name:"orgbrain_memory_relation_review",description:"Confirm, reject, or resolve a relationship as owner.",inputSchema:{type:"object",required:["relation_id","decision"],properties:{tenant_id:{type:"string"},relation_id:{type:"string"},decision:{type:"string",enum:["confirm","reject","resolve"]},reviewer_principal:{type:"string"}}}},
+  {name:"orgbrain_memory_integrity_issues",description:"List confirmed unresolved contradictions for a project.",inputSchema:{type:"object",properties:{tenant_id:{type:"string"},project_id:{type:"string"}}}},
+  {name:"orgbrain_memory_aging_plan",description:"Read-only episodic aging candidates from verified use history; performs no changes.",inputSchema:{type:"object",properties:{tenant_id:{type:"string"},project_id:{type:"string"}}}},
   {name:"orgbrain_memories_confirmation_status",description:"Read a local proposal or durable save receipt after an uncertain response. Does not save or ask again.",inputSchema:{type:"object",required:["confirmation_token"],properties:{tenant_id:{type:"string"},confirmation_token:{type:"string",minLength:1,maxLength:64}}}},
   {
     name: "orgbrain_memory_version_get",
@@ -901,6 +907,12 @@ function captureDefaults(input) {
 
 async function callTool(store, name, input, toolProfile = "default") {
   const tenantId = input.tenant_id || "default";
+  if (name === "orgbrain_memory_feedback_report") return store.reportMemoryFeedback({...input.payload,tenant_id:tenantId,reporter_principal:process.env.USER||"local-user"});
+  if (name === "orgbrain_memory_feedback_review") return store.reviewMemoryFeedback({tenant_id:tenantId,feedback_id:input.feedback_id,decision:input.decision,reviewer_principal:process.env.USER||"local-user"});
+  if (name === "orgbrain_memory_relation_propose") return store.proposeMemoryRelation({...input.payload,tenant_id:tenantId,proposer_principal:process.env.USER||"local-user"});
+  if (name === "orgbrain_memory_relation_review") return store.reviewMemoryRelation({tenant_id:tenantId,relation_id:input.relation_id,decision:input.decision,reviewer_principal:process.env.USER||"local-user"});
+  if (name === "orgbrain_memory_integrity_issues") return store.listMemoryIntegrityIssues(tenantId,input.project_id||null);
+  if (name === "orgbrain_memory_aging_plan") return store.planEpisodicAging(tenantId,input.project_id||null);
   if (name === "orgbrain_memories_confirmation_status") return store.mcpConfirmationStatus({token:boundedString(input.confirmation_token,64),tenant_id:tenantId});
   if (name === "orgbrain_memory_version_get") {
     const source = boundedString(input.source, 64);

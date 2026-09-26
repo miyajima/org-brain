@@ -21,6 +21,7 @@ import { rerankV3MemoryCandidates, searchRetrievalGenerationSemanticIndex, searc
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
+import { annotateMemorySearchIntegrity } from "./memory-integrity-service";
 import { loadRetrievalGenerationProfile, resolveRetrievalGenerationAssignment, type RetrievalGenerationProfile } from "./retrieval-generation-service";
 import { fnv1a32 } from "./deterministic-sampling";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
@@ -513,6 +514,7 @@ export async function searchMemories(
       });
       response={...response,results:ranked.results as typeof response.results,meta:{...response.meta,use_history:ranked.meta}};
     } else response={...response,results:response.results.slice(0,publicLimit)};
+    response = { ...response, results: await annotateMemorySearchIntegrity(env, request.tenantId, response.results) };
     response.meta={...response.meta,returned_count:response.results.length,top_result_ids:response.results.map(x=>x.id),top_result_ranks:response.results.map(x=>x.score)};
     if (options.recordUsage === false) return response;
     const queryHash = await getQueryHash();

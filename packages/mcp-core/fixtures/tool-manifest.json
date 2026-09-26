@@ -3889,6 +3889,30 @@
       "scope": "orgbrain:write"
     },
     {
+      "name": "orgbrain_memory_aging_plan",
+      "description": "Read-only episodic aging candidates based on verified use history. No memory is changed.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
       "name": "orgbrain_memory_commit_verified",
       "description": null,
       "input_schema": {
@@ -4505,6 +4529,99 @@
       "scope": "orgbrain:read"
     },
     {
+      "name": "orgbrain_memory_feedback_report",
+      "description": "Report stale or wrong information for an exact memory version with evidence. Reporting does not change retrieval.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          },
+          "memory_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "stale",
+              "wrong"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "memory_id",
+          "memory_version",
+          "kind",
+          "reason",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_feedback_review",
+      "description": "Confirm or reject a version-scoped report. A confirmed wrong report suppresses only the matching current memory version.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "feedback_id": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "reject"
+            ]
+          }
+        },
+        "required": [
+          "feedback_id",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
       "name": "orgbrain_memory_impact_metrics",
       "description": null,
       "input_schema": {
@@ -4673,6 +4790,30 @@
       "output_schema": null,
       "permission": "write",
       "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_integrity_issues",
+      "description": "List pending feedback and confirmed unresolved contradictions in a project.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
     },
     {
       "name": "orgbrain_memory_observe",
@@ -5117,6 +5258,106 @@
       "output_schema": null,
       "permission": "read",
       "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_memory_relation_propose",
+      "description": "Propose a version-scoped contradicts or fixes relationship with evidence. Proposal alone does not change retrieval.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "from_memory_id": {
+            "type": "string"
+          },
+          "from_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "to_memory_id": {
+            "type": "string"
+          },
+          "to_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "contradicts",
+              "fixes"
+            ]
+          },
+          "evidence": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "from_memory_id",
+          "from_version",
+          "to_memory_id",
+          "to_version",
+          "relation",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memory_relation_review",
+      "description": "Confirm, reject, or resolve a proposed relationship. Review is permission checked.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "relation_id": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "reject",
+              "resolve"
+            ]
+          }
+        },
+        "required": [
+          "relation_id",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
     },
     {
       "name": "orgbrain_memory_usage_state_update",

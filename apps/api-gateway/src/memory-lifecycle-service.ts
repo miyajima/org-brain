@@ -1366,11 +1366,18 @@ export async function suppressMemory(
     reason: string;
     actorType?: string | null;
     actorId?: string | null;
+    expectedVersion?: number;
+    markCompacted?: boolean;
   }
 ): Promise<LifecycleMutationResult> {
   const existing = await loadMemoryById(env, args.tenantId, args.memoryId);
+  if (args.expectedVersion !== undefined && existing.current_version !== args.expectedVersion) {
+    throw new HttpError(409, "memory_version_changed", "Memory version changed before suppression");
+  }
   const now = Date.now();
-  const tags = sanitizeTags([...JSON.parse(existing.tags_json ?? "[]"), "compacted"]);
+  const tags = sanitizeTags(args.markCompacted === false
+    ? JSON.parse(existing.tags_json ?? "[]")
+    : [...JSON.parse(existing.tags_json ?? "[]"), "compacted"]);
   const version = (existing.current_version ?? 0) + 1;
   const snapshot = normalizeWriteItem(args.tenantId, existing.source, {
     ...v2FieldsFromStored(existing),

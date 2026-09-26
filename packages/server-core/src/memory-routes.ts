@@ -113,6 +113,46 @@ routes.get("/v1/admin/memory-quality/audit/memories/:memoryId", async (c) => {
   return ports.jsonOk(c, await ports.getMemoryQualityAuditDetail(c.env, tenantId, c.req.param("memoryId")));
 });
 
+routes.get("/v1/memory-quality/issues", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const projectId = c.req.query("project_id")?.trim();
+  if (!projectId) throw new HttpError(400, "project_id_required", "project_id is required");
+  await ports.assertPermission(c.env, { tenantId, projectId, principal: ports.getApiPrincipal(c), permission: "read" });
+  return ports.jsonOk(c, await ports.listMemoryIntegrityIssues(c.env, tenantId, projectId, ports.getApiPrincipal(c)));
+});
+
+routes.get("/v1/memory-quality/aging-plan", async (c) => {
+  const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
+  const projectId = c.req.query("project_id")?.trim();
+  if (!projectId) throw new HttpError(400, "project_id_required", "project_id is required");
+  await ports.assertPermission(c.env, { tenantId, projectId, principal: ports.getApiPrincipal(c), permission: "read" });
+  return ports.jsonOk(c, await ports.getMemoryAgingPlan(c.env, tenantId, projectId));
+});
+
+routes.post("/v1/memories/feedback", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.reportMemoryFeedback(c.env, tenantId, body, ports.getApiPrincipal(c)), 201);
+});
+
+routes.post("/v1/memories/feedback/:feedbackId/review", async (c) => {
+  const body = await c.req.json<{ decision?: "confirm" | "reject" }>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.reviewMemoryFeedback(c.env, tenantId, c.req.param("feedbackId"), body.decision, ports.getApiPrincipal(c)));
+});
+
+routes.post("/v1/memories/relations", async (c) => {
+  const body = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.proposeMemoryRelation(c.env, tenantId, body, ports.getApiPrincipal(c)), 201);
+});
+
+routes.post("/v1/memories/relations/:relationId/review", async (c) => {
+  const body = await c.req.json<{ decision?: "confirm" | "reject" | "resolve" }>();
+  const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  return ports.jsonOk(c, await ports.reviewMemoryRelation(c.env, tenantId, c.req.param("relationId"), body.decision, ports.getApiPrincipal(c)));
+});
+
 routes.get("/v1/memories", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const scope = c.req.query("scope") === "mine" ? "mine" : "org";

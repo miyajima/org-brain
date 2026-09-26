@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { evaluateMemoryQualityAuditV1 } from "../src/memory-quality-audit";
 
 describe("MemoryQualityAuditV1", () => {
+  it("surfaces pending feedback and confirmed contradictions by memory id without reasons or evidence text", async () => {
+    const audit = await evaluateMemoryQualityAuditV1({
+      tenant_id: "tenant-a", scope: "project", project_id: "project-a",
+      memory_rows: [{ id: "a", project_id: "project-a", content: "private" }, { id: "b", project_id: "project-a", content: "private" }],
+      decision_rows: [],
+      integrity_issues: { feedback: [{ memory_id: "a", status: "reported", reason: "private reason" },
+        { memory_id: "b", status: "confirmed", kind: "stale" }],
+        contradictions: [{ from_memory_id: "a", to_memory_id: "b", evidence: "private evidence" }] }
+    });
+    expect(audit.counts).toMatchObject({ pending_feedback: 1, confirmed_stale: 1, unresolved_contradictions: 1 });
+    expect(audit.reason_code_samples.pending_feedback).toEqual(["a"]);
+    expect(audit.reason_code_samples.confirmed_stale).toEqual(["b"]);
+    expect(audit.reason_code_samples.unresolved_contradiction).toEqual(["a", "b"]);
+    expect(JSON.stringify(audit)).not.toContain("private reason");
+    expect(JSON.stringify(audit)).not.toContain("private evidence");
+  });
   it("returns aggregate-only quality evidence and detects duplicates and inferred decisions", async () => {
     const secretText = "internal prose that must never appear in an audit response";
     const audit = await evaluateMemoryQualityAuditV1({
