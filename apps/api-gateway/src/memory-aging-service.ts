@@ -1,5 +1,4 @@
-import { planEpisodicAging } from "@org-brain/shared";
-import type { EpisodicAgingCandidate } from "@org-brain/shared";
+import { planEpisodicAging, type EpisodicAgingCandidate } from "@org-brain/shared";
 import type { Env } from "./types";
 
 /** Shadow-only plan: verified evaluation means action and outcome evidence passed use-history checks. */
