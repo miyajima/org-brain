@@ -20,6 +20,10 @@ function measured(response) {
   return response;
 }
 
+export function measureCompactMemoryContext(response) {
+  return measured(response);
+}
+
 export function buildCompactMemoryContext({ results, query, topK, tokenBudget, at, usageId,
   verificationSampled = false, judgment = null, protectedIds = [] }) {
   const multiple = requiresMultipleEvidenceSources(query);

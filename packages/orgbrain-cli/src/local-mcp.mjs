@@ -964,7 +964,12 @@ async function callTool(store, name, input, toolProfile = "default") {
     const attempt_usage = await Promise.all(prior_attempts.map((attempt) => store.recordAttemptUse(tenantId, {
       project_id: projectId, attempt_id: attempt.id, task_id: input.task_id ?? null, stage: "returned"
     })));
-    return { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
+    const response = { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
+    if (contextFormat === "compact") {
+      const { measureCompactMemoryContext } = await import("./lib/compact-memory-context.mjs");
+      return measureCompactMemoryContext(response);
+    }
+    return response;
   }
   if (name === "orgbrain_domain_context") return previewLocalDomainRecall(store, { ...input, prompt: input.query });
   if (name === "orgbrain_managed_object_search") return searchLocalManagedObjects(store, input);
