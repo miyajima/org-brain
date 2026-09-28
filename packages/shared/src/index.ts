@@ -36,6 +36,7 @@ export * from "./retrieval-units";
 export * from "./schemas";
 export * from "./scheduled-jobs";
 export * from "./autonomy-policy";
+export * from "./agent-activity";
 export {
   VERIFIED_BATCH_MAX_BACKGROUND_INPUTS,
   VERIFIED_BATCH_MAX_BYTES,

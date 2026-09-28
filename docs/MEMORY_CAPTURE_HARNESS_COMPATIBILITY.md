@@ -229,3 +229,20 @@ not change Stop capture, the global Astra Harness, or interactive memory
 confirmation. It is enabled only for project IDs explicitly listed in the local
 `ORGBRAIN_ATTEMPT_HOOK_PROJECTS` environment setting. Cloud activation requires a trusted event collector, migration,
 permission checks and a successful local pilot before deployment.
+
+## Agent activity observation (Local schema 30)
+
+`agent-activity/v1` adds an append-only, metadata-only timeline beside memory and
+action-attempt history. It normalizes session, tool, command, file, approval,
+MCP, model and token observations from supported harnesses. Prompt bodies, raw
+commands, absolute paths, tool arguments and tool output are never written to
+the activity table; only bounded classifications, byte counts and hashes are
+retained. A configured hook is not considered live until a matching event is
+observed.
+
+Activity events may be cited as source references, but do not authorize a
+memory write or make an extracted claim true. Same-tenant and same-project
+validation is mandatory. Skill preview/install likewise accepts only verified
+or explicitly user-confirmed memory and never overwrites an existing file by
+default. See [Agent activity v1](AGENT_ACTIVITY_V1.md) for the event contract,
+CLI, connector inventory, security fixtures and rollout gates.
