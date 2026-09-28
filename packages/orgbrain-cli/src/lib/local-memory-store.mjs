@@ -5,6 +5,10 @@ import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-run
 import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
 import { ATTEMPT_SCHEMA_SQL, attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
+import {
+  AGENT_ACTIVITY_SCHEMA_SQL,
+  normalizeAgentActivity
+} from "./agent-activity.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, rename, stat, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -306,6 +310,82 @@ function memoryFromRow(row) {
     learning: parseJsonObject(row.learning_json),
     quality_dimensions: parseJsonObject(row.quality_dimensions_json)
   };
+}
+
+function activityFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    schema_version: row.schema_version,
+    tenant_id: row.tenant_id,
+    project_id: row.project_id,
+    occurred_at: new Date(Number(row.occurred_at)).toISOString(),
+    sequence: Number(row.sequence),
+    harness_name: row.harness_name,
+    collection_method: row.collection_method,
+    fidelity: row.fidelity,
+    action: row.action,
+    category: row.category,
+    session_id: row.session_id,
+    tool_call_id: row.tool_call_id,
+    model: row.model,
+    provider: row.provider,
+    tokens: {
+      input: row.input_tokens === null ? null : Number(row.input_tokens),
+      output: row.output_tokens === null ? null : Number(row.output_tokens),
+      cache_read: row.cache_read_tokens === null ? null : Number(row.cache_read_tokens),
+      cache_write: row.cache_write_tokens === null ? null : Number(row.cache_write_tokens)
+    },
+    metadata: parseJsonObject(row.metadata_json, {}),
+    content: null,
+    source_event_hash: row.source_event_hash,
+    created_at: new Date(Number(row.created_at)).toISOString()
+  };
+}
+
+function activityComparable(activity) {
+  return JSON.stringify({
+    project_id: activity.project_id,
+    harness_name: activity.harness_name,
+    collection_method: activity.collection_method,
+    fidelity: activity.fidelity,
+    action: activity.action,
+    category: activity.category,
+    session_id: activity.session_id,
+    tool_call_id: activity.tool_call_id,
+    model: activity.model,
+    provider: activity.provider,
+    tokens: activity.tokens,
+    metadata: activity.metadata
+  });
+}
+
+function validateActivitySourceReferences(db, record) {
+  record.source_references = record.source_references.map((reference) => {
+    if (reference.type !== "agent_activity") return reference;
+    const rawRef = nullableString(reference.ref, 256);
+    const eventId = rawRef?.startsWith("agent-activity:") ? rawRef.slice("agent-activity:".length) : null;
+    if (!eventId) throw new Error("invalid_agent_activity_reference");
+    const activity = db.prepare(
+      `SELECT id, tenant_id, project_id, occurred_at, sequence, action, fidelity, harness_name
+       FROM agent_activity_events WHERE tenant_id = ? AND id = ?`
+    ).get(record.tenant_id, eventId);
+    if (!activity) throw new Error("agent_activity_not_found");
+    if ((record.project_id ?? null) !== (activity.project_id ?? null)) {
+      throw new Error("agent_activity_scope_mismatch");
+    }
+    return {
+      type: "agent_activity",
+      ref: `agent-activity:${activity.id}`,
+      event_id: activity.id,
+      occurred_at: new Date(Number(activity.occurred_at)).toISOString(),
+      sequence: Number(activity.sequence),
+      action: activity.action,
+      fidelity: activity.fidelity,
+      harness_name: activity.harness_name
+    };
+  });
+  return record;
 }
 
 function captureComparable(record) {
@@ -2298,6 +2378,7 @@ function migrateSchema(db) {
     db.exec(MEMORY_USE_SCHEMA_SQL);
     db.exec(ATTEMPT_SCHEMA_SQL);
     db.exec(LOCAL_USE_SCHEMA);
+    db.exec(AGENT_ACTIVITY_SCHEMA_SQL);
     addIndexes(db);
     rebuildFts(db);
     rebuildLocalEmbeddings(db);
@@ -3368,6 +3449,7 @@ export class LocalMemoryStore {
         !hasTable(db, "action_attempt_use_events") ||
         !hasTable(db, "action_attempt_pattern_links") ||
         !hasTable(db, "action_attempt_metric_events") ||
+        !hasTable(db, "agent_activity_events") ||
         !hasTable(db, "local_mcp_confirmations") ||
         !hasTable(db, "retrieval_generations") ||
         !hasTable(db, "retrieval_units") ||
@@ -3385,6 +3467,185 @@ export class LocalMemoryStore {
 
   open({ readOnly = false } = {}) {
     return new DatabaseSync(this.dbPath, { readOnly });
+  }
+
+  async recordActivity(input) {
+    await this.init();
+    const normalized = normalizeAgentActivity(input);
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const existing = db.prepare(
+          "SELECT * FROM agent_activity_events WHERE tenant_id = ? AND source_event_hash = ?"
+        ).get(normalized.tenant_id, normalized.source_event_hash);
+        if (existing) {
+          if (activityComparable(activityFromRow(existing)) !== activityComparable(normalized)) {
+            throw new Error("activity_source_conflict");
+          }
+          db.exec("COMMIT");
+          return { ...activityFromRow(existing), deduplicated: true };
+        }
+        const sequence = normalized.sequence ?? Number(db.prepare(
+          `SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+           FROM agent_activity_events
+           WHERE tenant_id = ? AND session_id IS ?`
+        ).get(normalized.tenant_id, normalized.session_id).next_sequence);
+        const occurredAt = new Date(normalized.occurred_at).getTime();
+        const createdAt = Date.now();
+        db.prepare(
+          `INSERT INTO agent_activity_events(
+             id, schema_version, tenant_id, project_id, occurred_at, sequence,
+             harness_name, collection_method, fidelity, action, category,
+             session_id, tool_call_id, model, provider, input_tokens, output_tokens,
+             cache_read_tokens, cache_write_tokens, metadata_json, content_json,
+             source_event_hash, created_at
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)`
+        ).run(
+          normalized.id,
+          normalized.schema_version,
+          normalized.tenant_id,
+          normalized.project_id,
+          occurredAt,
+          sequence,
+          normalized.harness_name,
+          normalized.collection_method,
+          normalized.fidelity,
+          normalized.action,
+          normalized.category,
+          normalized.session_id,
+          normalized.tool_call_id,
+          normalized.model,
+          normalized.provider,
+          normalized.tokens.input,
+          normalized.tokens.output,
+          normalized.tokens.cache_read,
+          normalized.tokens.cache_write,
+          JSON.stringify(normalized.metadata),
+          normalized.source_event_hash,
+          createdAt
+        );
+        const saved = db.prepare("SELECT * FROM agent_activity_events WHERE id = ?").get(normalized.id);
+        db.exec("COMMIT");
+        return { ...activityFromRow(saved), deduplicated: false };
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.close();
+      await enforcePrivatePermissions(this.dbPath);
+    }
+  }
+
+  async getActivity(tenantId, eventId) {
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return activityFromRow(db.prepare(
+        "SELECT * FROM agent_activity_events WHERE tenant_id = ? AND id = ?"
+      ).get(tenantId, eventId));
+    } finally {
+      db.close();
+    }
+  }
+
+  async searchActivity(filters = {}) {
+    await this.init();
+    const tenantId = nullableString(filters.tenant_id, 128) || "default";
+    const clauses = ["tenant_id = ?"];
+    const bindings = [tenantId];
+    for (const [column, value, maxLength] of [
+      ["project_id", filters.project_id, 128],
+      ["harness_name", filters.harness_name, 64],
+      ["action", filters.action, 128],
+      ["category", filters.category, 64],
+      ["fidelity", filters.fidelity, 32],
+      ["session_id", filters.session_id, 256]
+    ]) {
+      if (value !== undefined && value !== null) {
+        clauses.push(`${column} IS ?`);
+        bindings.push(nullableString(value, maxLength));
+      }
+    }
+    if (filters.since) {
+      const since = new Date(filters.since).getTime();
+      if (!Number.isFinite(since)) throw new Error("invalid_activity_since");
+      clauses.push("occurred_at >= ?");
+      bindings.push(since);
+    }
+    if (filters.until) {
+      const until = new Date(filters.until).getTime();
+      if (!Number.isFinite(until)) throw new Error("invalid_activity_until");
+      clauses.push("occurred_at <= ?");
+      bindings.push(until);
+    }
+    if (filters.query) {
+      const query = `%${String(filters.query).replaceAll("%", "\\%").replaceAll("_", "\\_").slice(0, 200)}%`;
+      clauses.push("(action LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR harness_name LIKE ? ESCAPE '\\' OR json_extract(metadata_json, '$.tool_name') LIKE ? ESCAPE '\\')");
+      bindings.push(query, query, query, query);
+    }
+    const limit = Math.max(1, Math.min(500, Number(filters.limit ?? 100) || 100));
+    const db = this.open({ readOnly: true });
+    try {
+      return db.prepare(
+        `SELECT * FROM agent_activity_events WHERE ${clauses.join(" AND ")}
+         ORDER BY occurred_at DESC, sequence DESC, id DESC LIMIT ?`
+      ).all(...bindings, limit).map(activityFromRow);
+    } finally {
+      db.close();
+    }
+  }
+
+  async summarizeActivity(filters = {}) {
+    const events = await this.searchActivity({ ...filters, limit: filters.limit ?? 500 });
+    const countBy = (field) => Object.fromEntries(
+      [...events.reduce((counts, event) => counts.set(event[field], (counts.get(event[field]) ?? 0) + 1), new Map())]
+        .sort(([left], [right]) => String(left).localeCompare(String(right)))
+    );
+    const tokens = events.reduce((totals, event) => ({
+      input: totals.input + (event.tokens.input ?? 0),
+      output: totals.output + (event.tokens.output ?? 0),
+      cache_read: totals.cache_read + (event.tokens.cache_read ?? 0),
+      cache_write: totals.cache_write + (event.tokens.cache_write ?? 0)
+    }), { input: 0, output: 0, cache_read: 0, cache_write: 0 });
+    const durations = events
+      .map((event) => event.metadata.duration_ms)
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => left - right);
+    const memoryStages = Object.fromEntries(
+      [...events.reduce((counts, event) => {
+        const stage = event.metadata.memory_stage;
+        if (stage) counts.set(stage, (counts.get(stage) ?? 0) + 1);
+        return counts;
+      }, new Map())].sort(([left], [right]) => left.localeCompare(right))
+    );
+    return {
+      total: events.length,
+      observable: events.filter((event) => event.fidelity === "observed").length,
+      inferred: events.filter((event) => event.fidelity === "inferred").length,
+      coverage: {
+        observable: events.filter((event) => event.fidelity === "observed" && event.metadata.coverage !== "opaque").length,
+        opaque: events.filter((event) => event.metadata.coverage === "opaque").length,
+        missing: null,
+        missing_reason: "expected_event_denominator_required"
+      },
+      by_action: countBy("action"),
+      by_category: countBy("category"),
+      by_fidelity: countBy("fidelity"),
+      by_harness: countBy("harness_name"),
+      by_memory_stage: memoryStages,
+      tokens,
+      duration_ms: {
+        samples: durations.length,
+        average: durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null,
+        p95: durations.length ? durations[Math.min(durations.length - 1, Math.ceil(durations.length * 0.95) - 1)] : null
+      },
+      range: {
+        newest: events[0]?.occurred_at ?? null,
+        oldest: events.at(-1)?.occurred_at ?? null
+      }
+    };
   }
 
   async startMemoryImpact(tenantId, input, principal = "local") {
@@ -5209,6 +5470,7 @@ export class LocalMemoryStore {
       },
       existing ? memoryFromRow(existing) : null
     );
+    validateActivitySourceReferences(db, record);
     validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
     if (existing && capturePayloadEquivalent(record, memoryFromRow(existing))) {
       return {
@@ -6685,6 +6947,11 @@ export class LocalMemoryStore {
       }
       const userVersion = Number(db.prepare("PRAGMA user_version").get().user_version);
       if (userVersion !== MEMORY_SCHEMA_VERSION) errors.push(`schema version ${userVersion} != ${MEMORY_SCHEMA_VERSION}`);
+      const activityCount = Number(db.prepare("SELECT COUNT(*) AS count FROM agent_activity_events").get().count);
+      const activityContentCount = Number(db.prepare(
+        "SELECT COUNT(*) AS count FROM agent_activity_events WHERE content_json IS NOT NULL"
+      ).get().count);
+      if (activityContentCount > 0) errors.push(`activity content must be null: ${activityContentCount} rows`);
       return {
         ok: errors.length === 0,
         schema_version: userVersion,
@@ -6702,6 +6969,8 @@ export class LocalMemoryStore {
         retrieval_unit_v4_embedding_count: retrievalUnitV4EmbeddingCount,
         retrieval_unit_v4_digest: stableDigest(retrievalUnitsV4),
         content_digest: stableDigest(rows),
+        activity_event_count: activityCount,
+        activity_content_count: activityContentCount,
         errors
       };
     } finally {

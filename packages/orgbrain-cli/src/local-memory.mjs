@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { CLI_BUILD_INFO } from "./build-info.mjs";
 import {
   DEFAULT_LOCAL_DB,
@@ -50,6 +51,15 @@ Usage:
   orgbrain memory import codex-sessions --plan <path> --expected-plan-hash <sha256> [--apply-report <path>] --execute
   orgbrain memory import codex-attempts --workspace <path> [--sessions-root <path>] [--output <path>]
   orgbrain memory import codex-attempts --workspace <path> --plan <path> --expected-plan-hash <sha256> --execute
+  orgbrain memory skill preview <memory-id> [--project <path>]
+  orgbrain memory skill install <memory-id> [--project <path>] [--force]
+  orgbrain activity ingest <codex|claude|cursor|opencode> [json-payload]
+  orgbrain activity ingest-otlp <codex|claude|cursor|opencode> [OTLP-json-payload]
+  orgbrain activity search [query] [--tenant-id <id>] [--project-id <id>] [--harness <name>] [--action <action>] [--since <ISO-8601>]
+  orgbrain activity show <event-id> [--tenant-id <id>]
+  orgbrain activity timeline [--tenant-id <id>] [--project-id <id>] [--session-id <id>]
+  orgbrain activity summary [--tenant-id <id>] [--project-id <id>]
+  orgbrain activity scan [--tenant-id <id>] [--project-id <id>]
   orgbrain category list [--tenant-id <id>] [--include-inactive]
   orgbrain category create --slug <slug> --label <label> [--description <text>]
   orgbrain category update <category-id> [--slug <slug>] [--label <label>] [--active true|false]
@@ -108,6 +118,7 @@ Usage:
   orgbrain cf doctor [--root <checkout>] [--live] [--mcp-url <https-url>] [--hook-url <https-url>]
   orgbrain cf provision [--root <checkout>] [--with-vectorize] [--with-managed-oauth --mcp-host <host> --hook-host <host> --access-policy-id <id> --hook-access-policy-id <id>] [--execute]
   orgbrain connector setup <codex|claude|cursor|opencode|openclaw> [--mode mcp|remote-mcp|cloud-hooks|minimal-hooks] [--mcp-protocol modern|legacy] [--legacy-until <ISO-8601>] [--url <https-url>] [--maintenance daily|off] [--cli-path <local-memory.mjs>] [--scope user|project] [--execute] [--approve-hooks]
+  orgbrain connector inventory [--tenant-id <id>] [--project-id <id>]
 
 Compatibility aliases:
   orgbrain upsert | search | list | export-markdown
@@ -356,6 +367,23 @@ async function handleMemory(store, action, rest, args) {
     emit(await store.restoreMemoryVersion(tenantId,rest[0],Number(args.get("--version")),principal));
     return;
   }
+  if (action === "skill") {
+    const [skillAction, memoryId] = rest;
+    if (!memoryId || !["preview", "install"].includes(skillAction)) {
+      throw new Error("memory skill requires preview|install and a memory id");
+    }
+    const { installMemorySkill, previewMemorySkill } = await import("./lib/memory-skill.mjs");
+    const options = {
+      tenantId,
+      memoryId,
+      projectRoot: args.get("--project", process.cwd()),
+      force: args.flags.has("--force")
+    };
+    emit(skillAction === "preview"
+      ? await previewMemorySkill(store, options)
+      : await installMemorySkill(store, options));
+    return;
+  }
   if (action === "reviews") {
     const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
     emit({ source: "local_hook_observations", ...await new TaskCommitmentStore(store.dbPath).memoryReviewStatus({
@@ -572,6 +600,94 @@ async function readStructuredPayload(args, rest = []) {
     ...payload,
     ...(args.get("--tenant-id") ? { tenant_id: args.get("--tenant-id") } : {})
   };
+}
+
+async function handleActivity(store, action, rest, args) {
+  const tenantId = args.get("--tenant-id", "default");
+  const projectId = args.get("--project-id", null);
+  if (action === "ingest") {
+    const harnessName = rest[0];
+    if (!["codex", "claude", "cursor", "opencode", "openclaw"].includes(harnessName)) {
+      throw new Error("activity ingest requires a supported harness");
+    }
+    const payload = await readStructuredPayload(args, rest.slice(1));
+    emit(await store.recordActivity({
+      ...payload,
+      tenant_id: payload.tenant_id || tenantId,
+      project_id: payload.project_id ?? projectId,
+      harness_name: harnessName,
+      collection_method: payload.collection_method || "manual",
+      fidelity: payload.fidelity || "observed"
+    }));
+    return;
+  }
+  if (action === "ingest-otlp") {
+    const harnessName = rest[0];
+    if (!["codex", "claude", "cursor", "opencode", "openclaw"].includes(harnessName)) {
+      throw new Error("activity ingest-otlp requires a supported harness");
+    }
+    const payload = await readStructuredPayload(args, rest.slice(1));
+    const { normalizeOtlpActivities } = await import("./lib/agent-activity.mjs");
+    const normalized = normalizeOtlpActivities(payload, {
+      tenant_id: tenantId,
+      project_id: projectId,
+      harness_name: harnessName
+    });
+    const events = [];
+    for (const event of normalized) events.push(await store.recordActivity(event));
+    emit({ ingested: events.length, events });
+    return;
+  }
+  if (action === "show") {
+    if (!rest[0]) throw new Error("activity show requires an event id");
+    const event = await store.getActivity(tenantId, rest[0]);
+    if (!event) throw new Error("activity_not_found");
+    emit(event);
+    return;
+  }
+  const filters = {
+    tenant_id: tenantId,
+    project_id: projectId,
+    harness_name: args.get("--harness", null),
+    action: args.get("--action", null),
+    category: args.get("--category", null),
+    fidelity: args.get("--fidelity", null),
+    session_id: args.get("--session-id", null),
+    since: args.get("--since", null),
+    until: args.get("--until", null),
+    limit: Number(args.get("--limit", 100))
+  };
+  if (action === "search") {
+    emit(await store.searchActivity({ ...filters, query: rest.join(" ").trim() || args.get("--query", null) }));
+    return;
+  }
+  if (action === "timeline") {
+    emit((await store.searchActivity(filters)).reverse());
+    return;
+  }
+  if (action === "summary") {
+    emit(await store.summarizeActivity(filters));
+    return;
+  }
+  if (action === "scan") {
+    const { scanActivitySecurity, validateActivityRules } = await import("./lib/agent-activity.mjs");
+    const validation = validateActivityRules();
+    const findings = scanActivitySecurity(await store.searchActivity({ ...filters, limit: 500 }));
+    emit({ ok: validation.ok, rule_validation: validation, findings });
+    return;
+  }
+  throw new Error(`unknown activity command: ${action || "(missing)"}`);
+}
+
+async function recordHookActivity(store, hook, payload, tenantId = "default", projectId = null) {
+  try {
+    const { agentActivityFromHook } = await import("./lib/agent-activity.mjs");
+    const configuredDb = process.env.ORGBRAIN_LOCAL_DB || store.dbPath;
+    const activityStore = resolve(configuredDb) === store.dbPath ? store : new LocalMemoryStore(configuredDb);
+    return await activityStore.recordActivity(agentActivityFromHook({ hook, payload, tenantId, projectId }));
+  } catch {
+    return null;
+  }
 }
 
 async function readRequestBody(request, maxBytes = 1_000_000) {
@@ -817,12 +933,29 @@ async function main() {
       tenantId: workspace.entry?.tenant_id || process.env.ORGBRAIN_TENANT_ID || "default", projectId: workspace.entry?.project_id ?? null
     });
     const mcp = resolveMcpConfig();
+    const { connectorInventory } = await import("./lib/connector-inventory.mjs");
+    const inventory = await connectorInventory({
+      store,
+      homeDir: homedir(),
+      tenantId: workspace.entry?.tenant_id || process.env.ORGBRAIN_TENANT_ID || "default",
+      projectId: workspace.entry?.project_id ?? null
+    });
+    const hookWarnings = [
+      ...inventory.warnings,
+      ...(process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE === "false" && inventory.connectors.some((item) => item.managed)
+        ? [{ code: "hook_capture_disabled", detail: "managed hooks exist while local hook capture is disabled" }]
+        : [])
+    ];
     emit({ ...result, cli: { ...cli, executable: process.execPath, entrypoint: process.argv[1] }, workspace,
       hook_mcp: { configured: mcp.complete, hostname: mcp.url ? new URL(mcp.url).hostname : null, live_connection: "not_checked" },
+      connector_inventory: inventory,
+      hook_warnings: hookWarnings,
       memory_review: { states: review.states, activity: review.activity, recent_label_count: review.labels.length } });
     if (!result.ok) process.exitCode = 1;
   } else if (command === "memory") {
     await handleMemory(store, action, rest, args);
+  } else if (command === "activity") {
+    await handleActivity(store, action, rest, args);
   } else if (command === "category") {
     await handleCategory(store, action, rest, args);
   } else if (["profile", "organization", "user", "group"].includes(command)) {
@@ -997,19 +1130,50 @@ async function main() {
     const { buildCodexMemoryContext } = await import("./codex-memory-context.mjs");
     const { loadEnvFallbacks } = await import("./hook-memory-bridge.mjs");
     await loadEnvFallbacks();
-    const result = await buildCodexMemoryContext(await readStdin());
+    const payloadText = await readStdin();
+    let activityPayload = payloadText;
+    try { activityPayload = payloadText ? JSON.parse(payloadText) : {}; } catch {}
+    await recordHookActivity(
+      store,
+      action,
+      activityPayload,
+      process.env.ORGBRAIN_TENANT_ID || "default",
+      activityPayload?.project_id ?? null
+    );
+    const result = await buildCodexMemoryContext(payloadText);
     if (result) process.stdout.write(`${JSON.stringify(result)}\n`);
   } else if (command === "hook" && action === "cursor-context") {
     const { flushHookCaptureOutbox, loadEnvFallbacks, resolveMcpConfig } = await import("./hook-memory-bridge.mjs");
     await loadEnvFallbacks();
+    const payloadText = await readStdin();
+    let activityPayload = payloadText;
+    try { activityPayload = payloadText ? JSON.parse(payloadText) : {}; } catch {}
+    await recordHookActivity(
+      store,
+      action,
+      activityPayload,
+      process.env.ORGBRAIN_TENANT_ID || "default",
+      activityPayload?.project_id ?? null
+    );
     const config = resolveMcpConfig();
     if (config.complete) await flushHookCaptureOutbox(config, 100).catch(() => undefined);
     process.stdout.write("{}\n");
   } else if (command === "hook" && ["codex-stop", "claude-stop", "cursor-stop"].includes(action)) {
-    const { ingestHookEvent } = await import("./hook-memory-bridge.mjs");
+    const { ingestHookEvent, loadEnvFallbacks } = await import("./hook-memory-bridge.mjs");
     const { formatMemoryConfirmationQuestionsForDisplay } = await import("./lib/memory-confirmation-hints.mjs");
+    await loadEnvFallbacks();
     const source = action === "codex-stop" ? "codex-stop" : action.replace(/-stop$/u, "");
-    const result = await ingestHookEvent(source, await readStdin(), { emit: false });
+    const payloadText = await readStdin();
+    let activityPayload = payloadText;
+    try { activityPayload = payloadText ? JSON.parse(payloadText) : {}; } catch {}
+    await recordHookActivity(
+      store,
+      action,
+      activityPayload,
+      process.env.ORGBRAIN_TENANT_ID || "default",
+      activityPayload?.project_id ?? null
+    );
+    const result = await ingestHookEvent(source, payloadText, { emit: false });
     const output = action === "codex-stop" && result.confirmation_continuation === true
       ? {
         decision: "block",
@@ -1052,6 +1216,7 @@ async function main() {
     const attemptHookProjects = String(process.env.ORGBRAIN_ATTEMPT_HOOK_PROJECTS || "")
       .split(",").map((item) => item.trim()).filter(Boolean);
     const attemptHookEnabled = payload.project_id && attemptHookProjects.includes(payload.project_id);
+    await recordHookActivity(store, action, payload, tenantId, payload.project_id ?? null);
     if (action === "codex-pre-tool") {
       if (attemptHookEnabled) {
         const { preflightHookAction } = await import("./lib/action-attempt-hook.mjs");
@@ -1154,8 +1319,18 @@ async function main() {
     emit(commandWarnings.length ? { ...result, warnings: commandWarnings } : result);
     if (!result.ok) process.exitCode = 1;
   } else if (command === "connector") {
-    const { runConnectorCommand } = await import("./connector-setup.mjs");
-    emit(await runConnectorCommand(action, rest, args));
+    if (action === "inventory") {
+      const { connectorInventory } = await import("./lib/connector-inventory.mjs");
+      emit(await connectorInventory({
+        store,
+        homeDir: homedir(),
+        tenantId: args.get("--tenant-id", "default"),
+        projectId: args.get("--project-id", null)
+      }));
+    } else {
+      const { runConnectorCommand } = await import("./connector-setup.mjs");
+      emit(await runConnectorCommand(action, rest, args));
+    }
   } else {
     printHelp();
     process.exitCode = 1;
