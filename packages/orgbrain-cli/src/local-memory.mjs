@@ -32,6 +32,14 @@ Usage:
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>] [--root <checkout>]
   orgbrain workspace resolve [--root <checkout>]
+  orgbrain feature llm-wiki enable|disable|status
+  orgbrain wiki init|pages|sources|drafts|diagnose
+  orgbrain wiki read|put|patch|links|history|delete <path> [--input <file>] [--if-match <hash>]
+  orgbrain wiki search <query> [--mode lexical|hybrid] [--scope wiki|sources|all]
+  orgbrain wiki ingest <file> [--source-id <id>]
+  orgbrain wiki migrate|restore-backup --from <path>
+  orgbrain wiki export|backup --output <new-directory>
+  orgbrain wiki reindex-embeddings
   orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type implementation|review|debug|proposal|support|research|operations|other] [--tag <tag>]
   orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
@@ -721,6 +729,9 @@ async function serve(store, args) {
     throw new Error("local mode only permits loopback hosts; set ORGBRAIN_ALLOW_NON_LOOPBACK=1 to opt in");
   }
   const port = Number(args.get("--port", 8788));
+  const { wikiServiceForStore } = await import("./lib/wiki-service.mjs");
+  const { createWikiHttpHandler } = await import("./lib/wiki-http.mjs");
+  const wikiHttp = createWikiHttpHandler(wikiServiceForStore(store));
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("--port must be 1..65535");
   await store.init();
   const automaticBackups = process.env.ORGBRAIN_AUTO_BACKUP !== "false";
@@ -739,6 +750,7 @@ async function serve(store, args) {
   const initialBackup = automaticBackups ? await createAutomaticBackup() : null;
   const server = createServer(async (request, response) => {
     try {
+      if (await wikiHttp(request, response)) return;
       const requestUrl = new URL(request.url || "/", `http://${host}:${port}`);
       const path = requestUrl.pathname;
       const tenantId = requestUrl.searchParams.get("tenant_id") || "default";
@@ -873,6 +885,11 @@ async function main() {
   }
 
   let [command, action, ...rest] = args.positional;
+  if (["feature", "wiki"].includes(command)) {
+    const { runWikiCli } = await import("./lib/wiki-cli.mjs");
+    emit(await runWikiCli(command, action, rest, args, readStdin));
+    return;
+  }
   const commandWarnings = [];
   if (command === "cloud") {
     command = "cf";
@@ -1140,7 +1157,16 @@ async function main() {
       process.env.ORGBRAIN_TENANT_ID || "default",
       activityPayload?.project_id ?? null
     );
-    const result = await buildCodexMemoryContext(payloadText);
+    let result = await buildCodexMemoryContext(payloadText);
+    try {
+      const { WikiService } = await import("./lib/wiki-service.mjs");
+      const { wikiMaintenanceContext } = await import("./lib/wiki-maintenance.mjs");
+      const wiki = await wikiMaintenanceContext(new WikiService(), typeof activityPayload === "object" ? activityPayload : {});
+      if (wiki.context) {
+        result ||= { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: "" } };
+        result.hookSpecificOutput.additionalContext = [result.hookSpecificOutput.additionalContext, wiki.context].filter(Boolean).join("\n\n");
+      }
+    } catch { /* Optional Wiki failures must not interrupt memory hooks. */ }
     if (result) process.stdout.write(`${JSON.stringify(result)}\n`);
   } else if (command === "hook" && action === "cursor-context") {
     const { flushHookCaptureOutbox, loadEnvFallbacks, resolveMcpConfig } = await import("./hook-memory-bridge.mjs");

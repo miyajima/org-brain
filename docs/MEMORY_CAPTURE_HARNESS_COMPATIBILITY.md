@@ -24,6 +24,11 @@ This repository owns all memory extraction and quality decisions. The shared Ast
   skill. Its discovery helper is read-only and returns a successful no-op when
   LLM Wiki is not configured, disabled or its vault is unavailable. Neither
   OrgBrain runtime nor LLM Wiki runtime imports or invokes the other.
+- The optional integrated local Knowledge Wiki is a separate feature/model/DB
+  under `features.llm_wiki.enabled`, default OFF. It does not import, enable,
+  disable or rewrite an external LLM Wiki installation. Its separate maintenance
+  context is bounded guidance only, never a transcript reader or generation call.
+  See [Local Knowledge Wiki](LOCAL_KNOWLEDGE_WIKI.md).
 - The Stop hook scans only the current turn of the existing transcript (from a
   backwards read capped at 4 MiB), verifies successful observe calls against
   real tool/file/user evidence, and sends at most one batch to the known

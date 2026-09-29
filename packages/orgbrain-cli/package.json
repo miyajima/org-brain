@@ -18,12 +18,13 @@
   "publishConfig": {
     "access": "public"
   },
+  "files": ["dist", "bin", "assets/wiki", "skills/org-brain-wiki"],
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",
     "js-tiktoken": "1.0.21",
     "zod": "4.3.6"
   },
   "scripts": {
-    "prepack": "node ../../scripts/build-standalone.mjs packages/orgbrain-cli/dist/orgbrain.mjs"
+    "prepack": "node ../../scripts/build-wiki.mjs && node ../../scripts/build-standalone.mjs packages/orgbrain-cli/dist/orgbrain.mjs"
   }
 }

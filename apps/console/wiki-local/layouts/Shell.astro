@@ -1,0 +1,7 @@
+---
+import "../styles/wiki.css";
+const { title="Wiki", workspace=false }=Astro.props;
+---
+<!doctype html>
+<html lang="ja"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>{title} | OrgBrain</title></head>
+<body class:list={{"wiki-shell":workspace}}><header class="app-header"><a class="brand" href="/settings">OrgBrain <span>LOCAL</span></a><nav><a id="wiki-nav" href="/wiki" hidden>Wiki</a><a href="/settings">設定</a></nav>{workspace && <div class="pane-controls"><button id="toggle-pages" class="icon" aria-label="ページ一覧を開く" title="ページ一覧を開く" aria-controls="pages-pane" aria-expanded="false"><i data-lucide="panel-left"></i></button><button id="toggle-evidence" class="icon" aria-label="根拠ペインを開く" title="根拠ペインを開く" aria-controls="evidence-pane" aria-expanded="false"><i data-lucide="panel-right"></i></button></div>}<span id="connection" class="connection">ローカル</span></header><slot/></body></html>
