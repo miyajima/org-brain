@@ -2,6 +2,7 @@
 
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
+import { accessSync, constants, statSync } from "node:fs";
 import { chmod, copyFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
@@ -137,17 +138,18 @@ function extractRuntime(row, current) {
   const payload = asRecord(row?.payload);
   const rawUsage = asRecord(row?.usage ?? payload.usage);
   const usage = Object.keys(rawUsage).length > 0 ? (() => {
-    const inputTokens = Number(rawUsage.input_tokens ?? rawUsage.inputTokens ?? 0);
-    const cachedInputTokens = Number(rawUsage.cached_input_tokens ?? rawUsage.cachedInputTokens ?? 0);
-    const outputTokens = Number(rawUsage.output_tokens ?? rawUsage.outputTokens ?? 0);
-    const reasoningTokens = Number(rawUsage.reasoning_tokens ?? rawUsage.reasoningTokens ?? 0);
-    return {
-      input_tokens: inputTokens,
-      cached_input_tokens: cachedInputTokens,
-      output_tokens: outputTokens,
-      reasoning_tokens: reasoningTokens,
-      total_tokens: Number(rawUsage.total_tokens ?? rawUsage.totalTokens ?? (inputTokens + outputTokens))
+    const fields = {
+      input_tokens: "inputTokens", cached_input_tokens: "cachedInputTokens",
+      output_tokens: "outputTokens", reasoning_tokens: "reasoningTokens", total_tokens: "totalTokens"
     };
+    const measured = Object.fromEntries(Object.entries(fields).flatMap(([field, alias]) => {
+      const value = rawUsage[field] ?? rawUsage[alias];
+      return typeof value === "number" && Number.isFinite(value) && value >= 0 ? [[field, value]] : [];
+    }));
+    if (measured.total_tokens == null && Number.isFinite(measured.input_tokens + measured.output_tokens)) {
+      measured.total_tokens = measured.input_tokens + measured.output_tokens;
+    }
+    return measured;
   })() : current.usage;
   return {
     model: typeof row?.model === "string" ? row.model : typeof payload.model === "string" ? payload.model : current.model,
@@ -157,8 +159,27 @@ function extractRuntime(row, current) {
   };
 }
 
+function resolveCodexExecutable(codexExecutable) {
+  const explicit = codexExecutable ?? process.env.CODEX_CLI_PATH;
+  const filename = process.platform === "win32" ? "codex.exe" : "codex";
+  const candidates = explicit ? [explicit] : [
+    path.join(os.homedir(), ".local", "bin", filename),
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+    "/Applications/Codex.app/Contents/Resources/codex",
+    "/Applications/ChatGPT.app/Contents/Resources/codex",
+    ...String(process.env.PATH ?? "").split(path.delimiter).filter(Boolean).map((directory) => path.join(directory, filename))
+  ];
+  for (const candidate of candidates) {
+    try {
+      accessSync(candidate, constants.X_OK);
+      if (statSync(candidate).isFile()) return path.resolve(candidate);
+    } catch { /* Discovery never executes candidates or replaces an invalid explicit override. */ }
+  }
+  throw new Error("codex_executable_unavailable");
+}
+
 export function codexRunManifest(
-  codexExecutable = process.env.CODEX_CLI_PATH || "/Applications/ChatGPT.app/Contents/Resources/codex",
+  codexExecutable = resolveCodexExecutable(),
   outputSchema = OUTPUT_SCHEMA,
   runtime = { model: MODEL, reasoning_effort: REASONING_EFFORT }
 ) {
@@ -177,32 +198,33 @@ export function codexRunManifest(
 }
 
 export async function runCodexStructuredPrompt(prompt, options = {}) {
+  const executable = resolveCodexExecutable(options.codexExecutable);
   const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-ai-draft-"));
-  await chmod(directory, 0o700);
-  const isolatedCodexHome = path.join(directory, "codex-home");
-  await mkdir(isolatedCodexHome, { mode: 0o700 });
-  const sourceCodexHome = options.codexHome || process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  const sourceAuth = path.join(sourceCodexHome, "auth.json");
-  if ((await stat(sourceAuth)).mode & 0o077) throw new Error("codex_auth_permissions_too_open");
-  await copyFile(sourceAuth, path.join(isolatedCodexHome, "auth.json"));
-  await chmod(path.join(isolatedCodexHome, "auth.json"), 0o600);
-  const runtime = { model: options.model ?? MODEL, reasoning_effort: options.reasoningEffort ?? REASONING_EFFORT };
-  const manifest = codexRunManifest(options.codexExecutable, options.outputSchema ?? OUTPUT_SCHEMA, runtime);
-  const args = manifest.args.map((value) => value === "<private-temporary-directory>" ? directory : value);
-  const safePath = [...new Set([path.dirname(manifest.executable), path.dirname(process.execPath), "/usr/bin", "/bin", "/usr/sbin", "/sbin"])].join(path.delimiter);
-  const env = {
-    PATH: safePath,
-    HOME: directory,
-    TMPDIR: directory,
-    CODEX_HOME: isolatedCodexHome,
-    USER: "orgbrain-ai-reviewer",
-    LOGNAME: "orgbrain-ai-reviewer",
-    LANG: "C.UTF-8",
-    ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
-    ORGBRAIN_ENABLE_ORG_SHARING: "false",
-    ORGBRAIN_LOCAL_CONTEXT_ENABLED: "false"
-  };
   try {
+    await chmod(directory, 0o700);
+    const isolatedCodexHome = path.join(directory, "codex-home");
+    await mkdir(isolatedCodexHome, { mode: 0o700 });
+    const sourceCodexHome = options.codexHome || process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+    const sourceAuth = path.join(sourceCodexHome, "auth.json");
+    if ((await stat(sourceAuth)).mode & 0o077) throw new Error("codex_auth_permissions_too_open");
+    await copyFile(sourceAuth, path.join(isolatedCodexHome, "auth.json"));
+    await chmod(path.join(isolatedCodexHome, "auth.json"), 0o600);
+    const runtime = { model: options.model ?? MODEL, reasoning_effort: options.reasoningEffort ?? REASONING_EFFORT };
+    const manifest = codexRunManifest(executable, options.outputSchema ?? OUTPUT_SCHEMA, runtime);
+    const args = manifest.args.map((value) => value === "<private-temporary-directory>" ? directory : value);
+    const safePath = [...new Set([path.dirname(manifest.executable), path.dirname(process.execPath), "/usr/bin", "/bin", "/usr/sbin", "/sbin"])].join(path.delimiter);
+    const env = {
+      PATH: safePath,
+      HOME: directory,
+      TMPDIR: directory,
+      CODEX_HOME: isolatedCodexHome,
+      USER: "orgbrain-ai-reviewer",
+      LOGNAME: "orgbrain-ai-reviewer",
+      LANG: "C.UTF-8",
+      ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
+      ORGBRAIN_ENABLE_ORG_SHARING: "false",
+      ORGBRAIN_LOCAL_CONTEXT_ENABLED: "false"
+    };
     return await new Promise((resolve, reject) => {
       const child = spawn(manifest.executable, args, { cwd: directory, env, stdio: ["pipe", "pipe", "pipe"], shell: false });
       let pending = "";
@@ -210,11 +232,20 @@ export async function runCodexStructuredPrompt(prompt, options = {}) {
       let finalAnswer = "";
       let runtime = { model: null, reasoning_effort: null, usage: null };
       let settled = false;
+      let failure = null;
       const finish = (callback) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         callback();
+      };
+      const terminate = (error) => {
+        if (settled || failure) return;
+        failure = error;
+        child.kill("SIGKILL");
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
       };
       const consume = (line) => {
         try {
@@ -224,10 +255,10 @@ export async function runCodexStructuredPrompt(prompt, options = {}) {
         } catch { /* stream output is intentionally discarded */ }
       };
       child.stdout.on("data", (chunk) => {
+        if (failure) return;
         stdoutBytes += chunk.length;
         if (stdoutBytes > MAX_STDOUT_BYTES) {
-          child.kill("SIGTERM");
-          finish(() => reject(new Error("codex_output_too_large")));
+          terminate(new Error("codex_output_too_large"));
           return;
         }
         pending += chunk.toString();
@@ -237,7 +268,9 @@ export async function runCodexStructuredPrompt(prompt, options = {}) {
       });
       child.stderr.on("data", () => { /* never retain model or prompt-bearing diagnostics */ });
       child.on("error", (error) => finish(() => reject(error)));
-      child.on("exit", (code) => finish(() => {
+      // Wait for process termination and drained output before returning or cleaning up.
+      child.on("close", (code) => finish(() => {
+        if (failure) return reject(failure);
         if (pending.trim()) consume(pending);
         if (code !== 0 || !finalAnswer) return reject(new Error(`codex_draft_failed:${code}`));
         if (runtime.model && runtime.model !== manifest.model) return reject(new Error("codex_effective_model_mismatch"));
@@ -251,9 +284,9 @@ export async function runCodexStructuredPrompt(prompt, options = {}) {
         });
       }));
       const timer = setTimeout(() => {
-        child.kill("SIGTERM");
-        finish(() => reject(new Error("codex_draft_timeout")));
+        terminate(new Error("codex_draft_timeout"));
       }, options.timeoutMs ?? TIMEOUT_MS);
+      child.stdin.on("error", terminate);
       child.stdin.end(prompt);
     });
   } finally {
