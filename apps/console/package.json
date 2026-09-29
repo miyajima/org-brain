@@ -8,6 +8,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "build:node": "ORGBRAIN_CONSOLE_RUNTIME=node astro build",
+    "build:wiki": "astro build --config astro.wiki.config.mjs",
+    "typecheck:wiki": "astro check --config astro.wiki.config.mjs --tsconfig tsconfig.wiki.json",
     "preview": "astro preview",
     "typecheck": "astro check",
     "test": "vitest run --passWithNoTests --exclude \"e2e/**\"",
@@ -18,8 +20,14 @@
     "3d-force-graph": "^1.80.0",
     "@astrojs/cloudflare": "^13.1.7",
     "@astrojs/node": "^10.1.4",
+    "@codemirror/lang-markdown": "6.5.2",
     "@org-brain/contracts": "workspace:*",
     "astro": "^6.4.8",
+    "codemirror": "6.0.2",
+    "diff": "8.0.4",
+    "dompurify": "3.4.16",
+    "lucide": "1.48.0",
+    "marked": "18.0.14",
     "three": "0.185.1"
   },
   "devDependencies": {

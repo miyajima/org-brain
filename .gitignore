@@ -22,3 +22,9 @@ tmp/
 /review.json
 /gate.json
 /quality_score.json
+/packages/wiki-engine/target/
+/packages/orgbrain-cli/bin/
+/packages/orgbrain-cli/assets/wiki/
+/bin/
+/assets/wiki/
+/packages/orgbrain-cli/skills/org-brain-wiki/

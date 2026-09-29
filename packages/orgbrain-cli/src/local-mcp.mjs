@@ -1,4 +1,6 @@
 import { observeMemoryUse } from "./lib/memory-use-collector.mjs";
+import { WIKI_TOOLS, enabledWikiTools, callWikiTool } from "./lib/wiki-mcp.mjs";
+import { wikiStatusSync, wikiServiceForStore } from "./lib/wiki-service.mjs";
 import { answerGuidanceForDisposition } from "../../shared/src/evidence-disposition.mjs";
 import {
   classifyMemoryReviewAnswer,
@@ -155,6 +157,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         query: { type: "string" }, tenant_id: { type: "string" }, project_id: { type: ["string", "null"] },
         principal_id: { type: ["string", "null"] }, include_domain_recall: { type: "boolean" },
+        include_wiki: { type: "boolean", description: "Include separately labeled Wiki evidence only when the optional local feature is enabled." },
         task_title: { type: ["string", "null"], maxLength: 500 }, task_description: { type: ["string", "null"], maxLength: 4000 },
         task_id: { type: "string", maxLength: 128 }, work_type: { type: "string", enum: ["implementation", "review", "debug", "proposal", "support", "research", "operations", "other"] },
         use_context: { type: "object", properties: { task: { type: "string", maxLength: 4000 }, target: { type: "string", maxLength: 1000 }, constraints: { type: "string", maxLength: 4000 }, conditions: { type: "string", maxLength: 4000 } } },
@@ -906,6 +909,7 @@ function captureDefaults(input) {
 }
 
 async function callTool(store, name, input, toolProfile = "default") {
+  if (name.startsWith("orgbrain_wiki_")) return callWikiTool(store, name, input);
   const tenantId = input.tenant_id || "default";
   if (name === "orgbrain_memory_feedback_report") return store.reportMemoryFeedback({...input.payload,tenant_id:tenantId,reporter_principal:process.env.USER||"local-user"});
   if (name === "orgbrain_memory_feedback_review") return store.reviewMemoryFeedback({tenant_id:tenantId,feedback_id:input.feedback_id,decision:input.decision,reviewer_principal:process.env.USER||"local-user"});
@@ -965,6 +969,25 @@ async function callTool(store, name, input, toolProfile = "default") {
       project_id: projectId, attempt_id: attempt.id, task_id: input.task_id ?? null, stage: "returned"
     })));
     const response = { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
+    if (input.include_wiki) {
+      let status;
+      try { status = wikiStatusSync(); }
+      catch (error) { status = { enabled: false, error: error.message }; }
+      response.wiki = { status: status.enabled ? "enabled" : "disabled" };
+      if (status.error) response.wiki = { status: "unavailable", error: status.error };
+      if (status.enabled) {
+        const { countContextTokens } = await import("./lib/compact-memory-context.mjs");
+        const budget = (input.token_budget ?? 1500) - countContextTokens(response) - 160;
+        if (budget >= 128) {
+          try {
+            response.wiki = {
+              status: "enabled",
+              evidence: await wikiServiceForStore(store).search({ query: input.query, token_budget: budget })
+            };
+          } catch (error) { response.wiki = { status: "unavailable", error: error.message }; }
+        } else response.wiki = { status: "enabled", omitted: "context_budget_exhausted" };
+      }
+    }
     if (contextFormat === "compact") {
       const { measureCompactMemoryContext } = await import("./lib/compact-memory-context.mjs");
       return measureCompactMemoryContext(response);
@@ -1303,7 +1326,7 @@ function normalizeSearchMode(mode) {
 
 export async function handleLocalMcpRequest(store, request, options = {}) {
   const toolProfile = options.toolProfile ?? "default";
-  const definitions = toolDefinitionsForProfile(toolProfile);
+  const definitions = [...toolDefinitionsForProfile(toolProfile), ...enabledWikiTools(toolProfile)];
   if (request.method === "initialize") {
     throw Object.assign(new Error(`unsupported protocol version; use ${LOCAL_MCP_PROTOCOL_VERSION}`), { code: -32001 });
   }
@@ -1314,6 +1337,9 @@ export async function handleLocalMcpRequest(store, request, options = {}) {
   if (request.method === "tools/list") return { tools: definitions };
   if (request.method === "tools/call") {
     const name = request.params?.name;
+    if (name?.startsWith("orgbrain_wiki_") && !wikiStatusSync().enabled) {
+      return { content: content({ error: "feature_disabled" }), isError: true };
+    }
     if (!definitions.some((definition) => definition.name === name)) {
       throw Object.assign(new Error(`tool not available in active profile: ${name}`), { code: -32601 });
     }
@@ -1335,7 +1361,7 @@ export function createLocalMcpServer(store, {
   protocolVersion = LOCAL_MCP_PROTOCOL_VERSION,
   toolProfile = "default"
 } = {}) {
-  const definitions = toolDefinitionsForProfile(toolProfile);
+  const definitions = [...toolDefinitionsForProfile(toolProfile), ...(toolProfile === "default" ? WIKI_TOOLS : [])];
   const server = new McpServer(
     { name: "OrgBrain Local", version: "0.1.0" },
     {
@@ -1343,7 +1369,7 @@ export function createLocalMcpServer(store, {
       supportedProtocolVersions: [protocolVersion],
       cacheHints: {
         "server/discover": { ttlMs: 300_000, cacheScope: "private" },
-        "tools/list": { ttlMs: 300_000, cacheScope: "private" }
+        "tools/list": { ttlMs: toolProfile === "default" ? 0 : 300_000, cacheScope: "private" }
       }
     }
   );
@@ -1367,6 +1393,25 @@ export function createLocalMcpServer(store, {
         }
       }
     );
+  }
+  if (toolProfile === "default") {
+    // Keep handlers available for stale connections; gate visibility separately.
+    server.server.setRequestHandler("tools/list", () => ({
+      tools: [...toolDefinitionsForProfile(toolProfile), ...enabledWikiTools(toolProfile)]
+        .map((definition) => ({ ...definition, ...ORGBRAIN_TOOL_PRESENTATION }))
+    }));
+    let previous = enabledWikiTools(toolProfile).length > 0;
+    const timer = setInterval(() => {
+      let enabled = false;
+      try { enabled = wikiStatusSync().enabled; } catch {}
+      if (previous !== enabled) {
+        previous = enabled;
+        server.sendToolListChanged();
+      }
+    }, 1000);
+    timer.unref();
+    const close = server.close.bind(server);
+    server.close = async () => { clearInterval(timer); await close(); };
   }
   return server;
 }
