@@ -150,7 +150,7 @@ Local verification does not establish a deployed, trusted or authenticated hook.
 
 The independently opt-in `ORGBRAIN_USE_COLLECT` branch observes use of existing
 memories; it does not authorize new-memory capture or turn save confirmation into
-a usefulness score. The existing stateless observe tool accepts `use_observation`
+a usefulness score. The observe tool accepts `use_observation`
 with retrieval/item/version IDs and actual current-turn action/outcome call IDs.
 Stop checks those events within the same bounded transcript read, writes local
 receipts, and may enqueue sanitized use references only when `ORGBRAIN_USE_SYNC`
@@ -165,6 +165,19 @@ closed. Existing confirmation limits and held experiments remain unchanged.
 See [use-history operation](MEMORY_USE_HISTORY.md) and
 [validation](MEMORY_USE_HISTORY_VALIDATION.md). Migration `0041` and Local schema
 26 are additive. Global harness instructions require no changes.
+
+Local schema 31 adds scoped observation receipts and transcript delivery receipts
+to the existing database, plus an explicit usage purpose on retrieval events.
+Wrapped MCP calls are recognized only through an opaque receipt issued by the
+local MCP handler and present in a completed outer tool result. The collector
+never interprets JavaScript or quoted tool invocations. Direct MCP calls remain
+supported. Only developer delivery receipts after the latest compaction may
+cross a turn boundary (at most 32); action and assessment evidence must still be
+from the current turn. The 4 MiB read bound, task identity, source version and
+principal checks remain mandatory. Missing evidence remains unassessed.
+Receipt issuance is bookkeeping, not memory capture, verified use or a benefit
+evaluation. The hook invokes no model or new network call. Existing commitments,
+confirmation controls and bootstrap contract do not change.
 
 ## Local confirmation receipts (schema 27)
 
@@ -231,6 +244,15 @@ confirmation. It is enabled only for project IDs explicitly listed in the local
 permission checks and a successful local pilot before deployment.
 
 ## Agent activity observation (Local schema 30)
+
+The optional local Jev cost profile adds Wiki assessment and dependency-scoped
+question batching to existing capture/use. Stop still queues only and does not
+run inference. Search records returned items after qualified selection;
+audit/diagnostic/test keep the complete comparison set. Uncertainty and provider
+failure preserve originals. A batch-capable external quarantine runner may
+review eligible candidates together, retaining per-candidate verification and
+consensus. This adds no Cloud tool or migration and changes no harness bootstrap
+or confirmation contract. See [Jev cost profile](MEMORY_JUDGMENT_JEV.md).
 
 `agent-activity/v1` adds an append-only, metadata-only timeline beside memory and
 action-attempt history. It normalizes session, tool, command, file, approval,

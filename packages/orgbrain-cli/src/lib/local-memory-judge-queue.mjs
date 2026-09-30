@@ -34,6 +34,42 @@ export async function drainJudgmentCapture({ dbPath, tenantId = "default", proje
     // Completed evidence is transient and follows the queue's seven-day TTL.
     db.prepare("DELETE FROM capture_queue WHERE tenant_id=? AND project_id=? AND status='completed' AND expires_at <= ?").run(tenantId, projectId, now);
     const jobs = db.prepare("SELECT * FROM capture_queue WHERE tenant_id=? AND project_id=? AND status='pending' ORDER BY created_at LIMIT 20").all(tenantId, projectId);
+    if (env.ORGBRAIN_JEV_OBJECTIVE === "cost") {
+      const pending = [];
+      for (const job of jobs) {
+        if (job.mode === "active" && !allowActiveCapture) continue;
+        if (job.expires_at <= now) { db.prepare("UPDATE capture_queue SET status='expired' WHERE id=?").run(job.id); continue; }
+        if (!db.prepare("UPDATE capture_queue SET status='processing', completed_at=? WHERE id=? AND status='pending'").run(now, job.id).changes) continue;
+        try {
+          const records = JSON.parse(job.records_json);
+          if (await judgmentHash({ tenantId, projectId, source: job.source, records }) !== job.content_hash) throw new Error("capture_snapshot_changed");
+          pending.push({ job, records });
+        } catch { db.prepare("UPDATE capture_queue SET status='held' WHERE id=?").run(job.id); }
+      }
+      const valid = (record) => (record.valid_until ?? record.validUntil ?? record.expires_at ?? Infinity) > (suppliedNow ?? Date.now());
+      const candidates = pending.flatMap(({ job, records }) => records.flatMap((record, index) => valid(record)
+        ? [memoryJudgmentCandidate(record, `${job.id}:${index}`, { includeCaptureAssessment:
+          localJudgmentPolicy("capture", projectId, env).capture_assessment_mode === "shadow" })] : []));
+      let judgment;
+      try { judgment = candidates.length ? await ask({ stage: "capture", context: { tenant_id: tenantId, project_id: projectId,
+        purpose: "Future reuse within this project; preserve conditions across admitted queue jobs." }, candidates })
+        : { applied: false, status: "skipped", decisions: [] }; }
+      catch { judgment = { applied: false, status: "fallback", reason_code: "judgment_unavailable",
+        decisions: candidates.map((c) => ({ id: c.id, action: "review", requires_review: true })) }; }
+      const decisions = new Map(judgment.decisions.map((item) => [item.id, item]));
+      for (const { job, records } of pending) {
+        try {
+          const retained = records.filter((record, index) => valid(record)
+            && (!judgment.applied || decisions.get(`${job.id}:${index}`)?.action !== "omit"));
+          if (job.mode === "active" && retained.length) report.captured += (await save(job.source, tenantId, retained)).length;
+          db.prepare("UPDATE capture_queue SET status='completed', judgment_json=?, completed_at=? WHERE id=? AND status='processing'")
+            .run(JSON.stringify(judgment), now, job.id);
+          report.processed++;
+        } catch { db.prepare("UPDATE capture_queue SET status='held' WHERE id=?").run(job.id); }
+      }
+      if (pending.length) report.judgments.push(judgment);
+      return report;
+    }
     for (const job of jobs) {
       if (job.mode === "active" && !allowActiveCapture) continue;
       if (job.expires_at <= now) {

@@ -452,6 +452,7 @@ export async function runAutonomyMaintenance(options = {}) {
     result = { ok: false, error: safeError(error), applied: false, doctor: { ok: false, errors: [safeError(error)] } };
   }
   let quarantineEvaluator = null;
+  let quarantineBatchEvaluator = null;
   let quarantineRunnerError = null;
   const configuredQuarantineRunner = options.quarantineRunner
     ?? options.env?.ORGBRAIN_AUTONOMY_QUARANTINE_RUNNER
@@ -497,6 +498,29 @@ export async function runAutonomyMaintenance(options = {}) {
         reason_codes: consensus.pass ? [] : ["ai_consensus_required"]
       };
     } : null;
+    if (runner?.runAutonomyJudgeBatch && (options.env ?? process.env).ORGBRAIN_JEV_OBJECTIVE === "cost") {
+      quarantineBatchEvaluator = async (items) => {
+        const ready = items.filter(({ candidate }) => {
+          const source = candidate?.item && typeof candidate.item === "object" ? candidate.item : candidate;
+          return (source?.deterministic_verification ?? source?.verification)?.state === "verified"
+            && Array.isArray(source?.evidence) && source.evidence.length > 0;
+        });
+        const judgments = ready.length ? await runner.runAutonomyJudgeBatch({ action: "quarantine_re-evaluation",
+          candidates: ready.map(({ id, candidate }) => ({ id, candidate })), policy: status.policy, workspace: status.workspace }) : [];
+        if (!Array.isArray(judgments) || judgments.length !== ready.length
+          || new Set(judgments.map((j) => j?.id)).size !== judgments.length
+          || judgments.some((j) => !ready.some((item) => item.id === j?.id))) throw new Error("invalid_batch_review");
+        return items.map(({ id }) => {
+          const entry = judgments.find((j) => j.id === id);
+          if (!entry) return { id, route: "quarantine", verified: false, consensus_pass: false, reason_codes: ["deterministic_verification_required"] };
+          const consensus = evaluateAutonomyConsensus(entry.judgments, { requiredJudges: status.policy.judge.active_consensus,
+            minimumModelFamilies: status.policy.judge.minimum_model_families, minimumConfidence: status.policy.judge.minimum_confidence, requireSignatures: true });
+          return { id, route: consensus.pass ? "active" : consensus.rejected ? "excluded" : "quarantine",
+            verified: consensus.pass, consensus_pass: consensus.pass, judge_consensus: consensus,
+            reason_codes: consensus.pass ? [] : ["ai_consensus_required"] };
+        });
+      };
+    }
   }
   const captureJudgments = inspectOnly ? { skipped: "dry-run" } : await drainJudgmentCapture({
     dbPath: options.dbPath ?? options.store?.dbPath ?? process.env.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB,
@@ -515,6 +539,7 @@ export async function runAutonomyMaintenance(options = {}) {
           expireAfterDays: status.policy.quarantine.expire_after_days,
           reevaluateIntervalHours: status.policy.quarantine.reevaluate_interval_hours,
           evaluate: quarantineEvaluator,
+          evaluateBatch: quarantineBatchEvaluator,
           judgeBatch: createLearningCandidateJudge({
             dbPath: options.dbPath ?? options.store?.dbPath ?? process.env.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB,
             env: options.env ?? process.env, shadowOnly: shadowMode
@@ -577,7 +602,7 @@ export async function runAutonomyMaintenance(options = {}) {
     judge_error: judgeError,
     session_judge_consensus: sessionJudgeConsensus,
     session_judge_error: sessionJudgeError,
-    quarantine_evaluator: quarantineEvaluator ? "configured" : "deferred",
+    quarantine_evaluator: quarantineBatchEvaluator ? "configured_batch" : quarantineEvaluator ? "configured" : "deferred",
     quarantine_runner_error: quarantineRunnerError,
     qualification_runner: qualificationRun,
     qualification_error: qualificationError

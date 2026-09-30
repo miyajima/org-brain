@@ -5,6 +5,7 @@ import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-run
 import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
 import { ATTEMPT_SCHEMA_SQL, attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
+import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
 import {
   AGENT_ACTIVITY_SCHEMA_SQL,
   normalizeAgentActivity
@@ -46,7 +47,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 30;
+export const MEMORY_SCHEMA_VERSION = 31;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -1667,6 +1668,9 @@ function upgradeMemoryUsageItems(db) {
 
 function upgradeMemoryUsageEvents(db) {
   const columns = tableColumns(db, "memory_usage_events");
+  if (!columns.has("usage_purpose")) {
+    db.exec("ALTER TABLE memory_usage_events ADD COLUMN usage_purpose TEXT NOT NULL DEFAULT 'unclassified'");
+  }
   if (!columns.has("external_run_id")) {
     db.exec("ALTER TABLE memory_usage_events ADD COLUMN external_run_id TEXT");
   }
@@ -3443,6 +3447,8 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_impact_events") ||
         !hasTable(db, "memory_impact_daily_metrics") ||
         !hasTable(db, "memory_usage_events") ||
+        !hasTable(db, "local_use_observation_receipts") ||
+        !hasTable(db, "local_use_deliveries") ||
         !hasTable(db, "memory_effect_events") ||
         !hasTable(db, "action_attempts") ||
         !hasTable(db, "action_hook_coverage") ||
@@ -4626,8 +4632,8 @@ export class LocalMemoryStore {
              access_path, request_source, query_hash,
              requested_business_category_id, requested_work_type,
              retrieval_generation_id, ranking_profile_id,
-             actor_principal, verification_sampled, created_at
-           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+             actor_principal, verification_sampled, created_at, usage_purpose
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).run(
           usageId, tenantId, linkedProjectId,
           linkedTaskId, linkedTraceId,
@@ -4637,7 +4643,7 @@ export class LocalMemoryStore {
           nullableString(input.retrieval_generation_id, 128),
           nullableString(input.ranking_profile_id, 128),
           nullableString(input.actor_principal, 128) || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
-          verificationSampled(tenantId, usageId) ? 1 : 0, createdAt
+          verificationSampled(tenantId, usageId) ? 1 : 0, createdAt, normalizeUsagePurpose(input.usage_purpose)
         );
         const insert = db.prepare(
           `INSERT INTO memory_usage_items(
@@ -6126,6 +6132,10 @@ export class LocalMemoryStore {
       if (operation === "configure") return configureLocalUse(db, input);
       const flags = localUseFlags(db);
       if (operation === "status") return { flags, schema_version: MEMORY_SCHEMA_VERSION };
+      if (operation === "report") {
+        db.exec("BEGIN"); // One snapshot across events, receipts and live proofs.
+        return await localUsageReport(db, input);
+      }
       if (operation !== "history" && !flags.collect) throw new Error("memory_use_disabled");
       const service = localUseService(db, input.tenant_id || "default", input.principal_id || process.env.ORGBRAIN_USE_PRINCIPAL || "local");
       if (operation === "record") return await service.record(input);
@@ -6437,6 +6447,42 @@ export class LocalMemoryStore {
     }
   }
 
+  async selectMemorySearchResults(results, { tenant_id: tenantId, project_id: projectId = null,
+    principal_id: principalId = null, query, use_context: useContext = null, usage_purpose: usagePurpose = "unclassified",
+    at: queryAt = null, apply_selection: applySelection = true } = {}) {
+    const at = queryAt ?? Date.now();
+    const eligible = (memory, currentAt) => (!projectId || memory.project_id == null || memory.project_id === projectId)
+      && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
+      && (memory.valid_from == null || memory.valid_from <= currentAt)
+      && (memory.valid_until == null || memory.valid_until > currentAt)
+      && (memory.expires_at == null || memory.expires_at > currentAt);
+    const candidates = results.filter(({ memory }) => eligible(memory, at)).map(({ memory }) => memoryJudgmentCandidate(memory));
+    let judgment = await this.memoryJudge({ stage: "use",
+      context: { tenant_id: tenantId, project_id: projectId, principal_id: principalId || "local", query, use_context: useContext }, candidates });
+    if (judgment.mode !== "off") {
+      const refreshed = [];
+      let changed = false;
+      for (const result of results) {
+        const memory = await this.get(tenantId, result.memory.id);
+        if (!memory || !eligible(memory, queryAt ?? Date.now())) { changed = true; continue; }
+        if (JSON.stringify(memoryJudgmentCandidate(memory)) !== JSON.stringify(memoryJudgmentCandidate(result.memory))) changed = true;
+        refreshed.push({ ...result, memory });
+      }
+      results = refreshed;
+      if (changed) judgment = { ...judgment, applied: false, status: "fallback", reason_code: "source_changed" };
+    }
+    if (["audit", "diagnostic", "test"].includes(usagePurpose)) judgment = { ...judgment, applied: false };
+    if (applySelection && judgment.applied) {
+      const byId = new Map(judgment.decisions.map((decision) => [decision.id, decision]));
+      results = results.filter(({ memory }) => {
+        const candidate = memoryJudgmentCandidate(memory);
+        return candidate.protected_reasons.length || candidate.conflicts.length
+          || byId.get(memory.id)?.action !== "omit";
+      });
+    }
+    return { results, memory_judgment: judgment };
+  }
+
   async retrieveContext({
     tenant_id: tenantId,
     project_id: projectId = null,
@@ -6445,6 +6491,7 @@ export class LocalMemoryStore {
     query,
     top_k = 5,
     task_id: taskId = null,
+    usage_purpose: usagePurpose = 'unclassified',
     use_context: useContext = undefined,
     use_snapshot_id: useSnapshotId = null,
     minimum_total_score: minimumTotalScore = null,
@@ -6472,32 +6519,14 @@ export class LocalMemoryStore {
     });
     results = results.filter((result) => {
       const score = result.score;
-      return [score?.lexical, score?.semantic, score?.graph]
+      return [score?.lexical, score?.semantic, score?.graph, result.use_history?.examples?.length ? result.use_history.base_score : 0]
         .some((value) => typeof value === "number" && Number.isFinite(value) && value > 0);
     });
-    const eligibleForJudgment = (memory, currentAt = at) => (!projectId || memory.project_id == null || memory.project_id === projectId)
-      && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
-      && (memory.valid_from == null || memory.valid_from <= currentAt)
-      && (memory.valid_until == null || memory.valid_until > currentAt)
-      && (memory.expires_at == null || memory.expires_at > currentAt);
-    const judgmentCandidates = results.filter(({ memory }) => eligibleForJudgment(memory)).map(({ memory }) => memoryJudgmentCandidate(memory));
-    let judgment = await this.memoryJudge({ stage: "use",
-      context: { tenant_id: tenantId, project_id: projectId, principal_id: principalId || "local", query, use_context: useContext ?? null },
-      candidates: judgmentCandidates });
-    if (judgment.mode !== "off") {
-      // Recheck authorization, expiry, and canonical versions after asynchronous
-      // inference (also on a cache hit). A changed source invalidates this batch.
-      const refreshed = [];
-      let changed = false;
-      for (const result of results) {
-        const memory = await this.get(tenantId, result.memory.id);
-        if (!memory || !eligibleForJudgment(memory, queryAt ?? Date.now())) { changed = true; continue; }
-        if (JSON.stringify(memoryJudgmentCandidate(memory)) !== JSON.stringify(memoryJudgmentCandidate(result.memory))) changed = true;
-        refreshed.push({ ...result, memory });
-      }
-      results = refreshed;
-      if (changed) judgment = { ...judgment, applied: false, status: "fallback", reason_code: "source_changed" };
-    }
+    const selection = await this.selectMemorySearchResults(results, { tenant_id: tenantId, project_id: projectId,
+      principal_id: principalId, query, use_context: useContext ?? null, usage_purpose: usagePurpose, at: queryAt,
+      apply_selection: false });
+    results = selection.results;
+    let judgment = selection.memory_judgment;
     if (context_format === "compact") {
       const { buildCompactMemoryContext } = await import("./compact-memory-context.mjs");
       const usageId = randomUUID();
@@ -6511,6 +6540,7 @@ export class LocalMemoryStore {
       const packed = buildCompactMemoryContext({ results: candidates, query, topK: safeTopK,
         tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds });
       await this.recordUsage({ id: usageId, tenant_id: tenantId, project_id: projectId, task_id: taskId,
+        usage_purpose: usagePurpose,
         actor_principal: principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
         capability: "memory_retrieve_context", access_path: "context", request_source: "local",
         requested_business_category_id: businessCategoryId, requested_work_type: workType, items: packed.items });
@@ -6671,6 +6701,7 @@ export class LocalMemoryStore {
         tenant_id: tenantId,
         project_id: projectId,
         task_id: taskId,
+        usage_purpose: usagePurpose,
         actor_principal: principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
         capability: "memory_retrieve_context",
         access_path: "context",

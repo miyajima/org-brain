@@ -5,7 +5,7 @@
 ## 契約
 
 - 共通処理: `packages/shared/src/memory-judgment-runtime.mjs`。OpenRouter Decisions API、`typesafe/jev-1.13`、5 秒、再試行なし。応答モデルも記録する。
-- 候補本文・根拠・条件は組として扱う。候補 ID ごとの独立した質問を一括送信し、コードが retain/review/omit に変換する。上限 50 候補・28,000 bytes を超えたら原文を切らず既存経路へ戻す。
+- 候補本文・根拠・条件は組として扱う。候補 ID ごとの独立した質問を一括送信し、コードが retain/review/omit に変換する。既存quality経路は50候補・28,000 bytesを超えたら原文を切らず既存経路へ戻す。以下のcost経路は質問数とbytesで分割する。
 - 訂正、明示保存、制約、未解決失敗、既知の競合は保護する。保護候補も他の候補を判断する根拠として送信する。未知の競合を検出した場合も要確認として残す。
 - Stop はローカルキューへの投入まで。既存 learning candidates は通常の非同期 maintenance 内で判定し、根拠検証・確認・合議・昇格の条件は維持する。
 - 利用側は検索後、top_k/投入予算前に判定する。権限・プロジェクト・期限を先に検査し、推論後にも再検査する。active では全文・条件を単位として予算内に収め、results と evidence_bundle に同じ選別を反映する。保護対象を収められないときは既存処理へ戻す。
@@ -78,6 +78,72 @@ pnpm memory:judgment:queue recover --project org-brain --id HELD_JOB_ID
 recover は整合性・期限を検査し、既存保存経路を復元する。Jev は再呼び出ししない。processing の復旧は 5 分経過後のみ可能。外部キーによる既存の重複防止を使う。
 
 ## 評価
+
+### 費用優先の経路（objective=cost）
+
+Wikiと通常のcapture/useで、既存の判定・保存経路を共用する。
+次の設定は比較運用であり、判定による除外や自動保存を有効にしない。
+
+```sh
+export ORGBRAIN_JEV_PROJECTS=org-brain
+export ORGBRAIN_JEV_OBJECTIVE=cost
+export ORGBRAIN_JEV_WIKI_MODE=shadow
+export ORGBRAIN_JEV_CAPTURE_MODE=shadow
+export ORGBRAIN_JEV_USE_MODE=shadow
+export ORGBRAIN_JEV_THRESHOLD=0.95
+orgbrain memory wiki assess --project-id org-brain --page wiki/topics/example.md --json
+```
+
+ローカルMCPの`orgbrain_wiki_assess`も同じ処理を呼ぶ。ページと指定された原資料だけを読み、
+存在・ハッシュ・権限・期限・版をコードで検査する。Jevは種類、採用、行動と条件、
+出典による支持、既存記憶との同等性・条件差・矛盾・明示修正を型付きで予測する。
+6分類、最大3件の候補、必要な原文をまとめた`review_bundle`、重複しない出典抜粋を返す。
+shadowでは全項目を親モデルに返す。activeでも候補・不明・修正・保護対象は親が判断し、
+対話中の保存はpropose→明示確認→confirmを維持する。原資料の部分抜粋、変更、比較上限到達は保留する。
+
+キャッシュは質問単位で、原文・条件・版・質問・モデル・コンテキストをキーにする。
+incremental/contradictionは関連集合もキーに含める。集合が変わっても単体の出典質問は再利用できる。
+処理中の同一質問を共有し、最大50質問・28,000 bytesで分割、同時実行2、操作全体のJev待ちを5秒に制限する。
+入力や出典を上限に合わせて切って確定判定はしない。未知・時間切れ・不正応答では原文を親へ残し、失敗を自動再送しない。
+検索は選別後に返却実績を記録し、audit/diagnostic/testは比較対象を除外しない。
+抽出キューは同プロジェクトの最大20ジョブを一度に判断し、shadowジョブを再保存しない。
+
+保留候補のmaintenanceは既存の外部ランナーが`runAutonomyJudgeBatch`を提供する場合、
+`{action,candidates:[{id,candidate}],policy,workspace}`を一度に渡す。
+返却は全IDに対応する`[{id,judgments}]`で、項目ごとに既存の根拠・署名・モデル系列・合議条件を検査する。
+未対応ランナーは既存の`runAutonomyJudge`を使う。新しい親モデルプロセスや合議の免除は追加しない。
+
+配布bundleは`node_modules/orgbrain/jev-settings.json`の許可済みORGBRAIN_JEVフラグを読み込める。
+明示したプロセス環境変数が優先し、checkoutはこのファイルを読まない。認証情報のキーは受け付けない。
+設定変更後の新規CLI/MCPプロセスに適用され、起動済みMCPには再接続が必要。
+
+新しい費用評価はv2契約で、既存qualityのv1資格を変更しない。
+0.80/0.90/0.95/0.98の境界は独立した開発資料で選ぶ。未校正の初期値0.95を校正済みとは報告しない。
+以下は構成と評価資料を固定するだけで、モデルを呼ばず、親の成果・費用はnullのまま残す。
+
+```sh
+node scripts/memory-judgment-evaluate.mjs --objective cost --stages wiki,capture,use \
+  --resolved-model typesafe/jev-1.13-20260917 --threshold 0.95 \
+  --dataset /path/to/independent-dataset.json --out /path/to/new-frozen-run
+node scripts/memory-judgment-evaluate.mjs --manifest /path/to/new-frozen-run/manifest.json \
+  --outcomes /path/to/real-outcomes.json --out /path/to/new-qualification
+```
+
+同じ親モデル・設定・開始状態・予算のbaseline/jevの2条件を、20以上の独立した保留会話で比較する。
+各観測は既存v1の成果物・テスト証拠に加え、構成hashと`cost`を持つ。
+`cost.source`はproviderまたはprice_snapshot（後者はprice_snapshot_hashが必要）、
+parent_usd/fallback_usd/review_usd/rework_usd/other_usdは有限の非負数とし、
+jev_assumed_usd=0を比較前提にする。jev_actual_usdと実際のAPIログは別に保持する。
+欠落料金は資格を満たさず、トークン削減だけで費用減としない。
+
+項目ごとの成功退行・誤適用増加・重要記憶欠落・重大退行がなく、総費用が減り、
+追加待ち時間p95が5秒以内なら、同品質でも資格を満たす。
+activeにはORGBRAIN_JEV_RESOLVED_MODELと資格ファイルを設定し、
+有効にする判断点の集合、閾値、モデル、実装hashが評価構成と一致することが必要。
+コードや構成変更、証拠改変、モデル変更は失効する。不十分な結果はinconclusiveのまま比較運用を続ける。
+
+寄与率と評価カバー率は実際の利用観測から算出する。予測や未評価を不寄与に変換しない。
+Jev料金0は今回の比較仮定であり、実価格が無料という意味ではない。
 
 ### 継続的な振り返り
 

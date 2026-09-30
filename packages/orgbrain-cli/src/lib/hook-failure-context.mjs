@@ -4,6 +4,16 @@ const text = (value) => redactHookMemoryText(String(value ?? "")).trim();
 const field = (label, value) => `${label}: ${typeof value === "string" ? JSON.stringify(text(value)) : text(JSON.stringify(value))}`;
 const present = (value) => typeof value === "string" && value.trim().length > 0;
 
+export function isAutomaticMemoryCandidate(memory, query) {
+  if (["decision", "constraint", "preference"].includes(memory.kind) || present(memory.reuse_rule)
+    || memory.learning?.lesson_type || memory.conflicts?.length) return true;
+  const history = /(?:前回|以前|過去|これまで|履歴|状況|進捗|完了状況|コミットした|what (?:did|was)|previous|history|status|committed)/iu.test(query);
+  if (history) return true;
+  // This gate concerns the displayed legacy summary, not deletion of its source.
+  const summary = text(memory.summary);
+  return !/(?:\|\s*command-result\s*\||^(?:結論として[、,]?\s*)?(?:まだ全完了ではありません|完了しました)|\d+件をコミット済み|^(?:done|completed)[.!\s])/iu.test(summary);
+}
+
 function memoryEvidence(memory) {
   return [...(memory.source_references ?? []), ...(memory.evidence ?? [])]
     .map((item) => item.ref).filter(present);
@@ -22,6 +32,8 @@ function memoryCandidate(result) {
     && learning.lesson_type === "failure" && !learning.gaps?.length
     && !memory.conflicts?.length && evidence.length > 0
     && [learning.trigger, cause, correction, reuse, outcome].every(present);
+  const success = learning.lesson_type === "success" && !learning.gaps?.length
+    && [learning.procedure, learning.why_it_worked, learning.observed_outcome, learning.reuse_when].every(present);
   const lines = complete ? [
     "OrgBrain 検証済みの失敗教訓（過去の条件での検証。現在の条件との一致を確認する）",
     field("適用条件", { trigger: learning.trigger, ...learning.applicability }),
@@ -31,6 +43,12 @@ function memoryCandidate(result) {
     field("確認結果", outcome),
     field("再発防止・再利用条件", reuse),
     field("根拠", evidence)
+  ] : success ? [
+    "OrgBrain 成功手順の記録（過去の報告。現在の適用条件と根拠を確認する）",
+    field("手順", learning.procedure), field("理由", learning.why_it_worked),
+    field("報告された結果", learning.observed_outcome), field("再利用条件", learning.reuse_when),
+    field("検証状態", memory.verification_state),
+    ...(evidence.length ? [field("根拠", evidence)] : [])
   ] : [
     failure ? "OrgBrain 未検証または情報不足の失敗教訓（参考。禁止事項として扱わない）"
       : "OrgBrain local memory candidate (historical reference only):",

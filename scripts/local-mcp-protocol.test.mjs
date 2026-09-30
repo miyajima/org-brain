@@ -60,6 +60,13 @@ test("strict local MCP negotiates 2026-07-28 and survives a process restart betw
     assert.deepEqual(first.client.getDiscoverResult()?.supportedVersions, ["2026-07-28"]);
     const catalog = await first.client.listTools();
     assert.ok(catalog.tools.some((tool) => tool.name === "orgbrain_memories_propose"));
+    assert.ok(catalog.tools.some((tool) => tool.name === "orgbrain_wiki_assess"));
+    const wikiResult = await first.client.callTool({ name: "orgbrain_wiki_assess", arguments: {
+      project_id: "org-brain", vault: `${ctx.dbPath}.absent-vault`
+    } });
+    const wiki = JSON.parse(wikiResult.content[0].text);
+    assert.equal(wiki.available, false);
+    assert.equal(wiki.writes_performed, false);
 
     const proposed = await first.client.callTool({
       name: "orgbrain_memories_propose",

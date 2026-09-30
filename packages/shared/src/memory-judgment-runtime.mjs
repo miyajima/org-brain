@@ -1,3 +1,4 @@
+import { createTypedJudgmentScheduler } from "./memory-judgment-scheduler.mjs";
 // Portable decision policy. Neither the model nor this module writes memories.
 export const MEMORY_JUDGMENT_VERSION = "memory-judgment/v1";
 export const MEMORY_JUDGMENT_MODEL = "typesafe/jev-1.13";
@@ -73,12 +74,14 @@ export function redactJudgmentValue(value) {
 
 export function normalizeJudgmentPolicy(input = {}) {
   return {
+    objective: input.objective === "cost" ? "cost" : "quality",
     mode: ["off", "shadow", "active"].includes(input.mode) ? input.mode : "off",
     capture_assessment_mode: input.mode === "shadow" && input.capture_assessment_mode === "shadow" ? "shadow" : "off",
     threshold: MEMORY_JUDGMENT_THRESHOLDS.includes(Number(input.threshold)) ? Number(input.threshold) : 0.95,
     model: MEMORY_JUDGMENT_MODEL,
     max_request_bytes: 28_000,
-    timeout_ms: 5_000,
+    timeout_ms: Number.isFinite(input.timeout_ms) ? Math.max(1, Math.min(5_000, input.timeout_ms)) : 5_000,
+    ...(typeof input.resolved_model === "string" && input.resolved_model ? { resolved_model: input.resolved_model } : {}),
     version: MEMORY_JUDGMENT_VERSION
   };
 }
@@ -164,10 +167,36 @@ function assessCaptureCandidate(candidate, decision, lesson, utility, threshold)
   };
 }
 
-export async function memoryJudgmentPolicyHash(threshold = 0.95) {
+export async function memoryJudgmentPolicyHash(threshold = 0.95, { objective = "quality" } = {}) {
   return judgmentHash({ version: MEMORY_JUDGMENT_VERSION, model: MEMORY_JUDGMENT_MODEL, threshold, questions: QUESTIONS,
+    ...(objective === "cost" ? { objective, typed_contract: "dependency-questions/v1", cost_decision: costMemoryDecisions.toString() } : {}),
     capture_assessment: { version: MEMORY_CAPTURE_ASSESSMENT_VERSION, questions: CAPTURE_ASSESSMENT_QUESTIONS, decision: assessCaptureCandidate.toString() },
     decision: decideMemoryCandidate.toString(), redaction: redactJudgmentValue.toString(), validation: validateJudgmentResponse.toString() });
+}
+
+export function createTypedMemoryJudge({ transport, cache = new Map(), namespace } = {}) {
+  return createTypedJudgmentScheduler({ transport, cache, namespace,
+    hash: judgmentHash, redact: redactJudgmentValue, validate: validateJudgmentResponse, serialize: stableJudgmentJson });
+}
+
+function costMemoryDecisions(stage, candidates, eligible, duplicates, answers, failures, threshold) {
+  const decisions = new Map();
+  eligible.forEach((candidate, index) => {
+    const axes = Object.keys(QUESTIONS[stage]);
+    const missing = axes.map((axis) => failures[`c${index}_${axis}`] ?? (!answers[`c${index}_${axis}`] ? "insufficient_evidence" : null)).filter(Boolean);
+    const scores = Object.fromEntries(axes.filter((axis) => answers[`c${index}_${axis}`]).map((axis) => [axis, answers[`c${index}_${axis}`].noul]));
+    const unknown = Object.values(scores).some((value) => value < threshold && value > 1 - threshold + Number.EPSILON);
+    decisions.set(candidate.id, missing.length || unknown
+      ? { id: candidate.id, basis: "prediction", scores, action: "review", requires_review: true, reason_codes: missing.length ? [...new Set(missing)] : ["insufficient_evidence"] }
+      : decideMemoryCandidate(stage, candidate, scores, threshold));
+  });
+  const conflict = candidates.some((c) => c.conflicts?.length) || [...decisions.values()].some((d) => d.scores?.contradiction >= threshold);
+  return candidates.map((candidate) => {
+    if (conflict) return { id: candidate.id, basis: "prediction", action: "review", requires_review: true, reason_codes: ["conflicting_evidence"] };
+    if (protectedCandidate(candidate)) return { id: candidate.id, basis: "prediction", action: "review", requires_review: true, reason_codes: ["protected_evidence"] };
+    if (duplicates.has(candidate.id)) return { id: candidate.id, basis: "prediction", action: "omit", requires_review: false, reason_codes: ["exact_duplicate"], duplicate_of: duplicates.get(candidate.id) };
+    return decisions.get(candidate.id);
+  });
 }
 
 export function createOpenRouterMemoryTransport({ apiKey, fetcher = globalThis.fetch } = {}) {
@@ -184,13 +213,15 @@ export function createOpenRouterMemoryTransport({ apiKey, fetcher = globalThis.f
   };
 }
 
-export function createMemoryJudge({ transport, cache = new Map() } = {}) {
+export function createMemoryJudge({ transport, cache = new Map(), namespace } = {}) {
+  const typedJudge = createTypedMemoryJudge({ transport, cache, namespace });
   return async ({ stage, context = {}, candidates = [], policy: rawPolicy = {}, active_qualified = false }) => {
     const policy = normalizeJudgmentPolicy(rawPolicy);
     if (!QUESTIONS[stage]) throw new Error("invalid_judgment_stage");
     const assessCapture = stage === "capture" && policy.capture_assessment_mode === "shadow";
     const start = performance.now();
     const result = { policy_version: policy.version, stage, mode: policy.mode, threshold: policy.threshold,
+      ...(policy.objective === "cost" ? { objective: "cost" } : {}),
       capture_assessment_mode: assessCapture ? "shadow" : "off",
       basis: "prediction", applied: false, status: "skipped", reason_code: "off", cache_hit: false,
       request_count: 0, resolved_model: null, usage: null, provider_cost: null, elapsed_ms: 0,
@@ -199,7 +230,7 @@ export function createMemoryJudge({ transport, cache = new Map() } = {}) {
     if (policy.mode === "off") return finish();
     if (policy.mode === "active" && !active_qualified) { result.reason_code = "qualification_required"; return finish(); }
     if (!candidates.length) { result.reason_code = "no_candidates"; return finish(); }
-    if (candidates.length > 50 || candidates.some((c) => typeof c.id !== "string" || !c.id || typeof c.text !== "string") || new Set(candidates.map((c) => c.id)).size !== candidates.length) {
+    if ((policy.objective !== "cost" && candidates.length > 50) || candidates.some((c) => typeof c.id !== "string" || !c.id || typeof c.text !== "string") || new Set(candidates.map((c) => c.id)).size !== candidates.length) {
       result.reason_code = "invalid_candidates"; return finish();
     }
     // Duplicate only byte-identical semantic/provenance packets; a different
@@ -217,6 +248,37 @@ export function createMemoryJudge({ transport, cache = new Map() } = {}) {
     if (!eligible.length) {
       result.reason_code = "protected_candidates";
       result.decisions = candidates.map((c) => ({ id: c.id, action: "review", requires_review: true, reason_codes: ["protected_evidence"] }));
+      return finish();
+    }
+    if (policy.objective === "cost") {
+      const related = candidates.map(({ id: _id, ...candidate }) => candidate).sort((a, b) => stableJudgmentJson(a).localeCompare(stableJudgmentJson(b)));
+      const units = eligible.flatMap((candidate, index) => {
+        const { id: _id, ...original } = candidate;
+        const input = { stage, context, candidate: original };
+        const questions = { ...Object.fromEntries(Object.entries(QUESTIONS[stage]).map(([axis, instructions]) => [axis, { type: "noul", instructions }])),
+          ...(assessCapture ? CAPTURE_ASSESSMENT_QUESTIONS : {}) };
+        return Object.entries(questions).map(([axis, question]) => ({ id: `c${index}_${axis}`, question, input,
+          ...(["incremental", "contradiction"].includes(axis) ? { shared: { candidates: related } } : {}) }));
+      });
+      let assessed;
+      try { assessed = await typedJudge({ units, policy }); }
+      catch { assessed = { answers: {}, failures: Object.fromEntries(units.map((u) => [u.id, "judgment_unavailable"])), request_count: 0, cache_hit: false }; }
+      const { answers, failures, ...stats } = assessed;
+      Object.assign(result, stats);
+      result.decisions = costMemoryDecisions(stage, candidates, eligible, duplicates, answers, failures, policy.threshold);
+      if (assessCapture) {
+        const ordinals = new Map(eligible.map((c, index) => [c.id, index]));
+        result.decisions = result.decisions.map((decision, index) => {
+          const ordinal = ordinals.get(duplicates.get(decision.id) ?? decision.id);
+          const lesson = answers[`c${ordinal}_lesson_type`], utility = answers[`c${ordinal}_utility`];
+          return lesson && utility ? { ...decision, capture_assessment: assessCaptureCandidate(candidates[index], decision, lesson, utility, policy.threshold) } : decision;
+        });
+      }
+      result.status = Object.keys(answers).length ? "judged" : "fallback";
+      result.reason_code = Object.values(failures)[0] ?? null;
+      result.applied = policy.mode === "active" && result.status === "judged";
+      result.objective = "cost";
+      result.review_bundle = result.decisions.filter((d) => d.requires_review).map(({ id, reason_codes }) => ({ id, reason_codes }));
       return finish();
     }
     const questions = {};

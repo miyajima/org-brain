@@ -7,6 +7,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { CLI_BUILD_INFO } from "./build-info.mjs";
+import { loadBundledJudgmentSettings } from "./lib/jev-runtime-settings.mjs";
 import {
   DEFAULT_LOCAL_DB,
   LocalMemoryStore,
@@ -34,6 +35,7 @@ Usage:
   orgbrain workspace resolve [--root <checkout>]
   orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type implementation|review|debug|proposal|support|research|operations|other] [--tag <tag>]
   orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
+  orgbrain memory wiki assess --project-id <id> [--page wiki/topics/page.md] [--vault <path>] [--changed-since <ISO-8601>] [--limit <n>] [--json]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>
   orgbrain memory delete <memory-id>
@@ -76,6 +78,7 @@ Usage:
   orgbrain group archive <group-id>
   orgbrain usage configure --mode off|a|b|c [--collect] [--sync]
   orgbrain usage status
+  orgbrain usage report [--tenant-id <id>] [--project-id <id>]
   orgbrain usage context [json-payload]
   orgbrain usage history [--source-id <id>] [--project-id <id>]
   orgbrain usage evaluate [json-payload]
@@ -155,7 +158,7 @@ function parseArgs(argv) {
     }
     const value = inline ?? argv[++index];
     if (value === undefined || value.startsWith("--")) throw new Error(`${name} requires a value`);
-    if (["--tag", "--entity", "--conflict"].includes(name)) {
+    if (["--tag", "--entity", "--conflict", "--page"].includes(name)) {
       repeated.set(name, [...(repeated.get(name) ?? []), value]);
     } else {
       values.set(name, value);
@@ -338,6 +341,16 @@ async function handleMemory(store, action, rest, args) {
     return;
   }
   const tenantId = args.get("--tenant-id", "default");
+  if (action === "wiki" && rest[0] === "assess") {
+    const { assessLocalWiki } = await import("./lib/wiki-memory-assessment.mjs");
+    const changedSince = args.get("--changed-since") ? Date.parse(args.get("--changed-since")) : null;
+    if (changedSince !== null && !Number.isFinite(changedSince)) throw new Error("invalid_wiki_changed_since");
+    emit(await assessLocalWiki({ store, dbPath: store.dbPath, tenantId,
+      projectId: args.get("--project-id"), vault: args.get("--vault"), config: args.get("--config"),
+      pages: args.all("--page").length ? args.all("--page") : undefined, changedSince,
+      limit: Number(args.get("--limit", "10")), principalId: args.get("--principal-id", null) }));
+    return;
+  }
   const principal = process.env.USER || "local-user";
   if (action === "feedback" && rest[0] === "report") {
     emit(await store.reportMemoryFeedback({...await readPayload(args),tenant_id:tenantId,reporter_principal:principal}));
@@ -423,7 +436,7 @@ async function handleMemory(store, action, rest, args) {
   }
   if (action === "search") {
     const query = rest.join(" ").trim() || args.get("--query", "");
-    const results = await store.search({
+    let results = await store.search({
       tenant_id: tenantId,
       project_id: args.get("--project-id", null),
       business_category_id: args.get("--business-category-id", null),
@@ -435,11 +448,17 @@ async function handleMemory(store, action, rest, args) {
       limit: Number(args.get("--limit", 10)),
       search_mode: args.get("--search-mode", "hybrid_v4")
     });
+    const selection = await store.selectMemorySearchResults(results, { tenant_id: tenantId,
+      project_id: args.get("--project-id", null), query,
+      use_context: { conditions: args.get("--conditions", ""), constraints: args.get("--constraints", "") },
+      usage_purpose: args.get("--usage-purpose", "unclassified") });
+    results = selection.results;
     const usage = await store.recordUsage({
       tenant_id: tenantId,
       project_id: args.get("--project-id", null),
       task_id: args.get("--task-id", null),
       capability: "memory_search",
+      usage_purpose: args.get("--usage-purpose", "unclassified"),
       access_path: "search",
       request_source: "local",
       requested_business_category_id: args.get("--business-category-id", null),
@@ -454,7 +473,8 @@ async function handleMemory(store, action, rest, args) {
         used_state: "unknown"
       }))
     });
-    emit({ results, meta: { usage_id: usage.usage_id,usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items,use_history:results[0]?.use_history_meta, verification_sampled: usage.verification_sampled } });
+    emit({ results, meta: { usage_id: usage.usage_id,usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items,use_history:results[0]?.use_history_meta, verification_sampled: usage.verification_sampled,
+      ...(selection.memory_judgment.mode !== "off" ? { memory_judgment: selection.memory_judgment } : {}) } });
     return;
   }
   if (action === "revise") {
@@ -978,11 +998,12 @@ async function main() {
         const {setTimeout:delay}=await import('node:timers/promises');
         await delay(interval*1000,undefined,{signal:controller.signal}).catch(error=>{if(error.name!=='AbortError')throw error;});
       } while(!controller.signal.aborted);
-    } finally {process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);}  } else if (command === "usage" && ["configure","status","context","history","evaluate","revoke","rebuild"].includes(action)) {
+    } finally {process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);}  } else if (command === "usage" && ["configure","status","report","context","history","evaluate","revoke","rebuild"].includes(action)) {
     const payload = ["context","evaluate","rebuild"].includes(action) ? await readStructuredPayload(args, rest) : {};
     emit(await store.useHistory(action === "context" ? "record" : action, {
       ...payload, tenant_id:args.get("--tenant-id",payload.tenant_id || "default"), principal_id:args.get("--principal",payload.principal_id || process.env.ORGBRAIN_USE_PRINCIPAL || "local"),
       ...(action === "configure" ? {mode:args.get("--mode","off"),collect:args.flags.has("--collect"),sync:args.flags.has("--sync")} : {}),
+      ...(action === "report" ? {project_id:args.get("--project-id",null)} : {}),
       ...(action === "history" ? {source_id:args.get("--source-id",null),project_id:args.get("--project-id",null),before:args.get("--before",null),limit:Number(args.get("--limit",20))} : {}),
       ...(action === "revoke" ? {id:rest[0]} : {})
     }));
@@ -1337,7 +1358,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+loadBundledJudgmentSettings({ buildInfo: CLI_BUILD_INFO, bundleUrl: import.meta.url }).then(main).catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

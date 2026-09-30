@@ -7,6 +7,7 @@ import {
   MEMORY_JUDGMENT_VERSION, normalizeJudgmentPolicy, judgmentHash, memoryJudgmentPolicyHash
 } from "../../../shared/src/memory-judgment-runtime.mjs";
 import { qualifyMemoryJudgment } from "../../../shared/src/memory-judgment-evaluation.mjs";
+import { memoryCostConfigurationHash } from "../../../shared/src/memory-judgment-cost-evaluation.mjs";
 import { localJudgmentImplementationHash } from "./local-memory-judgment-binding.mjs";
 import { CLI_BUILD_INFO } from "../build-info.mjs";
 
@@ -34,7 +35,9 @@ export function localJudgmentPolicy(stage, projectId, env = process.env) {
   return normalizeJudgmentPolicy({
     mode: projectId && projects.includes(projectId) ? env[`ORGBRAIN_JEV_${stage.toUpperCase()}_MODE`] : "off",
     capture_assessment_mode: stage === "capture" ? env.ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE : "off",
-    threshold: env.ORGBRAIN_JEV_THRESHOLD
+    threshold: env.ORGBRAIN_JEV_THRESHOLD,
+    objective: env.ORGBRAIN_JEV_OBJECTIVE,
+    resolved_model: env.ORGBRAIN_JEV_RESOLVED_MODEL
   });
 }
 
@@ -75,7 +78,7 @@ export function memoryJudgmentCandidate(memory, id = memory.id, { includeCapture
 
 // Qualification reports are created by the evaluation CLI, never by a model
 // answering a retrieval request. This checks scope/bindings, not a self-score.
-export async function readJudgmentQualification(file, stage, policy) {
+export async function readJudgmentQualification(file, stage, policy, { activeStages = [stage] } = {}) {
   if (!file) return false;
   try {
     const report = JSON.parse(await readFile(file, "utf8"));
@@ -96,6 +99,14 @@ export async function readJudgmentQualification(file, stage, policy) {
           || receipt.artifact_hash !== observation.verification.artifact_hash) return false;
       }
     }
+    if (policy.objective === "cost") {
+      return report.schema === "memory-judgment-qualification/v2" && report.status === "passed" && report.objective === "cost"
+        && report.policy_version === MEMORY_JUDGMENT_VERSION && report.model === MEMORY_JUDGMENT_MODEL
+        && Boolean(policy.resolved_model) && report.resolved_model === policy.resolved_model
+        && report.threshold === policy.threshold && report.stages?.includes(stage)
+        && report.configuration_hash === await memoryCostConfigurationHash(activeStages, policy.threshold, policy.resolved_model)
+        && report.policy_hash === await memoryJudgmentPolicyHash(policy.threshold, { objective: "cost" });
+    }
     return report.schema === "memory-judgment-qualification/v1" && report.status === "passed"
       && report.policy_version === MEMORY_JUDGMENT_VERSION && report.model === MEMORY_JUDGMENT_MODEL
       && report.threshold === policy.threshold && report.stages?.includes(stage)
@@ -107,8 +118,8 @@ export async function readJudgmentQualification(file, stage, policy) {
   } catch { return false; }
 }
 
-export function createLocalMemoryJudge({ dbPath, env = process.env, transport, shadowOnly = false } = {}) {
-  const cache = {
+export function createLocalJudgmentCache(dbPath) {
+  return {
     async get(key) {
       const db = await openJudgmentDatabase(dbPath);
       try { const row = db.prepare("SELECT response FROM decisions WHERE key = ?").get(key); return row ? JSON.parse(row.response) : undefined; }
@@ -118,23 +129,54 @@ export function createLocalMemoryJudge({ dbPath, env = process.env, transport, s
       const db = await openJudgmentDatabase(dbPath);
       try {
         db.prepare("INSERT OR REPLACE INTO decisions VALUES (?, ?, ?)").run(key, JSON.stringify(response), Date.now());
-        db.exec("DELETE FROM decisions WHERE key NOT IN (SELECT key FROM decisions ORDER BY created_at DESC LIMIT 256)");
+        db.exec("DELETE FROM decisions WHERE key NOT IN (SELECT key FROM decisions ORDER BY created_at DESC LIMIT 4096)");
       } finally { db.close(); }
+    },
+    async getMany(keys) {
+      const db = await openJudgmentDatabase(dbPath);
+      try {
+        const statement = db.prepare("SELECT response FROM decisions WHERE key = ?");
+        return new Map(keys.map((key) => {
+          try { const row = statement.get(key); return [key, row ? JSON.parse(row.response) : undefined]; }
+          catch { return [key, undefined]; }
+        }));
+      } finally { db.close(); }
+    },
+    async setMany(entries) {
+      const db = await openJudgmentDatabase(dbPath);
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        const statement = db.prepare("INSERT OR REPLACE INTO decisions VALUES (?, ?, ?)");
+        for (const [key, value] of entries) statement.run(key, JSON.stringify(value), Date.now());
+        db.exec("DELETE FROM decisions WHERE key NOT IN (SELECT key FROM decisions ORDER BY created_at DESC LIMIT 4096)");
+        db.exec("COMMIT");
+      } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+      finally { db.close(); }
     }
   };
-  const judge = createMemoryJudge({ cache, transport: transport ?? createOpenRouterMemoryTransport({ apiKey: env.OPENROUTER_API_KEY }) });
+}
+
+export function activeLocalJudgmentStages(env = process.env) {
+  return ["wiki", "capture", "use"].filter((stage) => env[`ORGBRAIN_JEV_${stage.toUpperCase()}_MODE`] === "active");
+}
+
+export function createLocalMemoryJudge({ dbPath, env = process.env, transport, shadowOnly = false } = {}) {
+  const cache = dbPath ? createLocalJudgmentCache(dbPath) : undefined;
+  const judge = createMemoryJudge({ cache, namespace: dbPath ? resolve(dbPath) : undefined, transport: transport ?? createOpenRouterMemoryTransport({ apiKey: env.OPENROUTER_API_KEY }) });
   return async ({ stage, context, candidates }) => {
     const policy = localJudgmentPolicy(stage, context.project_id, env);
     if (shadowOnly && policy.mode === "active") policy.mode = "shadow";
-    const activeQualified = policy.mode === "active" && await readJudgmentQualification(env.ORGBRAIN_JEV_QUALIFICATION_FILE, stage, policy);
+    const activeQualified = policy.mode === "active" && await readJudgmentQualification(env.ORGBRAIN_JEV_QUALIFICATION_FILE, stage, policy,
+      { activeStages: activeLocalJudgmentStages(env) });
     const result = await judge({ stage, context, candidates, policy, active_qualified: activeQualified });
-    if (policy.mode !== "off") {
+    if (policy.mode !== "off" && dbPath) {
       // No prompt, original ID, text, credentials, or provider error bodies.
       const file = `${dbPath}.jev-metrics.jsonl`;
       try {
-        const trace = { ...result, telemetry_version: "memory-judgment-telemetry/v2", event_id: randomUUID(), recorded_at: Date.now(), build: CLI_BUILD_INFO,
+        const { review_bundle: _privateReview, ...safeResult } = result;
+        const trace = { ...safeResult, telemetry_version: "memory-judgment-telemetry/v2", event_id: randomUUID(), recorded_at: Date.now(), build: CLI_BUILD_INFO,
           project_hash: await judgmentHash(context.project_id), tenant_hash: await judgmentHash(context.tenant_id ?? "default"),
-          policy_hash: await memoryJudgmentPolicyHash(policy.threshold),
+          policy_hash: await memoryJudgmentPolicyHash(policy.threshold, { objective: policy.objective }),
           decisions: await Promise.all(result.decisions.map(async ({ id, duplicate_of, ...decision }, index) => ({ ...decision,
             candidate_hash: await judgmentHash(id), candidate_snapshot_hash: await judgmentHash(candidates[index]) }))) };
         try { const info = await lstat(file); if (!info.isFile() || info.isSymbolicLink()) return result; }

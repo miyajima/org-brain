@@ -1,4 +1,4 @@
-import { observeMemoryUse } from "./lib/memory-use-collector.mjs";
+import { receiveLocalUseObservation } from "./lib/local-use-observations.mjs";
 import { answerGuidanceForDisposition } from "../../shared/src/evidence-disposition.mjs";
 import {
   classifyMemoryReviewAnswer,
@@ -67,6 +67,16 @@ const ORGBRAIN_TOOL_PRESENTATION = Object.freeze({
 });
 
 const TOOL_DEFINITIONS = [
+  {
+    name: "orgbrain_wiki_assess",
+    description: "Assess selected LLM Wiki sections against original evidence and scoped memories. Returns prediction and one parent review bundle; never saves or revises memories.",
+    inputSchema: { type: "object", required: ["project_id"], properties: {
+      project_id: { type: "string", minLength: 1 }, tenant_id: { type: "string" },
+      pages: { type: "array", maxItems: 50, uniqueItems: true, items: { type: "string" } },
+      vault: { type: "string" }, changed_since: { type: "string" },
+      limit: { type: "integer", minimum: 1, maximum: 50 }, principal_id: { type: ["string", "null"] }
+    } }
+  },
   {name:"orgbrain_memory_feedback_report",description:"Report stale or wrong information for an exact version; requires evidence and does not change retrieval.",inputSchema:{type:"object",required:["payload"],properties:{tenant_id:{type:"string"},payload:{type:"object"}}}},
   {name:"orgbrain_memory_feedback_review",description:"Confirm or reject a memory feedback report as its owner.",inputSchema:{type:"object",required:["feedback_id","decision"],properties:{tenant_id:{type:"string"},feedback_id:{type:"string"},decision:{type:"string",enum:["confirm","reject"]},reviewer_principal:{type:"string"}}}},
   {name:"orgbrain_memory_relation_propose",description:"Propose an evidence-backed contradicts or fixes relationship between exact current versions.",inputSchema:{type:"object",required:["payload"],properties:{tenant_id:{type:"string"},payload:{type:"object"}}}},
@@ -157,6 +167,7 @@ const TOOL_DEFINITIONS = [
         principal_id: { type: ["string", "null"] }, include_domain_recall: { type: "boolean" },
         task_title: { type: ["string", "null"], maxLength: 500 }, task_description: { type: ["string", "null"], maxLength: 4000 },
         task_id: { type: "string", maxLength: 128 }, work_type: { type: "string", enum: ["implementation", "review", "debug", "proposal", "support", "research", "operations", "other"] },
+        usage_purpose: { type: "string", enum: ["task", "audit", "diagnostic", "test", "unclassified"] },
         use_context: { type: "object", properties: { task: { type: "string", maxLength: 4000 }, target: { type: "string", maxLength: 1000 }, constraints: { type: "string", maxLength: 4000 }, conditions: { type: "string", maxLength: 4000 } } },
         minimum_total_score: { type: ["number", "null"], minimum: 0 }, top_k: { type: "integer", minimum: 1, maximum: 10 }, token_budget: { type: "integer", minimum: 512, maximum: 16000 },
         context_format: { type: "string", enum: ["compact", "full"], description: "Compact preserves complete lessons and reuse conditions within the complete response budget; full includes historical projections." },
@@ -193,12 +204,13 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "orgbrain_memory_observe",
-    description: "Validate one current-turn durable learning event without persisting it. Use at most three times per turn.",
+    description: "Validate one current-turn learning event without saving a memory. For use_observation, issue a local tracking receipt pending transcript verification; print use_receipt in wrapped tool output. Use actual call IDs, never tool names. At most three per turn.",
     inputSchema: {
       type: "object",
       required: ["schema_version", "lesson_type"],
       properties: {
         schema_version: { type: "integer", enum: [1, 2] },
+        tenant_id: { type: "string" },
         use_observation: {type:"object"},
         lesson_type: { type: "string", enum: ["success", "decision", "failure"] },
         kind: { type: "string", enum: ["decision", "constraint", "pitfall", "preference", "fact"] },
@@ -317,6 +329,7 @@ const TOOL_DEFINITIONS = [
         minimum_total_score: { type: ["number", "null"], minimum: 0 },
         principal_id: { type: ["string", "null"] },
         task_id: { type: ["string", "null"] },
+        usage_purpose: { type: "string", enum: ["task", "audit", "diagnostic", "test", "unclassified"] },
         use_snapshot_id: {type:"string",maxLength:128},
         use_context: {type:"object",properties:{task:{type:"string"},target:{type:"string"},constraints:{type:"string"},conditions:{type:"string"}}},
         trace_id: { type: ["string", "null"] },
@@ -341,6 +354,7 @@ const TOOL_DEFINITIONS = [
         business_category_id: { type: ["string", "null"] },
         work_type: { type: ["string", "null"] },
         task_id:{type:"string",maxLength:128},
+        usage_purpose: { type: "string", enum: ["task", "audit", "diagnostic", "test", "unclassified"] },
         use_snapshot_id:{type:"string",maxLength:128},
         use_context:{type:"object",properties:{task:{type:"string",maxLength:600},target:{type:"string",maxLength:600},constraints:{type:"string",maxLength:600},conditions:{type:"string",maxLength:600}}},
         top_k: { type: "integer", minimum: 1, maximum: 50 },
@@ -907,6 +921,13 @@ function captureDefaults(input) {
 
 async function callTool(store, name, input, toolProfile = "default") {
   const tenantId = input.tenant_id || "default";
+  if (name === "orgbrain_wiki_assess") {
+    const { assessLocalWiki } = await import("./lib/wiki-memory-assessment.mjs");
+    const changedSince = input.changed_since ? Date.parse(input.changed_since) : null;
+    if (changedSince !== null && !Number.isFinite(changedSince)) throw new Error("invalid_wiki_changed_since");
+    return assessLocalWiki({ store, dbPath: store.dbPath, projectId: await canonicalLocalProjectId(input.project_id), tenantId,
+      vault: input.vault, pages: input.pages, changedSince, limit: input.limit ?? 10, principalId: input.principal_id ?? null });
+  }
   if (name === "orgbrain_memory_feedback_report") return store.reportMemoryFeedback({...input.payload,tenant_id:tenantId,reporter_principal:process.env.USER||"local-user"});
   if (name === "orgbrain_memory_feedback_review") return store.reviewMemoryFeedback({tenant_id:tenantId,feedback_id:input.feedback_id,decision:input.decision,reviewer_principal:process.env.USER||"local-user"});
   if (name === "orgbrain_memory_relation_propose") return store.proposeMemoryRelation({...input.payload,tenant_id:tenantId,proposer_principal:process.env.USER||"local-user"});
@@ -945,6 +966,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       project_id: projectId,
       work_type: input.work_type ?? "other",
       task_id: boundedString(input.task_id ?? input.task_title, 128) ?? "context-enrich",
+      usage_purpose: input.usage_purpose,
       use_context: useContext,
       query: input.query,
       top_k: input.top_k ?? 5,
@@ -976,7 +998,7 @@ async function callTool(store, name, input, toolProfile = "default") {
   if (name === "orgbrain_metric_query") return queryLocalMetrics(store, input);
   if (name === "orgbrain_domain_recall_feedback") return recordLocalDomainRecallFeedback(store, input);
   if (name === "orgbrain_memory_observe") {
-    if (input.use_observation) return observeMemoryUse(input.use_observation);
+    if (input.use_observation) return receiveLocalUseObservation(store, tenantId, input.use_observation);
     const observe = input.schema_version === 2
       ? observeMemoryContractV2Event
       : observeMemoryLearningEvent;
@@ -1124,7 +1146,7 @@ async function callTool(store, name, input, toolProfile = "default") {
   }
   if (name === "orgbrain_memory_capture") return store.capture(captureDefaults(input));
   if (name === "orgbrain_memory_search") {
-    const results = await store.search({
+    let results = await store.search({
       tenant_id: tenantId,
       project_id: input.project_id || undefined,
       business_category_id: input.business_category_id || null,
@@ -1136,10 +1158,15 @@ async function callTool(store, name, input, toolProfile = "default") {
       principal_id: input.principal_id || null,
       search_mode: normalizeSearchMode(input.search_mode || "default")
     });
+    const selection = await store.selectMemorySearchResults(results, { tenant_id: tenantId,
+      project_id: input.project_id || null, principal_id: input.principal_id || null, query: input.query,
+      use_context: input.use_context, usage_purpose: input.usage_purpose });
+    results = selection.results;
     const usage = await store.recordUsage({
       tenant_id: tenantId,
       project_id: input.project_id || undefined,
       task_id: input.task_id || undefined,
+      usage_purpose: input.usage_purpose,
       trace_id: input.trace_id || undefined,
       external_run_id: input.external_run_id || undefined,
       capability: "memory_search",
@@ -1157,7 +1184,8 @@ async function callTool(store, name, input, toolProfile = "default") {
         used_state: "unknown"
       }))
     });
-    return { results, meta: { usage_id: usage.usage_id, usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items, verification_sampled: usage.verification_sampled, use_history:results[0]?.use_history_meta } };
+    return { results, meta: { usage_id: usage.usage_id, usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items, verification_sampled: usage.verification_sampled, use_history:results[0]?.use_history_meta,
+      ...(selection.memory_judgment.mode !== "off" ? { memory_judgment: selection.memory_judgment } : {}) } };
   }
   if (name === "orgbrain_memory_retrieve_context") {
     return store.retrieveContext({
@@ -1166,7 +1194,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       business_category_id: input.business_category_id || null,
       work_type: input.work_type || null,
       query: input.query,
-      task_id:input.task_id,use_context:input.use_context,use_snapshot_id:input.use_snapshot_id,
+      task_id:input.task_id,use_context:input.use_context,use_snapshot_id:input.use_snapshot_id,usage_purpose:input.usage_purpose,
       top_k: input.top_k || 5,
       token_budget: input.token_budget || 8_000,
       principal_id: input.principal_id || null,

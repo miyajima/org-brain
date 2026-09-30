@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { createMemoryJudge, createOpenRouterMemoryTransport, MEMORY_JUDGMENT_MODEL, MEMORY_JUDGMENT_VERSION, judgmentHash, memoryJudgmentPolicyHash } from "../packages/shared/src/memory-judgment-runtime.mjs";
+import { createMemoryJudge, createOpenRouterMemoryTransport, MEMORY_JUDGMENT_MODEL, MEMORY_JUDGMENT_VERSION, MEMORY_JUDGMENT_THRESHOLDS, judgmentHash, memoryJudgmentPolicyHash } from "../packages/shared/src/memory-judgment-runtime.mjs";
+import { memoryCostConfigurationHash } from "../packages/shared/src/memory-judgment-cost-evaluation.mjs";
 import { calibrateMemoryJudgment, qualifyMemoryJudgment, replayMemoryJudgmentCase, validateJudgmentDataset } from "../packages/shared/src/memory-judgment-evaluation.mjs";
 import { localJudgmentImplementationHash } from "../packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs";
 
@@ -11,8 +12,9 @@ function argsOf(args) {
   const result = {};
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--live") result.live = true;
-    else if (["--dataset", "--out", "--outcomes", "--manifest"].includes(args[i]) && args[i + 1]) result[args[i++].slice(2)] = args[i];
-    else throw new Error("usage: --dataset FILE --out NEW_DIRECTORY [--live], or --manifest FILE --outcomes FILE --out NEW_DIRECTORY");
+    else if (["--dataset", "--out", "--outcomes", "--manifest", "--objective", "--stages", "--resolved-model", "--threshold"].includes(args[i]) && args[i + 1]) {
+      const key = args[i++].slice(2); result[key === "resolved-model" ? "resolvedModel" : key] = args[i];
+    } else throw new Error("usage: --dataset FILE --out NEW_DIRECTORY [--live | --objective cost --stages wiki,capture,use --resolved-model MODEL --threshold 0.95], or --manifest FILE --outcomes FILE --out NEW_DIRECTORY");
   }
   if (!result.out) throw new Error("new_output_directory_required");
   return result;
@@ -60,6 +62,27 @@ export async function runJudgmentEvaluation(args) {
   }
   const dataset = validateJudgmentDataset(JSON.parse(await readFile(resolve(args.dataset), "utf8")));
   const runtimeBytes = await readFile(new URL("../packages/shared/src/memory-judgment-runtime.mjs", import.meta.url));
+  if (args.objective === "cost") {
+    const stages = [...new Set(String(args.stages ?? "").split(","))].sort();
+    const threshold = Number(args.threshold ?? .95);
+    if (args.live || !args.resolvedModel || !MEMORY_JUDGMENT_THRESHOLDS.includes(threshold)
+      || !stages.length || stages.some((stage) => !["wiki", "capture", "use"].includes(stage))) throw new Error("invalid_cost_configuration");
+    const manifest = { schema: "memory-judgment-experiment/v2", objective: "cost", policy_version: MEMORY_JUDGMENT_VERSION,
+      model: MEMORY_JUDGMENT_MODEL, resolved_model: args.resolvedModel, stages, threshold,
+      policy_hash: await memoryJudgmentPolicyHash(threshold, { objective: "cost" }),
+      configuration_hash: await memoryCostConfigurationHash(stages, threshold, args.resolvedModel),
+      dataset_hash: await judgmentHash(dataset), runtime_hash: createHash("sha256").update(runtimeBytes).digest("hex"),
+      implementation_hash: await localJudgmentImplementationHash(), created_at: new Date().toISOString(), evaluator: "matched_whole_task_cost",
+      dev_conversations: [...new Set(dataset.cases.filter((c) => c.split === "dev").map((c) => c.conversation_id))],
+      holdout_conversations: [...new Set(dataset.cases.filter((c) => c.split === "holdout").map((c) => c.conversation_id))],
+      holdout_cases: dataset.cases.filter((c) => c.split === "holdout").map((c) => ({ id: c.id, conversation_id: c.conversation_id })) };
+    await write("manifest.json", manifest);
+    const report = { schema: "memory-judgment-cost-experiment/v2", status: "inconclusive", reason: "task_outcomes_not_measured",
+      configuration_hash: manifest.configuration_hash, threshold, threshold_calibration: "not_measured",
+      activation_qualified: false, model_calls: 0, parent_usage: null, task_success: null, provider_cost: null, jev_assumed_cost_usd: 0 };
+    await write("report.json", report);
+    return report;
+  }
   let currentCase;
   const transport = args.live ? createOpenRouterMemoryTransport({ apiKey: process.env.OPENROUTER_API_KEY }) : async (request) => ({
     model: "fixture-replay-not-a-model", usage: { input_tokens: 0, output_tokens: 0, cost: 0 },
