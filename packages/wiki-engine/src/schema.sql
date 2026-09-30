@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS pages(id TEXT PRIMARY KEY,path TEXT NOT NULL UNIQUE,title TEXT NOT NULL,content TEXT NOT NULL,hash TEXT NOT NULL,deleted INTEGER NOT NULL DEFAULT 0,project_id TEXT);
+CREATE TABLE IF NOT EXISTS aliases(path TEXT PRIMARY KEY,page_id TEXT NOT NULL REFERENCES pages(id));
+CREATE TABLE IF NOT EXISTS revisions(id TEXT PRIMARY KEY,page_id TEXT NOT NULL REFERENCES pages(id),content TEXT NOT NULL,hash TEXT NOT NULL,title TEXT NOT NULL,path TEXT NOT NULL,deleted INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS source_versions(source_id TEXT NOT NULL,version INTEGER NOT NULL,name TEXT NOT NULL,hash TEXT NOT NULL,url TEXT,original_path TEXT NOT NULL,text TEXT NOT NULL,extractor TEXT NOT NULL,page_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,PRIMARY KEY(source_id,version));
+CREATE TABLE IF NOT EXISTS links(from_page TEXT NOT NULL REFERENCES pages(id),target_id TEXT,target_text TEXT NOT NULL,anchor TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS links_target ON links(target_id);
+CREATE TABLE IF NOT EXISTS citations(page_id TEXT NOT NULL REFERENCES pages(id),source_id TEXT NOT NULL,version INTEGER NOT NULL,locator TEXT NOT NULL,FOREIGN KEY(source_id,version) REFERENCES source_versions(source_id,version));
+CREATE INDEX IF NOT EXISTS citations_source ON citations(source_id,version);
+CREATE TABLE IF NOT EXISTS chunks(id INTEGER PRIMARY KEY,owner TEXT NOT NULL,kind TEXT NOT NULL,version INTEGER NOT NULL,title TEXT NOT NULL,heading TEXT NOT NULL,start_line INTEGER NOT NULL,end_line INTEGER NOT NULL,body TEXT NOT NULL,normalized TEXT NOT NULL,hash TEXT NOT NULL,embedding_text TEXT NOT NULL,project_id TEXT);
+CREATE INDEX IF NOT EXISTS chunks_owner ON chunks(owner,kind);
+CREATE INDEX IF NOT EXISTS chunks_hash ON chunks(hash);
+CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(title,heading,normalized,tokenize='trigram');
+CREATE TABLE IF NOT EXISTS short_grams(gram TEXT NOT NULL,chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,PRIMARY KEY(gram,chunk_id));
+CREATE INDEX IF NOT EXISTS short_grams_chunk ON short_grams(chunk_id);
+CREATE TABLE IF NOT EXISTS embedding_models(model TEXT PRIMARY KEY,dimensions INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS embeddings(hash TEXT NOT NULL,model TEXT NOT NULL REFERENCES embedding_models(model),vector BLOB NOT NULL,PRIMARY KEY(hash,model));
+CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY,page_id TEXT NOT NULL REFERENCES pages(id),content TEXT NOT NULL,expected_hash TEXT NOT NULL,created_at TEXT NOT NULL);
+PRAGMA user_version=1;

@@ -1,0 +1,13 @@
+---
+import Shell from "../layouts/Shell.astro";
+---
+<Shell title="設定"><main class="settings"><h1>設定</h1><section class="setting-row"><div><h2>LLM Wiki</h2><p id="feature-state">読み込み中</p></div><label class="switch"><input id="wiki-enabled" type="checkbox" role="switch" aria-label="LLM Wikiを有効にする"/><span></span></label></section><section class="setting-row" id="maintenance-setting" hidden><div><h2>自動メンテナンス</h2></div><label class="switch"><input id="maintenance-enabled" type="checkbox" role="switch" aria-label="自動メンテナンスを有効にする"/><span></span></label></section><p id="error" role="alert" hidden></p><a id="open-wiki" href="/wiki" class="primary" hidden>Wikiを開く</a></main>
+<script>
+import { apiStatus, setFeature, showError } from "../lib/api";
+const enabled=document.querySelector<HTMLInputElement>("#wiki-enabled")!;
+const maintenance=document.querySelector<HTMLInputElement>("#maintenance-enabled")!;
+async function refresh(){const status=await apiStatus();enabled.checked=status.enabled;maintenance.checked=status.auto_maintenance;document.querySelector("#feature-state")!.textContent=status.enabled ? "ON" : "OFF";for(const id of ["open-wiki","wiki-nav","maintenance-setting"])(document.getElementById(id) as HTMLElement).hidden=!status.enabled;}
+enabled.addEventListener("change",async()=>{enabled.disabled=true;try{await setFeature(enabled.checked,maintenance.checked);await refresh();}catch(error){showError(error);await refresh();}finally{enabled.disabled=false;}});
+maintenance.addEventListener("change",async()=>{try{await setFeature(enabled.checked,maintenance.checked);}catch(error){showError(error);await refresh();}});
+refresh().catch(showError);
+</script></Shell>
