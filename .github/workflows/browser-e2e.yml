@@ -25,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      E2E_EVIDENCE: '1'
+      PLAYWRIGHT_JSON_OUTPUT_FILE: e2e-evidence/results.json
+      PLAYWRIGHT_JUNIT_OUTPUT_FILE: e2e-evidence/results.xml
       ASTRO_TELEMETRY_DISABLED: '1'
       WRANGLER_SEND_METRICS: 'false'
     steps:
@@ -41,22 +44,31 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @org-brain/console exec playwright install --with-deps chromium
       - name: Run selected browser suite
+        id: e2e
         timeout-minutes: 10
         env:
           E2E_SUITE: ${{ inputs.suite }}
         run: |
           case "$E2E_SUITE" in
-            smoke) pnpm --filter @org-brain/console test:e2e e2e/login-and-memory.spec.ts --project=chromium --workers=1 --retries=0 --max-failures=3 --trace=retain-on-failure ;;
-            default) pnpm --filter @org-brain/console test:e2e --project=chromium --workers=1 --retries=0 --max-failures=3 --trace=retain-on-failure ;;
-            decision) pnpm --filter @org-brain/console test:e2e:decision --project=chromium --workers=1 --retries=0 --max-failures=3 --trace=retain-on-failure ;;
+            smoke) pnpm --filter @org-brain/console test:e2e e2e/login-and-memory.spec.ts --project=chromium --workers=1 --retries=0 --max-failures=3 --reporter=list,html,json,junit ;;
+            default) pnpm --filter @org-brain/console test:e2e --project=chromium --workers=1 --retries=0 --max-failures=3 --reporter=list,html,json,junit ;;
+            decision) pnpm --filter @org-brain/console test:e2e:decision --project=chromium --workers=1 --retries=0 --max-failures=3 --reporter=list,html,json,junit ;;
             *) echo "Unknown suite: $E2E_SUITE" >&2; exit 1 ;;
           esac
-      - uses: actions/upload-artifact@v7
-        if: failure()
+      - name: Summarize evidence
+        if: always()
+        env:
+          EVIDENCE_SCOPE: ${{ inputs.suite }}
+          E2E_OUTCOME: ${{ steps.e2e.outcome }}
+        run: node .github/scripts/e2e-summary.cjs apps/console
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: console-e2e-report
+          name: browser-e2e-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.suite }}
           path: |
-            apps/console/playwright-report
-            apps/console/test-results
-          if-no-files-found: ignore
-          retention-days: 3
+            apps/console/playwright-report/
+            apps/console/test-results/
+            apps/console/e2e-evidence/
+          if-no-files-found: warn
+          retention-days: 14

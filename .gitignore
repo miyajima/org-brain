@@ -28,3 +28,6 @@ tmp/
 /bin/
 /assets/wiki/
 /packages/orgbrain-cli/skills/org-brain-wiki/
+
+# Generated manual browser evidence
+e2e-evidence/
