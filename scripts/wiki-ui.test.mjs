@@ -5,9 +5,8 @@ import { createServer } from "node:http";
 import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WikiService } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
+import { WikiService, setWikiFeature } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
 import { createWikiHttpHandler } from "../packages/orgbrain-cli/src/lib/wiki-http.mjs";
-import { setWikiFeature } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
 const { chromium } = createRequire(
   new URL("../apps/console/package.json", import.meta.url),
 )("@playwright/test");
