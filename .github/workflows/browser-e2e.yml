@@ -1,0 +1,62 @@
+name: Browser E2E (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Test scope (smoke is the cheapest option)'
+        type: choice
+        required: true
+        default: smoke
+        options:
+          - smoke
+          - default
+          - decision
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  console-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ASTRO_TELEMETRY_DISABLED: '1'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @org-brain/console exec playwright install --with-deps chromium
+      - name: Run selected browser suite
+        timeout-minutes: 10
+        env:
+          E2E_SUITE: ${{ inputs.suite }}
+        run: |
+          case "$E2E_SUITE" in
+            smoke) pnpm --filter @org-brain/console test:e2e e2e/login-and-memory.spec.ts --project=chromium --workers=1 --retries=0 --max-failures=3 --trace=retain-on-failure ;;
+            default) pnpm --filter @org-brain/console test:e2e --project=chromium --workers=1 --retries=0 --max-failures=3 --trace=retain-on-failure ;;
+            decision) pnpm --filter @org-brain/console test:e2e:decision --project=chromium --workers=1 --retries=0 --max-failures=3 --trace=retain-on-failure ;;
+            *) echo "Unknown suite: $E2E_SUITE" >&2; exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: console-e2e-report
+          path: |
+            apps/console/playwright-report
+            apps/console/test-results
+          if-no-files-found: ignore
+          retention-days: 3
