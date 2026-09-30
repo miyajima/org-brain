@@ -82,12 +82,12 @@ test("empty cost requests still identify the configured objective", async () => 
   assert.equal(result.request_count, 0);
 });
 
-async function paired() {
+async function paired(stages = ["capture", "use"]) {
   const cases = Array.from({ length: 20 }, (_, i) => ({ id: `case-${i}`, conversation_id: `source-${i}` }));
   const manifest = { schema: "memory-judgment-experiment/v2", objective: "cost", policy_version: "memory-judgment/v1",
     model: "typesafe/jev-1.13", resolved_model: "typesafe/jev-1.13", threshold: .95,
     policy_hash: await memoryJudgmentPolicyHash(.95, { objective: "cost" }), dataset_hash: "a".repeat(64), runtime_hash: "b".repeat(64),
-    implementation_hash: "c".repeat(64), configuration_hash: await memoryCostConfigurationHash(["capture", "use"]), stages: ["capture", "use"],
+    implementation_hash: "c".repeat(64), configuration_hash: await memoryCostConfigurationHash(stages), stages,
     dev_conversations: ["development"], holdout_conversations: cases.map((c) => c.conversation_id), holdout_cases: cases };
   const outcomes = cases.flatMap((c) => ["baseline", "jev"].map((arm) => ({ case_id: c.id, conversation_id: c.conversation_id, arm, split: "holdout",
     task_success: true, false_application: 0, required_memory_missing: 0, critical_regressions: 0,
@@ -167,4 +167,11 @@ test("cost activation verifies artifacts and binds the exact combined configurat
     await writeFile(join(root, "0.artifact"), "tampered");
     assert.equal(await readJudgmentQualification(file, "use", policy, { activeStages: ["capture", "use"] }), false);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("search qualification requires its own matched configuration and cannot reuse use-only outcomes", async () => {
+  const { manifest, outcomes } = await paired(["search"]);
+  assert.equal((await qualifyMemoryJudgment(manifest, outcomes)).status, "passed");
+  const changed = { ...manifest, stages: ["use"], configuration_hash: await memoryCostConfigurationHash(["use"]) };
+  assert.equal((await qualifyMemoryJudgment(changed, outcomes)).status, "inconclusive");
 });

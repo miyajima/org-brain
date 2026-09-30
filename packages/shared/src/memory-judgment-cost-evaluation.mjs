@@ -24,7 +24,7 @@ export async function qualifyMemoryCostJudgment(manifest, observations) {
     || manifest.policy_hash !== result.policy_hash
     || ![manifest.dataset_hash, manifest.implementation_hash, manifest.runtime_hash, manifest.configuration_hash].every(digest)
     || !Array.isArray(manifest.stages) || !manifest.stages.length || new Set(manifest.stages).size !== manifest.stages.length
-    || manifest.stages.some((s) => !["wiki", "capture", "use"].includes(s))
+    || manifest.stages.some((s) => !["wiki", "capture", "use", "search"].includes(s))
     || manifest.configuration_hash !== await memoryCostConfigurationHash(manifest.stages, manifest.threshold, manifest.resolved_model)
     || !Array.isArray(manifest.holdout_cases) || !Array.isArray(observations)) return fail("invalid_manifest");
   if (!Array.isArray(manifest.dev_conversations) || !manifest.dev_conversations.length

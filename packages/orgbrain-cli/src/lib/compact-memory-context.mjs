@@ -25,7 +25,7 @@ export function measureCompactMemoryContext(response) {
 }
 
 export function buildCompactMemoryContext({ results, query, topK, tokenBudget, at, usageId,
-  verificationSampled = false, judgment = null, protectedIds = [] }) {
+  verificationSampled = false, judgment = null, protectedIds = [], contextSearch = null }) {
   const multiple = requiresMultipleEvidenceSources(query);
   const conflicted = results.some(({ memory }) => memory.conflicts?.length)
     || (judgment?.applied && (judgment.decisions ?? []).some((item) => item.reason_codes?.includes("conflicting_evidence")));
@@ -41,6 +41,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
       score: { total: score.total }
     })),
     meta: {
+      ...(contextSearch ? { context_search: contextSearch } : {}),
       usage_id: usageId,
       usage_item_ids: items.map((item) => item.id),
       usage_items: items.map(({ id, result: { memory } }) => ({ usage_item_id: id,
