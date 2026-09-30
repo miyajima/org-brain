@@ -1,0 +1,1 @@
+{"extends":"./tsconfig.json","compilerOptions":{"types":["astro/client"],"lib":["ES2022","DOM","DOM.Iterable"]},"include":["wiki-local/**/*.ts","wiki-local/**/*.astro",".astro/types.d.ts"]}
