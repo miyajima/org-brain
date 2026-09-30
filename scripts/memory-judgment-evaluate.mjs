@@ -14,7 +14,7 @@ function argsOf(args) {
     if (args[i] === "--live") result.live = true;
     else if (["--dataset", "--out", "--outcomes", "--manifest", "--objective", "--stages", "--resolved-model", "--threshold"].includes(args[i]) && args[i + 1]) {
       const key = args[i++].slice(2); result[key === "resolved-model" ? "resolvedModel" : key] = args[i];
-    } else throw new Error("usage: --dataset FILE --out NEW_DIRECTORY [--live | --objective cost --stages wiki,capture,use --resolved-model MODEL --threshold 0.95], or --manifest FILE --outcomes FILE --out NEW_DIRECTORY");
+    } else throw new Error("usage: --dataset FILE --out NEW_DIRECTORY [--live | --objective cost --stages wiki,capture,use,search --resolved-model MODEL --threshold 0.95], or --manifest FILE --outcomes FILE --out NEW_DIRECTORY");
   }
   if (!result.out) throw new Error("new_output_directory_required");
   return result;
@@ -66,7 +66,7 @@ export async function runJudgmentEvaluation(args) {
     const stages = [...new Set(String(args.stages ?? "").split(","))].sort();
     const threshold = Number(args.threshold ?? .95);
     if (args.live || !args.resolvedModel || !MEMORY_JUDGMENT_THRESHOLDS.includes(threshold)
-      || !stages.length || stages.some((stage) => !["wiki", "capture", "use"].includes(stage))) throw new Error("invalid_cost_configuration");
+      || !stages.length || stages.some((stage) => !["wiki", "capture", "use", "search"].includes(stage))) throw new Error("invalid_cost_configuration");
     const manifest = { schema: "memory-judgment-experiment/v2", objective: "cost", policy_version: MEMORY_JUDGMENT_VERSION,
       model: MEMORY_JUDGMENT_MODEL, resolved_model: args.resolvedModel, stages, threshold,
       policy_hash: await memoryJudgmentPolicyHash(threshold, { objective: "cost" }),

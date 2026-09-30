@@ -11,7 +11,7 @@ export async function localJudgmentImplementationHash() {
   const files = ["../../../shared/src/memory-judgment-runtime.mjs", "../../../shared/src/memory-judgment-evaluation.mjs",
     "../../../shared/src/memory-judgment-scheduler.mjs", "../../../shared/src/memory-judgment-cost-evaluation.mjs",
     "./local-memory-judge.mjs", "./local-memory-judge-queue.mjs", "./local-memory-store.mjs", "./task-commitment-store.mjs",
-    "./wiki-memory-assessment.mjs", "./wiki-discovery.mjs", "./jev-runtime-settings.mjs", "../local-mcp.mjs", "../local-memory.mjs",
+    "./wiki-memory-assessment.mjs", "./wiki-discovery.mjs", "./context-search-followups.mjs", "./jev-runtime-settings.mjs", "../local-mcp.mjs", "../local-memory.mjs",
     "../autonomy.mjs", "../hook-memory-bridge.mjs", "./local-memory-judgment-binding.mjs", "./compact-memory-context.mjs"];
   return judgmentHash(await Promise.all(files.map(async (file) => [file, await readFile(new URL(file, import.meta.url), "utf8")])));
 }

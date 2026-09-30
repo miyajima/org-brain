@@ -1,5 +1,6 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
+import { createLocalContextSearchJudge, searchContextWithFollowups } from "./context-search-followups.mjs";
 import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
 import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-runtime.mjs";
 import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
@@ -3373,6 +3374,7 @@ export class LocalMemoryStore {
   constructor(dbPath = DEFAULT_LOCAL_DB, options = {}) {
     this.dbPath = resolve(dbPath);
     this.memoryJudge = options.memoryJudge ?? createLocalMemoryJudge({ dbPath: this.dbPath, env: options.env ?? process.env });
+    this.contextSearchJudge = options.contextSearchJudge ?? createLocalContextSearchJudge({ dbPath: this.dbPath, env: options.env ?? process.env });
     this.initialization = null;
     this.denseEmbeddingProvider = options.denseEmbeddingProvider === undefined
       ? localDenseEmbeddingProviderFromEnvironment()
@@ -6504,7 +6506,7 @@ export class LocalMemoryStore {
     const at = queryAt ?? Date.now();
     const safeTokenBudget = Math.max(512, Math.min(16_000, Number(token_budget) || 8_000));
     const safeTopK = Math.max(1, Math.min(50, Number(top_k) || 5));
-    let results = await this.search({
+    const searchInput = {
       tenant_id: tenantId,
       project_id: projectId,
       business_category_id: businessCategoryId,
@@ -6516,12 +6518,37 @@ export class LocalMemoryStore {
       principal_id: principalId,
       at,
       search_mode: searchMode
-    });
-    results = results.filter((result) => {
+    };
+    const relevant = (results) => results.filter((result) => {
       const score = result.score;
       return [score?.lexical, score?.semantic, score?.graph, result.use_history?.examples?.length ? result.use_history.base_score : 0]
         .some((value) => typeof value === "number" && Number.isFinite(value) && value > 0);
     });
+    const initialResults = relevant(await this.search(searchInput));
+    const refreshResults = async (results) => {
+        const fresh = []; let changed = false;
+        for (const result of results) {
+          const memory = await this.get(tenantId, result.memory.id);
+          const currentAt = queryAt ?? Date.now();
+          if (!memory || memory.lifecycle_state !== "active" || !canReadMemory(memory, principalId)
+            || (projectId && memory.project_id != null && memory.project_id !== projectId)
+            || (businessCategoryId && memory.business_category_id !== businessCategoryId)
+            || (workType && memory.work_type !== workType && memory.work_type !== "other")
+            || (memory.valid_from != null && memory.valid_from > currentAt)
+            || (memory.valid_until != null && memory.valid_until <= currentAt)
+            || (memory.expires_at != null && memory.expires_at <= currentAt)) { changed = true; continue; }
+          if (JSON.stringify(memoryJudgmentCandidate(memory)) !== JSON.stringify(memoryJudgmentCandidate(result.memory))) changed = true;
+          fresh.push({ ...result, memory });
+        }
+        return { results: fresh, changed };
+    };
+    const expanded = await searchContextWithFollowups({ initialResults, searchInput, context: useContext ?? {}, usagePurpose,
+      judge: this.contextSearchJudge, search: async (input) => relevant(await this.search(input)), refresh: refreshResults });
+    // A failed/timed-out judgment must not bypass ACL, expiry or version checks.
+    const fresh = await refreshResults(expanded.results);
+    let results = fresh.results;
+    const contextSearch = expanded.report.mode !== "off" ? { ...expanded.report,
+      ...(fresh.changed ? { reason_code: "source_changed", coverage: "uncertain" } : {}) } : null;
     const selection = await this.selectMemorySearchResults(results, { tenant_id: tenantId, project_id: projectId,
       principal_id: principalId, query, use_context: useContext ?? null, usage_purpose: usagePurpose, at: queryAt,
       apply_selection: false });
@@ -6538,7 +6565,7 @@ export class LocalMemoryStore {
         || judgment.decisions.find((item) => item.id === memory.id)?.action !== "omit")
         .sort((a, b) => Number(protectedIds.includes(b.memory.id)) - Number(protectedIds.includes(a.memory.id))) : results;
       const packed = buildCompactMemoryContext({ results: candidates, query, topK: safeTopK,
-        tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds });
+        tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds, contextSearch });
       await this.recordUsage({ id: usageId, tenant_id: tenantId, project_id: projectId, task_id: taskId,
         usage_purpose: usagePurpose,
         actor_principal: principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
@@ -6736,6 +6763,7 @@ export class LocalMemoryStore {
           score: item.score
         })),
         meta: {
+          ...(contextSearch ? { context_search: contextSearch } : {}),
           ...(judgment.mode !== "off" ? { memory_judgment: judgment } : {}),
           usage_id: usage.usage_id,
           usage_item_ids: usage.usage_item_ids,
