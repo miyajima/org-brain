@@ -45,3 +45,11 @@ test("missing logs and legacy-only logs do not imply successful operation",()=>f
   const r=await judgmentReport({file,project:"p",now});assert.equal(r.status,"insufficient_evidence");assert.equal(r.current.length,0);
   await assert.rejects(judgmentReport({file,project:"p",days:-1,now}),/invalid_report_options/);
 }));
+test("periodic report counts split requests and separates cost objective from legacy quality",()=>fixture(async file=>{
+  await writeFile(file,[await row({event_id:"batch",objective:"cost",request_count:5,provider_cost:.005}),
+    await row({event_id:"legacy"})].map(JSON.stringify).join("\n"));
+  const report=await judgmentReport({file,project:"p",now});
+  assert.equal(report.malformed_lines,0);assert.equal(report.current.length,2);
+  assert.equal(report.current.find((r)=>r.objective==="cost").calls,5);
+  assert.equal(report.current.find((r)=>r.objective==="cost").provider_cost,.005);
+}));

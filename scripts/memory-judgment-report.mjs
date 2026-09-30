@@ -21,13 +21,14 @@ export async function judgmentReport({ file, project, tenant = "default", days =
       if (!r || r.telemetry_version !== "memory-judgment-telemetry/v2") { legacy++; continue; }
       if (r.project_hash !== projectHash || r.tenant_hash !== tenantHash) continue;
       if (!Number.isFinite(r.recorded_at) || typeof r.event_id !== "string" || !r.event_id || !Array.isArray(r.decisions)
-        || !Number.isFinite(r.elapsed_ms) || r.elapsed_ms < 0 || ![0, 1].includes(r.request_count)
+        || !Number.isFinite(r.elapsed_ms) || r.elapsed_ms < 0 || !Number.isInteger(r.request_count) || r.request_count < 0
         || !["judged", "fallback", "skipped"].includes(r.status)) { malformed++; continue; }
       if (r.recorded_at < since - days * 86400000 || r.recorded_at >= now) continue;
       if (eventIds.has(r.event_id)) { duplicateEvents++; continue; } eventIds.add(r.event_id);
       const period = r.recorded_at >= since ? "current" : "previous";
-      const key = JSON.stringify([r.stage, r.mode, r.capture_assessment_mode, r.policy_hash, r.resolved_model, r.build?.built_at]);
+      const key = JSON.stringify([r.stage, r.mode, r.objective ?? "quality", r.capture_assessment_mode, r.policy_hash, r.resolved_model, r.build?.built_at]);
       const group = periods[period].get(key) ?? { stage: r.stage, mode: r.mode, assessment_mode: r.capture_assessment_mode,
+        objective: r.objective ?? "quality",
         policy_hash: r.policy_hash, model: r.resolved_model, build: r.build ?? null, events: 0, calls: 0, cache_hits: 0, fallbacks: 0,
         known_cost: 0, unknown_cost_calls: 0, api_elapsed: [], decisions: 0, assessments: 0, unknown_labels: 0,
         unknown_utility: 0, existing_label_comparisons: 0, existing_label_disagreements: 0,

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { MEMORY_USE_OBSERVE_HINT } from "./lib/memory-use-collector.mjs";
+import { MEMORY_USE_OBSERVE_HINT, memoryUseTranscriptEvents } from "./lib/memory-use-collector.mjs";
+import { readMemoryUseTurnRows } from "./lib/memory-learning-transcript.mjs";
 
 import { assessMemoryUsefulnessV2 } from "../../shared/src/memory-usefulness-runtime.mjs";
 import path from "node:path";
@@ -12,7 +13,8 @@ import { modernMcpHeaders, modernMcpRequest } from "./lib/mcp-modern-request.mjs
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { hasTaskIdentity, TaskCommitmentStore, taskKeyFromHookPayload } from "./lib/task-commitment-store.mjs";
 import { formatMemoryConfirmationContext } from "./lib/memory-confirmation-hints.mjs";
-import { hookMemoryCandidates } from "./lib/hook-failure-context.mjs";
+import { hookMemoryCandidates, isAutomaticMemoryCandidate } from "./lib/hook-failure-context.mjs";
+import { countContextTokens } from "./lib/compact-memory-context.mjs";
 import { MEMORY_CONTRACT_V2_PROMPT } from "../../shared/src/memory-contract-v2-runtime.mjs";
 import {
   answerGuidanceForDisposition,
@@ -155,6 +157,28 @@ async function sourceHashesAreCurrent(memory, workspaceRoot) {
   return true;
 }
 
+async function deliveredMemoryVersions(store, payload, scope, taskKey, queryHash) {
+  if (!taskKey || hookEventName(payload) === 'PostCompact') return new Set();
+  const rows = await readMemoryUseTurnRows({ transcriptPath: transcriptPathFromPayload(payload) }).catch(() => []);
+  const { injections } = memoryUseTranscriptEvents(rows);
+  const delivered = new Set(), db = store.open({ readOnly: true });
+  try {
+    for (const receipt of injections.filter(item => item.task_id === taskKey && item.project_id === scope.projectId)) {
+      const event = db.prepare(`SELECT id FROM memory_usage_events WHERE tenant_id=? AND actor_principal=? AND task_id=?
+        AND project_id=? AND id=? AND query_hash=? AND capability='hook_context' AND (trace_id IS NULL OR trace_id<>?)`)
+        .get(scope.tenantId, process.env.ORGBRAIN_USE_PRINCIPAL || 'local', taskKey, scope.projectId, receipt.usage_id, queryHash, turnIdFromPayload(payload));
+      if (!event) continue;
+      for (const item of receipt.items) {
+        const match = db.prepare(`SELECT id FROM memory_usage_items WHERE tenant_id=? AND usage_event_id=? AND id=?
+          AND source_id=? AND source_version=? AND reference_type='injected'`)
+          .get(scope.tenantId, event.id, item.usage_item_id, item.source_id, item.source_version);
+        if (match) delivered.add(`${item.source_id}:${item.source_version}`);
+      }
+    }
+  } finally { db.close(); }
+  return delivered;
+}
+
 async function readStdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
@@ -260,9 +284,11 @@ function packMemoryContext(prefix, candidates, options) {
   const keys = new Set();
   let failures = 0;
   let attempts = 0;
+  let memories = 0;
   let context = prefix;
   for (const candidate of candidates) {
     if ((candidate.failure && failures >= 2) || (candidate.attempt && attempts >= 2)
+      || (candidate.memory && memories >= MAX_RESULTS)
       || candidate.keys.some((key) => keys.has(key))) continue;
     const next = renderMemoryContext(prefix, [...selected, candidate], options);
     if (Buffer.byteLength(next, "utf8") > 7_168) continue;
@@ -270,6 +296,7 @@ function packMemoryContext(prefix, candidates, options) {
     candidate.keys.forEach((key) => keys.add(key));
     failures += Number(candidate.failure);
     attempts += Number(Boolean(candidate.attempt));
+    memories += Number(Boolean(candidate.memory));
     context = next;
   }
   return { context, selected };
@@ -337,6 +364,11 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   const taskIdentityPresent = hasTaskIdentity(payload);
   const taskKey = taskIdentityPresent ? taskKeyFromHookPayload(payload) : null;
   const retrievalQuery = await retrievalQueryFromPayload(payload, prompt);
+  const queryHash = crypto.createHash('sha256').update(retrievalQuery).digest('hex');
+  const receiptKey = taskKey && turnIdFromPayload(payload)
+    ? JSON.stringify([scope.tenantId, scope.projectId, scope.workType, process.env.ORGBRAIN_USE_PRINCIPAL || 'local', taskKey, turnIdFromPayload(payload), queryHash,
+      hookEventName(payload) === 'PostCompact' ? 'post-compact' : 'prompt']) : crypto.randomUUID();
+  const receiptId = (value) => crypto.createHash('sha256').update(`${receiptKey}:${value}`).digest('hex');
   const commitmentStore = options.commitmentStore ?? new TaskCommitmentStore(
     options.commitmentDbPath || options.store?.dbPath || env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB
   );
@@ -408,6 +440,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   let systemMessage = null;
   if (useStatus.flags.collect && taskKey && scope.projectId && scope.workType) contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}, work_type=${scope.workType}.`);
   if (scope.localMemoryEnabled) {
+    const delivered = useStatus.flags.collect ? await deliveredMemoryVersions(store, payload, scope, taskKey, queryHash) : new Set();
     const priorAttempts = scope.projectId
       ? await store.searchAttempts(scope.tenantId, { project_id: scope.projectId, query: retrievalQuery, limit: 2 })
       : [];
@@ -418,12 +451,14 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
       work_type: scope.workType,
       task_id: taskKey,
       query: retrievalQuery,
-      limit: MAX_RESULTS,
+      limit: MAX_RESULTS * 5,
       minimum_total_score: MIN_TOTAL_SCORE,
       search_mode: "hybrid_v4"
     });
     const relevant = [];
     for (const result of results) {
+      if (!isAutomaticMemoryCandidate(result.memory, retrievalQuery)) continue;
+      if (delivered.has(`${result.memory.id}:${result.memory.current_version}`)) continue;
       const assessment = assessMemoryUsefulnessV2({ stage: "use", project_id: result.memory.project_id,
         task_project_id: scope.projectId, expires_at: Math.min(result.memory.valid_until ?? Infinity, result.memory.expires_at ?? Infinity),
         source_available: await sourceHashesAreCurrent(result.memory, normalizeWorkspaceRoot(payload.cwd)) });
@@ -434,7 +469,8 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         Math.max(result.score.lexical ?? 0, result.score.semantic ?? 0, result.use_history?.examples?.length ? result.use_history.base_score : 0) >= MIN_COMPONENT_SCORE
       ) relevant.push(result);
     }
-    memoryCandidates = hookMemoryCandidates(relevant, priorAttempts).map((item) => ({ ...item, usageItemId: crypto.randomUUID() }));
+    memoryCandidates = hookMemoryCandidates(relevant, priorAttempts).map((item) => ({ ...item,
+      usageItemId: receiptId(JSON.stringify(item.memory ? [item.memory.memory.id, item.memory.memory.current_version] : item.keys)) }));
     const recallMode = ["shadow", "on"].includes(String(env.DOMAIN_RECALL_MODE ?? "off").toLowerCase())
       ? String(env.DOMAIN_RECALL_MODE).toLowerCase()
       : "off";
@@ -458,16 +494,21 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   if (eagerInstruction) contextParts.push(eagerInstruction);
   // Reserve confirmed commitments and lifecycle instructions before optional
   // historical entries. Include the guidance and receipt in the byte budget.
-  const usageId = crypto.randomUUID();
-  const { context: additionalContext, selected } = packMemoryContext(boundedContext(contextParts), memoryCandidates,
-    { prompt, scope, taskKey, usageId, collect: useStatus.flags.collect });
+  const provisionalId = receiptId('packing');
+  const prefix = boundedContext(contextParts);
+  const { selected } = packMemoryContext(prefix, memoryCandidates,
+    { prompt, scope, taskKey, usageId: provisionalId, collect: useStatus.flags.collect });
+  const usageId = receiptId(JSON.stringify(selected.map(item => item.usageItemId)));
+  for (const item of selected) item.usageItemId = receiptId(`${usageId}:${item.usageItemId}`);
+  const additionalContext = renderMemoryContext(prefix, selected, { prompt, scope, taskKey, usageId, collect: useStatus.flags.collect });
   const injectedMemories = selected.filter((item) => item.memory);
-  if (useStatus.flags.collect && injectedMemories.length) await store.recordUsage({
+  if (useStatus.flags.collect && taskKey) await store.recordUsage({
     id: usageId, tenant_id: scope.tenantId, project_id: scope.projectId, task_id: taskKey,
     trace_id: turnIdFromPayload(payload), access_path: "context", request_source: "local", capability: "hook_context",
-    requested_work_type: scope.workType, items: injectedMemories.map(({ usageItemId, memory: { memory } }, index) => ({
+    query_hash: queryHash, usage_purpose: payload.usage_purpose ?? 'task',
+    requested_work_type: scope.workType, items: injectedMemories.map(({ usageItemId, text, memory: { memory } }, index) => ({
       id: usageItemId, source_type: "memory", source_id: memory.id, source_version: memory.current_version,
-      rank: index + 1, reference_type: "injected"
+      rank: index + 1, reference_type: "injected", injected_token_estimate: countContextTokens(text)
     }))
   });
   if (scope.localMemoryEnabled && hookEventName(payload) === "UserPromptSubmit"

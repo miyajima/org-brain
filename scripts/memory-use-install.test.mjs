@@ -30,8 +30,17 @@ test('installed CLI and strict MCP expose usable C and immutable assessments',as
       assert.notEqual(result.isError,true,JSON.stringify(result));
       return JSON.parse(result.content[0].text);
     };
-    const context=await invoke('orgbrain_memory_retrieve_context',{tenant_id:'t',project_id:'p',work_type:'implementation',task_id:'new-task',query:'duplicate transaction',top_k:1});
+    const context=await invoke('orgbrain_memory_retrieve_context',{tenant_id:'t',project_id:'p',work_type:'implementation',task_id:'new-task',usage_purpose:'test',query:'duplicate transaction',top_k:1});
     assert.equal(context.meta.usage_items[0].source_id,f.id);
+    const observed=await invoke('orgbrain_memory_observe',{tenant_id:'t',schema_version:2,lesson_type:'success',use_observation:{
+      ...context.meta.usage_items[0],usage_id:context.meta.usage_id,task_id:'new-task',project_id:'p',work_type:'implementation',
+      context:f.payload.context,action_call_id:'call_fixture_action'
+    }});
+    assert.match(observed.use_receipt,/^orgbrain-use-receipt:/);
+    assert.equal(observed.tracking,'pending_transcript_verification');
+    const report=run('usage','report','--tenant-id','t');
+    assert.equal(report.by_purpose.test.references,1);
+    assert.equal(report.by_purpose.test.action_observed,0);
     const assessment={tenant_id:'t',payload:{id:'correction',context_id:'context',supersedes_id:'evaluation',feedback:{contribution:'unknown',statement:'The incremental contribution has not been established.'}}};
     assert.equal((await invoke('orgbrain_memory_use_evaluate',assessment)).outcome,'unknown');
     assert.equal((await invoke('orgbrain_memory_use_evaluate',assessment)).created,false);

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 import { rollup } from "rollup";
+import { localJudgmentImplementationHash } from "../packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = resolve(repositoryRoot, process.argv[2] || "dist/orgbrain.mjs");
@@ -17,6 +18,7 @@ try {
   // Source archives may not include Git metadata.
 }
 const buildInfoModule = resolve(repositoryRoot, "packages/orgbrain-cli/src/build-info.mjs");
+const judgmentImplementationHash = await localJudgmentImplementationHash();
 const bundle = await rollup({
   input: resolve(repositoryRoot, "packages/orgbrain-cli/src/local-memory.mjs"),
   external: (id) => id.startsWith("node:"),
@@ -28,7 +30,8 @@ const bundle = await rollup({
         version: packageManifest.version,
         commit,
         built_at: new Date().toISOString(),
-        source: "standalone"
+        source: "standalone",
+        judgment_implementation_hash: judgmentImplementationHash
       })});`;
     }
   }]

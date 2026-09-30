@@ -2,6 +2,18 @@ import { MemoryUseHistory, memoryUseFlags, useHash } from '../../../shared/src/m
 
 export const LOCAL_USE_SCHEMA = `
 CREATE TABLE IF NOT EXISTS local_use_settings (id INTEGER PRIMARY KEY CHECK(id=1), settings_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS local_use_observation_receipts (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, principal TEXT NOT NULL,
+ project_id TEXT NOT NULL, task_id TEXT NOT NULL, usage_item_id TEXT NOT NULL,
+ observation_json TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+ context_id TEXT, rejection_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_local_use_receipt_item ON local_use_observation_receipts(tenant_id, usage_item_id, created_at);
+CREATE TABLE IF NOT EXISTS local_use_deliveries (
+ tenant_id TEXT NOT NULL, usage_item_id TEXT NOT NULL, principal TEXT NOT NULL,
+ task_id TEXT NOT NULL, project_id TEXT NOT NULL, confirmed_at INTEGER NOT NULL,
+ PRIMARY KEY(tenant_id, usage_item_id)
+);
 CREATE TABLE IF NOT EXISTS local_use_proofs (
  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, principal TEXT NOT NULL, project_id TEXT NOT NULL,
  task_id TEXT NOT NULL, source_id TEXT NOT NULL, usage_item_id TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL, contribution TEXT,

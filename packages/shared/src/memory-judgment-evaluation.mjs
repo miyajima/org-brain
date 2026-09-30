@@ -1,4 +1,5 @@
 import { MEMORY_JUDGMENT_MODEL, MEMORY_JUDGMENT_THRESHOLDS, MEMORY_JUDGMENT_VERSION, decideMemoryCandidate, judgmentHash, memoryJudgmentPolicyHash } from "./memory-judgment-runtime.mjs";
+import { qualifyMemoryCostJudgment } from "./memory-judgment-cost-evaluation.mjs";
 
 export const MEMORY_JUDGMENT_ARMS = ["no_memory", "baseline", "capture_only", "use_only", "both"];
 
@@ -67,6 +68,7 @@ export async function replayMemoryJudgmentCase(item, judge, threshold) {
 // Only externally verified, paired task outcomes can qualify activation.
 // The replay evaluator deliberately cannot manufacture these observations.
 export async function qualifyMemoryJudgment(manifest, observations) {
+  if (manifest?.schema === "memory-judgment-experiment/v2") return qualifyMemoryCostJudgment(manifest, observations);
   const common = { schema: "memory-judgment-qualification/v1", status: "inconclusive", policy_version: MEMORY_JUDGMENT_VERSION,
     model: MEMORY_JUDGMENT_MODEL, threshold: manifest?.threshold, policy_hash: await memoryJudgmentPolicyHash(manifest?.threshold), stages: [], evidence_kind: "verified_task_outcomes",
     manifest_hash: await judgmentHash(manifest), evidence_hash: await judgmentHash(observations), holdout_count: 0 };

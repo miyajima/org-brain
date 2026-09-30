@@ -24,6 +24,21 @@ LLM Wiki, writes the vault, extracts memories, or writes OrgBrain.
 
 ## Extraction
 
+Apply [the selection criteria](references/selection-criteria.md) to each atomic
+claim before proposing an import. Record a disposition and evidence gaps;
+page titles, dates, citations and model confidence alone cannot qualify a claim.
+The criteria separate new candidates, equivalent memories, existing-memory
+repairs, reference material, unresolved candidates and excluded material.
+
+When the installed local backend exposes `orgbrain_wiki_assess`, it may prepare
+these comparisons (CLI: `orgbrain memory wiki assess --project-id ID --page PATH
+--json`). Use its single `review_bundle` and source references as evidence to
+review, not as confirmation. Shadow predictions require parent review of every
+item; even qualified active mode preserves review for candidates, uncertainty,
+corrections and protected constraints. It never saves or revises memories.
+Read original evidence where a supplied excerpt is partial. The optional typed
+adapter does not change the confirmation flow below.
+
 Read `wiki/index.md`, then only the pages needed for this import. Prefer the
 configured LLM Wiki CLI when available. Never scan `raw/`, `wiki/log.md`, hidden
 files, symlinks, or the whole vault indiscriminately.

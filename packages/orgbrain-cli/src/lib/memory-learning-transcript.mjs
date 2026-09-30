@@ -459,5 +459,14 @@ export async function readMemoryUseTurnRows(options) {
   if(index<0) return [];
   const id=payload(rows[index])?.turn_id??rows[index].turn_id;
   if(options.turnId && id!==options.turnId) return [];
-  return rows.slice(index);
+  // Carry only actual developer delivery receipts across turns. Past actions,
+  // user assessments and pre-compaction references cannot verify current use.
+  const compacted=rows.findLastIndex(row=>row.type==='compacted'||payload(row)?.type==='compacted');
+  const references=rows.slice(compacted+1,index).filter(row=>{
+    const p=payload(row);
+    if(p?.type!=='message'||p.role!=='developer') return false;
+    const text=typeof p.content==='string'?p.content:(p.content??[]).map(x=>x.text??'').join('\n');
+    return text.includes('Use tracking: receipt;');
+  }).slice(-32);
+  return [...references,...rows.slice(Math.max(index,compacted+1))];
 }

@@ -11,6 +11,7 @@ export interface MemoryJudgmentCandidate {
   [key: string]: unknown;
 }
 export interface MemoryJudgmentPolicy {
+  objective: "quality" | "cost";
   mode: "off" | "shadow" | "active";
   capture_assessment_mode: "off" | "shadow";
   threshold: number;
@@ -18,6 +19,7 @@ export interface MemoryJudgmentPolicy {
   max_request_bytes: number;
   timeout_ms: number;
   version: string;
+  resolved_model?: string;
 }
 export interface MemoryJudgmentDecision {
   id: string;
@@ -71,6 +73,10 @@ export interface MemoryJudgmentResult {
   provider_cost: number | null;
   elapsed_ms: number;
   decisions: MemoryJudgmentDecision[];
+  objective?: "cost";
+  cache_hits?: number;
+  shared_hits?: number;
+  review_bundle?: Array<{ id: string; reason_codes: string[] }>;
 }
 export interface MemoryJudgmentRequest { model: string; state: unknown; questions: Record<string, unknown> }
 export interface MemoryJudgmentResponse { model: string; answers: Record<string, { type: "noul"; noul: number } | MemoryJudgmentChoiceAnswer | MemoryJudgmentScoreAnswer>; usage?: Record<string, unknown> | null }
@@ -78,12 +84,28 @@ export type MemoryJudgmentTransport = (request: MemoryJudgmentRequest, options: 
 export function createMemoryJudge(options?: {
   transport?: MemoryJudgmentTransport;
   cache?: { get(key: string): unknown | Promise<unknown>; set(key: string, value: unknown): unknown | Promise<unknown> };
+  namespace?: string;
 }): (input: { stage: "capture" | "use"; context?: Record<string, unknown>; candidates?: MemoryJudgmentCandidate[]; policy?: Partial<MemoryJudgmentPolicy>; active_qualified?: boolean }) => Promise<MemoryJudgmentResult>;
 export function createOpenRouterMemoryTransport(options?: { apiKey?: string; fetcher?: typeof fetch }): MemoryJudgmentTransport;
 export function normalizeJudgmentPolicy(input?: Partial<MemoryJudgmentPolicy>): MemoryJudgmentPolicy;
 export function decideMemoryCandidate(stage: "capture" | "use", candidate: MemoryJudgmentCandidate, scores: Record<string, number>, threshold?: number): MemoryJudgmentDecision;
 export function stableJudgmentJson(value: unknown): string;
 export function judgmentHash(value: unknown): Promise<string>;
-export function memoryJudgmentPolicyHash(threshold?: number): Promise<string>;
+export function memoryJudgmentPolicyHash(threshold?: number, options?: { objective?: "quality" | "cost" }): Promise<string>;
+export interface TypedJudgmentUnit {
+  id: string;
+  question: Record<string, unknown>;
+  input: unknown;
+  shared?: unknown;
+}
+export function createTypedMemoryJudge(options?: {
+  transport?: MemoryJudgmentTransport;
+  cache?: { get(key: string): unknown | Promise<unknown>; set(key: string, value: unknown): unknown | Promise<unknown> };
+  namespace?: string;
+}): (input: { units: TypedJudgmentUnit[]; policy: MemoryJudgmentPolicy }) => Promise<{
+  answers: MemoryJudgmentResponse["answers"]; failures: Record<string, string>; request_count: number; cache_hits: number;
+  shared_hits: number; cache_hit: boolean; elapsed_ms: number; resolved_model: string | null;
+  usage: { input_tokens: number | null; output_tokens: number | null }; provider_cost: number | null;
+}>;
 export function redactJudgmentValue(value: unknown): unknown;
 export function validateJudgmentResponse(raw: unknown, questions: Record<string, unknown>): MemoryJudgmentResponse;

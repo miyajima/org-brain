@@ -49,3 +49,20 @@ test("qualification requires complete matched verified task observations, not a 
   observations[0].parent_model = "fixed-parent"; observations[0].verification.verified = false;
   assert.equal((await qualifyMemoryJudgment(manifest, observations)).reason, "unverified_or_incomplete_outcome");
 });
+
+test("cost experiment freezes the whole configuration without inventing parent outcomes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "jev-cost-manifest-"));
+  try {
+    const out = join(root, "frozen");
+    const result = await runJudgmentEvaluation({ objective: "cost", stages: "wiki,capture,use", resolvedModel: "typesafe/jev-1.13",
+      threshold: .95, dataset: new URL("./fixtures/memory-judgment-v1.json", import.meta.url).pathname, out });
+    const manifest = JSON.parse(await readFile(join(out, "manifest.json"), "utf8"));
+    assert.equal(manifest.schema, "memory-judgment-experiment/v2");
+    assert.deepEqual(manifest.stages, ["capture", "use", "wiki"]);
+    assert.match(manifest.configuration_hash, /^[a-f0-9]{64}$/u);
+    assert.equal(result.activation_qualified, false);
+    assert.equal(result.parent_usage, null);
+    assert.equal(result.provider_cost, null);
+    assert.equal(result.model_calls, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

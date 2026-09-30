@@ -1184,7 +1184,7 @@ export class TaskCommitmentStore {
    * left behind; callers can run the AI evaluator again on the remaining
    * quarantine rows in a later cycle.
    */
-  async maintainLearningCandidates({ tenantId = "default", now = Date.now(), evaluate = null, promote = null, judgeBatch = null, limit = 100, policyHash = null, expireAfterDays = null, reevaluateIntervalHours = null } = {}) {
+  async maintainLearningCandidates({ tenantId = "default", now = Date.now(), evaluate = null, evaluateBatch = null, promote = null, judgeBatch = null, limit = 100, policyHash = null, expireAfterDays = null, reevaluateIntervalHours = null } = {}) {
     await this.init();
     const db = this.open();
     const ttlMs = Number.isInteger(Number(expireAfterDays)) && Number(expireAfterDays) > 0
@@ -1222,7 +1222,7 @@ export class TaskCommitmentStore {
         promoted_memory_count: 0,
         promoted_candidates: []
       };
-      if ((typeof evaluate !== "function" && typeof judgeBatch !== "function") || rows.length === 0) return base;
+      if ((typeof evaluate !== "function" && typeof evaluateBatch !== "function" && typeof judgeBatch !== "function") || rows.length === 0) return base;
       const due = rows.filter((row) => {
         const payload = parseObject(row.payload_json) ?? {};
         const autonomy = parseObject(payload.autonomy) ?? {};
@@ -1236,13 +1236,30 @@ export class TaskCommitmentStore {
         catch { base.memory_judgments = [{ status: "fallback", reason_code: "judgment_unavailable" }]; }
       }
       if (selection) base.memory_judgments = selection.reports;
-      if (typeof evaluate !== "function") return base;
+      if (typeof evaluate !== "function" && typeof evaluateBatch !== "function") return base;
+      const evaluationInput = (row) => ({ id: row.id, external_key: row.external_key, project_id: row.project_id,
+        task_key: row.task_key, candidate: parseObject(row.payload_json) ?? {},
+        reason_codes: (() => { try { const value = JSON.parse(row.reason_codes_json ?? "[]"); return Array.isArray(value) ? value : []; } catch { return []; } })() });
+      let batched = null;
+      if (typeof evaluateBatch === "function") {
+        const eligible = due.filter((row) => !selection?.omitted.includes(row.id));
+        try {
+          const outcomes = eligible.length ? await evaluateBatch(eligible.map(evaluationInput)) : [];
+          if (!Array.isArray(outcomes) || outcomes.length !== eligible.length
+            || new Set(outcomes.map((o) => o?.id)).size !== outcomes.length
+            || outcomes.some((o) => !eligible.some((row) => row.id === o?.id))) throw new Error("invalid_batch_review");
+          batched = new Map(outcomes.map((outcome) => [outcome.id, outcome]));
+        } catch {
+          base.reevaluation_errors += eligible.length;
+          batched = new Map(eligible.map((row) => [row.id, { route: "quarantine", reason_codes: ["batch_review_unavailable"] }]));
+        }
+      }
       for (const row of due) {
         let outcome;
         try {
           outcome = selection?.omitted.includes(row.id)
             ? { route: "quarantine", reason_codes: ["jev_current_batch_omitted"] }
-            : await evaluate({
+            : batched ? batched.get(row.id) : await evaluate({
             id: row.id,
             external_key: row.external_key,
             project_id: row.project_id,
