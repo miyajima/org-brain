@@ -157,7 +157,7 @@ export function createLocalJudgmentCache(dbPath) {
 }
 
 export function activeLocalJudgmentStages(env = process.env) {
-  return ["wiki", "capture", "use"].filter((stage) => env[`ORGBRAIN_JEV_${stage.toUpperCase()}_MODE`] === "active");
+  return ["wiki", "capture", "use", "search"].filter((stage) => env[`ORGBRAIN_JEV_${stage.toUpperCase()}_MODE`] === "active");
 }
 
 export function createLocalMemoryJudge({ dbPath, env = process.env, transport, shadowOnly = false } = {}) {
