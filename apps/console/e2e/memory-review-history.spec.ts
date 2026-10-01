@@ -6,7 +6,7 @@ const record = {
   original: { memory: { content: '元の方針', summary: '<img src=x onerror=alert(1)>', project_id: 'org-brain', external_key: null, tags: [] }, rationale: { conclusion: '元の方針', reason_summary: '未確認' } }, correction: null
 };
 
-test('review history renders text safely and recovers a lost save receipt without duplicate submission', async ({ page }) => {
+test('review history renders text safely and recovers a lost save receipt without duplicate submission', async ({ page }, testInfo) => {
   let proposals = 0; let confirmations = 0;
   await page.route('**/api/v1/memory-reviews?**', route => route.fulfill({ json: { ok: true, data: { items: [record], next_cursor: null } } }));
   await page.route('**/api/v1/memories/propose', route => {
@@ -32,7 +32,7 @@ test('review history renders text safely and recovers a lost save receipt withou
   await root.getByRole('button', { name: '訂正して保存' }).click();
   await expect(root.getByRole('textbox')).toBeDisabled();
   expect(proposals).toBe(1); expect(confirmations).toBe(1);
-  await page.screenshot({ path: '/private/tmp/orgbrain-memory-review-history.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('orgbrain-memory-review-history.png'), fullPage: true });
 });
 
 test('export follows all review pages', async ({ page }) => {
