@@ -18,8 +18,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://127.0.0.1:${consolePort}`,
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
+    trace: process.env.E2E_EVIDENCE === "1" ? "on" : "on-first-retry",
+    screenshot: process.env.E2E_EVIDENCE === "1" ? "on" : "only-on-failure",
     video: "retain-on-failure"
   },
   webServer: [

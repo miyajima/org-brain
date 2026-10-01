@@ -1177,3 +1177,8 @@ are not granted by the source license.
 
 Initial public release target: `0.1.0`. Product versioning is tracked with SemVer in `CHANGELOG.md`
 and GitHub Releases. Feature-level labels such as internal prototype versions are not part of the public release story.
+
+## Optional browser checks
+
+Console browser E2E runs only when requested from GitHub Actions. See
+[manual browser E2E](docs/MANUAL_BROWSER_E2E.md) for scopes, limits and local commands.
