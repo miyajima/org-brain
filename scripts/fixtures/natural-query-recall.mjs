@@ -42,13 +42,18 @@ export const negativeCases = [
   { id: "project-boundary", query: positiveCases[6].query, project_id: "other" },
   { id: "conflict", query: positiveCases[14].query, isolated: "conflict" },
   { id: "permissions", query: positiveCases[6].query, isolated: "permissions" },
+  { id: "region-acronym", query: "Please investigate US database deployment in this repository.", isolated: "acronym" },
+  { id: "department-acronym", query: "Please investigate IT database deployment in this repository.", isolated: "acronym" },
   ...["suppressed", "future", "invalid", "expired"].map((state) => ({
     id: state, query: positiveCases[9].query, isolated: state
   }))
 ];
 
 export async function seedRecallFixture(store, isolated = null) {
-  const selected = isolated === "conflict" ? memories.filter((m) => m.key === "sqlite")
+  const selected = isolated === "acronym" ? [{ key: "eu-deployment", summary: "EU database deployment",
+    content: "EU database deployment uses the Frankfurt cluster.", rationale: "The Frankfurt cluster serves EU workloads.",
+    reuse_rule: "Only for EU workloads.", source_references: [{ type: "file", ref: "docs/eu-database.md" }] }]
+    : isolated === "conflict" ? memories.filter((m) => m.key === "sqlite")
     : isolated ? memories.filter((m) => m.key.startsWith("workspace-")) : memories;
   const ids = new Map();
   for (const memory of selected) {

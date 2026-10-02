@@ -92,6 +92,15 @@ const MARKDOWN_TABLE_DIVIDER_PATTERN = /^\|?(?:\s*:?-{3,}:?\s*\|){2,}\s*$/u;
 const SCHEMA_FRAGMENT_PATTERN = /^(?:`?[A-Za-z_][A-Za-z0-9_.-]{1,63}`?|[A-Z][A-Za-z0-9 _-]{0,31})\s*[:：]\s*[^。.!?]{1,180}$/u;
 const SUPPORT_LABEL_PATTERN = /^(?:reason|rationale|reuse(?: rule)?|applicability|evidence|理由|根拠|再利用条件|適用条件)\s*[:：]\s*/iu;
 const REASON_PREFIX_PATTERN = /^(?:(?:reason|rationale|理由)\s*[:：]\s*|because\s+|なぜなら\s*)/iu;
+const DISCLAIMED_EVIDENCE_PATTERN = /\b(?:do(?:es)?\s+not|cannot|can't|doesn't|don't)\s+(?:support|verify|establish|prove|confirm)\b|\b(?:unsupported|unverified)\s+(?:claim|evidence)\b|(?:裏付け|根拠|証拠).{0,20}(?:ではない|にならない|未確認)|(?:支持|検証|証明|裏付け)(?:しない|できない|されていない)/iu;
+
+function standaloneCausalClaim(block) {
+  // An unlabelled causal sentence may introduce a different durable decision
+  // ("Because X, the deployment checker must Y"). Do not borrow its support
+  // for the preceding lesson. Explicit Reason/Rationale labels remain support.
+  return REASON_PREFIX_PATTERN.test(block) && !SUPPORT_LABEL_PATTERN.test(block)
+    && CLASSIFIERS.some((classifier) => classifier.pattern.test(block));
+}
 
 function collapseWhitespace(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
@@ -206,9 +215,24 @@ function section(text, names) {
 }
 
 function splitBlocks(text) {
-  const blocks = text
-    .replace(/\r\n/gu, "\n")
-    .split(/\n+/u)
+  const lines = [];
+  let supportIndent = null;
+  for (const line of text.replace(/\r\n/gu, "\n").split("\n")) {
+    const trimmed = line.trim();
+    const indent = line.match(/^[\t ]*/u)[0].replace(/\t/gu, "    ").length;
+    const label = trimmed.replace(/^[-*]\s+/u, "");
+    // Keep an explicitly indented continuation with its labeled support before
+    // whitespace normalization removes the boundary. Blank lines, headings,
+    // list items and new labels begin a new block instead of borrowing scope.
+    if (trimmed && supportIndent !== null && indent > supportIndent
+      && !/^(?:#{1,6}\s|[-*]\s|\d+[.)]\s)/u.test(trimmed) && !SUPPORT_LABEL_PATTERN.test(label)) {
+      lines[lines.length - 1] += ` ${trimmed}`;
+      continue;
+    }
+    lines.push(line);
+    supportIndent = trimmed && SUPPORT_LABEL_PATTERN.test(label) ? indent : null;
+  }
+  const blocks = lines
     .map((item) => item.replace(/^\s*[-*]\s+/u, "").trim())
     .flatMap((item) => SUPPORT_LABEL_PATTERN.test(item) ? [item] : item.split(/(?<=[。.!?])\s+(?=[A-Z0-9\p{L}])/gu))
     .filter(Boolean);
@@ -324,7 +348,8 @@ function ordinaryCandidateContext(blocks, index, wholeText) {
     // A new heading or durable statement ends that scope; do not borrow fields
     // from a later lesson or a separate section.
     if (/^#{1,6}\s/u.test(blocks[cursor])) break;
-    const explicitSupport = SUPPORT_LABEL_PATTERN.test(blocks[cursor]) || REASON_PREFIX_PATTERN.test(blocks[cursor]);
+    const explicitSupport = SUPPORT_LABEL_PATTERN.test(blocks[cursor])
+      || REASON_PREFIX_PATTERN.test(blocks[cursor]) && !standaloneCausalClaim(blocks[cursor]);
     if (!explicitSupport && classify(blocks[cursor], wholeText)) break;
     scoped.push(blocks[cursor]);
     if (explicitSupport) supportIndices.push(cursor);
@@ -478,7 +503,8 @@ export function extractDurableMemoryDrafts(input, options = {}) {
   );
   for (const [blockIndex, block] of candidateBlocks.entries()) {
     if (supportIndices.has(blockIndex)) continue;
-    if (/^#{1,6}\s/u.test(block) || SUPPORT_LABEL_PATTERN.test(block) || REASON_PREFIX_PATTERN.test(block)
+    if (/^#{1,6}\s/u.test(block) || SUPPORT_LABEL_PATTERN.test(block)
+      || REASON_PREFIX_PATTERN.test(block) && !standaloneCausalClaim(block)
       || EXISTING_REDACTION_PATTERN.test(block) && block.length < 40) {
       excluded.push({ reason: "low_signal", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
@@ -510,9 +536,13 @@ export function extractDurableMemoryDrafts(input, options = {}) {
     const rawReuseRule = reuseRuleFromText(candidateContext, structuredInput ? reuseSection : null);
     const rawRationale = rationaleFromText(block, structuredInput ? screened.text : candidateContext, structuredInput ? reasonSection : null);
     const truncatedSupport = [rawRationale?.length > 1000 ? "rationale" : null, rawReuseRule?.length > 500 ? "reuse_rule" : null].filter(Boolean);
+    const declaredEvidence = structuredInput ? evidenceSection : splitBlocks(candidateContext)
+      .filter((line) => /^(?:evidence|根拠)\s*[:：]/iu.test(line)).join("\n");
+    const evidenceDisclaimed = DISCLAIMED_EVIDENCE_PATTERN.test(declaredEvidence);
     // Keep existing storage bounds, but never call a clipped limiting condition
     // complete. The unchanged unresolved-gaps gate sends it to review instead.
-    const candidateGaps = [gapsSection, truncatedSupport.length
+    const candidateGaps = [gapsSection, evidenceDisclaimed
+      ? "evidence_support_disclaimed: cited references explicitly do not establish this claim; review the source before reuse." : null, truncatedSupport.length
       ? `support_fields_truncated: ${truncatedSupport.join(", ")}; complete source text must be reviewed before reuse.` : null].filter(Boolean).join("\n");
     const reuseRule = rawReuseRule ? clip(rawReuseRule, 500) : null;
     const rationale = rawRationale ? clip(rawRationale, 1000) : null;

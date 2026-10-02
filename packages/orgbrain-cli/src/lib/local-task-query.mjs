@@ -28,11 +28,15 @@ function variants(term) {
 
 export function localTaskQueryPlan(query) {
   if (typeof query !== "string" || query.length > 8192) return null;
+  // Preserve scope-bearing acronyms before case folding: US is a region and IT
+  // may be a department. Treating them as pronouns can retrieve another scope.
+  const acronyms = new Set((query.normalize("NFKC").match(/\b[A-Z][A-Z0-9]+\b/gu) ?? [])
+    .map((term) => term.toLowerCase()));
   const subject = normalize(query)
     .replace(/\b(?:in|for|from|within|on)\s+(?:this|our|the current)\s+(?:project|repository|repo|codebase)\b/gu, " ")
     .replace(/(?:この|現在の)(?:プロジェクト|リポジトリ|ソース|コード)(?:で|の|に)?/gu, " ")
     .replace(/について|に関して/gu, " ");
-  const terms = [...new Set(words(subject).filter((term) => !stopWords.has(term)))];
+  const terms = [...new Set(words(subject).filter((term) => !stopWords.has(term) || acronyms.has(term)))];
   // Never truncate the remaining subject: a later topic must not disappear.
   if (terms.length < 2 || terms.length > 16) return null;
   const groups = terms.map(variants);
