@@ -132,13 +132,16 @@ node scripts/memory-lesson-capture-evaluate.mjs \
 ```
 
 The [recorded replay](../artifacts/memory-efficiency/2026-10-02/lesson-capture-replay.json)
-contains source and fixture hashes. The same 17 synthetic extraction cases pass
-7/17 before and 17/17 after. Seven expected atomic lessons retain all specified
+contains source and fixture hashes. The same 23 synthetic extraction cases pass
+7/23 before and 23/23 after. Ten expected atomic lessons retain all specified
 content, rationale, applicability, and evidence references after the change;
 none retained every specified field before. This is exact field preservation on
 regression fixtures, not a held-out precision/recall estimate. Bounded adjacent
 support is preserved; overlong rationale or conditions are review-only with an
-explicit truncation gap, rather than silently treated as complete.
+explicit truncation gap, rather than silently treated as complete. Clearly
+indented applicability tails stay attached, standalone causal claims keep their
+own support, and explicitly disclaimed evidence is review-only. References alone
+do not establish semantic support.
 
 Nine actual Stop-adapter fixture replays use disposable Git workspaces and SQLite
 stores with network access replaced by a failing sentinel. Eligibility criteria

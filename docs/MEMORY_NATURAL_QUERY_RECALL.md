@@ -9,7 +9,8 @@ or billing savings, and it does not solve unrestricted natural-language recall.
 
 `local-task-query.mjs` creates a separate lexical subject lane:
 
-- Normalize NFKC and case; segment Japanese/Latin mixed-script words using the
+- Preserve uppercase scope acronyms such as US/IT before case folding; normalize
+  NFKC and case; segment Japanese/Latin mixed-script words using the
   runtime's `Intl.Segmenter` instead of treating a complete Japanese sentence as
   one FTS token
 - Remove explicit request scaffolding and phrases such as “in this repository”
@@ -52,8 +53,8 @@ node scripts/natural-query-recall-evaluate.mjs \
 The [recorded replay](../artifacts/memory-value/2026-10-02/natural-query-replay.json)
 compares baseline `0c34324` with the integrated candidate, recording full Git IDs,
 source hashes, fixture hashes, Node/ICU versions, per-case ranked results, and
-abstention reasons. Both sides use the same eight synthetic lessons in isolated
-disposable SQLite stores, default MCP score floor 0.065, top-k 3, and 1,500-token
+abstention reasons. Both sides use the same eight primary synthetic lessons, plus an isolated
+EU-region safety decoy, in disposable SQLite stores, default MCP score floor 0.065, top-k 3, and 1,500-token
 budget. Dense embedding and judgment providers are disabled; attempted fetch calls
 fail. A first request and three warm requests are retained for each case.
 
@@ -74,7 +75,7 @@ memory quality. Historical lesson claims are not re-certified by this test.
 | Natural-query variants: search hits | 0/8 | 8/8 |
 | Natural-query variants: delivered context | 0/8 | 6/8 |
 | Original full live-study question hits | 0/3 | 0/3 |
-| Negative context abstentions | 13/13 | 13/13 |
+| Negative context abstentions | 15/15 | 15/15 |
 
 Two recovered searches remain withheld because the unchanged evidence rule treats
 “and” as requiring independent sources. The workspace lessons share one source,
@@ -98,7 +99,7 @@ node --test scripts/natural-query-recall.test.mjs \
   scripts/memory-efficiency.test.mjs scripts/memory-judgment-cost.test.mjs
 ```
 
-The 73-test focused run passes, including 55 partial-word distractors, word-boundary
+The original 73-test focused run passes, including 55 partial-word distractors, word-boundary
 negatives, high custom thresholds, low-floor automatic hook abstention, complete
 reuse conditions, scope/permission/lifecycle gates, conflicts, and qualification.
 Focused ESLint and `git diff --check` pass. These checks do not replace the full
@@ -107,5 +108,9 @@ repository test suite or large-corpus retrieval benchmarking.
 The three original long, multi-clause questions still miss. This implementation
 does not discard arbitrary clauses or unknown subjects to force a match. Query
 decomposition, language translation, synonym-heavy requests, large-corpus
-candidate starvation, and production coverage need separate evaluation. This
-change preserves the historical `hybrid_v3` and legacy search implementations.
+candidate starvation, and production coverage need separate evaluation.
+
+Raw search with judgment off can still return expired items, and pre-existing
+low-floor hook matches can cross a region named in a query. The expiry negatives
+above assert the compact-context gate, not every raw search API. These existing
+limits are not repaired by this bounded lexical lane. This change preserves the historical `hybrid_v3` and legacy search implementations.
