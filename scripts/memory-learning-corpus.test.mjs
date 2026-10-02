@@ -8,11 +8,14 @@ import { evaluateStrictBaseline } from "./memory-learning-baseline.mjs";
 function writeSession(root, id, startedAt, project, threadSource = "user") {
   const directory = path.join(root, id);
   mkdirSync(directory, { recursive: true });
+  // Keep project identity independent of the machine's /workspace Git root.
+  const workspace = path.join(root, "workspaces", project);
+  mkdirSync(path.join(workspace, ".git"), { recursive: true });
   const rows = [
     {
       timestamp: new Date(startedAt).toISOString(),
       type: "session_meta",
-      payload: { id, cwd: `/workspace/${project}`, thread_source: threadSource }
+      payload: { id, cwd: workspace, thread_source: threadSource }
     },
     {
       timestamp: new Date(startedAt + 1).toISOString(),
