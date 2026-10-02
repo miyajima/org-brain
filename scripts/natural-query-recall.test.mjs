@@ -51,6 +51,21 @@ test("Japanese mixed script and NFKC use word boundaries; substring decoys do no
     localTaskQueryPlan("Git worktree workspace mapping plus payroll")), false);
 });
 
+test("scope-bearing uppercase acronyms are not discarded as stopword pronouns", async () => {
+  for (const acronym of ["US", "IT"]) {
+    const plan = localTaskQueryPlan(`Please investigate ${acronym} database deployment in this repository.`);
+    assert.ok(plan.groups.some(group => group.includes(acronym.toLowerCase())));
+  }
+  await fixture(async store => {
+    for (const item of negativeCases.filter(item => item.isolated === "acronym")) {
+      assert.equal((await search(store, item.query)).length, 0, item.id);
+      const context = await enrich(store, item.query);
+      assert.equal(context.results.length, 0, item.id);
+      assert.equal(context.evidence_bundle.abstention_recommended, true, item.id);
+    }
+  }, "acronym");
+});
+
 test("all bounded natural subjects qualify at the unchanged final score floor, with precise top three", async () => {
   await fixture(async (store, ids) => {
     for (const item of positiveCases.filter((c) => c.category !== "original-full")) {
