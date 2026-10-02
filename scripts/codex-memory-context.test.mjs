@@ -49,7 +49,7 @@ async function fixture() {
   };
 }
 
-test("Codex prompt hook injects only a bounded local summary for a relevant prompt", async () => {
+test("Codex prompt hook injects bounded redacted usable memory for a relevant prompt", async () => {
   const ctx = await fixture();
   try {
     const result = await buildCodexMemoryContext({
@@ -61,7 +61,7 @@ test("Codex prompt hook injects only a bounded local summary for a relevant prom
     assert.match(result.hookSpecificOutput.additionalContext, /short-lived Codex hooks/u);
     assert.match(result.hookSpecificOutput.additionalContext, /\[REDACTED_EMAIL\]/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /user@example\.com/u);
-    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /Use the Codex notify and prompt hooks/u);
+    assert.match(result.hookSpecificOutput.additionalContext, /Use the Codex notify and prompt hooks/u);
     assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /memory_id=/u);
     assert.match(result.hookSpecificOutput.additionalContext, /### 回答契約/u);
     assert.match(result.hookSpecificOutput.additionalContext, /結論を最初の2文以内/u);
