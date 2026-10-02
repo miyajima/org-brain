@@ -1,7 +1,7 @@
 {
   "schema": "memory-value-local-validation/v1",
   "baseline_revision": "0c34324b827012ea444e8180363dc4d884bd8ed4",
-  "candidate_source_revision": "51a7a7e2f8062befa0ed53dbd07ac7edf5d91e49",
+  "candidate_source_revision": "51449df0230b56a28f9eb4079cdf45709fead2cf",
   "node": "24.19.0",
   "pnpm": "10.16.1",
   "checks": [
@@ -55,19 +55,21 @@
     }
   ],
   "aggregate_test_executions": {
-    "node_passed": 653,
+    "node_passed": 655,
     "node_skipped": 2,
     "vitest_passed": 907,
     "note": "Counts are executions across existing repeated suites, not unique tests. Standard skips were packaged hook tests; separate packaged run resolves one, the external Python wrapper is not provided."
   },
   "source_sha256": {
-    "package.json": "bf54d77ab804304290d4d14b8f8e485ab8c69d7f52ffec8d3163205ba3c8ffac",
+    ".github/workflows/benchmark.yml": "23095fb2282fa3e67b70a9f182da1310ce340fde8e6ac8b72a243e0c052d14e3",
+    "package.json": "c0378e257003416f2e866d04fa0ace4e4ed79401d83c74e1b1b2c0d5e912f99b",
     "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "b0158edf1bb810a82ba7e87f92a6166c6608bb1f66ba1c61418e3abcf9fe27a3",
     "packages/orgbrain-cli/src/lib/hook-failure-context.mjs": "ecab59712ea9629e27fbb7cbc7bf001815d782a78f4a7f4c71b48577683d3c43",
     "packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs": "d662769ff4b5e1722b07a7a7083571e22f4a656882ee2c88d24a4a97913599ec",
     "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "f1a9e2ac94bf94b9e9926d7669ec697e7409874cf2c07ac67d3fc95c18f42b5b",
     "packages/orgbrain-cli/src/lib/local-task-query.mjs": "3e450d67affd2bc2c3c779a722ff20438181a46265b3f095204e0dd58695198f",
     "packages/shared/src/memory-capture-v2-runtime.mjs": "58cae7233f08e2e30b3bae29e90f49f6e617c7af794091f94c703384e169591a",
+    "scripts/benchmark-runtime.test.mjs": "4716b3b2c3cddd4db13a4e4460f7fd3df4a48ff2369512f68bab80d015da1331",
     "scripts/codex-memory-context.test.mjs": "71798d02aa7c64c358a7379478a67f363cc61e985cc1c2f0a6551a442c9573f2",
     "scripts/fixtures/memory-lesson-capture.mjs": "9b16f5814a733eb9c661ab677e37f909e044deaef74ca510eb9e5eec300d5a7c",
     "scripts/fixtures/memory-lesson-confirmation-replay.mjs": "eddb62a203b3d3d57dedc435c194c5d4301d22d38eac42be0760d92ca3ffdc4d",
@@ -101,5 +103,17 @@
     "additional_hardening": "recognized explicit evidence disclaimers remain review-only",
     "remaining_new_actionable_findings": 0,
     "scope": "synthetic offline review, not production or semantic-entailment certification"
+  },
+  "ci_runtime_followup": {
+    "first_head": "e5b922d41cbe312d424b6c2bcbc5670d280998bb",
+    "failed_jobs": [
+      "https://github.com/miyajima/org-brain/actions/runs/37045346782/job/110965284749",
+      "https://github.com/miyajima/org-brain/actions/runs/37045346782/job/110965284693"
+    ],
+    "error": "no such module: fts5",
+    "cause": "Memory benchmarks pinned stock Node22.13; main CI already uses maintained Node22",
+    "fix_commit": "51449df0230b56a28f9eb4079cdf45709fead2cf",
+    "fix": "Match maintained Node22 and probe FTS5 explicitly before all benchmark jobs",
+    "independent_review": "No actionable follow-on defect; YAML, exact probes and 2 tests verified locally; hosted completion tracked separately"
   }
 }
