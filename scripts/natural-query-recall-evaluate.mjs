@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Network-free default MCP retrieval replay. Never loads production databases.
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -18,6 +19,7 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 const sourceFiles = ["packages/orgbrain-cli/src/lib/local-memory-store.mjs",
   "packages/orgbrain-cli/src/lib/local-task-query.mjs", "packages/shared/src/retrieval-units-core.mjs",
+  "packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs",
   "packages/orgbrain-cli/src/local-mcp.mjs", "packages/orgbrain-cli/src/lib/compact-memory-context.mjs"];
 const output = { schema: "natural-query-recall/v1", generated_at: new Date().toISOString(),
   scope: "synthetic local component regression replay, not held-out or production recall; no provider calls",
@@ -90,7 +92,8 @@ for (const [name, root] of Object.entries(roots)) {
   }
   const positives = cases.filter((c) => c.category !== "negative");
   const negatives = cases.filter((c) => c.category === "negative");
-  output.variants[name] = { source_sha256: sourceHashes, cases, summary: {
+  const gitHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  output.variants[name] = { git_head: gitHead, source_sha256: sourceHashes, cases, summary: {
     positive_cases: positives.length, hits_at_3: positives.filter((c) => c.hit).length,
     search_hits_at_3: positives.filter((c) => c.search_recall_at_3 > 0).length,
     macro_search_recall_at_3: positives.reduce((sum, c) => sum + c.search_recall_at_3, 0) / positives.length,
