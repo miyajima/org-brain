@@ -97,6 +97,21 @@ The fixture fixes these behaviors:
    no active candidate.
 5. `rationale` and `reuse_rule` remain separate persisted fields.
 
+Ordinary prose may bind labeled reason, reuse/applicability, and evidence lines
+to the immediately preceding atomic statement, within the existing three-following-
+block context bound. A new heading or durable statement ends that scope. Labeled
+support is not a second lesson. Multi-sentence labeled fields stay together;
+rationale beyond 1,000 characters or reuse conditions beyond 500 characters retain
+the existing storage bounds and receive `support_fields_truncated` in their gaps,
+so the unchanged strict-profile gap gate sends them to review. Prose references
+remain references, never command attestations.
+
+Rule-complete pitfalls and procedures do not become success/failure confirmation
+questions by copying their summary into an outcome. That lane requires the
+existing structured observation and current-turn verification. Source-backed
+decision questions remain eligible for human review without claiming verified
+execution. See the [synthetic lesson replay](MEMORY_EFFICIENCY.md#atomic-lesson-support-replay-2026-10-02).
+
 The UserPromptSubmit hook supplies the optional internal observe instruction.
 Changing the global harness remains unnecessary and outside this contract.
 
