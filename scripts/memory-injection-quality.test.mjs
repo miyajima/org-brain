@@ -60,3 +60,43 @@ test('unchanged delivered context is not repeated, while changed questions and p
   assert.match((await f.run('Voice APIのtimeout設定を変更したい',{turn_id:'third',transcript_path:transcript})).hookSpecificOutput.additionalContext,/summary:/);
   assert.match((await f.run(prompt,{turn_id:'fourth',transcript_path:transcript,hook_event_name:'PostCompact'})).hookSpecificOutput.additionalContext,/summary:/);
 });
+
+test('ordinary decisions deliver the usable body, rationale and complete reuse condition',async t=>{
+  const f=await fixture(t);
+  const content='Voice API requests must use a 2500 millisecond timeout; keep the retry count at zero for a non-idempotent operation.';
+  const rationale='A disconnect does not establish whether the server completed the operation.';
+  const reuse='Apply this only to non-idempotent Voice API requests; idempotent status reads have a separate retry policy.';
+  await f.save('decision','Voice API timeout policy',{kind:'decision',content,rationale,reuse_rule:reuse,source_references:[{type:'file',ref:'docs/voice-timeout.md'}]});
+  const output=(await f.run('Voice API timeout policy')).hookSpecificOutput.additionalContext;
+  for (const value of [content,rationale,reuse,'docs/voice-timeout.md']) assert.ok(output.includes(value),value);
+  assert.ok(Buffer.byteLength(output)<=7168);
+});
+
+test('long facts keep their limiting clause rather than silently truncating the memory',async t=>{
+  const f=await fixture(t);
+  const content=`Voice API migration policy. ${'This migration has a scoped compatibility check. '.repeat(8)}Only use it after the staging schema version is verified.`;
+  await f.save('fact',content);
+  const output=(await f.run('Voice API migration policy')).hookSpecificOutput.additionalContext;
+  assert.ok(output.includes(content));
+  assert.match(output,/Only use it after the staging schema version is verified\./);
+});
+
+test('oversized ordinary evidence is omitted atomically without an injection receipt',async t=>{
+  const f=await fixture(t);
+  await f.save('oversized','Voice API timeout policy',{kind:'decision',content:'Voice API timeout policy. '.repeat(1000),rationale:'The entire decision is required.'});
+  const output=(await f.run('Voice API timeout policy')).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(output,/summary:|The entire decision|Use tracking: receipt/);
+  const db=f.store.open({readOnly:true});try{
+    assert.equal(db.prepare("SELECT count(*) n FROM memory_usage_items WHERE source_id='oversized' AND reference_type='injected'").get().n,0);
+  }finally{db.close();}
+  assert.ok(Buffer.byteLength(output)<=7168);
+});
+
+test('ordinary body and rationale receive the same redaction as lesson fields',async t=>{
+  const f=await fixture(t);
+  await f.save('private','Voice API timeout policy',{kind:'decision',content:'Voice API timeout: contact operator@example.com for the historical setting.',rationale:'The original test was run by reviewer@example.com.'});
+  const output=(await f.run('Voice API timeout policy')).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(output,/operator@example\.com|reviewer@example\.com/);
+  assert.match(output,/\[REDACTED_EMAIL\]/);
+  assert.match(output,/original test/);
+});
