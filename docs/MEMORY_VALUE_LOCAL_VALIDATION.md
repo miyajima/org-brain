@@ -37,13 +37,13 @@ savings. Those limits are not replaced by the synthetic numbers below.
 
 | Criterion | Baseline | Candidate |
 | --- | ---: | ---: |
-| Extraction regression cases | 7/17 | 17/17 |
-| Exact complete atomic lessons preserved | 0/7 | 7/7 |
+| Extraction regression cases | 7/23 | 23/23 |
+| Exact complete atomic lessons preserved | 0/10 | 10/10 |
 | Actual Stop-path criteria | 8/9 | 9/9 |
 | Unsupported failure confirmations | 1 | 0 |
 | Qualified search hits at 3 | 4/15 | 12/15 |
 | Delivered compact-context hits | 4/15 | 10/15 |
-| Negative context abstentions | 13/13 | 13/13 |
+| Negative context abstentions | 15/15 | 15/15 |
 | Usable hook-context or correct-omission criteria | 5/12 | 12/12 |
 | Complete positive hook-context cases | 1/6 | 6/6 |
 
@@ -79,12 +79,13 @@ uses 200 synthetic tasks × 5 adapter searches and a separate 100,000-record,
 - This existing legacy-path weakness is retained rather than weakening conflict
   handling to improve a score. Its adapter calls are not actual model tasks, and
   its reported zero provider cost is not user-billing evidence
-- Scale retrieval failures remain 0/200. Final warm p95 is 268.78 ms against the
+- Scale retrieval failures remain 0/200. Final warm p95 is 244.41 ms against the
   500 ms gate (baseline 290.68 ms). Shared-host contention and a single paired run
   do not establish a speed improvement
 
 Unrestricted query decomposition, synonym-heavy requests, legacy full-context
-conflict pollution, real capture coverage, agent adoption and controlled live
+conflict pollution, raw-search expiry filtering, low-floor regional false
+positives, real capture coverage, agent adoption and controlled live
 session savings remain unqualified. This work does not change the legacy full
 response contract or turn Jev on. The new helper invalidates old implementation
 qualifications through the existing source hash.
@@ -105,7 +106,7 @@ source hashes and exact check status.
   bypassed. Live Worker smoke is left to CI; in-process API integration passes
 - No UI changes: browser E2E was not run and its workflow stays manual-only
 
-The aggregate run reports 646 Node and 907 Vitest passes, including intentional
+The aggregate run reports 653 Node and 907 Vitest passes, including intentional
 repeated suites, plus two standard packaging skips. The separate packaged run
 covers the CLI skip; no live desktop-hook rollout or external wrapper is claimed.
 The baseline corpus test's hardcoded `/workspace` paths were made hermetic so an
@@ -115,6 +116,20 @@ CI status is reported separately on the draft PR for its exact final commit.
 The external personal harness-router file is unavailable in this cloud checkout;
 repository bootstrap/compatibility fixtures pass and global harness files are
 unchanged.
+
+## Independent safety review
+
+Read-only review found and verified fixes for three edge cases: a standalone
+causal constraint could borrow support across lessons, US/IT acronyms could be
+lost as pronouns, and indented applicability could lose a safety tail. Explicit
+negative evidence declarations now also force review. Forty-two focused tests
+and paired baseline repros passed after the fixes, with no remaining actionable
+new defect identified in that review. References are still source pointers, not
+semantic entailment or verified execution by themselves.
+
+The full checks and replays above were rerun after these fixes. Raw-search expiry
+and low-floor regional matches are explicitly retained as pre-existing limits;
+compact-context negatives are not evidence of universal raw-search filtering.
 
 ## Reproduce
 

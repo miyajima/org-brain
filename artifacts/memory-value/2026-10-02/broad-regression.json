@@ -1,7 +1,7 @@
 {
   "schema": "memory-value-broad-regression/v1",
   "baseline_revision": "0c34324b827012ea444e8180363dc4d884bd8ed4",
-  "candidate_source_revision": "82e9707881f5ac22a0bc16c81b9d1134c34479af",
+  "candidate_source_revision": "51a7a7e2f8062befa0ed53dbd07ac7edf5d91e49",
   "scope": "Existing synthetic offline retrieval benchmarks. No model task completion, subscription cost, turn savings or real usage measured. Timings share a contended host and are not a causal speed comparison.",
   "known_legacy_limit": "The full-context competitive adapter retains low-relevance same-project candidates; a conflict belonging to another fixture topic causes all personal-query abstentions in both variants. Compact MCP task-query replay is measured separately. Conflict gates and legacy full contract were not weakened.",
   "variants": {
@@ -79,12 +79,12 @@
         "organization_hit_rate_pct": 100,
         "permission_or_tenant_leaks": 0,
         "failed_rows": 0,
-        "search_p50_ms": 21.98,
-        "search_p95_ms": 30.43
+        "search_p50_ms": 24.15,
+        "search_p95_ms": 32.73
       },
       "scale": {
         "benchmark": "orgbrain-local-scale-v1",
-        "generated_at": "2026-10-02T17:43:34.456Z",
+        "generated_at": "2026-10-02T18:02:30.223Z",
         "settings": {
           "record_count": 100000,
           "query_count": 200,
@@ -97,15 +97,15 @@
           "target_p95_ms": 500
         },
         "metrics": {
-          "seed_duration_ms": 3019.61,
-          "index_duration_ms": 67458.53,
-          "cold_search_latency_ms": 184.57,
-          "warm_search_latency_p50_ms": 193.09,
-          "warm_search_latency_p95_ms": 268.78,
-          "warm_search_latency_max_ms": 288.79,
+          "seed_duration_ms": 5958.76,
+          "index_duration_ms": 67180.97,
+          "cold_search_latency_ms": 174.15,
+          "warm_search_latency_p50_ms": 185.95,
+          "warm_search_latency_p95_ms": 244.41,
+          "warm_search_latency_max_ms": 311.67,
           "segment_count": 100000,
-          "memory_rss_bytes": 1143623680,
-          "memory_heap_used_bytes": 267322296,
+          "memory_rss_bytes": 1334353920,
+          "memory_heap_used_bytes": 1061945312,
           "retrieval_failures": 0,
           "database_bytes": 1280090112
         },

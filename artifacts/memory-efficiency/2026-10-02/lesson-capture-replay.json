@@ -1,6 +1,6 @@
 {
   "schema": "memory-lesson-capture-replay/v1",
-  "generated_at": "2026-10-02T17:41:36.524Z",
+  "generated_at": "2026-10-02T17:59:56.087Z",
   "scope": "Synthetic same-fixture regression replay; direct shared extraction plus actual Stop adapter in disposable local stores.",
   "limits": [
     "Not held out; no live user histories or production rollout.",
@@ -8,7 +8,7 @@
     "Rule-complete candidates are not verified outcomes. Confirmation eligibility is not user approval or memory activation.",
     "No new memory save is approved in this replay. Provider cost, task-time savings, and user billing are not measured."
   ],
-  "fixture_sha256": "c212d82ceca4cad9c610061a1cd18ec1371f74e889a97c460433e7e9a73fbb85",
+  "fixture_sha256": "9b16f5814a733eb9c661ab677e37f909e044deaef74ca510eb9e5eec300d5a7c",
   "stop_fixture_sha256": "eddb62a203b3d3d57dedc435c194c5d4301d22d38eac42be0760d92ca3ffdc4d",
   "variants": {
     "baseline": {
@@ -77,6 +77,28 @@
           "activated_verified_memories": 0
         },
         {
+          "id": "causal_new_constraint_cannot_supply_previous_lesson",
+          "rule_complete_candidates": 1,
+          "review_candidates": 1,
+          "generated_candidates": 2,
+          "expected_atomic_lessons": 1,
+          "preserved_atomic_lessons": 0,
+          "passed": false,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "japanese_causal_constraint_keeps_own_support",
+          "rule_complete_candidates": 1,
+          "review_candidates": 1,
+          "generated_candidates": 2,
+          "expected_atomic_lessons": 1,
+          "preserved_atomic_lessons": 0,
+          "passed": false,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
           "id": "later_complete_lesson_survives_cap",
           "rule_complete_candidates": 0,
           "review_candidates": 3,
@@ -114,6 +136,28 @@
           "rule_complete_candidates": 0,
           "review_candidates": 1,
           "generated_candidates": 1,
+          "expected_atomic_lessons": 0,
+          "preserved_atomic_lessons": 0,
+          "passed": false,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "indented_reuse_keeps_safety_continuation",
+          "rule_complete_candidates": 0,
+          "review_candidates": 2,
+          "generated_candidates": 2,
+          "expected_atomic_lessons": 1,
+          "preserved_atomic_lessons": 0,
+          "passed": false,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "indented_long_reuse_stays_review_only",
+          "rule_complete_candidates": 0,
+          "review_candidates": 2,
+          "generated_candidates": 2,
           "expected_atomic_lessons": 0,
           "preserved_atomic_lessons": 0,
           "passed": false,
@@ -205,6 +249,28 @@
           "expected_atomic_lessons": 0,
           "preserved_atomic_lessons": 0,
           "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "explicitly_unsupported_evidence_stays_review_only",
+          "rule_complete_candidates": 0,
+          "review_candidates": 1,
+          "generated_candidates": 1,
+          "expected_atomic_lessons": 0,
+          "preserved_atomic_lessons": 0,
+          "passed": false,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "japanese_unsupported_evidence_stays_review_only",
+          "rule_complete_candidates": 0,
+          "review_candidates": 1,
+          "generated_candidates": 1,
+          "expected_atomic_lessons": 0,
+          "preserved_atomic_lessons": 0,
+          "passed": false,
           "command_evidence_count": 0,
           "activated_verified_memories": 0
         }
@@ -348,8 +414,8 @@
       ],
       "summary": {
         "capture_cases_passed": 7,
-        "capture_cases": 17,
-        "expected_atomic_lessons": 7,
+        "capture_cases": 23,
+        "expected_atomic_lessons": 10,
         "fully_preserved_atomic_lessons": 0,
         "stop_cases_passed": 8,
         "stop_cases": 9,
@@ -360,9 +426,9 @@
       }
     },
     "candidate": {
-      "revision": "3ba81d0221d2d59da7ca0e4b732f20aae966e27c",
+      "revision": "51a7a7e2f8062befa0ed53dbd07ac7edf5d91e49",
       "source_sha256": {
-        "packages/shared/src/memory-capture-v2-runtime.mjs": "a11d7723e243ef338bf048d4c945b9cb23bf356fdc6e05e970b616b5e9a54732",
+        "packages/shared/src/memory-capture-v2-runtime.mjs": "58cae7233f08e2e30b3bae29e90f49f6e617c7af794091f94c703384e169591a",
         "packages/shared/src/memory-capture-profile-runtime.mjs": "58193f8eee169246b722aff2cf2ef71293fadee2a613aff03b2adc82582d2abe",
         "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "b0158edf1bb810a82ba7e87f92a6166c6608bb1f66ba1c61418e3abcf9fe27a3",
         "packages/orgbrain-cli/src/lib/memory-learning-transcript.mjs": "46a950469bf57380262a1d0e97beb2c55b430f12e3fcfb98774f0435e4c92f23",
@@ -425,6 +491,28 @@
           "activated_verified_memories": 0
         },
         {
+          "id": "causal_new_constraint_cannot_supply_previous_lesson",
+          "rule_complete_candidates": 1,
+          "review_candidates": 1,
+          "generated_candidates": 2,
+          "expected_atomic_lessons": 1,
+          "preserved_atomic_lessons": 1,
+          "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "japanese_causal_constraint_keeps_own_support",
+          "rule_complete_candidates": 1,
+          "review_candidates": 1,
+          "generated_candidates": 2,
+          "expected_atomic_lessons": 1,
+          "preserved_atomic_lessons": 1,
+          "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
           "id": "later_complete_lesson_survives_cap",
           "rule_complete_candidates": 1,
           "review_candidates": 2,
@@ -459,6 +547,28 @@
         },
         {
           "id": "long_rationale_stays_review_only",
+          "rule_complete_candidates": 0,
+          "review_candidates": 1,
+          "generated_candidates": 1,
+          "expected_atomic_lessons": 0,
+          "preserved_atomic_lessons": 0,
+          "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "indented_reuse_keeps_safety_continuation",
+          "rule_complete_candidates": 1,
+          "review_candidates": 0,
+          "generated_candidates": 1,
+          "expected_atomic_lessons": 1,
+          "preserved_atomic_lessons": 1,
+          "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "indented_long_reuse_stays_review_only",
           "rule_complete_candidates": 0,
           "review_candidates": 1,
           "generated_candidates": 1,
@@ -550,6 +660,28 @@
           "rule_complete_candidates": 0,
           "review_candidates": 0,
           "generated_candidates": 0,
+          "expected_atomic_lessons": 0,
+          "preserved_atomic_lessons": 0,
+          "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "explicitly_unsupported_evidence_stays_review_only",
+          "rule_complete_candidates": 0,
+          "review_candidates": 1,
+          "generated_candidates": 1,
+          "expected_atomic_lessons": 0,
+          "preserved_atomic_lessons": 0,
+          "passed": true,
+          "command_evidence_count": 0,
+          "activated_verified_memories": 0
+        },
+        {
+          "id": "japanese_unsupported_evidence_stays_review_only",
+          "rule_complete_candidates": 0,
+          "review_candidates": 1,
+          "generated_candidates": 1,
           "expected_atomic_lessons": 0,
           "preserved_atomic_lessons": 0,
           "passed": true,
@@ -695,10 +827,10 @@
         }
       ],
       "summary": {
-        "capture_cases_passed": 17,
-        "capture_cases": 17,
-        "expected_atomic_lessons": 7,
-        "fully_preserved_atomic_lessons": 7,
+        "capture_cases_passed": 23,
+        "capture_cases": 23,
+        "expected_atomic_lessons": 10,
+        "fully_preserved_atomic_lessons": 10,
         "stop_cases_passed": 9,
         "stop_cases": 9,
         "unsupported_failure_confirmations": 0,

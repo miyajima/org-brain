@@ -1,6 +1,6 @@
 {
   "schema": "memory-value-context-replay/v1",
-  "generated_at": "2026-10-02T17:41:38.221Z",
+  "generated_at": "2026-10-02T17:59:59.528Z",
   "scope": "synthetic regression replay of the real local UserPromptSubmit hook; identical inputs on both revisions",
   "metric": "complete usable memory fields or correct omission; not a model task outcome",
   "actual_session_tokens": null,
@@ -147,7 +147,7 @@
       }
     },
     "candidate": {
-      "revision": "3ba81d0221d2d59da7ca0e4b732f20aae966e27c",
+      "revision": "51a7a7e2f8062befa0ed53dbd07ac7edf5d91e49",
       "source_sha256": {
         "packages/orgbrain-cli/src/lib/hook-failure-context.mjs": "ecab59712ea9629e27fbb7cbc7bf001815d782a78f4a7f4c71b48577683d3c43",
         "packages/orgbrain-cli/src/codex-memory-context.mjs": "68d176cbaaeb023bcc29a857206842f8300578eb18f3b2c370d45a6492151937",
