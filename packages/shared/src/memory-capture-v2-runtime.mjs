@@ -214,7 +214,7 @@ function splitBlocks(text) {
     .filter(Boolean);
   const result = [];
   for (const block of blocks) {
-    if (block.length <= 900) {
+    if (block.length <= 900 || SUPPORT_LABEL_PATTERN.test(block)) {
       result.push(block);
       continue;
     }
@@ -271,24 +271,24 @@ function evidenceFromText(text) {
 }
 
 function rationaleFromText(block, wholeText, explicitReason) {
-  if (explicitReason) return clip(collapseWhitespace(explicitReason), 1000);
+  if (explicitReason) return collapseWhitespace(explicitReason);
   const reasonClause = (value) => {
     const normalized = collapseWhitespace(value);
     if (REASON_PREFIX_PATTERN.test(normalized)) {
       return normalized.replace(REASON_PREFIX_PATTERN, "").trim() || null;
     }
     const match = normalized.match(
-      /(?:\bbecause\b|\bsince\b|理由(?:は|:)|なぜなら|原因(?:は|:))\s*([^。.!?;；]{4,900}[。.!?]?)/iu
+      /(?:\bbecause\b|\bsince\b|理由(?:は|:)|なぜなら|原因(?:は|:))\s*([^。.!?;；]{4,}[。.!?]?)/iu
     );
     return match?.[1] ? collapseWhitespace(match[1]) : null;
   };
   const directReason = reasonClause(block);
-  if (directReason) return clip(directReason, 1000);
+  if (directReason) return directReason;
   for (const sentence of splitBlocks(wholeText)) {
     if (!REASON_PREFIX_PATTERN.test(sentence) && !CAUSE_PATTERN.test(sentence)) continue;
     const contextualReason = reasonClause(sentence);
     if (contextualReason && normalizeCanonical(contextualReason) !== normalizeCanonical(block)) {
-      return clip(contextualReason, 1000);
+      return contextualReason;
     }
   }
   return null;
@@ -308,11 +308,11 @@ function conclusionFromText(block) {
 }
 
 function reuseRuleFromText(wholeText, explicitReuseRule = null) {
-  if (explicitReuseRule) return clip(collapseWhitespace(explicitReuseRule), 500);
+  if (explicitReuseRule) return collapseWhitespace(explicitReuseRule);
   const blocks = splitBlocks(wholeText);
   const labeled = blocks.find((item) => /^(?:reuse(?: rule)?|applicability|再利用条件|適用条件)\s*[:：]/iu.test(item));
   const candidate = labeled ? labeled.replace(SUPPORT_LABEL_PATTERN, "") : blocks.find((item) => REUSE_PATTERN.test(item));
-  return candidate ? clip(candidate, 500) : null;
+  return candidate || null;
 }
 
 function ordinaryCandidateContext(blocks, index, wholeText) {
@@ -507,15 +507,22 @@ export function extractDurableMemoryDrafts(input, options = {}) {
     for (const index of ordinaryContext?.supportIndices ?? []) supportIndices.add(index);
     const candidateContext = structuredInput ? `${evidenceSection}\n${block}` : ordinaryContext.text;
     const evidence = evidenceFromText(candidateContext, occurredAt);
-    const reuseRule = reuseRuleFromText(candidateContext, structuredInput ? reuseSection : null);
-    const rationale = rationaleFromText(block, structuredInput ? screened.text : candidateContext, structuredInput ? reasonSection : null);
+    const rawReuseRule = reuseRuleFromText(candidateContext, structuredInput ? reuseSection : null);
+    const rawRationale = rationaleFromText(block, structuredInput ? screened.text : candidateContext, structuredInput ? reasonSection : null);
+    const truncatedSupport = [rawRationale?.length > 1000 ? "rationale" : null, rawReuseRule?.length > 500 ? "reuse_rule" : null].filter(Boolean);
+    // Keep existing storage bounds, but never call a clipped limiting condition
+    // complete. The unchanged unresolved-gaps gate sends it to review instead.
+    const candidateGaps = [gapsSection, truncatedSupport.length
+      ? `support_fields_truncated: ${truncatedSupport.join(", ")}; complete source text must be reviewed before reuse.` : null].filter(Boolean).join("\n");
+    const reuseRule = rawReuseRule ? clip(rawReuseRule, 500) : null;
+    const rationale = rawRationale ? clip(rawRationale, 1000) : null;
     const explicit = CLASSIFIERS.find((item) => item.kind === classification.kind)?.pattern.test(block) ?? false;
     const confidence = confidenceFor({
       classification,
       rationale,
       evidence,
       projectId: input.project_id ?? null,
-      gaps: gapsSection,
+      gaps: candidateGaps,
       explicit
     });
     const ttl = screened.restricted ? 7 * DAY_MS : TTL_BY_KIND[classification.kind];
@@ -537,7 +544,7 @@ export function extractDurableMemoryDrafts(input, options = {}) {
       visibility: screened.restricted ? "restricted" : input.project_id ? "project" : "tenant",
       allowed_principals: screened.restricted ? screened.allowed_principals : [],
       sensitive: screened.restricted,
-      gaps: gapsSection ? clip(collapseWhitespace(gapsSection), 500) : null
+      gaps: candidateGaps ? clip(collapseWhitespace(candidateGaps), 500) : null
     });
   }
 
