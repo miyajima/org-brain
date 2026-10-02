@@ -176,7 +176,11 @@ parity gates.
 
 Use this when you want free personal memory without Cloudflare.
 
-Requires Node.js 22.13 or newer and pnpm. The CLI uses the SQLite driver bundled
+Stock Node.js 22.13 does not include the FTS5 module required by local retrieval.
+Node added the SQLite build flags in [22.16.0](https://nodejs.org/en/blog/release/v22.16.0/);
+custom builds must also enable FTS5.
+
+Requires a current Node.js 22 LTS or 24 build with SQLite FTS5, plus pnpm. The CLI uses the SQLite driver bundled
 with Node; the external `sqlite3` command is not required. From a fresh checkout,
 use the following primary path:
 
@@ -581,7 +585,7 @@ OpenClaw currently has an import path from `~/.openclaw/memory/main.sqlite`; oth
 
 | Component | Supported |
 | --- | --- |
-| Node.js | 22.13 or newer |
+| Node.js | Current 22 LTS or 24 with SQLite FTS5 |
 | macOS | Current supported releases, arm64 and x64 |
 | Linux | glibc-based arm64 and x64 distributions |
 | Windows | Native Node CLI; private-mode checks follow platform capabilities |
@@ -596,7 +600,7 @@ curl http://127.0.0.1:8788/health
 ```
 
 Release assets also include `orgbrain.mjs`, a single-file executable bundle for
-users who already have Node.js 22.13 or newer and do not want to install the npm
+users who already have a current Node.js 22 LTS or 24 build with SQLite FTS5 and do not want to install the npm
 package:
 
 ```bash
