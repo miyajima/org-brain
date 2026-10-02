@@ -22,6 +22,7 @@ const sourceFiles = ["packages/orgbrain-cli/src/lib/local-memory-store.mjs",
 const output = { schema: "natural-query-recall/v1", generated_at: new Date().toISOString(),
   scope: "synthetic local component regression replay, not held-out or production recall; no provider calls",
   fixture_source: fixtureSource, fixture_sha256: sha256(await readFile(new URL("./fixtures/natural-query-recall.mjs", import.meta.url))),
+  fixture_source_sha256: sha256(await readFile(join(roots.candidate, fixtureSource))),
   node: process.version, icu: process.versions.icu, default_minimum_score_unchanged: true,
   top_k: 3, token_budget: 1500, warm_repetitions: 3,
   actual_task_time: null, actual_task_tokens: null, actual_provider_cost: null, variants: {} };
@@ -67,8 +68,11 @@ for (const [name, root] of Object.entries(roots)) {
       }
       const sample = samples[1], expected = fixture.expected ?? [];
       const relevant = sample.returned.filter((key) => expected.includes(key)).length;
+      const firstRelevantRank = retrieved.findIndex((key) => expected.includes(key));
       cases.push({ id: fixture.id, category: fixture.category ?? "negative", query: fixture.query, expected,
         retrieved, search_recall_at_3: expected.length ? retrieved.filter((key) => expected.includes(key)).length / expected.length : null,
+        search_precision_at_3: retrieved.length ? retrieved.filter((key) => expected.includes(key)).length / retrieved.length : null,
+        reciprocal_rank_at_3: expected.length ? (firstRelevantRank < 0 ? 0 : 1 / (firstRelevantRank + 1)) : null,
         ...sample, elapsed_ms: undefined, first_request_ms: Number(samples[0].elapsed_ms.toFixed(2)),
         warm_median_ms: Number(median(samples.slice(1).map((s) => s.elapsed_ms)).toFixed(2)),
         stable: samples.every((s) => JSON.stringify(s.returned) === JSON.stringify(sample.returned)),
@@ -90,6 +94,9 @@ for (const [name, root] of Object.entries(roots)) {
     positive_cases: positives.length, hits_at_3: positives.filter((c) => c.hit).length,
     search_hits_at_3: positives.filter((c) => c.search_recall_at_3 > 0).length,
     macro_search_recall_at_3: positives.reduce((sum, c) => sum + c.search_recall_at_3, 0) / positives.length,
+    mean_reciprocal_rank_at_3: positives.reduce((sum, c) => sum + c.reciprocal_rank_at_3, 0) / positives.length,
+    search_returned_precision: positives.reduce((sum, c) => sum + c.retrieved.filter((key) => c.expected.includes(key)).length, 0)
+      / (positives.reduce((sum, c) => sum + c.retrieved.length, 0) || 1),
     macro_recall_at_3: positives.reduce((sum, c) => sum + c.recall_at_3, 0) / positives.length,
     returned_precision: positives.reduce((sum, c) => sum + c.returned.filter((key) => c.expected.includes(key)).length, 0)
       / (positives.reduce((sum, c) => sum + c.returned.length, 0) || 1),
