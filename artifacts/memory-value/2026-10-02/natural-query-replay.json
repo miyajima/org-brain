@@ -1,0 +1,1561 @@
+{
+  "schema": "natural-query-recall/v1",
+  "generated_at": "2026-10-02T17:43:49.810Z",
+  "scope": "synthetic local component regression replay, not held-out or production recall; no provider calls",
+  "fixture_source": "artifacts/memory-efficiency/2026-09-23/live-codex/manifest.json",
+  "fixture_sha256": "b09c00439009329b69b45ded46e74ab804e9e0176526bdf295f1c84c0b8d1c42",
+  "fixture_source_sha256": "48dc3a767bd15e8e46532b0edaf543472b24b907492e1f0673a662b48a2cd4c1",
+  "node": "v24.19.0",
+  "icu": "78.3",
+  "default_minimum_score_unchanged": true,
+  "top_k": 3,
+  "token_budget": 1500,
+  "warm_repetitions": 3,
+  "actual_task_time": null,
+  "actual_task_tokens": null,
+  "actual_provider_cost": null,
+  "variants": {
+    "baseline": {
+      "git_head": "0c34324b827012ea444e8180363dc4d884bd8ed4",
+      "source_sha256": {
+        "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "11a382745b8774234af44f41b1678c0959a26db0e41de90fddd383ac0568b0ab",
+        "packages/orgbrain-cli/src/lib/local-task-query.mjs": null,
+        "packages/shared/src/retrieval-units-core.mjs": "f10ca4b8845bebb1d953700810d0fdb671b6a2c58c1331149582f1fc364633bd",
+        "packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs": "5feff961822ccdf18be0929b96cee119bf93088863adf6c4d393cd9956455c85",
+        "packages/orgbrain-cli/src/local-mcp.mjs": "5bed3da4504b01291c5e8fb753421c3b28a7ca7efe5692c1f105c33b86ed67e4",
+        "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "513f4fa92f943b510fd42d0f6b91b578e20b9047d0d662c8cbb2f23b9e054b3c"
+      },
+      "cases": [
+        {
+          "id": "workspace-original-full",
+          "category": "original-full",
+          "query": "Git worktreeでOrgBrainが別プロジェクト扱いになる問題を調査してください。現在のCLIが作業ディレクトリからworkspace設定を解決する優先順位、同名の別リポジトリを誤認しない仕組み、Git照会が失敗した場合の動作を、現在のソースで確認して説明してください。修正は不要です。",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 264,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 1227.72,
+          "warm_median_ms": 17.33,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "usage-original-full",
+          "category": "original-full",
+          "query": "OrgBrainで検索結果が返り、usage itemをusedにしても、usage historyの検証済み利用件数が増えない状況を調査してください。検索返却・手動のused・行動での利用・効果評価を区別し、実利用記録に必要な証拠、証拠不足時の扱い、次に確認すべき実装をソースに基づいて説明してください。修正は不要です。",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 13.91,
+          "warm_median_ms": 15.26,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "capture-original-full",
+          "category": "original-full",
+          "query": "eager設定で、functions.execの内部からOrgBrain検索と確認コマンドを呼んだ後も自動保存されない状況を調査してください。現在の実装はこの形式から検索失敗や実行成功を証明できるか、専用の診断理由、保存を認めるために必要な証拠、競合や予算不足の検索結果の扱いをソースで説明してください。修正は不要です。",
+          "expected": [
+            "capture-0",
+            "capture-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 273,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 13.69,
+          "warm_median_ms": 13.67,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "workspace-curated",
+          "category": "curated",
+          "query": "Git worktree",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "response_tokens": 1018,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 22.56,
+          "warm_median_ms": 23.97,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "usage-curated",
+          "category": "curated",
+          "query": "usage history",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [
+            "usage-0",
+            "usage-1"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "usage-0",
+            "usage-1"
+          ],
+          "response_tokens": 1042,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 33.88,
+          "warm_median_ms": 25.59,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "capture-curated",
+          "category": "curated",
+          "query": "eager capture",
+          "expected": [
+            "capture-0",
+            "capture-1"
+          ],
+          "retrieved": [
+            "capture-0",
+            "capture-1"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "capture-0",
+            "capture-1"
+          ],
+          "response_tokens": 1055,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 25.92,
+          "warm_median_ms": 21.23,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "workspace-en",
+          "category": "natural",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 15.3,
+          "warm_median_ms": 17.29,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "usage-en",
+          "category": "natural",
+          "query": "Could you investigate memory usage history in this project and explain it?",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 13.7,
+          "warm_median_ms": 13.33,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "capture-en",
+          "category": "natural",
+          "query": "Please investigate eager capture with opaque tool wrappers in this repository.",
+          "expected": [
+            "capture-0"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 13.81,
+          "warm_median_ms": 13.57,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "workspace-ja",
+          "category": "natural",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 267,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 12.93,
+          "warm_median_ms": 20.61,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "usage-ja",
+          "category": "natural",
+          "query": "memory usage historyについて、このリポジトリで確認して説明してください。",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 267,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 21.36,
+          "warm_median_ms": 21.46,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "capture-ja",
+          "category": "natural",
+          "query": "eager captureとopaque tool wrappersについて調査してください。",
+          "expected": [
+            "capture-0"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 17.11,
+          "warm_median_ms": 20.61,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "cloudflare-curated",
+          "category": "curated",
+          "query": "Cloudflare デプロイ API 応答",
+          "expected": [
+            "cloudflare"
+          ],
+          "retrieved": [
+            "cloudflare"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "cloudflare"
+          ],
+          "response_tokens": 674,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 76.11,
+          "warm_median_ms": 197.2,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "cloudflare-ja",
+          "category": "natural",
+          "query": "CloudflareのデプロイとAPIの応答について調査してください。",
+          "expected": [
+            "cloudflare"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 23.62,
+          "warm_median_ms": 22.04,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "sqlite-en",
+          "category": "natural",
+          "query": "Please investigate SQLite diagnostics and database lock errors in this repository.",
+          "expected": [
+            "sqlite"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 16,
+          "warm_median_ms": 15.33,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "unrelated",
+          "category": "negative",
+          "query": "Please investigate galactic bakery payroll reconciliation in this repository.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 15.28,
+          "warm_median_ms": 14.54,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "partial-topic",
+          "category": "negative",
+          "query": "Please investigate Git worktree payroll reconciliation in this repository.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 264,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 16.08,
+          "warm_median_ms": 17.9,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "multi-topic",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping and galactic bakery payroll reconciliation.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 19.32,
+          "warm_median_ms": 23.22,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "japanese-partial",
+          "category": "negative",
+          "query": "Cloudflareのデプロイと給与計算について調査してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 265,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 17.2,
+          "warm_median_ms": 12.18,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "unknown-identifier",
+          "category": "negative",
+          "query": "Please investigate SQLite diagnostics database lock ErrorXYZ732.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 23.97,
+          "warm_median_ms": 19.17,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "tenant-boundary",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 32.06,
+          "warm_median_ms": 19.48,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "project-boundary",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 272,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 20.85,
+          "warm_median_ms": 13.02,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "conflict",
+          "category": "negative",
+          "query": "Please investigate SQLite diagnostics and database lock errors in this repository.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 15.31,
+          "warm_median_ms": 16.3,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "permissions",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 17.51,
+          "warm_median_ms": 13.78,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "suppressed",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 15.96,
+          "warm_median_ms": 15.96,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "future",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 12.76,
+          "warm_median_ms": 11.2,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "invalid",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 11.92,
+          "warm_median_ms": 10.63,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "expired",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 267,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 12.89,
+          "warm_median_ms": 11.54,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        }
+      ],
+      "summary": {
+        "positive_cases": 15,
+        "hits_at_3": 4,
+        "search_hits_at_3": 4,
+        "macro_search_recall_at_3": 0.26666666666666666,
+        "mean_reciprocal_rank_at_3": 0.26666666666666666,
+        "search_returned_precision": 1,
+        "macro_recall_at_3": 0.26666666666666666,
+        "returned_precision": 1,
+        "negative_cases": 13,
+        "negative_abstentions": 13,
+        "false_positive_cases": 0,
+        "original_full_hits": 0,
+        "natural_hits": 0,
+        "all_stable": true,
+        "all_within_budget": true,
+        "warm_median_ms": 17.29
+      }
+    },
+    "candidate": {
+      "git_head": "82e9707881f5ac22a0bc16c81b9d1134c34479af",
+      "source_sha256": {
+        "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "f1a9e2ac94bf94b9e9926d7669ec697e7409874cf2c07ac67d3fc95c18f42b5b",
+        "packages/orgbrain-cli/src/lib/local-task-query.mjs": "a876af7bc6c94bdc8e978d3b8c6f9387e4ba11e63b1ae3f22aec8a15b9d1e6fd",
+        "packages/shared/src/retrieval-units-core.mjs": "f10ca4b8845bebb1d953700810d0fdb671b6a2c58c1331149582f1fc364633bd",
+        "packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs": "d662769ff4b5e1722b07a7a7083571e22f4a656882ee2c88d24a4a97913599ec",
+        "packages/orgbrain-cli/src/local-mcp.mjs": "5bed3da4504b01291c5e8fb753421c3b28a7ca7efe5692c1f105c33b86ed67e4",
+        "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "513f4fa92f943b510fd42d0f6b91b578e20b9047d0d662c8cbb2f23b9e054b3c"
+      },
+      "cases": [
+        {
+          "id": "workspace-original-full",
+          "category": "original-full",
+          "query": "Git worktreeでOrgBrainが別プロジェクト扱いになる問題を調査してください。現在のCLIが作業ディレクトリからworkspace設定を解決する優先順位、同名の別リポジトリを誤認しない仕組み、Git照会が失敗した場合の動作を、現在のソースで確認して説明してください。修正は不要です。",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 438.21,
+          "warm_median_ms": 14.85,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "usage-original-full",
+          "category": "original-full",
+          "query": "OrgBrainで検索結果が返り、usage itemをusedにしても、usage historyの検証済み利用件数が増えない状況を調査してください。検索返却・手動のused・行動での利用・効果評価を区別し、実利用記録に必要な証拠、証拠不足時の扱い、次に確認すべき実装をソースに基づいて説明してください。修正は不要です。",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 15.53,
+          "warm_median_ms": 15.02,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "capture-original-full",
+          "category": "original-full",
+          "query": "eager設定で、functions.execの内部からOrgBrain検索と確認コマンドを呼んだ後も自動保存されない状況を調査してください。現在の実装はこの形式から検索失敗や実行成功を証明できるか、専用の診断理由、保存を認めるために必要な証拠、競合や予算不足の検索結果の扱いをソースで説明してください。修正は不要です。",
+          "expected": [
+            "capture-0",
+            "capture-1"
+          ],
+          "retrieved": [],
+          "search_recall_at_3": 0,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": 0,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 14.75,
+          "warm_median_ms": 13.69,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "workspace-curated",
+          "category": "curated",
+          "query": "Git worktree",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "response_tokens": 1029,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 27.53,
+          "warm_median_ms": 31.74,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "usage-curated",
+          "category": "curated",
+          "query": "usage history",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [
+            "usage-0",
+            "usage-1"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "usage-0",
+            "usage-1"
+          ],
+          "response_tokens": 1058,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 23.39,
+          "warm_median_ms": 27.37,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "capture-curated",
+          "category": "curated",
+          "query": "eager capture",
+          "expected": [
+            "capture-0",
+            "capture-1"
+          ],
+          "retrieved": [
+            "capture-0",
+            "capture-1"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "capture-0",
+            "capture-1"
+          ],
+          "response_tokens": 1061,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 21.75,
+          "warm_median_ms": 23.78,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "workspace-en",
+          "category": "natural",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "insufficient_independent_sessions"
+          ],
+          "first_request_ms": 23.18,
+          "warm_median_ms": 23.4,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "usage-en",
+          "category": "natural",
+          "query": "Could you investigate memory usage history in this project and explain it?",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [
+            "usage-0",
+            "usage-1"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "usage-0",
+            "usage-1"
+          ],
+          "response_tokens": 1070,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 24.44,
+          "warm_median_ms": 28.37,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "capture-en",
+          "category": "natural",
+          "query": "Please investigate eager capture with opaque tool wrappers in this repository.",
+          "expected": [
+            "capture-0"
+          ],
+          "retrieved": [
+            "capture-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "capture-0"
+          ],
+          "response_tokens": 654,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 21.24,
+          "warm_median_ms": 30.31,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "workspace-ja",
+          "category": "natural",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [
+            "workspace-0",
+            "workspace-1"
+          ],
+          "retrieved": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "response_tokens": 1024,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 27.02,
+          "warm_median_ms": 27.22,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "usage-ja",
+          "category": "natural",
+          "query": "memory usage historyについて、このリポジトリで確認して説明してください。",
+          "expected": [
+            "usage-0",
+            "usage-1"
+          ],
+          "retrieved": [
+            "usage-1",
+            "usage-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "usage-1",
+            "usage-0"
+          ],
+          "response_tokens": 1075,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 54.95,
+          "warm_median_ms": 43.8,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "capture-ja",
+          "category": "natural",
+          "query": "eager captureとopaque tool wrappersについて調査してください。",
+          "expected": [
+            "capture-0"
+          ],
+          "retrieved": [
+            "capture-0"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "capture-0"
+          ],
+          "response_tokens": 663,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 53.85,
+          "warm_median_ms": 55.12,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "cloudflare-curated",
+          "category": "curated",
+          "query": "Cloudflare デプロイ API 応答",
+          "expected": [
+            "cloudflare"
+          ],
+          "retrieved": [
+            "cloudflare"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "cloudflare"
+          ],
+          "response_tokens": 669,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 67.16,
+          "warm_median_ms": 46.28,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "cloudflare-ja",
+          "category": "natural",
+          "query": "CloudflareのデプロイとAPIの応答について調査してください。",
+          "expected": [
+            "cloudflare"
+          ],
+          "retrieved": [
+            "cloudflare"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [
+            "cloudflare"
+          ],
+          "response_tokens": 671,
+          "abstained": false,
+          "missing_evidence": [],
+          "first_request_ms": 30.61,
+          "warm_median_ms": 34.64,
+          "stable": true,
+          "within_budget": true,
+          "hit": true,
+          "recall_at_3": 1,
+          "precision_at_3": 1,
+          "passed": true
+        },
+        {
+          "id": "sqlite-en",
+          "category": "natural",
+          "query": "Please investigate SQLite diagnostics and database lock errors in this repository.",
+          "expected": [
+            "sqlite"
+          ],
+          "retrieved": [
+            "sqlite"
+          ],
+          "search_recall_at_3": 1,
+          "search_precision_at_3": 1,
+          "reciprocal_rank_at_3": 1,
+          "returned": [],
+          "response_tokens": 267,
+          "abstained": true,
+          "missing_evidence": [
+            "insufficient_independent_sessions"
+          ],
+          "first_request_ms": 22.59,
+          "warm_median_ms": 29.14,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": 0,
+          "precision_at_3": null,
+          "passed": false
+        },
+        {
+          "id": "unrelated",
+          "category": "negative",
+          "query": "Please investigate galactic bakery payroll reconciliation in this repository.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 18.72,
+          "warm_median_ms": 22.87,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "partial-topic",
+          "category": "negative",
+          "query": "Please investigate Git worktree payroll reconciliation in this repository.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 23.54,
+          "warm_median_ms": 23.99,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "multi-topic",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping and galactic bakery payroll reconciliation.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 87.84,
+          "warm_median_ms": 103.12,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "japanese-partial",
+          "category": "negative",
+          "query": "Cloudflareのデプロイと給与計算について調査してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 57.4,
+          "warm_median_ms": 50.46,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "unknown-identifier",
+          "category": "negative",
+          "query": "Please investigate SQLite diagnostics database lock ErrorXYZ732.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 269,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 35.29,
+          "warm_median_ms": 23.07,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "tenant-boundary",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 270,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 23.3,
+          "warm_median_ms": 22.79,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "project-boundary",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 267,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 22.31,
+          "warm_median_ms": 29.99,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "conflict",
+          "category": "negative",
+          "query": "Please investigate SQLite diagnostics and database lock errors in this repository.",
+          "expected": [],
+          "retrieved": [
+            "sqlite"
+          ],
+          "search_recall_at_3": null,
+          "search_precision_at_3": 0,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "conflicting_evidence"
+          ],
+          "first_request_ms": 24.4,
+          "warm_median_ms": 48.65,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "permissions",
+          "category": "negative",
+          "query": "Please investigate Git worktree workspace mapping in this repository and explain what to check.",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 272,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 17.34,
+          "warm_median_ms": 21.06,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "suppressed",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 268,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 22.19,
+          "warm_median_ms": 39.32,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "future",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 32.55,
+          "warm_median_ms": 17.31,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "invalid",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [],
+          "search_recall_at_3": null,
+          "search_precision_at_3": null,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 266,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 13.59,
+          "warm_median_ms": 12.93,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        },
+        {
+          "id": "expired",
+          "category": "negative",
+          "query": "Git worktreeのworkspace mappingについて、このプロジェクトで調査して説明してください。",
+          "expected": [],
+          "retrieved": [
+            "workspace-1",
+            "workspace-0"
+          ],
+          "search_recall_at_3": null,
+          "search_precision_at_3": 0,
+          "reciprocal_rank_at_3": null,
+          "returned": [],
+          "response_tokens": 271,
+          "abstained": true,
+          "missing_evidence": [
+            "no_relevant_evidence"
+          ],
+          "first_request_ms": 15.9,
+          "warm_median_ms": 16.12,
+          "stable": true,
+          "within_budget": true,
+          "hit": false,
+          "recall_at_3": null,
+          "precision_at_3": null,
+          "passed": true
+        }
+      ],
+      "summary": {
+        "positive_cases": 15,
+        "hits_at_3": 10,
+        "search_hits_at_3": 12,
+        "macro_search_recall_at_3": 0.8,
+        "mean_reciprocal_rank_at_3": 0.8,
+        "search_returned_precision": 1,
+        "macro_recall_at_3": 0.6666666666666666,
+        "returned_precision": 1,
+        "negative_cases": 13,
+        "negative_abstentions": 13,
+        "false_positive_cases": 0,
+        "original_full_hits": 0,
+        "natural_hits": 6,
+        "all_stable": true,
+        "all_within_budget": true,
+        "warm_median_ms": 27.37
+      }
+    }
+  }
+}

@@ -1,0 +1,275 @@
+{
+  "schema": "memory-efficiency-component-replay/v1",
+  "generated_at": "2026-10-02T17:41:48.108Z",
+  "scope": "synthetic local component replay; no provider calls; same fixtures, budgets, and repetitions",
+  "token_basis": "o200k_base over complete serialized MCP text",
+  "repetitions": 5,
+  "actual_task_time": null,
+  "actual_provider_cost": null,
+  "user_bill_savings": null,
+  "variants": {
+    "baseline": {
+      "source_sha256": {
+        "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "11a382745b8774234af44f41b1678c0959a26db0e41de90fddd383ac0568b0ab",
+        "packages/orgbrain-cli/src/local-mcp.mjs": "5bed3da4504b01291c5e8fb753421c3b28a7ca7efe5692c1f105c33b86ed67e4",
+        "packages/shared/src/memory-capture-v2-runtime.mjs": "85198f47a2402b34e3904a14d2ae27263a42a00b65a2c08d39bb2baa732edb30",
+        "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "513f4fa92f943b510fd42d0f6b91b578e20b9047d0d662c8cbb2f23b9e054b3c"
+      },
+      "captures": [
+        {
+          "id": "late_complete_lesson",
+          "accepted": 1,
+          "review": 2,
+          "passed": true
+        },
+        {
+          "id": "early_complete_lesson",
+          "accepted": 1,
+          "review": 2,
+          "passed": true
+        },
+        {
+          "id": "transient_completion",
+          "accepted": 0,
+          "review": 0,
+          "passed": true
+        },
+        {
+          "id": "unsupported_decision",
+          "accepted": 0,
+          "review": 1,
+          "passed": true
+        },
+        {
+          "id": "unresolved_gap",
+          "accepted": 0,
+          "review": 1,
+          "passed": true
+        }
+      ],
+      "retrievals": [
+        {
+          "id": "sqlite",
+          "tokens": 601,
+          "first_request_ms": 634.71,
+          "warm_median_ms": 15.03,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 601
+        },
+        {
+          "id": "japanese_conditions",
+          "tokens": 652,
+          "first_request_ms": 32.68,
+          "warm_median_ms": 35.54,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 661
+        },
+        {
+          "id": "duplicate_lessons",
+          "tokens": 604,
+          "first_request_ms": 23.04,
+          "warm_median_ms": 18.09,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 604
+        },
+        {
+          "id": "oversized_first",
+          "tokens": 608,
+          "first_request_ms": 24.98,
+          "warm_median_ms": 23.89,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 603
+        },
+        {
+          "id": "irrelevant",
+          "tokens": 268,
+          "first_request_ms": 10.78,
+          "warm_median_ms": 9.78,
+          "returned": 0,
+          "abstained": true,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 264
+        },
+        {
+          "id": "conflicting",
+          "tokens": 269,
+          "first_request_ms": 11.36,
+          "warm_median_ms": 11.31,
+          "returned": 0,
+          "abstained": true,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 268
+        }
+      ],
+      "summary": {
+        "capture_cases_passed": 5,
+        "capture_cases": 5,
+        "retrieval_cases_passed": 6,
+        "retrieval_cases": 6,
+        "total_response_tokens": 3002,
+        "responses_within_budget": 6,
+        "warm_median_ms": 18.09
+      }
+    },
+    "candidate": {
+      "source_sha256": {
+        "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "f1a9e2ac94bf94b9e9926d7669ec697e7409874cf2c07ac67d3fc95c18f42b5b",
+        "packages/orgbrain-cli/src/local-mcp.mjs": "5bed3da4504b01291c5e8fb753421c3b28a7ca7efe5692c1f105c33b86ed67e4",
+        "packages/shared/src/memory-capture-v2-runtime.mjs": "a11d7723e243ef338bf048d4c945b9cb23bf356fdc6e05e970b616b5e9a54732",
+        "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "513f4fa92f943b510fd42d0f6b91b578e20b9047d0d662c8cbb2f23b9e054b3c"
+      },
+      "captures": [
+        {
+          "id": "late_complete_lesson",
+          "accepted": 1,
+          "review": 2,
+          "passed": true
+        },
+        {
+          "id": "early_complete_lesson",
+          "accepted": 1,
+          "review": 2,
+          "passed": true
+        },
+        {
+          "id": "transient_completion",
+          "accepted": 0,
+          "review": 0,
+          "passed": true
+        },
+        {
+          "id": "unsupported_decision",
+          "accepted": 0,
+          "review": 1,
+          "passed": true
+        },
+        {
+          "id": "unresolved_gap",
+          "accepted": 0,
+          "review": 1,
+          "passed": true
+        }
+      ],
+      "retrievals": [
+        {
+          "id": "sqlite",
+          "tokens": 619,
+          "first_request_ms": 26.14,
+          "warm_median_ms": 15.06,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 617
+        },
+        {
+          "id": "japanese_conditions",
+          "tokens": 661,
+          "first_request_ms": 29.78,
+          "warm_median_ms": 34.95,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 666
+        },
+        {
+          "id": "duplicate_lessons",
+          "tokens": 610,
+          "first_request_ms": 27.03,
+          "warm_median_ms": 18.33,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 617
+        },
+        {
+          "id": "oversized_first",
+          "tokens": 607,
+          "first_request_ms": 28.33,
+          "warm_median_ms": 27.93,
+          "returned": 1,
+          "abstained": false,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 607
+        },
+        {
+          "id": "irrelevant",
+          "tokens": 268,
+          "first_request_ms": 11.12,
+          "warm_median_ms": 12.76,
+          "returned": 0,
+          "abstained": true,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 266
+        },
+        {
+          "id": "conflicting",
+          "tokens": 268,
+          "first_request_ms": 12.47,
+          "warm_median_ms": 13.49,
+          "returned": 0,
+          "abstained": true,
+          "required_context_preserved": true,
+          "within_budget": true,
+          "estimate_matches_actual": true,
+          "passed": true,
+          "reported_estimate": 269
+        }
+      ],
+      "summary": {
+        "capture_cases_passed": 5,
+        "capture_cases": 5,
+        "retrieval_cases_passed": 6,
+        "retrieval_cases": 6,
+        "total_response_tokens": 3033,
+        "responses_within_budget": 6,
+        "warm_median_ms": 18.33
+      }
+    }
+  },
+  "comparison": {
+    "response_token_reduction_pct": -1.03,
+    "component_latency_change_pct": 1.33,
+    "economic_qualification": "inconclusive: parent-model task outcomes, usage, paid tools, and billing not measured"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "schema": "memory-lesson-capture-replay/v1",
-  "generated_at": "2026-10-02T17:38:54.533Z",
+  "generated_at": "2026-10-02T17:41:36.524Z",
   "scope": "Synthetic same-fixture regression replay; direct shared extraction plus actual Stop adapter in disposable local stores.",
   "limits": [
     "Not held out; no live user histories or production rollout.",
@@ -360,7 +360,7 @@
       }
     },
     "candidate": {
-      "revision": "90b010d81eb39e24779cdf1a0673e5b62eb21a1a",
+      "revision": "3ba81d0221d2d59da7ca0e4b732f20aae966e27c",
       "source_sha256": {
         "packages/shared/src/memory-capture-v2-runtime.mjs": "a11d7723e243ef338bf048d4c945b9cb23bf356fdc6e05e970b616b5e9a54732",
         "packages/shared/src/memory-capture-profile-runtime.mjs": "58193f8eee169246b722aff2cf2ef71293fadee2a613aff03b2adc82582d2abe",
