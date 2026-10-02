@@ -115,3 +115,38 @@ usage and is not part of the network-free component replay.
 Published evidence replaces local absolute path prefixes with placeholders.
 Original raw artifacts and frozen sources are preserved in a verified local
 archive; see the [artifact notes](../artifacts/memory-efficiency/2026-09-23/README.md).
+
+## Atomic lesson support replay (2026-10-02)
+
+Run the network-free regression replay against an installed-dependencies checkout
+of baseline `0c34324`:
+
+```sh
+node scripts/memory-lesson-capture-evaluate.mjs \
+  --baseline-root /path/to/baseline-checkout \
+  --output artifacts/memory-efficiency/2026-10-02/lesson-capture-replay.json
+```
+
+The [recorded replay](../artifacts/memory-efficiency/2026-10-02/lesson-capture-replay.json)
+contains source and fixture hashes. The same 17 synthetic extraction cases pass
+7/17 before and 17/17 after. Seven expected atomic lessons retain all specified
+content, rationale, applicability, and evidence references after the change;
+none retained every specified field before. This is exact field preservation on
+regression fixtures, not a held-out precision/recall estimate. Bounded adjacent
+support is preserved; overlong rationale or conditions are review-only with an
+explicit truncation gap, rather than silently treated as complete.
+
+Nine actual Stop-adapter fixture replays use disposable Git workspaces and SQLite
+stores with network access replaced by a failing sentinel. Eligibility criteria
+pass 8/9 before and 9/9 after. The formerly invented failure confirmation falls
+from one to zero; fully observed success and failure each still produce one
+confirmation with the actual fixture outcome and complete reuse rule. The
+source-backed decision question also remains available. Missing/rejected/gapped
+or previous-turn outcome evidence does not produce success/failure confirmation.
+
+Rule-complete extraction, deterministically verified observations, confirmation
+eligibility, and saved memory are reported separately. Both variants save and
+activate zero memories and make zero network calls. No user answer or production
+outcome is fabricated, and this replay does not measure task success, task-time
+savings, model cost, or user billing. The 4 MiB/current-turn read, three-candidate
+cap, one-batch behavior, approval, and existing verification gates are unchanged.
