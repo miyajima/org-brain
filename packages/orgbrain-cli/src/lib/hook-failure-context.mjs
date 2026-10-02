@@ -19,6 +19,23 @@ function memoryEvidence(memory) {
     .map((item) => item.ref).filter(present);
 }
 
+function ordinaryMemoryLines(memory, failure) {
+  const content = text(memory.content);
+  const summary = text(memory.summary);
+  return [
+    failure ? "OrgBrain 未検証または情報不足の失敗教訓（参考。禁止事項として扱わない）"
+      : "OrgBrain local memory candidate (historical reference only):",
+    // A heading alone is not usable memory. Preserve the actual decision/fact,
+    // rationale and applicability as one entry; the caller omits the whole
+    // entry if it cannot fit rather than silently removing a limiting clause.
+    field("summary", (summary || content).slice(0, 320)),
+    ...(content && content !== summary ? [field("content", content)] :
+      content.length > 320 ? [field("content", content)] : []),
+    ...(present(memory.rationale) ? [field("理由の記録", memory.rationale)] : []),
+    ...(present(memory.reuse_rule) ? [field("再利用条件", memory.reuse_rule)] : [])
+  ];
+}
+
 function memoryCandidate(result) {
   const { memory } = result;
   const learning = memory.learning ?? {};
@@ -50,13 +67,7 @@ function memoryCandidate(result) {
     field("検証状態", memory.verification_state),
     ...(evidence.length ? [field("根拠", evidence)] : [])
   ] : [
-    failure ? "OrgBrain 未検証または情報不足の失敗教訓（参考。禁止事項として扱わない）"
-      : "OrgBrain local memory candidate (historical reference only):",
-    // Legacy summaries retain their existing bound. Conditions, when present,
-    // are always complete; packing omits the whole entry rather than clipping.
-    field("summary", text(memory.summary || memory.content).slice(0, 320)),
-    ...(failure && present(memory.rationale) ? [field("理由の記録", memory.rationale)] : []),
-    ...(present(memory.reuse_rule) ? [field("再利用条件", memory.reuse_rule)] : []),
+    ...ordinaryMemoryLines(memory, failure),
     ...(evidence.length ? [field("source_ref", evidence)] : [])
   ];
   return { text: lines.join("\n"), memory: result, failure, complete,
