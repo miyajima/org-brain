@@ -106,13 +106,21 @@ source hashes and exact check status.
   bypassed. Live Worker smoke is left to CI; in-process API integration passes
 - No UI changes: browser E2E was not run and its workflow stays manual-only
 
-The aggregate run reports 653 Node and 907 Vitest passes, including intentional
+The aggregate run reports 655 Node and 907 Vitest passes, including intentional
 repeated suites, plus two standard packaging skips. The separate packaged run
 covers the CLI skip; no live desktop-hook rollout or external wrapper is claimed.
 The baseline corpus test's hardcoded `/workspace` paths were made hermetic so an
 ambient parent Git repository cannot merge its two synthetic projects.
 
 CI status is reported separately on the draft PR for its exact final commit.
+The first PR run exposed the benchmark workflow's old Node 22.13 pin:
+[local-scale failed before retrieval](https://github.com/miyajima/org-brain/actions/runs/37045346782/job/110965284749)
+with `no such module: fts5`. The workflow now matches main CI's maintained Node
+22 and explicitly probes FTS5 before benchmarks. A two-test regression checks
+the runtime capability and workflow. Node's [build-flag change](https://github.com/nodejs/node/commit/ed9d2fd51a)
+was included in [22.16.0](https://nodejs.org/en/blog/release/v22.16.0/); the old
+22.13 package engine floor alone does not establish that capability.
+
 The external personal harness-router file is unavailable in this cloud checkout;
 repository bootstrap/compatibility fixtures pass and global harness files are
 unchanged.
@@ -133,7 +141,8 @@ compact-context negatives are not evidence of universal raw-search filtering.
 
 ## Reproduce
 
-Use Node 22.13+ (recorded run: 24.19.0) and pnpm 10.16.1. Install the frozen lockfile
+Use a current Node 22 LTS or 24 build with SQLite FTS5 (recorded: 24.19.0)
+and pnpm 10.16.1. Install the frozen lockfile
 in this checkout and a separate baseline worktree. No provider credentials are
 needed. Keep all database/output paths disposable and outside production stores.
 
