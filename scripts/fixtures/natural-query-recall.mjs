@@ -41,12 +41,15 @@ export const negativeCases = [
   { id: "tenant-boundary", query: positiveCases[6].query, tenant_id: "other" },
   { id: "project-boundary", query: positiveCases[6].query, project_id: "other" },
   { id: "conflict", query: positiveCases[14].query, isolated: "conflict" },
-  { id: "permissions", query: positiveCases[6].query, isolated: "permissions" }
+  { id: "permissions", query: positiveCases[6].query, isolated: "permissions" },
+  ...["suppressed", "future", "invalid", "expired"].map((state) => ({
+    id: state, query: positiveCases[9].query, isolated: state
+  }))
 ];
 
 export async function seedRecallFixture(store, isolated = null) {
   const selected = isolated === "conflict" ? memories.filter((m) => m.key === "sqlite")
-    : isolated === "permissions" ? memories.filter((m) => m.key.startsWith("workspace-")) : memories;
+    : isolated ? memories.filter((m) => m.key.startsWith("workspace-")) : memories;
   const ids = new Map();
   for (const memory of selected) {
     const { key, ...fields } = memory;
@@ -54,7 +57,11 @@ export async function seedRecallFixture(store, isolated = null) {
       kind: "pitfall", work_type: "implementation", source: "synthetic-query-fixture", external_key: key,
       confidence_score: 0.9, utility_score: 0.8,
       ...(isolated === "conflict" ? { conflicts: ["Procedure revoked pending investigation."] } : {}),
-      ...(isolated === "permissions" ? { permissions: [{ principal_type: "principal", principal_id: "owner", permissions: ["read"] }] } : {}) });
+      ...(isolated === "permissions" ? { permissions: [{ principal_type: "principal", principal_id: "owner", permissions: ["read"] }] } : {}),
+      ...(isolated === "suppressed" ? { lifecycle_state: "suppressed" } : {}),
+      ...(isolated === "future" ? { valid_from: Date.now() + 86_400_000 } : {}),
+      ...(isolated === "invalid" ? { valid_until: Date.now() - 86_400_000 } : {}),
+      ...(isolated === "expired" ? { expires_at: Date.now() - 86_400_000 } : {}) });
     ids.set(saved.memory_id, key);
   }
   return ids;
