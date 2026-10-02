@@ -2844,11 +2844,14 @@ function searchRetrievalUnitsV4(db, options) {
   const intent = analyzeRetrievalIntent(query);
   const ftsQueries = buildFtsQueryVariants(query);
   if (ftsQueries.length === 0) throw new Error("search requires a query");
-  // v3 supplies candidates, not final v4 scores. Applying the v4 threshold here
-  // drops lexical seeds before fusion; the unchanged threshold is checked below.
-  const base = searchRetrievalUnitsV3(db, { ...options, limit: 50, minimumTotalScore: null });
-  const exactFtsQuery = buildFtsQuery(query, "AND");
   const taskQuery = localTaskQueryPlan(query);
+  // Retain the existing v3 floor for partial/intent-only candidates, including
+  // low-floor hook searches. Only fully covered task subjects may survive until
+  // v4 fusion; they still have to meet the unchanged final threshold below.
+  const base = searchRetrievalUnitsV3(db, { ...options, limit: 50, minimumTotalScore: null })
+    .filter((entry) => minimumTotalScore === null || entry.score.total >= minimumTotalScore
+      || matchesLocalTaskQuery(entry.memory, taskQuery));
+  const exactFtsQuery = buildFtsQuery(query, "AND");
   const exactStatement = db.prepare(
       `SELECT m.*, m.id AS memory_id, bm25(memories_fts) AS raw_rank
        FROM memories_fts
