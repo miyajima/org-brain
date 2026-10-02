@@ -26,6 +26,10 @@ Fewer retrieved tokens are a component result, not proof that this target is met
 - Japanese mixed-script queries can miss SQLite FTS token boundaries. The exact
   match contribution is restored only when **all** subject terms occur in an
   already retrieved, bounded, scoped candidate. Partial matches do not receive it.
+  The later [natural-task query lane](MEMORY_NATURAL_QUERY_RECALL.md) segments
+  mixed-script words, removes explicit request scaffolding, and requires every
+  remaining subject group. Its paired synthetic replay reports search recall
+  separately from delivered context; full multi-clause recall remains unqualified.
 - Jev shadow/fallback decisions do not change evidence. Active protected evidence
   must fit completely or the response abstains. The implementation hash includes
   the new packing module, invalidating stale qualifications.
