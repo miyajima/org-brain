@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LocalMemoryStore } from '../packages/orgbrain-cli/src/lib/local-memory-store.mjs';
 import { buildCodexMemoryContext } from '../packages/orgbrain-cli/src/codex-memory-context.mjs';
+import { handleLocalMcpRequest } from '../packages/orgbrain-cli/src/local-mcp.mjs';
+import { collectMemoryUse, memoryUseTranscriptEvents } from '../packages/orgbrain-cli/src/lib/memory-use-collector.mjs';
 
 async function fixture(t) {
   const root=await mkdtemp(join(tmpdir(),'orgbrain-injection-quality-'));
@@ -99,4 +101,40 @@ test('ordinary body and rationale receive the same redaction as lesson fields',a
   assert.doesNotMatch(output,/operator@example\.com|reviewer@example\.com/);
   assert.match(output,/\[REDACTED_EMAIL\]/);
   assert.match(output,/original test/);
+});
+
+test('usable hook context reaches verified action bookkeeping without inventing a benefit',async t=>{
+  const f=await fixture(t);
+  await f.save('decision','Voice API timeout policy',{kind:'decision',
+    content:'Voice API non-idempotent requests must not be retried after an unknown timeout.',
+    rationale:'A timeout does not establish whether the request completed.',reuse_rule:'Only for non-idempotent Voice API requests.'});
+  const text=(await f.run('Voice API timeout policy',{usage_purpose:'test'})).hookSpecificOutput.additionalContext;
+  assert.match(text,/must not be retried/);
+  const delivery={payload:{type:'message',role:'developer',content:[{type:'text',text}]}};
+  const receipt=memoryUseTranscriptEvents([delivery]).injections[0];
+  assert.equal(receipt.items.length,1);
+  const scope={tenantId:'default',projectId:'p',taskId:receipt.task_id,turnId:'turn'};
+  await collectMemoryUse(f.store,{...scope,rows:[delivery]});
+  let report=await f.store.useHistory('report',{tenant_id:'default',project_id:'p'});
+  assert.equal(report.by_purpose.test.delivery_confirmed,1);
+  assert.equal(report.by_purpose.test.action_observed,0);
+  const observation={usage_id:receipt.usage_id,...receipt.items[0],task_id:receipt.task_id,project_id:'p',work_type:'other',
+    context:{task:'Verify safe timeout recovery',target:'Voice API',conditions:'non-idempotent request',constraints:'no retry'},
+    action_call_id:'call_check',outcome_call_id:'call_check'};
+  const response=await handleLocalMcpRequest(f.store,{method:'tools/call',params:{name:'orgbrain_memory_observe',arguments:{
+    tenant_id:'default',schema_version:2,lesson_type:'success',use_observation:observation}}});
+  assert.notEqual(response.isError,true);
+  const accepted=JSON.parse(response.content[0].text);
+  const rows=[delivery,
+    {payload:{type:'function_call',call_id:'call_check',name:'exec_command',arguments:JSON.stringify({cmd:'test synthetic-recovery'})}},
+    {payload:{type:'function_call_output',call_id:'call_check',output:JSON.stringify({exit_code:0})}},
+    {payload:{type:'function_call',call_id:'call_observe',name:'orgbrain_memory_observe',arguments:JSON.stringify({use_observation:observation})}},
+    {payload:{type:'function_call_output',call_id:'call_observe',output:JSON.stringify(accepted)}}];
+  assert.equal((await collectMemoryUse(f.store,{...scope,rows})).recorded,1);
+  report=await f.store.useHistory('report',{tenant_id:'default',project_id:'p'});
+  assert.equal(report.by_purpose.test.action_observed,1);
+  assert.equal(report.verified_positive_effects,0);
+  const db=f.store.open({readOnly:true});try{
+    assert.equal(db.prepare('SELECT count(*) n FROM memory_use_evaluations').get().n,0);
+  }finally{db.close();}
 });
