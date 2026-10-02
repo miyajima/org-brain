@@ -1,0 +1,92 @@
+{
+  "schema": "memory-value-local-validation/v1",
+  "baseline_revision": "0c34324b827012ea444e8180363dc4d884bd8ed4",
+  "candidate_source_revision": "82e9707881f5ac22a0bc16c81b9d1134c34479af",
+  "node": "24.19.0",
+  "pnpm": "10.16.1",
+  "checks": [
+    {
+      "command": "pnpm surface:check",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm contract:check",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm test",
+      "result": "passed"
+    },
+    {
+      "command": "ORGBRAIN_CONSOLE_RUNTIME=node pnpm typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "ORGBRAIN_CONSOLE_RUNTIME=node pnpm build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm build:standalone",
+      "result": "passed"
+    },
+    {
+      "command": "packaged CLI hook and strict MCP use integration",
+      "result": "passed: 12 tests; 1 external Python wrapper test unavailable"
+    },
+    {
+      "command": "pnpm test:dashboard-performance",
+      "result": "passed: both 100k gates"
+    },
+    {
+      "command": "default Cloudflare console typecheck/build",
+      "result": "blocked locally: uv_interface_addresses in restricted runtime; supported Node mode passed"
+    },
+    {
+      "command": "live local Cloudflare Worker API smoke",
+      "result": "not run locally: runtime socket/interface restriction; in-process API integration passed, CI checks it separately"
+    },
+    {
+      "command": "browser E2E",
+      "result": "not run: no UI changes; workflow remains manual-only"
+    }
+  ],
+  "aggregate_test_executions": {
+    "node_passed": 646,
+    "node_skipped": 2,
+    "vitest_passed": 907,
+    "note": "Counts are executions across existing repeated suites, not unique tests. Standard skips were packaged hook tests; separate packaged run resolves one, the external Python wrapper is not provided."
+  },
+  "source_sha256": {
+    "package.json": "bf54d77ab804304290d4d14b8f8e485ab8c69d7f52ffec8d3163205ba3c8ffac",
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "b0158edf1bb810a82ba7e87f92a6166c6608bb1f66ba1c61418e3abcf9fe27a3",
+    "packages/orgbrain-cli/src/lib/hook-failure-context.mjs": "ecab59712ea9629e27fbb7cbc7bf001815d782a78f4a7f4c71b48577683d3c43",
+    "packages/orgbrain-cli/src/lib/local-memory-judgment-binding.mjs": "d662769ff4b5e1722b07a7a7083571e22f4a656882ee2c88d24a4a97913599ec",
+    "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "f1a9e2ac94bf94b9e9926d7669ec697e7409874cf2c07ac67d3fc95c18f42b5b",
+    "packages/orgbrain-cli/src/lib/local-task-query.mjs": "a876af7bc6c94bdc8e978d3b8c6f9387e4ba11e63b1ae3f22aec8a15b9d1e6fd",
+    "packages/shared/src/memory-capture-v2-runtime.mjs": "a11d7723e243ef338bf048d4c945b9cb23bf356fdc6e05e970b616b5e9a54732",
+    "scripts/codex-memory-context.test.mjs": "71798d02aa7c64c358a7379478a67f363cc61e985cc1c2f0a6551a442c9573f2",
+    "scripts/fixtures/memory-lesson-capture.mjs": "c212d82ceca4cad9c610061a1cd18ec1371f74e889a97c460433e7e9a73fbb85",
+    "scripts/fixtures/memory-lesson-confirmation-replay.mjs": "eddb62a203b3d3d57dedc435c194c5d4301d22d38eac42be0760d92ca3ffdc4d",
+    "scripts/fixtures/natural-query-recall.mjs": "b09c00439009329b69b45ded46e74ab804e9e0176526bdf295f1c84c0b8d1c42",
+    "scripts/memory-injection-quality.test.mjs": "8f5308e11f805cbeb78f21fcd0cef20deaaaee32b4c044209af74351230cbea1",
+    "scripts/memory-learning-corpus.test.mjs": "d9cfb43b9ba5818d724a8d146ca4a09f1dff59bab233c3bd7739eff0cb39ce77",
+    "scripts/memory-lesson-capture-evaluate.mjs": "710415d3b59a56e06c8409764f7e3d80d97dd5c9ffe9bcf5ed15f3ce534490c5",
+    "scripts/memory-lesson-capture.test.mjs": "2a6431eecbee55b341a6edb52dc6c965f116f87c80444e4e3629c7b6e7a58f38",
+    "scripts/memory-lesson-confirmation.test.mjs": "3498e9489e0e4f6f2fb9067f1aa2c60dda42781f2c8f239aacc5fd3120e7f1b4",
+    "scripts/memory-value-context-evaluate.mjs": "d4d4945ccc8cf777f3a806df2c31a2ab3d0da36c26628cb46f1db0a85d46d10b",
+    "scripts/natural-query-recall-evaluate.mjs": "14587061e43487c1b88152c3a3ecff9ed25db754e140cd6402cdec9d356fdce1",
+    "scripts/natural-query-recall.test.mjs": "b9e9d78619e296cac43b4b74203bc4dd32a9aa1ef867658b5fbf12068ab168a7"
+  },
+  "ci": "Reported on draft PR for exact final commit; not inferred from local checks.",
+  "runtime_changes": {
+    "deployment": false,
+    "main_merge": false,
+    "production_memory": false,
+    "provider_inference": false,
+    "settings_enabled": false
+  }
+}
