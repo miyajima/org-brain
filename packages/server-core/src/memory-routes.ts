@@ -475,6 +475,8 @@ routes.post("/v1/memories/capture-rationale", async (c) => {
 routes.post("/v1/memories/confirm", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  const tenantId = ports.tenantFromBody(body);
+  await ports.guardMemoryConfirmation?.(c.env, tenantId, (body as { confirmation_token?: string }).confirmation_token, ports.getApiAuthContext(c), "write");
   const result = await ports.confirmProposedMemory(c.env, body, ports.getApiPrincipal(c));
   return ports.jsonOk(c, result);
 });
@@ -482,7 +484,39 @@ routes.post("/v1/memories/confirm", async (c) => {
 routes.post("/v1/memories/confirmation-status", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  await ports.guardMemoryConfirmation?.(c.env, ports.tenantFromBody(body), (body as { confirmation_token?: string }).confirmation_token, ports.getApiAuthContext(c), "read");
   return ports.jsonOk(c, await ports.getMemoryConfirmationStatus(c.env, body, ports.getApiPrincipal(c)));
+});
+
+routes.post("/v1/memories/confirmation-cancel", async (c) => {
+  if (!ports.cancelMemoryConfirmation) throw new HttpError(501,"unsupported_operation","This backend does not support cancellation");
+  const body = await c.req.json<Record<string, unknown>>();
+  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(body));
+  const auth = ports.getApiAuthContext(c);
+  await ports.guardMemoryConfirmation?.(c.env,tenantId,body.confirmation_token,auth,"write");
+  return ports.jsonOk(c,await ports.cancelMemoryConfirmation(c.env,tenantId,body,ports.getApiPrincipal(c),auth.defaultRole));
+});
+routes.post("/v1/memories/conversation-stage", async (c) => {
+  if (!ports.stageConversationMemories) throw new HttpError(501,"unsupported_operation","This backend does not support conversation lifecycle");
+  const body = await c.req.json<Record<string, unknown>>();
+  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(body));
+  const auth = ports.getApiAuthContext(c);
+  return ports.jsonOk(c,await ports.stageConversationMemories(c.env,tenantId,body.conversation,{
+    principal: ports.getApiPrincipal(c),fallbackRole: auth.defaultRole,allowedProjectId: auth.projectId,
+    execute: body.execute,expectedPlanHash: body.expected_plan_hash
+  }));
+});
+routes.post("/v1/memories/conversation-revise", async (c) => {
+  if (!ports.stageConversationMemories) throw new HttpError(501,"unsupported_operation","This backend does not support conversation lifecycle");
+  const body = await c.req.json<Record<string, unknown>>();
+  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(body));
+  const auth = ports.getApiAuthContext(c);
+  await ports.guardMemoryConfirmation?.(c.env,tenantId,body.confirmation_token,auth,"write");
+  return ports.jsonOk(c,await ports.stageConversationMemories(c.env,tenantId,body.conversation,{
+    principal: ports.getApiPrincipal(c),fallbackRole: auth.defaultRole,allowedProjectId: auth.projectId,
+    execute: body.execute,expectedPlanHash: body.expected_plan_hash,
+    revisionOf: { confirmationToken: body.confirmation_token,expectedCandidateHash: body.expected_candidate_hash,expectedRevision: body.expected_revision }
+  }));
 });
 
 routes.get("/v1/memory-reviews", async (c) => {

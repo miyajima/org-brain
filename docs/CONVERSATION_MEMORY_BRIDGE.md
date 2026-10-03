@@ -133,3 +133,11 @@ checkout has uncommitted behavior, a clean upstream build does not include it:
 reconcile in a separate worktree, validate both features, and label the combined
 artifact's base SHA and patch digest honestly. Never overwrite a dirty checkout
 or claim that a mixed build is byte-identical to upstream.
+## Cloud adapter
+
+Cloud now exposes the same bounded caller-supplied planner through
+`orgbrain_conversation_memories_stage`. Preview and exact-hash execution stage
+pending review proposals only; actual human answers still use the existing
+propose/confirm/status contract. The CLI's explicit `remote-mcp` backend uses
+existing OAuth and never falls back to local storage. See
+[Local / Cloud parity](CLOUD_MEMORY_PARITY.md) for limits and remaining differences.

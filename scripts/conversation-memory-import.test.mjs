@@ -32,6 +32,16 @@ async function call(store, name, input) {
 }
 const search = store => store.search({ tenant_id: 'fixture', project_id: 'call-test', query: 'staging identity contact', minimum_total_score: 0.065, limit: 3 });
 
+test('legacy local queue rejects typed task limits before any durable queue write', async () => env(async ({ store }) => {
+  const input=fixture();
+  Object.assign(input.candidates[0], {memory_type:'task_constraint',scope:{level:'task',project_id:input.project_id,task_key:'11111111-1111-4111-8111-111111111111',expires_at:'2026-10-04T09:00:00Z'},task_constraint:{decision_key:'fixture-ceiling',max_calls:3}});
+  const preview=await ingestConversationMemory(store,input);
+  assert.equal(preview.candidates[0].scope.task_key,input.candidates[0].scope.task_key);
+  await assert.rejects(ingestConversationMemory(store,input,{execute:true,expectedPlanHash:preview.plan_hash}),/typed_conversation_requires_cloud_backend/);
+  await store.init();const db=store.open({readOnly:true});
+  try {assert.equal(db.prepare('SELECT count(*) AS n FROM memories').get().n,0);}finally{db.close();}
+}));
+
 test('preview is deterministic and non-mutating; execution stages idempotent review-only records', async () => env(async ({ store }) => {
   const input = fixture(), plan = await ingestConversationMemory(store, input);
   assert.equal(plan.executed, false);

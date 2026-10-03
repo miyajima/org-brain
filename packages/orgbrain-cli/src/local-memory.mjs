@@ -57,7 +57,7 @@ Usage:
   orgbrain memory issues [--tenant-id <id>] [--project-id <id>]
   orgbrain memory aging-plan [--tenant-id <id>] [--project-id <id>]
   orgbrain memory restore-version <memory-id> --version <n>
-  orgbrain memory import conversation --input <file> [--expected-plan-hash <sha256> --execute]
+  orgbrain memory import conversation --input <file> [--backend local|remote-mcp] [--mcp-url <https-url>] [--expected-plan-hash <sha256> --execute]
   orgbrain memory propose|confirm|confirmation-status [json-payload]
   orgbrain memory context <query> --tenant-id <id> --project-id <id> --task-id <id> --principal-id <id> [--token-budget <n>]
   orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
@@ -969,6 +969,10 @@ async function main() {
     return;
   }
 
+  if (command === "memory" && action === "import" && rest[0] === "conversation" && args.get("--backend", "local") === "remote-mcp") {
+    await handleMemory(null, action, rest, args);
+    return;
+  }
   const store = new LocalMemoryStore(args.get("--db", process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB));
   if (command === "version") {
     emit({ ok: true, ...CLI_BUILD_INFO });
