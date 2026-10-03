@@ -172,8 +172,9 @@ export async function upsertTaskCommitment(env: Env, input: CommitmentInput, opt
   const existing = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM task_commitments
      WHERE tenant_id = ? AND task_key = ? AND decision_key = ? AND superseded_at IS NULL
+       AND ((project_id IS NULL AND ? IS NULL) OR project_id=?)
      ORDER BY version DESC LIMIT 1`
-  ).bind(tenantId, normalized.taskKey, normalized.decisionKey).first<Record<string, unknown>>();
+  ).bind(tenantId, normalized.taskKey, normalized.decisionKey, projectId, projectId).first<Record<string, unknown>>();
   const answerJson = JSON.stringify(normalized.answer);
   if (existing && existing.question_fingerprint === normalized.questionFingerprint && existing.answer_json === answerJson && (!existing.expires_at || Number(existing.expires_at) > now)) {
     return { created: false, changed: false, commitment: commitmentJson(existing) };

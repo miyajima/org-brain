@@ -27,6 +27,7 @@ import { fnv1a32 } from "./deterministic-sampling";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import { normalizeActorPrincipal, parseMemorySearchMode, parseOptionalBoolean, parseOptionalFiniteNumber, parseOptionalInteger, parseString } from "./memory-service-utils";
 import type { MemoryRow, MemorySearchRequest, PrincipalActorOptions } from "./memory-service-types";
+import { applyNaturalTaskSearch, isNaturalTaskQuestion, isResumeInstruction } from "./natural-task-search-service";
 
 function shadowSampleRate(raw: string | undefined): number {
   if (!raw?.trim()) return 1;
@@ -98,6 +99,9 @@ function parseSearchRequest(raw: unknown): {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
   const body = raw as MemorySearchRequest;
+  if (typeof body.q === "string" && body.q.length > 500 && isNaturalTaskQuestion(body.q)) {
+    throw new HttpError(400, "natural_query_too_large", "A natural task question must fit the query bound without dropping subjects");
+  }
   return {
     tenantId: body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default",
     projectId: parseOptionalString(body.project_id, "project_id", 128),
@@ -514,6 +518,17 @@ export async function searchMemories(
       });
       response={...response,results:ranked.results as typeof response.results,meta:{...response.meta,use_history:ranked.meta}};
     } else response={...response,results:response.results.slice(0,publicLimit)};
+    // Preserve explicit generation and decision/entity filter contracts. Apply the
+    // lexical task lane after use-history packing so delivery still covers every clause.
+    if (isResumeInstruction(request.q) || !selectedGeneration && !Object.values(parseSearchFilters(rawBody)).some(Boolean)) {
+      response = await applyNaturalTaskSearch(env, response, { principal: options.actorPrincipal ?? null,
+        taskContext: (rawBody as {task_context?: unknown}).task_context, taskId: request.taskId,
+        // v4 may normalize include_history in its response. Resume's explicit
+        // unsupported-filter gate must use the original request contract.
+        unsupportedContext: Boolean(request.includeHistory || selectedGeneration || Object.values(parseSearchFilters(rawBody)).some(Boolean)),
+        limit: publicLimit, at: request.at, readAccess: request.readAccess, workType: request.workType,
+        businessCategoryId: request.businessCategoryId, includeSuppressed: request.includeSuppressed });
+    }
     response = { ...response, results: await annotateMemorySearchIntegrity(env, request.tenantId, response.results) };
     response.meta={...response.meta,returned_count:response.results.length,top_result_ids:response.results.map(x=>x.id),top_result_ranks:response.results.map(x=>x.score)};
     if (options.recordUsage === false) return response;

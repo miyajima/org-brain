@@ -137,6 +137,8 @@ export type MemorySearchMeta = {
   history_result_count: number;
   top_result_ids: string[];
   top_result_ranks: Array<number | null>;
+  task_query?: { applied: true; basis: "lexical_relevance"; coverage: "covered" | "missing" | "uncertain";
+    candidate_count: number; requires_parent_review: true; subject_query?: string; context_task_key?: string; context_basis?: "caller_supplied" };
   retrieval?: {
     semantic: { available: boolean; provider: string | null };
     graph: { available: boolean; provider: string };

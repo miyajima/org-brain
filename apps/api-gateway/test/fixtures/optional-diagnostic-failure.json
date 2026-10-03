@@ -1,0 +1,38 @@
+{
+  "schema_version": "conversation-memory/v1",
+  "tenant_id": "fixture",
+  "project_id": "workflow-fixture",
+  "session_id": "synthetic-session",
+  "event_id": "synthetic-failure-lesson",
+  "occurred_at": "2026-10-03T09:00:00Z",
+  "producer": "manual",
+  "sources": [
+    {
+      "id": "source-intent",
+      "role": "user",
+      "ref": "fixture:remember-intent",
+      "text": "Please retain a reusable failure lesson from this synthetic Job workflow."
+    },
+    {
+      "id": "source-lesson",
+      "role": "assistant",
+      "ref": "repo:workflow-fixture/skills/job/SKILL.md",
+      "text": "Synthetic case: skill prerequisites were unchecked; optional project describe and queue diagnostics failed IAM. Preserve the mandatory Job safe read gate and use only the current authorized target."
+    }
+  ],
+  "candidates": [
+    {
+      "id": "workflow-lesson",
+      "kind": "pitfall",
+      "claim_type": "assistant_claim",
+      "conclusion": "Job skill prerequisites: read repo:workflow-fixture/skills/job/SKILL.md, then perform its mandatory safe read gate. Generic project describe and queue diagnostics are optional unless the skill requires them.",
+      "rationale": "A synthetic worker treated optional diagnostics as mandatory and stopped on IAM denial before reading the skill.",
+      "reuse_rule": "Next: use `fixture-jobctl status --job <current-job-id>` only after the skill read gate. Expect authorized current scope and supported version; stop on mismatch. On optional diagnostic denial, follow the skill workflow without expanding IAM. Refresh this playbook when the skill or tool version changes. This supplied command is unverified; no Job execution or call is authorized by this lesson.",
+      "source_ids": [
+        "source-intent",
+        "source-lesson"
+      ],
+      "work_type": "operations"
+    }
+  ]
+}
