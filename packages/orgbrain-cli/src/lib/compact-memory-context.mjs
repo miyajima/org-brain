@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { localTaskQueryPlan, coversLocalTaskQuery } from "./local-task-query.mjs";
 import { Tiktoken } from "js-tiktoken/lite";
 import ranks from "js-tiktoken/ranks/o200k_base";
 import { requiresMultipleEvidenceSources } from "../../../shared/src/evidence-disposition.mjs";
@@ -27,6 +28,7 @@ export function measureCompactMemoryContext(response) {
 export function buildCompactMemoryContext({ results, query, topK, tokenBudget, at, usageId,
   verificationSampled = false, judgment = null, protectedIds = [], contextSearch = null }) {
   const multiple = requiresMultipleEvidenceSources(query);
+  const taskQuery = localTaskQueryPlan(query);
   const conflicted = results.some(({ memory }) => memory.conflicts?.length)
     || (judgment?.applied && (judgment.decisions ?? []).some((item) => item.reason_codes?.includes("conflicting_evidence")));
   const selected = [];
@@ -97,6 +99,10 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
     seen.add(key);
   }
   let missing = conflicted ? ["conflicting_evidence"] : [];
+  if (!conflicted && selected.length && taskQuery?.clauses.length > 1
+    && !coversLocalTaskQuery(selected.map((item) => item.result.memory), taskQuery)) {
+    missing.push("incomplete_question_coverage");
+  }
   if (!conflicted && protectedIds.some((id) => !selected.some((item) => item.result.memory.id === id))) {
     missing.push("protected_context_budget_exhausted");
     budgetLimited = true;
