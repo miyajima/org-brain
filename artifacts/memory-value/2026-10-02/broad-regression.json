@@ -1,0 +1,137 @@
+{
+  "schema": "memory-value-broad-regression/v1",
+  "baseline_revision": "0c34324b827012ea444e8180363dc4d884bd8ed4",
+  "candidate_source_revision": "51a7a7e2f8062befa0ed53dbd07ac7edf5d91e49",
+  "scope": "Existing synthetic offline retrieval benchmarks. No model task completion, subscription cost, turn savings or real usage measured. Timings share a contended host and are not a causal speed comparison.",
+  "known_legacy_limit": "The full-context competitive adapter retains low-relevance same-project candidates; a conflict belonging to another fixture topic causes all personal-query abstentions in both variants. Compact MCP task-query replay is measured separately. Conflict gates and legacy full contract were not weakened.",
+  "variants": {
+    "baseline": {
+      "competitive": {
+        "fixture_tasks": 200,
+        "repetitions": 5,
+        "retrieval_hit_rate_pct": 50,
+        "top1_accuracy_pct": 50,
+        "personal_hit_rate_pct": 0,
+        "organization_hit_rate_pct": 100,
+        "permission_or_tenant_leaks": 0,
+        "failed_rows": 0,
+        "search_p50_ms": 21.24,
+        "search_p95_ms": 25.37
+      },
+      "scale": {
+        "benchmark": "orgbrain-local-scale-v1",
+        "generated_at": "2026-10-02T17:38:23.998Z",
+        "settings": {
+          "record_count": 100000,
+          "query_count": 200,
+          "search_mode": "hybrid_v4",
+          "legacy_v3_projection": false,
+          "embedding_provider": "local-sparse-feature-hash-v2-degraded",
+          "quality_embedding_contract": "pinned ONNX float16 BLOB",
+          "segment_candidate_limit": 24,
+          "parent_candidate_limit": 50,
+          "target_p95_ms": 500
+        },
+        "metrics": {
+          "seed_duration_ms": 2720.54,
+          "index_duration_ms": 59302.65,
+          "cold_search_latency_ms": 163.62,
+          "warm_search_latency_p50_ms": 187.06,
+          "warm_search_latency_p95_ms": 290.68,
+          "warm_search_latency_max_ms": 669.97,
+          "segment_count": 100000,
+          "memory_rss_bytes": 1337335808,
+          "memory_heap_used_bytes": 1039223984,
+          "retrieval_failures": 0,
+          "database_bytes": 1280090112
+        },
+        "verification": {
+          "ok": true,
+          "schema_version": 31,
+          "record_count": 100000,
+          "version_count": 100000,
+          "fts_count": 100000,
+          "embedding_count": 100000,
+          "embedding_provider": "local-sparse-feature-hash-v2",
+          "retrieval_unit_count": 0,
+          "retrieval_unit_fts_count": 0,
+          "retrieval_unit_embedding_count": 0,
+          "retrieval_unit_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "retrieval_unit_v4_count": 300600,
+          "retrieval_unit_v4_fts_count": 300600,
+          "retrieval_unit_v4_embedding_count": 300600,
+          "retrieval_unit_v4_digest": "129898a5798f668ed3a7f3ffb6a6c640282e000dda5868d8dda61f03ced5757c",
+          "content_digest": "76827a0c4295a1e21802efb6cc0de6c476410507a5a252ecce533759cab173c5",
+          "activity_event_count": 0,
+          "activity_content_count": 0,
+          "errors": []
+        },
+        "passed": true
+      }
+    },
+    "candidate": {
+      "competitive": {
+        "fixture_tasks": 200,
+        "repetitions": 5,
+        "retrieval_hit_rate_pct": 50,
+        "top1_accuracy_pct": 50,
+        "personal_hit_rate_pct": 0,
+        "organization_hit_rate_pct": 100,
+        "permission_or_tenant_leaks": 0,
+        "failed_rows": 0,
+        "search_p50_ms": 24.15,
+        "search_p95_ms": 32.73
+      },
+      "scale": {
+        "benchmark": "orgbrain-local-scale-v1",
+        "generated_at": "2026-10-02T18:02:30.223Z",
+        "settings": {
+          "record_count": 100000,
+          "query_count": 200,
+          "search_mode": "hybrid_v4",
+          "legacy_v3_projection": false,
+          "embedding_provider": "local-sparse-feature-hash-v2-degraded",
+          "quality_embedding_contract": "pinned ONNX float16 BLOB",
+          "segment_candidate_limit": 24,
+          "parent_candidate_limit": 50,
+          "target_p95_ms": 500
+        },
+        "metrics": {
+          "seed_duration_ms": 5958.76,
+          "index_duration_ms": 67180.97,
+          "cold_search_latency_ms": 174.15,
+          "warm_search_latency_p50_ms": 185.95,
+          "warm_search_latency_p95_ms": 244.41,
+          "warm_search_latency_max_ms": 311.67,
+          "segment_count": 100000,
+          "memory_rss_bytes": 1334353920,
+          "memory_heap_used_bytes": 1061945312,
+          "retrieval_failures": 0,
+          "database_bytes": 1280090112
+        },
+        "verification": {
+          "ok": true,
+          "schema_version": 31,
+          "record_count": 100000,
+          "version_count": 100000,
+          "fts_count": 100000,
+          "embedding_count": 100000,
+          "embedding_provider": "local-sparse-feature-hash-v2",
+          "retrieval_unit_count": 0,
+          "retrieval_unit_fts_count": 0,
+          "retrieval_unit_embedding_count": 0,
+          "retrieval_unit_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "retrieval_unit_v4_count": 300600,
+          "retrieval_unit_v4_fts_count": 300600,
+          "retrieval_unit_v4_embedding_count": 300600,
+          "retrieval_unit_v4_digest": "129898a5798f668ed3a7f3ffb6a6c640282e000dda5868d8dda61f03ced5757c",
+          "content_digest": "76827a0c4295a1e21802efb6cc0de6c476410507a5a252ecce533759cab173c5",
+          "activity_event_count": 0,
+          "activity_content_count": 0,
+          "errors": []
+        },
+        "passed": true
+      }
+    }
+  }
+}

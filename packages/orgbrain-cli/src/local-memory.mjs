@@ -57,6 +57,9 @@ Usage:
   orgbrain memory issues [--tenant-id <id>] [--project-id <id>]
   orgbrain memory aging-plan [--tenant-id <id>] [--project-id <id>]
   orgbrain memory restore-version <memory-id> --version <n>
+  orgbrain memory import conversation --input <file> [--expected-plan-hash <sha256> --execute]
+  orgbrain memory propose|confirm|confirmation-status [json-payload]
+  orgbrain memory context <query> --tenant-id <id> --project-id <id> --task-id <id> --principal-id <id> [--token-budget <n>]
   orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
   orgbrain memory import codex-sessions --plan <path> --expected-plan-hash <sha256> [--apply-report <path>] --execute
   orgbrain memory import codex-attempts --workspace <path> [--sessions-root <path>] [--output <path>]
@@ -343,6 +346,31 @@ async function writeOutput(path, text) {
 }
 
 async function handleMemory(store, action, rest, args) {
+  if (action === "import" && rest[0] === "conversation") {
+    const { runConversationImportCommand } = await import("./conversation-memory-import.mjs");
+    emit(await runConversationImportCommand({ store, args }));
+    return;
+  }
+  if (["propose", "confirm", "confirmation-status", "context"].includes(action)) {
+    const { handleLocalMcpRequest } = await import("./local-mcp.mjs");
+    const name = { propose: "orgbrain_memories_propose", confirm: "orgbrain_memories_confirm", "confirmation-status": "orgbrain_memories_confirmation_status", context: "orgbrain_context_enrich" }[action];
+    let payload;
+    if (action === "context") {
+      const tenant = args.get("--tenant-id"), project = args.get("--project-id"), task = args.get("--task-id"), principal = args.get("--principal-id");
+      if (!tenant || !project || !task || !principal || !rest.length) throw new Error("memory_context_requires_query_tenant_project_task_principal");
+      payload = { tenant_id: tenant, project_id: project, task_id: task, principal_id: principal, query: rest.join(" "), work_type: args.get("--work-type", "implementation"),
+        token_budget: Number(args.get("--token-budget", 1500)), top_k: Number(args.get("--limit", 3)), usage_purpose: "task" };
+    } else payload = await readStructuredPayload(args, rest);
+    const response = await handleLocalMcpRequest(store, { method: "tools/call", params: { name, arguments: payload } });
+    if (response.isError) throw new Error(response.content?.[0]?.text || "memory_review_failed");
+    const result = JSON.parse(response.content[0].text);
+    if (action !== "context") {
+      const { recordConversationReviewReceipt } = await import("./conversation-memory-import.mjs");
+      await recordConversationReviewReceipt(store, name, payload, result);
+    }
+    emit(result);
+    return;
+  }
   if (action === "import") {
     const { runCodexSessionImportCommand } = await import("./codex-session-import.mjs");
     emit(await runCodexSessionImportCommand({ store, args, rest }));
