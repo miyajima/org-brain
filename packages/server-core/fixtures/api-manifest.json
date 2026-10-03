@@ -1,7 +1,7 @@
 {
   "contract_version": "orgbrain-api-manifest/v1",
-  "oss_ref": "0e9a3cebe51f8cf6292e2cb9cbb09b3f1cf1f388",
-  "generated_at": "2026-09-24T09:29:51.000Z",
+  "oss_ref": "ccaa1dece4bae9209ad12ca9cfb3fdda6a05b2da",
+  "generated_at": "2026-10-03T17:55:47.000Z",
   "routes": [
     {
       "method": "GET",
@@ -1239,10 +1239,43 @@
     },
     {
       "method": "POST",
+      "path": "/v1/memories/confirmation-cancel",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesConfirmationCancelRequest",
+      "response_schema": "PostV1MemoriesConfirmationCancelResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
       "path": "/v1/memories/confirmation-status",
       "permission": "read",
       "request_schema": "PostV1MemoriesConfirmationStatusRequest",
       "response_schema": "PostV1MemoriesConfirmationStatusResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/conversation-revise",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesConversationReviseRequest",
+      "response_schema": "PostV1MemoriesConversationReviseResponse",
+      "success_statuses": [
+        200
+      ],
+      "idempotent": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memories/conversation-stage",
+      "permission": "write",
+      "request_schema": "PostV1MemoriesConversationStageRequest",
+      "response_schema": "PostV1MemoriesConversationStageResponse",
       "success_statuses": [
         200
       ],

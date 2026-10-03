@@ -67,7 +67,7 @@ class FakeStatement {
       const row = this.db.businessCategories.find((item) => item.tenant_id === this.args[0] && item.id === this.args[1]);
       return (row ?? null) as T | null;
     }
-    if (this.sql.startsWith("SELECT id, tenant_id, source, payload_json, expires_at, consumed_at FROM memory_confirmations")) {
+    if (this.sql.startsWith("SELECT * FROM memory_confirmations")) {
       const row = this.db.memoryConfirmations.find((item) => item.tenant_id === this.args[0] && item.id === this.args[1]);
       return (row ?? null) as T | null;
     }
@@ -161,9 +161,18 @@ class FakeStatement {
         payload_json: String(this.args[3]),
         created_at: Number(this.args[4]),
         expires_at: Number(this.args[5]),
-        consumed_at: null
+        consumed_at: null, revision:1,candidate_hash:this.args[6] ?? null,managed_review:this.args[7] ?? 0,lifecycle_state:"pending"
       });
       return;
+    }
+    if (this.sql.startsWith("UPDATE memory_confirmations SET lifecycle_state='processing'")) {
+      const row=this.db.memoryConfirmations.find(item=>item.tenant_id===this.args[1]&&item.id===this.args[2]);
+      if(!row||row.lifecycle_state!=="pending")return {meta:{changes:0}};
+      row.lifecycle_state="processing";return {meta:{changes:1}};
+    }
+    if (this.sql.startsWith("UPDATE memory_confirmations SET lifecycle_state=?")) {
+      const row=this.db.memoryConfirmations.find(item=>item.tenant_id===this.args[2]&&item.id===this.args[3]);
+      if(row)row.lifecycle_state=this.args[0];return {meta:{changes:row?1:0}};
     }
     if (this.sql.startsWith("UPDATE memory_confirmations SET consumed_at = ?")) {
       const row = this.db.memoryConfirmations.find((item) => item.tenant_id === this.args[1] && item.id === this.args[2]);
@@ -333,9 +342,9 @@ class FakeD1 {
   }
 
   async batch(statements: FakeStatement[]) {
-    for (const statement of statements) {
-      await statement.run();
-    }
+    const results=[];
+    for (const statement of statements) results.push(await statement.run() ?? {meta:{changes:1}});
+    return results;
   }
 }
 
