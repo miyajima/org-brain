@@ -218,3 +218,133 @@ test('UUID tenant and project scopes survive the queue without scope redaction',
   const unsafeId = fixture(); unsafeId.session_id = '1762000000.123456';
   assert.throws(() => planConversationMemory(unsafeId), /invalid_session_id/);
 }));
+
+for (const date of ['2026-10-03', '2024-02-29', '2026-10-03T09:30:00.000Z']) {
+  test(`calendar-valid ISO date ${date} survives bridge, proposal, fixture confirmation and CLI restarts`, async () => env(async ({ dir, store }) => {
+    const input = fixture();
+    input.sources[0].text = `Synthetic staging state was selected on ${date}; revalidate the fixture before reuse.`;
+    Object.assign(input.candidates[0], {
+      conclusion: `Synthetic staging state was selected on ${date}.`,
+      rationale: `The fixture owner reviewed the staging state on ${date}.`,
+      reuse_rule: `Only for synthetic staging after ${date}; revalidate the current fixture.`
+    });
+    const inputFile = join(dir, 'dated-event.json');
+    await writeFile(inputFile, JSON.stringify(input));
+    const run = (args, payload) => JSON.parse(execFileSync(process.execPath, ['--no-warnings', cli, ...args, '--db', store.dbPath], {
+      input: payload ? JSON.stringify(payload) : '', encoding: 'utf8',
+      env: { ...process.env, ORGBRAIN_ENABLE_CLOUD_MEMORY: 'false', ORGBRAIN_LOCAL_EMBEDDING_PROVIDER: 'off', ORGBRAIN_MEMORY_JUDGMENT: 'off' }
+    }));
+    const plan = run(['memory', 'import', 'conversation', '--input', inputFile]);
+    const staged = run(['memory', 'import', 'conversation', '--input', inputFile, '--expected-plan-hash', plan.plan_hash, '--execute']);
+    assert.equal(staged.pending_created, 1);
+    const contextArgs = ['memory', 'context', 'synthetic staging state', '--tenant-id', 'fixture', '--project-id', 'call-test', '--task-id', 'dated-fixture-task', '--principal-id', 'reader'];
+    assert.equal(run(contextArgs).results.length, 0);
+    const proposal = run(['memory', 'propose'], staged.candidates[0].proposal);
+    assert.equal(proposal.proposed_rationale.conclusion, input.candidates[0].conclusion);
+    assert.equal(proposal.proposed_rationale.reason_summary, input.candidates[0].rationale);
+    assert.ok(proposal.proposed_memory.content.includes(input.candidates[0].reuse_rule));
+    // Explicitly synthetic unit-test review input, never approval of a live candidate.
+    const saved = run(['memory', 'confirm'], { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token, approved: true, review_answer: '1' });
+    const status = run(['memory', 'confirmation-status'], { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token });
+    assert.equal(status.status, 'completed');
+    assert.equal(status.memory_id, saved.memory_id);
+    const context = run(contextArgs);
+    assert.equal(context.results[0].memory.id, saved.memory_id);
+    assert.equal(context.meta.usage_items[0].source_version, saved.memory_version);
+    assert.equal(context.evidence_bundle.evidence[0].reuse_rule, input.candidates[0].reuse_rule);
+  }));
+}
+
+test('dated fixture corrections preserve supplied review text, rationale and reuse rule after restart', async () => env(async ({ store }) => {
+  const plan = planConversationMemory(fixture());
+  await ingestConversationMemory(store, fixture(), { execute: true, expectedPlanHash: plan.plan_hash });
+  const proposal = await call(store, 'orgbrain_memories_propose', plan.candidates[0].proposal);
+  const correction = {
+    tenant_id: 'fixture', confirmation_token: proposal.confirmation_token, approved: true,
+    review_answer: '修正: Use the synthetic staging state reviewed on 2024-02-29.',
+    corrected_content: 'Synthetic staging state was reviewed on 2024-02-29.',
+    corrected_summary: 'Synthetic staging state reviewed on 2024-02-29.',
+    conclusion: 'Synthetic staging state reviewed on 2024-02-29.',
+    reason_summary: 'The synthetic fixture review occurred on 2024-02-29.',
+    reuse_rule: 'Only for synthetic staging after 2024-02-29; revalidate before reuse.'
+  };
+  const saved = await call(store, 'orgbrain_memories_confirm', correction);
+  assert.equal(saved.saved, true);
+  assert.equal(saved.confirmation_state, 'user_corrected');
+  const restarted = new LocalMemoryStore(store.dbPath, { env: {}, denseEmbeddingProvider: null });
+  const status = await call(restarted, 'orgbrain_memories_confirmation_status', { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token });
+  assert.equal(status.status, 'completed');
+  assert.equal(status.review_answer, correction.review_answer);
+  const memory = await restarted.get('fixture', saved.memory_id);
+  assert.equal(memory.content, correction.corrected_content);
+  assert.equal(memory.summary, correction.conclusion);
+  assert.equal(memory.rationale, correction.reason_summary);
+  assert.equal(memory.reuse_rule, correction.reuse_rule);
+}));
+
+const unsafeDatedProse = [
+  '2026-02-30', '2026-13-01', '2026-02-29', '1900-02-29', '+2026-10-03',
+  '2026-10-03-12', '2026-10-03 12', '+1 (415) 555-0199', 'tel:2026-10-03', 'mailto:2026-10-03',
+  '2026-10-03@example.invalid', 'Bearer 2026-10-03', 'token=2026-10-03', 'password=2026-10-03',
+  'ｔｏｋｅｎ＝２０２６－１０－０３', '＋１（４１５）５５５－０１９９',
+  '２０２６－１０－０３＠ｅｘａｍｐｌｅ．ｉｎｖａｌｉｄ'
+];
+
+test('date exceptions do not admit invalid dates, phones or original and NFKC secrets in any proposal prose field', async () => env(async ({ store }) => {
+  const plan = planConversationMemory(fixture());
+  for (const value of unsafeDatedProse) {
+    for (const [container, key] of [['item', 'content'], ['item', 'summary'], ['review_context', 'conclusion'], ['review_context', 'reason_summary'], ['review_context', 'reuse_rule']]) {
+      const proposal = structuredClone(plan.candidates[0].proposal);
+      proposal[container][key] = `Synthetic fixture value: ${value}`;
+      await assert.rejects(call(store, 'orgbrain_memories_propose', proposal), /contains_sensitive_data/, `${container}.${key}: ${value}`);
+    }
+  }
+}));
+
+test('date exceptions do not admit invalid dates, phones or secrets in fixture confirmation corrections', async () => env(async ({ store }) => {
+  const plan = planConversationMemory(fixture());
+  const proposal = await call(store, 'orgbrain_memories_propose', plan.candidates[0].proposal);
+  for (const value of unsafeDatedProse) {
+    for (const key of ['review_answer', 'corrected_content', 'corrected_summary', 'conclusion', 'reason_summary', 'reuse_rule']) {
+      const correction = { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token, approved: true,
+        review_answer: '修正: Synthetic staging correction.', corrected_content: 'Synthetic staging correction.' };
+      correction[key] = `${key === 'review_answer' ? '修正: ' : ''}Synthetic fixture value: ${value}`;
+      await assert.rejects(call(store, 'orgbrain_memories_confirm', correction), /contains_sensitive_data/, `${key}: ${value}`);
+    }
+  }
+  const status = await call(store, 'orgbrain_memories_confirmation_status', { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token });
+  assert.equal(status.status, 'pending');
+  assert.equal((await search(store)).length, 0);
+}));
+
+test('prose date allowance does not widen source-reference or metadata date exceptions', async () => env(async ({ store }) => {
+  const plan = planConversationMemory(fixture());
+  for (const ref of ['2026-10-03', 'tel:2026-10-03', 'mailto:2026-10-03',
+    'http://example.invalid/docs/2026-10-03', 'https://example.invalid/docs/2026-02-30',
+    'https://example.invalid/docs/2026-13-01', 'https://example.invalid/docs/2026-10-03?day=2026-10-03',
+    'https://example.invalid/docs/2026-10-03#2026-10-03', 'https://2026-10-03.example.invalid/docs']) {
+    const proposal = structuredClone(plan.candidates[0].proposal);
+    proposal.review_context.source_references[0].ref = ref;
+    await assert.rejects(call(store, 'orgbrain_memories_propose', proposal), /contains_sensitive_data/, ref);
+  }
+  const metadata = structuredClone(plan.candidates[0].proposal);
+  metadata.review_context.source_references[0].span_id = '2026-10-03';
+  await assert.rejects(call(store, 'orgbrain_memories_propose', metadata), /contains_sensitive_data/);
+}));
+
+test('prose limits cannot truncate a longer phone candidate into a calendar-valid date', async () => env(async ({ store }) => {
+  const proposal = planConversationMemory(fixture()).candidates[0].proposal;
+  proposal.item.content = `${'x'.repeat(19_990)}2026-10-03-12`;
+  await assert.rejects(call(store, 'orgbrain_memories_propose', proposal), /item.content_too_large/);
+  const pending = await call(store, 'orgbrain_memories_propose', planConversationMemory(fixture()).candidates[0].proposal);
+  for (const [field, limit] of [['conclusion', 240], ['reason_summary', 500]]) {
+    await assert.rejects(call(store, 'orgbrain_memories_confirm', {
+      tenant_id: 'fixture', confirmation_token: pending.confirmation_token, approved: true,
+      review_answer: '修正: Synthetic fixture correction.', corrected_content: 'Synthetic fixture correction.',
+      [field]: `${'x'.repeat(limit - 10)}2026-10-03-12`
+    }), /contains_sensitive_data/, field);
+  }
+  assert.equal((await call(store, 'orgbrain_memories_confirmation_status', {
+    tenant_id: 'fixture', confirmation_token: pending.confirmation_token
+  })).status, 'pending');
+}));
