@@ -1,7 +1,7 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { createLocalContextSearchJudge, searchContextWithFollowups } from "./context-search-followups.mjs";
-import { localTaskQueryPlan, matchesLocalTaskQuery } from "./local-task-query.mjs";
+import { localTaskQueryPlan, matchesLocalTaskQuery, coversLocalTaskQuery, matchesLocalTaskQueryLiterals } from "./local-task-query.mjs";
 import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
 import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-runtime.mjs";
 import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
@@ -2844,13 +2844,16 @@ function searchRetrievalUnitsV4(db, options) {
   const intent = analyzeRetrievalIntent(query);
   const ftsQueries = buildFtsQueryVariants(query);
   if (ftsQueries.length === 0) throw new Error("search requires a query");
-  const taskQuery = localTaskQueryPlan(query);
-  // Retain the existing v3 floor for partial/intent-only candidates, including
-  // low-floor hook searches. Only fully covered task subjects may survive until
-  // v4 fusion; they still have to meet the unchanged final threshold below.
-  const base = searchRetrievalUnitsV3(db, { ...options, limit: 50, minimumTotalScore: null })
-    .filter((entry) => minimumTotalScore === null || entry.score.total >= minimumTotalScore
-      || matchesLocalTaskQuery(entry.memory, taskQuery));
+  const literalQuery = localTaskQueryPlan(query);
+  let taskQuery = literalQuery;
+  const taskEligible = (memory) => canReadMemory(memory, principalId)
+    && (includeSuppressed || memory.lifecycle_state !== "suppressed")
+    && (memory.valid_from == null || memory.valid_from <= at)
+    && (memory.valid_until == null || memory.valid_until > at)
+    && (memory.expires_at == null || memory.expires_at > at)
+    && (options.workType == null || memory.work_type === options.workType || memory.work_type === "other")
+    && (options.businessCategoryId == null || memory.business_category_id === options.businessCategoryId);
+  const baseCandidates = searchRetrievalUnitsV3(db, { ...options, limit: 50, minimumTotalScore: null });
   const exactFtsQuery = buildFtsQuery(query, "AND");
   const exactStatement = db.prepare(
       `SELECT m.*, m.id AS memory_id, bm25(memories_fts) AS raw_rank
@@ -2879,12 +2882,27 @@ function searchRetrievalUnitsV4(db, options) {
     : [];
   const exactRows = loadExactRows(exactFtsQuery);
   const exactIds = new Set(exactRows.map((row) => row.memory_id));
-  // Separate all-subject lane: no broad OR, no relaxed score floor or evidence gate.
-  const taskRows = taskQuery ? loadExactRows(taskQuery.fts).filter((row) => {
+  // Separate all-subject lane. Explicit repeated questions may use distinct
+  // records, but every question must have a fully matching accessible candidate.
+  let taskRows = taskQuery ? loadExactRows(taskQuery.fts).filter((row) => {
     if (exactIds.has(row.memory_id)) return false;
     const memory = memoryFromRow(row);
-    return canReadMemory(memory, principalId) && matchesLocalTaskQuery(memory, taskQuery);
+    return taskEligible(memory) && matchesLocalTaskQuery(memory, taskQuery);
   }) : [];
+  if (taskQuery?.clauses.length > 1) {
+    const eligible = (memory) => taskEligible(memory) && !memory.conflicts?.length;
+    const candidates = [...baseCandidates.map((entry) => entry.memory),
+      ...taskRows.map(memoryFromRow), ...exactRows.map(memoryFromRow)].filter(eligible);
+    if (!coversLocalTaskQuery(candidates, taskQuery)) {
+      taskQuery = null;
+      taskRows = [];
+    }
+  }
+  // Partial/intent-only candidates retain the v3 floor, even in low-floor hooks.
+  // Qualified task subjects still must meet the unchanged final score threshold.
+  const base = baseCandidates.filter((entry) => minimumTotalScore === null
+    || entry.score.total >= minimumTotalScore
+    || (taskEligible(entry.memory) && matchesLocalTaskQuery(entry.memory, taskQuery)));
   const taskIds = new Set(taskRows.map((row) => row.memory_id));
   const channel = (unitTypes, channelLimit = 50, queryVariants = ftsQueries) => {
     const placeholders = unitTypes.map(() => "?").join(",");
@@ -3096,9 +3114,10 @@ function searchRetrievalUnitsV4(db, options) {
     ? retrievalSubjectQueryTokens(query).slice(0, 16) : [];
   const ranked = candidateIds.flatMap((id, index) => {
     const entry = baseById.get(id);
-    if (!entry) return [];
+    if (!entry || !matchesLocalTaskQueryLiterals(entry.memory, literalQuery)) return [];
     let total = scores.get(id) ?? 0;
-    const taskMatch = !exactIds.has(id) && (taskIds.has(id) || matchesLocalTaskQuery(entry.memory, taskQuery));
+    const taskMatch = !exactIds.has(id) && taskEligible(entry.memory)
+      && (taskIds.has(id) || matchesLocalTaskQuery(entry.memory, taskQuery));
     if (!exactIds.has(id) && taskMatch) {
       total += 3 / (60 + index + 1);
     } else if (cjkTerms.length >= 2 && !exactIds.has(id)) {
@@ -6247,6 +6266,8 @@ export class LocalMemoryStore {
           query,
           limit: safeLimit,
           minimumTotalScore: parsedMinimumTotalScore,
+          workType,
+          businessCategoryId,
           includeSuppressed: include_suppressed,
           principalId,
           at,

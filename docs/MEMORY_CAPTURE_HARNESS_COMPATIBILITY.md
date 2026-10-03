@@ -288,3 +288,12 @@ validation is mandatory. Skill preview/install likewise accepts only verified
 or explicitly user-confirmed memory and never overwrites an existing file by
 default. See [Agent activity v1](AGENT_ACTIVITY_V1.md) for the event contract,
 CLI, connector inventory, security fixtures and rollout gates.
+
+## Explicit conversation-event adapter
+
+The separately invoked local `conversation-memory/v1` importer stages bounded
+caller-supplied source summaries for review. It cannot read dot/task-platform
+conversation events and installing Stop hooks does not enable that access.
+Pending candidates are not active memories. Existing propose/actual-human-answer/
+confirm gates remain in force, and supplied worker/tool excerpts do not become
+verified execution evidence. See [explicit bridge](CONVERSATION_MEMORY_BRIDGE.md).

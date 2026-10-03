@@ -382,11 +382,12 @@ orgbrain memory import codex-sessions \
 ```
 
 The importer scans only user-owned sessions from the same Git repository,
-including its worktrees. Deterministically verified `success`, `decision`, and
-`failure` observations are eligible for active memory in the explicit
-compatibility command; the autonomous controller adds its signed AI-consensus
-proof before allowing the same active write. Incomplete durable observations
-and strict final-answer fallback candidates remain in quarantine. Transient
+including its worktrees. Historical observe-derived candidates and strict
+final-answer fallback candidates are staged in quarantine by this import
+command. Deterministic evidence alone does not activate them. A separately
+configured promotion path must satisfy the existing verification and signed
+AI-consensus gates before an active write; incomplete candidates remain in
+quarantine. Transient
 completion messages, subagent or automation sessions, unsafe instructions,
 credentials, and unrelated workspaces are excluded. Plans are mode `0600` and
 contain distilled candidates and hashes, never raw transcripts, reasoning,
@@ -1186,3 +1187,10 @@ and GitHub Releases. Feature-level labels such as internal prototype versions ar
 
 Console browser E2E runs only when requested from GitHub Actions. See
 [manual browser E2E](docs/MANUAL_BROWSER_E2E.md) for scopes, limits and local commands.
+
+### Explicit runtime conversation bridge
+
+For a runtime that already has authorized access to selected messages or results,
+use the [bounded local conversation bridge](docs/CONVERSATION_MEMORY_BRIDGE.md).
+It stages source-backed summaries inside OrgBrain for actual review; it does not
+automatically read dot conversations or activate unverified worker claims.
