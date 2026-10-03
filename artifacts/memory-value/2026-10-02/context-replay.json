@@ -1,0 +1,288 @@
+{
+  "schema": "memory-value-context-replay/v1",
+  "generated_at": "2026-10-02T17:59:59.528Z",
+  "scope": "synthetic regression replay of the real local UserPromptSubmit hook; identical inputs on both revisions",
+  "metric": "complete usable memory fields or correct omission; not a model task outcome",
+  "actual_session_tokens": null,
+  "actual_session_turns": null,
+  "actual_task_elapsed_ms": null,
+  "actual_provider_cost": null,
+  "fixture_count": 12,
+  "variants": {
+    "baseline": {
+      "revision": "0c34324b827012ea444e8180363dc4d884bd8ed4",
+      "source_sha256": {
+        "packages/orgbrain-cli/src/lib/hook-failure-context.mjs": "e2f0d68fd33c609e29d612dd4692afe2c9b45e8a1a3ec3eb5279259e622e1c7f",
+        "packages/orgbrain-cli/src/codex-memory-context.mjs": "68d176cbaaeb023bcc29a857206842f8300578eb18f3b2c370d45a6492151937",
+        "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "11a382745b8774234af44f41b1678c0959a26db0e41de90fddd383ac0568b0ab"
+      },
+      "cases": [
+        {
+          "id": "decision_body_and_rationale",
+          "passed": false,
+          "complete_fields": false,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 549,
+          "hook_context_bytes": 2214
+        },
+        {
+          "id": "constraint_body_and_rationale",
+          "passed": false,
+          "complete_fields": false,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 546,
+          "hook_context_bytes": 2220
+        },
+        {
+          "id": "long_fact_limiting_clause",
+          "passed": false,
+          "complete_fields": false,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 562,
+          "hook_context_bytes": 2377
+        },
+        {
+          "id": "legacy_failure_body",
+          "passed": false,
+          "complete_fields": false,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 572,
+          "hook_context_bytes": 2327
+        },
+        {
+          "id": "success_fields",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 590,
+          "hook_context_bytes": 2407
+        },
+        {
+          "id": "oversized_body",
+          "passed": false,
+          "complete_fields": null,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 534,
+          "hook_context_bytes": 2175
+        },
+        {
+          "id": "oversized_rationale",
+          "passed": false,
+          "complete_fields": null,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 542,
+          "hook_context_bytes": 2190
+        },
+        {
+          "id": "other_project",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 183,
+          "hook_context_bytes": 859
+        },
+        {
+          "id": "expired",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 183,
+          "hook_context_bytes": 853
+        },
+        {
+          "id": "stale_source",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 184,
+          "hook_context_bytes": 858
+        },
+        {
+          "id": "unrelated",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 183,
+          "hook_context_bytes": 855
+        },
+        {
+          "id": "redaction",
+          "passed": false,
+          "complete_fields": false,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 536,
+          "hook_context_bytes": 2160
+        }
+      ],
+      "summary": {
+        "passed": 5,
+        "total": 12,
+        "budget_violations": 0,
+        "delivered_complete_positive_cases": 1,
+        "hook_context_tokens": 5164
+      }
+    },
+    "candidate": {
+      "revision": "51a7a7e2f8062befa0ed53dbd07ac7edf5d91e49",
+      "source_sha256": {
+        "packages/orgbrain-cli/src/lib/hook-failure-context.mjs": "ecab59712ea9629e27fbb7cbc7bf001815d782a78f4a7f4c71b48577683d3c43",
+        "packages/orgbrain-cli/src/codex-memory-context.mjs": "68d176cbaaeb023bcc29a857206842f8300578eb18f3b2c370d45a6492151937",
+        "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "f1a9e2ac94bf94b9e9926d7669ec697e7409874cf2c07ac67d3fc95c18f42b5b"
+      },
+      "cases": [
+        {
+          "id": "decision_body_and_rationale",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 597,
+          "hook_context_bytes": 2437
+        },
+        {
+          "id": "constraint_body_and_rationale",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 594,
+          "hook_context_bytes": 2443
+        },
+        {
+          "id": "long_fact_limiting_clause",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 645,
+          "hook_context_bytes": 2866
+        },
+        {
+          "id": "legacy_failure_body",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 602,
+          "hook_context_bytes": 2455
+        },
+        {
+          "id": "success_fields",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 590,
+          "hook_context_bytes": 2407
+        },
+        {
+          "id": "oversized_body",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 185,
+          "hook_context_bytes": 860
+        },
+        {
+          "id": "oversized_rationale",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 186,
+          "hook_context_bytes": 865
+        },
+        {
+          "id": "other_project",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 183,
+          "hook_context_bytes": 859
+        },
+        {
+          "id": "expired",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 183,
+          "hook_context_bytes": 853
+        },
+        {
+          "id": "stale_source",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 184,
+          "hook_context_bytes": 858
+        },
+        {
+          "id": "unrelated",
+          "passed": true,
+          "complete_fields": null,
+          "injected_count": 0,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 183,
+          "hook_context_bytes": 855
+        },
+        {
+          "id": "redaction",
+          "passed": true,
+          "complete_fields": true,
+          "injected_count": 1,
+          "within_budget": true,
+          "redaction_passed": true,
+          "hook_context_tokens": 575,
+          "hook_context_bytes": 2306
+        }
+      ],
+      "summary": {
+        "passed": 12,
+        "total": 12,
+        "budget_violations": 0,
+        "delivered_complete_positive_cases": 6,
+        "hook_context_tokens": 4707
+      }
+    }
+  },
+  "interpretation": "More complete context can require more injected tokens. This replay measures usable evidence delivery and safe omission; it does not measure agent adoption, avoided lookups or session savings. Fixtures are authored regressions, not independent held-out evaluation."
+}

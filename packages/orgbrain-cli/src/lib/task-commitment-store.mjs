@@ -102,15 +102,19 @@ function redact(value) {
     .replace(/\/Users\/[^/\s]+(?:\/[^\s`'"),:]+)+/gu, "[REDACTED_PATH]");
 }
 
-function redactedValue(value) {
-  if (typeof value === "string") return redact(value);
+const OPAQUE_ID_FIELDS = new Set(["id", "tenant_id", "project_id", "task_id", "principal_id", "session_id", "event_id", "candidate_id", "memory_id", "source_id", "usage_id", "usage_item_id", "span_id", "parent_span_id"]);
+function redactedValue(value, field = null) {
+  if (typeof value === "string") {
+    if (OPAQUE_ID_FIELDS.has(field) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) return value;
+    return redact(value);
+  }
   if (Array.isArray(value)) return value.map(redactedValue);
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value)
     .filter(([key]) => !isForbiddenCandidateKey(key))
     .map(([key, item]) => [key, typeof item === "string"
       && /^(?:(?:sha256:)?[a-f0-9]{64}|memory-confirmation:[a-f0-9]{40}|turn:(?:sha256:)?[a-f0-9]{64}#[A-Za-z0-9._:-]+)$/u.test(item)
-      ? item : redactedValue(item)]));
+      ? item : redactedValue(item, key)]));
 }
 
 function redactedJson(value) {

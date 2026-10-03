@@ -90,6 +90,17 @@ const REUSE_PATTERN = /(?:\b(?:if|when|whenever)\b|(?:再発時|次回|同じ症
 const MARKDOWN_TABLE_ROW_PATTERN = /^\|(?:[^|]*\|){2,}$/u;
 const MARKDOWN_TABLE_DIVIDER_PATTERN = /^\|?(?:\s*:?-{3,}:?\s*\|){2,}\s*$/u;
 const SCHEMA_FRAGMENT_PATTERN = /^(?:`?[A-Za-z_][A-Za-z0-9_.-]{1,63}`?|[A-Z][A-Za-z0-9 _-]{0,31})\s*[:：]\s*[^。.!?]{1,180}$/u;
+const SUPPORT_LABEL_PATTERN = /^(?:reason|rationale|reuse(?: rule)?|applicability|evidence|理由|根拠|再利用条件|適用条件)\s*[:：]\s*/iu;
+const REASON_PREFIX_PATTERN = /^(?:(?:reason|rationale|理由)\s*[:：]\s*|because\s+|なぜなら\s*)/iu;
+const DISCLAIMED_EVIDENCE_PATTERN = /\b(?:do(?:es)?\s+not|cannot|can't|doesn't|don't)\s+(?:support|verify|establish|prove|confirm)\b|\b(?:unsupported|unverified)\s+(?:claim|evidence)\b|(?:裏付け|根拠|証拠).{0,20}(?:ではない|にならない|未確認)|(?:支持|検証|証明|裏付け)(?:しない|できない|されていない)/iu;
+
+function standaloneCausalClaim(block) {
+  // An unlabelled causal sentence may introduce a different durable decision
+  // ("Because X, the deployment checker must Y"). Do not borrow its support
+  // for the preceding lesson. Explicit Reason/Rationale labels remain support.
+  return REASON_PREFIX_PATTERN.test(block) && !SUPPORT_LABEL_PATTERN.test(block)
+    && CLASSIFIERS.some((classifier) => classifier.pattern.test(block));
+}
 
 function collapseWhitespace(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
@@ -204,14 +215,30 @@ function section(text, names) {
 }
 
 function splitBlocks(text) {
-  const blocks = text
-    .replace(/\r\n/gu, "\n")
-    .split(/\n+|(?<=[。.!?])\s+(?=[A-Z0-9\p{L}])/gu)
+  const lines = [];
+  let supportIndent = null;
+  for (const line of text.replace(/\r\n/gu, "\n").split("\n")) {
+    const trimmed = line.trim();
+    const indent = line.match(/^[\t ]*/u)[0].replace(/\t/gu, "    ").length;
+    const label = trimmed.replace(/^[-*]\s+/u, "");
+    // Keep an explicitly indented continuation with its labeled support before
+    // whitespace normalization removes the boundary. Blank lines, headings,
+    // list items and new labels begin a new block instead of borrowing scope.
+    if (trimmed && supportIndent !== null && indent > supportIndent
+      && !/^(?:#{1,6}\s|[-*]\s|\d+[.)]\s)/u.test(trimmed) && !SUPPORT_LABEL_PATTERN.test(label)) {
+      lines[lines.length - 1] += ` ${trimmed}`;
+      continue;
+    }
+    lines.push(line);
+    supportIndent = trimmed && SUPPORT_LABEL_PATTERN.test(label) ? indent : null;
+  }
+  const blocks = lines
     .map((item) => item.replace(/^\s*[-*]\s+/u, "").trim())
+    .flatMap((item) => SUPPORT_LABEL_PATTERN.test(item) ? [item] : item.split(/(?<=[。.!?])\s+(?=[A-Z0-9\p{L}])/gu))
     .filter(Boolean);
   const result = [];
   for (const block of blocks) {
-    if (block.length <= 900) {
+    if (block.length <= 900 || SUPPORT_LABEL_PATTERN.test(block)) {
       result.push(block);
       continue;
     }
@@ -259,7 +286,7 @@ function evidenceFromText(text) {
     evidence.push({ type, ref: clip(ref, 512), ...(note ? { note: clip(note, 500) } : {}) });
   };
   for (const match of text.matchAll(URL_PATTERN)) add("doc", match[0]);
-  for (const match of text.matchAll(FILE_PATTERN)) add("file", match[1]);
+  for (const match of text.matchAll(FILE_PATTERN)) add("file", match[1].replace(/[.,;:!?]+$/u, ""));
   for (const match of text.matchAll(DOCUMENT_REF_PATTERN)) add("external", match[0]);
   // A final answer is an assertion, not an execution record. Command evidence
   // is attached only by the current-turn transcript verifier after it matches a
@@ -268,19 +295,25 @@ function evidenceFromText(text) {
 }
 
 function rationaleFromText(block, wholeText, explicitReason) {
-  if (explicitReason) return clip(collapseWhitespace(explicitReason), 1000);
+  if (explicitReason) return collapseWhitespace(explicitReason);
   const reasonClause = (value) => {
-    const match = collapseWhitespace(value).match(
-      /(?:\bbecause\b|\bsince\b|理由(?:は|:)|なぜなら|原因(?:は|:))\s*([^。.!?;；]{4,900}[。.!?]?)/iu
+    const normalized = collapseWhitespace(value);
+    if (REASON_PREFIX_PATTERN.test(normalized)) {
+      return normalized.replace(REASON_PREFIX_PATTERN, "").trim() || null;
+    }
+    const match = normalized.match(
+      /(?:\bbecause\b|\bsince\b|理由(?:は|:)|なぜなら|原因(?:は|:))\s*([^。.!?;；]{4,}[。.!?]?)/iu
     );
     return match?.[1] ? collapseWhitespace(match[1]) : null;
   };
   const directReason = reasonClause(block);
-  if (directReason) return clip(directReason, 1000);
-  const sentence = splitBlocks(wholeText).find((item) => CAUSE_PATTERN.test(item));
-  const contextualReason = sentence ? reasonClause(sentence) : null;
-  if (contextualReason && normalizeCanonical(contextualReason) !== normalizeCanonical(block)) {
-    return clip(contextualReason, 1000);
+  if (directReason) return directReason;
+  for (const sentence of splitBlocks(wholeText)) {
+    if (!REASON_PREFIX_PATTERN.test(sentence) && !CAUSE_PATTERN.test(sentence)) continue;
+    const contextualReason = reasonClause(sentence);
+    if (contextualReason && normalizeCanonical(contextualReason) !== normalizeCanonical(block)) {
+      return contextualReason;
+    }
   }
   return null;
 }
@@ -299,18 +332,29 @@ function conclusionFromText(block) {
 }
 
 function reuseRuleFromText(wholeText, explicitReuseRule = null) {
-  if (explicitReuseRule) return clip(collapseWhitespace(explicitReuseRule), 500);
-  const candidate = splitBlocks(wholeText).find((item) => REUSE_PATTERN.test(item));
-  return candidate ? clip(candidate, 500) : null;
+  if (explicitReuseRule) return collapseWhitespace(explicitReuseRule);
+  const blocks = splitBlocks(wholeText);
+  const labeled = blocks.find((item) => /^(?:reuse(?: rule)?|applicability|再利用条件|適用条件)\s*[:：]/iu.test(item));
+  const candidate = labeled ? labeled.replace(SUPPORT_LABEL_PATTERN, "") : blocks.find((item) => REUSE_PATTERN.test(item));
+  return candidate || null;
 }
 
 function ordinaryCandidateContext(blocks, index, wholeText) {
   const scoped = [blocks[index]];
+  const supportIndices = [];
   for (let cursor = index + 1; cursor < blocks.length && scoped.length < 4; cursor += 1) {
-    if (classify(blocks[cursor], wholeText)) break;
+    // Support labels belong to this immediately preceding atomic statement,
+    // even when their text contains a classifier such as "must" or "root cause".
+    // A new heading or durable statement ends that scope; do not borrow fields
+    // from a later lesson or a separate section.
+    if (/^#{1,6}\s/u.test(blocks[cursor])) break;
+    const explicitSupport = SUPPORT_LABEL_PATTERN.test(blocks[cursor])
+      || REASON_PREFIX_PATTERN.test(blocks[cursor]) && !standaloneCausalClaim(blocks[cursor]);
+    if (!explicitSupport && classify(blocks[cursor], wholeText)) break;
     scoped.push(blocks[cursor]);
+    if (explicitSupport) supportIndices.push(cursor);
   }
-  return scoped.join("\n");
+  return { text: scoped.join("\n"), supportIndices };
 }
 
 function summaryFromConclusion(conclusion, kind) {
@@ -451,13 +495,17 @@ export function extractDurableMemoryDrafts(input, options = {}) {
   const seen = new Set();
   const drafts = [];
   const candidateBlocks = splitBlocks(candidateSource);
+  const supportIndices = new Set();
 
   const maxCandidates = Math.min(
     options.max_candidates ?? MEMORY_CAPTURE_V2_MAX_CANDIDATES,
     options.capture_profile?.max_candidates ?? MEMORY_CAPTURE_V2_MAX_CANDIDATES
   );
   for (const [blockIndex, block] of candidateBlocks.entries()) {
-    if (/^#{1,6}\s/u.test(block) || EXISTING_REDACTION_PATTERN.test(block) && block.length < 40) {
+    if (supportIndices.has(blockIndex)) continue;
+    if (/^#{1,6}\s/u.test(block) || SUPPORT_LABEL_PATTERN.test(block)
+      || REASON_PREFIX_PATTERN.test(block) && !standaloneCausalClaim(block)
+      || EXISTING_REDACTION_PATTERN.test(block) && block.length < 40) {
       excluded.push({ reason: "low_signal", preview: clip(block, 80), disposition: "no_candidate" });
       continue;
     }
@@ -481,19 +529,30 @@ export function extractDurableMemoryDrafts(input, options = {}) {
       continue;
     }
     seen.add(`${classification.kind}:${canonicalText}`);
-    const candidateContext = structuredInput
-      ? `${evidenceSection}\n${block}`
-      : ordinaryCandidateContext(candidateBlocks, blockIndex, screened.text);
+    const ordinaryContext = structuredInput ? null : ordinaryCandidateContext(candidateBlocks, blockIndex, screened.text);
+    for (const index of ordinaryContext?.supportIndices ?? []) supportIndices.add(index);
+    const candidateContext = structuredInput ? `${evidenceSection}\n${block}` : ordinaryContext.text;
     const evidence = evidenceFromText(candidateContext, occurredAt);
-    const reuseRule = reuseRuleFromText(candidateContext, reuseSection);
-    const rationale = rationaleFromText(block, structuredInput ? screened.text : block, reasonSection);
+    const rawReuseRule = reuseRuleFromText(candidateContext, structuredInput ? reuseSection : null);
+    const rawRationale = rationaleFromText(block, structuredInput ? screened.text : candidateContext, structuredInput ? reasonSection : null);
+    const truncatedSupport = [rawRationale?.length > 1000 ? "rationale" : null, rawReuseRule?.length > 500 ? "reuse_rule" : null].filter(Boolean);
+    const declaredEvidence = structuredInput ? evidenceSection : splitBlocks(candidateContext)
+      .filter((line) => /^(?:evidence|根拠)\s*[:：]/iu.test(line)).join("\n");
+    const evidenceDisclaimed = DISCLAIMED_EVIDENCE_PATTERN.test(declaredEvidence);
+    // Keep existing storage bounds, but never call a clipped limiting condition
+    // complete. The unchanged unresolved-gaps gate sends it to review instead.
+    const candidateGaps = [gapsSection, evidenceDisclaimed
+      ? "evidence_support_disclaimed: cited references explicitly do not establish this claim; review the source before reuse." : null, truncatedSupport.length
+      ? `support_fields_truncated: ${truncatedSupport.join(", ")}; complete source text must be reviewed before reuse.` : null].filter(Boolean).join("\n");
+    const reuseRule = rawReuseRule ? clip(rawReuseRule, 500) : null;
+    const rationale = rawRationale ? clip(rawRationale, 1000) : null;
     const explicit = CLASSIFIERS.find((item) => item.kind === classification.kind)?.pattern.test(block) ?? false;
     const confidence = confidenceFor({
       classification,
       rationale,
       evidence,
       projectId: input.project_id ?? null,
-      gaps: gapsSection,
+      gaps: candidateGaps,
       explicit
     });
     const ttl = screened.restricted ? 7 * DAY_MS : TTL_BY_KIND[classification.kind];
@@ -515,7 +574,7 @@ export function extractDurableMemoryDrafts(input, options = {}) {
       visibility: screened.restricted ? "restricted" : input.project_id ? "project" : "tenant",
       allowed_principals: screened.restricted ? screened.allowed_principals : [],
       sensitive: screened.restricted,
-      gaps: gapsSection ? clip(collapseWhitespace(gapsSection), 500) : null
+      gaps: candidateGaps ? clip(collapseWhitespace(candidateGaps), 500) : null
     });
   }
 

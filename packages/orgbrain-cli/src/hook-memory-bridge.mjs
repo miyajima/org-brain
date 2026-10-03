@@ -1349,49 +1349,25 @@ export function captureItemPayload(record) {
 
 function deterministicRecordConfirmationCandidate(record) {
   if (!record || typeof record !== "object") return null;
+  // Rule extraction identifies durable assertions, not executed success/failure
+  // chains. Those categories must come through the existing observed-learning
+  // verifier. A summary is never a symptom, failed attempt or checked outcome.
+  if (["procedure", "pitfall"].includes(record.kind)) return null;
   const evidence = Array.isArray(record.evidence) ? record.evidence.slice(0, 3) : [];
   if (!record.content || !record.rationale || !record.reuseRule || evidence.length === 0) return null;
   const common = {
     external_key: record.externalKey,
     project_id: record.projectId,
-    verification: { state: "verified", evidence },
+    verification: { state: "partial", evidence },
     evidence,
     source_references: Array.isArray(record.sourceReferences) ? record.sourceReferences.slice(0, 3) : [],
     observation: {
       schema_version: 2,
-      capture_intent: "verify",
+      capture_intent: "review",
       evidence_selectors: evidence,
       gaps: []
     }
   };
-  if (record.kind === "procedure") {
-    return {
-      ...common,
-      observation: {
-        ...common.observation,
-        lesson_type: "success",
-        procedure: record.content,
-        why_it_worked: record.rationale,
-        observed_outcome: record.summary || record.content,
-        reuse_when: record.reuseRule
-      }
-    };
-  }
-  if (record.kind === "pitfall") {
-    return {
-      ...common,
-      observation: {
-        ...common.observation,
-        lesson_type: "failure",
-        symptom: record.summary || record.content,
-        failed_approach: record.summary || record.content,
-        root_cause: record.rationale,
-        correction: record.content,
-        verified_outcome: record.summary || record.content,
-        avoidance_rule: record.reuseRule
-      }
-    };
-  }
   return {
     ...common,
     confirmation_only: true,

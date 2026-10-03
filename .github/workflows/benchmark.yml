@@ -19,9 +19,11 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.13"
+          node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Verify SQLite FTS5 runtime
+        run: node --input-type=module -e 'import { DatabaseSync } from "node:sqlite"; const db = new DatabaseSync(":memory:"); db.exec("CREATE VIRTUAL TABLE runtime_probe USING fts5(content)"); db.close();'
       - run: pnpm benchmark:competitive -- --output benchmark-results/competitive-memory.json
       - uses: actions/upload-artifact@v4
         with:
@@ -35,9 +37,11 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.13"
+          node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Verify SQLite FTS5 runtime
+        run: node --input-type=module -e 'import { DatabaseSync } from "node:sqlite"; const db = new DatabaseSync(":memory:"); db.exec("CREATE VIRTUAL TABLE runtime_probe USING fts5(content)"); db.close();'
       - run: pnpm benchmark:scale -- --db /tmp/orgbrain-scale/memory.sqlite --output benchmark-results/local-scale.json --progress
       - uses: actions/upload-artifact@v4
         with:
@@ -52,9 +56,11 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.13"
+          node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Verify SQLite FTS5 runtime
+        run: node --input-type=module -e 'import { DatabaseSync } from "node:sqlite"; const db = new DatabaseSync(":memory:"); db.exec("CREATE VIRTUAL TABLE runtime_probe USING fts5(content)"); db.close();'
       - run: mkdir -p benchmark-results
       - name: LongMemEval-S 500-item deterministic retrieval and context run
         run: >
