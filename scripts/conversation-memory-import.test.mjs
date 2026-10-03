@@ -348,3 +348,65 @@ test('prose limits cannot truncate a longer phone candidate into a calendar-vali
     tenant_id: 'fixture', confirmation_token: pending.confirmation_token
   })).status, 'pending');
 }));
+
+for (const [format, ref] of [
+  ['fixture label', 'fixture:user-choice-one'],
+  ['thread label', 'thread:fixture-thread:user-choice-one'],
+  ['HTTPS document', 'https://example.invalid/docs/WORK_LOG_2026-10-03_example.md'],
+  ['repository document', 'repo:fixture-project/docs/WORK_LOG_2026-10-03_example.md'],
+  ['nested repository document', 'repo:fixture-project/docs/2024-02-29/WORK_LOG_2026-10-03_example.md']
+]) {
+  test(`${format} source survives CLI preview, stage, fixture review and restart retrieval`, async () => env(async ({ dir, store }) => {
+    const input = fixture(); input.sources[0].ref = ref;
+    const inputFile = join(dir, 'source-event.json'); await writeFile(inputFile, JSON.stringify(input));
+    const run = (args, payload) => JSON.parse(execFileSync(process.execPath, ['--no-warnings', cli, ...args, '--db', store.dbPath], {
+      input: payload ? JSON.stringify(payload) : '', encoding: 'utf8',
+      env: { ...process.env, ORGBRAIN_ENABLE_CLOUD_MEMORY: 'false', ORGBRAIN_LOCAL_EMBEDDING_PROVIDER: 'off', ORGBRAIN_MEMORY_JUDGMENT: 'off' }
+    }));
+    const plan = run(['memory', 'import', 'conversation', '--input', inputFile]);
+    assert.equal(plan.active_memories_created, 0);
+    assert.equal((await search(store)).length, 0);
+    const staged = run(['memory', 'import', 'conversation', '--input', inputFile, '--expected-plan-hash', plan.plan_hash, '--execute']);
+    assert.equal(staged.pending_created, 1);
+    assert.equal(staged.candidates[0].candidate_hash, plan.candidates[0].candidate_hash);
+    const args = ['memory', 'context', 'staging identity contact', '--tenant-id', 'fixture', '--project-id', 'call-test', '--task-id', 'source-fixture-task', '--principal-id', 'reader'];
+    assert.equal(run(args).results.length, 0);
+    const proposal = run(['memory', 'propose'], staged.candidates[0].proposal);
+    assert.equal(proposal.candidate_id, plan.candidates[0].id);
+    assert.equal(staged.candidates[0].proposal.review_context.source_references[0].ref, ref);
+    // This is an explicit unit-test fixture answer, never a live save approval.
+    const saved = run(['memory', 'confirm'], { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token, approved: true, review_answer: '1' });
+    const status = run(['memory', 'confirmation-status'], { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token });
+    assert.equal(status.status, 'completed'); assert.equal(status.memory_id, saved.memory_id);
+    const context = run(args), evidence = context.evidence_bundle.evidence[0];
+    assert.equal(context.results[0].memory.id, saved.memory_id);
+    assert.equal(context.meta.usage_items[0].source_version, saved.memory_version);
+    assert.equal(evidence.source_reference.ref, ref);
+    assert.equal(evidence.source_reference.role, 'user');
+    assert.equal(evidence.source_reference.content_hash, plan.candidates[0].source_references[0].content_hash);
+    assert.equal(evidence.verification_state, 'unverified');
+    assert.equal(evidence.reuse_rule, input.candidates[0].reuse_rule);
+    assert.match(evidence.additional_sources[0].ref, /^turn:sha256:[a-f0-9]{64}#conversation-event$/u);
+    assert.equal(evidence.additional_sources[0].role, 'supplied_unverified');
+  }));
+}
+
+test('repository date exception rejects malformed paths, traversal, non-path dates and sensitive values', async () => env(async ({ store }) => {
+  const plan = planConversationMemory(fixture());
+  for (const ref of [
+    'repo:fixture-project/../WORK_LOG_2026-10-03.md', 'repo:fixture-project/docs/./WORK_LOG_2026-10-03.md',
+    'repo:fixture-project/docs//WORK_LOG_2026-10-03.md', 'repo:fixture-project//WORK_LOG_2026-10-03.md',
+    'repo:fixture-project/docs/..', 'repo:fixture-project/docs/', 'repo:/docs/2026-10-03.md', 'repo:fixture-project',
+    'repo://fixture-project/docs/2026-10-03.md', 'Repo:fixture-project/docs/2026-10-03.md',
+    'repo:fixture-project/C:/docs/2026-10-03.md', 'repo:fixture-project/docs/\\..\\2026-10-03.md',
+    'repo:fixture-project/docs/%2e%2e/2026-10-03.md', 'repo:fixture-project/docs/..%2f2026-10-03.md',
+    'repo:fixture-project/docs/．．/2026-10-03.md', 'repo:fixture-project/docs/2026-10-03.md?date=2026-10-03',
+    'repo:fixture-project/docs/2026-10-03.md#2026-10-03', 'repo:2026-10-03/docs/example.md',
+    ...unsafeDatedProse.map(value => `repo:fixture-project/docs/${value}.md`)
+  ]) {
+    const proposal = structuredClone(plan.candidates[0].proposal);
+    proposal.review_context.source_references[0].ref = ref;
+    await assert.rejects(call(store, 'orgbrain_memories_propose', proposal), /invalid_review_source|contains_sensitive_data/, ref);
+  }
+  assert.equal((await search(store)).length, 0);
+}));
