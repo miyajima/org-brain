@@ -86,6 +86,15 @@ are rejected; use a stable non-sensitive label and a safe source reference.
 Rationale/reuse fields are never inferred by the bridge. Limits reject oversized
 fields rather than silently truncating a safety condition.
 
+Interactive proposal and confirmation prose accepts calendar-valid ISO dates,
+including the date portion of an ISO timestamp. The exception covers only a
+complete phone-pattern match: invalid dates, a leading `+`, additional phone
+digits, and `tel:`/`mailto:` values still reject. Credential/email checks inspect
+the original prose and its NFKC form without replacing date text first. Oversized
+interactive prose rejects before truncation could create a valid date prefix.
+Source references retain their separate, narrower clean-HTTPS-path exception;
+this prose allowance does not authorize arbitrary date-bearing references.
+
 ```sh
 # Choose the intended private local database explicitly.
 orgbrain memory import conversation --input event.json --db memory.sqlite > plan.json

@@ -672,7 +672,15 @@ function boundedString(value, limit, fallback = null) {
   return normalized ? normalized.slice(0, limit) : fallback;
 }
 
-function screenInteractiveMemory(value, field, { referenceDates = false } = {}) {
+function calendarIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value;
+}
+
+function screenInteractiveMemory(value, field, { referenceDates = false, proseDates = false } = {}) {
+  // A truncated phone candidate must not turn into an allowed date prefix.
+  if (proseDates && typeof value === 'string' && value.length > 20_000) throw new Error(`${field}_too_large`);
   const text = boundedString(value, 20_000);
   if (!text) throw new Error(`${field}_required`);
   const sensitivePatterns = [
@@ -680,16 +688,25 @@ function screenInteractiveMemory(value, field, { referenceDates = false } = {}) 
     /\bBearer\s+[A-Za-z0-9._~+/-]+=*/iu,
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu
   ];
-  const sensitivePhone = [...text.matchAll(/(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/gu)].some(match => {
-    const phone = match[0];
-    if (!referenceDates || match.index < referenceDates.pathStart || !/^\d{4}-\d{2}-\d{2}$/u.test(phone)) return true;
-    const parsed = Date.parse(`${phone}T00:00:00Z`);
-    return !Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== phone;
-  });
-  if (sensitivePhone || sensitivePatterns.some((pattern) => pattern.test(text))) {
-    throw new Error(`${field}_contains_sensitive_data`);
+  // Inspect original bytes before any date exception, and also inspect NFKC
+  // prose so compatibility characters cannot conceal a phone or credential.
+  const inspectedTexts = proseDates ? [text, text.normalize('NFKC')] : [text];
+  for (const inspected of inspectedTexts) {
+    const sensitivePhone = [...inspected.matchAll(/(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/gu)].some(match => {
+      const referenceDate = referenceDates && match.index >= referenceDates.pathStart;
+      const proseDate = proseDates && !/(?:tel|mailto):\s*$/iu.test(inspected.slice(0, match.index));
+      // Test the whole phone candidate, never just a date-shaped prefix.
+      return !(referenceDate || proseDate) || !calendarIsoDate(match[0]);
+    });
+    if (sensitivePhone || sensitivePatterns.some((pattern) => pattern.test(inspected))) {
+      throw new Error(`${field}_contains_sensitive_data`);
+    }
   }
   return text;
+}
+
+function screenInteractiveProse(value, field) {
+  return screenInteractiveMemory(value, field, { proseDates: true });
 }
 
 function rationaleProposal(item) {
@@ -764,7 +781,7 @@ function localReviewContext(raw) {
     })};
   for(const key of ['conclusion','reason_summary','reuse_rule']) if(raw[key]!=null) {
     if(typeof raw[key]!=='string'||raw[key].length>2000) throw new Error('invalid_review_context');
-    value[key]=screenInteractiveMemory(raw[key],key);
+    value[key]=screenInteractiveProse(raw[key],key);
   }
   return value;
 }
@@ -774,8 +791,8 @@ async function proposeLocalMemory(store, input) {
   const tenantId = boundedString(input.tenant_id, 128, "default");
   const item = {
     external_key: boundedString(input.item.external_key, 256),
-    content: screenInteractiveMemory(input.item.content, "item.content"),
-    summary: input.item.summary == null ? null : screenInteractiveMemory(input.item.summary, "item.summary").slice(0, 1000),
+    content: screenInteractiveProse(input.item.content, "item.content"),
+    summary: input.item.summary == null ? null : screenInteractiveProse(input.item.summary, "item.summary").slice(0, 1000),
     tags: Array.isArray(input.item.tags)
       ? [...new Set(input.item.tags.map((tag) => boundedString(tag, 64)).filter(Boolean))].slice(0, 16)
       : [],
@@ -833,7 +850,7 @@ async function confirmLocalMemory(store, input) {
   let rationaleId = null;
   let confirmationState = null;
   let reviewLabel=null;
-  const answer=input.review_answer==null?null:screenInteractiveMemory(input.review_answer,'review_answer');
+  const answer=input.review_answer==null?null:screenInteractiveProse(input.review_answer,'review_answer');
   const selectedCategory=memoryCategoryFromReviewAnswer(answer);
   const consumed = await store.consumeMcpConfirmation({
     token,
@@ -865,10 +882,14 @@ async function confirmLocalMemory(store, input) {
         memory_category:selectedCategory};
     },
     buildCaptureInput(payload) {
+      // Validate the supplied prose before the persisted rationale bounds.
+      for (const field of ['conclusion', 'reason_summary']) {
+        if (input[field] != null) screenInteractiveProse(input[field], field);
+      }
       const conclusion = boundedString(input.conclusion || input.corrected_summary || input.corrected_content, 240, payload.proposed_rationale.conclusion);
       const reason = boundedString(input.reason_summary, 500, payload.proposed_rationale.reason_summary);
-      screenInteractiveMemory(conclusion, "conclusion");
-      screenInteractiveMemory(reason, "reason_summary");
+      screenInteractiveProse(conclusion, "conclusion");
+      screenInteractiveProse(reason, "reason_summary");
       const corrected = Boolean(input.corrected_content || input.corrected_summary) || conclusion !== payload.proposed_rationale.conclusion ||
         reason !== payload.proposed_rationale.reason_summary ||
         (input.decision_type && input.decision_type !== payload.proposed_rationale.decision_type) ||
@@ -891,10 +912,10 @@ async function confirmLocalMemory(store, input) {
         actor_id: payload.actor_id,
         kind: "semantic",
         tags: withMemoryCategoryTags(payload.proposed_memory.tags, selectedCategory),
-        content: input.corrected_content ? screenInteractiveMemory(input.corrected_content, "corrected_content") : corrected ? `${conclusion}\n理由: ${reason}` : payload.proposed_memory.content,
-        summary: input.corrected_summary ? screenInteractiveMemory(input.corrected_summary, "corrected_summary") : conclusion,
+        content: input.corrected_content ? screenInteractiveProse(input.corrected_content, "corrected_content") : corrected ? `${conclusion}\n理由: ${reason}` : payload.proposed_memory.content,
+        summary: input.corrected_summary ? screenInteractiveProse(input.corrected_summary, "corrected_summary") : conclusion,
         rationale: reason,
-        reuse_rule:input.reuse_rule!=null?screenInteractiveMemory(input.reuse_rule,'reuse_rule')
+        reuse_rule:input.reuse_rule!=null?screenInteractiveProse(input.reuse_rule,'reuse_rule')
           :input.corrected_content?null:payload.review_context?.reuse_rule??null,
         entities: entities.map((entity) => entity.name),
         evidence: [...evidence, {
