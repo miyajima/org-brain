@@ -92,8 +92,14 @@ complete phone-pattern match: invalid dates, a leading `+`, additional phone
 digits, and `tel:`/`mailto:` values still reject. Credential/email checks inspect
 the original prose and its NFKC form without replacing date text first. Oversized
 interactive prose rejects before truncation could create a valid date prefix.
-Source references retain their separate, narrower clean-HTTPS-path exception;
-this prose allowance does not authorize arbitrary date-bearing references.
+Source references allow dates only within a clean HTTPS path or a canonical
+`repo:<project-id>/<relative-path>` reference. Repository paths contain non-empty
+segments of letters, numbers, dot, underscore or hyphen; `.`/`..`, absolute or
+backslash paths, URI arguments/fragments and percent encoding are rejected.
+Repository references must already be NFKC-normalized (the bridge normalizes
+supplied text). A date in the project identifier has no exception. The exact
+source reference is preserved through review and retrieval; arbitrary references
+and longer phone candidates do not gain a date exception.
 
 ```sh
 # Choose the intended private local database explicitly.

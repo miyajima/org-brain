@@ -753,9 +753,16 @@ function normalizedEvidence(value) {
 
 function screenReviewReference(value) {
   // Only a complete phone-pattern match that is a valid ISO date may pass in
-  // a clean HTTPS reference. All credential/email checks see original bytes.
+  // a clean HTTPS or canonical repo-relative path. Never exempt the project
+  // identifier, rewrite the reference, or hide it from credential/email checks.
   let referenceDates = false;
-  try {
+  if (/^repo:/iu.test(value)) {
+    const repo = /^repo:([A-Za-z0-9][A-Za-z0-9._:-]*)\/([\p{L}\p{N}._/-]+)$/u.exec(value);
+    if (!repo || value !== value.normalize('NFKC') || repo[2].split('/').some(segment => !segment || segment === '.' || segment === '..')) {
+      throw new Error('invalid_review_source');
+    }
+    referenceDates = { pathStart: value.indexOf('/') + 1 };
+  } else try {
     const url = new URL(value);
     const pathStart = value.indexOf('/', value.indexOf('://') + 3);
     if (url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash && pathStart >= 0) referenceDates = { pathStart };
