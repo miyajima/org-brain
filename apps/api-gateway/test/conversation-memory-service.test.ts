@@ -42,7 +42,7 @@ describe('Cloud conversation candidates (synthetic SQLite D1 adapter)', () => {
       const saved = await confirmProposedMemory(env, request, owner);
       expect(saved.saved).toBe(true);
       expect(await confirmProposedMemory(env, request, owner)).toEqual(saved);
-      expect(await getMemoryConfirmationStatus(env, request, owner)).toEqual(saved);
+      expect(await getMemoryConfirmationStatus(env, request, owner)).toEqual({ ...saved, project_id: 'test-project' });
       const memory = sql.prepare('SELECT * FROM memories WHERE id = ?').get(saved.memory_id);
       expect(memory.tenant_id).toBe('fixture');
       expect(memory.project_id).toBe('test-project');

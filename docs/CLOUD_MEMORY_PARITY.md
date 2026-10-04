@@ -17,7 +17,7 @@ is not automatic synchronization with dot, a native session or another platform.
 | Retrieval receipts | Returned/injected item, source/version, explicit purpose | Existing Cloud usage event/item/version/purpose recording; new task lane records the final delivered result set | Returned tool JSON alone does not prove native delivery |
 | Use observations | Scoped opaque receipt, then bounded trusted local transcript verification | Optional private opaque acknowledgement bound to authenticated principal/project/task/item and accessible current memory version | No trusted Cloud transcript collector or cross-turn delivery verifier; decision-memory observation receipt issuance is not ported |
 | Effect/ranking | Evidence-backed, separately enabled | Existing trusted task-event/attestation resolvers remain unchanged; new acknowledgement is never accepted as verified-use evidence | No verified benefit, live token saving or automatic usefulness rating established |
-| CLI transport | Explicit local backend remains the default | `memory import conversation --backend remote-mcp` uses modern MCP and fails closed | Existing OAuth must be supplied explicitly; no credential-store discovery, login, refresh or silent local fallback |
+| CLI transport | Explicit local backend remains the default | `memory import conversation --backend remote-mcp` uses modern MCP; dedicated `remote` commands add independently authorized OrgBrain login/refresh/logout and pinned search/stage/confirm/status | See [remote client boundaries](ORG_BRAIN_REMOTE_CLIENT.md): dedicated private profile, separately deployed identity endpoint required, headless server device grant and strict refresh reuse detection remain gaps; no silent local fallback |
 
 ## Explicit Cloud capture
 

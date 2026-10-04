@@ -3,6 +3,7 @@ import { ORGBRAIN_OAUTH_SCOPES, type OrgBrainOAuthScope } from "@org-brain/contr
 import { handleOrgBrainMcpRequest } from "./mcp";
 import { authorizeMcpRequest, type McpAuthResult } from "./mcp-security";
 import type { Env } from "./types";
+import { remoteClientIdentity } from "./remote-client-identity";
 export { shouldUseMcpOAuth } from "./mcp-oauth-routing";
 
 type OAuthProps = {
@@ -92,6 +93,16 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
       async fetch(request, oauthEnv, ctx) {
         const props = (ctx as ExecutionContext & { props?: OAuthProps }).props;
         if (!props) return new Response("Missing OAuth authorization context", { status: 500 });
+        // The pinned provider's ctx.props retains original grant scopes. Refresh
+        // can downscope the access token: enforce its effective scopes, not props.
+        const bearer = request.headers.get('authorization')?.match(/^Bearer\s+(\S+)$/iu)?.[1];
+        const token = bearer ? await (oauthEnv as OAuthEnv).OAUTH_PROVIDER.unwrapToken<OAuthProps>(bearer) : null;
+        if (!token || token.grant.props.principal !== props.principal || token.grant.props.tenantId !== props.tenantId ||
+            token.scope.some(scope => !ORGBRAIN_OAUTH_SCOPES.includes(scope as OrgBrainOAuthScope))) {
+          return new Response('Invalid OAuth authorization context', { status: 401 });
+        }
+        const effectiveProps = { ...props, scopes: token.scope as OrgBrainOAuthScope[] };
+        if (new URL(request.url).pathname === '/mcp/identity') return remoteClientIdentity(request, oauthEnv, effectiveProps);
         return handleOrgBrainMcpRequest(request, oauthEnv, ctx, {
           principal: props.principal,
           tenantId: props.tenantId,
@@ -99,7 +110,7 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
           source: "oauth",
           defaultRole: props.defaultRole,
           runtimeActor: `principal:${props.principal}`,
-          scopes: props.scopes
+          scopes: effectiveProps.scopes
         });
       }
     },
