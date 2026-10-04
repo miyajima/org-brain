@@ -1,4 +1,16 @@
-import { HttpError, screenMemoryText, screenSensitiveMemory } from "@org-brain/shared";
+import { HttpError, screenMemoryText, screenSensitiveMemory, screenInteractiveProse } from "@org-brain/shared";
+
+export function screenMemoryReviewText(value: string, field: string): string {
+  try {
+    const reviewed = screenInteractiveProse(value, field);
+    const screened = screenMemoryWriteText(reviewed, field);
+    if (screened !== reviewed) throw new HttpError(400, "invalid_review_text", `${field} contains sensitive data`);
+    return reviewed;
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, "invalid_review_text", error instanceof Error ? error.message : "Invalid review text");
+  }
+}
 
 export function screenMemoryWriteText(value: string, field: string): string {
   const screened = screenMemoryText(value);

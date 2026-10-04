@@ -55,10 +55,14 @@ import {
   captureMemoryWithInferredRationale,
   captureRequestClaimsVerified,
   confirmProposedMemory,
+  cancelMemoryConfirmation,
+  getMemoryConfirmationProject,
   getMemoryConfirmationStatus,
   listMemoryConfirmationReviews,
   proposeMemoryWithRationale
 } from "./rationale-service";
+import { stageConversationMemories } from "./conversation-memory-service";
+import { HttpError } from "@org-brain/shared";
 import { assertPermission } from "./rbac-service";
 import {
   assignRetrievalGeneration,
@@ -127,6 +131,14 @@ const memoryPort = {
   captureMemoryWithInferredRationale,
   captureRequestClaimsVerified,
   confirmProposedMemory,
+  cancelMemoryConfirmation,
+  stageConversationMemories,
+  guardMemoryConfirmation: async (env, tenantId, token, auth, permission) => {
+    if (typeof token !== "string" || !token || token.length>64) throw new HttpError(400,"invalid_confirmation_token","A confirmation token is required");
+    const projectId = await getMemoryConfirmationProject(env,tenantId,token,auth.principal);
+    if (auth.projectId && auth.projectId !== projectId) throw new HttpError(403,"confirmation_project_mismatch","Token is bound to another project");
+    await assertPermission(env,{tenantId,projectId,principal:auth.principal,permission,fallbackRole:auth.defaultRole});
+  },
   getMemoryConfirmationStatus,
   listMemoryConfirmationReviews,
   proposeMemoryWithRationale,

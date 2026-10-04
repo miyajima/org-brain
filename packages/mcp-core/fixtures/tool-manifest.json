@@ -769,6 +769,91 @@
       "scope": "orgbrain:read"
     },
     {
+      "name": "orgbrain_conversation_memories_revise",
+      "description": "Preview or atomically supersede one pending candidate. Execute needs the current token/hash/revision and new preview hash. Never infer approval; superseded tokens cannot save.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "confirmation_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "expected_candidate_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "conversation": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "execute": {
+            "type": "boolean"
+          },
+          "expected_plan_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "confirmation_token",
+          "expected_candidate_hash",
+          "expected_revision",
+          "conversation"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_conversation_memories_stage",
+      "description": "Preview or stage explicit bounded conversation-memory/v1 summaries as pending human-review proposals. Execute requires the exact preview hash. Caller-supplied roles/hashes remain unverified; this tool never saves active memory or reads transcripts. Use the existing confirm tool only after the actual human answer.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "conversation": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "execute": {
+            "type": "boolean"
+          },
+          "expected_plan_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "conversation"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
       "name": "orgbrain_decision_memories_create",
       "description": null,
       "input_schema": {
@@ -2723,6 +2808,15 @@
             "minLength": 1,
             "maxLength": 64
           },
+          "expected_candidate_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
           "approved": {
             "type": "boolean"
           },
@@ -2887,6 +2981,48 @@
         "required": [
           "confirmation_token",
           "approved"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_memories_confirmation_cancel",
+      "description": "Cancel an owned current pending proposal with its displayed hash/revision and explicit reason. A processing confirmation cannot be cancelled. No active memory is created.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "confirmation_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "expected_candidate_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "confirmation_token",
+          "expected_candidate_hash",
+          "expected_revision",
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -3481,6 +3617,32 @@
             "type": "string",
             "maxLength": 128
           },
+          "task_context": {
+            "type": "object",
+            "properties": {
+              "project_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "task_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "subject_query": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "project_id",
+              "task_key",
+              "subject_query"
+            ],
+            "additionalProperties": false
+          },
           "use_snapshot_id": {
             "type": "string",
             "maxLength": 128
@@ -3691,6 +3853,32 @@
                 "type": "null"
               }
             ]
+          },
+          "task_context": {
+            "type": "object",
+            "properties": {
+              "project_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "task_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "subject_query": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "project_id",
+              "task_key",
+              "subject_query"
+            ],
+            "additionalProperties": false
           },
           "use_snapshot_id": {
             "type": "string",

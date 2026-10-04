@@ -5,6 +5,9 @@ import {
   buildTenantMemoryProfile,
   deriveEvidenceDisposition,
   evidenceAnswerTemplate,
+  localTaskQueryPlan,
+  coversLocalTaskQuery,
+  matchesLocalTaskQuery,
   requiresMultipleEvidenceSources,
   type MemoryEvidenceBundle,
   type MemoryProfileResponse,
@@ -101,8 +104,13 @@ export async function retrieveMemoryContext(
     },
     { ...options, recordUsage: false }
   );
+  const query = parseString(body.q, "q");
+  const taskPlan = search.meta.task_query?.applied ? localTaskQueryPlan(search.meta.task_query.subject_query ?? query) : null;
   const selected = search.results
-    .filter((result) => result.kind === "memory" && hasRetrievalSignal(result))
+    .filter((result) => result.kind === "memory" && (hasRetrievalSignal(result)
+      // This lane already checked every delivered subject lexically. A zero
+      // base-v4 score is not a failed lexical match in this separate lane.
+      || search.meta.task_query?.applied && search.meta.task_query.coverage === "covered"))
     .slice(0, topK);
   const ids = selected.map((result) => result.id);
   const selectedGenerationId = search.meta.retrieval?.generation_id ?? null;
@@ -200,15 +208,27 @@ export async function retrieveMemoryContext(
       // Version snapshots are canonical but may predate the current JSON shape.
     }
   }
+  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null };
   const confidenceRows = ids.length === 0
-    ? { results: [] as Array<{ id: string; confidence_score: number | null }> }
+    ? { results: [] as ContextMemoryRow[] }
     : await env.OPEN_BRAIN_DB.prepare(
-        `SELECT id, confidence_score FROM memories
+        `SELECT id, confidence_score, content, learning_json, current_version FROM memories
          WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`
-      ).bind(tenantId, ...ids).all<{ id: string; confidence_score: number | null }>();
+      ).bind(tenantId, ...ids).all<ContextMemoryRow>();
   const confidenceById = new Map(
     confidenceRows.results.map((row) => [row.id, Number(row.confidence_score ?? 0.5)])
   );
+  const capsules = new Map<string, { content: string; version: number }>();
+  if (search.meta.task_query?.applied) {
+    for (const row of confidenceRows.results) {
+      try {
+        const provenance = JSON.parse(row.learning_json ?? '{}').conversation_provenance;
+        if (provenance?.evidence_status === 'supplied_unverified') {
+          capsules.set(row.id, { content: row.content, version: row.current_version ?? 1 });
+        }
+      } catch { /* Legacy malformed metadata does not identify a conversation capsule. */ }
+    }
+  }
   const charBudget = Math.max(0, tokenBudget * 4 - ANSWER_GUIDANCE_CHAR_RESERVE);
   let usedChars = 0;
   const evidence: Array<Record<string, unknown>> = [];
@@ -217,10 +237,19 @@ export async function retrieveMemoryContext(
   const conflicts: Array<{ memory_id: string; conflict: string }> = [];
   for (const result of selected) {
     if (usedChars >= charBudget) break;
-    const units = grouped.get(result.id) ?? [];
-    const unit = units[0];
+    const capsule = capsules.get(result.id);
+    const useCapsule = capsule && capsule.version === (result.current_version ?? 1);
+    const units = useCapsule ? [] : grouped.get(result.id) ?? [];
+    const unit = taskPlan
+      ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
+      : units[0];
     const remaining = charBudget - usedChars;
-    const text = String(unit?.text ?? result.content_preview).slice(0, Math.min(4_000, remaining));
+    // Reviewed conversation content includes the reason and reuse conditions.
+    // A sentence projection can remove stop conditions. Deliver it atomically,
+    // without upgrading its supplied/unverified provenance or using stale versions.
+    if (useCapsule && capsule.content.length > Math.min(4_000, remaining)) continue;
+    const text = useCapsule ? capsule.content
+      : String(unit?.text ?? result.content_preview).slice(0, Math.min(4_000, remaining));
     usedChars += text.length;
     let sourceReference = result.source_references?.[0] ?? null;
     try {
@@ -278,7 +307,14 @@ export async function retrieveMemoryContext(
     }
     for (const conflict of result.conflicts ?? []) conflicts.push({ memory_id: result.id, conflict });
   }
-  const query = parseString(body.q, "q");
+  // A search hit is not a delivered context excerpt. Recheck after top_k,
+  // projection selection and text budgeting, before disposition and receipts.
+  if (taskPlan && !coversLocalTaskQuery(evidence.map(item => ({ content: String(item.text ?? '') })), taskPlan)) {
+    evidence.length = 0;
+    currentState.length = 0;
+    timeline.length = 0;
+    usedChars = 0;
+  }
   const multiSession = requiresMultipleEvidenceSources(query);
   const disposition = deriveEvidenceDisposition({
     evidenceCount: evidence.length,
@@ -377,6 +413,14 @@ export async function retrieveMemoryContext(
     }),
     meta: {
       ...search.meta,
+      ...(search.meta.task_query ? {
+        task_query: { ...search.meta.task_query, coverage: taskPlan
+          && coversLocalTaskQuery(injectedEvidence.map(item => ({ content: String(item.text ?? '') })), taskPlan)
+          ? 'covered' as const : 'missing' as const },
+        returned_count: injectedEvidence.length,
+        top_result_ids: injectedEvidence.map(item => String(item.memory_id)),
+        top_result_ranks: injectedEvidence.map(item => typeof item.score === 'number' ? item.score : null)
+      } : {}),
       usage_id: contextUsage.usage_id,
       usage_item_ids:contextUsage.usage_item_ids,
       usage_items:contextUsage.usage_items,
