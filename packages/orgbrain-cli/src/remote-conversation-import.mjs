@@ -3,7 +3,7 @@ import { modernMcpHeaders, modernMcpRequest } from './lib/mcp-modern-request.mjs
 
 const MAX_RESPONSE_BYTES = 256 * 1024;
 
-async function readResponse(response) {
+export async function readResponse(response) {
   if (!response.body) throw new Error('remote_mcp_empty_response');
   const reader = response.body.getReader(), chunks = [];
   let size = 0;
@@ -51,7 +51,9 @@ export async function ingestRemoteConversationMemory(input, { execute = false, e
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/mcp') {
     throw new Error('invalid_remote_mcp_endpoint');
   }
-  if (!/^[A-Za-z0-9._~+/-]+=*$/u.test(accessToken)) throw new Error('invalid_existing_oauth_token');
+  // The pinned provider returns opaque colon-delimited tokens. Accept opaque
+  // printable ASCII, while rejecting whitespace/control characters and bounds.
+  if (accessToken.length > 8192 || !/^[\x21-\x7e]+$/u.test(accessToken)) throw new Error('invalid_existing_oauth_token');
   let response;
   try {
     response = await fetchImpl(url.href, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),

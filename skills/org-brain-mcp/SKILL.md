@@ -91,6 +91,13 @@ ORGBRAIN_TENANT_ID=default
 8. Never print the client secret or enrollment code. Report only presence, installation ID, client type, and MCP hostname.
 
 ## Operational Notes
+- The explicit OrgBrain CLI `remote` client can use its own independently
+  authorized private profile for pinned project search/stage/confirm/status.
+  See `docs/ORG_BRAIN_REMOTE_CLIENT.md` for login/refresh/logout and server
+  prerequisites. Never read another client's credential store or transfer tokens.
+  Login runs only in the user's native terminal. Unsupported headless device
+  flow fails closed. `remote stage` creates pending candidates only; display the
+  review and require the actual human answer before `remote confirm`.
 - OrgBrain master memory is Cloudflare D1.
 - The primary remote endpoint implements only MCP `2026-07-28` as stateless Streamable HTTP; it does not silently downgrade or expose a legacy protocol lane.
 - A client without MCP `2026-07-28` support must use the explicit local `2025-11-25` compatibility command with a required deadline of at most 90 days. This is capability-based, not client-name-specific.

@@ -120,7 +120,8 @@ describe('atomic pending confirmation lifecycle', () => {
       expect(row.payload_json).toBe(original);expect(row.revision).toBe(1);expect(row.managed_review).toBe(0);expect(row.candidate_hash).toBe('b'.repeat(64));
       expect(sql.prepare('SELECT lifecycle_state FROM memory_confirmations WHERE id=?').get(completed).lifecycle_state).toBe('saved');
       expect(await confirmProposedMemory(env,{tenant_id:'fixture',confirmation_token:completed,approved:true,review_answer:'3'},owner)).toEqual(receipt);
-      expect(await getMemoryConfirmationStatus(env,{tenant_id:'fixture',confirmation_token:completed},owner)).toEqual(receipt);
+      expect(await getMemoryConfirmationStatus(env,{tenant_id:'fixture',confirmation_token:completed},owner)).toEqual({ ...receipt, project_id: 'workflow-fixture' });
+      expect(sql.prepare('SELECT response_json FROM memory_confirmation_reviews WHERE confirmation_id=?').get(completed).response_json).toBe(JSON.stringify(receipt));
       const request={tenant_id:'fixture',confirmation_token:token,approved:true,review_answer:'3'};
       const saved=await confirmProposedMemory(env,request,owner);
       expect(saved.saved).toBe(true);expect(await confirmProposedMemory(env,request,owner)).toEqual(saved);

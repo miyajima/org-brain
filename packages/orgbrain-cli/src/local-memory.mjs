@@ -58,6 +58,12 @@ Usage:
   orgbrain memory aging-plan [--tenant-id <id>] [--project-id <id>]
   orgbrain memory restore-version <memory-id> --version <n>
   orgbrain memory import conversation --input <file> [--backend local|remote-mcp] [--mcp-url <https-url>] [--expected-plan-hash <sha256> --execute]
+  orgbrain remote login --mcp-url <https-url> --tenant-id <id> --project-id <id> --principal-id <canonical-id> [--mode loopback|device] [--execute]
+  orgbrain remote <status|refresh|logout> [--profile <name>]
+  orgbrain remote search <query> [--profile <name>] [--limit <n>]
+  orgbrain remote stage --input <summary.json> [--expected-plan-hash <sha256> --execute]
+  orgbrain remote confirmation-status --confirmation-token <token>
+  orgbrain remote confirm --input <actual-review.json>
   orgbrain memory propose|confirm|confirmation-status [json-payload]
   orgbrain memory context <query> --tenant-id <id> --project-id <id> --task-id <id> --principal-id <id> [--token-budget <n>]
   orgbrain memory import codex-sessions [--workspace <path>] [--sessions-root <path>] [--since <ISO-8601>] [--until <ISO-8601>] [--output <path>]
@@ -155,6 +161,8 @@ function parseArgs(argv) {
   const values = new Map();
   const repeated = new Map();
   const flags = new Set();
+  const optionCounts = new Map();
+  const assignedFlags = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--") continue;
@@ -163,8 +171,10 @@ function parseArgs(argv) {
       continue;
     }
     const [name, inline] = arg.split("=", 2);
+    optionCounts.set(name, (optionCounts.get(name) ?? 0) + 1);
     if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
       flags.add(name);
+      if (inline !== undefined) assignedFlags.add(name);
       continue;
     }
     const value = inline ?? argv[++index];
@@ -178,6 +188,8 @@ function parseArgs(argv) {
   return {
     positional,
     flags,
+    names: () => [...values.keys(), ...repeated.keys(), ...flags],
+    ambiguousOptions: () => assignedFlags.size > 0 || [...optionCounts.values()].some(count => count > 1),
     get(name, fallback = undefined) {
       return values.get(name) ?? fallback;
     },
@@ -933,6 +945,11 @@ async function main() {
   }
 
   let [command, action, ...rest] = args.positional;
+  if (command === 'remote') {
+    const { runRemoteCommand } = await import('./remote-cli.mjs');
+    emit(await runRemoteCommand(action, rest, args));
+    return;
+  }
   if (["feature", "wiki"].includes(command)) {
     const { runWikiCli } = await import("./lib/wiki-cli.mjs");
     emit(await runWikiCli(command, action, rest, args, readStdin));
