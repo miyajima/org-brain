@@ -137,7 +137,7 @@ export class OrgBrainRemoteClient {
           tokens = await tokenRequest(this.fetch, metadata, { grant_type: 'authorization_code', client_id: clientId,
             code: await receiver.result, code_verifier: verifier, redirect_uri: receiver.redirectUri });
         } else {
-          tokens = await this.deviceLogin(metadata, clientId, onAuthorize);
+          tokens = await this.deviceLogin(metadata, clientId, onAuthorize, binding);
         }
         if (opaque(tokens?.refresh_token)) issuedCredentials = { client_id: clientId, refresh_token: tokens.refresh_token };
         profile = this.issued(metadata, binding, clientId, tokens);
@@ -151,10 +151,11 @@ export class OrgBrainRemoteClient {
     });
   }
 
-  async deviceLogin(metadata, clientId, onAuthorize) {
+  async deviceLogin(metadata, clientId, onAuthorize, binding) {
     const device = await jsonRequest(this.fetch, metadata.device_authorization_endpoint, { method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: clientId, scope: REMOTE_SCOPES.join(' '), resource: metadata.resource }).toString() });
+      body: new URLSearchParams({ client_id: clientId, scope: REMOTE_SCOPES.join(' '), resource: metadata.resource,
+        tenant_id: binding.tenant_id, project_id: binding.project_id, principal_id: binding.principal }).toString() });
     if (!opaque(device.device_code) || typeof device.user_code !== 'string' || !/^[A-Z0-9-]{4,32}$/u.test(device.user_code) ||
         !Number.isSafeInteger(device.expires_in) || device.expires_in < 1 || device.expires_in > 900 ||
         device.interval !== undefined && (!Number.isSafeInteger(device.interval) || device.interval < 1 || device.interval > 60)) {
@@ -267,7 +268,7 @@ export class OrgBrainRemoteClient {
     if (typeof q !== 'string' || !q.trim() || q.length > 500 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw new RemoteOAuthError('invalid_search');
     return this.authenticated(async profile => {
       const result = await this.call(profile, 'orgbrain_memories_search', {
-        tenant_id: profile.tenant_id, project_id: profile.project_id, strict_project: true, scope: 'mine', q, limit, search_mode: 'memories' });
+        tenant_id: profile.tenant_id, project_id: profile.project_id, strict_project: true, scope: 'mine', q, limit, search_mode: 'memories', search_scope: 'evidence' });
       if (result.tenant_id !== profile.tenant_id || result.project_id !== profile.project_id || !Array.isArray(result.results)) {
         throw new RemoteOAuthError('search_binding_mismatch');
       }

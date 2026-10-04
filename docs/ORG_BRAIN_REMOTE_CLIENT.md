@@ -111,8 +111,9 @@ The new OAuth-only identity endpoint returns authenticated principal, tenant,
 explicit project, resource and **effective access-token scopes**, with no-store.
 It checks the active user and existing read permission, plus existing write
 permission when the token grants write. It creates no new roles or tenant grants.
-Existing RBAC tenant roles and fallback-role semantics still apply. Project
-pinning is a client request boundary, not a new project-bound OAuth grant.
+Existing RBAC tenant roles and fallback-role semantics still apply. Device grants
+also pin the project on the server. Ordinary native authorization-code grants
+retain the client profile boundary and existing server ACLs.
 
 Refresh persists a token-free `reauthentication_required` tombstone **before**
 rotation, requires a different refresh token and checks identity/scopes again.
@@ -125,40 +126,89 @@ an unreachable server eventually revoked it. Errors/status never return tokens,
 codes, verifiers, response bodies or raw transport exception messages. Responses
 and explicit input files are bounded; redirects and timeouts fail closed.
 
-## Cloud headless blocker and server requirements
+## Opt-in device server and strict refresh families
 
-The pinned `@cloudflare/workers-oauth-provider` **0.10.3** supports authorization
-code/refresh and RFC7009 revocation at `/oauth/token`. It has no RFC8628 device
-grant. A browser on a Mac cannot reach a remote Cloud machine's loopback.
-`--mode device --execute` is a standards-based **client** implementation, enabled
-only when discovery explicitly advertises the device endpoint and grant. With
-the current server it fails before registration or credential issuance. There
-is no manual code-exchange workaround, credential transfer or alternate trust path.
+Compared with client commit `97494e3`, the server now adds RFC8628 discovery,
+public device registration, authorization, browser consent, polling and redemption.
+`--mode device --execute` displays a verification URI and short user code in the
+user's native terminal. The browser may run on another machine; no Cloud loopback,
+manual authorization-code exchange or credential transfer is involved.
 
-To support headless Cloud, a separate server change must provide all of:
+The source flag `ORGBRAIN_OAUTH_SECURITY_V2` remains **false** in all three Wrangler
+profiles. This is an explicit **public-client** mode with `token_endpoint_auth_method=none`
+and read/write scopes. Confidential registration, consent and refresh are rejected
+when enabled; the metadata advertises only public authentication. Existing deployments
+using confidential or other-scope clients must not enable it without a separate
+compatibility design. Default-off legacy native-client behavior stays available.
+No SDK upgrade, new role, shared principal, real credential or live configuration
+change is included.
 
-1. RFC8628 device authorization endpoint and grant metadata; exact scopes and
-   canonical resource enforcement; independently registered public clients.
-2. High-entropy device credentials stored as hashes in atomic state, bounded
-   user-code attempts/rate limits, short TTL and client/resource binding.
-3. A browser verification page behind the existing user-login boundary. Show
-   client, resource, user/tenant and exact scopes. GET never approves; consent
-   POST requires CSRF/session binding and explicit human consent.
-4. Atomic pending/approved/denied/expired/consumed transitions and single-use
-   polling redemption, interval/slow_down handling and concurrent poll tests.
-5. Issuance through the same provider's token/grant verification path. Its current
-   public helpers do not provide device redemption; review a supported provider
-   extension/version before implementation. Do not build a parallel token system.
-6. Existing user/tenant/project ACL checks, rotation/revocation, expiry and
-   secret-free logs; synthetic end-to-end tests followed by separately authorized
-   live deployment/authentication.
+Apply additive migration `0048_oauth_device_security.sql` before separately enabling
+the flag. Cutover requires fresh V2 consent: old refresh tokens and authorization
+codes without the V2 marker are rejected while enabled. Existing V2 grant families
+keep their durable access/refresh/revocation checks when the flag is later disabled.
+Device client registration remains marked in the SDK and cannot enter public
+native auth-code issuance or exchange, even after disabling the flag. Flag-off native
+reauthorization durably revokes earlier matching V2 families before SDK revocation,
+so stale KV and in-flight refresh cannot revive them. The additive tables must remain
+available while any marked V2 credential could still be valid; removing the flag is
+not permission to drop security state.
 
-Another server limitation is independently measured: 0.10.3 accepts its immediately
-preceding refresh token, including repeated reuse in the tested sequence. Client
-rotation checks/tombstones do **not** fix server replay tolerance. Strict refresh
-reuse detection and grant-family revocation need a reviewed server/provider
-change with atomic state. No dependency upgrade or live OAuth config change is
-included here.
+`POST /oauth/device` requires explicit tenant, project and canonical principal,
+exact read/write scopes and the canonical resource. Device credentials contain
+256 random bits; the eight-symbol base32 user code has 40 random bits. Only hashes
+are stored. Requests expire after ten minutes. Polling starts at five seconds;
+early polls increase the interval by five seconds, including all subsequent polls.
+Atomic state/version transitions enforce pending, denied, expired and one-use
+redemption. A crash after consumption requires new authorization.
+
+The verification page is `/oauth/authorize/device`, within the existing
+Access-protected `/oauth/authorize*` login boundary. It verifies the actual Access
+user assertion and registered active OrgBrain identity, never a service token.
+It displays client, resource, principal, tenant, project, scopes and the matching
+user code. GET never approves. Same-origin POST needs the bound one-use CSRF nonce,
+secure cookie and explicit confirmation checkbox. CSP denies framing and external
+form actions. Authorization and redemption both check existing project permissions.
+The global principal/IP attempt budgets include unknown user-code guesses; device
+registration, authorization and polling are also bounded. The existing platform
+limiter and D1 are required and fail closed, independently of other fail-open flags.
+
+Device grants permit only search, conversation stage, confirm/status and basic MCP
+discovery. Search requires the exact project, `strict_project=true` and the evidence
+lane; staging checks the envelope project, and confirm/status resolve the project
+from the authoritative confirmation receipt. The identity endpoint has the same
+project check. Existing user activity, scopes and ACLs remain mandatory. These
+checks apply on the server even if a caller bypasses the dedicated client.
+
+The pinned `@cloudflare/workers-oauth-provider` **0.10.3** has no device grant handler.
+The adapter composes its exported `getOAuthApi`, client registration and
+`completeAuthorization` helpers: only after durable consent/consumption, it creates
+an internal S256 PKCE authorization code and exchanges it directly through the
+actual SDK token endpoint. The internal code/verifier are never displayed, persisted
+in the D1 device row or accepted from a public caller. The SDK still encrypts grants,
+issues bearer tokens and verifies their cryptography; no parallel token system or
+private SDK API is used.
+
+The SDK accepts its previous refresh token; a strongly consistent D1 ledger now
+closes that allowance for V2 families. It registers hashes before returning issued
+tokens, atomically consumes each refresh hash before SDK rotation, and revokes the
+family on a known used-hash replay. Full-token hashes identify a replay; unverified
+prefixes can only cause denial, never family mutation. Replacement hashes are
+inserted only while the family remains active. The partial unique index permits
+one active refresh hash per family; a competing
+native auth-code exchange fails closed and revokes the conflicting family.
+Protected requests check SDK-verified user/grant/client and immutable
+tenant/principal/project bindings against D1, including
+active user status. Revocation remains authoritative even if KV is stale or a
+concurrent SDK operation writes the old grant back. Uncertain rotation/storage
+failures require fresh authorization. Normal D1 binding reads use the primary;
+this security lane must not be changed to unconstrained replica reads.
+
+Used refresh hashes and family denial rows are retained for at least their full
+30-day family lifetime; they must not be discarded while replay remains possible.
+Device expiry and attempt windows are logical validity bounds. This change installs
+no cleanup cron or production retention mutation; operators must separately plan
+expired-state cleanup without shortening security retention.
 
 ## Verification and primary specifications
 
@@ -166,8 +216,13 @@ Node fixtures verify private storage, PKCE callback validation, rotation,
 redaction, unsupported-device failure, RFC8628 polling and CLI dry-run isolation.
 The provider integration executes the actual pinned provider source and modern
 MCP handlers over synthetic in-memory KV/D1, with an explicit synthetic trusted
-authorization helper. Two independent clients stage/review/confirm/read the same
-project, another project abstains, and logout of one leaves the other usable.
+authorization helper for the older native-flow fixtures. The new device tests use
+signed synthetic Access JWTs and the actual verification GET/POST, public DCR,
+SDK exchange and two independent headless JS clients. They stage/review/confirm/read
+the same project, reject direct escapes to another project, refresh and log out
+one client while the other remains usable. Tests also cover consent/expiry/rate
+limits, concurrent redemption, refresh/replay and reauthorization races, stale KV,
+storage failure and flag transitions.
 Downscoped access tokens are rejected from writes even though original grant
 props retain wider scopes. A Node shim provides only the provider's
 `WorkerEntrypoint` handler type check. This is neither real browser consent nor
