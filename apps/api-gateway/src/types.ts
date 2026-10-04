@@ -40,6 +40,7 @@ export type Env = {
   MCP_SERVICE_TOKENS_ADDITIONAL_JSON?: string;
   MCP_SERVICE_TOKENS_MACHINE_JSON?: string;
   MCP_OAUTH_RESOURCE?: string;
+  ORGBRAIN_OAUTH_SECURITY_V2?: "true" | "false";
   OAUTH_KV?: KVNamespace;
   OAUTH_PROVIDER?: OAuthHelpers;
   AI?: Ai;

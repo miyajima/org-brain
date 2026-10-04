@@ -3,7 +3,7 @@ import { assertPermission } from './rbac-service';
 import type { Env } from './types';
 
 export type RemoteOAuthIdentity = {
-  tenantId: string; principal: string; defaultRole: OrgRole; scopes: OrgBrainOAuthScope[];
+  tenantId: string; principal: string; defaultRole: OrgRole; scopes: OrgBrainOAuthScope[]; projectId?: string;
 };
 
 // Called ONLY from the OAuth provider's already authenticated apiHandler.
@@ -17,7 +17,7 @@ export async function remoteClientIdentity(request: Request, env: Env, props: Re
       !tenantId || !projectId || tenantId.length > 128 || projectId.length > 128) {
     return Response.json({ error: 'explicit_tenant_project_required' }, { status: 400, headers });
   }
-  if (tenantId !== props.tenantId || !props.scopes.includes('orgbrain:read')) {
+  if (tenantId !== props.tenantId || props.projectId && projectId !== props.projectId || !props.scopes.includes('orgbrain:read')) {
     return Response.json({ error: 'forbidden' }, { status: 403, headers });
   }
   const user = await env.OPEN_BRAIN_DB.prepare('SELECT status FROM user_profiles WHERE tenant_id=? AND principal=?')

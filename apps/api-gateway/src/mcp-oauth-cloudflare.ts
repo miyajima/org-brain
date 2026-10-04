@@ -1,16 +1,20 @@
-import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { AuthRequest, OAuthHelpers, OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import { ORGBRAIN_OAUTH_SCOPES, type OrgBrainOAuthScope } from "@org-brain/contracts";
 import { handleOrgBrainMcpRequest } from "./mcp";
 import { authorizeMcpRequest, type McpAuthResult } from "./mcp-security";
 import type { Env } from "./types";
 import { remoteClientIdentity } from "./remote-client-identity";
+import { OAuthDeviceSecurity } from './oauth-device-security';
+import { OAuthGrantLedger } from './oauth-grant-ledger';
 export { shouldUseMcpOAuth } from "./mcp-oauth-routing";
 
-type OAuthProps = {
+export type OAuthProps = {
   tenantId: string;
   principal: string;
   defaultRole: McpAuthResult["defaultRole"];
   scopes: OrgBrainOAuthScope[];
+  projectId?: string;
+  securityV2?: true;
 };
 
 type OAuthEnv = Env & { OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers };
@@ -53,6 +57,9 @@ async function authorizationHandler(request: Request, env: OAuthEnv, baseFetch: 
   const oauthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(parseRequest);
   const client = await env.OAUTH_PROVIDER.lookupClient(oauthRequest.clientId);
   if (!client) return new Response("Unknown OAuth client", { status: 400 });
+  if (env.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' && client.tokenEndpointAuthMethod !== 'none') {
+    return Response.json({ error: 'unauthorized_client' }, { status: 400 });
+  }
   const access = await resolveAccessUser(request, env);
   if (access.source !== "access-user") {
     return new Response("Interactive user authentication is required", { status: 403 });
@@ -67,15 +74,24 @@ async function authorizationHandler(request: Request, env: OAuthEnv, baseFetch: 
   const scopes = oauthRequest.scope.filter((scope): scope is OrgBrainOAuthScope =>
     ORGBRAIN_OAUTH_SCOPES.includes(scope as OrgBrainOAuthScope));
   if (scopes.length !== oauthRequest.scope.length) return new Response("Unsupported scope", { status: 400 });
+  if (env.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' && (scopes.length !== 2 || !scopes.includes('orgbrain:read') || !scopes.includes('orgbrain:write'))) {
+    return Response.json({ error: 'invalid_scope' }, { status: 400 });
+  }
+  const subject = await oauthProviderSubject(access.principal);
+  if (env.ORGBRAIN_OAUTH_SECURITY_V2 !== 'true') {
+    await new OAuthGrantLedger(env, env.OAUTH_PROVIDER).revokeClientFamilies(subject, oauthRequest.clientId);
+  }
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
     request: oauthRequest,
     // The provider serializes userId with colon delimiters. OrgBrain canonical
     // principals intentionally contain colons, so use a stable opaque subject
     // there and retain the canonical principal only inside encrypted props.
-    userId: await oauthProviderSubject(access.principal),
+    userId: subject,
     metadata: { tenant_id: access.tenantId, client_name: client.clientName ?? oauthRequest.clientId },
     scope: scopes,
-    props: { tenantId: access.tenantId, principal: access.principal, defaultRole: access.defaultRole, scopes } satisfies OAuthProps
+    props: { tenantId: access.tenantId, principal: access.principal, defaultRole: access.defaultRole, scopes,
+      ...(env.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' ? { securityV2: true as const } : {}) } satisfies OAuthProps,
+    revokeExistingGrants: env.ORGBRAIN_OAUTH_SECURITY_V2 !== 'true'
   });
   return Response.redirect(redirectTo, 302);
 }
@@ -86,8 +102,8 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
   if (!resource || new URL(resource).pathname !== "/mcp" || new URL(resource).protocol !== "https:") {
     throw new Error("MCP_OAUTH_RESOURCE must be the canonical HTTPS /mcp URL");
   }
-  const { default: OAuthProvider } = await import("@cloudflare/workers-oauth-provider");
-  return new OAuthProvider<Env>({
+  const { default: OAuthProvider, getOAuthApi } = await import("@cloudflare/workers-oauth-provider");
+  const options: OAuthProviderOptions<Env> = {
     apiRoute: "/mcp",
     apiHandler: {
       async fetch(request, oauthEnv, ctx) {
@@ -102,6 +118,16 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
           return new Response('Invalid OAuth authorization context', { status: 401 });
         }
         const effectiveProps = { ...props, scopes: token.scope as OrgBrainOAuthScope[] };
+        const security = new OAuthDeviceSecurity(oauthEnv, (oauthEnv as OAuthEnv).OAUTH_PROVIDER,
+          (req, bindings, execution) => provider.fetch(req, bindings, execution));
+        if (oauthEnv.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' || props.securityV2) {
+          try {
+            if (!await security.ledger.active(token.userId, token.grantId, props, token.grant.clientId)) {
+              return new Response('OAuth grant is inactive', { status: 401 });
+            }
+          } catch { return new Response('OAuth security state unavailable', { status: 503 }); }
+        }
+        if (props.projectId && !await security.guardProject(request, effectiveProps)) return new Response('Forbidden project or tool', { status: 403 });
         if (new URL(request.url).pathname === '/mcp/identity') return remoteClientIdentity(request, oauthEnv, effectiveProps);
         return handleOrgBrainMcpRequest(request, oauthEnv, ctx, {
           principal: props.principal,
@@ -130,5 +156,14 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
       bearer_methods_supported: ["header"],
       resource_name: "OrgBrain MCP"
     }
-  });
+  };
+  const provider = new OAuthProvider<Env>(options);
+  const helpers = getOAuthApi(options, env);
+  env.OAUTH_PROVIDER = helpers;
+  return { fetch: (request: Request, oauthEnv: Env, ctx: ExecutionContext) => {
+    const requestHelpers = getOAuthApi(options, oauthEnv);
+    oauthEnv.OAUTH_PROVIDER = requestHelpers;
+    const security = new OAuthDeviceSecurity(oauthEnv, requestHelpers, (req, bindings, execution) => provider.fetch(req, bindings, execution));
+    return security.fetch(request, oauthEnv, ctx);
+  } };
 }

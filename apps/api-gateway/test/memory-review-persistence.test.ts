@@ -79,7 +79,9 @@ describe('human review persistence', () => {
         corrected_content: 'このプロジェクトはOAuthを採用する。\n理由: 互換性を維持するため', corrected_summary: 'OAuthを採用する' };
       const receipt = await confirmProposedMemory(env, request, 'user:alice');
       expect(await confirmProposedMemory(env, request, 'user:alice')).toEqual(receipt);
-      expect(await getMemoryConfirmationStatus(env, request, 'user:alice')).toEqual(receipt);
+      expect(await getMemoryConfirmationStatus(env, request, 'user:alice')).toEqual({ ...receipt, project_id: 'org-brain' });
+      expect(JSON.parse(sql.prepare('SELECT response_json FROM memory_confirmation_reviews WHERE confirmation_id=?')
+        .get(proposed.confirmation_token).response_json)).toEqual(receipt);
       const memory = sql.prepare('SELECT content, summary, source_refs_json, rationale, reuse_rule FROM memories WHERE id = ?').get(receipt.memory_id);
       expect(memory.content).toBe(request.corrected_content);
       expect(memory.summary).toBe(request.corrected_summary);
