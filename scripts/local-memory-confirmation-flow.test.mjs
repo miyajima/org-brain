@@ -141,7 +141,7 @@ test('eager mode saves nothing without a retrieval miss or a safe durable candid
   } finally {await rm(root,{recursive:true,force:true});}
 });
 
-test('local Stop → prompt → question → approval → durable MCP receipt → search, with no network',async()=>{
+test('local Stop → prompt → question → approval → durable MCP receipt → search, with no network',async(t)=>{
   const root=await mkdtemp(join(tmpdir(),'local-confirm-flow-'));
   let connection;
   try {
@@ -194,7 +194,17 @@ test('local Stop → prompt → question → approval → durable MCP receipt �
     const connect=async()=>{
       const transport=new StdioClientTransport({command:process.execPath,args:['--no-warnings','--import',guard,cli,'mcp'],env,stderr:'pipe'});
       const client=new Client({name:'local-confirmation-flow-test',version:'1.0.0'},{versionNegotiation:{mode:{pin:'2026-07-28'},probe:{timeoutMs:2000}}});
-      await client.connect(transport);
+      const timing=process.env.ORGBRAIN_PROTOCOL_TIMING==='1',records=[];
+      const originalStart=StdioClientTransport.prototype.start;
+      if(timing) StdioClientTransport.prototype.start=async function(){
+        const started=performance.now();await originalStart.call(this);
+        const record={first_stdout_ms:null,pinned_mentioned:false};records.push(record);
+        this._process?.stdout?.on('data',chunk=>{record.first_stdout_ms??=Math.round(performance.now()-started);record.pinned_mentioned ||= chunk.toString().includes('2026-07-28');});
+      };
+      const started=performance.now();
+      try {await client.connect(transport);if(timing)t.diagnostic(JSON.stringify({protocol_probe:'connected',elapsed_ms:Math.round(performance.now()-started),probe_timeout_ms:2000,records}));}
+      catch(error){if(timing)t.diagnostic(JSON.stringify({protocol_probe:'failed',elapsed_ms:Math.round(performance.now()-started),probe_timeout_ms:2000,records,error_code:error.code}));await client.close();await transport.close();throw error;}
+      finally {if(timing)StdioClientTransport.prototype.start=originalStart;}
       return {client,close:async()=>{await client.close();await transport.close();}};
     };
     connection=await connect();

@@ -13,7 +13,10 @@ import {
   MEMORY_KINDS,
   RATIONALE_STATUSES,
   extractRationaleProposal,
+  normalizeMemoryReviewContext,
   ulid,
+  sha256,
+  renderMemoryPlaybook, type MemoryPlaybook,
   type ConfirmationState,
   type DecisionType,
   type EntityRole,
@@ -23,12 +26,16 @@ import {
   type MemoryKind,
   type ProposedEntity,
   type ProposedEvidence,
-  type MemoryWorkType
+  type MemoryWorkType,
+  type OrgRole
 } from "@org-brain/shared";
+import { upsertTaskCommitment } from "./memory-contract-service";
+import { assertPermission } from "./rbac-service";
 import { captureMemoryItems, runBatchChunks } from "./memory-lifecycle-service";
 import type { Env } from "./types";
 import {
   screenMemoryCaptureText,
+  screenMemoryReviewText,
   screenMemoryWriteText,
   screenOptionalMemoryWriteText
 } from "./memory-screening-service";
@@ -114,6 +121,8 @@ type MemoryReviewContext = {
 };
 
 type ConfirmMemoryRequest = {
+  expected_candidate_hash?: string;
+  expected_revision?: number;
   tenant_id?: string;
   confirmation_token?: string;
   approved?: boolean;
@@ -191,6 +200,9 @@ type StoredConfirmation = {
   payload_json: string;
   expires_at: number;
   consumed_at: number | null;
+  revision: number; candidate_hash: string | null; managed_review: number;
+  lifecycle_state: string; previous_confirmation_id: string | null; superseded_by: string | null;
+  cancellation_reason: string | null;
 };
 
 type ConfirmationPayload = {
@@ -198,6 +210,7 @@ type ConfirmationPayload = {
   source: string;
   actor_type: string | null;
   actor_id: string | null;
+  conversation_provenance?: Record<string, unknown>;
   proposed_memory: {
     external_key: string | null;
     content: string;
@@ -561,10 +574,16 @@ function parseConfirmRequest(rawBody: unknown): {
   correctedSummary: string | null;
   reviewLabel: string | null;
   reviewAnswer: string | null;
+  expectedCandidateHash: string | null;
+  expectedRevision: number | null;
 } {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as ConfirmMemoryRequest;
+  if (body.expected_revision !== undefined && (!Number.isSafeInteger(body.expected_revision) || body.expected_revision < 1)) throw new HttpError(400, "invalid_revision", "Expected revision must be a positive integer");
+  if (body.expected_candidate_hash !== undefined && !/^[a-f0-9]{64}$/u.test(body.expected_candidate_hash)) throw new HttpError(400, "invalid_candidate_hash", "Expected candidate hash must be SHA-256");
   return {
+    expectedCandidateHash: body.expected_candidate_hash ?? null,
+    expectedRevision: body.expected_revision ?? null,
     tenantId: parseOptionalString(body.tenant_id, "tenant_id", 128) ?? "default",
     confirmationToken: parseString(body.confirmation_token, "confirmation_token", 64),
     approved: parseOptionalBoolean(body.approved, "approved") ?? false,
@@ -582,45 +601,69 @@ function parseConfirmRequest(rawBody: unknown): {
 }
 
 function parseMemoryReviewContext(value: unknown): MemoryReviewContext | undefined {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, "invalid_payload", "review_context must be an object");
-  const row = value as Record<string, unknown>;
-  const candidateId = parseString(row.candidate_id, "review_context.candidate_id", 128);
-  const candidateHash = parseString(row.candidate_hash, "review_context.candidate_hash", 64);
-  if (!/^[a-f0-9]{64}$/u.test(candidateHash)) throw new HttpError(400, "invalid_payload", "candidate_hash must be sha256 hex");
-  if (!Array.isArray(row.source_references) || row.source_references.length > 8) throw new HttpError(400, "invalid_payload", "source_references must contain at most 8 references");
-  const references = row.source_references.map((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new HttpError(400, "invalid_payload", "source reference must be an object");
-    const reference = raw as Record<string, unknown>;
-    const result: Record<string, unknown> = { ref: screenMemoryWriteText(parseString(reference.ref, `source_references[${index}].ref`, 512), "source_reference") };
-    for (const key of ["type", "span_id", "parent_span_id", "role", "content_hash"]) {
-      const value = parseOptionalString(reference[key], `source_references[${index}].${key}`, 128);
-      if (value !== null) result[key] = screenMemoryWriteText(value, "source_reference");
+  try {
+    const context = normalizeMemoryReviewContext(value);
+    for (const field of ['conclusion', 'reason_summary', 'reuse_rule'] as const) {
+      if (context?.[field]) context[field] = screenMemoryReviewText(context[field]!, `review_context.${field}`);
     }
-    return result;
-  });
-  const displayed: Record<string, string> = {};
-  for (const key of ["conclusion", "reason_summary", "reuse_rule"]) {
-    const value = parseOptionalString(row[key], `review_context.${key}`, 2_000);
-    if (value !== null) displayed[key] = screenMemoryWriteText(value, `review_context.${key}`);
+    return context;
+  } catch (error) {
+    throw new HttpError(400, "invalid_review_context", error instanceof Error ? error.message : "Invalid review context");
   }
-  return { candidate_id: candidateId, candidate_hash: candidateHash, source_references: references, ...displayed };
 }
 
-async function storeConfirmation(env: Env, payload: ConfirmationPayload): Promise<string> {
-  const token = ulid();
+export type ConfirmationRevision = { confirmationToken: string; expectedCandidateHash: string; expectedRevision: number };
+async function candidateHashFromPayload(payload: ConfirmationPayload) { return payload.review_context?.candidate_hash ?? await sha256(JSON.stringify(payload)); }
+async function candidateHash(row: StoredConfirmation, payload: ConfirmationPayload) {
+  return row.candidate_hash ?? payload.review_context?.candidate_hash ?? await sha256(row.payload_json);
+}
+async function checkRevision(row: StoredConfirmation, payload: ConfirmationPayload, expected: { expectedCandidateHash: string | null; expectedRevision: number | null }, required = false) {
+  if (required && (!expected.expectedCandidateHash || !expected.expectedRevision)) throw new HttpError(409, "confirmation_guard_required", "Supply the displayed candidate hash and revision");
+  if (expected.expectedCandidateHash !== null && expected.expectedCandidateHash !== await candidateHash(row, payload)
+    || expected.expectedRevision !== null && expected.expectedRevision !== row.revision) throw new HttpError(409, "confirmation_revision_mismatch", "Candidate hash or revision has changed");
+}
+async function storeConfirmation(env: Env, payload: ConfirmationPayload, stableId?: string, revisionOf?: ConfirmationRevision) {
+  const token = stableId ?? ulid();
   const now = Date.now();
-  await env.OPEN_BRAIN_DB.prepare(
-    "INSERT INTO memory_confirmations(id, tenant_id, source, payload_json, created_at, expires_at, consumed_at) VALUES(?,?,?,?,?,?,NULL)"
+  const hash = payload.review_context?.candidate_hash ?? await sha256(JSON.stringify(payload));
+  if (revisionOf) {
+    const { row: previous, payload: oldPayload } = await loadConfirmation(env, payload.tenant_id, revisionOf.confirmationToken, true);
+    if (!payload.actor_id || oldPayload.actor_id !== payload.actor_id || oldPayload.proposed_memory.project_id !== payload.proposed_memory.project_id) throw new HttpError(403, "confirmation_scope_mismatch", "Revision must retain the proposal owner and project");
+    await checkRevision(previous, oldPayload, revisionOf, true);
+    if (token === previous.id || hash === await candidateHash(previous, oldPayload)) throw new HttpError(409, "revision_unchanged", "A revision requires a new candidate hash");
+    const json = JSON.stringify(payload);
+    const condition = "tenant_id=? AND id=? AND revision=? AND payload_json=? AND lifecycle_state='pending' AND consumed_at IS NULL AND expires_at>?";
+    const revisionResults = await env.OPEN_BRAIN_DB.batch([
+      env.OPEN_BRAIN_DB.prepare(`INSERT INTO memory_confirmations(id,tenant_id,source,payload_json,created_at,expires_at,consumed_at,revision,candidate_hash,managed_review,lifecycle_state,previous_confirmation_id,lifecycle_updated_at)
+        SELECT ?,?,?,?,?,?,NULL,?,?,1,'pending',?,? FROM memory_confirmations WHERE ${condition} ON CONFLICT(id) DO NOTHING`)
+        .bind(token,payload.tenant_id,payload.source,json,now,now+CONFIRMATION_TTL_MS,previous.revision+1,hash,previous.id,now,payload.tenant_id,previous.id,previous.revision,previous.payload_json,now),
+      env.OPEN_BRAIN_DB.prepare(`UPDATE memory_confirmations SET lifecycle_state='superseded',superseded_by=?,lifecycle_updated_at=? WHERE ${condition}
+        AND EXISTS(SELECT 1 FROM memory_confirmations n WHERE n.id=? AND n.previous_confirmation_id=? AND n.payload_json=? AND n.revision=?)`)
+        .bind(token,now,payload.tenant_id,previous.id,previous.revision,previous.payload_json,now,token,previous.id,json,previous.revision+1)
+    ]);
+    const current = await loadConfirmation(env,payload.tenant_id,previous.id,true);
+    const next = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM memory_confirmations WHERE tenant_id=? AND id=?").bind(payload.tenant_id,token).first<StoredConfirmation>();
+    if (current.row.lifecycle_state !== 'superseded' || current.row.superseded_by !== token || next?.previous_confirmation_id !== previous.id || next.payload_json !== json) throw new HttpError(409,"revision_conflict","Proposal is no longer pending or has a different successor");
+    return { token, created: revisionResults[0].meta.changes === 1, revision: next.revision, hash };
+  }
+  const stored = await env.OPEN_BRAIN_DB.prepare(
+    "INSERT INTO memory_confirmations(id, tenant_id, source, payload_json, created_at, expires_at, consumed_at, revision, candidate_hash, managed_review, lifecycle_state, lifecycle_updated_at) VALUES(?,?,?,?,?,?,NULL,1,?,?,'pending',?)" + (stableId ? " ON CONFLICT(id) DO NOTHING" : "")
   )
-    .bind(token, payload.tenant_id, payload.source, JSON.stringify(payload), now, now + CONFIRMATION_TTL_MS)
+    .bind(token, payload.tenant_id, payload.source, JSON.stringify(payload), now, now + CONFIRMATION_TTL_MS, hash, payload.conversation_provenance ? 1 : 0, now)
     .run();
-  return token;
+  if (stableId && stored.meta.changes === 0) {
+    const existing = await env.OPEN_BRAIN_DB.prepare("SELECT tenant_id, payload_json FROM memory_confirmations WHERE id = ?")
+      .bind(token).first<{ tenant_id: string; payload_json: string }>();
+    if (!existing || existing.tenant_id !== payload.tenant_id || existing.payload_json !== JSON.stringify(payload)) {
+      throw new HttpError(409, "conversation_proposal_changed", "Existing conversation proposal differs; supply a new event revision");
+    }
+  }
+  return { token, created: stableId ? stored.meta.changes === 1 : true, revision: 1, hash };
 }
 
 async function loadConfirmation(env: Env, tenantId: string, token: string, allowCompleted = false): Promise<{ row: StoredConfirmation; payload: ConfirmationPayload }> {
   const row = await env.OPEN_BRAIN_DB.prepare(
-    "SELECT id, tenant_id, source, payload_json, expires_at, consumed_at FROM memory_confirmations WHERE tenant_id = ? AND id = ?"
+    "SELECT * FROM memory_confirmations WHERE tenant_id = ? AND id = ?"
   )
     .bind(tenantId, token)
     .first<StoredConfirmation>();
@@ -629,6 +672,12 @@ async function loadConfirmation(env: Env, tenantId: string, token: string, allow
   if (!allowCompleted && row.expires_at <= Date.now()) throw new HttpError(410, "confirmation_expired", "Confirmation token expired");
   const payload = JSON.parse(row.payload_json) as ConfirmationPayload;
   return { row, payload };
+}
+
+export async function getMemoryConfirmationProject(env: Env, tenantId: string, token: string, principal: string) {
+  const { payload } = await loadConfirmation(env, tenantId, token, true);
+  if (payload.actor_id && payload.actor_id !== principal) throw new HttpError(403, "confirmation_owner_mismatch", "Confirmation belongs to another principal");
+  return payload.proposed_memory.project_id;
 }
 
 async function consumeConfirmation(env: Env, tenantId: string, token: string): Promise<void> {
@@ -779,7 +828,10 @@ async function persistInferredRationale(
   return { rationale_id: rationaleId, skipped: false };
 }
 
-export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
+export async function proposeMemoryWithRationale(env: Env, rawBody: unknown, options: {
+  stableConfirmationId?: string; conversationProvenance?: Record<string, unknown>; revisionOf?: ConfirmationRevision;
+} = {}) {
+  const reviewContext = parseMemoryReviewContext((rawBody as ProposeMemoryRequest)?.review_context);
   const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseProposeRequest(rawBody);
   const classification = await validateBusinessClassification(
     env,
@@ -792,8 +844,8 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
     ...parsedItem,
     business_category_id: classification.business_category_id,
     work_type: classification.work_type,
-    content: screenMemoryWriteText(parsedItem.content, "item.content"),
-    summary: screenOptionalMemoryWriteText(parsedItem.summary, "item.summary")
+    content: reviewContext ? screenMemoryReviewText(parsedItem.content, "item.content") : screenMemoryWriteText(parsedItem.content, "item.content"),
+    summary: reviewContext && parsedItem.summary != null ? screenMemoryReviewText(parsedItem.summary, "item.summary") : screenOptionalMemoryWriteText(parsedItem.summary, "item.summary")
   };
   const extracted = extractRationaleProposal({
     content: item.content,
@@ -808,10 +860,11 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
     actor_type: actorType,
     actor_id: actorId,
     proposed_memory: item,
+    ...(options.conversationProvenance ? { conversation_provenance: options.conversationProvenance } : {}),
     proposed_rationale: extracted.rationale,
     proposed_entities: extracted.entities,
     proposed_evidence: extracted.evidence,
-    review_context: parseMemoryReviewContext((rawBody as ProposeMemoryRequest).review_context)
+    review_context: reviewContext
   };
   if (payload.review_context) {
     payload.proposed_rationale = {
@@ -823,15 +876,19 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown) {
     // Do not retain extra, undisplayed prose or inferred entities from `item`.
     item.content = [payload.proposed_rationale.conclusion, `理由: ${payload.proposed_rationale.reason_summary}`,
       `再利用条件: ${payload.review_context.reuse_rule ?? "未確認"}`].join("\n");
+    if (payload.conversation_provenance?.playbook) item.content += '\n' + renderMemoryPlaybook(payload.conversation_provenance.playbook as MemoryPlaybook);
+    if (payload.conversation_provenance?.task_constraint) item.content += '\nTask-only constraint: ' + JSON.stringify({scope:payload.conversation_provenance.scope,limits:payload.conversation_provenance.task_constraint,grants_execution_permission:false});
     item.summary = payload.proposed_rationale.conclusion.slice(0, 1000);
     payload.proposed_entities = [];
     payload.proposed_evidence = [];
   }
-  const confirmationToken = await storeConfirmation(env, payload);
+  const { token: confirmationToken, created, revision, hash } = await storeConfirmation(env, payload, options.stableConfirmationId, options.revisionOf);
   return {
     tenant_id: tenantId,
     source,
     confirmation_token: confirmationToken,
+    candidate_hash: hash, revision, confirmation_guard_required: Boolean(payload.conversation_provenance || options.revisionOf),
+    ...(options.stableConfirmationId ? { proposal_created: created } : {}),
     candidate_id: payload.review_context?.candidate_id ?? null,
     review_contract: "memory-review-feedback/v1",
     proposed_memory: item,
@@ -1207,6 +1264,17 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
     };
   }
 
+  if (payload.conversation_provenance?.memory_type === 'task_constraint') {
+    const scope = payload.conversation_provenance.scope as Record<string, unknown>;
+    const limit = payload.conversation_provenance.task_constraint as Record<string, unknown>;
+    if (Date.parse(String(scope.expires_at)) <= Date.now()) throw new HttpError(410,'task_constraint_expired','Task approval expired');
+    const saved = await upsertTaskCommitment(env,{tenant_id:request.tenantId,project_id:payload.proposed_memory.project_id,
+      task_key:String(scope.task_key),decision_key:String(limit.decision_key),question_fingerprint:'sha256:' + await candidateHashFromPayload(payload),
+      question:payload.proposed_rationale.conclusion,answer:{label:JSON.stringify({ ...limit,expires_at:scope.expires_at,grants_execution_permission:false })},
+      confirmation_state:'user_confirmed',evidence:{type:'request_user_input_result',digest:'sha256:' + await sha256(JSON.stringify({candidate_hash:await candidateHashFromPayload(payload),answer:request.reviewAnswer,confirmation:request.confirmationToken}))},expires_at:Date.parse(String(scope.expires_at))});
+    await consumeConfirmation(env,request.tenantId,request.confirmationToken);
+    return {tenant_id:request.tenantId,approved:true,saved:true,memory_id:null,rationale_id:null,task_commitment_id:saved.commitment.id,persistence_scope:'task',active_memories_created:0};
+  }
   const textCorrected = Boolean(request.correctedContent || request.correctedSummary
     || request.conclusion && request.conclusion !== payload.proposed_rationale.conclusion
     || request.reasonSummary && request.reasonSummary !== payload.proposed_rationale.reason_summary);
@@ -1232,6 +1300,10 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
       ? request.correctedContent.match(/(?:^|\n)再利用条件[:：]\s*([^\n]+)/u)?.[1] ?? null
       : payload.review_context?.reuse_rule ?? null,
     source_references: payload.review_context?.source_references ?? [],
+    ...(payload.conversation_provenance ? {
+      verification_state: "unverified" as const, verified_at: null,
+      learning: { conversation_provenance: payload.conversation_provenance }
+    } : {}),
     kind: "semantic" as const,
     lifecycle_state: "active" as const
   };
@@ -1314,20 +1386,45 @@ type ConfirmationReviewRow = {
 };
 
 async function confirmationRequestHash(request: ReturnType<typeof parseConfirmRequest>) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(request)));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(Object.fromEntries(Object.entries(request).filter(([key,value]) => !(value === null && ["expectedCandidateHash","expectedRevision"].includes(key)))))));
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function recoverConsumedConfirmation(env: Env, request: ReturnType<typeof parseConfirmRequest>, payload: ConfirmationPayload) {
+  // consumed_at is written only after persistence and associations complete.
+  // Recover the receipt from durable evidence instead of re-running an active write.
+  if (!request.approved) return { tenant_id:request.tenantId,approved:false,saved:false };
+  if (payload.conversation_provenance?.memory_type === 'task_constraint') {
+    const digest='sha256:' + await sha256(JSON.stringify({candidate_hash:await candidateHashFromPayload(payload),answer:request.reviewAnswer,confirmation:request.confirmationToken}));
+    const row=await env.OPEN_BRAIN_DB.prepare("SELECT id FROM task_commitments WHERE tenant_id=? AND evidence_digest=?").bind(request.tenantId,digest).first<{id:string}>();
+    if (row) return { tenant_id:request.tenantId,approved:true,saved:true,memory_id:null,rationale_id:null,task_commitment_id:row.id,persistence_scope:'task',active_memories_created:0 };
+  } else {
+    const row=await env.OPEN_BRAIN_DB.prepare("SELECT memory_id,confirmation_state FROM decision_rationales WHERE tenant_id=? AND id=?").bind(request.tenantId,`confirmation:${request.confirmationToken}`).first<{memory_id:string;confirmation_state:string}>();
+    if (row) return {tenant_id:request.tenantId,approved:true,saved:true,memory_id:row.memory_id,rationale_id:`confirmation:${request.confirmationToken}`,confirmation_state:row.confirmation_state};
+  }
+  throw new HttpError(409,'confirmation_recovery_incomplete','Consumed confirmation has no complete persistence evidence; inspect its status');
 }
 
 export async function confirmProposedMemory(env: Env, rawBody: unknown, principal?: string) {
   const request = parseConfirmRequest(rawBody);
   const { row: confirmation, payload } = await loadConfirmation(env, request.tenantId, request.confirmationToken, true);
   if (principal && payload.actor_id && payload.actor_id !== principal) throw new HttpError(403, "confirmation_owner_mismatch", "Confirmation belongs to another principal");
+  await checkRevision(confirmation, payload, request, confirmation.managed_review === 1);
+  if (['superseded','cancelled'].includes(confirmation.lifecycle_state)) throw new HttpError(409, 'confirmation_terminal', 'Proposal is superseded or cancelled; show the current revision');
+  if (payload.review_context) {
+    for (const [field, value] of Object.entries({ corrected_content: request.correctedContent,
+      corrected_summary: request.correctedSummary, conclusion: request.conclusion,
+      reason_summary: request.reasonSummary, review_answer: request.reviewAnswer })) {
+      if (value !== null) screenMemoryReviewText(value, field);
+    }
+  }
   const answer = request.reviewAnswer === null ? null : screenMemoryWriteText(request.reviewAnswer, "review_answer");
   const selectedCategory = memoryCategoryFromConfirmationAnswer(answer);
   const answerLabel = selectedCategory ? "accepted" : answer === null ? null : classifyMemoryReviewAnswer(answer);
   const modified = Boolean(request.correctedContent || request.correctedSummary
     || request.conclusion && request.conclusion !== payload.proposed_rationale.conclusion
     || request.reasonSummary && request.reasonSummary !== payload.proposed_rationale.reason_summary);
+  if (modified && ['playbook','task_constraint'].includes(String(payload.conversation_provenance?.memory_type))) throw new HttpError(409,'typed_revision_required','Revise the typed candidate and review its new hash instead of editing text separately');
   const label = request.reviewLabel ?? answerLabel ?? (request.approved ? modified ? "corrected" : "accepted" : "not_needed");
   if (request.reviewLabel && answerLabel && request.reviewLabel !== answerLabel) throw new HttpError(400, "review_label_mismatch", "Review label must match the actual answer");
   if (!request.approved && ["accepted", "corrected"].includes(label)) throw new HttpError(400, "review_label_mismatch", "A declined write cannot have an approved label");
@@ -1349,34 +1446,42 @@ export async function confirmProposedMemory(env: Env, rawBody: unknown, principa
   if (existing?.response_json) return JSON.parse(existing.response_json) as Record<string, unknown>;
   if (existing?.save_state === "processing") throw new HttpError(409, "confirmation_in_progress", "Read confirmation status before resuming");
   if (!existing && confirmation.consumed_at) throw new HttpError(409, "confirmation_consumed", "Confirmation token already used");
-  if (confirmation.expires_at <= Date.now()) throw new HttpError(410, "confirmation_expired", "Confirmation token expired");
+  if (confirmation.expires_at <= Date.now() && !(confirmation.lifecycle_state === "processing" && existing?.save_state === "failed")) throw new HttpError(410, "confirmation_expired", "Confirmation token expired");
   const assessment = assessMemoryUsefulnessV2({ stage: "capture", basis: "human_confirmation", project_id: payload.proposed_memory.project_id });
   const now = Date.now();
-  const claim = existing
-    ? await env.OPEN_BRAIN_DB.prepare("UPDATE memory_confirmation_reviews SET save_state = 'processing', error_code = NULL, updated_at = ? WHERE tenant_id = ? AND confirmation_id = ? AND save_state = 'failed'")
-      .bind(now, request.tenantId, request.confirmationToken).run()
-    : await env.OPEN_BRAIN_DB.prepare(`INSERT INTO memory_confirmation_reviews(
+  const reviewStatement = existing
+    ? env.OPEN_BRAIN_DB.prepare("UPDATE memory_confirmation_reviews SET save_state = 'processing', error_code = NULL, updated_at = ? WHERE tenant_id = ? AND confirmation_id = ? AND save_state = 'failed' AND EXISTS(SELECT 1 FROM memory_confirmations c WHERE c.id=memory_confirmation_reviews.confirmation_id AND c.lifecycle_state='processing')")
+      .bind(now, request.tenantId, request.confirmationToken)
+    : env.OPEN_BRAIN_DB.prepare(`INSERT INTO memory_confirmation_reviews(
         confirmation_id, tenant_id, project_id, owner_principal, candidate_id, candidate_hash, original_json, source_refs_json,
         answer_label, answer_text, corrected_json, assessment_json, request_hash, save_state, created_at, updated_at
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'processing',?,?) ON CONFLICT(confirmation_id) DO NOTHING`).bind(
+      ) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,'processing',?,? FROM memory_confirmations c WHERE c.id=? AND c.tenant_id=? AND c.lifecycle_state='processing' ON CONFLICT(confirmation_id) DO NOTHING`).bind(
         request.confirmationToken, request.tenantId, payload.proposed_memory.project_id, payload.actor_id,
         payload.review_context?.candidate_id ?? null, payload.review_context?.candidate_hash ?? null,
         JSON.stringify({ memory: payload.proposed_memory, rationale: payload.proposed_rationale }),
         JSON.stringify(payload.review_context?.source_references ?? []), label, answer ?? "",
         modified ? JSON.stringify({ content: request.correctedContent, summary: request.correctedSummary, conclusion: request.conclusion, reason_summary: request.reasonSummary }) : null,
-        JSON.stringify(assessment), requestHash, now, now
-      ).run();
-  if (claim.meta.changes !== 1) throw new HttpError(409, "confirmation_in_progress", "Read confirmation status before resuming");
+        JSON.stringify(assessment), requestHash, now, now, request.confirmationToken, request.tenantId
+      );
+  const claims = await env.OPEN_BRAIN_DB.batch([
+    env.OPEN_BRAIN_DB.prepare(`UPDATE memory_confirmations SET lifecycle_state='processing',lifecycle_updated_at=? WHERE tenant_id=? AND id=? AND revision=? AND payload_json=? AND (consumed_at IS NULL OR lifecycle_state='processing') AND (expires_at>? OR lifecycle_state='processing')
+      AND (lifecycle_state='pending' OR lifecycle_state='processing' AND EXISTS(SELECT 1 FROM memory_confirmation_reviews r WHERE r.confirmation_id=memory_confirmations.id AND r.save_state='failed'))`)
+      .bind(now,request.tenantId,request.confirmationToken,confirmation.revision,confirmation.payload_json,now),
+    reviewStatement
+  ]);
+  const claim = claims[0];
+  if (claim.meta.changes !== 1 || claims[1].meta.changes !== 1) throw new HttpError(409, "confirmation_in_progress", "Read confirmation status before resuming");
   try {
-    const saved = await persistConfirmedMemory(env, request, payload);
+    const saved = confirmation.consumed_at ? await recoverConsumedConfirmation(env,request,payload) : await persistConfirmedMemory(env, request, payload);
     const result = { ...saved, candidate_id: payload.review_context?.candidate_id ?? null,
       review_id: request.confirmationToken, review_label: label, review_answer: answer ?? "",
-      memory_category: selectedCategory, usefulness: assessment };
-    await env.OPEN_BRAIN_DB.prepare(`UPDATE memory_confirmation_reviews SET save_state = ?, memory_id = ?, rationale_id = ?,
+      memory_category: selectedCategory, usefulness: assessment, candidate_hash: await candidateHash(confirmation,payload), revision: confirmation.revision, lifecycle_state: saved.saved ? "saved" : "declined" };
+    await env.OPEN_BRAIN_DB.batch([env.OPEN_BRAIN_DB.prepare(`UPDATE memory_confirmation_reviews SET save_state = ?, memory_id = ?, rationale_id = ?,
       response_json = ?, updated_at = ? WHERE tenant_id = ? AND confirmation_id = ?`).bind(
         saved.saved ? "saved" : "not_requested", "memory_id" in saved ? saved.memory_id : null,
         "rationale_id" in saved ? saved.rationale_id : null, JSON.stringify(result), Date.now(), request.tenantId, request.confirmationToken
-      ).run();
+      ), env.OPEN_BRAIN_DB.prepare("UPDATE memory_confirmations SET lifecycle_state=?,lifecycle_updated_at=? WHERE tenant_id=? AND id=? AND lifecycle_state='processing'")
+        .bind(saved.saved ? 'saved' : 'declined',Date.now(),request.tenantId,request.confirmationToken)]);
     return result;
   } catch (error) {
     await env.OPEN_BRAIN_DB.prepare("UPDATE memory_confirmation_reviews SET save_state = 'failed', error_code = 'confirmation_save_failed', updated_at = ? WHERE tenant_id = ? AND confirmation_id = ?")
@@ -1396,8 +1501,26 @@ export async function getMemoryConfirmationStatus(env: Env, rawBody: unknown, pr
   if (review?.response_json) return JSON.parse(review.response_json) as Record<string, unknown>;
   return { tenant_id: tenantId, project_id: payload.proposed_memory.project_id,
     candidate_id: payload.review_context?.candidate_id ?? null,
-    status: review?.save_state ?? (row.consumed_at ? "consumed" : row.expires_at <= Date.now() ? "expired" : "pending"),
+    candidate_hash: await candidateHash(row,payload), revision: row.revision, lifecycle_state: row.lifecycle_state, superseded_by: row.superseded_by, previous_confirmation_id: row.previous_confirmation_id, confirmation_guard_required: row.managed_review === 1,
+    status: ['superseded','cancelled'].includes(row.lifecycle_state) ? row.lifecycle_state : review?.save_state ?? (row.consumed_at ? "consumed" : row.expires_at <= Date.now() ? "expired" : "pending"),
     saved: null, review_label: review?.answer_label ?? null };
+}
+
+export async function cancelMemoryConfirmation(env: Env, tenantId: string, input: { confirmation_token: string; expected_candidate_hash: string; expected_revision: number; reason: string }, principal: string, fallbackRole?: OrgRole) {
+  if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.length>500) throw new HttpError(400,'invalid_cancellation_reason','Cancellation reason must be 1–500 characters');
+  const { row, payload } = await loadConfirmation(env,tenantId,input.confirmation_token,true);
+  if (!principal || payload.actor_id !== principal) throw new HttpError(403,'confirmation_owner_mismatch','Only the proposal owner can cancel');
+  await assertPermission(env,{ tenantId,projectId: payload.proposed_memory.project_id,principal,permission: "write",fallbackRole });
+  await checkRevision(row,payload,{ expectedCandidateHash: input.expected_candidate_hash, expectedRevision: input.expected_revision },true);
+  const reason = screenMemoryReviewText(parseString(input.reason,'reason',500),'reason');
+  if (row.lifecycle_state === 'cancelled') {
+    if (row.cancellation_reason !== reason) throw new HttpError(409,'cancellation_changed','Cancellation already has a different reason');
+    return getMemoryConfirmationStatus(env,{ tenant_id: tenantId, confirmation_token: row.id },principal);
+  }
+  const changed = await env.OPEN_BRAIN_DB.prepare("UPDATE memory_confirmations SET lifecycle_state='cancelled',consumed_at=?,lifecycle_updated_at=?,cancellation_reason=? WHERE tenant_id=? AND id=? AND revision=? AND payload_json=? AND lifecycle_state='pending' AND consumed_at IS NULL AND expires_at>?")
+    .bind(Date.now(),Date.now(),reason,tenantId,row.id,row.revision,row.payload_json,Date.now()).run();
+  if (changed.meta.changes !== 1) throw new HttpError(409,'cancellation_conflict','Only a current pending proposal can be cancelled');
+  return getMemoryConfirmationStatus(env,{ tenant_id: tenantId, confirmation_token: row.id },principal);
 }
 
 export async function listMemoryConfirmationReviews(env: Env, tenantId: string, options: { principal: string; projectId?: string; limit?: number; cursor?: string }) {

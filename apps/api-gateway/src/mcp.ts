@@ -1,5 +1,5 @@
+import { receiveCloudUseObservation } from './memory-use-observation-service';
 import {
-  observeMemoryUse,
   MEMORY_READ_SCOPES,
   HttpError,
   sha256,
@@ -62,7 +62,9 @@ import {
   captureMemoryWithInferredRationale,
   confirmProposedMemory,
   getMemoryConfirmationStatus,
-  proposeMemoryWithRationale
+  proposeMemoryWithRationale,
+  getMemoryConfirmationProject,
+  cancelMemoryConfirmation
 } from "./rationale-service";
 import { assertPermission } from "./rbac-service";
 import { appendAuditEvent } from "./audit-service";
@@ -87,6 +89,8 @@ import { getDomainContext, queryMetrics, searchManagedObjects } from "./domain-m
 import { getDomainRecall, recordDomainRecallFeedback } from "./domain-recall-service";
 import { getMemoryQualityAudit } from "./memory-quality-service";
 import { listMemoryIntegrityIssues, proposeMemoryRelation, reportMemoryFeedback, reviewMemoryFeedback, reviewMemoryRelation } from "./memory-integrity-service";
+import { isResumeInstruction } from "./natural-task-search-service";
+import { stageConversationMemories } from "./conversation-memory-service";
 import { getMemoryAgingPlan } from "./memory-aging-service";
 import { ingestVerifiedKnowledgeBundle } from "./verified-ingestion-service";
 import { enqueueMemoryExtraction } from "./memory-extraction-enqueue-service";
@@ -185,6 +189,9 @@ const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
   orgbrain_memory_use_evaluate: "Record an explicit use assessment. payload requires id, context_id and either proof_id or feedback {contribution: positive|negative|unknown,statement}. Supply supersedes_id for correction, optionally effect_event_id. Verified action and outcome evidence remain necessary for any ranking contribution. Never infer usefulness from task success or consent to save.",
   orgbrain_memory_use_revoke: "Revoke an existing use. payload requires id. Invalidates its context search and ranking contributions without editing the original memory.",
   orgbrain_memories_confirmation_status: "Read the result of the same confirmation after a timeout. Never infer saved from an answer or resend an in-progress confirmation.",
+  orgbrain_conversation_memories_revise: "Preview or atomically supersede one pending candidate. Execute needs the current token/hash/revision and new preview hash. Never infer approval; superseded tokens cannot save.",
+  orgbrain_memories_confirmation_cancel: "Cancel an owned current pending proposal with its displayed hash/revision and explicit reason. A processing confirmation cannot be cancelled. No active memory is created.",
+  orgbrain_conversation_memories_stage: "Preview or stage explicit bounded conversation-memory/v1 summaries as pending human-review proposals. Execute requires the exact preview hash. Caller-supplied roles/hashes remain unverified; this tool never saves active memory or reads transcripts. Use the existing confirm tool only after the actual human answer.",
   orgbrain_memory_quality_audit: "Run the read-only memory-quality-audit/v1 evaluator. Returns aggregate coverage, reason-code samples, and no raw memory content.",
   orgbrain_memory_feedback_report: "Report stale or wrong information for an exact memory version with evidence. Reporting does not change retrieval.",
   orgbrain_memory_feedback_review: "Confirm or reject a version-scoped report. A confirmed wrong report suppresses only the matching current memory version.",
@@ -476,7 +483,8 @@ class OrgBrainMcpTools {
       "orgbrain_memory_observe",
       learningEventShape,
       async (event) => {
-        if (event.use_observation) return toContent(observeMemoryUse(event.use_observation));
+        if (event.use_observation) return toContent(await receiveCloudUseObservation(this.env, this.props.tenantId,
+          this.props.principal, event.use_observation, this.props.defaultRole));
         if (event.schema_version === 2 && !validateMemoryContractV2Event(event)) {
           throw new HttpError(400, "memory_contract_schema_invalid", "memory contract v2 observation does not match the shared schema");
         }
@@ -810,7 +818,50 @@ class OrgBrainMcpTools {
       }
     );
 
-    registerTool(this.server, 
+    registerTool(this.server,
+      "orgbrain_conversation_memories_stage",
+      {
+        tenant_id: z.string().optional(),
+        conversation: z.record(z.string(), z.unknown()),
+        execute: z.boolean().optional(),
+        expected_plan_hash: z.string().regex(/^[a-f0-9]{64}$/u).optional()
+      },
+      async ({ tenant_id, conversation, execute, expected_plan_hash }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        const projectId = typeof conversation.project_id === "string" ? conversation.project_id : null;
+        await this.requirePermission(tenantId, "write", projectId);
+        return toContent(await this.auditedMutation(tenantId, "mcp.orgbrain_conversation_memories_stage", "memory_confirmation",
+          () => stageConversationMemories(this.env, tenantId, conversation, {
+            principal: this.props.principal, fallbackRole: this.props.defaultRole,
+            execute, expectedPlanHash: expected_plan_hash
+          })));
+      }
+    );
+
+    registerTool(this.server, "orgbrain_conversation_memories_revise", {
+      tenant_id: z.string().optional(), confirmation_token: z.string().min(1).max(64),
+      expected_candidate_hash: z.string().regex(/^[a-f0-9]{64}$/u), expected_revision: z.number().int().min(1),
+      conversation: z.record(z.string(), z.unknown()), execute: z.boolean().optional(),
+      expected_plan_hash: z.string().regex(/^[a-f0-9]{64}$/u).optional()
+    }, async ({ tenant_id, confirmation_token, expected_candidate_hash, expected_revision, conversation, execute, expected_plan_hash }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      const projectId = await getMemoryConfirmationProject(this.env,tenantId,confirmation_token,this.props.principal);
+      await this.requirePermission(tenantId,"write",projectId);
+      return toContent(await this.auditedMutation(tenantId,"mcp.orgbrain_conversation_memories_revise","memory_confirmation", () =>
+        stageConversationMemories(this.env,tenantId,conversation,{ principal: this.props.principal, fallbackRole: this.props.defaultRole,
+          execute, expectedPlanHash: expected_plan_hash, revisionOf: { confirmationToken: confirmation_token, expectedCandidateHash: expected_candidate_hash, expectedRevision: expected_revision } })));
+    });
+    registerTool(this.server, "orgbrain_memories_confirmation_cancel", {
+      tenant_id: z.string().optional(), confirmation_token: z.string().min(1).max(64),
+      expected_candidate_hash: z.string().regex(/^[a-f0-9]{64}$/u), expected_revision: z.number().int().min(1), reason: z.string().min(1).max(500)
+    }, async ({ tenant_id, ...input }) => {
+      const tenantId = normalizeTenant(tenant_id,this.props);
+      const projectId = await getMemoryConfirmationProject(this.env,tenantId,input.confirmation_token,this.props.principal);
+      await this.requirePermission(tenantId,"write",projectId);
+      return toContent(await this.auditedMutation(tenantId,"mcp.orgbrain_memories_confirmation_cancel","memory_confirmation", () => cancelMemoryConfirmation(this.env,tenantId,input,this.props.principal,this.props.defaultRole)));
+    });
+
+    registerTool(this.server,
       "orgbrain_memories_propose",
       {
         tenant_id: z.string().optional(),
@@ -901,6 +952,8 @@ class OrgBrainMcpTools {
       {
         tenant_id: z.string().optional(),
         confirmation_token: z.string().min(1).max(64),
+        expected_candidate_hash: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
+        expected_revision: z.number().int().min(1).optional(),
         approved: z.boolean(),
         corrected_content: z.string().min(1).max(20000).optional(),
         corrected_summary: z.string().min(1).max(1000).optional(),
@@ -927,7 +980,8 @@ class OrgBrainMcpTools {
       },
       async ({ tenant_id, ...payload }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
-        await this.requirePermission(tenantId, "write");
+        const projectId = await getMemoryConfirmationProject(this.env, tenantId, payload.confirmation_token, this.props.principal);
+        await this.requirePermission(tenantId, "write", projectId);
         const result = await this.auditedMutation(
           tenantId,
           "mcp.orgbrain_memories_confirm",
@@ -943,7 +997,8 @@ class OrgBrainMcpTools {
       { tenant_id: z.string().optional(), confirmation_token: z.string().min(1).max(64) },
       async ({ tenant_id, confirmation_token }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
-        await this.requirePermission(tenantId, "read");
+        const projectId = await getMemoryConfirmationProject(this.env, tenantId, confirmation_token, this.props.principal);
+        await this.requirePermission(tenantId, "read", projectId);
         return toContent(await getMemoryConfirmationStatus(this.env, { tenant_id: tenantId, confirmation_token }, this.props.principal));
       }
     );
@@ -1010,12 +1065,13 @@ class OrgBrainMcpTools {
         generation_id: z.string().max(128).nullable().optional(),
         ranking_profile_id: z.string().max(128).nullable().optional(),
         task_id: z.string().max(128).nullable().optional(),
+        task_context: z.object({project_id:z.string().min(1).max(128),task_key:z.string().min(1).max(128),subject_query:z.string().min(1).max(500)}).strict().optional(),
         use_snapshot_id: z.string().max(128).optional(),
         use_context: z.object({task:z.string().max(600).optional(),target:z.string().max(600).optional(),constraints:z.string().max(600).optional(),conditions:z.string().max(600).optional()}).optional(),
         trace_id: z.string().max(128).nullable().optional(),
         external_run_id: z.string().max(256).nullable().optional()
       },
-      async ({ scope, tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, use_context, use_snapshot_id, trace_id, external_run_id }) => {
+      async ({ scope, tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, task_context, use_context, use_snapshot_id, trace_id, external_run_id }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, generation_id || ranking_profile_id ? "admin" : "read", project_id);
         const request = {
@@ -1038,12 +1094,13 @@ class OrgBrainMcpTools {
           reason_text,
           generation_id,
           ranking_profile_id,
-          task_id,
+          task_id, task_context,
           use_context,
           use_snapshot_id,
           trace_id,
           external_run_id
         };
+        if (isResumeInstruction(q) && search_scope && search_scope !== "evidence") throw new HttpError(400,"resume_evidence_scope_required","Resume context currently supports evidence memory only");
         if (search_scope === "governance") {
           return toContent(await searchDecisionMemories(this.env, request, { principal: this.props?.principal }));
         }
@@ -1123,6 +1180,7 @@ class OrgBrainMcpTools {
         business_category_id: z.string().max(128).nullable().optional(),
         work_type: workTypeSchema.nullable().optional(),
         task_id:z.string().max(128).optional(),
+        task_context: z.object({project_id:z.string().min(1).max(128),task_key:z.string().min(1).max(128),subject_query:z.string().min(1).max(500)}).strict().optional(),
         use_snapshot_id:z.string().max(128).optional(),
         use_context:z.object({task:z.string().max(600).optional(),target:z.string().max(600).optional(),constraints:z.string().max(600).optional(),conditions:z.string().max(600).optional()}).optional(),
         q: z.string().min(1).max(500),
@@ -1130,14 +1188,14 @@ class OrgBrainMcpTools {
         token_budget: z.number().int().min(512).max(16000).optional(),
         search_mode: z.enum(["hybrid_v3", "hybrid_v4"]).optional()
       },
-      async ({ tenant_id, project_id, business_category_id, work_type, task_id, use_context, use_snapshot_id, q, top_k, token_budget, search_mode }) => {
+      async ({ tenant_id, project_id, business_category_id, work_type, task_id, task_context, use_context, use_snapshot_id, q, top_k, token_budget, search_mode }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", project_id);
         return toContent(await retrieveMemoryContext(this.env, {
           tenant_id: tenantId,
           project_id,
           business_category_id,
-          work_type, task_id, use_context, use_snapshot_id,
+          work_type, task_id, task_context, use_context, use_snapshot_id,
           q,
           top_k,
           token_budget,

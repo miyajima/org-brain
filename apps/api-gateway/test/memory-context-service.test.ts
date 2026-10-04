@@ -19,7 +19,7 @@ import { searchMemories } from "../src/memory-search-service";
 
 const search = vi.mocked(searchMemories);
 
-function database() {
+function database(units: Array<Record<string, unknown>> = []) {
   const statement = {
     bind() {
       return this;
@@ -29,8 +29,8 @@ function database() {
     }
   };
   return {
-    prepare() {
-      return statement;
+    prepare(query: string) {
+      return { ...statement, async all() { return { results: query.includes("FROM memory_retrieval_units_v4") ? units : [] }; } };
     }
   };
 }
@@ -92,6 +92,39 @@ function searchPayload(results: ReturnType<typeof hit>[], semanticAvailable: boo
 describe("retrieveMemoryContext", () => {
   beforeEach(() => {
     search.mockReset();
+  });
+
+  it("rechecks natural task coverage after top_k and token budgeting before recording delivery", async () => {
+    const q = "What rollback checks should we use and what cache rules should we use?";
+    const payload = searchPayload([
+      hit("rollback", { lexical: 0, semantic: 0, graph: 0 }, { content_preview: "Rollback checks require a fixture." }),
+      hit("cache", { lexical: 1 }, { content_preview: "Cache rules require a checksum." })
+    ], true);
+    payload.q = q;
+    const meta = { ...payload.meta, task_query: { applied: true, coverage: "covered", basis: "lexical_relevance", requires_parent_review: true } };
+    search.mockResolvedValue({ ...payload, meta } as never);
+    const missing = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 1, token_budget: 512 });
+    expect(missing.evidence_bundle.evidence).toEqual([]);
+    expect(missing.meta.task_query?.coverage).toBe("missing");
+    expect(missing.meta.usage_items).toEqual([]);
+    expect(missing.meta.top_result_ids).toEqual([]);
+    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 2, token_budget: 512 });
+    expect(covered.evidence_bundle.evidence).toHaveLength(2);
+    expect(covered.meta.task_query?.coverage).toBe("covered");
+  });
+
+  it("uses a subject-matching segment instead of an unrelated first atomic projection", async () => {
+    const q = "What rollback checks should we use?";
+    const payload = searchPayload([hit("rollback", { lexical: 1 }, { content_preview: "Rollback checks require a fixture." })], true);
+    search.mockResolvedValue({ ...payload, q, meta: { ...payload.meta, task_query: { applied: true, coverage: "covered" } } } as never);
+    const env = { OPEN_BRAIN_DB: database([
+      { memory_id: "rollback", unit_type: "atomic", text: "Reason: preserve synthetic scope.", extraction_state: "degraded" },
+      { memory_id: "rollback", unit_type: "segment", text: "Rollback checks require a fixture. Stop on mismatch.", extraction_state: "degraded" }
+    ]) };
+    const response = await retrieveMemoryContext(env as never, { q, top_k: 1, token_budget: 512 });
+    expect(response.meta.task_query?.coverage).toBe("covered");
+    expect(response.evidence_bundle.evidence[0]?.text).toContain("Stop on mismatch");
+    expect(JSON.stringify(response.evidence_bundle.evidence)).not.toContain("Reason:");
   });
 
   it("bounds the response to top_k references and does not return unselected bodies", async () => {
