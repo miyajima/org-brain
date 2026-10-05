@@ -115,6 +115,19 @@ test("a stalled additional search returns within the phase deadline and keeps pr
   assert.equal(result.report.additional_searches, 1);
 });
 
+test("freshness verification shares the phase deadline and stops before judging stale candidates", async () => {
+  let judgments = 0;
+  const stalled = await run({ timeoutMs: 10, refresh: async () => new Promise(() => {}),
+    judge: async (options) => { judgments++; return decision(options); } });
+  assert.equal(stalled.report.reason_code, "timeout");
+  assert.equal(judgments, 0);
+  assert.equal(stalled.report.additional_searches, 0);
+  const revoked = await run({ refresh: async () => ({ results: [], changed: true }),
+    judge: async () => { throw new Error("revoked evidence must not reach judge"); } });
+  assert.equal(revoked.report.reason_code, "source_changed");
+  assert.deepEqual(revoked.results, []);
+});
+
 test("the total candidate set remains bounded and literal single-term queries are not repeated", async () => {
   const result = await run({ search: async () => Array.from({ length: 50 }, (_, i) => row(`found${i}`)) });
   assert.equal(result.results.length, 50); assert.equal(result.report.additional_searches, 1);
