@@ -55,6 +55,7 @@ test('refresh replaces both credentials; concurrent operations cannot resend the
 });
 test('ambiguous refresh is quarantined; repeat refresh/memory calls require logout, which can revoke',async t=>{
   const f=await fixture(t);await f.login();await assert.rejects(refreshRemote(f.options,{...f.deps,fetchImpl:async()=>{throw new Error('secret=hidden');}}),/connection_failed/);
+  assert.equal((await remoteStatus(f.options,f.deps)).local_state,'quarantined');
   let calls=0;const deps={...f.deps,fetchImpl:async()=>{calls++;return json(token());}};
   await assert.rejects(refreshRemote(f.options,deps),/uncertain/);await assert.rejects(callRemoteMemory('search',{q:'synthetic'},f.options,deps),/uncertain/);assert.equal(calls,0);
   const r=await logoutRemote(f.options,{fetchImpl:async()=>new Response(null,{status:200})});assert.equal(r.revoked,true);
@@ -82,4 +83,10 @@ test('credential permissions, symlinks, and mismatched identities are rejected',
 test('logout retains credentials on revocation failure and removes only its own file on success',async t=>{
   const f=await fixture(t);await f.login();await assert.rejects(logoutRemote(f.options,{fetchImpl:async()=>json({},503)}),/revocation_failed/);assert.equal((await remoteStatus(f.options)).logged_in,true);
   const other=join(f.id.directory,'unrelated');await writeFile(other,'synthetic');await logoutRemote(f.options,{fetchImpl:async()=>new Response(null,{status:200})});assert.equal((await remoteStatus(f.options)).logged_in,false);assert.equal(await readFile(other,'utf8'),'synthetic');
+});
+
+test('status distinguishes expired and refresh-required credentials without secrets',async t=>{
+  const f=await fixture(t);await f.login();assert.equal((await remoteStatus(f.options,f.deps)).local_state,'active');
+  f.setTime(epoch+605001);assert.equal((await remoteStatus(f.options,f.deps)).local_state,'refresh_required');
+  f.setTime(epoch+30*86400000);const status=await remoteStatus(f.options,f.deps);assert.equal(status.local_state,'expired');assert.doesNotMatch(JSON.stringify(status),/odb_[ar]_/);
 });

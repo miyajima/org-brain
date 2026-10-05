@@ -34,6 +34,9 @@ type LegacyPrincipalResolution = {
 
 export type McpAuthResult = {
   projectId?: string;
+  identityIssuer?: string;
+  identitySubject?: string;
+  identityEmail?: string | null;
   principal: string;
   tenantId: string;
   allowedTenants: string[];
@@ -228,6 +231,9 @@ async function authorizeAccessRequest(request: Request, env: Env): Promise<McpAu
     tenantId,
     allowedTenants: grant.allowedTenants,
     source: "access-user",
+    identityIssuer: grant.issuer,
+    identitySubject: grant.subject,
+    identityEmail: grant.email,
     defaultRole: grant.defaultRole,
     runtimeActor: `principal:${grant.principal}`
   };

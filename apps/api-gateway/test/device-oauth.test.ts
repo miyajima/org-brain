@@ -2,15 +2,21 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { memoryD1Fixture } from './fixtures/memory-d1';
 import { handleDeviceOAuth, deviceHash, deviceBearer, pollDevice, refreshDevice, deviceRateLimit, cleanupDeviceOAuth, DEVICE_CLIENT, DEVICE_GRANT } from '../src/device-oauth';
 import { authorizeMcpRequest } from '../src/mcp-security';
+import { upsertMemories } from '../src/memory-service';
 import { assertMcpToolAllowed } from '../src/mcp';
 import type { Env } from '../src/types';
 
 vi.mock('../src/mcp-security',async importOriginal=>({ ...await importOriginal<typeof import('../src/mcp-security')>(),
   authorizeMcpRequest:vi.fn(async(request:Request)=>({source:request.headers.get('test-source')??'access-user',tenantId:request.headers.get('test-tenant')??'synthetic',
-    allowedTenants:['synthetic'],principal:request.headers.get('test-user')??'user:synthetic@example.test',defaultRole:'tenant_admin',runtimeActor:'synthetic'})) }));
+    allowedTenants:['synthetic'],principal:request.headers.get('test-user')??'user:synthetic@example.test',defaultRole:'tenant_admin',runtimeActor:'synthetic',identityIssuer:'https://access.example.test',identitySubject:'synthetic-subject',identityEmail:'synthetic@example.test'})) }));
 const origin='https://orgbrain.example.test', resource=`${origin}/mcp`, now=2_000_000_000_000;
 const context={} as ExecutionContext;
-function fixture() {const f=memoryD1Fixture();Object.assign(f.env,{ORGBRAIN_DEVICE_OAUTH_ENABLED:'true',MCP_AUTH_MODE:'dual',MCP_OAUTH_RESOURCE:resource});return f;}
+function fixture() {const f=memoryD1Fixture();
+  for(const tenant of ['synthetic','second-tenant']) {
+    f.sql.prepare("INSERT INTO user_profiles(tenant_id,principal,email,status,created_at,updated_at) VALUES(?,?,?,'active',1,1)").run(tenant,'user:synthetic@example.test','synthetic@example.test');
+    f.sql.prepare("INSERT INTO user_identities(id,tenant_id,principal,provider_type,issuer,subject,created_at,updated_at) VALUES(?,?,?,'oidc',?,?,1,1)").run(`identity-${tenant}`,tenant,'user:synthetic@example.test','https://access.example.test','synthetic-subject');
+  }
+  Object.assign(f.env,{ACCESS_TENANT_POLICY_JSON:JSON.stringify({default_tenants:['synthetic','second-tenant'],default_role:'tenant_admin'}),ORGBRAIN_DEVICE_OAUTH_ENABLED:'true',MCP_AUTH_MODE:'dual',MCP_OAUTH_RESOURCE:resource});return f;}
 function post(path:string,fields:Record<string,string>,headers:Record<string,string>={}) {return new Request(`${origin}${path}`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',...headers},body:new URLSearchParams(fields)});}
 async function start(env:Env,extra:Record<string,string>={}) {const r=await handleDeviceOAuth(post('/oauth/device/code',{client_id:DEVICE_CLIENT,resource,tenant_id:'synthetic',project_id:'project-a',...extra}),env,context);return {response:r!,data:await r!.json<any>()};}
 async function consent(env:Env,data:any) {
@@ -26,10 +32,40 @@ async function tokens(env:Env) {const data=await ready(env);const response=await
 const refreshForm=(t:any,extra:Record<string,string>={})=>new URLSearchParams({client_id:DEVICE_CLIENT,resource,refresh_token:t.refresh_token,...extra});
 afterEach(()=>vi.useRealTimers());
 describe('D1 authoritative device flow',()=>{
+  it('requires an active registered identity and current tenant grants/role at bearer and refresh',async()=>{
+    vi.useFakeTimers();vi.setSystemTime(now);
+    for(const change of ['suspended','deprovisioned','missing-profile','missing-identity','rebound-identity','tenant-grant','role-downgrade','project-role']) {
+      const {env,sql}=fixture();const t=await tokens(env);
+      if(['suspended','deprovisioned'].includes(change)) sql.prepare('UPDATE user_profiles SET status=? WHERE tenant_id=?').run(change,'synthetic');
+      if(change==='missing-profile') sql.prepare("DELETE FROM user_profiles WHERE tenant_id='synthetic'").run();
+      if(change==='missing-identity') sql.prepare("DELETE FROM user_identities WHERE tenant_id='synthetic'").run();
+      if(change==='rebound-identity') sql.prepare("UPDATE user_identities SET principal='user:other@example.test' WHERE tenant_id='synthetic'").run();
+      if(change==='tenant-grant') env.ACCESS_TENANT_POLICY_JSON=JSON.stringify({default_tenants:['other'],default_role:'tenant_admin'});
+      if(change==='role-downgrade') env.ACCESS_TENANT_POLICY_JSON=JSON.stringify({default_tenants:['synthetic','second-tenant'],default_role:'reader'});
+      if(change==='project-role') sql.prepare("INSERT INTO principal_role_assignments(id,tenant_id,project_id,principal,role,created_by_principal,created_at,updated_at) VALUES('downgrade','synthetic','project-a','user:synthetic@example.test','reader','synthetic',1,1)").run();
+      expect(await deviceBearer(env,t.access_token,now+6000),change).toBeNull();
+      expect((await refreshDevice(env,refreshForm(t),now+7000)).status,change).toBe(400);
+      expect((sql.prepare('SELECT revoked_at FROM oauth_device_families').get() as any).revoked_at,change).not.toBeNull();
+    }
+  });
+  it('rejects device exchange if the approved user becomes inactive before polling',async()=>{
+    vi.useFakeTimers();vi.setSystemTime(now);const {env,sql}=fixture();const data=await ready(env);
+    sql.prepare("UPDATE user_profiles SET status='suspended' WHERE tenant_id='synthetic'").run();
+    expect(await (await pollDevice(env,pollForm(data),now+5000)).json()).toEqual({error:'access_denied'});
+    expect((sql.prepare('SELECT count(*) AS n FROM oauth_device_families').get() as any).n).toBe(0);
+  });
+  it('provides the RFC-required verification URI manual code entry without authorizing',async()=>{
+    const {env,sql}=fixture();const {data}=await start(env);
+    const page=await handleDeviceOAuth(new Request(data.verification_uri),env,context);
+    expect(page!.status).toBe(200);expect(await page!.text()).toContain('name="user_code"');
+    expect((sql.prepare('SELECT state FROM oauth_device_requests').get() as any).state).toBe('pending');
+    expect((await consent(env,data)).response.status).toBe(200);
+  });
+
   it('selects the device tenant through the existing multi-tenant Access grant check',async()=>{
     vi.useFakeTimers();vi.setSystemTime(now);const {env}=fixture();const {data}=await start(env,{tenant_id:'second-tenant'});
     vi.mocked(authorizeMcpRequest).mockImplementationOnce(async(request)=>({source:'access-user',tenantId:request.headers.get('x-orgbrain-tenant')!,
-      allowedTenants:['first-tenant','second-tenant'],principal:'user:synthetic@example.test',defaultRole:'tenant_admin',runtimeActor:'synthetic'}));
+      allowedTenants:['first-tenant','second-tenant'],principal:'user:synthetic@example.test',defaultRole:'tenant_admin',runtimeActor:'synthetic',identityIssuer:'https://access.example.test',identitySubject:'synthetic-subject',identityEmail:'synthetic@example.test'}));
     expect((await consent(env,data)).response.status).toBe(200);
   });
 
@@ -79,9 +115,19 @@ describe('D1 authoritative device flow',()=>{
     expect((sql.prepare('SELECT count(*) AS n FROM memories').get() as any).n).toBe(0);
     const confirmed=await call(b.access_token,'orgbrain_memories_confirm',{tenant_id:'synthetic',confirmation_token:confirmation,approved:true,review_answer:'保存する'});
     expect(confirmed.value.saved,JSON.stringify(confirmed.rpc)).toBe(true);
+    await upsertMemories(env,{tenant_id:'synthetic',source:'manual',items:[
+      {external_key:'foreign-project',project_id:'project-b',content:'Synthetic crossprojectmarker foreign.',summary:'Synthetic crossprojectmarker foreign.'},
+      {external_key:'null-project',content:'Synthetic nullprojectmarker foreign.',summary:'Synthetic nullprojectmarker foreign.'}
+    ]},{actorPrincipal:'user:synthetic@example.test'});
     const search=await call(a.access_token,'orgbrain_memories_search',{tenant_id:'synthetic',project_id:'project-a',scope:'mine',q:'Synthetic Cloud',search_mode:'memories'});
     expect(search.rpc.result?.isError,JSON.stringify(search.rpc)).not.toBe(true);
     expect(JSON.stringify(search.value)).toContain('Synthetic');
+    for(const mode of ['memories','hybrid','hybrid_v2','hybrid_v3','hybrid_v4']) {
+      const isolated=await call(a.access_token,'orgbrain_memories_search',{tenant_id:'synthetic',project_id:'project-a',scope:'mine',q:'Synthetic',search_mode:mode});
+      expect(isolated.rpc.result?.isError,JSON.stringify(isolated.rpc)).not.toBe(true);
+      expect(JSON.stringify(isolated.value)).not.toContain('crossprojectmarker');
+      expect(JSON.stringify(isolated.value)).not.toContain('nullprojectmarker');
+    }
     const wrong=await call(a.access_token,'orgbrain_memories_search',{tenant_id:'synthetic',project_id:'project-b',scope:'mine',q:'Synthetic'});
     expect(wrong.rpc.result?.isError).toBe(true);
     const otherTenant=await call(a.access_token,'orgbrain_memories_confirmation_status',{tenant_id:'other',confirmation_token:confirmation});
@@ -90,11 +136,11 @@ describe('D1 authoritative device flow',()=>{
     const bRow=await deviceBearer(env,b.access_token,now);
     sql.prepare("UPDATE oauth_device_families SET principal='user:other@example.test' WHERE id IN (SELECT family_id FROM oauth_device_tokens WHERE hash=?)").run(await deviceHash(b.access_token));
     const otherUser=await call(b.access_token,'orgbrain_memories_confirmation_status',{tenant_id:'synthetic',confirmation_token:confirmation});
-    expect(otherUser.rpc.result?.isError).toBe(true);
+    expect(otherUser.status).toBe(401);
     const otherSearch=await call(b.access_token,'orgbrain_memories_search',{tenant_id:'synthetic',project_id:'project-a',scope:'mine',q:'Synthetic Cloud',search_mode:'memories'});
     expect(JSON.stringify(otherSearch.value)).not.toContain('Synthetic choice:');
     expect(bRow?.principal).toBe('user:synthetic@example.test');
-    expect((sql.prepare('SELECT count(*) AS n FROM memories').get() as any).n).toBe(1);
+    expect((sql.prepare('SELECT count(*) AS n FROM memories').get() as any).n).toBe(3);
   });
   it('enforces the device tool allowlist and private search scope before handlers',async()=>{
     vi.useFakeTimers();vi.setSystemTime(now);const {env}=fixture();const t=await tokens(env);const auth=await deviceBearer(env,t.access_token,now);

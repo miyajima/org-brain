@@ -1108,6 +1108,7 @@ class OrgBrainMcpTools {
         }
         const evidence = await searchMemories(this.env, request, {
           actorPrincipal: this.props?.principal,
+          allowedProjectId: this.props.projectId,
           recordUsage: search_scope !== "both"
         });
         if (search_scope !== "both") return toContent(evidence);

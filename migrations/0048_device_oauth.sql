@@ -6,12 +6,14 @@ CREATE TABLE oauth_device_requests (
   state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','approved','denied','consumed')),
   interval_ms INTEGER NOT NULL DEFAULT 5000, poll_after INTEGER NOT NULL,
   version INTEGER NOT NULL DEFAULT 0, claim_id TEXT,
-  principal TEXT, role TEXT, csrf_hash TEXT, csrf_expires_at INTEGER
+  principal TEXT, role TEXT, identity_issuer TEXT, identity_subject TEXT, identity_email TEXT,
+  csrf_hash TEXT, csrf_expires_at INTEGER
 );
 CREATE INDEX oauth_device_expiry ON oauth_device_requests(expires_at);
 CREATE TABLE oauth_device_families (
   id TEXT PRIMARY KEY, client_id TEXT NOT NULL, tenant_id TEXT NOT NULL,
   project_id TEXT NOT NULL, principal TEXT NOT NULL, role TEXT NOT NULL,
+  identity_issuer TEXT NOT NULL, identity_subject TEXT NOT NULL, identity_email TEXT,
   resource TEXT NOT NULL, scopes TEXT NOT NULL, expires_at INTEGER NOT NULL,
   revoked_at INTEGER
 );
