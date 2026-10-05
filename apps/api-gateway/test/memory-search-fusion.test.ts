@@ -78,7 +78,7 @@ describe("stable generation bounded fusion", () => {
       const result = await searchMemories(f.env, { tenant_id: "t", project_id: "p", generation_id: "fixture", q: "cache repair", limit: 5, at: 1000 }, { recordUsage: false, actorPrincipal: "alice" });
       expect(provider.seen.length).toBeLessThanOrEqual(50);
       expect(provider.seen).toContain("semantic");
-      expect(provider.seen).not.toEqual(expect.arrayContaining(["suppressed", "other-project", "expired-unit", "denied"]));
+      for (const id of ["suppressed", "other-project", "expired-unit", "denied"]) expect(provider.seen).not.toContain(id);
       expect(result.results[0].id).toBe("semantic");
     } finally { f.sql.close(); }
   });
