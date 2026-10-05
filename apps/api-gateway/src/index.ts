@@ -10,7 +10,7 @@ import { materializeDueRetrospectives } from "./knowledge-measurement-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, tenantFromBody, type ApiContextEnv } from "./auth";
 import { assertSessionCsrf } from "./email-auth-service";
 import { mountMcp } from "./mcp";
-import { handleDeviceOAuth } from "./device-oauth";
+import { cleanupDeviceOAuth, handleDeviceOAuth } from "./device-oauth";
 import { createCloudflareMcpOAuthProvider, shouldUseMcpOAuth } from "./mcp-oauth-cloudflare";
 import { assertPermission } from "./rbac-service";
 import type { Env } from "./types";
@@ -225,6 +225,7 @@ export default {
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const scheduledFor = controller.scheduledTime ?? Date.now();
+    await cleanupDeviceOAuth(env, scheduledFor);
     try {
       await dispatchMemoryExtractionOutbox(env, scheduledFor);
       await reconcileMemoryExtractionReservations(env, scheduledFor);

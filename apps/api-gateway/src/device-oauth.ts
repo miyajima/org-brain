@@ -127,10 +127,16 @@ export async function pollDevice(env: Env, form: URLSearchParams, now = Date.now
   }
   return error('slow_down');
 }
-async function body(request: Pick<Request, 'headers' | 'text'>) {
+async function body(request: Pick<Request, 'headers' | 'body'>) {
   if (!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded')) return null;
-  const raw = await request.text();
-  if (raw.length > 8192) return null;
+  if (!request.body) return null;
+  const reader = request.body.getReader(), chunks:Uint8Array[]=[]; let size=0;
+  try { for (;;) { const {done,value}=await reader.read(); if(done) break; size+=value.byteLength;
+    if(size>8192) {await reader.cancel();return null;} chunks.push(value); } }
+  finally {reader.releaseLock();}
+  const bytes=new Uint8Array(size);let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+  const raw = new TextDecoder('utf-8',{fatal:true}).decode(bytes);
   const form = new URLSearchParams(raw);
   if ([...form.keys()].some(k => form.getAll(k).length !== 1)) return null;
   return form;
@@ -140,11 +146,15 @@ async function verify(request: Request, env: Env, now: number) {
   if (!form) return error('invalid_request');
   const code = (form.get('user_code') ?? '').toUpperCase().replace(/-/gu,'');
   if (!/^[A-Z2-7]{12}$/u.test(code)) return error('invalid_request');
-  const access = await authorizeMcpRequest(request,{...env,MCP_AUTH_MODE:'access'});
-  if (access.source !== 'access-user') return error('access_denied',403);
   const db = primary(env), hash = await deviceHash(code);
   const row = await db.prepare('SELECT * FROM oauth_device_requests WHERE user_hash=?').bind(hash).first<DeviceRow>();
-  if (!row || row.state !== 'pending' || row.expires_at <= now || row.tenant_id !== access.tenantId ||
+  if (!row || row.state !== 'pending' || row.expires_at <= now) return error('access_denied',403);
+  // The device's requested tenant must pass the existing identity grant check.
+  // A mobile form cannot send custom headers, and the user's first tenant may differ.
+  const identityHeaders = new Headers(request.headers);
+  identityHeaders.set('x-orgbrain-tenant',row.tenant_id);
+  const access = await authorizeMcpRequest(new Request(request.url,{headers:identityHeaders}),{...env,MCP_AUTH_MODE:'access'});
+  if (access.source !== 'access-user' || !access.allowedTenants.includes(row.tenant_id) || row.tenant_id !== access.tenantId ||
     row.principal && row.principal !== access.principal) return error('access_denied',403);
   const scopes:OrgBrainOAuthScope[] = JSON.parse(row.scopes);
   for (const scope of scopes) await assertPermission(env,{tenantId:row.tenant_id,projectId:row.project_id,
@@ -169,15 +179,16 @@ async function verify(request: Request, env: Env, now: number) {
 }
 // Runs before the KV OAuth provider. Its token prefix never falls through to KV.
 export async function handleDeviceOAuth(request: Request, env: Env, ctx: ExecutionContext): Promise<Response|null> {
-  const url = new URL(request.url), path = url.pathname, bearer = request.headers.get('authorization')?.replace(/^Bearer /u,'') ?? '';
+  const url = new URL(request.url), path = url.pathname, bearer = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/iu)?.[1] ?? '';
   if (path === '/mcp' && bearer.startsWith('odb_')) {
-    const auth = await deviceBearer(env,bearer);
+    let auth:McpAuthResult|null;
+    try { auth = await deviceBearer(env,bearer); } catch { return error('device_request_failed',503); }
     if (!auth || auth && env.MCP_OAUTH_RESOURCE !== url.href) return error('invalid_token',401);
     return handleOrgBrainMcpRequest(request,env,ctx,auth);
   }
   let form:URLSearchParams|null = null;
   if (request.method === 'POST' && ['/oauth/token','/oauth/revoke'].includes(path)) {
-    form = await body(request.clone());
+    form = await body(request.clone()).catch(()=>null);
     if (form?.get('client_id') !== DEVICE_CLIENT && form?.get('grant_type') !== DEVICE_GRANT &&
       !form?.get('refresh_token')?.startsWith('odb_') && !form?.get('token')?.startsWith('odb_')) return null;
   } else if (!path.startsWith('/oauth/device/')) return null;
@@ -188,7 +199,9 @@ export async function handleDeviceOAuth(request: Request, env: Env, ctx: Executi
     if (!['GET','POST'].includes(request.method)) return error('invalid_request',405);
   } else if (request.method !== 'POST') return error('invalid_request',405);
   const now = Date.now(), ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
-  if (!await deviceRateLimit(env,path,ip,now,path === '/oauth/token' ? 120 : 10)) return error('slow_down',429);
+  try {
+    if (!await deviceRateLimit(env,path,ip,now,path === '/oauth/token' ? 120 : 10)) return error('slow_down',429);
+  } catch { return error('device_request_failed',503); }
   try {
     if (path === '/oauth/device/verify') return await verify(request,env,now);
     form ??= await body(request);
@@ -216,4 +229,16 @@ export async function handleDeviceOAuth(request: Request, env: Env, ctx: Executi
     return result({device_code:code,user_code:user.match(/.{4}/gu)!.join('-'),verification_uri:`${url.origin}/oauth/device/verify`,
       verification_uri_complete:`${url.origin}/oauth/device/verify?user_code=${user}`,expires_in:DEVICE_TTL/1000,interval:5});
   } catch { return error('device_request_failed',503); }
+}
+
+// Keep refresh tombstones until family expiry so replay never becomes valid again.
+export async function cleanupDeviceOAuth(env: Env, now = Date.now()) {
+  if (!enabled(env)) return;
+  const db=primary(env);
+  await db.batch([
+    db.prepare('DELETE FROM oauth_device_limits WHERE expires_at<=?').bind(now),
+    db.prepare('DELETE FROM oauth_device_requests WHERE expires_at<=?').bind(now-86400_000),
+    db.prepare("DELETE FROM oauth_device_tokens WHERE (kind='access' AND expires_at<=?) OR family_id IN (SELECT id FROM oauth_device_families WHERE expires_at<=?)").bind(now,now),
+    db.prepare('DELETE FROM oauth_device_families WHERE expires_at<=?').bind(now)
+  ]);
 }
