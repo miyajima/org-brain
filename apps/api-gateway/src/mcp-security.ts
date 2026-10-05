@@ -38,6 +38,9 @@ export type McpAuthResult = {
   allowedTenants: string[];
   source: "access-user" | "access-service" | "legacy-service-token" | "oauth";
   defaultRole: OrgRole;
+  identityIssuer?: string;
+  identitySubject?: string;
+  identityEmail?: string | null;
   clientInstallationId?: string;
   clientType?: McpClientType;
   clientPurpose?: McpClientPurpose;
@@ -228,6 +231,9 @@ async function authorizeAccessRequest(request: Request, env: Env): Promise<McpAu
     allowedTenants: grant.allowedTenants,
     source: "access-user",
     defaultRole: grant.defaultRole,
+    identityIssuer: grant.issuer,
+    identitySubject: grant.subject,
+    identityEmail: grant.email,
     runtimeActor: `principal:${grant.principal}`
   };
 }

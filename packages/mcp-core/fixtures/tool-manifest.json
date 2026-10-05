@@ -3728,6 +3728,9 @@
               }
             ]
           },
+          "strict_project": {
+            "type": "boolean"
+          },
           "business_category_id": {
             "anyOf": [
               {

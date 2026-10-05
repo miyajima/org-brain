@@ -21,7 +21,7 @@ const SEARCH_FETCH_LIMIT_FLOOR = 12;
 const HISTORY_FETCH_LIMIT_FLOOR = 24;
 const DOC_FETCH_LIMIT = 4;
 const TAG_PRIORITY_ORDER = ["policy", "diagnosis", "command-result", "workaround"] as const;
-const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest", "capture-v2"] as const;
+const PRIMARY_SEARCHABLE_TAGS = ["canonical-memory", "promoted", "memory-digest", "capture-v2", "conversation-event"] as const;
 const LOW_SIGNAL_TITLES = new Set(["起動", "修正", "削除", "空け", "実装完了", "修正完了", "実行結果です", "変更しました", "1"]);
 
 export type MemorySearchMode = "memories" | "hybrid" | "hybrid_v2" | "hybrid_v3" | "hybrid_v4";

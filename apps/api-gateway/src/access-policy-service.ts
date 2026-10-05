@@ -377,12 +377,13 @@ async function mirrorLegacyColumns(env: Env, policy: ResourceAccessPolicy): Prom
       }))
     ];
     await env.OPEN_BRAIN_DB.prepare(
-      `UPDATE memories SET permissions_json = ?, scope_type = ?, scope_key = ?, updated_at = ?
+      `UPDATE memories SET permissions_json = ?, scope_type = ?, scope_key = ?, owner_principal = ?, updated_at = ?
        WHERE tenant_id = ? AND id = ?`
     ).bind(
       JSON.stringify(grants),
       policy.scope === "project" ? "project" : policy.scope === "private" ? "user" : "tenant",
       policy.scope === "project" ? policy.project_id : policy.scope === "private" ? policy.owner_principal : policy.tenant_id,
+      policy.owner_principal,
       policy.updated_at,
       policy.tenant_id,
       policy.resource_id
