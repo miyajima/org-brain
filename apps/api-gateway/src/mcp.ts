@@ -1282,7 +1282,7 @@ class OrgBrainMcpTools {
         } });
         if (payload.project_id) await recordActionAttemptMetricEvent(this.env, tenantId, {
           project_id: payload.project_id, kind: "context_query", source: "mcp", returned_count: priorAttempts.length
-        });
+        }).catch(() => console.warn({ event: "orgbrain.context.attempt_metric_recording_skipped" }));
         const attemptUse = await Promise.allSettled(plannedUse.map(item => recordActionAttemptUse(this.env, tenantId, item)));
         Object.assign(result, { attempt_usage_ids: attemptUse.flatMap(item => item.status === "fulfilled" ? [item.value.id] : []) });
         measureContextPayload(result, result.meta, "estimatedTokens");

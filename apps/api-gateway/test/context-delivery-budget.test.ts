@@ -15,6 +15,7 @@ describe("complete context delivery and D1 usage", () => {
       for (const [index, content] of contents.entries()) sql.prepare(`INSERT INTO memories(
         id,tenant_id,project_id,content,summary,source,created_at,current_version)
         VALUES(?,?,?,?,?,'fixture',1,3)`).run(`memory-${index}`, "fixture", "project-a", content, "fixture policy");
+      sql.prepare("UPDATE memories SET learning_json='malformed',rationale=?,reuse_rule=? WHERE id=?").run("Bounded synthetic inputs.", "Stop on mismatch; do not reuse on production.", "memory-1");
       const hits = contents.map((content, index) => ({ kind: "memory", id: `memory-${index}`, score: 0.7,
         content_preview: content, summary: "fixture", memory_kind: "fact", lifecycle_state: "active", current_version: 3,
         created_at: 1, source_references: [{ ref: `fixture:${index}` }], conflicts: [], score_breakdown: { lexical: 1 } }));
@@ -27,7 +28,8 @@ describe("complete context delivery and D1 usage", () => {
       expect(response.evidence_bundle.estimated_tokens).toBe(countContextTokens(response));
       expect(countContextTokens(response)).toBeLessThanOrEqual(1100);
       expect(response.results.map(item => item.id)).toEqual(["memory-1"]);
-      expect(response.evidence_bundle.evidence[0]?.text).toBe(contents[1]);
+      expect(response.evidence_bundle.evidence[0]?.text).toBe(`${contents[1]}\nRationale: Bounded synthetic inputs.\nReuse or avoid: Stop on mismatch; do not reuse on production.`);
+      expect(response.evidence_bundle.evidence[0]?.verification_state).toBe("unverified");
       expect(response.meta.usage_items).toEqual([{ usage_item_id: response.meta.usage_item_ids[0],
         source_type: "memory", source_id: "memory-1", source_version: 3 }]);
       const items = sql.prepare("SELECT * FROM memory_usage_items WHERE usage_event_id=?").all(response.meta.usage_id);
@@ -66,6 +68,10 @@ describe("complete context delivery and D1 usage", () => {
         confirmation_state: "user_confirmed", confidence: 0.8
       });
         await confirmDecisionMemory(env, "fixture", created.decisionMemory.id, {});
+        if (index === 1) for (let revision = 0; revision < 31; revision++) sql.prepare(`INSERT INTO decision_memory_versions(
+          id,decision_memory_id,tenant_id,operation,snapshot_json,actor_refs_json,reviewer_refs_json,created_at)
+          SELECT ?,decision_memory_id,tenant_id,'fixture_revision',snapshot_json,actor_refs_json,reviewer_refs_json,created_at
+          FROM decision_memory_versions WHERE decision_memory_id=? LIMIT 1`).run(`fixture-revision-${revision}`, created.decisionMemory.id);
       }
       const response = await enrichContext(env, { tenant_id: "fixture", project_id: "project-a", task_id: "task-decisions",
         usage_purpose: "audit", task: { title: "fixture policy" }, max_tokens: 1300 });
@@ -75,7 +81,7 @@ describe("complete context delivery and D1 usage", () => {
       expect(response.decisionContext).toHaveLength(1);
       expect(response.decisionContext[0]).toMatchObject({ title: "fixture policy 1",
         constraints: ["Only synthetic fixtures; stop on mismatch."], knownPitfalls: ["Never execute on production."] });
-      expect(response.meta.usage_items).toEqual([expect.objectContaining({ source_id: response.decisionContext[0].id, source_version: 2 })]);
+      expect(response.meta.usage_items).toEqual([expect.objectContaining({ source_id: response.decisionContext[0].id, source_version: 33 })]);
       expect(sql.prepare("SELECT COUNT(*) AS n FROM memory_usage_items WHERE usage_event_id=?").get(response.meta.usage_id)?.n).toBe(1);
       expect(sql.prepare("SELECT * FROM memory_usage_events WHERE id=?").get(response.meta.usage_id)).toMatchObject({ task_id: "task-decisions", usage_purpose: "audit" });
     } finally { sql.close(); }

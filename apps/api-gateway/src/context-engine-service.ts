@@ -15,7 +15,7 @@ import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
-import { parseUsagePurpose, recordMemoryUsage } from "./memory-effect-service";
+import { parseUsagePurpose, recordMemoryUsage, resolveMemoryUsageContext } from "./memory-effect-service";
 import {
   loadRetrievalGenerationProfile,
   resolveRetrievalGenerationAssignment
@@ -75,6 +75,7 @@ type RejectedAlternative = {
 };
 
 type DecisionMemoryRow = {
+  source_version?: number;
   id: string;
   tenant_id: string;
   project_id: string | null;
@@ -105,6 +106,7 @@ type DecisionMemoryRow = {
 };
 
 type DecisionMemory = {
+  sourceVersion?: number;
   id: string;
   tenantId: string;
   projectId: string | null;
@@ -468,6 +470,7 @@ function normalizeConfirmationState(raw: unknown): ConfirmationState {
 
 function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
   return {
+    ...(row.source_version !== undefined ? { sourceVersion: row.source_version } : {}),
     id: row.id,
     tenantId: row.tenant_id,
     projectId: row.project_id,
@@ -1014,7 +1017,9 @@ async function loadDecisionMemories(env: Env, args: {
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
             valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
             confirmation_state, confirmation_note, confirmed_at,
-            created_at, updated_at, business_category_id, work_type
+            created_at, updated_at, business_category_id, work_type,
+            (SELECT COUNT(*) FROM decision_memory_versions v
+             WHERE v.tenant_id = decision_memories.tenant_id AND v.decision_memory_id = decision_memories.id) AS source_version
      FROM decision_memories
      WHERE tenant_id = ?
        ${eligibility}
@@ -2225,6 +2230,13 @@ export async function confirmDecisionMemory(
 
 export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const request = parseEnrichRequest(rawBody, options.principal);
+  const supplied = rawBody as ContextEnrichRequest;
+  const usageContext = await resolveMemoryUsageContext(env, {
+    tenant_id: request.tenantId, project_id: supplied.project_id === undefined && supplied.projectId === undefined ? undefined : request.projectId,
+    task_id: supplied.task_id === undefined ? undefined : request.taskId,
+    trace_id: supplied.trace_id === undefined ? undefined : request.traceId, external_run_id: request.externalRunId
+  });
+  if (request.projectId === null && usageContext.project_id !== null) request.projectId = usageContext.project_id;
   await validateBusinessClassification(
     env,
     request.tenantId,
@@ -2271,7 +2283,9 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
   const versions = new Map<string, number>();
   const receiptIds = new Map<string, string>();
   for (const item of candidates) {
-    versions.set(item.memory.id, (await loadDecisionMemoryVersions(env, request.tenantId, item.memory.id)).length);
+    // Bound to the same SELECT snapshot as the delivered content, not a later
+    // read or the capped history display used by the review UI.
+    versions.set(item.memory.id, item.memory.sourceVersion ?? 0);
     receiptIds.set(item.memory.id, ulid());
   }
   const deferredAssetUsage: D1PreparedStatement[] = [];
@@ -2310,7 +2324,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
       requiresHumanReview: confidence < 0.45 || selected.some(item => item.memory.status === "uncertain")
         || conflicts.some(conflict => conflict.requiresHumanReview),
       meta: {
-        tenant_id: request.tenantId, project_id: request.projectId, task_id: request.taskId,
+        tenant_id: request.tenantId, project_id: request.projectId, task_id: usageContext.task_id,
         usage_purpose: request.usagePurpose, task_type: request.taskType,
         selectedMemoryCount: selected.length, conflictCount: conflicts.length,
         featureFlags: { includeProvenance: request.includeProvenance,
@@ -2344,7 +2358,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
     try {
       await recordMemoryUsage(env, {
         id: usageId, tenant_id: request.tenantId, project_id: request.projectId,
-        task_id: request.taskId, trace_id: request.traceId, external_run_id: request.externalRunId,
+        task_id: usageContext.task_id, trace_id: usageContext.trace_id, external_run_id: request.externalRunId,
         usage_purpose: request.usagePurpose, capability: "context_enrich", access_path: "context", request_source: "api",
         requested_business_category_id: request.businessCategoryId, requested_work_type: request.workType,
         retrieval_generation_id: "gen_structured_context", ranking_profile_id: "rank_default",
@@ -2366,7 +2380,10 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
         project_id: request.projectId, error_code: error instanceof HttpError ? error.code : "unknown" });
     }
   }
-  if (deferredAssetUsage.length) await env.OPEN_BRAIN_DB.batch(deferredAssetUsage);
+  if (deferredAssetUsage.length) {
+    try { await env.OPEN_BRAIN_DB.batch(deferredAssetUsage); }
+    catch { console.warn({ event: "orgbrain.context.asset_usage_recording_skipped", tenant_id: request.tenantId }); }
+  }
   return response;
 }
 
