@@ -3,6 +3,7 @@ import { sha256, type OrgRole } from '@org-brain/shared';
 import { authorizeMcpRequest } from './mcp-security';
 import { oauthProviderSubject, type OAuthProps } from './mcp-oauth-cloudflare';
 import { OAuthGrantLedger } from './oauth-grant-ledger';
+import { currentOAuthIdentity } from './oauth-current-identity';
 import { remoteClientIdentity } from './remote-client-identity';
 import { getMemoryConfirmationProject } from './rationale-service';
 import { DEVICE_GRANT, DEVICE_SCOPES, attemptLimit, boundedJson, escapeHtml, formBody, identifier, noStore, oauthError, opaque, randomCode } from './oauth-security-utils';
@@ -10,6 +11,7 @@ import type { Env } from './types';
 
 type Device = { device_hash: string; user_hash: string; client_id: string; resource: string; tenant_id: string;
   project_id: string; principal: string; default_role: OrgRole; state: string; expires_at: number;
+  identity_issuer: string | null; identity_subject: string | null; identity_email: string | null;
   interval_seconds: number; next_poll_at: number; version: number; csrf_hash: string | null; csrf_principal: string | null };
 type ProviderFetch = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
 const csrfName = '__Host-orgbrain_device_csrf';
@@ -118,7 +120,8 @@ export class OAuthDeviceSecurity {
     catch { return null; }
     if (auth.source !== 'access-user' || auth.principal !== device.principal || auth.tenantId !== device.tenant_id) return null;
     const props: OAuthProps = { tenantId: auth.tenantId, principal: auth.principal, projectId: device.project_id,
-      defaultRole: auth.defaultRole, scopes: [...DEVICE_SCOPES], securityV2: true };
+      defaultRole: auth.defaultRole, scopes: [...DEVICE_SCOPES], securityV2: true,
+      identity: { issuer: auth.identityIssuer!, subject: auth.identitySubject!, email: auth.identityEmail ?? null } };
     return (await this.checkProject(props)).ok ? props : null;
   }
   private checkProject(props: OAuthProps) {
@@ -174,9 +177,9 @@ export class OAuthDeviceSecurity {
         row.csrf_principal !== props.principal || row.csrf_hash !== await this.csrfHash(row, nonce) ||
         !['approve', 'deny'].includes(form.get('decision') ?? '') || form.get('decision') === 'approve' && form.get('confirmed') !== 'yes') return oauthError('access_denied', 403);
     const state = form.get('decision') === 'approve' ? 'approved' : 'denied';
-    const changed = await this.env.OPEN_BRAIN_DB.prepare(`UPDATE oauth_device_requests SET state=?,default_role=?,csrf_hash=NULL,csrf_principal=NULL,version=version+1
+    const changed = await this.env.OPEN_BRAIN_DB.prepare(`UPDATE oauth_device_requests SET state=?,default_role=?,identity_issuer=?,identity_subject=?,identity_email=?,csrf_hash=NULL,csrf_principal=NULL,version=version+1
       WHERE device_hash=? AND state='pending' AND expires_at>? AND csrf_hash=? AND csrf_principal=?`)
-      .bind(state, props.defaultRole, row.device_hash, this.now(), row.csrf_hash, props.principal).run();
+      .bind(state, props.defaultRole, props.identity!.issuer, props.identity!.subject, props.identity!.email, row.device_hash, this.now(), row.csrf_hash, props.principal).run();
     if (changed.meta.changes !== 1) return oauthError('invalid_request');
     return this.page(`<h1>${state === 'approved' ? '接続を許可しました' : '接続を拒否しました'}</h1><p>端末へ戻ってください。</p>`);
   }
@@ -252,8 +255,11 @@ export class OAuthDeviceSecurity {
     if (slow) return oauthError('slow_down');
     if (state !== 'consumed') return oauthError('authorization_pending');
     const props: OAuthProps = { tenantId: row.tenant_id, principal: row.principal, projectId: row.project_id,
-      defaultRole: row.default_role, scopes: [...DEVICE_SCOPES], securityV2: true };
-    if (!(await this.checkProject(props)).ok) return oauthError('access_denied');
+      defaultRole: row.default_role, scopes: [...DEVICE_SCOPES], securityV2: true,
+      identity: row.identity_issuer && row.identity_subject ? { issuer: row.identity_issuer, subject: row.identity_subject, email: row.identity_email } : undefined };
+    const current = await currentOAuthIdentity(this.env, props);
+    if (!current) return oauthError('access_denied');
+    props.defaultRole = current.defaultRole;
     const verifier = randomCode();
     const challenge = b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const { redirectTo } = await this.helpers.completeAuthorization({ request: {

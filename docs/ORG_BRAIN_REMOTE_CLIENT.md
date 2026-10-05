@@ -87,7 +87,7 @@ The dedicated POSIX default is
 `~/.config/org-brain/remote/<profile>.json`, directory `0700`, file `0600`,
 owned by the current UID. Use `--profile <name>` on each command for another
 independently authorized profile. `--remote-directory <private-directory>` is
-an explicit user-controlled path; it does not modify HOME or CODEX_HOME. The
+an explicit user-controlled path outside CODEX_HOME and any `.codex` directory; managed paths are rejected before creating files. It does not modify HOME or CODEX_HOME. The
 initial implementation fails closed on Windows; it does not claim Keychain,
 Credential Manager or encrypted-at-rest storage. A plaintext private file is
 the current storage backend. Do not put it in Git or shared artifacts.
@@ -115,14 +115,17 @@ Existing RBAC tenant roles and fallback-role semantics still apply. Device grant
 also pin the project on the server. Ordinary native authorization-code grants
 retain the client profile boundary and existing server ACLs.
 
-Refresh persists a token-free `reauthentication_required` tombstone **before**
-rotation, requires a different refresh token and checks identity/scopes again.
-A crash or uncertain response does not leave a reusable old token on disk. Any
-failure requires fresh login; freshly returned invalid credentials are revoked
-best-effort. No mutation or old refresh token is automatically replayed. Logout
-requests RFC7009 revocation and clears the local file even offline; its
-`remote_revoked` flag reports whether that remote request succeeded, not whether
-an unreachable server eventually revoked it. Errors/status never return tokens,
+Refresh persists a `reauthentication_required` quarantine **before** rotation,
+requires a different refresh token and checks identity/scopes again. Quarantine
+contains no usable access token: it keeps the old client ID/refresh token only
+inside a private, undisplayed revocation handle. That token is never retried for
+refresh or a memory operation. A crash or uncertain response requires logout and
+fresh authorization; freshly returned invalid credentials are revoked best-effort.
+Logout uses even a consumed refresh hash to revoke the entire D1 family. If the
+server is unreachable, authentication remains disabled and only the revocation
+handle stays on disk; retry logout after connectivity returns before reusing the
+profile. The returned `remote_revoked=false` does not establish remote revocation.
+Successful logout removes the file. Errors/status never return tokens,
 codes, verifiers, response bodies or raw transport exception messages. Responses
 and explicit input files are bounded; redirects and timeouts fail closed.
 
@@ -144,7 +147,10 @@ No SDK upgrade, new role, shared principal, real credential or live configuratio
 change is included.
 
 Apply additive migration `0048_oauth_device_security.sql` before separately enabling
-the flag. Cutover requires fresh V2 consent: old refresh tokens and authorization
+the flag. This draft's 0048 includes verified identity/scope bindings and assumes
+0048 has never been applied in the target environment. If an earlier variant was
+already applied, use an explicitly approved additive follow-up migration instead
+of replacing an applied migration. Cutover requires fresh V2 consent: old refresh tokens and authorization
 codes without the V2 marker are rejected while enabled. Existing V2 grant families
 keep their durable access/refresh/revocation checks when the flag is later disabled.
 Device client registration remains marked in the SDK and cannot enter public
@@ -199,7 +205,16 @@ one active refresh hash per family; a competing
 native auth-code exchange fails closed and revokes the conflicting family.
 Protected requests check SDK-verified user/grant/client and immutable
 tenant/principal/project bindings against D1, including
-active user status. Revocation remains authoritative even if KV is stale or a
+active user status. Verified Access issuer/subject/email are bound at consent,
+stored in SDK props and D1, and rechecked against the current registered identity,
+active profile and tenant grant at exchange, bearer acceptance and refresh. Loss
+of identity or tenant grant revokes the family. Fixed-project device grants also
+recheck all authorized scope permissions and revoke on permission loss. Native
+OAuth grants have no fixed project: scope is only an upper limit; current role
+is passed to each handler's target-project RBAC. A role downgrade blocks writes
+immediately, including after refresh, but does not by itself revoke an unbound
+native refresh family. No tenant-wide write requirement is introduced.
+Revocation remains authoritative even if KV is stale or a
 concurrent SDK operation writes the old grant back. Uncertain rotation/storage
 failures require fresh authorization. Normal D1 binding reads use the primary;
 this security lane must not be changed to unconstrained replica reads.

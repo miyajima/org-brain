@@ -239,11 +239,18 @@ test('two independently authorized synthetic clients stage/review/read the same 
   await assert.rejects(q.client.stage(input), /conversation_binding_mismatch/);
 });
 
-test('network/server error bodies containing secrets are never returned, and logout still clears locally', async t => {
+test('network errors are redacted and offline logout retains only a revocation handle', async t => {
   const f = await setup(t); await f.client.login(binding, { onAuthorize: f.onAuthorize });
   f.client.fetch = async () => { throw Error('access-token=NEVER-LOG-fixture-secret'); };
   await assert.rejects(f.client.search('fixture'), error => error.message === 'remote_network_failed');
   assert.deepEqual(await f.client.logout(), { state: 'logged_out', remote_revoked: false });
+  const pending = await f.store.read();
+  assert.equal(pending.state, 'reauthentication_required');
+  assert.equal(pending.access_token, undefined); assert.equal(pending.refresh_token, undefined);
+  assert.ok(pending.revocation.refresh_token);
+  await assert.rejects(f.client.search('fixture'), /login_required/);
+  f.client.fetch = f.fetchImpl;
+  assert.equal((await f.client.logout()).remote_revoked, true);
   assert.equal(await f.store.read(), null);
 });
 
@@ -282,4 +289,35 @@ test('remote store status/preview do not touch SQLite or Codex directories', asy
   assert.equal(await readFile(f.store.path).catch(error => error.code), 'ENOENT');
   const shared = join(f.directory, 'shared'); await mkdir(shared, { mode: 0o755 }); await chmod(shared, 0o755);
   await assert.rejects(new RemotePrivateStore({ directory: shared }).withLock(async () => {}), /private_store_unavailable/);
+});
+
+
+test('lost refresh response quarantines old tokens for revocation only and never retries rotation', async t => {
+ const f=await setup(t); await f.client.login(binding,{onAuthorize:f.onAuthorize});
+ const original=await f.store.read(), fetch=f.client.fetch;
+ f.client.fetch=async(raw,opts)=>{ const response=await fetch(raw,opts);
+  if(new URL(raw).pathname==='/oauth/token' && new URLSearchParams(opts.body).get('grant_type')==='refresh_token') throw Error('synthetic lost response');
+  return response;
+ };
+ await assert.rejects(f.client.refresh(),/reauthentication_required/);
+ const pending=await f.store.read();
+ assert.equal(pending.access_token,undefined); assert.equal(pending.refresh_token,undefined);
+ assert.equal(pending.revocation.refresh_token,original.refresh_token);
+ assert.ok(!JSON.stringify(await f.client.status()).includes(original.refresh_token));
+ await assert.rejects(f.client.refresh(),/login_required/); await assert.rejects(f.client.search('fixture'),/login_required/);
+ assert.equal(f.state.refreshes,1);
+ assert.equal((await f.client.logout()).remote_revoked,true); assert.equal(f.state.revokes,1); assert.equal(await f.store.read(),null);
+});
+
+test('credential storage rejects managed CODEX_HOME and .codex paths before creating files', async t => {
+ const directory=await mkdtemp(join(tmpdir(),'orgbrain-managed-dir-')); t.after(()=>rm(directory,{recursive:true,force:true}));
+ const previous=process.env.CODEX_HOME; process.env.CODEX_HOME=join(directory,'managed');
+ try {
+  for(const path of [process.env.CODEX_HOME,join(process.env.CODEX_HOME,'remote'),join(directory,'.codex','remote')]) {
+   assert.throws(()=>new RemotePrivateStore({directory:path}),/managed_credential_directory_forbidden/);
+  }
+  assert.equal(await stat(process.env.CODEX_HOME).catch(e=>e.code),'ENOENT');
+  assert.equal(await stat(join(directory,'.codex')).catch(e=>e.code),'ENOENT');
+  await new RemotePrivateStore({directory:join(directory,'private-remote')}).write({synthetic:true});
+ }finally{if(previous===undefined)delete process.env.CODEX_HOME;else process.env.CODEX_HOME=previous;}
 });

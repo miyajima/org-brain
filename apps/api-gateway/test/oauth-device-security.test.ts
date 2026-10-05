@@ -311,6 +311,18 @@ describe('opt-in device authorization and strict refresh security', () => {
         body:JSON.stringify(modernMcpRequest({id:1,method:'tools/call',name:'orgbrain_memories_confirm',params:{arguments:{tenant_id:'fixture',confirmation_token:receipt.confirmation_token,
           approved:true,review_answer:'保存する',expected_candidate_hash:receipt.candidate_hash,expected_revision:receipt.revision}}}))});
       expect(qconfirm.status).toBe(403);
+      const fetchA = a.client.fetch;
+      a.client.fetch = async (url: string, options: RequestInit) => {
+        const response = await fetchA(url, options);
+        if (new URL(url).pathname === '/oauth/token' && new URLSearchParams(String(options.body)).get('grant_type') === 'refresh_token') {
+          throw Error('synthetic lost rotated response');
+        }
+        return response;
+      };
+      await expect(a.client.refresh()).rejects.toThrow('reauthentication_required');
+      expect((await a.store.read()).access_token).toBeUndefined();
+      expect((await a.store.read()).revocation.refresh_token).toBeDefined();
+      await expect(a.client.refresh()).rejects.toThrow('login_required');
       expect((await a.client.logout()).remote_revoked).toBe(true);
       expect((await f.identity(access)).status).toBe(401);
       expect((await b.client.search('synthetic')).results).toHaveLength(1);
@@ -454,4 +466,91 @@ describe('opt-in device authorization and strict refresh security', () => {
       for (const r of results.filter(r=>r.status===200)) expect((await f.identity((await r.json<any>()).access_token)).status).toBe(401);
     } finally { f.sql.close(); }
   });
+});
+
+
+const revocationChanges = ['identity-delete','identity-rebind','tenant-grant','suspend','default-role','project-role'] as const;
+type RevocationChange = typeof revocationChanges[number];
+function prepareChange(f: Awaited<ReturnType<typeof fixture>>, change: RevocationChange) {
+ if(change==='default-role') {
+  f.sql.prepare('DELETE FROM principal_role_assignments').run();
+  f.env.ACCESS_TENANT_POLICY_JSON=JSON.stringify({default_tenants:['fixture'],default_role:'contributor'});
+ }
+}
+function revokeIdentityOrRole(f: Awaited<ReturnType<typeof fixture>>, change: RevocationChange) {
+ if(change==='identity-delete') f.sql.prepare('DELETE FROM user_identities').run();
+ if(change==='identity-rebind') f.sql.prepare("UPDATE user_identities SET principal='user:other'").run();
+ if(change==='tenant-grant') f.env.ACCESS_TENANT_POLICY_JSON=JSON.stringify({default_tenants:['other'],default_role:'reader'});
+ if(change==='suspend') f.sql.prepare("UPDATE user_profiles SET status='suspended'").run();
+ if(change==='default-role') f.env.ACCESS_TENANT_POLICY_JSON=JSON.stringify({default_tenants:['fixture'],default_role:'reader'});
+ if(change==='project-role') f.sql.prepare("UPDATE principal_role_assignments SET role='reader' WHERE project_id='project-a'").run();
+}
+
+describe('current verified identity and authorization lifecycle',()=>{
+ it('revokes fixed-project families on direct refresh without a prior bearer request',async()=>{
+  for(const change of revocationChanges) {const f=await fixture();try {
+   prepareChange(f,change); const a=await f.issue(); revokeIdentityOrRole(f,change);
+   expect((await f.refresh(a.id,a.tokens.refresh_token)).status,change).toBe(400);
+   expect(f.sql.prepare('SELECT state FROM oauth_grant_families').get()!.state,change).toBe('revoked');
+   expect((await f.identity(a.tokens.access_token)).status,change).toBe(401);
+  }finally{f.sql.close();vi.restoreAllMocks();}}
+ },15000);
+ it('revokes fixed-project families at bearer acceptance after identity or permission loss',async()=>{
+  for(const change of revocationChanges) {const f=await fixture();try {
+   prepareChange(f,change); const a=await f.issue(); revokeIdentityOrRole(f,change);
+   expect((await f.identity(a.tokens.access_token)).status,change).toBe(401);
+   expect(f.sql.prepare('SELECT state FROM oauth_grant_families').get()!.state,change).toBe('revoked');
+   expect((await f.refresh(a.id,a.tokens.refresh_token)).status,change).toBe(400);
+  }finally{f.sql.close();vi.restoreAllMocks();}}
+ },15000);
+ it('rechecks identity and fixed-project permissions between approval and exchange',async()=>{
+  for(const change of revocationChanges) {const f=await fixture();try {
+   prepareChange(f,change); const id=await f.register(),device=await f.begin(id);
+   expect((await f.approve(device)).status).toBe(200); revokeIdentityOrRole(f,change); f.advance(5000);
+   const response=await f.poll(id,device); expect(response.status,change).toBe(400);
+   expect((await response.json<any>()).error,change).toBe('access_denied');
+   expect(f.sql.prepare('SELECT count(*) AS n FROM oauth_grant_families').get()!.n).toBe(0);
+  }finally{f.sql.close();vi.restoreAllMocks();}}
+ },15000);
+ it('native V2 identity/grant loss denies exchange and revokes issued families even on rollback',async()=>{
+  for(const change of ['identity-delete','identity-rebind','tenant-grant','suspend'] as const) {
+   for(const route of ['exchange','bearer','refresh']) {const f=await fixture();try {
+    const auth=await f.nativeAuthorization();
+    if(route==='exchange') {revokeIdentityOrRole(f,change);expect((await auth.exchange()).status,change).toBe(400);}
+    else {const response=await auth.exchange();expect(response.status).toBe(200);const tokens=await response.json<any>();
+     revokeIdentityOrRole(f,change);f.env.ORGBRAIN_OAUTH_SECURITY_V2='false';
+     if(route==='refresh') expect((await f.refresh(auth.id,tokens.refresh_token)).status,change).toBe(400);
+     else expect((await f.identity(tokens.access_token)).status,change).toBe(401);
+     expect(f.sql.prepare('SELECT state FROM oauth_grant_families').get()!.state).toBe('revoked');
+    }
+   }finally{f.sql.close();vi.restoreAllMocks();}}
+  }
+ },20000);
+ it('uses current native role at the actual target without requiring tenant-wide project permission',async()=>{
+  const modulePath='../../../packages/orgbrain-cli/src/lib/mcp-modern-request.mjs';
+  const {modernMcpHeaders,modernMcpRequest}=await import(modulePath);
+  for(const mode of ['project-assignment','policy-default']) {const f=await fixture();try {
+   if(mode==='policy-default') prepareChange(f,'default-role');
+   const auth=await f.nativeAuthorization(),response=await auth.exchange();expect(response.status).toBe(200);
+   const tokens=await response.json<any>();
+   const call=async(token:string)=>{const name='orgbrain_conversation_memories_stage';
+    const conversation={schema_version:'conversation-memory/v1',tenant_id:'fixture',project_id:'project-a',session_id:'fixture-session',
+     event_id:'native-role-event',occurred_at:'2026-10-04T09:00:00Z',producer:'manual',
+     sources:[{id:'source',role:'user',ref:'fixture:synthetic',text:'Use synthetic checks.'}],
+     candidates:[{id:'decision',kind:'decision',claim_type:'user_decision',conclusion:'Use synthetic checks.',rationale:'No private data.',reuse_rule:'Tests only.',source_ids:['source']}]};
+    const rpc=await f.fetch('/mcp',{method:'POST',headers:{...modernMcpHeaders('tools/call',name),authorization:`Bearer ${token}`},
+     body:JSON.stringify(modernMcpRequest({id:1,method:'tools/call',name,params:{arguments:{tenant_id:'fixture',conversation}}}))});
+    return rpc.json<any>();
+   };
+   const before=await call(tokens.access_token);expect(before.error).toBeUndefined();expect(before.result.isError).not.toBe(true);
+   if(mode==='project-assignment') f.sql.prepare("UPDATE principal_role_assignments SET role='reader' WHERE project_id='project-a'").run();
+   else revokeIdentityOrRole(f,'default-role');
+   const denied=await call(tokens.access_token);expect(Boolean(denied.error||denied.result?.isError)).toBe(true);
+   // An unbound native scope is only an upper limit. Refresh has no target:
+   // it stays valid, while old and new bearer writes use current target RBAC.
+   const refreshed=await f.refresh(auth.id,tokens.refresh_token);expect(refreshed.status).toBe(200);
+   const after=await call((await refreshed.json<any>()).access_token);expect(Boolean(after.error||after.result?.isError)).toBe(true);
+   expect(f.sql.prepare('SELECT count(*) AS n FROM memories').get()!.n).toBe(0);
+  }finally{f.sql.close();vi.restoreAllMocks();}}
+ },15000);
 });
