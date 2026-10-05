@@ -1,24 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { localTaskQueryPlan, coversLocalTaskQuery } from "./local-task-query.mjs";
-import { Tiktoken } from "js-tiktoken/lite";
-import ranks from "js-tiktoken/ranks/o200k_base";
+import { countContextTokens, measureContextPayload } from "../../../shared/src/context-payload-budget.mjs";
 import { requiresMultipleEvidenceSources } from "../../../shared/src/evidence-disposition.mjs";
 
-let encoder;
-export function countContextTokens(value) {
-  encoder ??= new Tiktoken(ranks);
-  return encoder.encode(typeof value === "string" ? value : JSON.stringify(value, null, 2), [], []).length;
-}
+export { countContextTokens };
 
 function measured(response) {
   // Count the complete MCP text, including receipts and JSON framing. The
   // tokenizer is a local estimate, not provider billing or a task-cost ledger.
-  for (let i = 0; i < 4; i += 1) {
-    const count = countContextTokens(response);
-    if (response.evidence_bundle.estimated_tokens === count) break;
-    response.evidence_bundle.estimated_tokens = count;
-  }
-  return response;
+  return measureContextPayload(response, response.evidence_bundle);
 }
 
 export function measureCompactMemoryContext(response) {

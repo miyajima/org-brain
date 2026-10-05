@@ -1,3 +1,4 @@
+import { countContextTokens } from "@org-brain/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   backfillDecisionRetrievalUnits,
@@ -254,6 +255,8 @@ class FakeStatement {
       }
     } else if (this.sql.includes("INSERT INTO retrieval_units(")) {
       this.db.retrievalUnitInsertCount += 1;
+    } else if (this.sql.includes("INSERT INTO memory_usage_items")) {
+      this.db.usageItemBindings.push(this.args);
     } else if (this.sql.includes("INSERT INTO memory_usage_events")) {
       this.db.usageEventBindings.push(this.args);
     }
@@ -267,6 +270,7 @@ class FakeD1 {
   groupMembers: GroupMemberRecord[] = [];
   resourceAcl: ResourceAclRecord[] = [];
   usageEventBindings: unknown[][] = [];
+  usageItemBindings: unknown[][] = [];
   retrievalUnitInsertCount = 0;
   executionContexts: Array<{
     tenant_id: string;

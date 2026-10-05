@@ -1,5 +1,9 @@
 import {
   HttpError,
+  countContextTokens,
+  measureContextPayload,
+  shouldSampleMemoryEffectVerification,
+  ulid,
   assessMemoryUsefulnessV2,
   answerGuidanceForDisposition,
   buildTenantMemoryProfile,
@@ -16,7 +20,7 @@ import {
 } from "@org-brain/shared";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
-import { recordMemoryUsage } from "./memory-effect-service";
+import { parseUsagePurpose, recordMemoryUsage } from "./memory-effect-service";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import { parseMemorySearchMode, parseOptionalBoolean, parseOptionalInteger, parseString } from "./memory-service-utils";
 import type { MemoryProfileRequest, PrincipalActorOptions } from "./memory-service-types";
@@ -32,9 +36,15 @@ type RetrieveMemoryContextResponse = {
   meta: Awaited<ReturnType<typeof searchMemories>>["meta"] & {
     usage_id: string;
     verification_sampled: boolean;
+    usage_item_ids: string[];
+    usage_items: Array<{ usage_item_id: string; source_type: string; source_id: string; source_version: number | null }>;
+    task_id: string | null;
+    usage_purpose: string;
   };
   evidence_bundle: Omit<MemoryEvidenceBundle, "evidence"> & {
     evidence: Array<Record<string, unknown>>;
+    token_count_basis: string;
+    budget_limited: boolean;
   };
 };
 
@@ -90,6 +100,10 @@ export async function retrieveMemoryContext(
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const topK = parseOptionalInteger(body.top_k, "top_k", 5, 1, 50);
   const tokenBudget = parseOptionalInteger(body.token_budget, "token_budget", 8_000, 512, 16_000);
+  const usagePurpose = parseUsagePurpose(body.usage_purpose);
+  const taskId = parseOptionalString(body.task_id, "task_id", 128);
+  const traceId = parseOptionalString(body.trace_id, "trace_id", 128);
+  const externalRunId = parseOptionalString(body.external_run_id, "external_run_id", 256);
   const queryAt =
     typeof body.at === "number" && Number.isFinite(body.at)
       ? body.at
@@ -248,8 +262,8 @@ export async function retrieveMemoryContext(
     // A sentence projection can remove stop conditions. Deliver it atomically,
     // without upgrading its supplied/unverified provenance or using stale versions.
     if (useCapsule && capsule.content.length > Math.min(4_000, remaining)) continue;
-    const text = useCapsule ? capsule.content
-      : String(unit?.text ?? result.content_preview).slice(0, Math.min(4_000, remaining));
+    const text = useCapsule ? capsule.content : String(unit?.text ?? result.content_preview);
+    if (text.length > Math.min(4_000, remaining)) continue;
     usedChars += text.length;
     let sourceReference = result.source_references?.[0] ?? null;
     try {
@@ -316,132 +330,106 @@ export async function retrieveMemoryContext(
     usedChars = 0;
   }
   const multiSession = requiresMultipleEvidenceSources(query);
-  const disposition = deriveEvidenceDisposition({
-    evidenceCount: evidence.length,
-    independentSourceCount: new Set(evidence.map((item) =>
-      (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id)
-    )).size,
-    requiresMultipleSources: multiSession,
-    conflictCount: conflicts.length,
-    hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
-    hasLowConfidence: selected.some((item) => (confidenceById.get(item.id) ?? 0.5) < 0.5),
-    degradedReasons: search.meta.retrieval?.degraded_reasons ?? []
-  });
-  const answerTemplate = evidenceAnswerTemplate(disposition, {
-    hasTimeline: timeline.length > 0,
-    hasCurrentState: currentState.length > 0,
-    requiresMultipleSources: multiSession
-  });
-  const legacyMissingEvidence = [
-    ...disposition.missing_evidence,
-    ...(evidence.some((item) => item.extraction_state !== "ready")
-      ? ["structured_extractor_degraded"]
-      : [])
-  ];
-  const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
-  const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
-  const effectiveAbstention = shadowMode ? legacyAbstention : disposition.abstention_recommended;
-  // Abstaining means nothing is auto-injected; the wide candidate set stays
-  // reachable through the explicit search tool.
-  const injectedEvidence = effectiveAbstention ? [] : evidence;
-  const injectedCurrentState = effectiveAbstention ? [] : currentState;
-  const injectedTimeline = effectiveAbstention ? [] : timeline;
-  const injectedChars = effectiveAbstention ? 0 : usedChars;
-  const answerGuidance = answerGuidanceForDisposition(
-    effectiveAbstention && !["insufficient", "conflicted"].includes(disposition.evidence_status)
-      ? { ...disposition, evidence_status: "insufficient", abstention_recommended: true }
-      : disposition,
-    injectedEvidence.map((item) => {
-      const reference = item.source_reference;
-      if (!reference || typeof reference !== "object") return null;
-      const ref = (reference as { ref?: unknown }).ref;
-      return typeof ref === "string" ? { ref } : null;
-    })
-  );
-  if (shadowMode && legacyAbstention !== disposition.abstention_recommended) {
-    console.warn(JSON.stringify({
-      event: "orgbrain.evidence_disposition.shadow_difference",
-      proposed_status: disposition.evidence_status,
-      legacy_abstention: legacyAbstention,
-      evidence_count: evidence.length,
-      conflict_count: conflicts.length
-    }));
+  const usageId = ulid();
+  const sampled = shouldSampleMemoryEffectVerification(tenantId, usageId);
+  const selectedById = new Map(selected.map(result => [result.id, result]));
+  const receiptIds = new Map(evidence.map(item => [String(item.memory_id), ulid()]));
+  let budgetLimited = false;
+  const buildResponse = (proposed: typeof evidence): RetrieveMemoryContextResponse => {
+    const covered = !taskPlan || coversLocalTaskQuery(proposed.map(item => ({ content: String(item.text ?? "") })), taskPlan);
+    const candidates = covered ? proposed : [];
+    const disposition = deriveEvidenceDisposition({
+      evidenceCount: candidates.length,
+      independentSourceCount: new Set(candidates.map(item =>
+        (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id))).size,
+      requiresMultipleSources: multiSession,
+      conflictCount: conflicts.length,
+      hasDegradedExtraction: candidates.some(item => item.extraction_state !== "ready"),
+      hasLowConfidence: candidates.some(item => (confidenceById.get(String(item.memory_id)) ?? 0.5) < 0.5),
+      degradedReasons: search.meta.retrieval?.degraded_reasons ?? []
+    });
+    const legacyMissingEvidence = [...disposition.missing_evidence,
+      ...(candidates.some(item => item.extraction_state !== "ready") ? ["structured_extractor_degraded"] : [])];
+    const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
+    const abstain = shadowMode ? legacyMissingEvidence.length > 0 || conflicts.length > 0 : disposition.abstention_recommended;
+    const delivered = abstain ? [] : candidates;
+    const deliveredIds = new Set(delivered.map(item => String(item.memory_id)));
+    const states = currentState.filter(item => deliveredIds.has(String(item.memory_id)));
+    const times = timeline.filter(item => deliveredIds.has(String(item.memory_id)));
+    const receiptItems = delivered.map(item => ({ usage_item_id: receiptIds.get(String(item.memory_id))!,
+      source_type: "memory", source_id: String(item.memory_id),
+      source_version: selectedById.get(String(item.memory_id))?.current_version ?? null }));
+    const response: RetrieveMemoryContextResponse = {
+      ...search,
+      results: delivered.map(item => {
+        const result = selectedById.get(String(item.memory_id))!;
+        return { kind: result.kind, id: result.id, score: result.score, memory_kind: result.memory_kind,
+          lifecycle_state: result.lifecycle_state, current_version: result.current_version, source_references: result.source_references };
+      }),
+      meta: { ...search.meta,
+        ...(search.meta.task_query ? { task_query: { ...search.meta.task_query,
+          coverage: taskPlan && delivered.length && covered ? "covered" as const : "missing" as const } } : {}),
+        returned_count: delivered.length,
+        top_result_ids: delivered.map(item => String(item.memory_id)),
+        top_result_ranks: delivered.map(item => typeof item.score === "number" ? item.score : null),
+        task_id: taskId, usage_purpose: usagePurpose,
+        usage_id: usageId, usage_item_ids: receiptItems.map(item => item.usage_item_id),
+        usage_items: receiptItems, verification_sampled: sampled },
+      evidence_bundle: {
+        query_at: queryAt, token_budget: tokenBudget, estimated_tokens: 0,
+        token_count_basis: "o200k_base_complete_mcp_text", budget_limited: budgetLimited,
+        evidence_status: disposition.evidence_status,
+        answer_template: abstain ? "abstention" : evidenceAnswerTemplate(disposition, {
+          hasTimeline: times.length > 0, hasCurrentState: states.length > 0, requiresMultipleSources: multiSession }),
+        evidence: delivered, current_state: states, timeline: times, conflicts,
+        missing_evidence: [...new Set([...(shadowMode ? legacyMissingEvidence : disposition.missing_evidence),
+          ...(!covered ? ["incomplete_question_coverage"] : []), ...(budgetLimited ? ["context_budget_exhausted"] : [])])],
+        abstention_recommended: abstain, degraded_reasons: disposition.degraded_reasons,
+        answer_guidance: answerGuidanceForDisposition(abstain ? { ...disposition,
+          evidence_status: conflicts.length ? "conflicted" : "insufficient", abstention_recommended: true } : disposition,
+          delivered.map(item => {
+            const ref = (item.source_reference as { ref?: unknown } | null)?.ref;
+            return typeof ref === "string" ? { ref } : null;
+          }))
+      }
+    };
+    return measureContextPayload(response, response.evidence_bundle);
+  };
+  // Pack the final envelope before writing usage. Preserve each excerpt with its
+  // conditions and provenance; never count omitted candidates as injections.
+  const deliveredCandidates: typeof evidence = [];
+  for (const item of evidence) {
+    if (countContextTokens(buildResponse([...deliveredCandidates, item])) <= tokenBudget) deliveredCandidates.push(item);
+    else budgetLimited = true;
   }
-  const contextUsage = await recordMemoryUsage(env, {
-    tenant_id: tenantId,
+  let response = buildResponse(deliveredCandidates);
+  while (deliveredCandidates.length && countContextTokens(response) > tokenBudget) {
+    deliveredCandidates.pop();
+    budgetLimited = true;
+    response = buildResponse(deliveredCandidates);
+  }
+  if (countContextTokens(response) > tokenBudget) {
+    throw new HttpError(400, "context_budget_below_envelope", "token_budget cannot fit the complete context envelope");
+  }
+  await recordMemoryUsage(env, {
+    id: usageId, tenant_id: tenantId,
     project_id: typeof body.project_id === "string" ? body.project_id : null,
-    task_id:typeof body.task_id === "string" ? body.task_id : null,
-    capability: "memory_retrieve_context",
-    access_path: "context",
-    request_source: "api",
-    requested_business_category_id: typeof body.business_category_id === "string"
-      ? body.business_category_id
-      : null,
-    requested_work_type: typeof body.work_type === "string"
-      ? body.work_type as MemoryWorkType
-      : null,
+    task_id: taskId, trace_id: traceId, external_run_id: externalRunId, usage_purpose: usagePurpose,
+    capability: "memory_retrieve_context", access_path: "context", request_source: "api",
+    requested_business_category_id: typeof body.business_category_id === "string" ? body.business_category_id : null,
+    requested_work_type: typeof body.work_type === "string" ? body.work_type as MemoryWorkType : null,
     retrieval_generation_id: selectedGenerationId,
     ranking_profile_id: search.meta.retrieval?.ranking_profile_id ?? null,
     actor_principal: options.actorPrincipal ?? null,
-    items: injectedEvidence.map((item, index) => ({
-      source_type: "memory" as const,
-      source_id: String(item.memory_id),
-      source_version:selected.find(source=>source.id===item.memory_id)?.current_version ?? null,
-      rank: index + 1,
-      score: typeof item.score === "number" ? item.score : null,
-      reference_type: "injected" as const,
-      used_state: "unknown" as const,
-      injected_token_estimate: Math.ceil(String(item.text ?? "").length / 4)
+    items: response.evidence_bundle.evidence.map((item, index) => ({
+      id: receiptIds.get(String(item.memory_id)), source_type: "memory" as const,
+      source_id: String(item.memory_id), source_version: selectedById.get(String(item.memory_id))?.current_version ?? null,
+      rank: index + 1, score: typeof item.score === "number" ? item.score : null,
+      reference_type: "injected" as const, used_state: "unknown" as const,
+      injected_token_estimate: countContextTokens(item)
     }))
   });
-  const selectedById = new Map(selected.map((result) => [result.id, result]));
-  return {
-    ...search,
-    results: injectedEvidence.flatMap((item) => {
-      const result = selectedById.get(String(item.memory_id));
-      return result
-        ? [{
-          kind: result.kind,
-          id: result.id,
-          score: result.score,
-          memory_kind: result.memory_kind,
-          lifecycle_state: result.lifecycle_state,
-          current_version: result.current_version,
-          source_references: result.source_references
-        }]
-        : [];
-    }),
-    meta: {
-      ...search.meta,
-      ...(search.meta.task_query ? {
-        task_query: { ...search.meta.task_query, coverage: taskPlan
-          && coversLocalTaskQuery(injectedEvidence.map(item => ({ content: String(item.text ?? '') })), taskPlan)
-          ? 'covered' as const : 'missing' as const },
-        returned_count: injectedEvidence.length,
-        top_result_ids: injectedEvidence.map(item => String(item.memory_id)),
-        top_result_ranks: injectedEvidence.map(item => typeof item.score === 'number' ? item.score : null)
-      } : {}),
-      usage_id: contextUsage.usage_id,
-      usage_item_ids:contextUsage.usage_item_ids,
-      usage_items:contextUsage.usage_items,
-      verification_sampled: contextUsage.verification_sampled
-    },
-    evidence_bundle: {
-      query_at: queryAt,
-      token_budget: tokenBudget,
-      estimated_tokens: Math.ceil((injectedChars + answerGuidance.instructions.length) / 4),
-      evidence_status: disposition.evidence_status,
-      answer_template: shadowMode && legacyAbstention ? "abstention" : answerTemplate,
-      evidence: injectedEvidence,
-      current_state: injectedCurrentState,
-      timeline: injectedTimeline,
-      conflicts,
-      missing_evidence: shadowMode ? legacyMissingEvidence : disposition.missing_evidence,
-      abstention_recommended: effectiveAbstention,
-      degraded_reasons: disposition.degraded_reasons,
-      answer_guidance: answerGuidance
-    }
-  };
+  return response;
 }
 
 export async function getMemoryProfile(
