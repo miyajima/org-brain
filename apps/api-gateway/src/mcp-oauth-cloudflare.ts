@@ -15,6 +15,7 @@ export type OAuthProps = {
   scopes: OrgBrainOAuthScope[];
   projectId?: string;
   securityV2?: true;
+  identity?: { issuer: string; subject: string; email: string | null };
 };
 
 type OAuthEnv = Env & { OAUTH_KV: KVNamespace; OAUTH_PROVIDER: OAuthHelpers };
@@ -90,7 +91,8 @@ async function authorizationHandler(request: Request, env: OAuthEnv, baseFetch: 
     metadata: { tenant_id: access.tenantId, client_name: client.clientName ?? oauthRequest.clientId },
     scope: scopes,
     props: { tenantId: access.tenantId, principal: access.principal, defaultRole: access.defaultRole, scopes,
-      ...(env.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' ? { securityV2: true as const } : {}) } satisfies OAuthProps,
+      ...(env.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' ? { securityV2: true as const,
+        identity: { issuer: access.identityIssuer!, subject: access.identitySubject!, email: access.identityEmail ?? null } } : {}) } satisfies OAuthProps,
     revokeExistingGrants: env.ORGBRAIN_OAUTH_SECURITY_V2 !== 'true'
   });
   return Response.redirect(redirectTo, 302);
@@ -117,14 +119,16 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
             token.scope.some(scope => !ORGBRAIN_OAUTH_SCOPES.includes(scope as OrgBrainOAuthScope))) {
           return new Response('Invalid OAuth authorization context', { status: 401 });
         }
-        const effectiveProps = { ...props, scopes: token.scope as OrgBrainOAuthScope[] };
+        let effectiveProps = { ...props, scopes: token.scope as OrgBrainOAuthScope[] };
         const security = new OAuthDeviceSecurity(oauthEnv, (oauthEnv as OAuthEnv).OAUTH_PROVIDER,
           (req, bindings, execution) => provider.fetch(req, bindings, execution));
         if (oauthEnv.ORGBRAIN_OAUTH_SECURITY_V2 === 'true' || props.securityV2) {
           try {
-            if (!await security.ledger.active(token.userId, token.grantId, props, token.grant.clientId)) {
+            const current = await security.ledger.authorize(token.userId, token.grantId, props, token.grant.clientId);
+            if (!current) {
               return new Response('OAuth grant is inactive', { status: 401 });
             }
+            effectiveProps = { ...current, scopes: token.scope as OrgBrainOAuthScope[] };
           } catch { return new Response('OAuth security state unavailable', { status: 503 }); }
         }
         if (props.projectId && !await security.guardProject(request, effectiveProps)) return new Response('Forbidden project or tool', { status: 403 });
@@ -134,7 +138,7 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
           tenantId: props.tenantId,
           allowedTenants: [props.tenantId],
           source: "oauth",
-          defaultRole: props.defaultRole,
+          defaultRole: effectiveProps.defaultRole,
           runtimeActor: `principal:${props.principal}`,
           scopes: effectiveProps.scopes
         });

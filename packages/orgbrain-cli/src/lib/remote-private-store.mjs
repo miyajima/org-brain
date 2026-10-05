@@ -13,6 +13,10 @@ export class RemotePrivateStore {
     if (process.platform === 'win32') throw new Error('remote_private_store_platform_unsupported');
     if (!/^[a-zA-Z0-9_-]{1,64}$/u.test(profile)) throw new Error('remote_invalid_profile');
     this.directory = resolve(directory);
+    const managed = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
+    if (this.directory === managed || this.directory.startsWith(`${managed}/`) || this.directory.split('/').includes('.codex')) {
+      throw new Error('remote_managed_credential_directory_forbidden');
+    }
     this.path = join(this.directory, `${profile}.json`);
     this.lockPath = join(this.directory, `${profile}.lock`);
   }

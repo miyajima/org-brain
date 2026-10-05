@@ -2,23 +2,34 @@ import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import { sha256 } from '@org-brain/shared';
 import type { Env } from './types';
 import type { OAuthProps } from './mcp-oauth-cloudflare';
+import { currentOAuthIdentity } from './oauth-current-identity';
 import { oauthError, opaque } from './oauth-security-utils';
 
 type Family = { family_id: string; user_id: string; grant_id: string; client_id: string; resource: string;
-  tenant_id: string; principal: string; project_id: string | null; state: string; expires_at: number };
+  tenant_id: string; principal: string; project_id: string | null;
+  identity_issuer: string; identity_subject: string; identity_email: string | null; scopes_json: string; state: string; expires_at: number };
 type Refresh = Family & { token_hash: string; token_state: string };
 
 export class OAuthGrantLedger {
   constructor(private env: Env, private helpers: OAuthHelpers, private now = Date.now) {}
 
-  async active(userId: string, grantId: string, props: OAuthProps, clientId: string) {
+  async authorize(userId: string, grantId: string, props: OAuthProps, clientId: string) {
     const family = await this.env.OPEN_BRAIN_DB.prepare('SELECT * FROM oauth_grant_families WHERE family_id=?')
       .bind(`${userId}:${grantId}`).first<Family>();
-    const user = await this.env.OPEN_BRAIN_DB.prepare('SELECT status FROM user_profiles WHERE tenant_id=? AND principal=?')
-      .bind(props.tenantId, props.principal).first<{ status: string }>();
-    return user?.status === 'active' && family?.state === 'active' && family.expires_at > this.now() && family.client_id === clientId &&
-      family.resource === this.env.MCP_OAUTH_RESOURCE && family.tenant_id === props.tenantId &&
-      family.principal === props.principal && family.project_id === (props.projectId ?? null);
+    if (!family || family.state !== 'active' || family.expires_at <= this.now() || family.client_id !== clientId ||
+        family.resource !== this.env.MCP_OAUTH_RESOURCE || family.tenant_id !== props.tenantId ||
+        family.principal !== props.principal || family.project_id !== (props.projectId ?? null) ||
+        family.identity_issuer !== props.identity?.issuer || family.identity_subject !== props.identity?.subject ||
+        family.identity_email !== (props.identity?.email ?? null) || family.scopes_json !== JSON.stringify(props.scopes)) return null;
+    const current = await this.current(family);
+    if (!current) { await this.revoke(family); return null; }
+    return { ...props, defaultRole: current.defaultRole };
+  }
+
+  private current(family: Family) {
+    return currentOAuthIdentity(this.env, { tenantId: family.tenant_id, principal: family.principal,
+      projectId: family.project_id ?? undefined, scopes: JSON.parse(family.scopes_json),
+      identity: { issuer: family.identity_issuer, subject: family.identity_subject, email: family.identity_email } });
   }
 
   async revoke(family: Family) {
@@ -59,9 +70,7 @@ export class OAuthGrantLedger {
     if (!opaque(token)) return null;
     const row = await this.refreshRecord(token);
     if (!row || row.client_id !== clientId || row.resource !== resource || row.expires_at <= this.now() || row.state !== 'active') return null;
-    const user = await this.env.OPEN_BRAIN_DB.prepare('SELECT status FROM user_profiles WHERE tenant_id=? AND principal=?')
-      .bind(row.tenant_id, row.principal).first<{ status: string }>();
-    if (user?.status !== 'active') { await this.revoke(row); return null; }
+    if (!await this.current(row)) { await this.revoke(row); return null; }
     const result = await this.env.OPEN_BRAIN_DB.prepare(`UPDATE oauth_refresh_tokens SET state='used'
       WHERE token_hash=? AND state='active' AND EXISTS(SELECT 1 FROM oauth_grant_families f
         WHERE f.family_id=oauth_refresh_tokens.family_id AND f.state='active' AND f.expires_at>?)`)
@@ -90,23 +99,25 @@ export class OAuthGrantLedger {
       const props = verified.grant.props;
       family = { family_id: id, user_id: verified.userId, grant_id: verified.grantId, client_id: clientId,
         resource: this.env.MCP_OAUTH_RESOURCE!, tenant_id: props.tenantId, principal: props.principal,
-        project_id: props.projectId ?? null, state: 'active', expires_at: this.now() + 30 * 86400_000 };
+        project_id: props.projectId ?? null, identity_issuer: props.identity?.issuer ?? '',
+        identity_subject: props.identity?.subject ?? '', identity_email: props.identity?.email ?? null,
+        scopes_json: JSON.stringify(props.scopes), state: 'active', expires_at: this.now() + 30 * 86400_000 };
       // Cutover requires fresh V2 consent. A pre-cutover authorization code may
       // not create an unmarked family that could bypass denial on rollback.
-      if (props.securityV2 !== true) throw Error();
+      if (props.securityV2 !== true || !await this.current(family)) throw Error();
       const audience = Array.isArray(verified.audience) ? verified.audience : [verified.audience];
       if (audience.length !== 1 || audience[0] !== family.resource) throw Error();
       const result = await this.env.OPEN_BRAIN_DB.batch([
         this.env.OPEN_BRAIN_DB.prepare(`INSERT INTO oauth_grant_families
-          (family_id,user_id,grant_id,client_id,resource,tenant_id,principal,project_id,state,created_at,expires_at)
-          VALUES(?,?,?,?,?,?,?,?,'active',?,?) ON CONFLICT(family_id) DO NOTHING`)
+          (family_id,user_id,grant_id,client_id,resource,tenant_id,principal,project_id,identity_issuer,identity_subject,identity_email,scopes_json,state,created_at,expires_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'active',?,?) ON CONFLICT(family_id) DO NOTHING`)
           .bind(id, family.user_id, family.grant_id, clientId, family.resource, family.tenant_id, family.principal,
-            family.project_id, this.now(), family.expires_at),
+            family.project_id, family.identity_issuer, family.identity_subject, family.identity_email, family.scopes_json, this.now(), family.expires_at),
         this.env.OPEN_BRAIN_DB.prepare(`INSERT INTO oauth_refresh_tokens(token_hash,family_id,state,created_at)
           SELECT ?,family_id,'active',? FROM oauth_grant_families WHERE family_id=? AND state='active' AND expires_at>?`)
           .bind(await sha256(tokens.refresh_token), this.now(), id, this.now())
       ]);
-      if (result[1].meta.changes !== 1 || !await this.active(family.user_id, family.grant_id, props, clientId)) throw Error();
+      if (result[1].meta.changes !== 1 || !await this.authorize(family.user_id, family.grant_id, props, clientId)) throw Error();
       return response;
     } catch {
       if (family) await this.revoke(family);

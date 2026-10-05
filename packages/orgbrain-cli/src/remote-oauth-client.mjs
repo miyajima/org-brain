@@ -196,11 +196,16 @@ export class OrgBrainRemoteClient {
     return this.summary(this.validateProfile(profile));
   }
 
+  quarantine(profile) {
+    return { version: 1, state: 'reauthentication_required', ...this.binding(profile), scopes: [...REMOTE_SCOPES],
+      revocation: { client_id: profile.client_id, refresh_token: profile.refresh_token } };
+  }
+
   async refreshLocked(profile) {
     let refreshed, metadata, issuedCredentials;
     // Persist uncertainty BEFORE the external rotation. A crash must not leave
     // an old refresh token on disk that another process could replay.
-    await this.store.write({ version: 1, state: 'reauthentication_required', ...this.binding(profile), scopes: [...REMOTE_SCOPES] });
+    await this.store.write(this.quarantine(profile));
     try {
       metadata = await discoverOrgBrain(this.fetch, profile.resource);
       const tokens = await tokenRequest(this.fetch, metadata, { grant_type: 'refresh_token', client_id: profile.client_id,
@@ -214,7 +219,7 @@ export class OrgBrainRemoteClient {
       // A network interruption after rotation is ambiguous. Never replay old refresh
       // credentials, retry a mutation, or silently change accounts after uncertainty.
       if (issuedCredentials) await this.revoke(issuedCredentials, metadata).catch(() => {});
-      await this.store.write({ version: 1, state: 'reauthentication_required', ...this.binding(profile), scopes: [...REMOTE_SCOPES] });
+      await this.store.write(this.quarantine(profile));
       throw new RemoteOAuthError('reauthentication_required');
     }
   }
@@ -227,15 +232,25 @@ export class OrgBrainRemoteClient {
     return this.store.withLock(async () => {
       const profile = await this.store.read();
       if (!profile) return { state: 'logged_out', remote_revoked: false };
-      let revoked = false;
+      let revoked = false, pending;
       try {
         if (profile.state === 'authenticated') {
           this.validateProfile(profile);
-          await this.revoke(profile, await discoverOrgBrain(this.fetch, profile.resource));
+          pending = this.quarantine(profile);
+        } else if (profile.version === 1 && profile.state === 'reauthentication_required' && profile.revocation) {
+          this.binding(profile); exactScopes(profile.scopes);
+          if (!opaque(profile.revocation.client_id) || !opaque(profile.revocation.refresh_token)) throw new RemoteOAuthError('invalid_profile');
+          pending = { version: 1, state: profile.state, ...this.binding(profile), scopes: [...REMOTE_SCOPES], revocation: profile.revocation };
+        }
+        if (pending) {
+          await this.revoke(pending.revocation, await discoverOrgBrain(this.fetch, pending.resource));
           revoked = true;
         }
-      } catch { /* Keep local logout available offline; report remote uncertainty. */ }
-      finally { await this.store.clear(); }
+      } catch { /* Local authentication stops offline; only a revocation handle survives. */ }
+      finally {
+        if (pending && !revoked) await this.store.write(pending);
+        else await this.store.clear();
+      }
       return { state: 'logged_out', remote_revoked: revoked };
     });
   }
