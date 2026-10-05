@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import event from './fixtures/optional-diagnostic-failure.json';
-import { planConversationMemory } from '@org-brain/shared';
+import { countContextTokens, planConversationMemory } from '@org-brain/shared';
 import { stageConversationMemories } from '../src/conversation-memory-service';
 import { confirmProposedMemory } from '../src/rationale-service';
 import { searchMemories } from '../src/memory-search-service';
@@ -15,13 +15,13 @@ function input(): any { const e=structuredClone(event) as any;e.candidates[0].me
 function fixture() {const f=memoryD1Fixture();f.env.HYBRID_V4_MODE='on';f.env.EVIDENCE_DISPOSITION_MODE='on';f.sql.prepare('INSERT INTO principal_role_assignments(id,tenant_id,project_id,principal,role,created_by_principal,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run('role','fixture','workflow-fixture',owner,'project_owner',owner,1,1);return f;}
 async function stage(env:any,e:any) {const p=await stageConversationMemories(env,'fixture',e,{principal:owner});return (await stageConversationMemories(env,'fixture',e,{principal:owner,execute:true,expectedPlanHash:p.plan_hash})).receipts[0];}
 const answer=(r:any)=>({tenant_id:'fixture',confirmation_token:r.confirmation_token,expected_candidate_hash:r.candidate_hash,expected_revision:r.revision,approved:true,review_answer:'保存する'});
-const request={tenant_id:'fixture',project_id:'workflow-fixture',q:'再開して',task_id:'fixture-current-task',task_context:{project_id:'workflow-fixture',task_key:'fixture-current-task',subject_query:'What Job skill prerequisites should we use?'},top_k:2,token_budget:1200};
+const request={tenant_id:'fixture',project_id:'workflow-fixture',q:'再開して',task_id:'fixture-current-task',task_context:{project_id:'workflow-fixture',task_key:'fixture-current-task',subject_query:'What Job skill prerequisites should we use?'},top_k:2,token_budget:2500};
 describe('typed compatible playbook and task scope',()=>{
   it('delivers minimal current-scope steps on a contextual resume without verifying commands or granting actions',async()=>{const {env,sql}=fixture();try{
     const e=input(),r=await stage(env,e);expect((await searchMemories(env,request,{actorPrincipal:owner})).results).toEqual([]);
     await confirmProposedMemory(env,answer(r),owner);
     const context=await retrieveMemoryContext(env,request,{actorPrincipal:owner});const text=context.evidence_bundle.evidence.map(x=>x.text).join('\n');
-    expect(context.meta.task_query?.coverage).toBe('covered');
+    expect(context.meta.task_query?.coverage).toBe('covered');expect(countContextTokens(context)).toBeLessThanOrEqual(request.token_budget);
     for(const required of ['skills/job/SKILL.md','fixture-v1','<current-job-id>','mandatory safe read gate','optional','Stop:','Failure:','Refresh:','unverified','grants no execution permission'])expect(text).toContain(required);
     const row=sql.prepare('SELECT * FROM memories').get();expect(row.verification_state).toBe('unverified');
     expect(JSON.parse(row.learning_json).conversation_provenance.playbook.steps[0].command.validation_state).toBe('template_checked_unverified');
