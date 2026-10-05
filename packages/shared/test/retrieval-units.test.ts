@@ -35,6 +35,45 @@ describe("retrieval units", () => {
     });
   });
 
+  it.each([
+    "The deployment is scheduled on 2030-01-01.",
+    "The deployment may occur on 2030-01-01.",
+    "The policy deadline is on 2030-01-01.",
+    "We planned to attend the launch on 2030-01-01.",
+    "We will attend the launch on 2030-01-01.",
+    "We did not attend the launch on 2030-01-01.",
+    "2030-01-01にデプロイを実施する予定です。",
+    "2030-01-01に障害が発生するかもしれません。",
+    "方針の期限は2030-01-01です。",
+    "2030-01-01に参加した場合は検証してください。",
+    "2030-01-01に参加したら検証する。"
+  ])("keeps a planned, modal, negative or deadline date as mentioned time: %s", async (content) => {
+    const units = await buildRetrievalUnitsV4({ ...provenanceRecord, content });
+    const dated = units.filter((unit) => JSON.parse(unit.metadata_json).mentioned_at !== undefined);
+    expect(dated.length).toBeGreaterThan(0);
+    for (const unit of dated) {
+      expect(unit.event_at).toBe(provenanceRecord.created_at);
+      expect(JSON.parse(unit.metadata_json)).toMatchObject({
+        mentioned_at: Date.UTC(2030, 0, 1), event_time_basis: "source_capture"
+      });
+      if (unit.unit_type === "timeline") expect(JSON.parse(unit.metadata_json).starts_at).toBeNull();
+    }
+  });
+
+  it.each([
+    "The deployment completed on 2025-02-03.",
+    "The incident occurred on 2025-02-03.",
+    "2025-02-03にイベントに参加した。",
+    "2025-02-03に障害が発生しました。"
+  ])("retains an explicit realized event date without attesting execution: %s", async (content) => {
+    const units = await buildRetrievalUnitsV4({ ...provenanceRecord, content });
+    const event = units.find((unit) => unit.unit_type === "timeline")!;
+    expect(event.event_at).toBe(Date.UTC(2025, 1, 3));
+    expect(JSON.parse(event.metadata_json)).toMatchObject({
+      mentioned_at: Date.UTC(2025, 1, 3), event_time_basis: "explicit_event_text", evidence_status: "extracted_unverified"
+    });
+  });
+
   it("anchors structured output to the persisted source and preserves complete conditional reuse", async () => {
     const units = await buildRetrievalUnitsV4(provenanceRecord, { structuredUnits: [{
       text: "Use bounded replay.", event_at: Date.UTC(2025, 1, 3),
