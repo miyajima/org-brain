@@ -6,6 +6,7 @@ import {
   resolveMemoryTokenEstimate,
   validateAvoidedLookupCategories,
   shouldSampleMemoryEffectVerification,
+  normalizeUsagePurpose,
   ulid,
   type AvoidedLookupCategory,
   type MemoryEffectOutcome,
@@ -16,6 +17,10 @@ import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 
 type UsageSourceType = "memory" | "decision_memory";
+export function parseUsagePurpose(value: unknown) {
+  try { return normalizeUsagePurpose(value); }
+  catch { throw new HttpError(400, "invalid_usage_purpose", "usage_purpose must be task, audit, diagnostic, test or unclassified"); }
+}
 type UsageItemInput = {
   id?: string | null;
   source_type: UsageSourceType;
@@ -48,6 +53,7 @@ export type MemoryUsageInput = {
   tenant_id: string;
   project_id?: string | null;
   task_id?: string | null;
+  usage_purpose?: "task" | "audit" | "diagnostic" | "test" | "unclassified";
   trace_id?: string | null;
   external_run_id?: string | null;
   capability?: string | null;
@@ -261,6 +267,7 @@ async function sourceSnapshot(env: Env, tenantId: string, item: UsageItemInput) 
 }
 
 export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
+  const usagePurpose = parseUsagePurpose(input.usage_purpose);
   const usageId = input.id?.trim() || ulid();
   const existing = await firstResult<{ id: string }>(env.OPEN_BRAIN_DB.prepare(
     "SELECT id FROM memory_usage_events WHERE tenant_id = ? AND id = ?"
@@ -318,8 +325,8 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
          id, tenant_id, project_id, task_id, trace_id, external_run_id, capability, access_path,
          request_source, query_hash, requested_business_category_id,
          requested_work_type, retrieval_generation_id, ranking_profile_id,
-         actor_principal, verification_sampled, created_at
-       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         actor_principal, verification_sampled, created_at, usage_purpose
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       usageId, input.tenant_id, linkedProjectId ?? null, linkedTaskId ?? null,
       linkedTraceId ?? null, input.external_run_id ?? null, input.capability ?? null, input.access_path,
@@ -327,7 +334,7 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
       input.requested_business_category_id ?? null, input.requested_work_type ?? null,
       input.retrieval_generation_id ?? null, input.ranking_profile_id ?? null,
       input.actor_principal?.trim().slice(0, 128) || null,
-      shouldSampleMemoryEffectVerification(input.tenant_id, usageId) ? 1 : 0, createdAt
+      shouldSampleMemoryEffectVerification(input.tenant_id, usageId) ? 1 : 0, createdAt, usagePurpose
     )
   ];
   const itemIds: string[] = [];
@@ -431,6 +438,7 @@ export async function recordMemoryUsageFromRequest(
     tenant_id: tenantId,
     project_id: typeof body.project_id === "string" ? body.project_id : null,
     task_id: typeof body.task_id === "string" ? body.task_id : null,
+    usage_purpose: parseUsagePurpose(body.usage_purpose),
     trace_id: typeof body.trace_id === "string" ? body.trace_id : null,
     external_run_id: typeof body.external_run_id === "string" && body.external_run_id.trim()
       ? body.external_run_id.trim().slice(0, 256)

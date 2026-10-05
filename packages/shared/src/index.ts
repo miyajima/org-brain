@@ -72,3 +72,4 @@ export * from "./types";
 export * from './memory-use-attestation.mjs';
 
 export * from "./memory-read-access";
+export * from "./context-payload-budget.mjs";

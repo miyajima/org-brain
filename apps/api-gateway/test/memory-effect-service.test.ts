@@ -83,7 +83,8 @@ class ImpactStatement {
         trace_id: this.args[4],
         external_run_id: this.args[5],
         actor_principal: this.args[14],
-        created_at: this.args[16]
+        created_at: this.args[16],
+        usage_purpose: this.args[17]
       });
     } else if (this.sql.includes("INSERT INTO memory_usage_items")) {
       this.db.usageItems.push({
