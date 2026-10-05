@@ -89,8 +89,8 @@ function credential(identity,data,now) {
     scopes:data.scope.split(' '),access_token:data.access_token,refresh_token:data.refresh_token,
     access_expires_at:now+data.expires_in*1000,refresh_expires_at:data.refresh_expires_at};
 }
-function summary(identity,c) {return {backend:'remote-mcp',endpoint:identity.endpoint,tenant_id:identity.tenantId,project_id:identity.projectId,
-  logged_in:Boolean(c),credential_path:identity.file,...(c ? {scopes:c.scopes,access_expires_at:c.access_expires_at,refresh_expires_at:c.refresh_expires_at} : {})};}
+function summary(identity,c,now=Date.now()) {return {backend:'remote-mcp',endpoint:identity.endpoint,tenant_id:identity.tenantId,project_id:identity.projectId,
+  logged_in:Boolean(c),local_state:!c?'missing':c.refresh_uncertain?'quarantined':c.refresh_expires_at<=now?'expired':c.access_expires_at<=now?'refresh_required':'active',credential_path:identity.file,...(c ? {scopes:c.scopes,access_expires_at:c.access_expires_at,refresh_expires_at:c.refresh_expires_at} : {})};}
 export async function loginRemote(options,{fetchImpl=globalThis.fetch,now=Date.now,
   sleep=ms=>new Promise(r=>setTimeout(r,ms)),onVerification=()=>{}}={}) {
   const id=remoteIdentity(options);
@@ -112,7 +112,7 @@ export async function loginRemote(options,{fetchImpl=globalThis.fetch,now=Date.n
       if (now()>=deadline) break;
       try {
         const tokens=await oauth(id,'/oauth/token',{grant_type:GRANT,device_code:response.device_code},fetchImpl);
-        const c=credential(id,tokens,now()); await save(id,c); return summary(id,c);
+        const c=credential(id,tokens,now()); await save(id,c); return summary(id,c,now());
       } catch (e) {
         if (e.message==='slow_down') interval+=5000;
         else if(e.message==='remote_oauth_connection_failed') interval*=2;
@@ -131,7 +131,7 @@ async function refreshLocked(id,c,fetchImpl,now) {
   const next=credential(id,data,now()); await save(id,next); return next;
 }
 export async function refreshRemote(options,{fetchImpl=globalThis.fetch,now=Date.now}={}) {
-  const id=remoteIdentity(options); return withCredentialLock(id,async()=>summary(id,await refreshLocked(id,await loadRemoteCredential(id),fetchImpl,now)));
+  const id=remoteIdentity(options); return withCredentialLock(id,async()=>summary(id,await refreshLocked(id,await loadRemoteCredential(id),fetchImpl,now),now()));
 }
 export async function logoutRemote(options,{fetchImpl=globalThis.fetch}={}) {
   const id=remoteIdentity(options); return withCredentialLock(id,async()=>{
@@ -148,7 +148,7 @@ export async function logoutRemote(options,{fetchImpl=globalThis.fetch}={}) {
     return {...summary(id,null),revoked:Boolean(c)};
   });
 }
-export async function remoteStatus(options) {const id=remoteIdentity(options);return summary(id,await loadRemoteCredential(id,{missing:true}));}
+export async function remoteStatus(options,{now=Date.now}={}) {const id=remoteIdentity(options);return summary(id,await loadRemoteCredential(id,{missing:true}),now());}
 export async function callRemoteMemory(action,payload,options,{fetchImpl=globalThis.fetch,now=Date.now}={}) {
   const id=remoteIdentity(options);
   const tools={search:'orgbrain_memories_search',propose:'orgbrain_memories_propose',confirm:'orgbrain_memories_confirm','confirmation-status':'orgbrain_memories_confirmation_status'};

@@ -1,3 +1,5 @@
+import { HttpError } from '@org-brain/shared';
+import { resolveVerifiedAccessUser } from './auth';
 import type { OrgBrainOAuthScope, OrgRole } from '@org-brain/contracts';
 import { authorizeMcpRequest, type McpAuthResult } from './mcp-security';
 import { assertPermission } from './rbac-service';
@@ -40,10 +42,34 @@ export async function deviceRateLimit(env: Env, action: string, key: string, now
 }
 type DeviceRow = { device_hash:string; user_hash:string; client_id:string; tenant_id:string; project_id:string;
   resource:string; scopes:string; expires_at:number; state:string; interval_ms:number; poll_after:number;
-  version:number; principal:string|null; role:OrgRole|null; csrf_hash:string|null; csrf_expires_at:number|null };
+  version:number; principal:string|null; role:OrgRole|null; identity_issuer:string|null; identity_subject:string|null; identity_email:string|null; csrf_hash:string|null; csrf_expires_at:number|null };
 type Family = { id:string; client_id:string; tenant_id:string; project_id:string; resource:string; scopes:string;
-  principal:string; role:OrgRole; expires_at:number; revoked_at:number|null };
+  principal:string; role:OrgRole; identity_issuer:string; identity_subject:string; identity_email:string|null; expires_at:number; revoked_at:number|null };
 type TokenRow = Family & { token_expires_at:number; consumed_at:number|null; kind:string };
+// Re-evaluate registered identity, active profile, current tenant grant and role.
+// These fields came from verified Access claims, never from the device client.
+async function currentDeviceIdentity(env: Env, row: Pick<DeviceRow, 'tenant_id'|'project_id'|'principal'|'identity_issuer'|'identity_subject'|'identity_email'|'scopes'>) {
+  if (!row.principal || !row.identity_issuer || !row.identity_subject) return null;
+  const identityEnv = { ...env, OPEN_BRAIN_DB: primary(env) as unknown as D1Database };
+  try {
+    const grant = await resolveVerifiedAccessUser(identityEnv, {iss:row.identity_issuer,sub:row.identity_subject,
+      ...(row.identity_email ? {email:row.identity_email} : {})}, 'access-jwt', {requireExistingIdentity:true});
+    if (grant.principal !== row.principal || !grant.allowedTenants.includes(row.tenant_id)) return null;
+    for (const scope of JSON.parse(row.scopes) as OrgBrainOAuthScope[]) {
+      await assertPermission(identityEnv,{tenantId:row.tenant_id,projectId:row.project_id,principal:grant.principal,
+        permission:scope==='orgbrain:read' ? 'read' : 'write',fallbackRole:grant.defaultRole});
+    }
+    return grant;
+  } catch (failure) {
+    if (failure instanceof HttpError && [401,403,409].includes(failure.status)) return null;
+    throw failure; // D1 outage or policy misconfiguration is not valid authentication.
+  }
+}
+async function activeFamily(env: Env, row: TokenRow, now: number) {
+  const grant=await currentDeviceIdentity(env,row);
+  if (!grant) await primary(env).prepare('UPDATE oauth_device_families SET revoked_at=COALESCE(revoked_at,?) WHERE id=?').bind(now,row.id).run();
+  return grant;
+}
 async function tokenRow(env: Env, token: string) {
   return primary(env).prepare(`SELECT f.*,t.expires_at AS token_expires_at,t.consumed_at,t.kind FROM oauth_device_tokens t
     JOIN oauth_device_families f ON f.id=t.family_id WHERE t.hash=?`).bind(await deviceHash(token)).first<TokenRow>();
@@ -52,8 +78,10 @@ export async function deviceBearer(env: Env, token: string, now = Date.now()): P
   if (!enabled(env) || !/^odb_a_[a-f0-9]{64}$/u.test(token)) return null;
   const row = await tokenRow(env, token);
   if (!row || row.kind !== 'access' || row.revoked_at !== null || row.expires_at <= now || row.token_expires_at <= now) return null;
+  const grant=await activeFamily(env,row,now);
+  if (!grant) return null;
   return { tenantId:row.tenant_id, principal:row.principal, allowedTenants:[row.tenant_id], projectId:row.project_id,
-    source:'oauth', defaultRole:row.role, runtimeActor:`principal:${row.principal}`,
+    source:'oauth', defaultRole:grant.defaultRole, runtimeActor:`principal:${row.principal}`,
     scopes:JSON.parse(row.scopes), allowedTools:DEVICE_TOOLS };
 }
 async function makeTokens() {
@@ -76,6 +104,7 @@ export async function refreshDevice(env: Env, form: URLSearchParams, now = Date.
     return error('invalid_grant');
   }
   if (old.revoked_at !== null || old.expires_at <= now || old.token_expires_at <= now) return error('invalid_grant');
+  if (!await activeFamily(env,old,now)) return error('invalid_grant');
   if (form.has('scope') && form.get('scope') !== JSON.parse(old.scopes).join(' ')) return error('invalid_scope');
   const t = await makeTokens(), claim = random(), hash = await deviceHash(token);
   const guard = `SELECT ? ,family_id,?,? FROM oauth_device_tokens WHERE hash=? AND claim_id=?
@@ -110,12 +139,17 @@ export async function pollDevice(env: Env, form: URLSearchParams, now = Date.now
       if (update.meta.changes !== 1) continue;
       return error(fast ? 'slow_down' : 'authorization_pending');
     }
+    const grant=await currentDeviceIdentity(env,row);
+    if (!grant) {
+      await db.prepare("UPDATE oauth_device_requests SET state='denied',csrf_hash=NULL,version=version+1 WHERE device_hash=? AND state='approved'").bind(hash).run();
+      return error('access_denied');
+    }
     const t = await makeTokens(), familyId = random(), claim = random();
     const writes = await db.batch([
       db.prepare(`UPDATE oauth_device_requests SET state='consumed',claim_id=?,csrf_hash=NULL,version=version+1
         WHERE device_hash=? AND version=? AND state='approved' AND expires_at>?`).bind(claim,hash,row.version,now),
-      db.prepare(`INSERT INTO oauth_device_families(id,client_id,tenant_id,project_id,principal,role,resource,scopes,expires_at)
-        SELECT ?,client_id,tenant_id,project_id,principal,role,resource,scopes,? FROM oauth_device_requests WHERE device_hash=? AND claim_id=? AND state='consumed'`)
+      db.prepare(`INSERT INTO oauth_device_families(id,client_id,tenant_id,project_id,principal,role,identity_issuer,identity_subject,identity_email,resource,scopes,expires_at)
+        SELECT ?,client_id,tenant_id,project_id,principal,role,identity_issuer,identity_subject,identity_email,resource,scopes,? FROM oauth_device_requests WHERE device_hash=? AND claim_id=? AND state='consumed'`)
         .bind(familyId,now+FAMILY_TTL,hash,claim),
       db.prepare(`INSERT INTO oauth_device_tokens(hash,family_id,kind,expires_at) SELECT ?,id,'access',? FROM oauth_device_families WHERE id=?`)
         .bind(t.accessHash,now+ACCESS_TTL,familyId),
@@ -123,7 +157,7 @@ export async function pollDevice(env: Env, form: URLSearchParams, now = Date.now
         .bind(t.refreshHash,familyId)
     ]);
     if (writes[0].meta.changes !== 1) continue;
-    return tokenResponse(t,{...row,id:familyId,principal:row.principal!,role:row.role!,expires_at:now+FAMILY_TTL,revoked_at:null});
+    return tokenResponse(t,{...row,id:familyId,principal:row.principal!,role:grant.defaultRole,identity_issuer:row.identity_issuer!,identity_subject:row.identity_subject!,expires_at:now+FAMILY_TTL,revoked_at:null});
   }
   return error('slow_down');
 }
@@ -144,6 +178,9 @@ async function body(request: Pick<Request, 'headers' | 'body'>) {
 async function verify(request: Request, env: Env, now: number) {
   const url = new URL(request.url), form = request.method === 'POST' ? await body(request) : url.searchParams;
   if (!form) return error('invalid_request');
+  if (request.method === 'GET' && !form.has('user_code')) {
+    return new Response('<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OrgBrain Cloud接続</title><main><h1>OrgBrain Cloud接続</h1><p>自分が開始したCloud接続のコードを入力してください。</p><form method="get" action="/oauth/device/verify"><label>Code <input name="user_code" maxlength="14" required autocomplete="off"></label><button>接続先を確認</button></form></main></html>',{headers:{'content-type':'text/html;charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}});
+  }
   const code = (form.get('user_code') ?? '').toUpperCase().replace(/-/gu,'');
   if (!/^[A-Z2-7]{12}$/u.test(code)) return error('invalid_request');
   const db = primary(env), hash = await deviceHash(code);
@@ -154,7 +191,7 @@ async function verify(request: Request, env: Env, now: number) {
   const identityHeaders = new Headers(request.headers);
   identityHeaders.set('x-orgbrain-tenant',row.tenant_id);
   const access = await authorizeMcpRequest(new Request(request.url,{headers:identityHeaders}),{...env,MCP_AUTH_MODE:'access'});
-  if (access.source !== 'access-user' || !access.allowedTenants.includes(row.tenant_id) || row.tenant_id !== access.tenantId ||
+  if (access.source !== 'access-user' || !access.identityIssuer || !access.identitySubject || !access.allowedTenants.includes(row.tenant_id) || row.tenant_id !== access.tenantId ||
     row.principal && row.principal !== access.principal) return error('access_denied',403);
   const scopes:OrgBrainOAuthScope[] = JSON.parse(row.scopes);
   for (const scope of scopes) await assertPermission(env,{tenantId:row.tenant_id,projectId:row.project_id,
@@ -171,9 +208,9 @@ async function verify(request: Request, env: Env, now: number) {
     return result({approved:form.get('decision') === 'approve'},200,{'set-cookie':'__Host-orgbrain_device_csrf=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Strict'});
   }
   const csrf = random();
-  const update = await db.prepare(`UPDATE oauth_device_requests SET principal=?,role=?,csrf_hash=?,csrf_expires_at=?,version=version+1
+  const update = await db.prepare(`UPDATE oauth_device_requests SET principal=?,role=?,identity_issuer=?,identity_subject=?,identity_email=?,csrf_hash=?,csrf_expires_at=?,version=version+1
     WHERE user_hash=? AND state='pending' AND expires_at>? AND (principal IS NULL OR principal=?)`)
-    .bind(access.principal,access.defaultRole,await deviceHash(csrf),Math.min(row.expires_at,now+DEVICE_TTL),hash,now,access.principal).run();
+    .bind(access.principal,access.defaultRole,access.identityIssuer,access.identitySubject,access.identityEmail ?? null,await deviceHash(csrf),Math.min(row.expires_at,now+DEVICE_TTL),hash,now,access.principal).run();
   if (update.meta.changes !== 1) return error('access_denied',403);
   return new Response(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OrgBrain Cloud接続</title><main><h1>OrgBrain Cloud接続</h1><p>自分が開始したCloud接続だけを許可してください。</p><p>Client: ${DEVICE_CLIENT}</p><p>Tenant: ${escapeHtml(row.tenant_id)} / Project: ${escapeHtml(row.project_id)}</p><p>権限: ${escapeHtml(scopes.join(' '))}</p><p>Code: ${escapeHtml(code)}</p><form method="post" action="/oauth/device/verify"><input type="hidden" name="user_code" value="${code}"><input type="hidden" name="csrf" value="${csrf}"><button name="decision" value="approve">確認して許可</button><button name="decision" value="deny">拒否</button></form></main></html>`,{headers:{'content-type':'text/html;charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",'set-cookie':`__Host-orgbrain_device_csrf=${csrf}; Max-Age=600; Path=/; Secure; HttpOnly; SameSite=Strict`}});
 }
