@@ -2222,6 +2222,13 @@ export async function assertMcpToolAllowed(request: Request, props: AgentProps):
   if (props.allowedTools && !props.allowedTools.includes(body.params.name)) {
     throw new HttpError(403, "forbidden", "This MCP client installation cannot call that MCP method or tool");
   }
+  if (props.projectId && body.params.name === "orgbrain_memories_search") {
+    const args = body.params.arguments;
+    if (args?.scope !== "mine" || args?.search_scope && args.search_scope !== "evidence" ||
+      args?.task_context && (args.task_context as {project_id?:string}).project_id !== props.projectId) {
+      throw new HttpError(403, "project_boundary", "Device search requires private memory in the authorized project");
+    }
+  }
   if (props.authSource === "oauth") {
     const requirement = requirementForMcpTool(body.params.name);
     const requiredScope = body.params.name === "orgbrain_memory_quality_audit" &&
@@ -2349,7 +2356,7 @@ export async function handleOrgBrainMcpRequest(
       const handler = createMcpHandler(
         () => createOrgBrainMcpServer(env, props),
         {
-          route: "/",
+          route: new URL(request.url).pathname === "/mcp" ? "/mcp" : "/",
           legacy: "reject",
           corsOptions: false,
           authContext: { props }

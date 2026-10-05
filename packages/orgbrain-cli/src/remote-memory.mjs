@@ -156,7 +156,7 @@ export async function callRemoteMemory(action,payload,options,{fetchImpl=globalT
   if(payload.tenant_id && payload.tenant_id!==id.tenantId || payload.project_id && payload.project_id!==id.projectId ||
     payload.item?.project_id && payload.item.project_id!==id.projectId) throw new Error('remote_project_boundary');
   let args={...payload,tenant_id:id.tenantId};
-  if(action==='search') {if(payload.scope && payload.scope!=='private') throw new Error('remote_private_scope_required');args={...args,project_id:id.projectId,scope:'private'};}
+  if(action==='search') {if(payload.scope && payload.scope!=='mine') throw new Error('remote_private_scope_required');args={...args,project_id:id.projectId,scope:'mine'};}
   if(action==='propose') {if(!payload.item || typeof payload.item!=='object') throw new Error('remote_proposal_item_required');args={...args,item:{...payload.item,project_id:id.projectId}};}
   // An approved field is explicit human review. No stage/status command adds it.
   if(action==='confirm' && typeof payload.approved!=='boolean') throw new Error('explicit_review_decision_required');
