@@ -1,6 +1,9 @@
 import {
   memoryUseFlags,
   HttpError,
+  countContextTokens,
+  measureContextPayload,
+  shouldSampleMemoryEffectVerification,
   collapseWhitespace,
   sha256,
   ulid,
@@ -12,7 +15,7 @@ import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
-import { recordMemoryUsage } from "./memory-effect-service";
+import { parseUsagePurpose, recordMemoryUsage, resolveMemoryUsageContext } from "./memory-effect-service";
 import {
   loadRetrievalGenerationProfile,
   resolveRetrievalGenerationAssignment
@@ -72,6 +75,7 @@ type RejectedAlternative = {
 };
 
 type DecisionMemoryRow = {
+  source_version?: number;
   id: string;
   tenant_id: string;
   project_id: string | null;
@@ -102,6 +106,7 @@ type DecisionMemoryRow = {
 };
 
 type DecisionMemory = {
+  sourceVersion?: number;
   id: string;
   tenantId: string;
   projectId: string | null;
@@ -173,6 +178,10 @@ type ScoredDecisionMemory = {
 };
 
 type ContextEnrichRequest = {
+  task_id?: string | null;
+  trace_id?: string | null;
+  external_run_id?: string | null;
+  usage_purpose?: "task" | "audit" | "diagnostic" | "test" | "unclassified";
   orgId?: string;
   tenant_id?: string;
   projectId?: string | null;
@@ -316,6 +325,7 @@ type PrincipalIdentityOptions = {
   principal?: string | null;
   recordUsage?: boolean;
   bestEffortUsage?: boolean;
+  responseExtras?: Record<string, unknown>;
   autoOrigin?: {
     memoryId: string | null;
     source: string;
@@ -460,6 +470,7 @@ function normalizeConfirmationState(raw: unknown): ConfirmationState {
 
 function toDecisionMemory(row: DecisionMemoryRow): DecisionMemory {
   return {
+    ...(row.source_version !== undefined ? { sourceVersion: row.source_version } : {}),
     id: row.id,
     tenantId: row.tenant_id,
     projectId: row.project_id,
@@ -760,6 +771,10 @@ function parseEnrichRequest(rawBody: unknown, principal?: string | null) {
   const taskText = buildTaskText({ ...task, title: taskTitle ?? "", description: taskDescription ?? "" });
   if (!taskText) throw new HttpError(400, "invalid_payload", "task title or description is required");
   return {
+    taskId: parseOptionalString(body.task_id, "task_id", 128),
+    traceId: parseOptionalString(body.trace_id, "trace_id", 128),
+    externalRunId: parseOptionalString(body.external_run_id, "external_run_id", 256),
+    usagePurpose: parseUsagePurpose(body.usage_purpose),
     tenantId: parseOptionalString(body.orgId ?? body.tenant_id, "orgId", 128) ?? "default",
     projectId: parseOptionalString(body.projectId ?? body.project_id, "projectId", 128),
     agentId: requestPrincipal ?? parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
@@ -1002,7 +1017,9 @@ async function loadDecisionMemories(env: Env, args: {
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
             valid_from, valid_until, status, superseded_by, confidence, visibility, allowed_principals_json,
             confirmation_state, confirmation_note, confirmed_at,
-            created_at, updated_at, business_category_id, work_type
+            created_at, updated_at, business_category_id, work_type,
+            (SELECT COUNT(*) FROM decision_memory_versions v
+             WHERE v.tenant_id = decision_memories.tenant_id AND v.decision_memory_id = decision_memories.id) AS source_version
      FROM decision_memories
      WHERE tenant_id = ?
        ${eligibility}
@@ -1256,53 +1273,6 @@ function toPublicDecisionContextWithFlags(args: {
   return result;
 }
 
-function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): Record<string, unknown> {
-  const trimmed = response;
-  const decisionContext = Array.isArray(trimmed.decisionContext) ? trimmed.decisionContext : [];
-  const knownPitfalls = Array.isArray(trimmed.knownPitfalls) ? trimmed.knownPitfalls : [];
-  const constraints = Array.isArray(trimmed.constraints) ? trimmed.constraints : [];
-  const nextActions = Array.isArray(trimmed.recommendedNextActions) ? trimmed.recommendedNextActions : [];
-  const conflicts = Array.isArray(trimmed.conflicts) ? trimmed.conflicts : [];
-  const overBudget = () => estimateTokens(trimmed) > maxTokens;
-  const popNested = (field: "knownPitfalls" | "constraints" | "sources") => {
-    for (let index = decisionContext.length - 1; index >= 0; index -= 1) {
-      const entry = decisionContext[index];
-      if (!entry || typeof entry !== "object") continue;
-      const values = (entry as Record<string, unknown>)[field];
-      if (Array.isArray(values) && values.length > 0) {
-        values.pop();
-        return true;
-      }
-    }
-    return false;
-  };
-
-  while (overBudget() && knownPitfalls.length > 0) knownPitfalls.pop();
-  while (overBudget() && nextActions.length > 0) nextActions.pop();
-  while (overBudget() && constraints.length > 0) constraints.pop();
-  while (overBudget() && decisionContext.length > 1) decisionContext.pop();
-  while (overBudget() && popNested("knownPitfalls")) continue;
-  while (overBudget() && popNested("constraints")) continue;
-  while (overBudget() && popNested("sources")) continue;
-  while (overBudget() && conflicts.length > 0) conflicts.pop();
-
-  if (overBudget() && decisionContext[0] && typeof decisionContext[0] === "object") {
-    const entry = decisionContext[0] as Record<string, unknown>;
-    delete entry.provenance;
-    delete entry.trustSignals;
-    if (typeof entry.rationale === "string") entry.rationale = entry.rationale.slice(0, 320);
-    if (typeof entry.decision === "string") entry.decision = entry.decision.slice(0, 480);
-    if (typeof entry.title === "string") entry.title = entry.title.slice(0, 160);
-  }
-  if (overBudget()) {
-    trimmed.summary = String(trimmed.summary ?? "").slice(0, Math.max(80, Math.min(480, maxTokens)));
-  }
-  if (overBudget()) decisionContext.splice(0);
-  if (overBudget()) {
-    trimmed.summary = String(trimmed.summary ?? "").slice(0, 160);
-  }
-  return trimmed;
-}
 
 async function projectDecisionMemory(env: Env, memory: DecisionMemory) {
   const text = [
@@ -2260,6 +2230,13 @@ export async function confirmDecisionMemory(
 
 export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const request = parseEnrichRequest(rawBody, options.principal);
+  const supplied = rawBody as ContextEnrichRequest;
+  const usageContext = await resolveMemoryUsageContext(env, {
+    tenant_id: request.tenantId, project_id: supplied.project_id === undefined && supplied.projectId === undefined ? undefined : request.projectId,
+    task_id: supplied.task_id === undefined ? undefined : request.taskId,
+    trace_id: supplied.trace_id === undefined ? undefined : request.traceId, external_run_id: request.externalRunId
+  });
+  if (request.projectId === null && usageContext.project_id !== null) request.projectId = usageContext.project_id;
   await validateBusinessClassification(
     env,
     request.tenantId,
@@ -2299,129 +2276,113 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
     .sort(compareScored);
 
   const conflicts = request.includeConflicts ? detectConflicts(scored, Date.now()) : [];
-  const selected = scored.slice(0, 8);
-  const constraints = [...new Set(selected.flatMap((item) => item.memory.constraints))].slice(0, 12);
-  const knownPitfalls = [...new Set(selected.flatMap((item) => item.memory.knownPitfalls))].slice(0, 12);
-  const top = selected[0];
-  const confidence = selected.length === 0
-    ? 0
-    : clamp(selected.reduce((sum, item) => sum + item.score.finalScore * item.memory.confidence, 0) / selected.length, 0, 1);
-  const requiresHumanReview =
-    confidence < 0.45 ||
-    selected.some((item) => item.memory.status === "uncertain") ||
-    conflicts.some((conflict) => conflict.requiresHumanReview);
+  const candidates = scored.slice(0, 8);
+  const usageId = ulid();
+  const sampled = shouldSampleMemoryEffectVerification(request.tenantId, usageId);
+  const usageEnabled = options.recordUsage !== false;
+  const versions = new Map<string, number>();
+  const receiptIds = new Map<string, string>();
+  for (const item of candidates) {
+    // Bound to the same SELECT snapshot as the delivered content, not a later
+    // read or the capped history display used by the review UI.
+    versions.set(item.memory.id, item.memory.sourceVersion ?? 0);
+    receiptIds.set(item.memory.id, ulid());
+  }
+  const deferredAssetUsage: D1PreparedStatement[] = [];
   const agentContext = request.agentKey
     ? await resolveAgentLoadoutContext(env, {
-        tenantId: request.tenantId,
-        agentKey: request.agentKey,
+        tenantId: request.tenantId, agentKey: request.agentKey,
         principal: normalizePrincipal(options.principal) ?? request.agentId ?? request.userId ?? "api",
-        projectId: request.projectId,
-        taskText: request.taskText,
+        projectId: request.projectId, taskText: request.taskText,
         maxTokens: Math.max(500, Math.floor(request.maxTokens / 2)),
-        recordUsage: options.recordUsage !== false,
-        usageEvent: "resolved",
-        enforceRuntimeFlag: true
-      })
-    : null;
-
-  const response = trimToMaxTokens(
-    {
-      summary: top
-        ? `このタスクでは「${top.memory.title}」の判断を優先してください: ${top.memory.decision}`
+        recordUsage: usageEnabled, usageEvent: "resolved", enforceRuntimeFlag: true,
+        deferUsage: statements => deferredAssetUsage.push(...statements)
+      }) : null;
+  let budgetLimited = false;
+  const buildResponse = (selected: typeof candidates) => {
+    const constraints = [...new Set(selected.flatMap(item => item.memory.constraints))].slice(0, 12);
+    const knownPitfalls = [...new Set(selected.flatMap(item => item.memory.knownPitfalls))].slice(0, 12);
+    const top = selected[0];
+    const confidence = selected.length ? clamp(selected.reduce((sum, item) =>
+      sum + item.score.finalScore * item.memory.confidence, 0) / selected.length, 0, 1) : 0;
+    const receiptItems = selected.map(item => ({ usage_item_id: receiptIds.get(item.memory.id)!,
+      source_type: "decision_memory", source_id: item.memory.id, source_version: versions.get(item.memory.id)! }));
+    const response = {
+      ...options.responseExtras,
+      summary: top ? `このタスクでは「${top.memory.title}」の判断を優先してください: ${top.memory.decision}`
         : "このタスクに十分関連するdecision memoryは見つかりませんでした。",
-      decisionContext: selected.map((item) =>
-        toPublicDecisionContextWithFlags({
-          item,
-          includeSources: request.includeSources,
-          includeProvenance: request.includeProvenance,
-          authorityScoring: request.authorityScoring,
-          verificationView: request.verificationView,
-          conflicts,
-          userId: request.userId,
-          agentId: request.agentId,
-          debugScores: request.debugScores
-        })
-      ),
-      constraints,
-      knownPitfalls,
-      conflicts,
-      ...(agentContext ? { agentContext } : {}),
-      recommendedNextActions: [
+      decisionContext: selected.map(item => toPublicDecisionContextWithFlags({ item,
+        includeSources: request.includeSources, includeProvenance: request.includeProvenance,
+        authorityScoring: request.authorityScoring, verificationView: request.verificationView,
+        conflicts, userId: request.userId, agentId: request.agentId, debugScores: request.debugScores })),
+      constraints, knownPitfalls, conflicts, ...(agentContext ? { agentContext } : {}),
+      recommendedNextActions: selected.length ? [
         request.taskType === "implementation" ? "対象ファイルで既存方針に沿う実装例を確認する" : "差分が既存方針に反していないか確認する",
-        constraints.length > 0 ? "PR前にconstraintsに対応するテストまたはレビュー観点を確認する" : "不足する組織文脈があればdecision memoryとして記録する"
-      ],
+        "constraints・根拠・適用条件を確認する"
+      ] : [],
       confidence: Number(confidence.toFixed(3)),
-      requiresHumanReview,
+      requiresHumanReview: confidence < 0.45 || selected.some(item => item.memory.status === "uncertain")
+        || conflicts.some(conflict => conflict.requiresHumanReview),
       meta: {
-        tenant_id: request.tenantId,
-        project_id: request.projectId,
-        task_type: request.taskType,
-        selectedMemoryCount: selected.length,
-        conflictCount: conflicts.length,
-        featureFlags: {
-          includeProvenance: request.includeProvenance,
-          authorityScoring: request.authorityScoring,
-          verificationView: request.verificationView
-        },
-        estimatedTokens: 0
+        tenant_id: request.tenantId, project_id: request.projectId, task_id: usageContext.task_id,
+        usage_purpose: request.usagePurpose, task_type: request.taskType,
+        selectedMemoryCount: selected.length, conflictCount: conflicts.length,
+        featureFlags: { includeProvenance: request.includeProvenance,
+          authorityScoring: request.authorityScoring, verificationView: request.verificationView },
+        estimatedTokens: 0, token_count_basis: "o200k_base_complete_mcp_text", budget_limited: budgetLimited,
+        usage_recorded: usageEnabled,
+        ...(usageEnabled ? { usage_id: usageId, usage_item_ids: receiptItems.map(item => item.usage_item_id),
+          usage_items: receiptItems, verification_sampled: sampled } : {}),
+        retrieval: { generation_id: "gen_structured_context", unit_schema_version: "2",
+          extractor_name: "decision-memory-projector", extractor_version: "1", ranking_profile_id: "rank_default",
+          embedding_profile_id: null }
       }
-    },
-    request.maxTokens
-  );
-  const meta = response.meta as { estimatedTokens?: number } | undefined;
-  if (meta) meta.estimatedTokens = estimateTokens(response);
-  let usage: Awaited<ReturnType<typeof recordMemoryUsage>> | null = null;
-  if (options.recordUsage !== false) {
+    };
+    return measureContextPayload(response, response.meta, "estimatedTokens");
+  };
+  // Each decision is an atomic capsule: do not truncate rationale, constraints,
+  // pitfalls or provenance to make an apparently reusable decision fit.
+  const selected: typeof candidates = [];
+  for (const item of candidates) {
+    if (countContextTokens(buildResponse([...selected, item])) <= request.maxTokens) selected.push(item);
+    else budgetLimited = true;
+  }
+  let response = buildResponse(selected);
+  while (selected.length && countContextTokens(response) > request.maxTokens) {
+    selected.pop(); budgetLimited = true; response = buildResponse(selected);
+  }
+  if (countContextTokens(response) > request.maxTokens) {
+    throw new HttpError(400, "context_budget_below_envelope", "maxTokens cannot fit the complete context envelope");
+  }
+  if (usageEnabled) {
     try {
-      usage = await recordMemoryUsage(env, {
-        tenant_id: request.tenantId,
-        project_id: request.projectId,
-        capability: "context_enrich",
-        access_path: "context",
-        request_source: "api",
-        requested_business_category_id: request.businessCategoryId,
-        requested_work_type: request.workType,
-        retrieval_generation_id: "gen_structured_context",
-        ranking_profile_id: "rank_default",
+      await recordMemoryUsage(env, {
+        id: usageId, tenant_id: request.tenantId, project_id: request.projectId,
+        task_id: usageContext.task_id, trace_id: usageContext.trace_id, external_run_id: request.externalRunId,
+        usage_purpose: request.usagePurpose, capability: "context_enrich", access_path: "context", request_source: "api",
+        requested_business_category_id: request.businessCategoryId, requested_work_type: request.workType,
+        retrieval_generation_id: "gen_structured_context", ranking_profile_id: "rank_default",
         actor_principal: options.principal ?? null,
         items: selected.map((item, index) => ({
-          source_type: "decision_memory" as const,
-          source_id: item.memory.id,
-          rank: index + 1,
-          score: item.score.finalScore,
-          reference_type: "injected" as const,
-          used_state: "unknown" as const,
-          injected_token_estimate: estimateTokens(toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, false))
+          id: receiptIds.get(item.memory.id), source_type: "decision_memory" as const,
+          source_id: item.memory.id, source_version: versions.get(item.memory.id), rank: index + 1,
+          score: item.score.finalScore, reference_type: "injected" as const, used_state: "unknown" as const,
+          injected_token_estimate: countContextTokens(response.decisionContext[index])
         }))
       });
     } catch (error) {
       if (!options.bestEffortUsage) throw error;
-      console.warn({
-        event: "orgbrain.context.usage_recording_skipped",
-        tenant_id: request.tenantId,
-        project_id: request.projectId,
-        error_code: error instanceof HttpError ? error.code : "unknown"
-      });
+      const meta = response.meta as Record<string, unknown>;
+      meta.usage_recorded = false;
+      for (const key of ["usage_id", "usage_item_ids", "usage_items", "verification_sampled"]) delete meta[key];
+      measureContextPayload(response, meta, "estimatedTokens");
+      console.warn({ event: "orgbrain.context.usage_recording_skipped", tenant_id: request.tenantId,
+        project_id: request.projectId, error_code: error instanceof HttpError ? error.code : "unknown" });
     }
   }
-  if (meta) {
-    Object.assign(meta, {
-      usage_recorded: Boolean(usage),
-      ...(usage
-        ? {
-            usage_id: usage.usage_id,
-            verification_sampled: usage.verification_sampled
-          }
-        : {}),
-      retrieval: {
-        generation_id: "gen_structured_context",
-        unit_schema_version: "2",
-        extractor_name: "decision-memory-projector",
-        extractor_version: "1",
-        ranking_profile_id: "rank_default",
-        embedding_profile_id: null
-      }
-    });
+  if (deferredAssetUsage.length) {
+    try { await env.OPEN_BRAIN_DB.batch(deferredAssetUsage); }
+    catch { console.warn({ event: "orgbrain.context.asset_usage_recording_skipped", tenant_id: request.tenantId }); }
   }
   return response;
 }

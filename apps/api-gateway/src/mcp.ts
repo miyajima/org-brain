@@ -2,6 +2,7 @@ import { receiveCloudUseObservation } from './memory-use-observation-service';
 import {
   MEMORY_READ_SCOPES,
   HttpError,
+  measureContextPayload,
   sha256,
   validateMemoryContractV2Event,
   observeMemoryContractV2Event,
@@ -158,6 +159,9 @@ const contextEnrichInputShape = {
     related_issue_ids: z.array(z.string().max(128)).max(32).optional()
   }),
   task_id: z.string().max(128).optional(),
+  trace_id: z.string().max(128).optional(),
+  external_run_id: z.string().max(256).optional(),
+  usage_purpose: z.enum(["task", "audit", "diagnostic", "test", "unclassified"]).optional(),
   max_tokens: z.number().int().min(500).max(32000).optional(),
   include_sources: z.boolean().optional(),
   include_conflicts: z.boolean().optional(),
@@ -1185,6 +1189,9 @@ class OrgBrainMcpTools {
         business_category_id: z.string().max(128).nullable().optional(),
         work_type: workTypeSchema.nullable().optional(),
         task_id:z.string().max(128).optional(),
+        trace_id: z.string().max(128).optional(),
+        external_run_id: z.string().max(256).optional(),
+        usage_purpose: z.enum(["task", "audit", "diagnostic", "test", "unclassified"]).optional(),
         task_context: z.object({project_id:z.string().min(1).max(128),task_key:z.string().min(1).max(128),subject_query:z.string().min(1).max(500)}).strict().optional(),
         use_snapshot_id:z.string().max(128).optional(),
         use_context:z.object({task:z.string().max(600).optional(),target:z.string().max(600).optional(),constraints:z.string().max(600).optional(),conditions:z.string().max(600).optional()}).optional(),
@@ -1193,14 +1200,14 @@ class OrgBrainMcpTools {
         token_budget: z.number().int().min(512).max(16000).optional(),
         search_mode: z.enum(["hybrid_v3", "hybrid_v4"]).optional()
       },
-      async ({ tenant_id, project_id, business_category_id, work_type, task_id, task_context, use_context, use_snapshot_id, q, top_k, token_budget, search_mode }) => {
+      async ({ tenant_id, project_id, business_category_id, work_type, task_id, trace_id, external_run_id, usage_purpose, task_context, use_context, use_snapshot_id, q, top_k, token_budget, search_mode }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", project_id);
         return toContent(await retrieveMemoryContext(this.env, {
           tenant_id: tenantId,
           project_id,
           business_category_id,
-          work_type, task_id, task_context, use_context, use_snapshot_id,
+          work_type, task_id, trace_id, external_run_id, usage_purpose, task_context, use_context, use_snapshot_id,
           q,
           top_k,
           token_budget,
@@ -1249,41 +1256,37 @@ class OrgBrainMcpTools {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", payload.project_id);
         const principal = this.props?.principal ?? "mcp";
-        const result = await enrichContext(this.env, {
-          tenant_id: tenantId,
-          user_id: user_id ?? principal,
-          agent_id: agent_id ?? principal,
-          ...payload
-        }, { principal });
         const priorAttempts = payload.project_id
           ? await searchActionAttempts(this.env, tenantId, {
               project_id: payload.project_id,
-              query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
-              limit: 3
-            })
-          : [];
+              query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "), limit: 3 }) : [];
+        const plannedUse = priorAttempts.map(attempt => ({ id: crypto.randomUUID(),
+          project_id: payload.project_id, attempt_id: attempt.id, task_id: payload.task_id, stage: "returned" }));
+        const recall = payload.include_domain_recall === true ? await getDomainRecall(this.env, {
+          tenant_id: tenantId, project_id: payload.project_id,
+          query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
+          object_type_key: payload.object_type_key, object_id: payload.object_id, scope: payload.scope,
+          max_tokens: payload.domain_recall_max_tokens
+        }, {
+          ownerPrincipal: this.props.ownerPrincipal ?? principal, runtimeActor: this.props.runtimeActor,
+          clientInstallationId: this.props.clientInstallationId, clientName: this.props.clientType ?? "mcp"
+        }) : null;
+        // Include every MCP addition before the complete payload budget is
+        // packed and memory injection receipts are persisted.
+        const result = await enrichContext(this.env, {
+          tenant_id: tenantId, user_id: user_id ?? principal, agent_id: agent_id ?? principal, ...payload
+        }, { principal, responseExtras: {
+          prior_attempts: priorAttempts, attempt_usage_ids: plannedUse.map(item => item.id),
+          ...(recall ? { domainRecall: recall.inject ? recall.bundle : null,
+            domainRecallMeta: { mode: recall.mode, injected: recall.inject } } : {})
+        } });
         if (payload.project_id) await recordActionAttemptMetricEvent(this.env, tenantId, {
           project_id: payload.project_id, kind: "context_query", source: "mcp", returned_count: priorAttempts.length
-        });
-        const attemptUse = await Promise.allSettled(priorAttempts.map((attempt) => recordActionAttemptUse(this.env, tenantId, {
-          project_id: payload.project_id, attempt_id: attempt.id, task_id: payload.task_id, stage: "returned"
-        })));
-        const attemptUsageIds = attemptUse.flatMap((item) => item.status === "fulfilled" ? [item.value.id] : []);
-        if (payload.include_domain_recall !== true) return toContent({ ...result, prior_attempts: priorAttempts, attempt_usage_ids: attemptUsageIds });
-        const recall = await getDomainRecall(this.env, {
-          tenant_id: tenantId,
-          project_id: payload.project_id,
-          query: [payload.task?.title, payload.task?.description].filter(Boolean).join(" "),
-          object_type_key: payload.object_type_key,
-          object_id: payload.object_id,
-          scope: payload.scope
-        }, {
-          ownerPrincipal: this.props.ownerPrincipal ?? principal,
-          runtimeActor: this.props.runtimeActor,
-          clientInstallationId: this.props.clientInstallationId,
-          clientName: this.props.clientType ?? "mcp"
-        });
-        return toContent({ ...result, prior_attempts: priorAttempts, attempt_usage_ids: attemptUsageIds, domainRecall: recall.inject ? recall.bundle : null, domainRecallMeta: { mode: recall.mode, injected: recall.inject } });
+        }).catch(() => console.warn({ event: "orgbrain.context.attempt_metric_recording_skipped" }));
+        const attemptUse = await Promise.allSettled(plannedUse.map(item => recordActionAttemptUse(this.env, tenantId, item)));
+        Object.assign(result, { attempt_usage_ids: attemptUse.flatMap(item => item.status === "fulfilled" ? [item.value.id] : []) });
+        measureContextPayload(result, result.meta, "estimatedTokens");
+        return toContent(result);
       }
     );
 

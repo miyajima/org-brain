@@ -1,3 +1,4 @@
+import { countContextTokens } from "@org-brain/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   backfillDecisionRetrievalUnits,
@@ -130,7 +131,7 @@ class FakeStatement {
       });
       return { results: rows.map((row) => ({ resource_id: row.resource_id })) as T[] };
     }
-    if (this.sql.includes("FROM decision_memory_versions")) {
+    if (this.sql.includes("FROM decision_memory_versions") && !this.sql.includes("FROM decision_memories")) {
       const tenantId = String(this.args[0]);
       const decisionMemoryId = String(this.args[1]);
       const rows = this.db.decisionMemoryVersions
@@ -153,7 +154,7 @@ class FakeStatement {
         .filter((row) => !projectId || row.project_id === projectId || row.project_id === null)
         .sort((left, right) => right.updated_at - left.updated_at)
         .slice(0, limit);
-      return { results: rows as T[] };
+      return { results: rows.map(row => ({ ...row, source_version: this.db.decisionMemoryVersions.filter(version => version.tenant_id === row.tenant_id && version.decision_memory_id === row.id).length })) as T[] };
     }
     return { results: [] as T[] };
   }
@@ -254,6 +255,8 @@ class FakeStatement {
       }
     } else if (this.sql.includes("INSERT INTO retrieval_units(")) {
       this.db.retrievalUnitInsertCount += 1;
+    } else if (this.sql.includes("INSERT INTO memory_usage_items")) {
+      this.db.usageItemBindings.push(this.args);
     } else if (this.sql.includes("INSERT INTO memory_usage_events")) {
       this.db.usageEventBindings.push(this.args);
     }
@@ -267,6 +270,7 @@ class FakeD1 {
   groupMembers: GroupMemberRecord[] = [];
   resourceAcl: ResourceAclRecord[] = [];
   usageEventBindings: unknown[][] = [];
+  usageItemBindings: unknown[][] = [];
   retrievalUnitInsertCount = 0;
   executionContexts: Array<{
     tenant_id: string;

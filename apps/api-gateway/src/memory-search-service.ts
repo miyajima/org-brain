@@ -1,4 +1,5 @@
 import {
+  boundedRetrievalFusion,
   memoryReadAccessSql,
   type MemoryReadAccess,
   memoryUseFlags,
@@ -209,7 +210,8 @@ async function searchStableRetrievalUnits(
     if (request.businessCategoryId) bindings.push(request.businessCategoryId);
     if (request.workType) bindings.push(request.workType);
     unitRows = (await env.OPEN_BRAIN_DB.prepare(
-      `SELECT u.id, u.source_id, u.unit_type, u.text, bm25(retrieval_units_fts) AS raw_rank
+      `WITH bounded_matches AS MATERIALIZED (
+         SELECT u.id, u.source_id, u.unit_type, u.text, bm25(retrieval_units_fts) AS raw_rank
        FROM retrieval_units_fts
        JOIN retrieval_units u
          ON u.id = retrieval_units_fts.unit_id
@@ -217,10 +219,28 @@ async function searchStableRetrievalUnits(
         AND u.tenant_id = retrieval_units_fts.tenant_id
        WHERE u.generation_id = ? AND u.tenant_id = ?
          AND u.source_type = 'memory' AND retrieval_units_fts MATCH ?
+         AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(request.at)})
+         AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(request.at)})
          ${projectSql}${categorySql}${workSql}
-         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = u.tenant_id AND m.id = u.source_id AND ${memoryReadAccessSql("m", request.readAccess)})
+         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = u.tenant_id AND m.id = u.source_id AND ${memoryReadAccessSql("m", request.readAccess)}
+           AND m.deleted_at IS NULL
+           AND (m.expires_at IS NULL OR m.expires_at > ${Math.trunc(request.at)})
+           AND (m.tags_json IS NULL OR m.tags_json NOT LIKE '%"source-drift"%')
+           AND (m.conflicts_json IS NULL OR m.conflicts_json NOT LIKE '%source_drift%')
+           AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'suppressed')
+           AND (m.valid_from IS NULL OR m.valid_from <= ${Math.trunc(request.at)})
+           AND (m.valid_until IS NULL OR m.valid_until > ${Math.trunc(request.at)})
+           ${request.projectId ? `AND (m.project_id IS NULL OR m.project_id = '${request.projectId.replaceAll("'", "''")}')` : ""}
+           ${request.businessCategoryId ? `AND m.business_category_id = '${request.businessCategoryId.replaceAll("'", "''")}'` : ""}
+           ${request.workType ? `AND m.work_type = '${request.workType.replaceAll("'", "''")}'` : ""})
        ORDER BY bm25(retrieval_units_fts), u.created_at DESC
-       LIMIT 200`
+       LIMIT 1000
+       ), diverse_matches AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY source_id, unit_type ORDER BY raw_rank, id) AS source_rank
+         FROM bounded_matches
+       )
+       SELECT id, source_id, unit_type, text, raw_rank FROM diverse_matches
+       WHERE source_rank = 1 ORDER BY raw_rank, id LIMIT 200`
     ).bind(...bindings).all<StableUnitCandidate>()).results;
   } else {
     if (request.projectId) bindings.push(request.projectId);
@@ -231,7 +251,17 @@ async function searchStableRetrievalUnits(
        FROM retrieval_units u
        WHERE u.generation_id = ? AND u.tenant_id = ? AND u.source_type = 'memory'
          ${projectSql}${categorySql}${workSql}
-         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = u.tenant_id AND m.id = u.source_id AND ${memoryReadAccessSql("m", request.readAccess)})
+         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = u.tenant_id AND m.id = u.source_id AND ${memoryReadAccessSql("m", request.readAccess)}
+           AND m.deleted_at IS NULL
+           AND (m.expires_at IS NULL OR m.expires_at > ${Math.trunc(request.at)})
+           AND (m.tags_json IS NULL OR m.tags_json NOT LIKE '%"source-drift"%')
+           AND (m.conflicts_json IS NULL OR m.conflicts_json NOT LIKE '%source_drift%')
+           AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'suppressed')
+           AND (m.valid_from IS NULL OR m.valid_from <= ${Math.trunc(request.at)})
+           AND (m.valid_until IS NULL OR m.valid_until > ${Math.trunc(request.at)})
+           ${request.projectId ? `AND (m.project_id IS NULL OR m.project_id = '${request.projectId.replaceAll("'", "''")}')` : ""}
+           ${request.businessCategoryId ? `AND m.business_category_id = '${request.businessCategoryId.replaceAll("'", "''")}'` : ""}
+           ${request.workType ? `AND m.work_type = '${request.workType.replaceAll("'", "''")}'` : ""})
        ORDER BY u.created_at DESC LIMIT 200`
     ).bind(...bindings).all<StableUnitCandidate>()).results;
   }
@@ -275,31 +305,40 @@ async function searchStableRetrievalUnits(
        FROM retrieval_units
        WHERE generation_id = ? AND tenant_id = ? AND id IN (${chunk.map(() => "?").join(",")})
          AND source_type = 'memory'
-         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = retrieval_units.tenant_id AND m.id = retrieval_units.source_id AND ${memoryReadAccessSql("m", request.readAccess)})`
+         AND (valid_from IS NULL OR valid_from <= ${Math.trunc(request.at)})
+         AND (valid_until IS NULL OR valid_until > ${Math.trunc(request.at)})
+         AND EXISTS (SELECT 1 FROM memories m WHERE m.tenant_id = retrieval_units.tenant_id AND m.id = retrieval_units.source_id AND ${memoryReadAccessSql("m", request.readAccess)}
+           AND m.deleted_at IS NULL
+           AND (m.expires_at IS NULL OR m.expires_at > ${Math.trunc(request.at)})
+           AND (m.tags_json IS NULL OR m.tags_json NOT LIKE '%"source-drift"%')
+           AND (m.conflicts_json IS NULL OR m.conflicts_json NOT LIKE '%source_drift%')
+           AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'suppressed')
+           AND (m.valid_from IS NULL OR m.valid_from <= ${Math.trunc(request.at)})
+           AND (m.valid_until IS NULL OR m.valid_until > ${Math.trunc(request.at)})
+           ${request.projectId ? `AND (m.project_id IS NULL OR m.project_id = '${request.projectId.replaceAll("'", "''")}')` : ""}
+           ${request.businessCategoryId ? `AND m.business_category_id = '${request.businessCategoryId.replaceAll("'", "''")}'` : ""}
+           ${request.workType ? `AND m.work_type = '${request.workType.replaceAll("'", "''")}'` : ""})`
     ).bind(generation.id, request.tenantId, ...chunk.map((item) => item.id)).all<StableUnitCandidate>()).results;
     semanticRows.push(...rows);
   }
   const allUnits = new Map<string, StableUnitCandidate>();
   for (const unit of [...unitRows, ...semanticRows]) allUnits.set(unit.id, unit);
-  const scoreById = new Map<string, number>();
-  unitRows.forEach((unit, index) => {
-    const configuredWeight = Number(rankingConfig[`${unit.unit_type}_weight`]);
-    const weight = Number.isFinite(configuredWeight) ? Math.max(0, configuredWeight) : 1;
-    const score = generation.ranking_algorithm === "reciprocal_rank_fusion"
-      ? weight / (rrfConstant + index + 1)
-      : weight / (1 + Math.abs(unit.raw_rank ?? index));
-    scoreById.set(unit.source_id, (scoreById.get(unit.source_id) ?? 0) + score);
-  });
-  semanticHits.forEach((hit, index) => {
-    const unit = allUnits.get(hit.id);
-    if (!unit) return;
-    const configuredWeight = Number(rankingConfig[`${unit.unit_type}_weight`]);
-    const channelWeight = Number.isFinite(configuredWeight) ? Math.max(0, configuredWeight) : 1;
-    const score = semanticWeight * channelWeight / (rrfConstant + index + 1);
-    scoreById.set(unit.source_id, (scoreById.get(unit.source_id) ?? 0) + score);
-  });
+  const fusion = boundedRetrievalFusion([
+    { name: "semantic", weight: semanticWeight, hits: semanticHits.flatMap((hit) => {
+      const unit = allUnits.get(hit.id);
+      return unit ? [{ id: hit.id, sourceId: unit.source_id, score: hit.score }] : [];
+    }) },
+    ...[...new Set(unitRows.map((unit) => unit.unit_type))].slice(0, 7).map((type) => ({
+      name: type, weight: Number.isFinite(Number(rankingConfig[`${type}_weight`]))
+        ? Number(rankingConfig[`${type}_weight`]) : 1,
+      hits: unitRows.filter((unit) => unit.unit_type === type).map((unit) => ({ id: unit.id, sourceId: unit.source_id }))
+    }))
+  ], { constant: rrfConstant });
+  const scoreById = fusion.scores;
+  const candidateIds = new Set(fusion.candidateIds);
   const candidateTextByMemory = new Map<string, string[]>();
   for (const unit of allUnits.values()) {
+    if (!candidateIds.has(unit.source_id)) continue;
     const values = candidateTextByMemory.get(unit.source_id) ?? [];
     if (!values.includes(unit.text)) values.push(unit.text);
     candidateTextByMemory.set(unit.source_id, values.slice(0, 5));
@@ -314,12 +353,16 @@ async function searchStableRetrievalUnits(
   } catch {
     degradedReasons.push("reranker_unavailable");
   }
-  [...(reranker?.scores.entries() ?? [])]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .forEach(([memoryId], index) => {
-      scoreById.set(memoryId, (scoreById.get(memoryId) ?? 0) + rerankerWeight / (rrfConstant + index + 1));
-    });
-  const ids = [...scoreById.keys()].sort((left, right) =>
+  // Relevance is dominant when available; fusion breaks ties. No recency bonus
+  // may displace an older, better supported answer merely because it is older.
+  if (reranker?.scores.size && rerankerWeight > 0) {
+    for (const id of candidateIds) {
+      const relevance = reranker.scores.get(id) ?? 0;
+      scoreById.set(id, Math.max(0, Math.min(1, relevance)) * rerankerWeight
+        + (scoreById.get(id) ?? 0) * 0.001);
+    }
+  }
+  const ids = [...candidateIds].sort((left, right) =>
     (scoreById.get(right) ?? 0) - (scoreById.get(left) ?? 0) || left.localeCompare(right)
   );
   const memoryRows = ids.length
@@ -329,6 +372,9 @@ async function searchStableRetrievalUnits(
               utility_score, permissions_json, source_refs_json, conflicts_json,
               business_category_id, work_type
        FROM memories WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})
+         AND ${memoryReadAccessSql("memories", request.readAccess)}
+         AND deleted_at IS NULL
+         AND (expires_at IS NULL OR expires_at > ${Math.trunc(request.at)})
          AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
          AND (valid_from IS NULL OR valid_from <= ?)
          AND (valid_until IS NULL OR valid_until > ?)
@@ -740,7 +786,12 @@ export async function searchMemories(
       const placeholders = ids.map(() => "?").join(",");
       const rows = await env.OPEN_BRAIN_DB.prepare(
         `SELECT id, content, summary FROM memories
-         WHERE tenant_id = ? AND id IN (${placeholders})`
+         WHERE tenant_id = ? AND id IN (${placeholders})
+           AND ${memoryReadAccessSql("memories", request.readAccess)}
+           AND deleted_at IS NULL
+           AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
+           AND (valid_from IS NULL OR valid_from <= ${Math.trunc(request.at)})
+           AND (valid_until IS NULL OR valid_until > ${Math.trunc(request.at)})`
       ).bind(request.tenantId, ...ids).all<{ id: string; content: string; summary: string | null }>();
       const rowById = new Map(rows.results.map((row) => [row.id, row]));
       rerankerCandidates = ids.flatMap((id) => {

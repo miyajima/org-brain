@@ -2,6 +2,7 @@ import { isAiConsensusCertified } from "./memory-contract-judge.mjs";
 
 export const RETRIEVAL_UNIT_EXTRACTOR = "deterministic-retrieval-units-v1";
 export const RETRIEVAL_UNIT_EXTRACTOR_V4 = "deterministic-retrieval-units-v4";
+export const RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION = "4.1";
 export const RETRIEVAL_SEGMENT_MAX_RECORDS = 32;
 export const RETRIEVAL_SEGMENT_MAX_CHARS = 64 * 1024;
 export const RETRIEVAL_SEGMENT_OVERLAP_RATIO = 0.25;
@@ -350,6 +351,35 @@ function retrievalUnitEventAt(record) {
   return record.created_at ?? null;
 }
 
+// Provenance comes from the persisted record, never from extraction output.
+export function retrievalUnitSourceMetadata(record) {
+  const capturedAt = Number(sourceReference(record)?.captured_at);
+  return {
+    source_memory_id: record.id,
+    source_version: Number.isInteger(record.current_version) && record.current_version > 0
+      ? record.current_version : null,
+    source_content_hash: record.content_hash ?? hash(String(record.content ?? "")),
+    captured_at: Number.isFinite(capturedAt) && capturedAt > 0 ? capturedAt : record.created_at ?? null
+  };
+}
+
+function explicitEventTime(text, unitType, mentionedAt) {
+  if (unitType !== "event" || mentionedAt === null) return null;
+  // DATE_RE also classifies plans and deadlines as event-shaped units. Require
+  // an explicit realized-event cue; extraction still does not verify the claim.
+  const nonOccurrence = /\b(?:scheduled|planned|planning|plans?|will|would|may|might|could|should|must|expected|forecast|deadline|due|target|proposed|intended|if|unless|not|never|didn't)\b|(?:予定|計画|見込み|期限|締切|締め切り|かもしれ|可能性|はず|未完了|中止|場合|なら|したら|すれば)/iu;
+  const normalizedText = text.normalize("NFKC").replace(/[’‘]/gu, "'");
+  // Reuse the polarity gate, including Japanese negatives, and normalize
+  // apostrophes before handling negative English contractions.
+  if (NEGATION_RE.test(normalizedText) || /\b[a-z]+n't\b/iu.test(normalizedText)
+    || nonOccurrence.test(normalizedText)) return null;
+  const realizedEvent = /\b(?:went|visited|attended|bought|sold|finished|completed|graduated|married|traveled|travelled|returned|joined|left|met|worked|ran|drove|watched|read|made|paid|spent|occurred|happened)\b|(?:参加した|参加しました|開催された|開催しました|完了した|完了しました|訪れた|訪れました|購入した|購入しました|発生した|発生しました|起きた|終了した|行った)/iu;
+  if (!realizedEvent.test(normalizedText)) return null;
+  const datedEvent = /\b(?:on|in)\s+(?:19|20)\d{2}(?:[-/]\d{1,2}(?:[-/]\d{1,2})?)?\b|(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\s*に/iu;
+  return datedEvent.test(normalizedText)
+    ? mentionedAt : null;
+}
+
 export function buildRetrievalUnits(record) {
   const content = collapseWhitespace(record.content);
   if (!content) return [];
@@ -434,10 +464,14 @@ export function buildRetrievalUnitsV4(record) {
       source_span_start: options.source_span_start ?? null,
       source_span_end: options.source_span_end ?? null,
       content_hash: hash(normalized),
-      metadata_json: JSON.stringify(options.metadata ?? {}),
+      metadata_json: JSON.stringify({
+        ...options.metadata,
+        ...retrievalUnitSourceMetadata(record),
+        evidence_status: "extracted_unverified"
+      }),
       segment_id: options.segment_id ?? null,
       extractor: RETRIEVAL_UNIT_EXTRACTOR_V4,
-      extractor_version: "4",
+      extractor_version: RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION,
       extraction_state: "degraded",
       degraded_reason: "gemini_structured_extractor_not_configured",
       created_at: record.updated_at ?? record.created_at ?? Date.now()
@@ -460,9 +494,12 @@ export function buildRetrievalUnitsV4(record) {
   for (const unit of semanticUnits) {
     if (semanticUnitTypes.includes(unit.unit_type)) {
       const atomic = atomicMetadata(unit.text, unit.speaker);
+      const eventTime = explicitEventTime(unit.text, unit.unit_type, atomic.normalized_at);
+      atomic.mentioned_at = atomic.normalized_at;
+      atomic.event_time_basis = eventTime === null ? "source_capture" : "explicit_event_text";
       append("atomic", unit.text, {
         speaker: unit.speaker,
-        event_at: atomic.normalized_at,
+        event_at: eventTime ?? unit.event_at,
         metadata: atomic
       });
       if (["preference", "instruction", "update", "fact"].includes(unit.unit_type)) {
@@ -497,10 +534,10 @@ export function buildRetrievalUnitsV4(record) {
       if (unit.unit_type === "event" || atomic.normalized_at !== null) {
         append("timeline", unit.text, {
           speaker: unit.speaker,
-          event_at: atomic.normalized_at,
+          event_at: eventTime ?? unit.event_at,
           metadata: {
-            relation: "event",
-            starts_at: atomic.normalized_at,
+            relation: unit.unit_type === "event" ? "event" : "mentioned_time",
+            starts_at: eventTime,
             ends_at: null,
             causes: [],
             follows: [],

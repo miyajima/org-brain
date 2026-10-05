@@ -128,6 +128,29 @@ The seeded compatibility mapping is:
 The aliases are deprecated compatibility inputs only. Stable table and API
 contracts do not include `v3` or `v4` names.
 
+The code extractor patch `4.1` keeps the unit schema additive. Its metadata anchors
+each projected unit to the persisted `source_memory_id`, `source_version` and
+`source_content_hash`; missing legacy versions stay unknown. Structured model
+output cannot override those anchors or claim verified evidence. Persisted
+rationale and complete conditional reuse guidance are projected by the same
+deterministic support channels for Local and D1, including when structured
+extraction supplies the other units.
+
+`mentioned_at` is a date appearing in source text. The legacy `normalized_at`
+metadata remains its alias; it is not automatically an event occurrence time.
+Explicit event statements may supply `event_at`; otherwise that field uses the
+existing source-time fallback, with `captured_at` retained separately in metadata.
+Neither extracted dates nor human-confirmed storage attest execution or current
+permission. Corrections replace current source projections, and suppression
+removes them while keeping version history; textual `supersedes_unit_id` alone
+does not execute a correction or retraction.
+
+This code change does not update seeded generations or live assignments. Existing
+projections keep their original metadata until rebuilt. Uniform rollout requires
+a separately authorized shadow generation/backfill for extractor `4.1` and the
+existing coverage, digest, ACL and promotion gates below; a code test does not
+establish deployment or authorize activation.
+
 When an active assignment has a shadow generation, deterministic sampling uses
 the assignment rate. The active result is returned; the shadow result stores
 only query hash, generation IDs, counts, overlap, degraded/error state, and
