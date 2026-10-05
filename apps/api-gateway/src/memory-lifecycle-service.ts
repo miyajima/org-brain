@@ -622,6 +622,11 @@ async function saveCurrentSnapshot(
       ? []
       : await extractRetrievalUnitsV4(env, {
           id: args.memoryId,
+          current_version: args.version,
+          content_hash: contentHash,
+          rationale: snapshot.rationale,
+          reuse_rule: snapshot.reuse_rule,
+          learning_json: snapshot.learning ? JSON.stringify(snapshot.learning) : null,
           tenant_id: args.tenantId,
           project_id: snapshot.project_id,
           content: snapshot.content,
