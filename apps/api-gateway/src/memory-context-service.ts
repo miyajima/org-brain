@@ -229,11 +229,11 @@ export async function retrieveMemoryContext(
       // Version snapshots are canonical but may predate the current JSON shape.
     }
   }
-  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null; rationale: string | null; reuse_rule: string | null; verification_state: string | null };
+  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null; rationale: string | null; reuse_rule: string | null; verification_state: string | null; lifecycle_state: string; valid_until: number | null; expires_at: number | null };
   const confidenceRows = ids.length === 0
     ? { results: [] as ContextMemoryRow[] }
     : await env.OPEN_BRAIN_DB.prepare(
-        `SELECT id, confidence_score, content, learning_json, current_version, rationale, reuse_rule, verification_state FROM memories
+        `SELECT id, confidence_score, content, learning_json, current_version, rationale, reuse_rule, verification_state, lifecycle_state, valid_until, expires_at FROM memories
          WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`
       ).bind(tenantId, ...ids).all<ContextMemoryRow>();
   const confidenceById = new Map(
@@ -245,7 +245,7 @@ export async function retrieveMemoryContext(
     try { conversation = JSON.parse(row.learning_json ?? '{}').conversation_provenance?.evidence_status === 'supplied_unverified'; }
     catch { /* Malformed provenance does not remove independent reuse conditions. */ }
     if (conversation || row.rationale || row.reuse_rule) {
-      capsules.set(row.id, { content: [row.content,
+      capsules.set(row.id, { content: conversation ? row.content : [row.content,
         ...(row.rationale ? [`Rationale: ${row.rationale}`] : []),
         ...(row.reuse_rule ? [`Reuse or avoid: ${row.reuse_rule}`] : [])].join('\n'), version: row.current_version ?? 1 });
     }
@@ -256,12 +256,22 @@ export async function retrieveMemoryContext(
   const currentState: Array<Record<string, unknown>> = [];
   const timeline: Array<Record<string, unknown>> = [];
   const conflicts: Array<{ memory_id: string; conflict: string }> = [];
+  const currentRows = new Map(confidenceRows.results.map(row => [row.id, row]));
   for (const result of selected) {
     if (usedChars >= charBudget) break;
+    const canonical = currentRows.get(result.id);
+    if (!canonical || canonical.current_version !== result.current_version || canonical.lifecycle_state !== "active"
+      || canonical.valid_until !== null && canonical.valid_until <= queryAt
+      || canonical.expires_at !== null && canonical.expires_at <= queryAt) continue;
     const capsule = capsules.get(result.id);
     if (capsule && capsule.version !== (result.current_version ?? 1)) continue;
     const useCapsule = capsule;
-    const units = useCapsule ? [] : grouped.get(result.id) ?? [];
+    const units = useCapsule ? [] : (grouped.get(result.id) ?? []).filter(candidate => {
+      try {
+        const source = JSON.parse(candidate.metadata_json);
+        return source.source_memory_id === result.id && source.source_version === canonical.current_version;
+      } catch { return false; }
+    });
     const unit = taskPlan
       ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
       : units[0];
@@ -270,7 +280,7 @@ export async function retrieveMemoryContext(
     // A sentence projection can remove stop conditions. Deliver it atomically,
     // without upgrading its supplied/unverified provenance or using stale versions.
     if (useCapsule && capsule.content.length > remaining) continue;
-    const text = useCapsule ? capsule.content : String(unit?.text ?? result.content_preview);
+    const text = useCapsule ? capsule.content : String(unit?.text ?? canonical.content);
     if (text.length > (useCapsule ? remaining : Math.min(4_000, remaining))) continue;
     usedChars += text.length;
     let sourceReference = result.source_references?.[0] ?? null;

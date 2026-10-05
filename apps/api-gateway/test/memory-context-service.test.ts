@@ -22,7 +22,7 @@ import { searchMemories } from "../src/memory-search-service";
 
 const search = vi.mocked(searchMemories);
 
-function database(units: Array<Record<string, unknown>> = []) {
+function database(units: Array<Record<string, unknown>> = [], contents: Record<string, string> = {}) {
   const statement = {
     bind() {
       return this;
@@ -33,7 +33,11 @@ function database(units: Array<Record<string, unknown>> = []) {
   };
   return {
     prepare(query: string) {
-      return { ...statement, async all() { return { results: query.includes("FROM memory_retrieval_units_v4") ? units : [] }; } };
+      let bindings: unknown[] = [];
+      return { ...statement, bind(...args: unknown[]) { bindings = args; return this; },
+        async all() { return { results: query.includes("FROM memory_retrieval_units_v4") ? units.map(unit => ({ ...unit,
+          metadata_json: unit.metadata_json ?? JSON.stringify({ source_memory_id: unit.memory_id, source_version: 1 }) })) : query.includes("confidence_score, content")
+          ? bindings.slice(1).map(id => ({ id, content: contents[String(id)] ?? `BODY-${id}`, current_version: 1, lifecycle_state: "active", valid_until: null, expires_at: null })) : [] }; } };
     }
   };
 }
@@ -107,12 +111,12 @@ describe("retrieveMemoryContext", () => {
     payload.q = q;
     const meta = { ...payload.meta, task_query: { applied: true, coverage: "covered", basis: "lexical_relevance", requires_parent_review: true } };
     search.mockResolvedValue({ ...payload, meta } as never);
-    const missing = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 1, token_budget: 1600 });
+    const missing = await retrieveMemoryContext({ OPEN_BRAIN_DB: database([], { rollback: "Rollback checks require a fixture.", cache: "Cache rules require a checksum." }) } as never, { q, top_k: 1, token_budget: 1600 });
     expect(missing.evidence_bundle.evidence).toEqual([]);
     expect(missing.meta.task_query?.coverage).toBe("missing");
     expect(missing.meta.usage_items).toEqual([]);
     expect(missing.meta.top_result_ids).toEqual([]);
-    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 2, token_budget: 1600 });
+    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database([], { rollback: "Rollback checks require a fixture.", cache: "Cache rules require a checksum." }) } as never, { q, top_k: 2, token_budget: 1600 });
     expect(covered.evidence_bundle.evidence).toHaveLength(2);
     expect(covered.meta.task_query?.coverage).toBe("covered");
   });
