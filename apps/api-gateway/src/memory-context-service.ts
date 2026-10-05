@@ -245,9 +245,9 @@ export async function retrieveMemoryContext(
     try { conversation = JSON.parse(row.learning_json ?? '{}').conversation_provenance?.evidence_status === 'supplied_unverified'; }
     catch { /* Malformed provenance does not remove independent reuse conditions. */ }
     if (conversation || row.rationale || row.reuse_rule) {
-      capsules.set(row.id, { content: conversation ? row.content : [row.content,
-        ...(row.rationale ? [`Rationale: ${row.rationale}`] : []),
-        ...(row.reuse_rule ? [`Reuse or avoid: ${row.reuse_rule}`] : [])].join('\n'), version: row.current_version ?? 1 });
+      capsules.set(row.id, { content: [row.content,
+        ...(row.rationale && !row.content.includes(row.rationale) ? [`Rationale: ${row.rationale}`] : []),
+        ...(row.reuse_rule && !row.content.includes(row.reuse_rule) ? [`Reuse or avoid: ${row.reuse_rule}`] : [])].join('\n'), version: row.current_version ?? 1 });
     }
   }
   const charBudget = Math.max(0, tokenBudget * 4 - ANSWER_GUIDANCE_CHAR_RESERVE);
