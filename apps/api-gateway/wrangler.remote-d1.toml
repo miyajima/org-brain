@@ -7,6 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 # The binding is read/write capable; use dashboard GET routes only unless a
 # remote mutation is intentionally requested.
 [vars]
+ORGBRAIN_DEVICE_OAUTH_ENABLED = "false"
 HYBRID_V3_MODE = "off"
 # Read-only remote-D1 validation uses the promoted v4 response path.
 HYBRID_V4_MODE = "on"

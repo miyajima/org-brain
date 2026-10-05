@@ -33,6 +33,7 @@ Usage:
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>] [--root <checkout>]
   orgbrain workspace resolve [--root <checkout>]
+  orgbrain remote login|refresh|logout|status|search|propose|confirm|confirmation-status --mcp-url <https-url> --tenant-id <id> --project-id <id> [--credential-dir <private-dir>] [--input <json-file>]
   orgbrain feature llm-wiki enable|disable|status
   orgbrain wiki init|pages|sources|drafts|diagnose
   orgbrain wiki read|put|patch|links|history|delete <path> [--input <file>] [--if-match <hash>]
@@ -936,6 +937,11 @@ async function main() {
   if (["feature", "wiki"].includes(command)) {
     const { runWikiCli } = await import("./lib/wiki-cli.mjs");
     emit(await runWikiCli(command, action, rest, args, readStdin));
+    return;
+  }
+  if (command === "remote") {
+    const { runRemoteCli } = await import("./remote-memory.mjs");
+    emit(await runRemoteCli(action, rest, args, readStdin));
     return;
   }
   const commandWarnings = [];
