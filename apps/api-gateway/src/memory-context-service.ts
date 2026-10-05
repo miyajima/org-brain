@@ -20,7 +20,7 @@ import {
 } from "@org-brain/shared";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
-import { parseUsagePurpose, recordMemoryUsage } from "./memory-effect-service";
+import { parseUsagePurpose, recordMemoryUsage, resolveMemoryUsageContext } from "./memory-effect-service";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import { parseMemorySearchMode, parseOptionalBoolean, parseOptionalInteger, parseString } from "./memory-service-utils";
 import type { MemoryProfileRequest, PrincipalActorOptions } from "./memory-service-types";
@@ -96,14 +96,21 @@ export async function retrieveMemoryContext(
   if (!rawBody || typeof rawBody !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
-  const body = rawBody as Record<string, unknown>;
+  const body = { ...rawBody as Record<string, unknown> };
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
   const topK = parseOptionalInteger(body.top_k, "top_k", 5, 1, 50);
   const tokenBudget = parseOptionalInteger(body.token_budget, "token_budget", 8_000, 512, 16_000);
   const usagePurpose = parseUsagePurpose(body.usage_purpose);
-  const taskId = parseOptionalString(body.task_id, "task_id", 128);
-  const traceId = parseOptionalString(body.trace_id, "trace_id", 128);
+  const requestedTaskId = parseOptionalString(body.task_id, "task_id", 128);
+  const requestedTraceId = parseOptionalString(body.trace_id, "trace_id", 128);
   const externalRunId = parseOptionalString(body.external_run_id, "external_run_id", 256);
+  const usageContext = await resolveMemoryUsageContext(env, {
+    tenant_id: tenantId, project_id: body.project_id === undefined ? undefined : parseOptionalString(body.project_id, "project_id", 128),
+    task_id: body.task_id === undefined ? undefined : requestedTaskId,
+    trace_id: body.trace_id === undefined ? undefined : requestedTraceId, external_run_id: externalRunId
+  });
+  const { task_id: taskId, trace_id: traceId } = usageContext;
+  if (body.project_id === undefined && usageContext.project_id) body.project_id = usageContext.project_id;
   const queryAt =
     typeof body.at === "number" && Number.isFinite(body.at)
       ? body.at
@@ -222,25 +229,25 @@ export async function retrieveMemoryContext(
       // Version snapshots are canonical but may predate the current JSON shape.
     }
   }
-  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null };
+  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null; rationale: string | null; reuse_rule: string | null; verification_state: string | null };
   const confidenceRows = ids.length === 0
     ? { results: [] as ContextMemoryRow[] }
     : await env.OPEN_BRAIN_DB.prepare(
-        `SELECT id, confidence_score, content, learning_json, current_version FROM memories
+        `SELECT id, confidence_score, content, learning_json, current_version, rationale, reuse_rule, verification_state FROM memories
          WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`
       ).bind(tenantId, ...ids).all<ContextMemoryRow>();
   const confidenceById = new Map(
     confidenceRows.results.map((row) => [row.id, Number(row.confidence_score ?? 0.5)])
   );
   const capsules = new Map<string, { content: string; version: number }>();
-  if (search.meta.task_query?.applied) {
-    for (const row of confidenceRows.results) {
-      try {
-        const provenance = JSON.parse(row.learning_json ?? '{}').conversation_provenance;
-        if (provenance?.evidence_status === 'supplied_unverified') {
-          capsules.set(row.id, { content: row.content, version: row.current_version ?? 1 });
-        }
-      } catch { /* Legacy malformed metadata does not identify a conversation capsule. */ }
+  for (const row of confidenceRows.results) {
+    let conversation = false;
+    try { conversation = JSON.parse(row.learning_json ?? '{}').conversation_provenance?.evidence_status === 'supplied_unverified'; }
+    catch { /* Malformed provenance does not remove independent reuse conditions. */ }
+    if (conversation || row.rationale || row.reuse_rule) {
+      capsules.set(row.id, { content: [row.content,
+        ...(row.rationale ? [`Rationale: ${row.rationale}`] : []),
+        ...(row.reuse_rule ? [`Reuse or avoid: ${row.reuse_rule}`] : [])].join('\n'), version: row.current_version ?? 1 });
     }
   }
   const charBudget = Math.max(0, tokenBudget * 4 - ANSWER_GUIDANCE_CHAR_RESERVE);
@@ -252,7 +259,8 @@ export async function retrieveMemoryContext(
   for (const result of selected) {
     if (usedChars >= charBudget) break;
     const capsule = capsules.get(result.id);
-    const useCapsule = capsule && capsule.version === (result.current_version ?? 1);
+    if (capsule && capsule.version !== (result.current_version ?? 1)) continue;
+    const useCapsule = capsule;
     const units = useCapsule ? [] : grouped.get(result.id) ?? [];
     const unit = taskPlan
       ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
@@ -261,9 +269,9 @@ export async function retrieveMemoryContext(
     // Reviewed conversation content includes the reason and reuse conditions.
     // A sentence projection can remove stop conditions. Deliver it atomically,
     // without upgrading its supplied/unverified provenance or using stale versions.
-    if (useCapsule && capsule.content.length > Math.min(4_000, remaining)) continue;
+    if (useCapsule && capsule.content.length > remaining) continue;
     const text = useCapsule ? capsule.content : String(unit?.text ?? result.content_preview);
-    if (text.length > Math.min(4_000, remaining)) continue;
+    if (text.length > (useCapsule ? remaining : Math.min(4_000, remaining))) continue;
     usedChars += text.length;
     let sourceReference = result.source_references?.[0] ?? null;
     try {
@@ -283,6 +291,7 @@ export async function retrieveMemoryContext(
       },
       score: result.score,
       extraction_state: unit?.extraction_state ?? "degraded",
+      verification_state: confidenceRows.results.find(row => row.id === result.id)?.verification_state ?? "unverified",
       usefulness: assessMemoryUsefulnessV2({ stage: "use",
         task_project_id: typeof body.project_id === "string" ? body.project_id : null,
         within_budget: usedChars <= charBudget })
@@ -335,9 +344,9 @@ export async function retrieveMemoryContext(
   const selectedById = new Map(selected.map(result => [result.id, result]));
   const receiptIds = new Map(evidence.map(item => [String(item.memory_id), ulid()]));
   let budgetLimited = false;
-  const buildResponse = (proposed: typeof evidence): RetrieveMemoryContextResponse => {
+  const buildResponse = (proposed: typeof evidence, forPacking = false): RetrieveMemoryContextResponse => {
     const covered = !taskPlan || coversLocalTaskQuery(proposed.map(item => ({ content: String(item.text ?? "") })), taskPlan);
-    const candidates = covered ? proposed : [];
+    const candidates = covered || forPacking ? proposed : [];
     const disposition = deriveEvidenceDisposition({
       evidenceCount: candidates.length,
       independentSourceCount: new Set(candidates.map(item =>
@@ -352,7 +361,7 @@ export async function retrieveMemoryContext(
       ...(candidates.some(item => item.extraction_state !== "ready") ? ["structured_extractor_degraded"] : [])];
     const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
     const abstain = shadowMode ? legacyMissingEvidence.length > 0 || conflicts.length > 0 : disposition.abstention_recommended;
-    const delivered = abstain ? [] : candidates;
+    const delivered = forPacking ? proposed : abstain ? [] : candidates;
     const deliveredIds = new Set(delivered.map(item => String(item.memory_id)));
     const states = currentState.filter(item => deliveredIds.has(String(item.memory_id)));
     const times = timeline.filter(item => deliveredIds.has(String(item.memory_id)));
@@ -399,7 +408,7 @@ export async function retrieveMemoryContext(
   // conditions and provenance; never count omitted candidates as injections.
   const deliveredCandidates: typeof evidence = [];
   for (const item of evidence) {
-    if (countContextTokens(buildResponse([...deliveredCandidates, item])) <= tokenBudget) deliveredCandidates.push(item);
+    if (countContextTokens(buildResponse([...deliveredCandidates, item], true)) <= tokenBudget) deliveredCandidates.push(item);
     else budgetLimited = true;
   }
   let response = buildResponse(deliveredCandidates);
