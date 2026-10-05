@@ -1498,7 +1498,8 @@ export async function getMemoryConfirmationStatus(env: Env, rawBody: unknown, pr
   if (principal && payload.actor_id && payload.actor_id !== principal) throw new HttpError(403, "confirmation_owner_mismatch", "Confirmation belongs to another principal");
   const review = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM memory_confirmation_reviews WHERE tenant_id = ? AND confirmation_id = ?")
     .bind(tenantId, token).first<ConfirmationReviewRow>();
-  if (review?.response_json) return JSON.parse(review.response_json) as Record<string, unknown>;
+  if (review?.response_json) return { ...JSON.parse(review.response_json) as Record<string, unknown>,
+    tenant_id: tenantId, project_id: payload.proposed_memory.project_id } as Record<string, unknown>;
   return { tenant_id: tenantId, project_id: payload.proposed_memory.project_id,
     candidate_id: payload.review_context?.candidate_id ?? null,
     candidate_hash: await candidateHash(row,payload), revision: row.revision, lifecycle_state: row.lifecycle_state, superseded_by: row.superseded_by, previous_confirmation_id: row.previous_confirmation_id, confirmation_guard_required: row.managed_review === 1,

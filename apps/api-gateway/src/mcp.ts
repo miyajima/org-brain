@@ -1047,6 +1047,7 @@ class OrgBrainMcpTools {
         tenant_id: z.string().optional(),
         scope: z.enum(MEMORY_READ_SCOPES).optional(),
         project_id: z.string().nullable().optional(),
+        strict_project: z.boolean().optional(),
         business_category_id: z.string().max(128).nullable().optional(),
         work_type: workTypeSchema.nullable().optional(),
         q: z.string().min(1).max(500),
@@ -1071,8 +1072,11 @@ class OrgBrainMcpTools {
         trace_id: z.string().max(128).nullable().optional(),
         external_run_id: z.string().max(256).nullable().optional()
       },
-      async ({ scope, tenant_id, project_id, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, task_context, use_context, use_snapshot_id, trace_id, external_run_id }) => {
+      async ({ scope, tenant_id, project_id, strict_project, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, task_context, use_context, use_snapshot_id, trace_id, external_run_id }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
+        if (strict_project && (!project_id?.trim() || search_scope && search_scope !== 'evidence')) {
+          throw new HttpError(400, 'explicit_evidence_project_required', 'Strict project search requires an explicit evidence project');
+        }
         await this.requirePermission(tenantId, generation_id || ranking_profile_id ? "admin" : "read", project_id);
         const request = {
           tenant_id: tenantId,
@@ -1106,6 +1110,7 @@ class OrgBrainMcpTools {
         }
         const evidence = await searchMemories(this.env, request, {
           actorPrincipal: this.props?.principal,
+          allowedProjectId: strict_project ? project_id! : undefined,
           recordUsage: search_scope !== "both"
         });
         if (search_scope !== "both") return toContent(evidence);
@@ -2346,7 +2351,9 @@ export async function handleOrgBrainMcpRequest(
       const handler = createMcpHandler(
         () => createOrgBrainMcpServer(env, props),
         {
-          route: "/",
+          // Hono mount strips /mcp for Access requests. The OAuth provider calls
+          // this handler directly with the canonical path still present.
+          route: authOverride?.source === 'oauth' ? '/mcp' : '/',
           legacy: "reject",
           corsOptions: false,
           authContext: { props }

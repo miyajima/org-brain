@@ -315,6 +315,10 @@ class FakeStatement {
       return { success: true };
     }
 
+    // Canonical policy storage is covered by the migrated-SQLite integration
+    // fixtures. This fake has no policy table and must not treat owner-only
+    // synchronization as the full snapshot update below.
+    if (this.sql.startsWith('UPDATE memories SET owner_principal=')) return { success: true, meta: { changes: 0 } };
     if (this.sql.startsWith("UPDATE memories")) {
       const tenantId = this.args[this.args.length - 2] as string;
       const id = this.args[this.args.length - 1] as string;

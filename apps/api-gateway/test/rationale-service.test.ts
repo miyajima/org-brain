@@ -249,6 +249,9 @@ class FakeStatement {
       });
       return;
     }
+    // This fake does not model the canonical policy table; the real SQLite
+    // integration tests cover owner synchronization.
+    if (this.sql.startsWith('UPDATE memories SET owner_principal=')) return { success: true, meta: { changes: 0 } };
     if (this.sql.startsWith("UPDATE memories")) {
       const row = this.db.memories.find((item) => item.tenant_id === this.args[40] && item.id === this.args[41]);
       if (row) {
@@ -403,7 +406,7 @@ describe("rationale service", () => {
       corrected_content: "新しい方針を使用する。理由は運用を簡潔にするため。", corrected_summary: "新しい方針を使用する" };
     const first = await confirmProposedMemory(env, answer, "owner");
     expect(await confirmProposedMemory(env, answer, "owner")).toEqual(first);
-    expect(await getMemoryConfirmationStatus(env, answer, "owner")).toEqual(first);
+    expect(await getMemoryConfirmationStatus(env, answer, "owner")).toEqual({ ...first, project_id: 'org-brain' });
     expect(db.memories).toHaveLength(1);
     expect(db.rationales).toHaveLength(1);
     expect(db.memories[0].content).toBe(answer.corrected_content);

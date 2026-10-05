@@ -4,6 +4,7 @@ compatibility_date = "2026-03-03"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
+ORGBRAIN_OAUTH_SECURITY_V2 = "false"
 HYBRID_V3_MODE = "off"
 # Local default mirrors the repository production target.
 HYBRID_V4_MODE = "on"

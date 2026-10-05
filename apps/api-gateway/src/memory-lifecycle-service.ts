@@ -347,6 +347,15 @@ async function ensureMemoryAccessPolicy(
     restrictedSubjects: subjects.restrictedSubjects,
     actorPrincipal: ownerPrincipal
   });
+  // mine searches use this legacy column alongside canonical ACL checks. Keep
+  // the canonical policy owner (including an existing policy), never the actor
+  // of a later edit. ensureAccessPolicy itself does not mirror legacy columns.
+  await env.OPEN_BRAIN_DB.prepare(`UPDATE memories SET owner_principal=(
+    SELECT p.owner_principal FROM resource_access_policies p
+    WHERE p.tenant_id=memories.tenant_id AND p.resource_type='memory' AND p.resource_id=memories.id)
+    WHERE tenant_id=? AND id=? AND EXISTS(SELECT 1 FROM resource_access_policies p
+      WHERE p.tenant_id=memories.tenant_id AND p.resource_type='memory' AND p.resource_id=memories.id)`)
+    .bind(tenantId, memoryId).run();
 }
 
 async function loadMemoryById(env: Env, tenantId: string, memoryId: string): Promise<StoredMemoryRow> {
