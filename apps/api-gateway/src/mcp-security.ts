@@ -33,6 +33,7 @@ type LegacyPrincipalResolution = {
 };
 
 export type McpAuthResult = {
+  projectId?: string;
   principal: string;
   tenantId: string;
   allowedTenants: string[];

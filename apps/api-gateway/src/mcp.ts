@@ -117,6 +117,7 @@ type AgentProps = {
   ownerPrincipal?: string;
   allowedTools?: string[];
   scopes?: OrgBrainOAuthScope[];
+  projectId?: string;
 };
 
 class McpInsufficientScopeError extends Error {
@@ -254,6 +255,7 @@ async function requireMcpPermission(
   permission: OrgPermission,
   projectId?: string | null
 ) {
+  if (props.projectId && projectId !== props.projectId) throw new HttpError(403, "project_boundary", "Device credential is bound to one project");
   const principal = props.principal;
   if (!principal) throw new HttpError(500, "misconfigured", "missing MCP principal");
   if (props.authSource === "oauth" && !permissionsForScopes(props.scopes ?? []).includes(permission)) {
@@ -2338,7 +2340,8 @@ export async function handleOrgBrainMcpRequest(
         clientPurpose: auth.clientPurpose,
         ownerPrincipal: auth.ownerPrincipal,
         allowedTools: auth.allowedTools,
-        scopes: auth.scopes
+        scopes: auth.scopes,
+        projectId: auth.projectId
       };
       const transportValidationResponse = mcpTransportValidationResponse(request);
       if (transportValidationResponse) return transportValidationResponse;

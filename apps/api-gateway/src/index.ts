@@ -10,6 +10,7 @@ import { materializeDueRetrospectives } from "./knowledge-measurement-service";
 import { apiKeyAuth, assertApiTenantAccess, getApiAuthContext, tenantFromBody, type ApiContextEnv } from "./auth";
 import { assertSessionCsrf } from "./email-auth-service";
 import { mountMcp } from "./mcp";
+import { handleDeviceOAuth } from "./device-oauth";
 import { createCloudflareMcpOAuthProvider, shouldUseMcpOAuth } from "./mcp-oauth-cloudflare";
 import { assertPermission } from "./rbac-service";
 import type { Env } from "./types";
@@ -199,6 +200,8 @@ app.notFound((c) =>
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const deviceResponse = await handleDeviceOAuth(request, env, ctx);
+    if (deviceResponse) return deviceResponse;
     if (shouldUseMcpOAuth(request, env)) {
       const provider = await createCloudflareMcpOAuthProvider(env, app.fetch);
       const url = new URL(request.url);
@@ -209,6 +212,10 @@ export default {
       const response = await provider.fetch(request, env, ctx);
       if (url.pathname === "/.well-known/oauth-authorization-server" && response.ok) {
         const metadata = await response.json<Record<string, unknown>>();
+        if (env.ORGBRAIN_DEVICE_OAUTH_ENABLED === "true") {
+          metadata.device_authorization_endpoint = `${url.origin}/oauth/device/code`;
+          metadata.grant_types_supported = [...new Set([...(metadata.grant_types_supported as string[] ?? []), "urn:ietf:params:oauth:grant-type:device_code"])];
+        }
         metadata.revocation_endpoint = `${url.origin}/oauth/revoke`;
         return Response.json(metadata, { headers: response.headers });
       }
