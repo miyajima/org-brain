@@ -368,11 +368,15 @@ function explicitEventTime(text, unitType, mentionedAt) {
   // DATE_RE also classifies plans and deadlines as event-shaped units. Require
   // an explicit realized-event cue; extraction still does not verify the claim.
   const nonOccurrence = /\b(?:scheduled|planned|planning|plans?|will|would|may|might|could|should|must|expected|forecast|deadline|due|target|proposed|intended|if|unless|not|never|didn't)\b|(?:予定|計画|見込み|期限|締切|締め切り|かもしれ|可能性|はず|未完了|中止|場合|なら|したら|すれば)/iu;
-  if (nonOccurrence.test(text)) return null;
+  const normalizedText = text.normalize("NFKC").replace(/[’‘]/gu, "'");
+  // Reuse the polarity gate, including Japanese negatives, and normalize
+  // apostrophes before handling negative English contractions.
+  if (NEGATION_RE.test(normalizedText) || /\b[a-z]+n't\b/iu.test(normalizedText)
+    || nonOccurrence.test(normalizedText)) return null;
   const realizedEvent = /\b(?:went|visited|attended|bought|sold|finished|completed|graduated|married|traveled|travelled|returned|joined|left|met|worked|ran|drove|watched|read|made|paid|spent|occurred|happened)\b|(?:参加した|参加しました|開催された|開催しました|完了した|完了しました|訪れた|訪れました|購入した|購入しました|発生した|発生しました|起きた|終了した|行った)/iu;
-  if (!realizedEvent.test(text)) return null;
+  if (!realizedEvent.test(normalizedText)) return null;
   const datedEvent = /\b(?:on|in)\s+(?:19|20)\d{2}(?:[-/]\d{1,2}(?:[-/]\d{1,2})?)?\b|(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\s*に/iu;
-  return datedEvent.test(text)
+  return datedEvent.test(normalizedText)
     ? mentionedAt : null;
 }
 
