@@ -73,3 +73,5 @@ export * from './memory-use-attestation.mjs';
 
 export * from "./memory-read-access";
 export * from "./context-payload-budget.mjs";
+
+export { boundedRetrievalFusion, type RetrievalFusionChannel } from "./retrieval-fusion";
