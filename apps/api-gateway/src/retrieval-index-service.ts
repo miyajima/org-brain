@@ -821,7 +821,7 @@ export async function backfillV4RetrievalUnits(
   const cursor = options.cursor ?? checkpoint?.cursor ?? "";
   const rows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, content, summary, source_refs_json,
-            created_at, updated_at, valid_from, valid_until, content_hash
+            created_at, updated_at, valid_from, valid_until, content_hash, current_version, rationale, reuse_rule, learning_json
      FROM memories
      WHERE tenant_id = ? AND id > ?
        AND (? IS NULL OR project_id = ?)
@@ -846,6 +846,10 @@ export async function backfillV4RetrievalUnits(
     valid_from: number | null;
     valid_until: number | null;
     content_hash: string;
+    current_version: number;
+    rationale: string | null;
+    reuse_rule: string | null;
+    learning_json: string | null;
   }>();
   let projectedUnits = 0;
   const unitHashes: string[] = [];
@@ -859,6 +863,11 @@ export async function backfillV4RetrievalUnits(
     }
     const units = await extractRetrievalUnitsV4(env, {
       id: row.id,
+      current_version: row.current_version,
+      content_hash: row.content_hash,
+      rationale: row.rationale,
+      reuse_rule: row.reuse_rule,
+      learning_json: row.learning_json,
       tenant_id: row.tenant_id,
       project_id: row.project_id,
       content: row.content,

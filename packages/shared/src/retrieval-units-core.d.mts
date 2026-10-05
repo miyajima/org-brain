@@ -1,5 +1,6 @@
 export const RETRIEVAL_UNIT_EXTRACTOR: string;
 export const RETRIEVAL_UNIT_EXTRACTOR_V4: string;
+export const RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION: string;
 export const RETRIEVAL_SEGMENT_MAX_RECORDS: number;
 export const RETRIEVAL_SEGMENT_MAX_CHARS: number;
 export const RETRIEVAL_SEGMENT_OVERLAP_RATIO: number;
@@ -15,6 +16,12 @@ export function splitRetrievalTurns(
 ): Array<{ speaker: "user" | "assistant" | "system" | "tool" | "unknown"; text: string }>;
 export function buildRetrievalUnits(record: unknown): unknown[];
 export function buildRetrievalUnitsV4(record: unknown): unknown[];
+export function retrievalUnitSourceMetadata(record: unknown): {
+  source_memory_id: string;
+  source_version: number | null;
+  source_content_hash: string;
+  captured_at: number | null;
+};
 export function buildVerifiedLearningRetrievalUnits(record: unknown, now?: number): unknown[];
 export function analyzeRetrievalIntent(query: string): unknown;
 export function retrievalUnitIntentBoost(

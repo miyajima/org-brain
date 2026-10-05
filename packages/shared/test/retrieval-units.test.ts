@@ -9,6 +9,61 @@ import {
 } from "../src/retrieval-units";
 
 describe("retrieval units", () => {
+  const provenanceRecord = {
+    id: "source-versioned", tenant_id: "tenant-1", project_id: "project-1",
+    content: "The policy mentions 2030-01-01. I attended the launch on 2025-02-03.",
+    summary: null, created_at: Date.UTC(2026, 0, 1), updated_at: Date.UTC(2026, 0, 2),
+    valid_from: null, valid_until: null, current_version: 3, content_hash: "a".repeat(64),
+    source_references: [{ type: "file", ref: "docs/release.md", captured_at: Date.UTC(2026, 0, 1) }],
+    rationale: "Synthetic validation permits bounded replay.",
+    reuse_rule: "Only synthetic fixtures after checking their digest; never use production inputs."
+  };
+
+  it("separates mentioned dates from explicit event time and retains exact source lineage", async () => {
+    const units = await buildRetrievalUnitsV4(provenanceRecord);
+    const policy = units.find((unit) => unit.unit_type === "atomic" && unit.text.includes("policy"))!;
+    expect(policy.event_at).toBe(provenanceRecord.created_at);
+    expect(JSON.parse(policy.metadata_json)).toMatchObject({
+      mentioned_at: Date.UTC(2030, 0, 1), event_time_basis: "source_capture",
+      source_memory_id: provenanceRecord.id, source_version: 3,
+      source_content_hash: provenanceRecord.content_hash, evidence_status: "extracted_unverified"
+    });
+    const event = units.find((unit) => unit.unit_type === "timeline" && unit.text.includes("attended"))!;
+    expect(event.event_at).toBe(Date.UTC(2025, 1, 3));
+    expect(JSON.parse(event.metadata_json)).toMatchObject({
+      mentioned_at: Date.UTC(2025, 1, 3), starts_at: Date.UTC(2025, 1, 3), event_time_basis: "explicit_event_text"
+    });
+  });
+
+  it("anchors structured output to the persisted source and preserves complete conditional reuse", async () => {
+    const units = await buildRetrievalUnitsV4(provenanceRecord, { structuredUnits: [{
+      text: "Use bounded replay.", event_at: Date.UTC(2025, 1, 3),
+      metadata: { source_memory_id: "forged", source_version: 999, source_content_hash: "forged", evidence_status: "verified" }
+    }] });
+    expect(JSON.parse(units[0].metadata_json)).toMatchObject({
+      source_memory_id: provenanceRecord.id, source_version: 3,
+      source_content_hash: provenanceRecord.content_hash, evidence_status: "extracted_unverified"
+    });
+    expect(units.find((unit) => JSON.parse(unit.metadata_json).channel === "reuse_or_avoidance")?.text)
+      .toBe(`Reuse or avoid: ${provenanceRecord.reuse_rule}`);
+    expect(units.find((unit) => JSON.parse(unit.metadata_json).channel === "rationale")?.text)
+      .toBe(`Rationale: ${provenanceRecord.rationale}`);
+    expect(JSON.parse(units[0].source_ref_json)).toEqual(provenanceRecord.source_references[0]);
+  });
+
+  it("keeps canonical support when a structured extractor repeats the same projection", async () => {
+    const prior = await buildRetrievalUnitsV4(provenanceRecord);
+    const structuredUnits = prior.filter((unit) => unit.unit_type !== "segment").map((unit) => ({
+      text: unit.text, speaker: unit.speaker, event_at: unit.event_at,
+      unit_type: unit.unit_type as "atomic" | "profile" | "ledger" | "timeline",
+      metadata: { evidence_status: "verified" }
+    }));
+    const units = await buildRetrievalUnitsV4(provenanceRecord, { structuredUnits });
+    expect(new Set(units.map((unit) => unit.id)).size).toBe(units.length);
+    expect(units.filter((unit) => JSON.parse(unit.metadata_json).channel === "reuse_or_avoidance")).toHaveLength(1);
+    expect(units.every((unit) => JSON.parse(unit.metadata_json).evidence_status === "extracted_unverified")).toBe(true);
+  });
+
   it("builds generic v4 profile, timeline, atomic, and segment channels", async () => {
     const units = await buildRetrievalUnitsV4({
       id: "memory-v4",
@@ -30,7 +85,7 @@ describe("retrieval units", () => {
     expect(units.map((unit) => unit.unit_type)).toEqual(expect.arrayContaining([
       "atomic", "profile", "timeline", "segment"
     ]));
-    expect(units.every((unit) => unit.extractor_version === "4")).toBe(true);
+    expect(units.every((unit) => unit.extractor_version === "4.1")).toBe(true);
     expect(units.every((unit) => JSON.parse(unit.metadata_json))).toBeTruthy();
     expect(units.find((unit) => unit.unit_type === "segment")?.segment_id).toMatch(/^seg_/);
   });
