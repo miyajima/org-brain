@@ -3,7 +3,7 @@ import { lstat, readFile } from "node:fs/promises";
 const allowed = new Set([
   "ORGBRAIN_JEV_PROJECTS", "ORGBRAIN_JEV_OBJECTIVE", "ORGBRAIN_JEV_CAPTURE_MODE",
   "ORGBRAIN_JEV_CAPTURE_ASSESSMENT_MODE", "ORGBRAIN_JEV_USE_MODE", "ORGBRAIN_JEV_WIKI_MODE",
-  "ORGBRAIN_JEV_SEARCH_MODE", "ORGBRAIN_JEV_THRESHOLD", "ORGBRAIN_JEV_RESOLVED_MODEL", "ORGBRAIN_JEV_QUALIFICATION_FILE"
+  "ORGBRAIN_JEV_SEARCH_MODE", "ORGBRAIN_JEV_SEARCH_ACTIVATION", "ORGBRAIN_JEV_THRESHOLD", "ORGBRAIN_JEV_RESOLVED_MODEL", "ORGBRAIN_JEV_QUALIFICATION_FILE"
 ]);
 
 // This file contains flags only. Credentials remain in the process environment.
@@ -20,6 +20,7 @@ export async function loadBundledJudgmentSettings({ buildInfo, bundleUrl, env = 
   if (!settings || Array.isArray(settings) || typeof settings !== "object" || Object.entries(settings).some(([key, value]) =>
     !allowed.has(key) || typeof value !== "string" || value.length > 2048 ||
     (key.endsWith("_MODE") && !["off", "shadow", "active"].includes(value)) ||
+    (key === "ORGBRAIN_JEV_SEARCH_ACTIVATION" && !["qualified", "operator"].includes(value)) ||
     (key === "ORGBRAIN_JEV_OBJECTIVE" && !["quality", "cost"].includes(value)) ||
     (key === "ORGBRAIN_JEV_THRESHOLD" && !["0.8", "0.9", "0.95", "0.98"].includes(value))
   )) throw new Error("invalid_bundled_judgment_settings");
