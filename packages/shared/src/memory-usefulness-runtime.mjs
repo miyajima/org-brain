@@ -81,6 +81,11 @@ export function classifyMemoryReviewAnswer(value) {
   if (/^(?:内容が違う|間違い|誤り|違います|incorrect|wrong)[。.!！\s]*$/iu.test(answer)) return "incorrect";
   if (memoryCategoryFromReviewAnswer(answer)) return "accepted";
   if (/^(?:保存する|この内容で保存する|合っているので保存する|save)(?:\s*\(Recommended\))?[。.!！\s]*$/iu.test(answer)) return "accepted";
+  // The displayed-content save directive may include a subsequent UI command.
+  // Keep questions, intentions, and generic yes/no outside the consent path.
+  if (/^この内容で保存(?:して(?:ください)?)?[。.!！\s]*$/u.test(answer)) return "accepted";
+  if (!/[?？]|(?:ですか|ますか|かな|だろう)/u.test(answer)
+      && /^この内容で保存して(?:ください)?[、,。]\s*\S+(?:して|してください|開いて|開いてください)[。.!！\s]*$/u.test(answer)) return "accepted";
   // Only explicit corrections carry approval under the displayed question.
   // Generic yes/no, a new task, and ambiguous free text are not consent.
   if (/^(?:修正|訂正|correction|correct)\s*[:：]\s*\S/iu.test(answer)

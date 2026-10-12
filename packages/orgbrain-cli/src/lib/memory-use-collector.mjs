@@ -25,7 +25,13 @@ function receiptIds(value) {
 }
 function resultObjects(value) {
   const decoded=decode(value);
-  if(decoded&&typeof decoded==='object') return Array.isArray(decoded)?decoded.flatMap(resultObjects):[decoded];
+  if(decoded&&typeof decoded==='object') {
+    if(Array.isArray(decoded)) return decoded.flatMap(resultObjects);
+    // Known transport envelopes only; never interpret wrapper code or quoted calls.
+    if(decoded.result?.status==='fulfilled'&&decoded.result.value) return resultObjects(decoded.result.value);
+    if(decoded.status==='fulfilled'&&decoded.value) return resultObjects(decoded.value);
+    return [decoded];
+  }
   // Multiple text() outputs are separate JSON lines. Never parse the call's code.
   return typeof decoded==='string'?decoded.split('\n').flatMap(line=>{try{return resultObjects(JSON.parse(line));}catch{return [];}}):[];
 }
@@ -61,22 +67,34 @@ export function memoryUseTranscriptEvents(rows) {
   return {calls:[...calls.values()],users,injections};
 }
 
-export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,turnId=null,principal=process.env.ORGBRAIN_USE_PRINCIPAL || 'local'}) {
+export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,turnId=null,readReason=null,principal=process.env.ORGBRAIN_USE_PRINCIPAL || 'local'}) {
   await store.init();
   const db=store.open();
   try {
     const flags=localUseFlags(db);
     if(!flags.collect) return {queued:0,recorded:0,skipped:'disabled'};
-    if(!taskId||!projectId) return {queued:0,recorded:0,skipped:'task_identity_missing'};
+    const saveMetrics=async ({calls=[],delivered=new Set(),observations=[],recorded=0,rejected=[],gap=null}={})=>{
+      const id=await useHash({tenantId,principal,projectId:projectId??null,taskId:taskId??null,turnId:turnId??calls.map(c=>c.id)});
+      const counts={};for(const reason of rejected){const safe=/^[a-z][a-z0-9_]{0,80}$/u.test(reason)?reason:'collection_failed';counts[safe]=(counts[safe]??0)+1;}
+      const observedItems=new Set(observations.map(o=>o.args?.use_observation?.usage_item_id).filter(Boolean));
+      const without=[...delivered].filter(id=>!observedItems.has(id)).length;
+      db.prepare(`INSERT INTO local_use_collection_runs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET completed_calls=excluded.completed_calls,delivered_items=excluded.delivered_items,
+        observations=excluded.observations,recorded=excluded.recorded,without_observation=excluded.without_observation,
+        gap_reason=excluded.gap_reason,rejection_counts_json=excluded.rejection_counts_json`)
+        .run(id,tenantId,principal,projectId??null,taskId??null,turnId,Date.now(),calls.filter(c=>Number.isInteger(c.output_order)).length,delivered.size,observations.length,recorded,without,gap,JSON.stringify(counts));
+    };
+    if(!taskId||!projectId) {await saveMetrics({gap:'task_identity_missing'});return {queued:0,recorded:0,skipped:'task_identity_missing'};}
     const {calls,users,injections}=memoryUseTranscriptEvents(rows);
     const deliveries=[...injections.filter(i=>i.task_id===taskId&&i.project_id===projectId),
       ...calls.filter(c=>c.done).flatMap(c=>resultObjects(c.outputs??c.output)).filter(o=>o.meta?.usage_id&&Array.isArray(o.meta?.usage_items))
         .map(o=>({usage_id:o.meta.usage_id,items:usageItems(o.meta.usage_items)}))];
+    const delivered=new Set();
     for(const delivery of deliveries) for(const candidate of delivery.items) {
       const match=db.prepare(`SELECT i.id FROM memory_usage_items i JOIN memory_usage_events e ON e.id=i.usage_event_id AND e.tenant_id=i.tenant_id
         WHERE e.tenant_id=? AND e.actor_principal=? AND e.project_id=? AND e.task_id=? AND e.id=? AND i.id=? AND i.source_id=? AND i.source_version=?`)
         .get(tenantId,principal,projectId,taskId,delivery.usage_id,candidate.usage_item_id,candidate.source_id,candidate.source_version);
-      if(match) db.prepare('INSERT OR IGNORE INTO local_use_deliveries VALUES(?,?,?,?,?,?)').run(tenantId,match.id,principal,taskId,projectId,Date.now());
+      if(match) {db.prepare('INSERT OR IGNORE INTO local_use_deliveries VALUES(?,?,?,?,?,?)').run(tenantId,match.id,principal,taskId,projectId,Date.now());delivered.add(match.id);}
     }
     const observations=[], seenReceipts=new Set();
     for(const call of calls.filter(c=>c.done)) {
@@ -161,7 +179,8 @@ export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,tur
         if(call.receipt) db.prepare('UPDATE local_use_observation_receipts SET rejection_reason=? WHERE id=? AND context_id IS NULL').run(error.message,call.receipt.id);
       }
     }
-    return {queued,recorded,rejected};
+    await saveMetrics({calls,delivered,observations,recorded,rejected,gap:readReason??(!rows.length?'turn_evidence_missing':null)});
+    return {queued,recorded,rejected,delivered:delivered.size,metrics_persisted:true};
   } finally {db.close();}
 }
 

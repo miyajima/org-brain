@@ -27,7 +27,7 @@ import {
   MEMORY_CONTRACT_V2_PROMPT_HASH
 } from "../../shared/src/memory-contract-v2-contract.mjs";
 import {
-  readMemoryUseTurnRows,
+  readMemoryUseTurnEvidence,
   collectVerifiedLearningEvents,
   collectVerifiedLearningEventsFromRows
 } from "./lib/memory-learning-transcript.mjs";
@@ -2167,8 +2167,8 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     const useStore = new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
     const status = await useStore.useHistory("status");
     if (status.flags.collect) {
-      const rows = await readMemoryUseTurnRows({transcriptPath:normalizedRecord.metadata?.transcriptPath,turnId:normalizedRecord.metadata?.turnId});
-      memoryUseReport = await collectMemoryUse(useStore,{rows,tenantId,projectId:workspace.projectId,taskId:taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord),turnId:normalizedRecord.metadata?.turnId});
+      const evidence = await readMemoryUseTurnEvidence({transcriptPath:normalizedRecord.metadata?.transcriptPath,turnId:normalizedRecord.metadata?.turnId});
+      memoryUseReport = await collectMemoryUse(useStore,{rows:evidence.rows,readReason:evidence.reason,tenantId,projectId:workspace.projectId,taskId:taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord),turnId:normalizedRecord.metadata?.turnId});
     }
   }
 

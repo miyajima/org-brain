@@ -7,6 +7,7 @@ import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
 import { ATTEMPT_SCHEMA_SQL, attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
 import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
+import { isTransientMemory } from '../../../shared/src/memory-admission-runtime.mjs';
 import {
   AGENT_ACTIVITY_SCHEMA_SQL,
   normalizeAgentActivity
@@ -48,7 +49,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 31;
+export const MEMORY_SCHEMA_VERSION = 32;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 const WORK_TYPES = new Set([
@@ -3451,6 +3452,7 @@ export class LocalMemoryStore {
         !hasTable(db, "memory_usage_events") ||
         !hasTable(db, "local_use_observation_receipts") ||
         !hasTable(db, "local_use_deliveries") ||
+        !hasTable(db, "local_use_collection_runs") ||
         !hasTable(db, "memory_effect_events") ||
         !hasTable(db, "action_attempts") ||
         !hasTable(db, "action_hook_coverage") ||
@@ -5452,6 +5454,7 @@ export class LocalMemoryStore {
     input,
     { updateFeatureStats = true, writeProjections = true } = {}
   ) {
+    if ((input.capture_origin === 'observed' || input.capture_route === 'realtime_hook') && isTransientMemory(input)) throw new Error('transient_memory_rejected');
     const now = Date.now();
     const tenantId = nullableString(input.tenant_id, 128) || "default";
     const source = nullableString(input.source, 64) || "local";

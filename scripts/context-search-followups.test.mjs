@@ -108,6 +108,24 @@ test("typed shadow planning batches query type, coverage and action and retains 
   assert.equal(result.report.query_type, "comparison");
 });
 
+test("explicit operator activation allows bounded search without claiming qualification", async () => {
+  let calls = 0;
+  const judge = createLocalContextSearchJudge({ env: { ORGBRAIN_JEV_PROJECTS: "p", ORGBRAIN_JEV_SEARCH_MODE: "active",
+    ORGBRAIN_JEV_SEARCH_ACTIVATION: "operator", ORGBRAIN_JEV_OBJECTIVE: "cost" }, transport: async (request) => {
+    calls++;
+    return { model: "typesafe/jev-1.13-20260917", answers: Object.fromEntries(Object.entries(request.questions).map(([id, q]) => {
+      const value = id === "query_type" ? "comparison" : id === "next_search" ? (calls === 1 ? Object.keys(q.criteria).find((k) => k !== "stop" && k !== "uncertain") : "stop") : calls === 1 ? "missing" : "covered";
+      return [id, { type: "choice", choice: value, confidence: .99, probabilities: Object.fromEntries(Object.keys(q.criteria).map((k) => [k, k === value ? 1 : 0])) }];
+    })), usage: { input_tokens: 100, output_tokens: 20, cost: .001 } };
+  } });
+  const result = await run({ judge });
+  assert.equal(calls, 2); assert.equal(result.report.additional_searches, 1);
+  assert.equal(result.report.activation_basis, "operator_opt_in");
+  assert.equal(result.report.request_count, 2);
+  assert.equal(result.report.resolved_model, "typesafe/jev-1.13-20260917");
+  assert.equal(result.report.reason_code, "requirements_covered");
+});
+
 test("a stalled additional search returns within the phase deadline and keeps prior evidence", async () => {
   const result = await run({ timeoutMs: 10, search: async () => new Promise(() => {}) });
   assert.equal(result.report.reason_code, "timeout");
