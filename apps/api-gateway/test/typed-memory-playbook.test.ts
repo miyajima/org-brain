@@ -1,4 +1,4 @@
-import { describe,expect,it } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import event from './fixtures/optional-diagnostic-failure.json';
 import { planConversationMemory } from '@org-brain/shared';
 import { stageConversationMemories } from '../src/conversation-memory-service';
@@ -53,8 +53,12 @@ describe('typed compatible playbook and task scope',()=>{
     }
     expect(sql.prepare('SELECT count(*) AS n FROM memory_confirmations').get().n).toBe(0);
   }finally{sql.close();}});
-  it('routes explicitly typed task ceilings to commitments after review, never to searchable durable memories',async()=>{const {env,sql}=fixture();try{
-    const e=structuredClone(event) as any;e.sources[0].text='Fixture current task permits at most three attempts until its expiry.';e.candidates[0].claim_type='user_decision';e.candidates[0].memory_type='task_constraint';e.candidates[0].scope={level:'task',project_id:e.project_id,task_key:'fixture-current-task',expires_at:new Date(Date.now()+60_000).toISOString()};e.candidates[0].task_constraint={decision_key:'fixture-call-ceiling',max_calls:3};
+  it('routes explicitly typed task ceilings to commitments after review, never to searchable durable memories',async()=>{const {env,sql}=fixture();
+    // Exercise a run more than seven days after the reusable fixture's date.
+    const clock=vi.spyOn(Date,'now').mockReturnValue(Date.parse(event.occurred_at)+8*86400000);
+    try{
+    const now=Date.now();
+    const e=structuredClone(event) as any;e.occurred_at=new Date(now).toISOString();e.sources[0].text='Fixture current task permits at most three attempts until its expiry.';e.candidates[0].claim_type='user_decision';e.candidates[0].memory_type='task_constraint';e.candidates[0].scope={level:'task',project_id:e.project_id,task_key:'fixture-current-task',expires_at:new Date(now+60_000).toISOString()};e.candidates[0].task_constraint={decision_key:'fixture-call-ceiling',max_calls:3};
     const r=await stage(env,e);expect((await getTaskCommitmentContext(env,{tenant_id:'fixture',project_id:e.project_id,task_key:'fixture-current-task'})).commitments).toEqual([]);
     const saved=await confirmProposedMemory(env,answer(r),owner);expect(saved.saved).toBe(true);expect(saved).toMatchObject({persistence_scope:'task',active_memories_created:0,memory_id:null});
     expect(sql.prepare('SELECT count(*) AS n FROM memories').get().n).toBe(0);
@@ -65,5 +69,5 @@ describe('typed compatible playbook and task scope',()=>{
     expect((await getTaskCommitmentContext(env,{tenant_id:'fixture',project_id:'other',task_key:'fixture-current-task'})).commitments).toEqual([]);
     expect((await searchMemories(env,request,{actorPrincipal:owner})).results).toEqual([]);
     sql.prepare('UPDATE task_commitments SET expires_at=1').run();expect((await getTaskCommitmentContext(env,{tenant_id:'fixture',project_id:e.project_id,task_key:'fixture-current-task'})).commitments).toEqual([]);
-  }finally{sql.close();}});
+  }finally{clock.mockRestore();sql.close();}});
 });
