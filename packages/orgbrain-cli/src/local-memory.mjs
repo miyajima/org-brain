@@ -38,6 +38,8 @@ Usage:
   orgbrain wiki read|put|patch|links|history|delete <path> [--input <file>] [--if-match <hash>]
   orgbrain wiki search <query> [--mode lexical|hybrid] [--scope wiki|sources|all]
   orgbrain wiki ingest <file> [--source-id <id>]
+  orgbrain wiki ingest-folder <folder> [--dry-run]
+  orgbrain wiki catalog [--folder-id <id>] [--offset <n>] [--limit <n>]
   orgbrain wiki migrate|restore-backup --from <path>
   orgbrain wiki export|backup --output <new-directory>
   orgbrain wiki reindex-embeddings

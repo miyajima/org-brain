@@ -69,6 +69,9 @@ project filter. Explicit Wiki searches can still supply `project_id`.
 
 ```sh
 orgbrain wiki ingest /absolute/source.txt --name source.txt
+orgbrain wiki ingest-folder /absolute/docs --dry-run
+orgbrain wiki ingest-folder /absolute/docs
+orgbrain wiki catalog --limit 50
 orgbrain wiki sources
 orgbrain wiki put topics/example.md --input /absolute/draft.md
 orgbrain wiki read topics/example.md --section Evidence
@@ -86,6 +89,55 @@ orgbrain wiki migrate --from /absolute/selected-vault --dry-run
 orgbrain wiki migrate --from /absolute/selected-vault
 orgbrain feature llm-wiki disable
 ```
+
+### Folder Import And Coverage Catalog
+
+`wiki ingest-folder` recursively imports `.md`, `.markdown`, `.txt` and `.text`
+files containing UTF-8 text, preserving original bytes (including line endings).
+It does not synthesize pages, activate memories, call a model or fetch URLs.
+Wiki must already be enabled and initialized. `--dry-run` reads selected text
+but writes no originals, source versions or catalog; it returns counts, skip
+reasons and a bounded 20-entry preview.
+
+Imports exclude hidden entries, symbolic links, generated directories
+(`node_modules`, `target`, `dist`, `build`, `coverage`, `Library`, `Temp`, `obj`,
+`__pycache__`) and the Wiki's own storage. Nested `.gitignore` and
+`.orgbrainignore` rules are honored within the selected folder. Parent/global Git
+ignore settings are not loaded. Ignored directories are recorded once without
+reading their children. Invalid ignore rules fail the scan before writing.
+Unsupported extensions, binary content, invalid UTF-8 and files over 1 MB are
+recorded with explicit reasons. PDF/DOCX extraction and AST code indexing remain
+future work. The scan is capped at 10,000 entries and depth 64.
+
+The native engine commits at most 50 entries / 8 MB of text per CLI batch, with
+source versions and their catalog entries in the same transaction. File identity
+depends on the canonical selected folder plus relative path; identical contents
+in different files retain distinct source IDs while sharing original objects.
+Rerunning skips unchanged originals and creates a new immutable version for
+changed content, including changes back to a previous body. After interruption,
+rerun the same command: committed files are reused; an interrupted batch is
+rolled back. Scans changing between batches are refused with `folder_changed`;
+rerun from the beginning. A confirmed dead native process may leave the existing
+feature lock; inspect it before removing a stale lock as described above.
+
+`wiki catalog [--folder-id ID] [--offset N] [--limit N]` reads persisted coverage
+without rescanning files. Entries include format, last import status, skip reason,
+source ID/version, latest source version and whether retained source text is
+searchable. Summary groups count entries and bytes by folder/format/status;
+directory skips count as one entry. The unfiltered summary is capped at 100
+groups (`summary_truncated`); filter a folder for its full summary. Files missing
+from a completed rescan are marked `missing`; previously imported originals
+remain retained and searchable as evidence. Skipped replacements also retain
+their earlier source reference. No source or citation is deleted automatically.
+
+The read-only `orgbrain_wiki_catalog` MCP tool accepts `folder_id`, `offset`,
+`limit` and `token_budget`; follow `next_offset`. If even one entry cannot fit,
+`wiki_catalog_budget_exhausted` asks for a larger budget or a folder filter.
+Catalog reads are also accepted by the local Wiki HTTP request endpoint.
+Folder filesystem reads are CLI-only and are refused by browser/MCP surfaces.
+Catalog metadata is included in backups and Markdown exports; older schema-1
+backups with no catalog remain restorable. Reading an older Wiki does not
+create a catalog table; its first folder import adds it transactionally.
 
 Updates, patches, rename, deletion, restoration and draft approval require the
 hash returned by read. `hash` is an opaque state/revision concurrency token;

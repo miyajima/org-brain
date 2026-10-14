@@ -36,6 +36,250 @@ impl Wiki {
 }
 
 #[test]
+fn folder_import_is_byte_exact_incremental_and_reports_skips() {
+    let w = Wiki::new();
+    let docs = w.home.path().join("docs");
+    fs::create_dir_all(docs.join("notes")).unwrap();
+    fs::create_dir_all(docs.join("node_modules")).unwrap();
+    fs::write(docs.join("a.md"), "# 資料\r\n初期の根拠\r\n").unwrap();
+    fs::write(docs.join("b.md"), "# 資料\r\n初期の根拠\r\n").unwrap();
+    fs::write(docs.join("notes/keep.txt"), "対象資料の事実").unwrap();
+    fs::write(docs.join("notes/omit.txt"), "ignored").unwrap();
+    fs::write(docs.join(".gitignore"), "notes/*.txt\n").unwrap();
+    fs::write(docs.join("notes/.gitignore"), "!keep.txt\n").unwrap();
+    fs::write(docs.join(".orgbrainignore"), "private.txt\n").unwrap();
+    fs::write(docs.join("private.txt"), "not selected").unwrap();
+    fs::write(docs.join("node_modules/secret.txt"), "must not read").unwrap();
+    fs::write(docs.join(".hidden.txt"), "must not read").unwrap();
+    fs::write(docs.join("document.pdf"), b"%PDF-1.7").unwrap();
+    fs::write(docs.join("bad.txt"), [0xff]).unwrap();
+    fs::write(docs.join("binary.txt"), [0, 1]).unwrap();
+    let dry = w.call(json!({"op":"ingest_folder","folder":docs,"dry_run":true}));
+    assert_eq!(
+        dry["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["status"] == "would_import")
+            .count(),
+        3
+    );
+    assert!(
+        w.call(json!({"op":"sources"}))["sources"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        w.call(json!({"op":"catalog"}))["entries"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(fs::read_dir(w.root.join("objects")).unwrap().count(), 0);
+    let first = w.call(json!({"op":"ingest_folder","folder":docs}));
+    let entries = first["entries"].as_array().unwrap();
+    let a = entries.iter().find(|e| e["path"] == "a.md").unwrap();
+    let b = entries.iter().find(|e| e["path"] == "b.md").unwrap();
+    assert_ne!(a["source_id"], b["source_id"]);
+    assert_eq!(a["hash"], b["hash"]);
+    assert_eq!(
+        fs::read(w.root.join("objects").join(a["hash"].as_str().unwrap())).unwrap(),
+        fs::read(docs.join("a.md")).unwrap()
+    );
+    for (path, reason) in [
+        ("notes/omit.txt", "ignore_rule"),
+        ("private.txt", "ignore_rule"),
+        ("node_modules", "generated_directory"),
+        (".hidden.txt", "hidden"),
+        ("document.pdf", "unsupported_format"),
+        ("bad.txt", "invalid_utf8"),
+        ("binary.txt", "binary_content"),
+    ] {
+        assert_eq!(
+            entries.iter().find(|e| e["path"] == path).unwrap()["reason"],
+            reason
+        );
+    }
+    let again = w.call(json!({"op":"ingest_folder","folder":docs}));
+    assert_eq!(
+        again["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["status"] == "unchanged")
+            .count(),
+        3
+    );
+    fs::write(docs.join("a.md"), "# 資料\n変更された根拠").unwrap();
+    w.call(json!({"op":"ingest_folder","folder":docs}));
+    assert_eq!(
+        w.call(json!({"op":"source_read","source_id":a["source_id"]}))["version"],
+        2
+    );
+    assert!(
+        w.call(json!({"op":"search","query":"変更された根拠","scope":"sources"}))["hits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|h| h["owner_id"] == a["source_id"])
+    );
+    fs::write(docs.join("a.md"), "# 資料\r\n初期の根拠\r\n").unwrap();
+    w.call(json!({"op":"ingest_folder","folder":docs}));
+    assert_eq!(
+        w.call(json!({"op":"source_read","source_id":a["source_id"]}))["version"],
+        3
+    );
+    assert!(
+        w.call(json!({"op":"search","query":"変更された根拠","scope":"sources"}))["hits"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    fs::remove_file(docs.join("a.md")).unwrap();
+    w.call(json!({"op":"ingest_folder","folder":docs}));
+    let catalog = w.call(json!({"op":"catalog","folder_id":first["folder_id"]}));
+    let missing = catalog["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["path"] == "a.md")
+        .unwrap();
+    assert_eq!(missing["status"], "missing");
+    assert_eq!(missing["searchable"], true);
+    assert_eq!(missing["version"], 3);
+    assert_eq!(w.call(json!({"op":"diagnose"}))["integrity"], "ok");
+}
+
+#[test]
+fn folder_batches_resume_and_reject_changed_scans_without_losing_commits() {
+    let w = Wiki::new();
+    let docs = w.home.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    for name in ["a.md", "b.txt", "c.txt"] {
+        fs::write(docs.join(name), name).unwrap();
+    }
+    let first = w.call(json!({"op":"ingest_folder","folder":docs,"limit":1}));
+    assert_eq!(first["next_offset"], 1);
+    // A new execute call opens a new DB connection, as after process restart.
+    let second = w.call(json!({"op":"ingest_folder","folder":docs,"limit":1,"offset":first["next_offset"],"scan_id":first["scan_id"]}));
+    assert_eq!(second["next_offset"], 2);
+    fs::write(docs.join("new.txt"), "new").unwrap();
+    w.fail(json!({"op":"ingest_folder","folder":docs,"offset":second["next_offset"],"scan_id":first["scan_id"]}), "folder_changed");
+    assert_eq!(
+        w.call(json!({"op":"sources"}))["sources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let resumed = w.call(json!({"op":"ingest_folder","folder":docs}));
+    assert_eq!(
+        resumed["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["status"] == "unchanged")
+            .count(),
+        2
+    );
+    assert_eq!(
+        w.call(json!({"op":"sources"}))["sources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        4
+    );
+    let page = w.call(json!({"op":"catalog","limit":1}));
+    assert_eq!(page["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(page["next_offset"], 1);
+    let next = w.call(json!({"op":"catalog","offset":1,"limit":1}));
+    assert_ne!(page["entries"][0]["path"], next["entries"][0]["path"]);
+}
+
+#[test]
+fn folder_catalog_survives_backup_restore_and_exports_with_sources() {
+    let w = Wiki::new();
+    let docs = w.home.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    fs::write(docs.join("a.md"), "# Evidence\nsource").unwrap();
+    let old_backup = w.home.path().join("old-backup");
+    w.call(json!({"op":"backup","output":old_backup}));
+    w.call(json!({"op":"ingest_folder","folder":docs}));
+    let backup = w.home.path().join("backup");
+    w.call(json!({"op":"backup","output":backup}));
+    let before = w.call(json!({"op":"catalog"}));
+    let export = w.home.path().join("export");
+    w.call(json!({"op":"export","output":export}));
+    assert!(export.join("folder-catalog.json").is_file());
+    assert_eq!(fs::read_dir(export.join("raw")).unwrap().count(), 1);
+    fs::write(docs.join("b.txt"), "additional").unwrap();
+    w.call(json!({"op":"ingest_folder","folder":docs}));
+    w.call(json!({"op":"restore_backup","from":backup}));
+    assert_eq!(w.call(json!({"op":"catalog"})), before);
+    w.call(json!({"op":"restore_backup","from":old_backup}));
+    assert!(
+        w.call(json!({"op":"catalog"}))["entries"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        w.call(json!({"op":"sources"}))["sources"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn folder_import_bounds_large_files_and_excludes_its_own_storage() {
+    let w = Wiki::new();
+    let docs = w.home.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    fs::write(docs.join("huge.txt"), vec![b'x'; 1_000_001]).unwrap();
+    let result = w.call(json!({"op":"ingest_folder","folder":docs}));
+    assert_eq!(result["entries"][0]["reason"], "file_too_large");
+    w.fail(
+        json!({"op":"ingest_folder","folder":w.root}),
+        "wiki_storage_rejected",
+    );
+    let dry = w.call(json!({"op":"ingest_folder","folder":w.home.path(),"dry_run":true}));
+    assert!(
+        dry["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["reason"] == "wiki_storage")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn folder_import_does_not_follow_selected_or_nested_symlinks() {
+    use std::os::unix::fs::symlink;
+    let w = Wiki::new();
+    let docs = w.home.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    let external = w.home.path().join("outside.txt");
+    fs::write(&external, "external private fact").unwrap();
+    symlink(&external, docs.join("linked.txt")).unwrap();
+    symlink(&docs, w.home.path().join("alias")).unwrap();
+    let imported = w.call(json!({"op":"ingest_folder","folder":docs}));
+    assert_eq!(imported["entries"][0]["reason"], "symlink");
+    w.fail(
+        json!({"op":"ingest_folder","folder":w.home.path().join("alias")}),
+        "symlink_rejected",
+    );
+    assert!(
+        w.call(json!({"op":"sources"}))["sources"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn diagnostics_identify_uncited_sources_without_treating_them_as_failed_imports() {
     let w = Wiki::new();
     let unused =
