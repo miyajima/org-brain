@@ -9,6 +9,7 @@ const properties = {
   path: { type: "string", maxLength: 512 },
   page_id: { type: "string" },
   source_id: { type: "string" },
+  folder_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
   version: { type: "integer", minimum: 1 },
   query: { type: "string", maxLength: 2000 },
   mode: { type: "string", enum: ["lexical", "literal", "hybrid"] },
@@ -43,6 +44,7 @@ export const WIKI_TOOLS = [
     "Search source-backed Wiki passages. Does not run a generation LLM.",
   ],
   ["sources", "List immutable sources and versions."],
+  ["catalog", "List folder import coverage, searchable sources and skip reasons. Read-only; does not scan the filesystem."],
   ["source_read", "Read one exact source version."],
   ["put", "Create or update a page; updates require the read hash."],
   [
@@ -109,8 +111,9 @@ export async function callWikiTool(store, name, input) {
     if (arrays.length) {
       const [key, value] = arrays.sort((a, b) => b[1].length - a[1].length)[0];
       value.pop();
-      if (["pages", "sources", "drafts"].includes(key))
+      if (["pages", "sources", "drafts", "entries"].includes(key))
         result.next_offset = (input.offset || 0) + value.length;
+      if (key === "summary") result.summary_truncated = true;
     } else if (fields.length) {
       const key = fields.sort((a, b) => result[b].length - result[a].length)[0];
       result[key] = [...result[key]]
@@ -123,6 +126,8 @@ export async function callWikiTool(store, name, input) {
     changed = true;
   }
   if (changed) result.truncated = true;
+  if (op === "catalog" && result.next_offset === (input.offset || 0))
+    throw new Error("wiki_catalog_budget_exhausted: increase token_budget or filter folder_id");
   for (let n = 0; n < 4; n++) result.estimated_tokens = countWikiTokens(result);
   return result;
 }

@@ -14,6 +14,7 @@ const allowedOperations = new Set([
   "search",
   "ingest",
   "sources",
+  "catalog",
   "source_read",
   "links",
   "rename",

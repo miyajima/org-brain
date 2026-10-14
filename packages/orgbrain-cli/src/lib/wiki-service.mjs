@@ -289,6 +289,34 @@ export class WikiService {
       output.estimated_tokens = countWikiTokens(output);
     return output;
   }
+  async ingestFolder(input) {
+    const status = await wikiStatus(this.config);
+    if (!status.enabled) throw new Error("feature_disabled");
+    let offset = 0, scanId;
+    const counts = { imported: 0, unchanged: 0, skipped: 0, would_import: 0 };
+    const skipReasons = {};
+    const preview = [];
+    let batch;
+    do {
+      batch = await this.request({
+        ...input, op: "ingest_folder", offset, scan_id: scanId,
+      }, status.epoch);
+      scanId = batch.scan_id;
+      for (const entry of batch.entries) {
+        counts[entry.status]++;
+        if (entry.reason) skipReasons[entry.reason] = (skipReasons[entry.reason] || 0) + 1;
+        if (input.dry_run && preview.length < 20) preview.push(entry);
+      }
+      offset = batch.next_offset;
+    } while (offset !== null);
+    return {
+      folder_id: batch.folder_id, scan_id: scanId, dry_run: input.dry_run === true,
+      total_entries: batch.total_entries, ...counts,
+      catalog_available: input.dry_run !== true,
+      skip_reasons: skipReasons,
+      ...(input.dry_run ? { preview, preview_truncated: preview.length < batch.total_entries } : {}),
+    };
+  }
   embeddingProvider() {
     if (process.env.ORGBRAIN_WIKI_EMBEDDING_PROVIDER !== "qwen-ollama")
       return null;

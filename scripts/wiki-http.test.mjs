@@ -110,6 +110,8 @@ test("Local Wiki HTTP guards Host/Origin and feature state without touching exte
       await request({ op: "put", path: "test.md", content: "# Test\nEvidence" })
     ).json();
     assert.ok(saved.page_id);
+    assert.equal((await request({ op: "catalog" })).status, 200);
+    assert.equal((await request({ op: "ingest_folder", folder: home })).status, 400);
     await toggle(false);
     const blocked = await request({
       op: "put",

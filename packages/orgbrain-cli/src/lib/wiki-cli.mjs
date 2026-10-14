@@ -38,6 +38,11 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
   }
   if (action === "reindex-embeddings") return wiki.reindexEmbeddings();
   if (action === "status") return wikiStatus(config);
+  if (action === "ingest-folder") {
+    const folder = rest[0] || args.get("--folder");
+    if (!folder) throw new Error("folder_required");
+    return wiki.ingestFolder({ folder: resolve(folder), dry_run: args.flags.has("--dry-run") });
+  }
   const op = action?.replaceAll("-", "_");
   const input = { op };
   for (const field of [
@@ -54,6 +59,7 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
     "extractor",
     "mode",
     "scope",
+    "folder_id",
   ]) {
     const value = args.get(`--${field.replaceAll("_", "-")}`);
     if (value !== undefined) input[field] = value;

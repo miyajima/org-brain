@@ -1,0 +1,87 @@
+{
+  "schema": "orgbrain-folder-smoke/v1",
+  "passed": true,
+  "execution": "packaged standalone CLI and native engine outside checkout; isolated copied project docs",
+  "cli_sha256": "3a649820d824993e85289be45cb9b7278c15b12918b7f1fb1230078e35a279cd",
+  "native_sha256": "d8dff11068977f1883950d202b377ca146729bfebea1628bcba370e886d46cb5",
+  "initial_imported": 77,
+  "skipped": 56,
+  "skip_reasons": {
+    "hidden": 1,
+    "unsupported_format": 54,
+    "ignore_rule": 1
+  },
+  "repeated_imported": 0,
+  "repeated_unchanged": 77,
+  "delta_imported": 1,
+  "reverted_version": 3,
+  "catalog_entries": 133,
+  "original_project_docs_unchanged": true,
+  "original_memory_untouched": true,
+  "receipts": [
+    {
+      "command": "feature llm-wiki",
+      "duration_ms": 171
+    },
+    {
+      "command": "feature llm-wiki",
+      "duration_ms": 190
+    },
+    {
+      "command": "wiki init",
+      "duration_ms": 188
+    },
+    {
+      "command": "wiki ingest-folder",
+      "duration_ms": 238
+    },
+    {
+      "command": "wiki sources",
+      "duration_ms": 193
+    },
+    {
+      "command": "wiki ingest-folder",
+      "duration_ms": 2396
+    },
+    {
+      "command": "wiki ingest-folder",
+      "duration_ms": 289
+    },
+    {
+      "command": "wiki catalog",
+      "duration_ms": 184
+    },
+    {
+      "command": "wiki catalog",
+      "duration_ms": 184
+    },
+    {
+      "command": "wiki search",
+      "duration_ms": 884
+    },
+    {
+      "command": "wiki ingest-folder",
+      "duration_ms": 310
+    },
+    {
+      "command": "wiki search",
+      "duration_ms": 747
+    },
+    {
+      "command": "wiki ingest-folder",
+      "duration_ms": 279
+    },
+    {
+      "command": "wiki search",
+      "duration_ms": 691
+    },
+    {
+      "command": "wiki catalog",
+      "duration_ms": 183
+    },
+    {
+      "command": "wiki diagnose",
+      "duration_ms": 779
+    }
+  ]
+}

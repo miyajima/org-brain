@@ -19,6 +19,8 @@ use tempfile::NamedTempFile;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
+mod folder;
+
 const SCHEMA: &str = include_str!("schema.sql");
 static VEC_INIT: Once = Once::new();
 static WIKILINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[([^\[\]\n]+)\]\]").unwrap());
@@ -86,6 +88,7 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
         "read",
         "search",
         "sources",
+        "catalog",
         "source_read",
         "links",
         "history",
@@ -97,7 +100,8 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
         "backup",
         "export",
     ]
-    .contains(&op);
+    .contains(&op)
+        && !(op == "ingest_folder" && input["dry_run"] == true);
     let flags = if write {
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE
     } else {
@@ -322,6 +326,8 @@ impl Wiki {
             "read" => self.read(v),
             "patch" => self.patch(v),
             "ingest" => self.ingest(v),
+            "ingest_folder" => self.ingest_folder(v),
+            "catalog" => self.folder_catalog(v),
             "extraction_put" => self.extraction_put(v),
             "sources" => self.listing(v,"sources","SELECT source_id,version,name,hash,url,original_path,extractor FROM source_versions ORDER BY source_id,version DESC"),
             "source_read" => self.source_read(v),
@@ -861,16 +867,40 @@ impl Wiki {
                 && !name.contains('\\'),
             "invalid_source_name"
         );
-        let hash = self.store_object(&bytes)?;
         let requested = v["source_id"].as_str();
-        let duplicate=self.rows("SELECT source_id,version,hash,name FROM source_versions WHERE hash=? AND (? IS NULL OR source_id=?) ORDER BY version DESC LIMIT 1",params![hash,requested,requested])?;
+        let original_path = v["original_path"]
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("raw/{name}"));
+        self.ingest_original(
+            &bytes,
+            &name,
+            requested,
+            &original_path,
+            v["url"].as_str(),
+            false,
+        )
+    }
+    fn ingest_original(
+        &self,
+        bytes: &[u8],
+        name: &str,
+        requested: Option<&str>,
+        original_path: &str,
+        url: Option<&str>,
+        create_identity: bool,
+    ) -> Result<Value> {
+        let hash = self.store_object(bytes)?;
+        // Only the latest version can be reused: A -> B -> A is a new version,
+        // otherwise search would keep serving B while the receipt claims A.
+        let duplicate=self.rows("SELECT source_id,version,hash,name,original_path FROM source_versions s WHERE hash=? AND (? IS NULL OR source_id=?) AND version=(SELECT MAX(version) FROM source_versions latest WHERE latest.source_id=s.source_id) ORDER BY version DESC LIMIT 1",params![hash,requested,requested])?;
         if let Some(found) = duplicate.first() {
             return Ok(found.clone());
         }
         let id = requested
             .map(str::to_owned)
             .unwrap_or_else(|| Uuid::new_v4().to_string());
-        if requested.is_some() {
+        if requested.is_some() && !create_identity {
             ensure!(
                 self.db
                     .query_row(
@@ -888,15 +918,11 @@ impl Wiki {
             [&id],
             |r| r.get(0),
         )?;
-        let text = String::from_utf8(bytes)
+        let text = std::str::from_utf8(bytes)
             .ok()
             .filter(|s| !s.contains('\0'))
             .unwrap_or_default();
-        let original_path = v["original_path"]
-            .as_str()
-            .map(str::to_owned)
-            .unwrap_or_else(|| format!("raw/{name}"));
-        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,'original-utf8',0,?)",params![id,version,name,hash,v["url"].as_str(),original_path,text,Utc::now().to_rfc3339()])?;
+        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,'original-utf8',0,?)",params![id,version,name,hash,url,original_path,text,Utc::now().to_rfc3339()])?;
         self.index(&id, "source", version, &name, &text, None)?;
         Ok(
             json!({"source_id":id,"version":version,"hash":hash,"name":name,"original_path":original_path}),
@@ -1429,6 +1455,12 @@ impl Wiki {
             [origin.join("knowledge.sqlite").to_string_lossy().as_ref()],
         )?;
         self.db.execute_batch("DELETE FROM drafts;DELETE FROM citations;DELETE FROM links;DELETE FROM aliases;DELETE FROM revisions;DELETE FROM chunk_fts;DELETE FROM chunks;DELETE FROM embeddings;DELETE FROM embedding_models;DELETE FROM pages;DELETE FROM source_versions;")?;
+        // Folder catalogs are additive to schema 1. Older backups have none.
+        self.db.execute_batch(folder::SCHEMA)?;
+        self.db.execute_batch("DELETE FROM folder_catalog")?;
+        if src.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='folder_catalog' AND type='table')", [], |r| r.get::<_, bool>(0))? {
+            self.db.execute_batch("INSERT INTO folder_catalog SELECT * FROM incoming.folder_catalog")?;
+        }
         for table in [
             "pages",
             "aliases",
@@ -1488,6 +1520,9 @@ impl Wiki {
             output.join("sources.json"),
             serde_json::to_vec_pretty(&sources)?,
         )?;
+        if self.db.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='folder_catalog' AND type='table')", [], |r| r.get::<_, bool>(0))? {
+            fs::write(output.join("folder-catalog.json"), serde_json::to_vec_pretty(&self.rows("SELECT * FROM folder_catalog ORDER BY folder_id,path", [])?)?)?;
+        }
         Ok(json!({"output":output,"exported":true}))
     }
     fn export_source_name(&self, source: &Value) -> Result<String> {
