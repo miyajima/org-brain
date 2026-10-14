@@ -56,9 +56,19 @@ shutil.copy2(source/'packages/orgbrain-cli/dist/orgbrain.mjs', bundle)
 for relative in ['bin','assets/wiki','skills/org-brain-wiki']:
     shutil.copytree(source/'packages/orgbrain-cli'/relative, destination/relative, dirs_exist_ok=True)
 def run(args, env=None):
-    return json.loads(subprocess.check_output(args, env=env, text=True, stderr=subprocess.PIPE, timeout=120))
+    try:
+        output = subprocess.check_output(args, env=env, text=True, stderr=subprocess.PIPE, timeout=120)
+    except subprocess.CalledProcessError as error:
+        # The CLI can report errors as JSON on stdout; preserve both streams.
+        print('OrgBrain command failed: '+ ' '.join(args), file=sys.stderr)
+        if error.output: print(error.output[-8000:], file=sys.stderr)
+        if error.stderr: print(error.stderr[-8000:], file=sys.stderr)
+        raise
+    return json.loads(output)
 with tempfile.TemporaryDirectory(prefix='orgbrain-mac-smoke-') as temporary:
-    temp=pathlib.Path(temporary)
+    # macOS /var and /tmp are aliases. Use the real path for isolated test
+    # storage so the native engine can keep rejecting symlink storage paths.
+    temp=pathlib.Path(temporary).resolve()
     env=dict(os.environ, ORGBRAIN_FEATURES_FILE=str(temp/'features.json'), ORGBRAIN_WIKI_ROOT=str(temp/'wiki'), ORGBRAIN_LOCAL_DB=str(temp/'memory.sqlite'))
     env.pop('ORGBRAIN_WIKI_ENGINE', None)
     cli=['node',str(bundle)]
