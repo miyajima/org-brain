@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { normalizeMemoryLearningEvent } from "../../../shared/src/memory-learning-runtime.mjs";
 import { normalizeMemoryContractV2Event } from "../../../shared/src/memory-contract-v2-runtime.mjs";
 import { requestUserInputEvidenceDigest } from "./task-commitment-store.mjs";
+import { resolveWikiSourceEvidence } from "./wiki-source-evidence.mjs";
 
 const execFileAsync = promisify(execFile);
 export const MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024;
@@ -270,7 +271,7 @@ function qualityDimensions(event, evidence) {
 export async function verifyLearningEvent(event, context) {
   const evidence = [];
   const reasons = [];
-  let changedFile = false;
+  let verifiedFile = false;
   let successfulCommand = false;
   let failedCommand = false;
   const executions = commandExecutions(context.rows, context.attestationKey);
@@ -278,6 +279,12 @@ export async function verifyLearningEvent(event, context) {
   const requestResults = requestUserInputResults(context.rows);
   const v2 = event.schema_version === 2;
   for (const selector of event.evidence_selectors) {
+    if (selector.type === 'doc' && selector.ref?.startsWith('source:')) {
+      const resolved=await (context.resolveWikiSource ?? resolveWikiSourceEvidence)(selector.ref, selector.digest);
+      if(resolved.ok) evidence.push(resolved.evidence);
+      else reasons.push(resolved.reason);
+      continue;
+    }
     if (selector.type === "command") {
       const expectedDigest = typeof selector.digest === "string"
         ? (selector.digest.startsWith("sha256:") ? selector.digest.slice("sha256:".length) : selector.digest)
@@ -312,7 +319,7 @@ export async function verifyLearningEvent(event, context) {
       if (!verified.ok) reasons.push(verified.reason);
       else {
         evidence.push(verified.evidence);
-        changedFile ||= verified.changed;
+        verifiedFile = true;
       }
       continue;
     }
@@ -339,7 +346,7 @@ export async function verifyLearningEvent(event, context) {
   if (event.gaps.length > 0) reasons.push("gaps_present");
   if (event.applicability.target_files.length + event.applicability.components.length === 0) reasons.push("scope_missing");
   const independentTypes = new Set(evidence.map((item) => item.type));
-  if (event.lesson_type === "success" && (!changedFile || !successfulCommand || (v2 && (!event.procedure || !event.why_it_worked || !event.observed_outcome || !event.reuse_when)))) reasons.push("success_requires_change_and_verification");
+  if (event.lesson_type === "success" && (!verifiedFile || !successfulCommand || (v2 && (!event.procedure || !event.why_it_worked || !event.observed_outcome || !event.reuse_when)))) reasons.push("success_requires_file_and_verification");
   if (event.lesson_type === "failure" && (!failedCommand || !successfulCommand || !event.rationale || !event.reuse_rule || (v2 && (!event.symptom || !event.root_cause || !event.correction || !event.verified_outcome || !event.avoidance_rule)))) {
     reasons.push("failure_chain_incomplete");
   }
@@ -450,15 +457,17 @@ export async function collectVerifiedLearningEventsFromRows(rowsInput, options =
   return { events, reviews, raw_transcript_persisted: false };
 }
 
-export async function readMemoryUseTurnRows(options) {
-  if (!options.transcriptPath) return [];
-  const raw = await readTail(options.transcriptPath, MAX_TRANSCRIPT_BYTES);
+export async function readMemoryUseTurnEvidence(options) {
+  if (!options.transcriptPath) return {rows:[],reason:'transcript_path_missing'};
+  let raw;
+  try {raw=await readTail(options.transcriptPath, MAX_TRANSCRIPT_BYTES);}
+  catch {return {rows:[],reason:'transcript_unavailable'};}
   const rows = raw.split(/\r?\n/u).filter(Boolean).flatMap(line => { const parsed=safeJson(line); return parsed?[parsed]:[]; });
   const marker=row=>row.type==='turn_context'||payload(row)?.type==='turn_context';
   const index=rows.findLastIndex(marker);
-  if(index<0) return [];
+  if(index<0) return {rows:[],reason:'turn_marker_missing'};
   const id=payload(rows[index])?.turn_id??rows[index].turn_id;
-  if(options.turnId && id!==options.turnId) return [];
+  if(options.turnId && id!==options.turnId) return {rows:[],reason:'turn_identity_mismatch'};
   // Carry only actual developer delivery receipts across turns. Past actions,
   // user assessments and pre-compaction references cannot verify current use.
   const compacted=rows.findLastIndex(row=>row.type==='compacted'||payload(row)?.type==='compacted');
@@ -468,5 +477,9 @@ export async function readMemoryUseTurnRows(options) {
     const text=typeof p.content==='string'?p.content:(p.content??[]).map(x=>x.text??'').join('\n');
     return text.includes('Use tracking: receipt;');
   }).slice(-32);
-  return [...references,...rows.slice(Math.max(index,compacted+1))];
+  return {rows:[...references,...rows.slice(Math.max(index,compacted+1))],reason:null};
+}
+
+export async function readMemoryUseTurnRows(options) {
+  return (await readMemoryUseTurnEvidence(options)).rows;
 }

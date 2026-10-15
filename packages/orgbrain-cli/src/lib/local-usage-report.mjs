@@ -6,6 +6,17 @@ export function normalizeUsagePurpose(value = 'unclassified') {
   return value;
 }
 
+function collectionMetrics(db, tenantId, principal, projectId) {
+  const rows=db.prepare(`SELECT * FROM local_use_collection_runs WHERE tenant_id=? AND principal=? AND (? IS NULL OR project_id=?) ORDER BY created_at`)
+    .all(tenantId,principal,projectId,projectId);
+  const out={runs:rows.length,first_recorded_at:rows[0]?.created_at??null,last_recorded_at:rows.at(-1)?.created_at??null,completed_calls:0,delivered_items:0,observations:0,verified_use_records:0,without_use_observation:0,gap_reasons:{},rejection_reasons:{}};
+  for(const row of rows){out.completed_calls+=row.completed_calls;out.delivered_items+=row.delivered_items;out.observations+=row.observations;out.verified_use_records+=row.recorded;out.without_use_observation+=row.without_observation;
+    if(row.gap_reason)out.gap_reasons[row.gap_reason]=(out.gap_reasons[row.gap_reason]??0)+1;
+    for(const [reason,count]of Object.entries(JSON.parse(row.rejection_counts_json)))out.rejection_reasons[reason]=(out.rejection_reasons[reason]??0)+count;
+  }
+  return out;
+}
+
 function bucket() {
   return { events: 0, tasks: new Set(), references: 0, contributed: 0, not_contributed: 0,
     not_assessed: 0, action_observed: 0, reported_used: 0, delivery_confirmed: 0, received_assessed: 0,
@@ -90,6 +101,7 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
     by_purpose_reference: Object.fromEntries(Object.entries(byPurposeReference).map(([purpose, references]) =>
       [purpose, Object.fromEntries(Object.entries(references).map(([key, value]) => [key, finish(value)]))])),
     verified_positive_effects: positive, unassessed_reasons: reasons,
+    collection_metrics: collectionMetrics(db,tenant_id,principal_id,project_id),
     definitions: { contributed: 'Reported adoption or observed action; not a measured causal benefit.',
       injected: 'Database injection receipt; delivery is not implied.',
       token_estimate: 'Estimated entry tokens, excludes hook framing and other instructions.',

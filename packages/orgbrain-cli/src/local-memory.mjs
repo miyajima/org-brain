@@ -48,6 +48,7 @@ Usage:
   orgbrain memory wiki assess --project-id <id> [--page wiki/topics/page.md] [--vault <path>] [--changed-since <ISO-8601>] [--limit <n>] [--json]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>
+  orgbrain memory prune-transient [--tenant-id <id>] [--project-id <id>] [--apply]
   orgbrain memory delete <memory-id>
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
@@ -542,6 +543,11 @@ async function handleMemory(store, action, rest, args) {
       actor_type: "principal",
       actor_id: process.env.USER || "local-user"
     }));
+    return;
+  }
+  if (action === 'prune-transient') {
+    const {pruneTransientMemories}=await import('./lib/memory-prune.mjs');
+    emit(await pruneTransientMemories(store,{tenantId,projectId:args.get('--project-id',null),apply:args.flags.has('--apply')}));
     return;
   }
   if (action === "delete") {
