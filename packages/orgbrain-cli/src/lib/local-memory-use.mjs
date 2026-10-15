@@ -1,6 +1,13 @@
 import { MemoryUseHistory, memoryUseFlags, useHash } from '../../../shared/src/memory-use-history-runtime.mjs';
 
 export const LOCAL_USE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS local_use_collection_runs (
+ id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, principal TEXT NOT NULL,
+ project_id TEXT, task_id TEXT, turn_id TEXT, created_at INTEGER NOT NULL,
+ completed_calls INTEGER NOT NULL, delivered_items INTEGER NOT NULL,
+ observations INTEGER NOT NULL, recorded INTEGER NOT NULL, without_observation INTEGER NOT NULL,
+ gap_reason TEXT, rejection_counts_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS local_use_settings (id INTEGER PRIMARY KEY CHECK(id=1), settings_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS local_use_observation_receipts (
  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, principal TEXT NOT NULL,

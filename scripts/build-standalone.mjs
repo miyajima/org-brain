@@ -62,4 +62,18 @@ for (const relative of ["bin", "assets/wiki", "skills/org-brain-wiki"]) {
   try { await access(source); } catch { continue; }
   await cp(source, target, { recursive: true });
 }
+// A successful source test cannot certify an older/missing feature in a bundle.
+// Exercise the exact artifact against isolated data before making it releasable.
+try {
+  execFileSync(process.execPath, ["--test", resolve(repositoryRoot, "scripts/cli-intake-compatibility.test.mjs"),
+    resolve(repositoryRoot, "scripts/wiki-source-pagination.test.mjs")], {
+    cwd: repositoryRoot,
+    env: { ...process.env, ORGBRAIN_TEST_CLI: output },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+} catch (error) {
+  if (error.stdout) process.stderr.write(error.stdout);
+  if (error.stderr) process.stderr.write(error.stderr);
+  throw error;
+}
 process.stdout.write(`${output}\n`);
