@@ -89,6 +89,16 @@ test('unknown is not zero and saving is not evidence of task improvement', () =>
   assert.equal(classifyMemoryReviewAnswer('はい'), 'unknown');
 });
 
+test('explicit save commands approve the displayed content while questions and refusals do not', () => {
+  for (const answer of ['この内容で保存', 'この内容で保存して', 'この内容で保存してください', 'この内容で保存して、知識の繋がりページで選択された状態で表示して', 'この内容で保存して、詳細を開いてください']) {
+    assert.equal(classifyMemoryReviewAnswer(answer), 'accepted', answer);
+  }
+  for (const answer of ['この内容で保存していい？', 'この内容で保存して、いいですか？', 'この内容で保存して、表示できますか', 'この内容で保存する予定', '保存して表示して', 'はい']) {
+    assert.equal(classifyMemoryReviewAnswer(answer), 'unknown', answer);
+  }
+  assert.equal(classifyMemoryReviewAnswer('この内容で保存しないで表示して'), 'not_needed');
+});
+
 test('confirmation-only Stop queues a decision without automatic writes even with extraction enabled', async () => {
   const { writeFile } = await import('node:fs/promises');
   const root = await mkdtemp(path.join(tmpdir(), 'review-stop-'));

@@ -54,6 +54,14 @@ This repository owns all memory extraction and quality decisions. The shared Ast
 - Explicit user decision search is a deterministic, candidate-only OR lane in
   the project router. It does not persist memory, invoke an LLM in the hook, or
   add a hook batch; the existing safety screen and verifier remain mandatory.
+- Native question-tool answers have a separate deterministic local path in
+  `memory_learning_mode=eager`: successful submitted answers become searchable
+  task-scoped decisions through the existing local capture store. Replay is
+  idempotent and corrected answers revise the same decision. Merely showing a
+  question never saves a decision. Asynchronous questions wait for an actual
+  matching answer on UserPromptSubmit. This path performs no model inference,
+  cloud fallback or transcript read. Confirm/off retain their existing consent
+  behavior. See [Question-answer memory](QUESTION_ANSWER_MEMORY.md).
 - The optional `coverage/v1` extraction profile changes provider work inside
   that same batch to at most two calls. The Stop hook still invokes no LLM and
   sends at most one batch. See `MEMORY_EXTRACTION_COVERAGE_V1.md`.
@@ -74,6 +82,18 @@ This repository owns all memory extraction and quality decisions. The shared Ast
   memory by themselves. A tool failure is closed automatically only by a later
   successful execution with the same tool name and argument hash; otherwise
   textual or structured outcome evidence remains required.
+- Verifier v4 accepts unchanged, relevant workspace code when a current-turn
+  successful verification command is observed. A new edit is not evidence of
+  reuse. The optional `source:ID@VERSION#Lx-Ly` resolver checks immutable source
+  bytes through the configured personal Wiki CLI. This proves source provenance
+  only; it never upgrades a historical success report into execution evidence.
+- Local schema 32 stores per-turn collection counts and missing-evidence reasons
+  in the existing SQLite database. Known fulfilled tool-result envelopes are
+  decoded, but wrapper code is never interpreted. Delivery and use remain
+  distinct; no observation is not a negative assessment.
+- Automatic capture rejects transient completion reports. Conservative legacy
+  cleanup uses native suppression, preserves versions and usage history, and
+  never removes explicit decisions, preferences, constraints, or reusable lessons.
 - `PreCompact` checkpoints task commitments only; it is not a new-memory
   activation boundary.
 - Candidate hashes, category IDs, TTLs, redaction, and rejection reason codes

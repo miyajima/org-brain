@@ -32,7 +32,13 @@
   タスク全体が5秒以内という保証ではない。取得済み本文を削って要求サイズを収めることはしない。
 - shadowは最初の判定予測だけで、追加検索を実行しない。activeは費用資格v2の`search`を含む構成が必要。
   useだけの旧資格は使えない。実装hashと有効判断点集合を再確認するため、コード更新だけではactive化されない。
+  `ORGBRAIN_JEV_SEARCH_ACTIVATION=qualified|operator` は既定 `qualified`。送信対象と継続利用の範囲を了承した利用者が
+  `operator` を明示した場合だけ、cost目的の追加検索に限り資格評価前でもactiveにできる。capture/use/wikiの資格条件は変わらない。
+  質問・条件・読める候補の本文、根拠、再利用条件、出典参照を既存の伏せ字処理後にOpenRouterへ送る。
+  この設定は評価合格やLLM費用削減を意味しない。最大2回、50候補、5秒と既存のアクセス・版・期限確認は維持する。
 - `meta.context_search`は判断の範囲と停止理由を示す予測で、最終回答の正しさや根拠の確定ではない。
+  `activation_basis=operator_opt_in` は明示設定による有効化を示す。`request_count` は認証前の試行を含むため、
+  `resolved_model` と実応答を併せて確認する。
   最終の全文・条件・引用の梱包、応答全体のトークン予算、実際に返した項目だけの利用記録は既存処理を使う。
 
 比較準備は`memory:judgment:evaluate --objective cost --stages search --resolved-model MODEL`で行える。

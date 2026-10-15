@@ -39,8 +39,9 @@ export function createLocalContextSearchJudge({ dbPath, env = process.env, trans
     const policy = localJudgmentPolicy("search", context.project_id, env);
     const skipped = (reason) => ({ mode: policy.mode, applied: false, status: "skipped", reason_code: reason, coverage: {} });
     if (policy.mode === "off") return skipped("disabled");
-    if (policy.mode === "active" && (policy.objective !== "cost" || !await readJudgmentQualification(
-      env.ORGBRAIN_JEV_QUALIFICATION_FILE, "search", policy, { activeStages: activeLocalJudgmentStages(env) })))
+    const operatorActivation = env.ORGBRAIN_JEV_SEARCH_ACTIVATION === "operator";
+    if (policy.mode === "active" && (policy.objective !== "cost" || (!operatorActivation && !await readJudgmentQualification(
+      env.ORGBRAIN_JEV_QUALIFICATION_FILE, "search", policy, { activeStages: activeLocalJudgmentStages(env) }))))
       return skipped("qualification_required");
     const input = { original_request: context, requirements, search_options: options,
       evidence: results.map(({ memory }) => memoryJudgmentCandidate(memory)) };
@@ -53,6 +54,7 @@ export function createLocalContextSearchJudge({ dbPath, env = process.env, trans
     const report = await typed({ units, policy: { ...policy, timeout_ms: Math.min(policy.timeout_ms, timeoutMs) } });
     const certain = (id) => report.answers[id]?.confidence >= policy.threshold ? report.answers[id].choice : "uncertain";
     return { mode: policy.mode, applied: policy.mode === "active" && Object.keys(report.failures).length === 0,
+      activation_basis: policy.mode === "active" ? (operatorActivation ? "operator_opt_in" : "verified_task_outcomes") : "shadow",
       status: Object.keys(report.failures).length ? "fallback" : "judged",
       reason_code: Object.values(report.failures)[0] ?? null, query_type: certain("query_type"),
       coverage: Object.fromEntries(requirements.map(({ id }) => [id, certain(id)])), selected_option_id: certain("next_search"),
@@ -67,6 +69,7 @@ export async function searchContextWithFollowups({ initialResults, searchInput, 
   search, refresh, now = () => performance.now(), timeoutMs = TIMEOUT_MS }) {
   let results = initialResults;
   const report = { mode: "off", applied: false, basis: "prediction", additional_searches: 0,
+    activation_basis: null, request_count: 0, resolved_model: null,
     query_type: "unknown", coverage: "uncertain", requires_parent_review: true, reason_code: "disabled" };
   const finish = (reason) => ({ results, report: { ...report, reason_code: reason } });
   if (usagePurpose !== "task" || !searchInput.project_id) return finish("not_task_retrieval");
@@ -87,6 +90,9 @@ export async function searchContextWithFollowups({ initialResults, searchInput, 
     try { judgment = await bounded(() => judge({ context: requestContext, requirements, options: [...remaining.values()], results, timeoutMs: deadline - now() })); }
     catch (error) { return finish(error.message === "context_search_timeout" ? "timeout" : "judgment_unavailable"); }
     report.mode = judgment.mode;
+    report.activation_basis = judgment.activation_basis ?? null;
+    report.request_count += judgment.request_count ?? 0;
+    report.resolved_model = judgment.resolved_model ?? report.resolved_model;
     report.query_type = judgment.query_type ?? "unknown";
     const values = requirements.map(({ id }) => judgment.coverage?.[id] ?? "uncertain");
     report.coverage = values.every((value) => value === "covered") ? "covered" : values.includes("missing") ? "missing" : "uncertain";
