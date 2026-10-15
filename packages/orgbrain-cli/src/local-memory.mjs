@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { CLI_BUILD_INFO } from "./build-info.mjs";
 import { loadBundledJudgmentSettings } from "./lib/jev-runtime-settings.mjs";
+import { resolveMemoryMode } from './lib/memory-mode.mjs';
 import {
   DEFAULT_LOCAL_DB,
   LocalMemoryStore,
@@ -1374,6 +1375,14 @@ async function main() {
       const result = await commitmentStore.ingestToolResult(payload, tenantId);
       const learningMode = String(mapping.entry?.memory_learning_mode ?? "off").trim().toLowerCase();
       const localHookCaptureEnabled = process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== "false";
+      if (localHookCaptureEnabled && learningMode === 'eager' && !resolveMemoryMode().cloudMemoryEnabled && mapping.entry?.project_id) {
+        const { persistAnsweredQuestionDecisions } = await import('./lib/question-answer-memory.mjs');
+        result.question_answer_memories = await persistAnsweredQuestionDecisions(store,
+          result.commitments.map(item => item.commitment), { enabled: true, tenantId,
+            projectId: mapping.entry.project_id, workType: mapping.entry.default_work_type,
+            sensitivePolicy: mapping.entry.sensitive_memory });
+        result.pending_question = await commitmentStore.rememberAsyncQuestions(payload, tenantId);
+      }
       if (localHookCaptureEnabled && result.commitments?.length > 0 && ["confirm", "on", "shadow"].includes(learningMode)) {
         // ingestToolResult returns upsert receipts; the candidate builder needs
         // the committed task records themselves (the nested `commitment`).

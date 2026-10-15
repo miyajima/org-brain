@@ -42,6 +42,7 @@ const CONTINUATION_PROMPT = /(?:^|\s)(?:上記|前述|その|それ|これ|続�
 export const VERIFIED_LEARNING_HIDDEN_INSTRUCTION = MEMORY_CONTRACT_V2_PROMPT;
 export const EAGER_MEMORY_HIDDEN_INSTRUCTION = [
   "OrgBrain eager learning is enabled for this workspace.",
+  "Ask clarification and decision questions through the native request_user_input or request_user_input_async tool. In local eager mode, submitted answers are recorded as task-scoped user decisions by the hooks; do not duplicate them with observe or manual memory writes. A shown question or preselected option is never an answer. Ask one asynchronous question at a time. Its free-text answer must start with 回答:; never infer an answer from an unrelated follow-up message.",
   "If a current-turn OrgBrain search or context enrichment returns no relevant memory or recommends abstention, treat that as an internal status, continue from the current repository and available skills, and do not narrate the miss.",
   "A retrieval miss is not required for a verified orgbrain_memory_observe event. When a source-backed knowledge page is updated, observe only confirmed atomic decisions or reusable execution lessons, not the page body or raw sources.",
   "Do not claim that a memory was saved before the Stop hook runs, and do not perform an interactive memory write for this automatic path.",
@@ -206,6 +207,7 @@ async function workspaceScope(cwdInput, env) {
     // generic bucket explicit so retrievals can be measured and corrected.
     workType: mapped?.default_work_type ?? "other",
     learningMode: mapped?.memory_learning_mode ?? "off",
+    sensitivePolicy: mapped?.sensitive_memory,
     autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config),
     localMemoryEnabled: !mode.cloudMemoryEnabled
   };
@@ -355,8 +357,6 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   const payload = typeof payloadInput === "string" ? parsePayload(payloadInput) : payloadInput;
   if (!payload || !["UserPromptSubmit", "SessionStart", "PostCompact"].includes(hookEventName(payload))) return null;
   const prompt = compact(payload.prompt || "task continuity", 4_000);
-  if (hookEventName(payload) === "UserPromptSubmit" && (prompt.length < 4 || SKIP_PROMPTS.test(prompt))) return null;
-
   const env = options.env ?? process.env;
   const scope = await workspaceScope(payload.cwd, env);
   if (!scope) return null;
@@ -372,6 +372,21 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   const commitmentStore = options.commitmentStore ?? new TaskCommitmentStore(
     options.commitmentDbPath || options.store?.dbPath || env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB
   );
+  if (hookEventName(payload) === 'UserPromptSubmit' && taskIdentityPresent && scope.localMemoryEnabled
+    && scope.learningMode === 'eager' && env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false') {
+    const { persistAnsweredQuestionDecisions } = await import('./lib/question-answer-memory.mjs');
+    const answers = await commitmentStore.answerPendingQuestion({ tenantId: scope.tenantId,
+      projectId: scope.projectId, taskKey, prompt: payload.prompt ?? '' });
+    if (answers.length) {
+      const saved = await persistAnsweredQuestionDecisions(options.store ?? new LocalMemoryStore(env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB),
+        answers.map(item => item.commitment), { enabled: true, tenantId: scope.tenantId, projectId: scope.projectId,
+          workType: scope.workType, sensitivePolicy: scope.sensitivePolicy });
+      if (saved.saved + saved.deduplicated > 0) {
+        for (const answer of answers) await commitmentStore.completePendingQuestion(answer.question_request_id);
+      }
+    }
+  }
+  if (hookEventName(payload) === "UserPromptSubmit" && (prompt.length < 4 || SKIP_PROMPTS.test(prompt))) return null;
   const directReviewResolutions = hookEventName(payload) === "UserPromptSubmit" && taskIdentityPresent
     ? await commitmentStore.resolveMemoryConfirmationsFromPrompt({
       tenantId: scope.tenantId,

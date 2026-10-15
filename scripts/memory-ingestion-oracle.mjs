@@ -16,7 +16,7 @@ import { createCodexSessionImportReport } from "../packages/orgbrain-cli/src/cod
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const DEFAULT_ORACLE = path.join(
   ROOT,
-  "packages/shared/test/fixtures/memory-ingestion-oracle-v1.json"
+  "packages/shared/test/fixtures/memory-ingestion-oracle-v2.json"
 );
 export const DEFAULT_ORACLE_LOCK = `${DEFAULT_ORACLE}.sha256`;
 

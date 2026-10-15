@@ -20,3 +20,19 @@ test("bundled Jev settings respect explicit off and cannot persist provider cred
     await assert.rejects(loadBundledJudgmentSettings(options),/invalid_bundled_judgment_settings/u);
   }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test("bundled settings validate search activation and respect explicit qualified activation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "jev-activation-settings-"));
+  try {
+    await mkdir(join(root, "dist"));
+    const options = { buildInfo: { source: "standalone" }, bundleUrl: pathToFileURL(join(root, "dist/orgbrain.mjs")).href, env: {} };
+    await writeFile(join(root, "jev-settings.json"), JSON.stringify({ ORGBRAIN_JEV_SEARCH_ACTIVATION: "operator" }));
+    await loadBundledJudgmentSettings(options);
+    assert.equal(options.env.ORGBRAIN_JEV_SEARCH_ACTIVATION, "operator");
+    options.env.ORGBRAIN_JEV_SEARCH_ACTIVATION = "qualified";
+    await loadBundledJudgmentSettings(options);
+    assert.equal(options.env.ORGBRAIN_JEV_SEARCH_ACTIVATION, "qualified");
+    await writeFile(join(root, "jev-settings.json"), JSON.stringify({ ORGBRAIN_JEV_SEARCH_ACTIVATION: "invalid" }));
+    await assert.rejects(loadBundledJudgmentSettings(options), /invalid_bundled_judgment_settings/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

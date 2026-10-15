@@ -139,7 +139,7 @@ function normalizeAnswer(raw, options) {
     return (optionLabel && optionLabel.toLocaleLowerCase().replace(/\s+/gu, " ").trim() === normalized) ||
       (optionId && optionId === normalized);
   });
-  const optionLabel = option ? text(option.label ?? option.value ?? option, 500) : null;
+  const optionLabel = option ? redact(text(option.label ?? option.value ?? option, 500)) : null;
   return {
     option_id: option ? slug(option.id ?? optionLabel, "option") : null,
     label: optionLabel || label,
@@ -208,7 +208,7 @@ function appendMemoryLabel(db, row, label, response, now) {
 }
 
 function questionFingerprint(question) {
-  const questionText = text(question?.question ?? question?.prompt ?? question?.label, 1_000);
+  const questionText = text(question?.question ?? question?.title ?? question?.prompt ?? question?.label, 1_000);
   const options = Array.isArray(question?.options) ? question.options : [];
   return `sha256:${hash(stableJson({
     question: normalizeCommitmentText(questionText),
@@ -291,6 +291,9 @@ export function extractTaskCommitments(payloadInput) {
   if (!hasTaskIdentity(payload)) return [];
   const questions = questionList(input);
   if (questions.length === 0) return [];
+  const response = toolResultObject(payload);
+  if (response.result == null || payload.is_error || response.object?.isError || response.object?.error
+    || ['failed', 'rejected', 'cancelled', 'canceled'].includes(response.object?.status)) return [];
   const result = payload.tool_result ?? payload.tool_response ?? payload.result ?? payload.output ?? payload.tool_output ?? payload.response;
   const answers = answersFromResult(result);
   const taskKey = taskKeyFromHookPayload(payload);
@@ -300,7 +303,9 @@ export function extractTaskCommitments(payloadInput) {
     if (isMemoryQuestion(question)) return [];
     const questionText = text(question?.question ?? question?.title ?? question?.prompt ?? question?.label, 1_000);
     if (!questionText) return [];
-    const decisionKey = slug(question?.id ?? question?.header ?? questionText);
+    const decisionKey = question?.id || question?.header
+      ? slug(question.id ?? question.header)
+      : `question_${hash(normalizeCommitmentText(questionText)).slice(0, 32)}`;
     if (decisionKey.startsWith(MEMORY_CONFIRMATION_QUESTION_PREFIX)) return [];
     const options = Array.isArray(question?.options) ? question.options : [];
     const answer = normalizeAnswer(answerFor(answers, { id: text(question?.id ?? question?.header, 160) }, index), options);
@@ -460,6 +465,12 @@ export class TaskCommitmentStore {
           WHERE superseded_at IS NULL;
         CREATE INDEX IF NOT EXISTS idx_task_commitments_context
           ON task_commitments(tenant_id, project_id, task_key, expires_at);
+        CREATE TABLE IF NOT EXISTS task_question_requests (
+          id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT NOT NULL,
+          task_key TEXT NOT NULL, questions_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+          answered_at INTEGER, superseded_at INTEGER
+        );
         CREATE TABLE IF NOT EXISTS task_commitment_semantic_aliases (
           id TEXT PRIMARY KEY,
           tenant_id TEXT NOT NULL,
@@ -649,7 +660,7 @@ export class TaskCommitmentStore {
         "explicit_user",
         commitment.confirmation_state === "user_corrected" ? "user_corrected" : "user_confirmed",
         "reuse_until_superseded",
-        "request_user_input_result",
+        commitment.evidence?.type ?? "request_user_input_result",
         commitment.evidence?.digest ?? `sha256:${hash(answerJson)}`,
         version,
         now,
@@ -677,6 +688,71 @@ export class TaskCommitmentStore {
     const memoryConfirmations = await this.resolveMemoryConfirmationsFromToolResult(payload, tenantId);
     const receipt = await this.recordMemoryConfirmationReceipt(payload, tenantId);
     return { commitments: results, count: results.length, memory_confirmations: memoryConfirmations, ...(receipt ? { memory_receipt: receipt } : {}) };
+  }
+
+  async rememberAsyncQuestions(payloadInput, tenantId = 'default') {
+    const { payload, input, toolName } = toolInputFromPayload(payloadInput);
+    const response = toolResultObject(payload);
+    if (!/(?:^|[.:/])request_user_input_async$/u.test(toolName) || !hasTaskIdentity(payload)
+      || !payload.project_id || response.result == null || response.object?.isError || response.object?.error || payload.is_error
+      || ['failed', 'rejected', 'cancelled', 'canceled'].includes(response.object?.status)
+      || extractTaskCommitments(payload).length > 0) return false;
+    const questions = questionList(input).filter(q => !isMemoryQuestion(q)).slice(0, 16).map(q => ({
+      ...q, id: q.id || q.header || `question_${hash(normalizeCommitmentText(q.question ?? q.title)).slice(0, 32)}`
+    }));
+    if (!questions.length) return false;
+    await this.init();
+    const taskKey = taskKeyFromHookPayload(payload);
+    const id = hash(JSON.stringify([tenantId, payload.project_id, taskKey, payload.tool_call_id ?? payload.call_id, questions]));
+    const db = this.open();
+    try {
+      db.exec('BEGIN IMMEDIATE');
+      const existing = db.prepare('SELECT id FROM task_question_requests WHERE id=?').get(id);
+      if (existing) { db.exec('COMMIT'); return false; }
+      const now = Date.now();
+      db.prepare('UPDATE task_question_requests SET superseded_at=? WHERE tenant_id=? AND project_id=? AND task_key=? AND answered_at IS NULL AND superseded_at IS NULL').run(now, tenantId, payload.project_id, taskKey);
+      db.prepare('INSERT INTO task_question_requests(id,tenant_id,project_id,task_key,questions_json,created_at,expires_at) VALUES(?,?,?,?,?,?,?)')
+        .run(id, tenantId, payload.project_id, taskKey, redactedJson(questions), now, now + DAY_MS);
+      db.exec('COMMIT');
+      return true;
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+    finally { db.close(); await secureDatabaseFiles(this.dbPath); }
+  }
+
+  async answerPendingQuestion({ tenantId, projectId, taskKey, prompt }) {
+    await this.init();
+    const db = this.open();
+    try {
+      const row = db.prepare('SELECT * FROM task_question_requests WHERE tenant_id=? AND project_id=? AND task_key=? AND superseded_at IS NULL AND answered_at IS NULL AND expires_at>? ORDER BY created_at DESC LIMIT 1')
+        .get(tenantId, projectId, taskKey, Date.now());
+      if (!row) return [];
+      const questions = JSON.parse(row.questions_json);
+      // A plain reply cannot unambiguously answer multiple pending questions.
+      if (questions.length !== 1) return [];
+      const question = questions[0];
+      const answer = text(prompt);
+      const options = question.options ?? [];
+      const matches = options.map(o => typeof o === 'string' ? o : o.label ?? o.value)
+        .filter(label => normalizeCommitmentText(label) === normalizeCommitmentText(answer));
+      const explicit = answer.match(/^(?:回答|答え|answer)\s*[:：]\s*(.+)$/iu)?.[1];
+      if (matches.length !== 1 && !explicit) return [];
+      const payload = { session_id: taskKey.replace(/^codex:/u, ''), project_id: projectId,
+        tool_name: 'request_user_input_async', tool_input: { questions },
+        tool_result: { answers: { [question.id]: explicit ?? matches[0] } } };
+      const [commitment] = extractTaskCommitments(payload);
+      if (!commitment) return [];
+      commitment.evidence = { type: 'user_prompt_answer', digest: `sha256:${hash(stableJson({ question, answer }))}` };
+      const receipt = await this.upsert({ ...commitment, tenant_id: tenantId });
+      // Leave the request pending until memory persistence succeeds, so failures retry.
+      return [{ ...receipt, question_request_id: row.id }];
+    } finally { db.close(); }
+  }
+
+  async completePendingQuestion(id) {
+    await this.init();
+    const db = this.open();
+    try { db.prepare('UPDATE task_question_requests SET answered_at=? WHERE id=? AND answered_at IS NULL').run(Date.now(), id); }
+    finally { db.close(); await secureDatabaseFiles(this.dbPath); }
   }
 
   async queueMemoryConfirmations({ tenantId = "default", projectId = null, taskKey, candidates = [], now = Date.now() } = {}) {

@@ -144,7 +144,8 @@ VALUES('admin-smoke-policy','default','memory','admin-smoke-memory','group','use
 
     const before = await apiJson(apiBase, `/v1/groups/${GROUP_ID}/members/${encodeURIComponent(MEMBER)}/impact?tenant_id=default`);
     if (before.data?.impact?.lost_count !== 1 || !before.data?.impact_digest) throw new Error("impact_preview_not_proven");
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: true,
+      ...(process.env.ORGBRAIN_SMOKE_BROWSER_EXECUTABLE ? { executablePath: process.env.ORGBRAIN_SMOKE_BROWSER_EXECUTABLE } : {}) });
     const page = await browser.newPage();
     await page.goto(`${consoleBase}/groups/${GROUP_ID}?tenant_id=default`);
     const remove = page.getByRole("button", { name: "Remove Smoke User from group" });
