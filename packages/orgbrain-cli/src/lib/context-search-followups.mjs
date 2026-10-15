@@ -83,6 +83,11 @@ export async function searchContextWithFollowups({ initialResults, searchInput, 
     principal_id: searchInput.principal_id, query: searchInput.query };
   for (;;) {
     if (now() >= deadline) return finish("timeout");
+    let initialFresh;
+    try { initialFresh = await bounded(() => refresh(results)); }
+    catch (error) { return finish(error.message === "context_search_timeout" ? "timeout" : "refresh_unavailable"); }
+    results = initialFresh.results;
+    if (initialFresh.changed) { report.coverage = "uncertain"; return finish("source_changed"); }
     let judgment;
     try { judgment = await bounded(() => judge({ context: requestContext, requirements, options: [...remaining.values()], results, timeoutMs: deadline - now() })); }
     catch (error) { return finish(error.message === "context_search_timeout" ? "timeout" : "judgment_unavailable"); }
@@ -91,7 +96,9 @@ export async function searchContextWithFollowups({ initialResults, searchInput, 
     const values = requirements.map(({ id }) => judgment.coverage?.[id] ?? "uncertain");
     report.coverage = values.every((value) => value === "covered") ? "covered" : values.includes("missing") ? "missing" : "uncertain";
     if (judgment.mode === "off" || judgment.status === "skipped") return finish(judgment.reason_code ?? "disabled");
-    const fresh = await refresh(results);
+    let fresh;
+    try { fresh = await bounded(() => refresh(results)); }
+    catch (error) { return finish(error.message === "context_search_timeout" ? "timeout" : "refresh_unavailable"); }
     results = fresh.results;
     if (fresh.changed) { report.coverage = "uncertain"; return finish("source_changed"); }
     if (now() >= deadline) return finish("timeout");

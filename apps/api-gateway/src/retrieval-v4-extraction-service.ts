@@ -18,6 +18,11 @@ type V4ExtractionRecord = {
   valid_from: number | null;
   valid_until: number | null;
   source_references: MemorySourceReference[];
+  current_version?: number;
+  content_hash?: string;
+  rationale?: string | null;
+  reuse_rule?: string | null;
+  learning_json?: string | null;
 };
 
 type StructuredUnit = {
@@ -44,9 +49,14 @@ export function parseGeminiV4Units(value: unknown): StructuredUnit[] {
     const speaker = ["user", "assistant", "system", "tool", "unknown"].includes(String(item.speaker))
       ? String(item.speaker) as StructuredUnit["speaker"]
       : null;
-    const eventAt = typeof item.normalized_at === "number" && Number.isFinite(item.normalized_at)
-      ? item.normalized_at
+    const eventAt = typeof item.event_at === "number" && Number.isFinite(item.event_at)
+      ? item.event_at
       : null;
+    const mentionedAt = typeof item.mentioned_at === "number" && Number.isFinite(item.mentioned_at)
+      ? item.mentioned_at
+      : typeof item.normalized_at === "number" && Number.isFinite(item.normalized_at)
+        ? item.normalized_at
+        : null;
     return [{
       text,
       speaker,
@@ -58,13 +68,15 @@ export function parseGeminiV4Units(value: unknown): StructuredUnit[] {
         object: typeof item.object === "string" ? item.object : text,
         polarity: item.polarity === "negative" ? "negative" : "positive",
         domain: typeof item.domain === "string" ? item.domain : "general",
-        normalized_at: eventAt,
+        normalized_at: mentionedAt,
+        mentioned_at: mentionedAt,
+        event_time_basis: eventAt === null ? "source_capture" : "structured_event_text",
         facet_kind: typeof item.facet_kind === "string" ? item.facet_kind : null,
         state_key: typeof item.state_key === "string" ? item.state_key : null,
         supersedes_unit_id:
           typeof item.supersedes_unit_id === "string" ? item.supersedes_unit_id : null,
-        starts_at: typeof item.starts_at === "number" ? item.starts_at : eventAt,
-        ends_at: typeof item.ends_at === "number" ? item.ends_at : null,
+        starts_at: typeof item.starts_at === "number" && Number.isFinite(item.starts_at) ? item.starts_at : eventAt,
+        ends_at: typeof item.ends_at === "number" && Number.isFinite(item.ends_at) ? item.ends_at : null,
         causes: Array.isArray(item.causes) ? item.causes.slice(0, 16) : [],
         follows: Array.isArray(item.follows) ? item.follows.slice(0, 16) : []
       }
@@ -92,6 +104,8 @@ async function geminiStructuredUnits(env: Env, record: V4ExtractionRecord): Prom
               "Extract generic memory units from the supplied text.",
               "Return atomic subject/predicate/object/polarity/domain/time facts,",
               "profile facets, state updates with supersedes, and timeline events.",
+              "event_at is an explicit event occurrence time in Unix milliseconds; mentioned_at is a date mentioned in the text.",
+              "Do not turn a mentioned date, planned date or source capture date into an event occurrence. Omit event_at when unknown.",
               "Do not answer questions and do not infer benchmark labels.",
               JSON.stringify({ summary: record.summary, content: record.content.slice(0, 64 * 1024) })
             ].join("\n")
@@ -117,6 +131,8 @@ async function geminiStructuredUnits(env: Env, record: V4ExtractionRecord): Prom
                     polarity: { type: "STRING" },
                     domain: { type: "STRING" },
                     normalized_at: { type: "NUMBER" },
+                    event_at: { type: "NUMBER" },
+                    mentioned_at: { type: "NUMBER" },
                     facet_kind: { type: "STRING" },
                     state_key: { type: "STRING" },
                     supersedes_unit_id: { type: "STRING" },

@@ -5,7 +5,8 @@ vi.mock("../src/memory-search-service", () => ({
   bestEffortMarkMemoryResultsAccessed: vi.fn()
 }));
 
-vi.mock("../src/memory-effect-service", () => ({
+vi.mock("../src/memory-effect-service", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/memory-effect-service")>(),
   recordMemoryUsage: vi.fn(async () => ({
     usage_id: "usage-1",
     usage_item_ids: ["item-1"],
@@ -15,11 +16,13 @@ vi.mock("../src/memory-effect-service", () => ({
 }));
 
 import { retrieveMemoryContext } from "../src/memory-context-service";
+import { countContextTokens } from "@org-brain/shared";
+import { recordMemoryUsage } from "../src/memory-effect-service";
 import { searchMemories } from "../src/memory-search-service";
 
 const search = vi.mocked(searchMemories);
 
-function database(units: Array<Record<string, unknown>> = []) {
+function database(units: Array<Record<string, unknown>> = [], contents: Record<string, string> = {}) {
   const statement = {
     bind() {
       return this;
@@ -30,7 +33,11 @@ function database(units: Array<Record<string, unknown>> = []) {
   };
   return {
     prepare(query: string) {
-      return { ...statement, async all() { return { results: query.includes("FROM memory_retrieval_units_v4") ? units : [] }; } };
+      let bindings: unknown[] = [];
+      return { ...statement, bind(...args: unknown[]) { bindings = args; return this; },
+        async all() { return { results: query.includes("FROM memory_retrieval_units_v4") ? units.map(unit => ({ ...unit,
+          metadata_json: unit.metadata_json ?? JSON.stringify({ source_memory_id: unit.memory_id, source_version: 1 }) })) : query.includes("confidence_score, content")
+          ? bindings.slice(1).map(id => ({ id, content: contents[String(id)] ?? `BODY-${id}`, current_version: 1, lifecycle_state: "active", valid_until: null, expires_at: null })) : [] }; } };
     }
   };
 }
@@ -92,6 +99,7 @@ function searchPayload(results: ReturnType<typeof hit>[], semanticAvailable: boo
 describe("retrieveMemoryContext", () => {
   beforeEach(() => {
     search.mockReset();
+    vi.mocked(recordMemoryUsage).mockClear();
   });
 
   it("rechecks natural task coverage after top_k and token budgeting before recording delivery", async () => {
@@ -103,12 +111,12 @@ describe("retrieveMemoryContext", () => {
     payload.q = q;
     const meta = { ...payload.meta, task_query: { applied: true, coverage: "covered", basis: "lexical_relevance", requires_parent_review: true } };
     search.mockResolvedValue({ ...payload, meta } as never);
-    const missing = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 1, token_budget: 512 });
+    const missing = await retrieveMemoryContext({ OPEN_BRAIN_DB: database([], { rollback: "Rollback checks require a fixture.", cache: "Cache rules require a checksum." }) } as never, { q, top_k: 1, token_budget: 1600 });
     expect(missing.evidence_bundle.evidence).toEqual([]);
     expect(missing.meta.task_query?.coverage).toBe("missing");
     expect(missing.meta.usage_items).toEqual([]);
     expect(missing.meta.top_result_ids).toEqual([]);
-    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 2, token_budget: 512 });
+    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database([], { rollback: "Rollback checks require a fixture.", cache: "Cache rules require a checksum." }) } as never, { q, top_k: 2, token_budget: 1600 });
     expect(covered.evidence_bundle.evidence).toHaveLength(2);
     expect(covered.meta.task_query?.coverage).toBe("covered");
   });
@@ -121,7 +129,7 @@ describe("retrieveMemoryContext", () => {
       { memory_id: "rollback", unit_type: "atomic", text: "Reason: preserve synthetic scope.", extraction_state: "degraded" },
       { memory_id: "rollback", unit_type: "segment", text: "Rollback checks require a fixture. Stop on mismatch.", extraction_state: "degraded" }
     ]) };
-    const response = await retrieveMemoryContext(env as never, { q, top_k: 1, token_budget: 512 });
+    const response = await retrieveMemoryContext(env as never, { q, top_k: 1, token_budget: 1600 });
     expect(response.meta.task_query?.coverage).toBe("covered");
     expect(response.evidence_bundle.evidence[0]?.text).toContain("Stop on mismatch");
     expect(JSON.stringify(response.evidence_bundle.evidence)).not.toContain("Reason:");

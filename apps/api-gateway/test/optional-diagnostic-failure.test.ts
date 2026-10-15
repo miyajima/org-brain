@@ -1,3 +1,4 @@
+import { countContextTokens } from '@org-brain/shared';
 import { describe, expect, it } from 'vitest';
 import event from './fixtures/optional-diagnostic-failure.json';
 import { stageConversationMemories } from '../src/conversation-memory-service';
@@ -31,7 +32,7 @@ describe('synthetic optional diagnostics lesson and task scope', () => {
       const pending = await stage(env);
       const confirmation = { tenant_id: 'fixture', confirmation_token: pending.receipts[0].confirmation_token, expected_candidate_hash: pending.receipts[0].candidate_hash, expected_revision: pending.receipts[0].revision, approved: true };
       expect((await searchMemories(env, query, { actorPrincipal: owner })).results).toEqual([]);
-      expect((await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 512 }, { actorPrincipal: owner })).evidence_bundle.evidence).toEqual([]);
+      expect((await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 2500 }, { actorPrincipal: owner })).evidence_bundle.evidence).toEqual([]);
       await expect(confirmProposedMemory(env, confirmation, owner)).rejects.toThrow('actual user answer');
       await expect(confirmProposedMemory(env, { ...confirmation, review_answer: event.sources[0].text }, owner)).rejects.toThrow('does not approve');
       // Synthetic review of this displayed fixture only. No real user's choice is inferred.
@@ -41,17 +42,18 @@ describe('synthetic optional diagnostics lesson and task scope', () => {
       expect(row.verification_state).toBe('unverified');
       expect(row.reuse_rule).toBe(event.candidates[0].reuse_rule);
       expect(JSON.parse(row.source_refs_json).map((ref: any) => ref.role)).toEqual(expect.arrayContaining(['user', 'assistant', 'supplied_unverified']));
-      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 512 }, { actorPrincipal: owner });
+      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 2500 }, { actorPrincipal: owner });
       const text = context.evidence_bundle.evidence.map(item => item.text).join('\n');
       expect(context.meta.task_query?.coverage).toBe('covered');
       for (const required of ['skills/job/SKILL.md', 'mandatory safe read gate', 'optional unless', '<current-job-id>', 'stop on mismatch', 'without expanding IAM', 'Refresh', 'unverified']) {
         expect(text).toContain(required);
       }
       expect(text.length).toBeLessThan(1_000);
+      expect(countContextTokens(context)).toBeLessThanOrEqual(2500);
       expect(sql.prepare('SELECT count(*) AS n FROM memories').get().n).toBe(1);
       // A fixture-only oversized current capsule must not deliver a command without its conditions.
-      sql.prepare('UPDATE memories SET content=content || ?, current_version=current_version+1 WHERE id=?').run(' Additional fixture detail.'.repeat(80), saved.memory_id);
-      const insufficient = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 512 }, { actorPrincipal: owner });
+      sql.prepare('UPDATE memories SET content=content || ?, current_version=current_version+1 WHERE id=?').run(' Additional fixture detail.'.repeat(800), saved.memory_id);
+      const insufficient = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 2500 }, { actorPrincipal: owner });
       expect(insufficient.evidence_bundle.evidence).toEqual([]);
       expect(insufficient.meta.task_query?.coverage).toBe('missing');
       expect(insufficient.meta.usage_items).toEqual([]);
@@ -74,7 +76,7 @@ describe('synthetic optional diagnostics lesson and task scope', () => {
       // Isolated SQLite fixture clock expiry, never an operational pending DB mutation.
       sql.prepare('UPDATE task_commitments SET expires_at=?').run(now - 1);
       expect((await getTaskCommitmentContext(env, { ...scope, task_key: 'task-current' })).commitments).toEqual([]);
-      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 512 }, { actorPrincipal: owner });
+      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 2500 }, { actorPrincipal: owner });
       expect(context.evidence_bundle.evidence).toHaveLength(1);
       expect(JSON.stringify(context.evidence_bundle.evidence)).not.toContain('three fixture attempts');
       expect(sql.prepare('SELECT count(*) AS n FROM memories').get().n).toBe(1);

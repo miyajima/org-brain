@@ -637,6 +637,24 @@
             "type": "string",
             "maxLength": 128
           },
+          "trace_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "external_run_id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "usage_purpose": {
+            "type": "string",
+            "enum": [
+              "task",
+              "audit",
+              "diagnostic",
+              "test",
+              "unclassified"
+            ]
+          },
           "max_tokens": {
             "type": "integer",
             "minimum": 500,
@@ -3616,6 +3634,24 @@
           "task_id": {
             "type": "string",
             "maxLength": 128
+          },
+          "trace_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "external_run_id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "usage_purpose": {
+            "type": "string",
+            "enum": [
+              "task",
+              "audit",
+              "diagnostic",
+              "test",
+              "unclassified"
+            ]
           },
           "task_context": {
             "type": "object",

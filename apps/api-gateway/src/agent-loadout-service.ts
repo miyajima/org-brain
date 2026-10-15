@@ -450,6 +450,7 @@ export async function resolveAgentLoadoutContext(
     taskText: string;
     maxTokens?: number;
     recordUsage?: boolean;
+    deferUsage?: (statements: D1PreparedStatement[]) => void;
     usageEvent?: "previewed" | "resolved";
     enforceRuntimeFlag?: boolean;
   }
@@ -600,7 +601,8 @@ export async function resolveAgentLoadoutContext(
     usageStatements.push(env.OPEN_BRAIN_DB.prepare(
       `UPDATE agents SET last_used_at = ?, updated_at = MAX(updated_at, ?) WHERE tenant_id = ? AND id = ?`
     ).bind(now, now, args.tenantId, agent.id));
-    await env.OPEN_BRAIN_DB.batch(usageStatements);
+    if (args.deferUsage) args.deferUsage(usageStatements);
+    else await env.OPEN_BRAIN_DB.batch(usageStatements);
   }
   return {
     contract_version: AGENT_LOADOUT_CONTRACT_VERSION,

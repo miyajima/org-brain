@@ -6,6 +6,7 @@ import {
   RETRIEVAL_SEGMENT_OVERLAP_RATIO,
   RETRIEVAL_UNIT_EXTRACTOR,
   RETRIEVAL_UNIT_EXTRACTOR_V4,
+  RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION,
   analyzeRetrievalIntent as analyzeCoreRetrievalIntent,
   buildRetrievalUnits as buildCoreRetrievalUnits,
   buildRetrievalUnitsV4 as buildCoreRetrievalUnitsV4,
@@ -14,6 +15,7 @@ import {
   retrievalSubjectQueryTokens,
   retrievalUnitIntentBoost,
   retrievalUnitLexicalSpecificity,
+  retrievalUnitSourceMetadata,
   splitRetrievalTurns
 } from "./retrieval-units-core.mjs";
 
@@ -23,6 +25,7 @@ export {
   RETRIEVAL_SEGMENT_OVERLAP_RATIO,
   RETRIEVAL_UNIT_EXTRACTOR,
   RETRIEVAL_UNIT_EXTRACTOR_V4,
+  RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION,
   retrievalQueryTokens,
   retrievalSubjectQueryTokens,
   retrievalUnitIntentBoost,
@@ -31,7 +34,6 @@ export {
 };
 
 export const RETRIEVAL_UNIT_EXTRACTOR_VERSION = "1";
-export const RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION = "4";
 
 export type RetrievalUnitType =
   | "session"
@@ -96,7 +98,10 @@ type RetrievalUnitRecord = Pick<
   | "valid_from"
   | "valid_until"
   | "source_references"
-> & Partial<Pick<MemoryRecordV2, "kind">>;
+> & Partial<Pick<MemoryRecordV2, "kind" | "current_version" | "content_hash" | "rationale">> & {
+  reuse_rule?: string | null;
+  learning_json?: string | null;
+};
 
 export type VerifiedLearningRetrievalRecord = RetrievalUnitRecord & {
   capture_origin?: string | null;
@@ -204,7 +209,11 @@ export async function buildRetrievalUnitsV4(
       source_span_start: null,
       source_span_end: null,
       content_hash: await sha256(text),
-      metadata_json: JSON.stringify(candidate.metadata),
+      metadata_json: JSON.stringify({
+        ...candidate.metadata,
+        ...retrievalUnitSourceMetadata(record),
+        evidence_status: "extracted_unverified"
+      }),
       segment_id: null,
       extractor: RETRIEVAL_UNIT_EXTRACTOR_V4,
       extractor_version: RETRIEVAL_UNIT_EXTRACTOR_V4_VERSION,
@@ -212,6 +221,18 @@ export async function buildRetrievalUnitsV4(
       degraded_reason: null,
       created_at: record.updated_at
     });
+  }
+
+  // Structured extraction must not discard the persisted applicability contract.
+  // These support channels use the same deterministic projection as Local.
+  const supportChannels = new Set(["rationale", "reuse_or_avoidance", "learning_context"]);
+  for (const unit of buildCoreRetrievalUnitsV4(record) as RetrievalUnitV4[]) {
+    const metadata = JSON.parse(unit.metadata_json) as Record<string, unknown>;
+    if (unit.unit_type === "profile" && supportChannels.has(String(metadata.channel))) {
+      const existing = output.findIndex((candidate) => candidate.id === unit.id);
+      if (existing >= 0) output[existing] = unit;
+      else output.push(unit);
+    }
   }
 
   for (const [segmentIndex, text] of (options.includeRecordSegments === false
@@ -235,6 +256,8 @@ export async function buildRetrievalUnitsV4(
       source_span_end: null,
       content_hash: await sha256(text),
       metadata_json: JSON.stringify({
+        ...retrievalUnitSourceMetadata(record),
+        evidence_status: "extracted_unverified",
         level: "record",
         record_count: 1,
         overlap_ratio: RETRIEVAL_SEGMENT_OVERLAP_RATIO,

@@ -1,3 +1,4 @@
+import { boundedRetrievalFusion } from "../../../shared/src/retrieval-fusion.mjs";
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { createLocalContextSearchJudge, searchContextWithFollowups } from "./context-search-followups.mjs";
@@ -2691,32 +2692,30 @@ function searchRetrievalUnitsV3(db, {
   }
 
   const localSemanticRrfWeight = intent.speaker === "assistant" ? 0.6 : 0.35;
-  const fusedByUnit = new Map();
-  lexicalRows.forEach((row, index) => {
-    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
-  });
-  subjectLexicalRows.forEach((row, index) => {
-    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1.25 / (60 + index + 1));
-  });
-  temporalLexicalRows.forEach((row, index) => {
-    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
-  });
-  temporalRelevanceRows.forEach((row, index) => {
-    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 1 / (60 + index + 1));
-  });
-  semanticRows.forEach((row, index) => {
-    if (!unitById.has(row.unitId)) return;
-    fusedByUnit.set(
-      row.unitId,
-      (fusedByUnit.get(row.unitId) ?? 0) + localSemanticRrfWeight / (60 + index + 1)
-    );
-  });
-  temporalRows.forEach((row, index) => {
-    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 0.75 / (60 + index + 1));
-  });
-  intentRows.forEach((row, index) => {
-    fusedByUnit.set(row.id, (fusedByUnit.get(row.id) ?? 0) + 0.8 / (60 + index + 1));
-  });
+  const eligibleIds = [...new Set([...unitById.values()].map((unit) => unit.memory_id))];
+  const eligibleParents = new Set(eligibleIds.length ? db.prepare(
+    `SELECT * FROM memories WHERE tenant_id = ? AND id IN (${eligibleIds.map(() => "?").join(",")})`
+  ).all(tenantId, ...eligibleIds).map(memoryFromRow).filter((memory) =>
+    canReadMemory(memory, principalId) && (includeSuppressed || memory.lifecycle_state !== "suppressed")
+    && (memory.valid_from == null || memory.valid_from <= at)
+    && (memory.valid_until == null || memory.valid_until > at)
+    && (memory.expires_at == null || memory.expires_at > at)
+  ).map((memory) => memory.id) : []);
+  for (const [id, unit] of unitById) if (!eligibleParents.has(unit.memory_id)) unitById.delete(id);
+  const rowHits = (rows) => rows.filter((row) => unitById.has(row.id)).map((row) => ({ id: row.id, sourceId: row.memory_id }));
+  const fusion = boundedRetrievalFusion([
+    { name: "lexical", hits: rowHits(lexicalRows) },
+    { name: "subject", weight: 1.25, hits: rowHits(subjectLexicalRows) },
+    { name: "temporal_lexical", hits: rowHits(temporalLexicalRows) },
+    { name: "temporal_relevance", hits: rowHits(temporalRelevanceRows) },
+    { name: "sparse", weight: localSemanticRrfWeight, hits: semanticRows.flatMap((row) => {
+      const unit = unitById.get(row.unitId);
+      return unit ? [{ id: row.unitId, sourceId: unit.memory_id }] : [];
+    }) },
+    { name: "temporal", weight: .75, hits: rowHits(temporalRows) },
+    { name: "intent", weight: .8, hits: rowHits(intentRows) }
+  ]);
+  const fusedByUnit = fusion.unitScores;
   const lexicalSpecificity = retrievalUnitLexicalSpecificity([...unitById.values()], query);
   const parentScores = new Map();
   for (const [unitId, baseScore] of fusedByUnit) {
@@ -2733,7 +2732,7 @@ function searchRetrievalUnitsV3(db, {
   }
   if (parentScores.size === 0) return [];
 
-  const parentIds = [...parentScores.keys()];
+  const parentIds = fusion.candidateIds;
   const placeholders = parentIds.map(() => "?").join(",");
   const memories = db.prepare(
     `SELECT * FROM memories WHERE tenant_id = ? AND id IN (${placeholders})`
@@ -2756,6 +2755,7 @@ function searchRetrievalUnitsV3(db, {
   const relativeDistanceRange = Math.max(1, maxRelativeDistance - minRelativeDistance);
 
   const ranked = [...parentScores.entries()]
+    .filter(([id]) => fusion.candidateIds.includes(id))
     .flatMap(([memoryId, unitScores]) => {
       const row = memoryById.get(memoryId);
       if (!row) return [];
@@ -2768,10 +2768,10 @@ function searchRetrievalUnitsV3(db, {
       const eventAt = Math.max(...sorted.map((entry) => Number(entry.unit.event_at ?? 0)));
       if (relativeTargetAt !== null && eventAt > 0) {
         const distance = Math.abs(eventAt - relativeTargetAt);
-        total += (1 - (distance - minRelativeDistance) / relativeDistanceRange) * 0.02;
+        total += (1 - (distance - minRelativeDistance) / relativeDistanceRange) * 0.002;
       } else if (intent.temporal_direction && eventAt > 0 && Number.isFinite(minEventAt)) {
         const relative = (eventAt - minEventAt) / eventRange;
-        total += intent.temporal_direction === "latest" ? relative * 0.006 : (1 - relative) * 0.006;
+        total += intent.temporal_direction === "latest" ? relative * 0.002 : (1 - relative) * 0.002;
       }
       return [{
         memory,
@@ -3034,56 +3034,49 @@ function searchRetrievalUnitsV4(db, options) {
         .sort((left, right) => right.dense_score - left.dense_score || left.memory_id.localeCompare(right.memory_id))
         .slice(0, 50);
     })();
-  const scores = new Map();
-  const addRrf = (rows, weight) => {
-    rows.forEach((row, index) => {
-      const memoryId = row.memory_id ?? row.memory?.id;
-      if (!memoryId) return;
-      scores.set(memoryId, (scores.get(memoryId) ?? 0) + weight / (60 + index + 1));
-    });
-  };
-  addRrf(base, 1);
-  addRrf(exactRows, 3);
-  // Fully covered subject candidates share the existing 50-candidate bound.
-  addRrf(taskRows, 1);
-  addRrf(sparseRows, 0.9);
-  addRrf(denseRows, 1.2);
-  addRrf(segmentRows, 0.65);
+  const discoveryIds = [...new Set([...base.map((entry) => entry.memory.id),
+    ...[exactRows, taskRows, sparseRows, denseRows, segmentRows, lexicalRows, profileRows, timelineRows]
+      .flatMap((rows) => rows.map((row) => row.memory_id))])];
+  const eligible = new Set(discoveryIds.length ? db.prepare(
+    `SELECT * FROM memories WHERE tenant_id = ? AND id IN (${discoveryIds.map(() => "?").join(",")})`
+  ).all(tenantId, ...discoveryIds).map(memoryFromRow).filter((memory) =>
+    taskEligible(memory) && (projectId == null || memory.project_id === projectId)
+  ).map((memory) => memory.id) : []);
+  const hits = (rows) => rows.map((row) => ({ id: row.unit_id ?? row.memory_id ?? row.memory?.id,
+    sourceId: row.memory_id ?? row.memory?.id, score: row.dense_score })).filter((hit) => eligible.has(hit.sourceId));
+  const channels = [
+    { name: "semantic", weight: 1.2, hits: hits(denseRows) },
+    { name: "base", hits: hits(base) },
+    { name: "exact", weight: 3, hits: hits(exactRows) },
+    { name: "task", hits: hits(taskRows) },
+    { name: "sparse", weight: .9, hits: hits(sparseRows) },
+    { name: "segment", weight: .65, hits: hits(segmentRows) },
+    { name: "atomic", weight: 1.2, hits: hits(lexicalRows) },
+    ...(intent.unit_types.some((type) => ["preference", "instruction", "update", "fact"].includes(type))
+      ? [{ name: "profile", weight: 1.35, hits: hits(profileRows) }] : []),
+    ...(intent.temporal_direction || intent.relative_age_ms !== null || intent.relative_weekday !== null
+      ? [{ name: "timeline", weight: 1.35, hits: hits(timelineRows) }] : [])
+  ];
+  const fusion = boundedRetrievalFusion(channels);
+  const scores = boundedRetrievalFusion(channels.slice(0, 6)).scores;
+  const structuralScores = new Map();
+  for (const channel of channels.slice(6)) {
+    for (const [id, score] of boundedRetrievalFusion([channel]).scores) {
+      structuralScores.set(id, Math.max(structuralScores.get(id) ?? 0, score));
+    }
+  }
+  for (const [id, score] of structuralScores) scores.set(id, (scores.get(id) ?? 0) + score);
   for (const row of denseRows) {
+    if (!eligible.has(row.memory_id)) continue;
     const normalized = Math.max(0, Math.min(1, (row.dense_score + 1) / 2));
     scores.set(row.memory_id, (scores.get(row.memory_id) ?? 0) + normalized * 0.5);
-  }
-  const structuralScores = new Map();
-  const addStructuralRrf = (rows, weight) => {
-    rows.forEach((row, index) => {
-      const contribution = weight / (60 + index + 1);
-      structuralScores.set(
-        row.memory_id,
-        Math.max(structuralScores.get(row.memory_id) ?? 0, contribution)
-      );
-    });
-  };
-  addStructuralRrf(lexicalRows, 1.2);
-  if (intent.unit_types.some((type) =>
-    ["preference", "instruction", "update", "fact"].includes(type)
-  )) {
-    addStructuralRrf(profileRows, 1.35);
-  }
-  if (intent.temporal_direction || intent.relative_age_ms !== null || intent.relative_weekday !== null) {
-    addStructuralRrf(timelineRows, 1.35);
-  }
-  for (const [memoryId, contribution] of structuralScores) {
-    scores.set(memoryId, (scores.get(memoryId) ?? 0) + contribution);
   }
 
   const baseById = new Map(base.map((entry) => [entry.memory.id, {
     ...entry,
     score: { ...entry.score, authority: memoryAuthority(entry.memory) }
   }]));
-  const candidateIds = [...scores.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 50)
-    .map(([id]) => id);
+  const candidateIds = fusion.candidateIds;
   const missingIds = candidateIds.filter((id) => !baseById.has(id));
   if (missingIds.length > 0) {
     const placeholders = missingIds.map(() => "?").join(",");

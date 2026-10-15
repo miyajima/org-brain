@@ -1,3 +1,4 @@
+import { boundedRetrievalFusion } from "./retrieval-fusion";
 import { memoryReadAccessSql, type MemoryReadAccess } from "./memory-read-access";
 import { buildKnowledgeFtsQuery } from "./knowledge-docs";
 import { normalizeLifecycleState, normalizeMemoryKind, type MemoryKind, type MemoryLifecycleState } from "./memory-lifecycle-types";
@@ -986,26 +987,28 @@ export async function searchTenantRetrievalUnitsV3(
     for (const row of loaded.results) unitById.set(row.id, row);
   }
 
-  const unitScores = new Map<string, number>();
-  lexicalRows.forEach((row, index) => {
-    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
+  // Provider unit IDs are discovery hints. Revalidate parent scope before a
+  // protected candidate can occupy the bounded pool, and again before delivery.
+  const eligibleRows = await loadMemoryRowsByIds(db, tenantId, [...new Set([...unitById.values()].map((unit) => unit.memory_id))], {
+    at: referenceAt, includeSuppressed, readAccess: options.readAccess
   });
-  subjectLexicalRows.forEach((row, index) => {
-    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1.25 / (60 + index + 1));
-  });
-  temporalLexicalRows.forEach((row, index) => {
-    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
-  });
-  temporalRelevanceRows.forEach((row, index) => {
-    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 1 / (60 + index + 1));
-  });
-  semanticHits.forEach((hit, index) => {
-    if (!unitById.has(hit.id)) return;
-    unitScores.set(hit.id, (unitScores.get(hit.id) ?? 0) + 1 / (60 + index + 1));
-  });
-  temporalRows.forEach((row, index) => {
-    unitScores.set(row.id, (unitScores.get(row.id) ?? 0) + 0.75 / (60 + index + 1));
-  });
+  const eligibleParents = new Set(eligibleRows.filter((row) =>
+    (!projectId || row.project_id === projectId) && (options.readAccess || candidateAllowed(toMemorySearchCandidate(row), options.principalId))
+  ).map((row) => row.id));
+  for (const [id, unit] of unitById) if (!eligibleParents.has(unit.memory_id)) unitById.delete(id);
+  const rowHits = (rows: RetrievalUnitCandidateRow[]) => rows.filter((row) => unitById.has(row.id)).map((row) => ({ id: row.id, sourceId: row.memory_id }));
+  const fusion = boundedRetrievalFusion([
+    { name: "semantic", hits: semanticHits.flatMap((hit) => {
+      const unit = unitById.get(hit.id);
+      return unit ? [{ id: hit.id, sourceId: unit.memory_id, score: hit.score }] : [];
+    }) },
+    { name: "lexical", hits: rowHits(lexicalRows) },
+    { name: "subject", weight: 1.25, hits: rowHits(subjectLexicalRows) },
+    { name: "temporal_lexical", hits: rowHits(temporalLexicalRows) },
+    { name: "temporal_relevance", hits: rowHits(temporalRelevanceRows) },
+    { name: "temporal", weight: 0.75, hits: rowHits(temporalRows) }
+  ], { candidateLimit: 20 });
+  const unitScores = fusion.unitScores;
   const lexicalSpecificity = retrievalUnitLexicalSpecificity([...unitById.values()], q);
   const parentUnitScores = new Map<string, Array<{
     unit: RetrievalUnitCandidateRow;
@@ -1043,7 +1046,7 @@ export async function searchTenantRetrievalUnitsV3(
         Math.max(0, ...units.map((entry) => entry.lexicalSpecificity)) * 0.02
     }))
     .sort((left, right) => right.score - left.score);
-  const parentIds = rankedParentIds.slice(0, 20);
+  const parentIds = rankedParentIds.filter((item) => fusion.candidateIds.includes(item.memoryId));
   const reservedTemporalMemoryIds =
     relativeTargetAt === null
       ? []
@@ -1058,11 +1061,12 @@ export async function searchTenantRetrievalUnitsV3(
     if (parentIds.some((item) => item.memoryId === memoryId)) continue;
     const reserved = rankedParentIds.find((item) => item.memoryId === memoryId);
     if (!reserved) continue;
-    parentIds.splice(Math.max(0, parentIds.length - 1), 1, reserved);
+    const replacement = parentIds.length - 1 - [...parentIds].reverse().findIndex((item) => !fusion.protectedIds.includes(item.memoryId));
+    if (replacement >= 0 && replacement < parentIds.length) parentIds.splice(replacement, 1, reserved);
   }
   const parentRows = await loadMemoryRowsByIds(db, tenantId, parentIds.map((item) => item.memoryId), {
     at: referenceAt,
-    includeSuppressed
+    includeSuppressed, readAccess: options.readAccess
   });
   const rowById = new Map(parentRows.map((row) => [row.id, row]));
   const rerankerScores = options.rerankerScores ?? new Map<string, number>();
@@ -1090,14 +1094,16 @@ export async function searchTenantRetrievalUnitsV3(
     const eventAt = Math.max(...units.map(({ unit }) => unit.event_at ?? 0));
     const temporal =
       relativeTargetAt !== null && eventAt > 0
-        ? (1 - (Math.abs(eventAt - relativeTargetAt) - minRelativeDistance) / relativeDistanceRange) * 0.02
+        ? (1 - (Math.abs(eventAt - relativeTargetAt) - minRelativeDistance) / relativeDistanceRange) * 0.002
         : intent.temporal_direction && eventAt > 0
           ? (intent.temporal_direction === "latest"
             ? (eventAt - minEventAt) / eventRange
-            : (maxEventAt - eventAt) / eventRange) * 0.006
+            : (maxEventAt - eventAt) / eventRange) * 0.002
           : 0;
     const reranker = rerankerScores.get(memoryId);
-    const total = baseScore + temporal + (reranker === undefined ? 0 : Math.max(0, Math.min(1, reranker)) * 0.02);
+    const total = options.rerankerScores?.size
+      ? Math.max(0, Math.min(1, reranker ?? 0)) + (baseScore + temporal) * 0.001
+      : baseScore + temporal;
     candidate.score_breakdown = {
       total: Number(total.toFixed(6)),
       lexical: units.some(({ unit }) => unit.raw_rank !== null) ? 1 : 0,
@@ -1105,7 +1111,7 @@ export async function searchTenantRetrievalUnitsV3(
       graph: null,
       time:
         intent.temporal_direction || relativeTargetAt !== null
-          ? Number((temporal / (relativeTargetAt === null ? 0.006 : 0.02)).toFixed(6))
+          ? Number((temporal / 0.002).toFixed(6))
           : 0,
       authority: 0,
       utility: 0,
@@ -1221,14 +1227,14 @@ export async function searchTenantRetrievalUnitsV4(
            AND memory_retrieval_units_v4_fts.text MATCH ?
            AND (? IS NULL OR u.project_id = ?)
            AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
+           AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+           AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})
          ORDER BY bm25(memory_retrieval_units_v4_fts), u.content_hash
          LIMIT 200`
       )
         .bind(options.tenantId, ftsQuery, projectId, projectId)
         .all<{ memory_id: string; unit_type: string; raw_rank: number }>()
     : { results: [] as Array<{ memory_id: string; unit_type: string; raw_rank: number }> };
-  const scores = new Map<string, number>();
-  base.results.forEach((result, index) => scores.set(result.id, 1 / (60 + index + 1)));
   const semanticHits = (options.semanticHits ?? []).slice(0, 50);
   const semanticParents = semanticHits.length === 0
     ? { results: [] as Array<{ id: string; memory_id: string }> }
@@ -1238,50 +1244,54 @@ export async function searchTenantRetrievalUnitsV4(
          JOIN memories m ON m.id = u.memory_id AND m.tenant_id = u.tenant_id
          WHERE u.tenant_id = ? AND u.id IN (${semanticHits.map(() => "?").join(",")})
            AND (? IS NULL OR u.project_id = ?)
-           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}`
+           AND ${retrievalSearchableFilterSql("m", referenceAt, includeSuppressed, options.readAccess)}
+           AND (u.valid_from IS NULL OR u.valid_from <= ${Math.trunc(referenceAt)})
+           AND (u.valid_until IS NULL OR u.valid_until > ${Math.trunc(referenceAt)})`
       ).bind(options.tenantId, ...semanticHits.map((hit) => hit.id), projectId, projectId)
         .all<{ id: string; memory_id: string }>();
-  const semanticParentByUnit = new Map(
-    semanticParents.results.map((row) => [row.id, row.memory_id])
-  );
-  semanticHits.forEach((hit, index) => {
-    const memoryId = semanticParentByUnit.get(hit.id);
-    if (!memoryId) return;
-    scores.set(memoryId, (scores.get(memoryId) ?? 0) + 0.9 / (60 + index + 1));
+  const semanticParentRows = await loadMemoryRowsByIds(db, options.tenantId, [...new Set(semanticParents.results.map((row) => row.memory_id))], {
+    at: referenceAt, includeSuppressed, readAccess: options.readAccess
   });
-  const channelRanks = new Map<string, number>();
-  for (const row of rows.results) {
-    const key = `${row.unit_type}\0${row.memory_id}`;
-    if (channelRanks.has(key)) continue;
-    const rank = [...channelRanks.keys()].filter((candidate) =>
-      candidate.startsWith(`${row.unit_type}\0`)
-    ).length;
-    channelRanks.set(key, rank);
-    const profileIntent = intent.unit_types.some((type) =>
-      ["preference", "instruction", "update", "fact"].includes(type)
-    );
-    const temporalIntent = intent.temporal_direction !== null || intent.relative_age_ms !== null;
-    const weight =
-      row.unit_type === "profile" || row.unit_type === "ledger"
-        ? profileIntent ? 1.35 : 0.55
-        : row.unit_type === "timeline"
-          ? temporalIntent ? 1.35 : 0.5
-          : row.unit_type === "atomic"
-            ? 1.2
-            : 0.65;
-    scores.set(row.memory_id, (scores.get(row.memory_id) ?? 0) + weight / (60 + rank + 1));
+  const eligibleSemanticParents = new Set(semanticParentRows.filter((row) =>
+    (!projectId || row.project_id === projectId) && (options.readAccess || candidateAllowed(toMemorySearchCandidate(row), options.principalId))
+  ).map((row) => row.id));
+  const semanticParentByUnit = new Map(
+    semanticParents.results.filter((row) => eligibleSemanticParents.has(row.memory_id)).map((row) => [row.id, row.memory_id])
+  );
+  const profileIntent = intent.unit_types.some((type) => ["preference", "instruction", "update", "fact"].includes(type));
+  const temporalIntent = intent.temporal_direction !== null || intent.relative_age_ms !== null;
+  const fusion = boundedRetrievalFusion([
+    { name: "semantic", weight: 0.9, hits: semanticHits.flatMap((hit) => {
+      const id = semanticParentByUnit.get(hit.id);
+      return id ? [{ id: hit.id, sourceId: id, score: hit.score }] : [];
+    }) },
+    { name: "base", hits: base.results.map((result) => ({ id: result.id, sourceId: result.id })) },
+    ...["atomic", "profile", "ledger", "timeline", "segment"].map((type) => ({
+      name: type,
+      weight: type === "profile" || type === "ledger" ? (profileIntent ? 1.35 : 0.55)
+        : type === "timeline" ? (temporalIntent ? 1.35 : 0.5) : type === "atomic" ? 1.2 : 0.65,
+      hits: rows.results.filter((row) => row.unit_type === type).map((row) => ({ id: `${type}:${row.memory_id}`, sourceId: row.memory_id }))
+    }))
+  ], { candidateLimit: Math.max(20, limit) });
+  const scores = fusion.scores;
+  if (options.rerankerScores?.size) {
+    for (const id of fusion.candidateIds) {
+      scores.set(id, Math.max(0, Math.min(1, options.rerankerScores.get(id) ?? 0)) + (scores.get(id) ?? 0) * 0.001);
+    }
   }
   const baseIds = new Set(base.results.map((result) => result.id));
-  const missingParentIds = [...scores.keys()].filter((memoryId) => !baseIds.has(memoryId));
+  const missingParentIds = fusion.candidateIds.filter((memoryId) => !baseIds.has(memoryId));
   const missingRows = await loadMemoryRowsByIds(db, options.tenantId, missingParentIds, {
     at: referenceAt,
-    includeSuppressed
+    includeSuppressed, readAccess: options.readAccess
   });
   const candidateResults = [
     ...base.results,
-    ...missingRows.map((row) => toPublicResult(toMemorySearchCandidate(row)))
+    ...missingRows.filter((row) => options.readAccess || candidateAllowed(toMemorySearchCandidate(row), options.principalId))
+      .map((row) => toPublicResult(toMemorySearchCandidate(row)))
   ];
   const results = candidateResults
+    .filter((result) => fusion.candidateIds.includes(result.id))
     .sort((left, right) =>
       (scores.get(right.id) ?? 0) - (scores.get(left.id) ?? 0) ||
       (right.score ?? 0) - (left.score ?? 0) ||
