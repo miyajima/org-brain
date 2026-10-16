@@ -30,6 +30,28 @@ The server's Wiki root follows its memory DB directory unless overridden.
 `ORGBRAIN_FEATURES_FILE`, `ORGBRAIN_WIKI_ROOT`, `ORGBRAIN_WIKI_ENGINE` select
 explicit alternate installations. They do not discover or modify a legacy Vault.
 
+### Troubleshoot `wiki_engine_unavailable`
+
+Check the CLI path used by the failing MCP server, as well as the separate
+`wiki_command` in `~/.config/org-brain/wiki-integration.json`. A working Wiki CLI
+does not establish that the MCP installation contains its native engine.
+For a packaged `dist/orgbrain.mjs`, the native executable belongs at
+`bin/<platform>-<arch>/orgbrain-wiki-engine` under the same package root
+(`orgbrain-wiki-engine.exe` on Windows). Preserve this directory when installing
+or replacing a standalone runtime; copying only `dist/` is insufficient.
+
+Restore the matching native package, or build with `pnpm build:wiki` and copy the
+matching platform's executable into that installation with executable permissions.
+Reuse an existing binary only after checking that it matches the intended build
+and platform. `ORGBRAIN_WIKI_ENGINE` is an explicit override when a separate
+engine installation is intended. Do not change the Wiki feature flag or data root
+to repair a missing executable.
+
+Verify search through the original failing MCP connection. Check init, put, read
+and search with the exact installed CLI against an isolated Wiki and feature file;
+resolve temporary paths to real paths on macOS to avoid `/var` symlink rejection.
+Run `wiki diagnose` to distinguish engine recovery from existing corpus findings.
+
 ## Feature Boundary
 
 `features.llm_wiki.enabled=false` suppresses Wiki tools/screens and stops all
