@@ -63,6 +63,27 @@ function result(id, value) {
   return { payload: { type: "function_call_output", call_id: id, output: JSON.stringify(value) } };
 }
 
+test('coverage excludes injected user contexts before sentence splitting while retaining actual user decisions', async () => {
+  const evidence = await buildTurnEvidenceV1({ rows: [
+    message('user', '# AGENTS.md instructions\n旧APIを採用します。'),
+    message('user', '今後は新APIを採用します。')
+  ], project_id: 'example' }, { preserve_snippet_text: true });
+  const packet = buildLearningExtractionPacket(evidence, { routing: {}, review_drafts: [] }, { extraction_profile: 'coverage/v1' });
+  assert.equal(packet.snippets.some(s => s.text.includes('旧API')), false);
+  assert.equal(packet.snippets.some(s => s.text.includes('新API')), true);
+});
+
+test("collection diagnostics distinguish parent clipping, snippet limits and event limits without raw text", async () => {
+  const rows = [message("user", "説明".repeat(2500)), ...Array.from({ length: 9 }, (_, i) => message("user", `確認対象の操作 ${i}`)),
+    ...Array.from({ length: 30 }, (_, i) => result(`c${i}`, { exit_code: 0 }))];
+  const evidence = await buildTurnEvidenceV1({ rows, project_id: "example" });
+  assert.equal(evidence.snippets.length, 8);
+  assert.equal(evidence.collection_diagnostics.parent_text_clipped, 1);
+  assert.equal(evidence.collection_diagnostics.snippets_omitted, 2);
+  assert.equal(evidence.collection_diagnostics.events_omitted, 6);
+  assert.doesNotMatch(JSON.stringify(evidence.collection_diagnostics), /説明|確認対象/u);
+});
+
 test("file capture exclusions remove matching calls and results before turn evidence is persisted", async () => {
   const root = await mkdtemp(join(tmpdir(), "orgbrain-exclusions-"));
   try {

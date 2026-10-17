@@ -1,0 +1,6560 @@
+{
+  "schema": "memory-extraction-offline-budget-results/v1",
+  "run": "implementation-v6",
+  "status": "local_source_experiment_only",
+  "corpus_sha256": "53e352ceb92bcead8e8fc620b2e87d6bbfe7062781bda11092f5a4d743a15a64",
+  "minimal_upper_bounds": {
+    "before": {
+      "legacy": 1614,
+      "coverage": 1389
+    },
+    "after-2000": {
+      "legacy": 1533,
+      "coverage": 1424
+    },
+    "after-4000": {
+      "legacy": 1533,
+      "coverage": 1424
+    },
+    "after-8000": {
+      "legacy": 1533,
+      "coverage": 1424
+    }
+  },
+  "aggregate": [
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1214,
+      "safety_stops": 3,
+      "packets_ready": 7,
+      "input_spans": 10,
+      "input_text_bytes": 1441,
+      "retained_source_units": 14,
+      "categories": {
+        "reason": 2,
+        "condition": 1,
+        "verification": 6,
+        "negation": 2,
+        "numeric": 8
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1214,
+      "safety_stops": 14,
+      "packets_ready": 1,
+      "input_spans": 4,
+      "input_text_bytes": 220,
+      "retained_source_units": 3,
+      "categories": {
+        "reason": 0,
+        "condition": 1,
+        "verification": 0,
+        "negation": 0,
+        "numeric": 3
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1921,
+      "safety_stops": 3,
+      "packets_ready": 7,
+      "input_spans": 12,
+      "input_text_bytes": 1920,
+      "retained_source_units": 17,
+      "categories": {
+        "reason": 2,
+        "condition": 1,
+        "verification": 8,
+        "negation": 2,
+        "numeric": 10
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1921,
+      "safety_stops": 14,
+      "packets_ready": 2,
+      "input_spans": 9,
+      "input_text_bytes": 617,
+      "retained_source_units": 7,
+      "categories": {
+        "reason": 1,
+        "condition": 3,
+        "verification": 1,
+        "negation": 2,
+        "numeric": 2
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1921,
+      "safety_stops": 3,
+      "packets_ready": 7,
+      "input_spans": 24,
+      "input_text_bytes": 5069,
+      "retained_source_units": 44,
+      "categories": {
+        "reason": 5,
+        "condition": 7,
+        "verification": 20,
+        "negation": 9,
+        "numeric": 22
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1921,
+      "safety_stops": 14,
+      "packets_ready": 2,
+      "input_spans": 16,
+      "input_text_bytes": 1694,
+      "retained_source_units": 7,
+      "categories": {
+        "reason": 1,
+        "condition": 4,
+        "verification": 2,
+        "negation": 4,
+        "numeric": 1
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1921,
+      "safety_stops": 3,
+      "packets_ready": 7,
+      "input_spans": 24,
+      "input_text_bytes": 5069,
+      "retained_source_units": 44,
+      "categories": {
+        "reason": 5,
+        "condition": 7,
+        "verification": 20,
+        "negation": 9,
+        "numeric": 22
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "cases": 18,
+      "source_rows": 1928,
+      "loaded_rows": 1921,
+      "safety_stops": 14,
+      "packets_ready": 2,
+      "input_spans": 16,
+      "input_text_bytes": 1694,
+      "retained_source_units": 7,
+      "categories": {
+        "reason": 1,
+        "condition": 4,
+        "verification": 2,
+        "negation": 4,
+        "numeric": 1
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 282,
+      "loaded_rows": 151,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 149,
+      "input_upper_bound": 1828,
+      "source_units": 14,
+      "retained_units": 1,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 1
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 282,
+      "loaded_rows": 151,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": "unsafe_instruction",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 15,
+      "loaded_rows": 15,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 192,
+      "input_upper_bound": 1907,
+      "source_units": 44,
+      "retained_units": 1,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 1
+        },
+        "verification": {
+          "source": 8,
+          "retained": 1
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 15,
+      "loaded_rows": 15,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 215,
+      "loaded_rows": 81,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 268,
+      "input_upper_bound": 1982,
+      "source_units": 5,
+      "retained_units": 1,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 215,
+      "loaded_rows": 81,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 430,
+      "loaded_rows": 177,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 430,
+      "loaded_rows": 177,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 327,
+      "input_upper_bound": 1987,
+      "source_units": 17,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 14,
+          "retained": 2
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 17,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 14,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 22,
+      "loaded_rows": 22,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 22,
+      "loaded_rows": 22,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 103,
+      "loaded_rows": 96,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 103,
+      "loaded_rows": 96,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 136,
+      "input_upper_bound": 1772,
+      "source_units": 14,
+      "retained_units": 1,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 6,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 1
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 4,
+      "input_text_bytes": 220,
+      "input_upper_bound": 1850,
+      "source_units": 14,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 6,
+          "retained": 1
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 3
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 345,
+      "loaded_rows": 156,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 345,
+      "loaded_rows": 156,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 134,
+      "input_upper_bound": 1815,
+      "source_units": 8,
+      "retained_units": 2,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": "coverage_skipped_input_budget",
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 8,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 235,
+      "input_upper_bound": 1872,
+      "source_units": 11,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 5
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 11,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "before",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "before",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 282,
+      "loaded_rows": 280,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 280,
+      "input_upper_bound": 1936,
+      "source_units": 14,
+      "retained_units": 1,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 282,
+      "loaded_rows": 280,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": "unsafe_instruction",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 15,
+      "loaded_rows": 14,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 3,
+      "input_text_bytes": 323,
+      "input_upper_bound": 1935,
+      "source_units": 44,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 2
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 2
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 15,
+      "loaded_rows": 14,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 215,
+      "loaded_rows": 213,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 268,
+      "input_upper_bound": 1944,
+      "source_units": 5,
+      "retained_units": 1,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 215,
+      "loaded_rows": 213,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 430,
+      "loaded_rows": 430,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 430,
+      "loaded_rows": 430,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 327,
+      "input_upper_bound": 1936,
+      "source_units": 17,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 14,
+          "retained": 2
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 17,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 14,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 22,
+      "loaded_rows": 21,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 22,
+      "loaded_rows": 21,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 103,
+      "loaded_rows": 103,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 103,
+      "loaded_rows": 103,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 353,
+      "input_upper_bound": 1947,
+      "source_units": 14,
+      "retained_units": 2,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 6,
+          "retained": 1
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 5,
+      "input_text_bytes": 303,
+      "input_upper_bound": 1977,
+      "source_units": 14,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 6,
+          "retained": 2
+        },
+        "verification": {
+          "source": 4,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 345,
+      "loaded_rows": 344,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 345,
+      "loaded_rows": 344,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 134,
+      "input_upper_bound": 1776,
+      "source_units": 8,
+      "retained_units": 2,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 4,
+      "input_text_bytes": 314,
+      "input_upper_bound": 1964,
+      "source_units": 8,
+      "retained_units": 4,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 235,
+      "input_upper_bound": 1805,
+      "source_units": 11,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 5
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 11,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "after-2000",
+      "profile": "legacy",
+      "ceiling": 2000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "after-2000",
+      "profile": "coverage",
+      "ceiling": 2000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 282,
+      "loaded_rows": 280,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 4,
+      "input_text_bytes": 1270,
+      "input_upper_bound": 2998,
+      "source_units": 14,
+      "retained_units": 11,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 2
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 4,
+          "retained": 4
+        },
+        "negation": {
+          "source": 3,
+          "retained": 3
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 7
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 282,
+      "loaded_rows": 280,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": "unsafe_instruction",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 15,
+      "loaded_rows": 14,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 3,
+      "input_text_bytes": 323,
+      "input_upper_bound": 1935,
+      "source_units": 44,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 2
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 2
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 15,
+      "loaded_rows": 14,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 215,
+      "loaded_rows": 213,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 3,
+      "input_text_bytes": 684,
+      "input_upper_bound": 2384,
+      "source_units": 5,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 3
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 5
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 215,
+      "loaded_rows": 213,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 430,
+      "loaded_rows": 430,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 430,
+      "loaded_rows": 430,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 7,
+      "input_text_bytes": 1265,
+      "input_upper_bound": 2972,
+      "source_units": 17,
+      "retained_units": 9,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 2,
+          "retained": 1
+        },
+        "verification": {
+          "source": 14,
+          "retained": 8
+        },
+        "negation": {
+          "source": 2,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 17,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 14,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 22,
+      "loaded_rows": 21,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 22,
+      "loaded_rows": 21,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 103,
+      "loaded_rows": 103,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 103,
+      "loaded_rows": 103,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 4,
+      "input_text_bytes": 927,
+      "input_upper_bound": 2569,
+      "source_units": 14,
+      "retained_units": 6,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 6,
+          "retained": 4
+        },
+        "verification": {
+          "source": 4,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 2
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 8,
+      "input_text_bytes": 733,
+      "input_upper_bound": 2542,
+      "source_units": 14,
+      "retained_units": 4,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 6,
+          "retained": 3
+        },
+        "verification": {
+          "source": 4,
+          "retained": 2
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 345,
+      "loaded_rows": 344,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 345,
+      "loaded_rows": 344,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 365,
+      "input_upper_bound": 2031,
+      "source_units": 8,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 8,
+      "input_text_bytes": 961,
+      "input_upper_bound": 3250,
+      "source_units": 8,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 235,
+      "input_upper_bound": 1805,
+      "source_units": 11,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 5
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 11,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "after-4000",
+      "profile": "legacy",
+      "ceiling": 4000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "after-4000",
+      "profile": "coverage",
+      "ceiling": 4000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 282,
+      "loaded_rows": 280,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 4,
+      "input_text_bytes": 1270,
+      "input_upper_bound": 2998,
+      "source_units": 14,
+      "retained_units": 11,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 2
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 4,
+          "retained": 4
+        },
+        "negation": {
+          "source": 3,
+          "retained": 3
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 7
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-01",
+      "project": "consentside",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 282,
+      "loaded_rows": 280,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 3,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "consentside-02",
+      "project": "consentside",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 4,
+      "loaded_rows": 4,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 5,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 8,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-01",
+      "project": "org-brain",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 46,
+      "loaded_rows": 46,
+      "safety_stop": "unsafe_instruction",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 4,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 15,
+      "loaded_rows": 14,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 3,
+      "input_text_bytes": 323,
+      "input_upper_bound": 1935,
+      "source_units": 44,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 2
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 2
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "org-brain-02",
+      "project": "org-brain",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 15,
+      "loaded_rows": 14,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 11,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 11,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 215,
+      "loaded_rows": 213,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 3,
+      "input_text_bytes": 684,
+      "input_upper_bound": 2384,
+      "source_units": 5,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 3
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 5
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-01",
+      "project": "socia",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 215,
+      "loaded_rows": 213,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-02",
+      "project": "socia",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 166,
+      "loaded_rows": 166,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 430,
+      "loaded_rows": 430,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "socia-03",
+      "project": "socia",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 430,
+      "loaded_rows": 430,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 14,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 10,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "project": "sfk-shinsa",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 15,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 12,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 7,
+      "input_text_bytes": 1265,
+      "input_upper_bound": 2972,
+      "source_units": 17,
+      "retained_units": 9,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 2,
+          "retained": 1
+        },
+        "verification": {
+          "source": 14,
+          "retained": 8
+        },
+        "negation": {
+          "source": 2,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "project": "sfk-shinsa",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 8,
+      "loaded_rows": 8,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 17,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 2,
+          "retained": 0
+        },
+        "verification": {
+          "source": 14,
+          "retained": 0
+        },
+        "negation": {
+          "source": 2,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 22,
+      "loaded_rows": 21,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "project": "sfk-shinsa",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 22,
+      "loaded_rows": 21,
+      "safety_stop": null,
+      "route": "operational_history",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 44,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 23,
+          "retained": 0
+        },
+        "verification": {
+          "source": 8,
+          "retained": 0
+        },
+        "negation": {
+          "source": 12,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 12,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-01",
+      "project": "jrg",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 47,
+      "loaded_rows": 47,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 13,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 0
+        },
+        "verification": {
+          "source": 5,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 9,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 103,
+      "loaded_rows": 103,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-02",
+      "project": "jrg",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 103,
+      "loaded_rows": 103,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 10,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 2,
+          "retained": 0
+        },
+        "condition": {
+          "source": 3,
+          "retained": 0
+        },
+        "verification": {
+          "source": 4,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 5,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 4,
+      "input_text_bytes": 927,
+      "input_upper_bound": 2569,
+      "source_units": 14,
+      "retained_units": 6,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 6,
+          "retained": 4
+        },
+        "verification": {
+          "source": 4,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 2
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "jrg-03",
+      "project": "jrg",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 3,
+      "loaded_rows": 3,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 8,
+      "input_text_bytes": 733,
+      "input_upper_bound": 2542,
+      "source_units": 14,
+      "retained_units": 4,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 6,
+          "retained": 3
+        },
+        "verification": {
+          "source": 4,
+          "retained": 2
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 6,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 345,
+      "loaded_rows": 344,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "factoreview-01",
+      "project": "factoreview",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 345,
+      "loaded_rows": 344,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 97,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 11,
+          "retained": 0
+        },
+        "condition": {
+          "source": 19,
+          "retained": 0
+        },
+        "verification": {
+          "source": 31,
+          "retained": 0
+        },
+        "negation": {
+          "source": 31,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 45,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 2,
+      "input_text_bytes": 365,
+      "input_upper_bound": 2031,
+      "source_units": 8,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-01",
+      "project": "smart-block",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 12,
+      "loaded_rows": 12,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 8,
+      "input_text_bytes": 961,
+      "input_upper_bound": 3250,
+      "source_units": 8,
+      "retained_units": 3,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 1,
+          "retained": 1
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 3,
+          "retained": 2
+        },
+        "numeric": {
+          "source": 2,
+          "retained": 1
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": null,
+      "route": "llm_candidate",
+      "packet_error": null,
+      "packet_ready": true,
+      "input_spans": 1,
+      "input_text_bytes": 235,
+      "input_upper_bound": 1805,
+      "source_units": 11,
+      "retained_units": 5,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 1
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 1
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 5
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-02",
+      "project": "smart-block",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 175,
+      "loaded_rows": 175,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 11,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 3,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 8,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "smart-block-03",
+      "project": "smart-block",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 13,
+      "loaded_rows": 13,
+      "safety_stop": "sensitive_default_deny",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 5,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 1,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 2,
+          "retained": 0
+        },
+        "negation": {
+          "source": 1,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 4,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "after-8000",
+      "profile": "legacy",
+      "ceiling": 8000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": null,
+      "route": "discard",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    },
+    {
+      "case_id": "tsugi-01",
+      "project": "tsugi",
+      "variant": "after-8000",
+      "profile": "coverage",
+      "ceiling": 8000,
+      "source_rows": 34,
+      "loaded_rows": 34,
+      "safety_stop": "credential_detected",
+      "route": "hard_excluded",
+      "packet_error": null,
+      "packet_ready": false,
+      "input_spans": 0,
+      "input_text_bytes": 0,
+      "input_upper_bound": null,
+      "source_units": 1,
+      "retained_units": 0,
+      "category_units": {
+        "reason": {
+          "source": 0,
+          "retained": 0
+        },
+        "condition": {
+          "source": 0,
+          "retained": 0
+        },
+        "verification": {
+          "source": 1,
+          "retained": 0
+        },
+        "negation": {
+          "source": 0,
+          "retained": 0
+        },
+        "numeric": {
+          "source": 1,
+          "retained": 0
+        }
+      },
+      "provider_calls": 0,
+      "measured_provider_tokens": null,
+      "measured_provider_fee": null,
+      "semantic_quality": "not_assessed"
+    }
+  ],
+  "human_labels": 0,
+  "full_provider_path": "not_run",
+  "formal_memory_writes": 0,
+  "production_settings_changed": false
+}

@@ -65,6 +65,13 @@ This repository owns all memory extraction and quality decisions. The shared Ast
 - The optional `coverage/v1` extraction profile changes provider work inside
   that same batch to at most two calls. The Stop hook still invokes no LLM and
   sends at most one batch. See `MEMORY_EXTRACTION_COVERAGE_V1.md`.
+- The additional-extraction reader combines consecutive context records for the
+  same turn ID before applying the logical-turn byte limit. It excludes instruction
+  roles, internal reasoning and direct child coordination and requires a final
+  record at Stop. It never joins a different turn or silently crosses workspace
+  scope. This changes no harness bootstrap, hook command, external-send gate,
+  confirmation protocol, or installed runtime. Read/packing diagnostics are counts
+  and reason codes only; they do not establish successful execution or human consent.
 - Optional Jev capture selection runs only in local candidate maintenance or
   the separate capture queue worker. Stop performs no Jev inference. Capture
   and retrieval default independently to OFF; verification, confirmation and

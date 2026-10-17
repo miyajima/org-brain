@@ -17,9 +17,11 @@ const DECISION = /\b(?:decid(?:e|ed)|choose|chose|selected|must|prefer|default|r
 const FAILURE = /\b(?:fail(?:ed|ure)?|error|regression|timed? out|root cause|did not work)\b|(?:失敗|エラー|不具合|回帰|原因|動かな|タイムアウト)/iu;
 const PROCEDURE = /\b(?:run|use|change|fix|implement|configure|deploy)\b|(?:実行|使用|変更|修正|実装|設定|デプロイ)/iu;
 const VERIFIED = /\b(?:pass(?:ed)?|succeed(?:ed)?|verified|resolved|exit[_ ]?code\s*[=:]?\s*0)\b|(?:成功|通った|検証済み|解消|終了コード\s*0)/iu;
+const EXPLICIT_REASON = /^(?:理由|なぜなら|because\b|the reason\b)/iu;
 const QUALIFIER = /\b(?:not|never|only|unless|except|if|when|must|cannot|failed?)\b|(?:ない|禁止|のみ|場合|条件|例外|ただし|必須|失敗|撤回|訂正)/iu;
 const STANDALONE_CORRECTION = /^(?:違います|訂正します|そうではなく|that's wrong)[。.!]?$/iu;
 const HUMAN_DECISION_FIELDS = new Set(["decision", "selected_value", "constraint", "constraints", "preference", "approval"]);
+const HUMAN_DECISION_CONTEXT_FIELDS = new Set(["rationale", "reason_rejected", "applicability", "reuse_when", "why_it_worked", "avoidance_rule", "conditions", "scope", "exceptions", "alternative", "alternatives", "question"]);
 const OUTCOME_FIELDS = new Set(["observed_outcome", "verified_outcome"]);
 const CONTROL_FIELDS = new Set(["persistence", "memory_kind", "action", "target_memory_id", "decision_type"]);
 const TRANSIENT_CONTENT = /\b(?:for now|this time|temporary|one[- ]off|for this (?:submission|preview|demo|run|task) only)\b|(?:今回(?:だけ|限り)|今回の(?:レビュー|確認|提出|デモ|試写|実行|作業)(?:だけ|限り)|この(?:ターン|回答|確認|提出分|試写|説明会|デモ|実行|作業|検証回|テスト回)(?:だけ|限り)|一時的|ひとまず|今だけ|(?:通常|既定|デフォルト)(?:の[^。\n]{0,24})?(?:には?|を|は)?(?:保存|変更|更新)(?:しない|しません)|次回(?:から)?[^。\n]{0,24}(?:戻す|戻します))/iu;
@@ -101,7 +103,14 @@ export function coveragePriority(text, options = {}) {
 }
 
 function shouldAttach(left, right) {
-  if (!left || !right || left.parent_span_id !== right.parent_span_id) return false;
+  if (!left || !right) return false;
+  if (left.parent_span_id !== right.parent_span_id) {
+    // A human's consecutive explanation may qualify their own choice. An
+    // assistant's explanation must never be attached as the human's rationale.
+    return left.role === "user" && right.role === "user"
+      && (DECISION.test(left.text) || EXPLICIT_REASON.test(left.text) || QUALIFIER.test(left.text))
+      && (EXPLICIT_REASON.test(right.text) || /^(?:ただし|例外|unless\b|except\b)/iu.test(right.text));
+  }
   return QUALIFIER.test(left.text) || QUALIFIER.test(right.text)
     || FAILURE.test(left.text) && (PROCEDURE.test(right.text) || VERIFIED.test(right.text))
     || PROCEDURE.test(left.text) && VERIFIED.test(right.text);
@@ -115,12 +124,48 @@ export function buildCoverageEvidenceGroups(snippets, events = [], options = {})
     if (current && shouldAttach(current.at(-1), span)) current.push(span);
     else components.push([span]);
   }
-  return components.map((members) => {
+  const roots = components.map((_, index) => index);
+  const root = (index) => {
+    while (roots[index] !== index) { roots[index] = roots[roots[index]]; index = roots[index]; }
+    return index;
+  };
+  const merge = (indices) => {
+    if (indices.length < 2) return;
+    const target = Math.min(...indices.map(root));
+    for (const index of indices) roots[root(index)] = target;
+  };
+  const byCall = new Map();
+  for (const [index, members] of components.entries()) for (const span of members) {
+    if (span.source !== "tool_result" || !span.call_id) continue;
+    if (!byCall.has(span.call_id)) byCall.set(span.call_id, new Set());
+    byCall.get(span.call_id).add(index);
+  }
+  for (const failed of events.filter((event) => event.status === "failed" && event.name && event.argument_hash)) {
+    const failedIndices = [...(byCall.get(failed.call_id) ?? [])];
+    if (failedIndices.length === 0) continue;
+    const failedOrder = Math.max(...failedIndices.flatMap((index) => components[index].map((span) => span.order)));
+    const recovered = events.find((event) => event.status === "completed"
+      && (event.exit_code === 0 || Number(event.http_status) >= 200 && Number(event.http_status) < 300)
+      && event.name === failed.name && event.argument_hash === failed.argument_hash
+      && [...(byCall.get(event.call_id) ?? [])].some((index) => components[index][0].order > failedOrder));
+    if (!recovered) continue;
+    const recoveredIndices = [...(byCall.get(recovered.call_id) ?? [])];
+    const recoveredOrder = Math.min(...recoveredIndices.flatMap((index) => components[index].map((span) => span.order)));
+    const correctionIndices = components.flatMap((members, index) => members.some((span) => span.role === "user"
+      && span.order > failedOrder && span.order < recoveredOrder && CORRECTION.test(span.text)) ? [index] : []);
+    merge([...failedIndices, ...correctionIndices, ...recoveredIndices]);
+  }
+  const merged = new Map();
+  for (const [index, members] of components.entries()) {
+    const key = root(index);
+    merged.set(key, [...(merged.get(key) ?? []), ...members]);
+  }
+  return [...merged.values()].map((members) => {
     const unique = [...new Map(members.map((span) => [span.span_id, span])).values()];
     const verified = (Array.isArray(events) ? events : []).some((event) => {
       const row = asRecord(event);
       return row.status === "completed" && (row.exit_code === 0 || Number(row.http_status) >= 200 && Number(row.http_status) < 300)
-        && (!unique.some((span) => span.call_id) || unique.some((span) => span.call_id === row.call_id));
+        && unique.some((span) => span.call_id && span.call_id === row.call_id);
     });
     const priority = Math.min(...unique.map((span) => coveragePriority(span.text, { verified })));
     return {
@@ -169,21 +214,36 @@ export function packCoverageGroups(packet, groups, options = {}) {
   const upperBound = typeof options.upper_bound === "function" ? options.upper_bound : (() => 0);
   const selected = [];
   const omitted = [];
+  const requestPacket = (rows) => {
+    const snippets = rows.flatMap((row) => row.snippets).sort((a, b) => a.order - b.order);
+    if (packet.extraction_profile !== MEMORY_EXTRACTION_COVERAGE_PROFILE) return { ...packet, snippets };
+    const calls = new Set(snippets.map((snippet) => snippet.call_id).filter(Boolean));
+    return { ...packet, snippets,
+      events: (packet.events ?? []).filter((event) => event.call_id && calls.has(event.call_id)),
+      coverage: { ...packet.coverage, groups: rows.map((group) => ({
+        group_id: group.group_id, span_ids: group.span_ids, priority: group.priority
+      })) }
+    };
+  };
   for (const group of groups) {
     if (selected.reduce((sum, row) => sum + row.snippets.length, 0) + group.snippets.length > maxSnippets) {
       omitted.push({ group_id: group.group_id, span_ids: group.span_ids, reason: "input_budget" });
       continue;
     }
     const next = [...selected, group];
-    const snippetsForRequest = next.flatMap((row) => row.snippets).sort((a, b) => a.order - b.order);
-    if (upperBound({ ...packet, snippets: snippetsForRequest }) + reserveBytes > 2_000) {
+    if (upperBound(requestPacket(next)) + reserveBytes > 2_000) {
       omitted.push({ group_id: group.group_id, span_ids: group.span_ids, reason: "input_budget" });
       continue;
     }
     selected.push(group);
   }
-  const snippetsForRequest = selected.flatMap((row) => row.snippets).sort((a, b) => a.order - b.order);
-  return { packet: { ...packet, snippets: snippetsForRequest }, groups: selected, omitted, upper_bound: upperBound({ ...packet, snippets: snippetsForRequest }) };
+  const packed = requestPacket(selected);
+  const bound = upperBound(packed);
+  return { packet: packed, groups: selected, omitted, upper_bound: bound,
+    diagnostics: { schema: "memory-extraction-packing/v1", input_ceiling: 2_000, input_upper_bound: bound,
+      reserve_bytes: reserveBytes, packed_span_count: packed.snippets.length,
+      packed_text_bytes: packed.snippets.reduce((sum, snippet) => sum + byteLength(snippet.text), 0),
+      omitted_group_count: omitted.length } };
 }
 
 export function decideCoverageSecondPass({ groups = [], pass1_presented_group_ids = [], pass1_adopted_span_ids = [], pass1_status = "succeeded" } = {}) {
@@ -243,7 +303,8 @@ export function validateCoverageCandidate(candidate, packet) {
       if (!snippets.some((snippet) => String(snippet.text).includes(value))) reasons.push(`${name}_not_single_fragment_grounded`);
     }
   }
-  const humanValues = [...fields].filter(([name]) => HUMAN_DECISION_FIELDS.has(name)).flatMap(([, values]) => values);
+  const humanValues = [...fields].filter(([name]) => HUMAN_DECISION_FIELDS.has(name)
+    || candidate?.lesson_type === "decision" && HUMAN_DECISION_CONTEXT_FIELDS.has(name)).flatMap(([, values]) => values);
   const humanClaim = candidate?.lesson_type === "decision" || humanValues.length > 0;
   if (humanClaim && (humanValues.length === 0 || humanValues.some((value) => !snippets.some((snippet) => snippet.role === "user" && String(snippet.text).includes(value))))) reasons.push("human_attribution_unsupported");
   for (const [name, values] of fields) {

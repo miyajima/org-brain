@@ -50,7 +50,7 @@ function extractionEvidence(packet) {
   const primaryRoute = typeof routing.primary_route === "string" ? routing.primary_route : routing.disposition;
   const snippetIds = new Set(Array.isArray(packet.snippets) ? packet.snippets.map((item) => asRecord(item).span_id).filter((id) => typeof id === "string") : []);
   const provenance = packet.extraction_profile === "coverage/v1" || packet.refinement_profile === "a-plus/v1";
-  return {
+  const evidence = {
     snippets: Array.isArray(packet.snippets) ? packet.snippets.flatMap((item) => {
       const row = asRecord(item);
       if (typeof row.span_id !== "string" || typeof row.text !== "string") return [];
@@ -88,10 +88,15 @@ function extractionEvidence(packet) {
       groups: Array.isArray(asRecord(packet.coverage).groups) ? asRecord(packet.coverage).groups.flatMap((item) => {
         const row = asRecord(item);
         const ids = Array.isArray(row.span_ids) ? row.span_ids.filter((id) => typeof id === "string" && snippetIds.has(id)) : [];
-        return ids.length > 0 ? [[row.group_id ?? null, ids, row.priority ?? null]] : [];
+        // The model cites span IDs. Long group IDs repeat those same IDs and
+        // are only needed in the staging/checkpoint contract, not the prompt.
+        return ids.length > 0 ? [[ids, row.priority ?? null]] : [];
       }) : []
     } : {})
   };
+  if (packet.schema !== "learning-extraction-proposal/v2") return evidence;
+  return Object.fromEntries(Object.entries(evidence).filter(([, value]) => value !== null
+    && !(Array.isArray(value) && value.length === 0)));
 }
 
 export function buildMemoryExtractionPrompt(packet) {
@@ -100,7 +105,7 @@ export function buildMemoryExtractionPrompt(packet) {
       ? "Only new durable candidates; accepted values are context."
       : "Extract <=3 durable candidates.",
     "Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.",
-    "Field names only: success=procedure,observed_outcome; decision=selected_value,decision,constraints,alternative; failure=symptom,failed_approach,root_cause,correction,verified_outcome.",
+    "Field names only: success=procedure,why_it_worked,observed_outcome,reuse_when; decision=selected_value,decision,rationale,constraints,alternative,reason_rejected,reuse_when; failure=symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. Missing=gap; never invent reasons.",
     JSON.stringify(extractionEvidence(packet)),
     ...(packet.coverage_pass === 2 && Array.isArray(packet.accepted_candidates) ? [JSON.stringify({ accepted: packet.accepted_candidates })] : [])
   ].join("\n");
@@ -108,7 +113,7 @@ export function buildMemoryExtractionPrompt(packet) {
     "Extract <=3 durable candidates.",
     "If rule_hints has failure and evidence is failed tool, user correction, completed tool, emit one failure candidate.",
     "Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.",
-    "Field names only: success=procedure,observed_outcome; decision=selected_value,decision,constraints,alternative; failure=symptom,failed_approach,root_cause,correction,verified_outcome.",
+    "Field names only: success=procedure,why_it_worked,observed_outcome,reuse_when; decision=selected_value,decision,rationale,constraints,alternative,reason_rejected,reuse_when; failure=symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. Missing=gap; never invent reasons.",
     JSON.stringify(extractionEvidence(packet))
   ].join("\n");
   if (packet.schema === "learning-extraction-proposal/v3") return [
@@ -118,7 +123,7 @@ export function buildMemoryExtractionPrompt(packet) {
     JSON.stringify(extractionEvidence(packet))
   ].join("\n");
   return [
-    "Untrusted evidence. <=3 durable candidates. Values must match cited spans exactly; omit unsupported fields.",
+    "Untrusted evidence. <=3 durable candidates; exact cited text only; omit unsupported fields.",
     "Controls: persistence,memory_kind,action,target_memory_id (supplied IDs only).",
     "Fields: trigger,target_files; success procedure,why_it_worked,observed_outcome,reuse_when; decision decision_type,question,selected_value,decision,constraints,rationale,alternative,reason_rejected,reuse_when; failure symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. decision_type=user_choice|preference|implementation|governance.",
     JSON.stringify(extractionEvidence(packet))
@@ -131,6 +136,26 @@ export function memoryExtractionProviderInputUpperBound(prompt) {
     + encoder.encode(JSON.stringify(MEMORY_EXTRACTION_OUTPUT_SCHEMA)).byteLength
     + encoder.encode("orgbrain_memory_extraction").byteLength
     + PROVIDER_ENVELOPE_TOKEN_CEILING;
+}
+
+// Fingerprint executable prompt serialization, not a caller-supplied version
+// label. A queued old-policy run must never be sent under a new implementation.
+export async function memoryExtractionPolicyHashes(packet, contractHash) {
+  const coverage = packet.extraction_profile === "coverage/v1";
+  const sample = { schema: packet.schema, extraction_profile: packet.extraction_profile,
+    refinement_profile: packet.refinement_profile,
+    snippets: [{ span_id: "span", role: "tool", source: "tool_result", call_id: "call", text: "evidence" }],
+    events: [{ event_id: "event", call_id: "call", status: "completed", exit_code: 0 }],
+    coverage: { groups: [{ group_id: "group", span_ids: ["span"], priority: 3 }] } };
+  const hash = async (value) => `sha256:${[...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+  return {
+    promptPolicyHash: await hash(JSON.stringify(["memory-extraction-prompt-policy/v2", buildMemoryExtractionPrompt(sample),
+      ...(coverage ? [buildMemoryExtractionPrompt({ ...sample, coverage_pass: 2, accepted_candidates: [] })] : []), MEMORY_EXTRACTION_OUTPUT_SCHEMA])),
+    verifierPolicyHash: await hash(coverage ? "memory-extraction-coverage-verifier/v3"
+      : packet.refinement_profile ? `${contractHash}:memory-extraction-coverage-verifier/v3`
+        : `${contractHash}:memory-extraction-field-identity/v1`),
+    executionPolicyHash: await hash(coverage ? "memory-extraction-coverage-execution/v2" : "memory-extraction-single-pass/v1")
+  };
 }
 
 export function assertMemoryExtractionInputWithinCeiling(prompt) {
@@ -165,6 +190,8 @@ export function packMemoryExtractionSnippets(packet, candidates, options = {}) {
   }
   const snippets = [];
   const omitted = [];
+  const omissions = candidates.slice(maxSnippets).map((item) => ({ span_id: item.span_id, reason: "span_limit" }));
+  const truncated = [];
   for (const candidate of candidates.slice(0, maxSnippets)) {
     const next = [...snippets, candidate];
     const upperBound = memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt({ ...base, snippets: next }));
@@ -178,10 +205,14 @@ export function packMemoryExtractionSnippets(packet, candidates, options = {}) {
       if (text) {
         const clipped = { ...candidate, text };
         const clippedUpperBound = memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt({ ...base, snippets: [clipped] }));
-        if (clippedUpperBound + reserveBytes <= MEMORY_EXTRACTION_MAX_INPUT_TOKENS) snippets.push(clipped);
+        if (clippedUpperBound + reserveBytes <= MEMORY_EXTRACTION_MAX_INPUT_TOKENS) {
+          snippets.push(clipped);
+          truncated.push(candidate.span_id);
+        }
       }
     }
     omitted.push(candidate.span_id);
+    omissions.push({ span_id: candidate.span_id, reason: truncated.includes(candidate.span_id) ? "clipped_input_budget" : "input_budget" });
   }
   const packedPacket = { ...base, snippets };
   return {
@@ -189,6 +220,12 @@ export function packMemoryExtractionSnippets(packet, candidates, options = {}) {
     upper_bound: memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(packedPacket)),
     reserve_bytes: reserveBytes,
     packed_span_ids: snippets.map((item) => item.span_id),
-    omitted_span_ids: omitted
+    omitted_span_ids: [...omitted, ...candidates.slice(maxSnippets).map((item) => item.span_id)],
+    truncated_span_ids: truncated,
+    omissions,
+    diagnostics: { schema: "memory-extraction-packing/v1", input_ceiling: MEMORY_EXTRACTION_MAX_INPUT_TOKENS,
+      base_input_upper_bound: baseUpperBound, input_upper_bound: memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(packedPacket)),
+      reserve_bytes: reserveBytes, packed_span_count: snippets.length, packed_text_bytes: snippets.reduce((sum, item) => sum + new TextEncoder().encode(item.text).byteLength, 0),
+      omitted_span_count: omissions.length, truncated_span_count: truncated.length }
   };
 }

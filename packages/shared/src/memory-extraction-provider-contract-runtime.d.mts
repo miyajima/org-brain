@@ -6,6 +6,9 @@ export const MEMORY_EXTRACTION_RETRIEVAL_RESERVE_BYTES: number;
 export const MEMORY_EXTRACTION_OUTPUT_SCHEMA: Record<string, unknown>;
 export function buildMemoryExtractionPrompt(packet: Record<string, unknown>): string;
 export function memoryExtractionProviderInputUpperBound(prompt: string): number;
+export function memoryExtractionPolicyHashes(packet: Record<string, unknown>, contractHash: string): Promise<{
+  promptPolicyHash: string; verifierPolicyHash: string; executionPolicyHash: string;
+}>;
 export function assertMemoryExtractionInputWithinCeiling(prompt: string): number;
 export function packMemoryExtractionSnippets<T extends { span_id: string; text: string }>(
   packet: Record<string, unknown>,
@@ -17,4 +20,7 @@ export function packMemoryExtractionSnippets<T extends { span_id: string; text: 
   reserve_bytes: number;
   packed_span_ids: string[];
   omitted_span_ids: string[];
+  truncated_span_ids: string[];
+  omissions: Array<{ span_id: string; reason: string }>;
+  diagnostics: Record<string, unknown>;
 };

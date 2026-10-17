@@ -90,6 +90,19 @@ export async function verifiedCandidates(input, candidates) {
         rejections.push({ candidate_index: candidateIndex, reason_codes: [...new Set(reasonCodes)].sort() });
     };
     for (const [index, providerCandidate] of candidates.entries()) {
+        // Reject ambiguity before refinement or normalization can discard or
+        // concatenate duplicate values differently from attribution validation.
+        const names = new Set();
+        const duplicateField = (Array.isArray(providerCandidate?.fields) ? providerCandidate.fields : []).some((field) => {
+            if (typeof field?.name !== 'string') return false;
+            if (names.has(field.name)) return true;
+            names.add(field.name);
+            return false;
+        });
+        if (duplicateField) {
+            reject(index, ['duplicate_field_name']);
+            continue;
+        }
         const refined = refinementProfile ? sanitizeRefinedCandidate(providerCandidate, input.packet) : { candidate: providerCandidate, omitted: false };
         const raw = refined.candidate;
         if (raw?.lesson_type === "failure") {

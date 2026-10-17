@@ -99,6 +99,17 @@ function rowPayload(row) {
   return row?.payload && typeof row.payload === "object" ? row.payload : row;
 }
 
+function toolInvocationName(payload) {
+  const invocation = payload?.invocation ?? {};
+  return String(invocation.tool ?? invocation.name ?? payload?.name ?? payload?.tool_name ?? payload?.server ?? "tool");
+}
+
+function coordinationCall(payload) {
+  const name = toolInvocationName(payload);
+  return ["function_call", "custom_tool_call", "mcp_tool_call", "mcp_tool_call_begin", "mcp_tool_call_end"].includes(payload?.type)
+    && (name.startsWith("collaboration.") || /(?:^|[._])(?:spawn_agent|followup_task|interrupt_agent|list_agents|send_message_to_thread|read_thread|wait_threads|wait_agent)$/u.test(name));
+}
+
 export async function loadTurnEvidenceRows(input = {}) {
   if (typeof input.transcript_path !== "string" || !input.transcript_path.trim()) return [];
   const rows = [];
@@ -106,19 +117,37 @@ export async function loadTurnEvidenceRows(input = {}) {
   let current = [];
   let currentBytes = 0;
   let matched = null;
+  let currentTurnId = "";
+  let currentCwd = "";
+  let excludedCalls = new Set();
+  let skipped = {};
+  let matchedDiagnostics = null;
   const requestedTurn = typeof input.turn_id === "string" ? input.turn_id.trim() : "";
   const stream = createReadStream(input.transcript_path, { encoding: "utf8" });
   const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   const flush = () => {
-    if (current.length === 0) return;
-    const context = current.find((row) => row?.type === "turn_context" || rowPayload(row)?.type === "turn_context");
-    const turnId = String(rowPayload(context)?.turn_id ?? "").trim();
-    if (!requestedTurn || requestedTurn === turnId) matched = [...(sessionMeta ? [sessionMeta] : []), ...current];
+    if (current.length > 0 && (!requestedTurn || requestedTurn === currentTurnId)) {
+      const hasFinal = current.some((row) => ["final", "final_answer"].includes(rowPayload(row)?.phase));
+      const completed = hasFinal && current.some((row) => {
+        const payload = rowPayload(row);
+        return ["task_complete", "task_completed"].includes(payload?.type)
+          && (!payload.turn_id || payload.turn_id === currentTurnId);
+      });
+      matched = input.require_completed === true && !completed || input.require_final === true && !hasFinal
+        ? [] : [...(sessionMeta ? [sessionMeta] : []), ...current];
+      matchedDiagnostics = { schema: "turn-evidence-read/v1", retained_rows: matched.length, completed,
+        turn_context_count: current.filter((row) => row.type === "turn_context" || rowPayload(row)?.type === "turn_context").length,
+        skipped: { ...skipped } };
+    }
     current = [];
     currentBytes = 0;
+    currentTurnId = "";
+    currentCwd = "";
+    excludedCalls = new Set();
+    skipped = {};
   };
   for await (const line of lines) {
-    if (!line || /"(?:agent_reasoning|reasoning)"/u.test(line)) continue;
+    if (!line) continue;
     if (Buffer.byteLength(line) > MAX_TRANSCRIPT_LINE_BYTES) throw new Error("turn_evidence_line_too_large");
     let row;
     try {
@@ -127,18 +156,49 @@ export async function loadTurnEvidenceRows(input = {}) {
       throw new Error("turn_evidence_transcript_corrupt");
     }
     if (row?.type === "session_meta") {
-      sessionMeta = row;
+      flush();
+      if (row.payload?.source && typeof row.payload.source === "object") throw new Error("turn_evidence_subagent_session");
+      sessionMeta = { ...row, payload: Object.fromEntries(["id", "cwd", "source", "model_provider", "timestamp"]
+        .filter((key) => row.payload?.[key] !== undefined).map((key) => [key, row.payload[key]])) };
       continue;
     }
     const payload = rowPayload(row);
     const isTurnContext = row?.type === "turn_context" || payload?.type === "turn_context";
-    if (isTurnContext) flush();
+    if (isTurnContext) {
+      const turnId = String(payload?.turn_id ?? "").trim();
+      const cwd = String(payload?.cwd ?? "");
+      if (!turnId || !currentTurnId || currentTurnId !== turnId) flush();
+      else if (cwd && currentCwd && cwd !== currentCwd) throw new Error("turn_evidence_scope_mismatch");
+      currentTurnId = turnId;
+      currentCwd ||= cwd;
+    }
+    if (requestedTurn && currentTurnId !== requestedTurn) continue;
+    if (["reasoning", "agent_reasoning"].includes(payload?.type)
+      || payload?.role === "assistant" && ["analysis", "reasoning"].includes(payload?.phase)) {
+      skipped.reasoning = (skipped.reasoning ?? 0) + 1;
+      continue;
+    }
     currentBytes += Buffer.byteLength(line);
     if (currentBytes > MAX_TURN_BYTES) throw new Error("turn_evidence_turn_too_large");
+    const message = messageFromRow(row);
+    if (["system", "developer"].includes(payload?.role) || message?.role === "user" && isInjectedUserContextText(message.text)) {
+      skipped.instructions = (skipped.instructions ?? 0) + 1;
+      continue;
+    }
+    const callId = payload?.call_id ?? payload?.id;
+    const coordination = coordinationCall(payload);
+    if (coordination && callId) excludedCalls.add(callId);
+    if (coordination || callId && excludedCalls.has(callId)) {
+      skipped.coordination = (skipped.coordination ?? 0) + 1;
+      continue;
+    }
     current.push(row);
   }
   flush();
   if (matched) rows.push(...matched);
+  if (typeof input.on_diagnostic === "function") input.on_diagnostic(matchedDiagnostics ?? {
+    schema: "turn-evidence-read/v1", retained_rows: 0, completed: false, turn_context_count: 0, skipped: {}
+  });
   return rows;
 }
 
@@ -250,7 +310,7 @@ function toolCallFromRow(row, workspaceRoot) {
   const type = payload?.type;
   if (!["function_call", "custom_tool_call", "mcp_tool_call", "mcp_tool_call_end"].includes(type)) return null;
   const invocation = payload.invocation && typeof payload.invocation === "object" ? payload.invocation : {};
-  const name = clip(invocation.tool ?? invocation.name ?? payload.name ?? payload.tool_name ?? payload.server ?? "tool", 128);
+  const name = clip(toolInvocationName(payload), 128);
   const effectiveArguments = invocation.arguments ?? invocation.input ?? payload.arguments ?? payload.input ?? payload.params ?? {};
   const effectiveResult = invocation.result ?? payload.result;
   const changedPaths = /(?:^|\.)apply_patch$/u.test(name)
@@ -761,11 +821,18 @@ export async function buildTurnEvidenceV1(input, options = {}) {
   let provider = clip(input?.provider, 64) || null;
   let model = clip(input?.model, 128) || null;
   let hardExclusion = null;
+  let parentTextClipped = 0;
 
   for (const [sourceOrder, row] of rows.entries()) {
     const payload = rowPayload(row);
     const callId = String(payload?.call_id ?? payload?.id ?? "");
+    if (coordinationCall(payload)) {
+      if (callId) excludedCallIds.add(callId);
+      continue;
+    }
     if (callId && excludedCallIds.has(callId)) continue;
+    const message = messageFromRow(row);
+    if (message?.role === "user" && isInjectedUserContextText(message.text)) continue;
     if (fileToolPaths(row).some((filePath) => excludedFilePath(filePath, exclusionPatterns, options.workspace_root))) {
       if (callId) excludedCallIds.add(callId);
       continue;
@@ -774,7 +841,6 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     if (payload?.type === "turn_context") model ||= clip(payload.model, 128) || null;
     if (row?.type === "session_meta") provider ||= clip(row.payload?.model_provider, 64) || null;
 
-    const message = messageFromRow(row);
     if (message?.text) {
       const normalized = normalizeMemoryPaths(message.text, options.workspace_root ?? null);
       if (UNSAFE_SIGNAL.test(normalized)) {
@@ -791,6 +857,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
         messageSpanIndex += 1;
         const spanId = `s${messageSpanIndex}`;
         const stripped = stripMemoryCitationBlocks(screened.text);
+        if (options.preserve_snippet_text !== true && clip(stripped, Number.MAX_SAFE_INTEGER).length > 4_000) parentTextClipped += 1;
         const text = options.preserve_snippet_text === true ? stripped.trim() : clip(stripped, 4_000);
         if (!text) continue;
         const messageKey = `${message.role}\0${text}`;
@@ -862,6 +929,10 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     snippet_aliases: hardExclusion ? {} : retainedAliases,
     events: hardExclusion ? [] : events.slice(0, 24),
     hard_exclusion_reason: hardExclusion,
+    collection_diagnostics: { schema: "memory-extraction-collection/v1", input_rows: rows.length,
+      parent_text_clipped: parentTextClipped, snippets_omitted: hardExclusion ? snippets.length : Math.max(0, snippets.length - retainedSnippetLimit),
+      events_omitted: hardExclusion ? events.length : Math.max(0, events.length - 24),
+      partial_due_to_safety_stop: Boolean(hardExclusion) },
     raw_transcript_persisted: false,
     reasoning_included: false,
     absolute_paths_included: false
@@ -1177,7 +1248,9 @@ export function buildLearningExtractionPacket(turnEvidence, discovery, options =
     const pool = selectCoverageEvidence(groups);
     const requestPacket = { ...packet, snippets: [], coverage_pass: 1 };
     const pass1 = packCoverageGroups(requestPacket, pool.groups, {
-      reserve_bytes: 256,
+      // The shared packer now includes the exact group metadata and matching
+      // events used by cap-runner. Do not reserve those bytes a second time.
+      reserve_bytes: 0,
       max_snippets: 8,
       upper_bound: (value) => memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(value))
     });
@@ -1203,7 +1276,8 @@ export function buildLearningExtractionPacket(turnEvidence, discovery, options =
         review_diagnostics: turnEvidence.review_diagnostics ?? null,
         pool_span_count: pool.span_count,
         pool_text_bytes: pool.text_bytes,
-        pass1_upper_bound: pass1.upper_bound
+        pass1_upper_bound: pass1.upper_bound,
+        input_diagnostics: pass1.diagnostics
       }
     };
     return { ...finalizedPacket, packet_hash: `sha256:${sha256(stableJson(finalizedPacket))}` };
@@ -1216,7 +1290,8 @@ export function buildLearningExtractionPacket(turnEvidence, discovery, options =
     : packMemoryExtractionSnippets(packet, evidenceCandidates, { reserve_bytes: 0, max_snippets: 8 });
   const finalizedPacket = {
     ...packed.packet,
-    snippets: packed.packet.snippets.map((item) => ({ ...item, text_hash: `sha256:${sha256(item.text)}` }))
+    snippets: packed.packet.snippets.map((item) => ({ ...item, text_hash: `sha256:${sha256(item.text)}` })),
+    input_diagnostics: { ...packed.diagnostics, omissions: packed.omissions, truncated_span_ids: packed.truncated_span_ids }
   };
   return { ...finalizedPacket, packet_hash: `sha256:${sha256(stableJson(finalizedPacket))}` };
 }

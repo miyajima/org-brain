@@ -151,6 +151,23 @@ function coverageInput() {
 const options = { tenantId: "tenant-a", principal: "client:installation-a", installationId: "installation-a" };
 
 describe("memory extraction enqueue", () => {
+  it("accepts the CLI coverage packet with unrelated pool events using the worker request budget", async () => {
+    const cliPath = '../../../packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs';
+    const { buildLearningExtractionPacket } = await import(cliPath);
+    const raw = input();
+    const events = Array.from({ length: 24 }, (_, i) => ({ event_id: `e${i}`, call_id: `call${i}`, status: 'completed', exit_code: 0 }));
+    const packet = buildLearningExtractionPacket({ project_id: 'project-a', session_hash: raw.session_hash,
+      turn_hash: raw.turn_hash, provider: raw.provider, model: raw.model, events,
+      snippets: [{ span_id: 't', role: 'tool', source: 'tool_result', call_id: 'call0', text: 'contract passed' }]
+    }, { routing: { llm_recommended: true }, review_drafts: [] }, { extraction_profile: 'coverage/v1' });
+    expect(packet.coverage.pass1_upper_bound).toBeLessThanOrEqual(2000);
+    expect(packet.events).toHaveLength(24);
+    const fixture = createFixture();
+    fixture.env.MEMORY_EXTRACTION_COVERAGE_ALLOWLIST_JSON = JSON.stringify([{
+      tenant_id: options.tenantId, project_id: 'project-a', installation_id: options.installationId
+    }]);
+    await expect(enqueueMemoryExtraction(fixture.env, { ...raw, packet }, options)).resolves.toMatchObject({ execution_status: 'reserved', reserved_tokens: 5600 });
+  });
   it("migrates populated extraction rows without changing IDs, foreign keys, indexes, or balances", () => {
     const database = new DatabaseSync(":memory:");
     database.exec(`PRAGMA foreign_keys=ON;

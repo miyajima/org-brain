@@ -1,0 +1,1343 @@
+{
+  "schema": "memory-extraction-local-token-diagnostic/v1",
+  "run": "implementation-v6",
+  "encoding": "o200k_base",
+  "tokenizer_version": "1.0.21",
+  "ranks_sha256": "d2a4d9f263b2de045dcd98f347c50e38d71104141948918b6c30a92fb2411f42",
+  "meaning": "Exact local counts of prompt/schema/name plus a 256-token reserve; not verified model tokenization, API usage, or fees",
+  "provider_calls": 0,
+  "aggregate": [
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "requests_counted": 7,
+      "reference_input_tokens_min": 616,
+      "reference_input_tokens_max": 682,
+      "reference_input_tokens_mean": 645.8571428571429
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "requests_counted": 1,
+      "reference_input_tokens_min": 692,
+      "reference_input_tokens_max": 692,
+      "reference_input_tokens_mean": 692
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "requests_counted": 7,
+      "reference_input_tokens_min": 614,
+      "reference_input_tokens_max": 673,
+      "reference_input_tokens_mean": 656.2857142857143
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "requests_counted": 2,
+      "reference_input_tokens_min": 705,
+      "reference_input_tokens_max": 715,
+      "reference_input_tokens_mean": 710
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "requests_counted": 7,
+      "reference_input_tokens_min": 636,
+      "reference_input_tokens_max": 986,
+      "reference_input_tokens_mean": 795
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "requests_counted": 2,
+      "reference_input_tokens_min": 882,
+      "reference_input_tokens_max": 1152,
+      "reference_input_tokens_mean": 1017
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "requests_counted": 7,
+      "reference_input_tokens_min": 636,
+      "reference_input_tokens_max": 986,
+      "reference_input_tokens_mean": 795
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "requests_counted": 2,
+      "reference_input_tokens_min": 882,
+      "reference_input_tokens_max": 1152,
+      "reference_input_tokens_mean": 1017
+    }
+  ],
+  "cases": [
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "consentside-01",
+      "reference_count": {
+        "prompt_tokens": 217,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 629
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "consentside-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "org-brain-02",
+      "reference_count": {
+        "prompt_tokens": 230,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 642
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "org-brain-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "socia-01",
+      "reference_count": {
+        "prompt_tokens": 268,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 680
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "socia-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": {
+        "prompt_tokens": 270,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 682
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 204,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 616
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 280,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 692
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 209,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 621
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "smart-block-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "smart-block-02",
+      "reference_count": {
+        "prompt_tokens": 239,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 651
+      }
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "smart-block-02",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "legacy",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "before",
+      "profile": "coverage",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "consentside-01",
+      "reference_count": {
+        "prompt_tokens": 254,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 666
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "consentside-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "org-brain-02",
+      "reference_count": {
+        "prompt_tokens": 254,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 666
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "org-brain-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "socia-01",
+      "reference_count": {
+        "prompt_tokens": 261,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 673
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "socia-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": {
+        "prompt_tokens": 260,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 672
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 255,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 667
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 303,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 715
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 202,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 614
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 293,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 705
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "smart-block-02",
+      "reference_count": {
+        "prompt_tokens": 224,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 636
+      }
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "smart-block-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "legacy",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-2000",
+      "profile": "coverage",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "consentside-01",
+      "reference_count": {
+        "prompt_tokens": 554,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 966
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "consentside-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "org-brain-02",
+      "reference_count": {
+        "prompt_tokens": 254,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 666
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "org-brain-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "socia-01",
+      "reference_count": {
+        "prompt_tokens": 380,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 792
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "socia-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": {
+        "prompt_tokens": 574,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 986
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 422,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 834
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 470,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 882
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 273,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 685
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 740,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 1152
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "smart-block-02",
+      "reference_count": {
+        "prompt_tokens": 224,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 636
+      }
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "smart-block-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "legacy",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-4000",
+      "profile": "coverage",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "consentside-01",
+      "reference_count": {
+        "prompt_tokens": 554,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 966
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "consentside-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "consentside-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "org-brain-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "org-brain-02",
+      "reference_count": {
+        "prompt_tokens": 254,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 666
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "org-brain-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "socia-01",
+      "reference_count": {
+        "prompt_tokens": 380,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 792
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "socia-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "socia-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "socia-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": {
+        "prompt_tokens": 574,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 986
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "sfk-shinsa-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "jrg-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "jrg-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 422,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 834
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "jrg-03",
+      "reference_count": {
+        "prompt_tokens": 470,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 882
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "factoreview-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 273,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 685
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "smart-block-01",
+      "reference_count": {
+        "prompt_tokens": 740,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 1152
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "smart-block-02",
+      "reference_count": {
+        "prompt_tokens": 224,
+        "schema_tokens": 151,
+        "tool_name_tokens": 5,
+        "envelope_reserve_tokens": 256,
+        "local_estimated_input_tokens": 636
+      }
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "smart-block-02",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "smart-block-03",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "legacy",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    },
+    {
+      "variant": "after-8000",
+      "profile": "coverage",
+      "case_id": "tsugi-01",
+      "reference_count": null
+    }
+  ],
+  "loader": [
+    {
+      "case_id": "consentside-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 280,
+        "completed": false,
+        "turn_context_count": 2,
+        "skipped": {
+          "coordination": 2
+        }
+      }
+    },
+    {
+      "case_id": "consentside-02",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 4,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "org-brain-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 46,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "org-brain-02",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 14,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {
+          "instructions": 1
+        }
+      }
+    },
+    {
+      "case_id": "socia-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 213,
+        "completed": false,
+        "turn_context_count": 2,
+        "skipped": {
+          "coordination": 2
+        }
+      }
+    },
+    {
+      "case_id": "socia-02",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 166,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "socia-03",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 430,
+        "completed": false,
+        "turn_context_count": 2,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "sfk-shinsa-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 8,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "sfk-shinsa-02",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 8,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "sfk-shinsa-03",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 21,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {
+          "instructions": 1
+        }
+      }
+    },
+    {
+      "case_id": "jrg-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 47,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "jrg-02",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 103,
+        "completed": false,
+        "turn_context_count": 2,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "jrg-03",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 3,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "factoreview-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 344,
+        "completed": false,
+        "turn_context_count": 2,
+        "skipped": {
+          "instructions": 1
+        }
+      }
+    },
+    {
+      "case_id": "smart-block-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 12,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "smart-block-02",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 175,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "smart-block-03",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 13,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    },
+    {
+      "case_id": "tsugi-01",
+      "diagnostic": {
+        "schema": "turn-evidence-read/v1",
+        "retained_rows": 34,
+        "completed": false,
+        "turn_context_count": 1,
+        "skipped": {}
+      }
+    }
+  ]
+}
