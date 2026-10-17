@@ -3,6 +3,9 @@ import {
   validateV3Packet,
   assertV3ProviderProfile,
   buildMemoryExtractionPrompt,
+  packCoverageGroups,
+  memoryExtractionProviderInputUpperBound,
+  memoryExtractionPolicyHashes,
   MEMORY_EXTRACTION_COVERAGE_PROFILE,
   HttpError,
   MEMORY_EXTRACTION_TOKEN_PROFILE,
@@ -122,7 +125,13 @@ function parseInput(raw: unknown): EnqueueInput {
     if (requestPacket.snippets.length === 0 || requestPacket.snippets.length > 8 || pass1Ids.size === 0 || pass1Groups.length !== pass1Ids.size || new Set(groupIds).size !== groupIds.length) {
       throw new HttpError(400, "invalid_payload", "coverage pass 1 selection is invalid");
     }
-    try { assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(requestPacket)); } catch {
+    try {
+      const packed = packCoverageGroups({ ...packet, coverage_pass: 1 }, pass1Groups.map((group) => ({
+        ...group, snippets: snippets.filter((item) => (group.span_ids as string[]).includes(String(asRecord(item).span_id)))
+      })), { upper_bound: (value: Record<string, unknown>) => memoryExtractionProviderInputUpperBound(buildMemoryExtractionPrompt(value)) });
+      if (packed.groups.length !== pass1Groups.length) throw new Error("coverage pass 1 selection exceeds input budget");
+      assertMemoryExtractionInputWithinCeiling(buildMemoryExtractionPrompt(packed.packet));
+    } catch {
       throw new HttpError(413, "memory_extraction_input_too_large", "coverage pass 1 exceeds the 2000-token ceiling");
     }
   } else {
@@ -295,11 +304,7 @@ export async function enqueueMemoryExtraction(env: Env, raw: unknown, options: E
       throw new HttpError(400, "invalid_payload", "coverage group dependency is missing");
     }
   }
-  const policyHashes = {
-    promptPolicyHash: `sha256:${await sha256(input.extraction_profile ? "memory-extraction-coverage-prompt/v1" : input.prompt_version ?? PROMPT_VERSION)}`,
-    verifierPolicyHash: `sha256:${await sha256(input.extraction_profile ? "memory-extraction-coverage-verifier/v1" : MEMORY_CONTRACT_V2_CONTRACT_HASH)}`,
-    executionPolicyHash: `sha256:${await sha256(input.extraction_profile ? "memory-extraction-coverage-execution/v1" : "memory-extraction-single-pass/v1")}`
-  };
+  const policyHashes = await memoryExtractionPolicyHashes(input.packet, MEMORY_CONTRACT_V2_CONTRACT_HASH);
   const screened = screenSensitiveMemory(packetJson, { mode: "deny", allowed_principals: [] });
   const keys = hmacKeys(env);
   const identity = stableJson({

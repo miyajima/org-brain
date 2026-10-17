@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MEMORY_CONTRACT_V2_CONTRACT_HASH, sha256 } from "@org-brain/shared";
+import { MEMORY_CONTRACT_V2_CONTRACT_HASH, memoryExtractionPolicyHashes, sha256 } from "@org-brain/shared";
 import { __memoryExtractionInternals, runMemoryExtraction } from "../src/capabilities/memory-extraction";
 import type { CapabilityContext, Env } from "../src/types";
 
@@ -101,6 +101,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     limits: { input_tokens: 2_000, output_tokens: 800, candidates: 3, calls: 1 }
   };
   const packetHash = `sha256:${await sha256(JSON.stringify(stableValue(packet)))}`;
+  const policy = await memoryExtractionPolicyHashes(packet, MEMORY_CONTRACT_V2_CONTRACT_HASH);
   const input = {
     schema_version: 1,
     run_id: "run-a",
@@ -113,6 +114,9 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     turn_hash: "turn-hash",
     tier: "tier2",
     packet_hash: packetHash,
+    prompt_policy_hash: policy.promptPolicyHash,
+    verifier_policy_hash: policy.verifierPolicyHash,
+    execution_policy_hash: policy.executionPolicyHash,
     contract_hash: MEMORY_CONTRACT_V2_CONTRACT_HASH,
     prompt_version: "memory-extraction-prompt/v1",
     redaction_version: "turn-evidence-redaction/v1",
@@ -135,6 +139,8 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     "episode-state-machine/v1", status === "reserved" ? 2_800 : 0, "inputs/run-a.json", now, now,
     now + 86_400_000, input.capsule_expires_at
   );
+  database.prepare("UPDATE memory_extraction_runs SET prompt_policy_hash=?, verifier_policy_hash=?, execution_policy_hash=? WHERE id='run-a'")
+    .run(policy.promptPolicyHash, policy.verifierPolicyHash, policy.executionPolicyHash);
   database.prepare("INSERT INTO memory_extraction_token_buckets VALUES(?,?,?,?,?,?,?)").run(
     "tenant-a", new Date(now).toISOString().slice(0, 7), "tier2", 500_000,
     status === "reserved" ? 2_800 : 0, 0, now
@@ -201,9 +207,10 @@ async function enableCoverage(fx: Awaited<ReturnType<typeof fixture>>) {
     limits: { input_tokens: 2_000, output_tokens: 800, candidates: 3, calls: 2 }
   };
   stored.extraction_profile = "coverage/v1";
-  stored.prompt_policy_hash = `sha256:${"1".repeat(64)}`;
-  stored.verifier_policy_hash = `sha256:${"2".repeat(64)}`;
-  stored.execution_policy_hash = `sha256:${"3".repeat(64)}`;
+  const policy = await memoryExtractionPolicyHashes(stored.packet, MEMORY_CONTRACT_V2_CONTRACT_HASH);
+  stored.prompt_policy_hash = policy.promptPolicyHash;
+  stored.verifier_policy_hash = policy.verifierPolicyHash;
+  stored.execution_policy_hash = policy.executionPolicyHash;
   stored.packet_hash = `sha256:${await sha256(JSON.stringify(stableValue(stored.packet)))}`;
   fx.bucket.objects.set("inputs/run-a.json", JSON.stringify(stored));
   fx.database.prepare("UPDATE memory_extraction_runs SET schema_version='learning-extraction-proposal/v2', packet_hash=?, extraction_profile='coverage/v1', prompt_policy_hash=?, verifier_policy_hash=?, execution_policy_hash=?, reserved_tokens=5600 WHERE id='run-a'")
@@ -304,6 +311,19 @@ describe("memory extraction capability", () => {
     expect(database.prepare("SELECT outcome, coverage_status, charged_tokens FROM memory_extraction_runs WHERE id='run-a'").get()).toEqual({ outcome: "succeeded", coverage_status: "executed", charged_tokens: 255 });
     expect(database.prepare("SELECT COUNT(*) AS count FROM memory_learning_candidates").get()).toEqual({ count: 2 });
     expect([...bucket.objects.keys()].filter((key) => key.includes("/passes/run-a/"))).toHaveLength(2);
+  });
+
+  it.each(["prompt_policy_hash", "verifier_policy_hash", "execution_policy_hash"])("does not send an old queued extraction under a changed %s", async (field) => {
+    const { database, bucket, context } = await enableCoverage(await fixture());
+    const stored = await (await bucket.get("inputs/run-a.json"))!.json<any>();
+    stored[field] = "obsolete-policy";
+    bucket.objects.set("inputs/run-a.json", JSON.stringify(stored));
+    database.prepare(`UPDATE memory_extraction_runs SET ${field}=? WHERE id='run-a'`).run(stored[field]);
+    const provider = vi.fn(async () => new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [] }), usage: { input_tokens: 10, output_tokens: 5 } })));
+    vi.stubGlobal("fetch", provider);
+    await expect(runMemoryExtraction(context)).rejects.toThrow("policy mismatch");
+    expect(provider).not.toHaveBeenCalled();
+    expect(database.prepare("SELECT reserved_tokens FROM memory_extraction_token_buckets").get()).toEqual({ reserved_tokens: 5600 });
   });
 
   it("keeps pass-one candidates when coverage pass two fails and never retries it", async () => {

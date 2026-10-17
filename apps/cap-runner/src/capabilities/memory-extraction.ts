@@ -15,6 +15,7 @@ import {
   MEMORY_EXTRACTION_OUTPUT_SCHEMA,
   MEMORY_EXTRACTION_TOKEN_PROFILE,
   memoryExtractionProviderInputUpperBound,
+  memoryExtractionPolicyHashes,
   MEMORY_CONTRACT_V2_CONTRACT_HASH,
   MEMORY_CONTRACT_V2_PROMPT_HASH,
   MEMORY_CONTRACT_V2_PROMPT_ID,
@@ -892,6 +893,13 @@ export async function runMemoryExtraction(ctx: CapabilityContext): Promise<Capab
     || input.verifier_policy_hash !== run.verifier_policy_hash
     || input.execution_policy_hash !== run.execution_policy_hash) {
     throw new Error("memory extraction run attestation mismatch");
+  }
+  const policy = await memoryExtractionPolicyHashes(input.packet, MEMORY_CONTRACT_V2_CONTRACT_HASH);
+  if (input.prompt_policy_hash !== policy.promptPolicyHash || input.verifier_policy_hash !== policy.verifierPolicyHash
+    || input.execution_policy_hash !== policy.executionPolicyHash) {
+    // Preserve existing reservations/checkpoints. A deployment mismatch cannot
+    // prove that an old running pass was unsent, so do not zero its accounting.
+    throw new Error("memory extraction policy mismatch");
   }
   const installation = await ctx.env.OPEN_BRAIN_DB.prepare(
     "SELECT status, purpose FROM mcp_client_installations WHERE tenant_id = ? AND id = ?"

@@ -1618,6 +1618,8 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       operational_history_count: operationalRecords.length,
       packet_hash: extractionPacket?.packet_hash ?? null,
       extraction_error: extractionPacketError,
+      collection_diagnostics: turnEvidence.collection_diagnostics,
+      input_diagnostics: extractionPacket?.input_diagnostics ?? extractionPacket?.coverage?.input_diagnostics ?? null,
       provider: turnEvidence.provider,
       model: turnEvidence.model,
       reserved_tokens: extractionPacket ? (extractionPacket.extraction_profile === "coverage/v1" ? 5_600 : 2_800) : 0,
@@ -2186,10 +2188,13 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const refinementProfile = refinementProfileValue === "a-plus/v1" ? refinementProfileValue : undefined;
   let evidenceRows = [];
   let evidenceLoadError = null;
+  let evidenceReadDiagnostics = null;
   if (inputSourceName === "codex-stop" && (extractionMode !== "off" || ["on", "shadow", "confirm", "eager"].includes(workspace.memoryLearningMode))) {
     evidenceRows = await loadTurnEvidenceRows({
       transcript_path: normalizedRecord.metadata?.transcriptPath,
-      turn_id: normalizedRecord.metadata?.turnId
+      turn_id: normalizedRecord.metadata?.turnId,
+      require_final: true,
+      on_diagnostic: (value) => { evidenceReadDiagnostics = value; }
     }).catch((error) => {
       evidenceLoadError = error instanceof Error ? error.message : "turn_evidence_load_failed";
       return [];
@@ -2201,6 +2206,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
       refinementProfile
     });
     if (evidenceLoadError) extractionPrepared.report.turn_evidence_error = evidenceLoadError;
+    if (evidenceReadDiagnostics) extractionPrepared.report.turn_evidence_read = evidenceReadDiagnostics;
     shadowReport = extractionPrepared.report;
     learningReviewCandidates = extractionPrepared.reviewCandidates ?? [];
     if (

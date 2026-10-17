@@ -88,6 +88,54 @@ pnpm contract:check
 
 These checks prove local code, contracts, migration behavior, and fake-provider execution. They do not prove fixed-set quality, deployment, runtime enablement, or platform acceptance.
 
+## Input preservation and policy compatibility
+
+The logical turn reader retains consecutive `turn_context` records with the same
+turn ID, including evidence before compaction. A different turn ID starts a new
+bounded group; reusing an ID after another turn never joins the groups. The 8 MiB
+limit applies to the whole logical group. Requested-turn reads do not accumulate
+unrelated historical groups. Cross-workspace changes within a logical group fail
+closed. Instruction roles, internal reasoning, child sessions, and direct agent
+coordination results are excluded. Opaque wrappers remain an evidence coverage gap.
+
+Stop requires a final-answer record. A strict offline reader can additionally
+require the actual `task_complete` marker; Stop does not require that marker,
+because native completion delivery can precede its append. Neither signal
+attests the truth of an assistant's claimed execution outcome.
+
+Coverage combines consecutive human decisions with explicitly introduced human
+reasons/exceptions. Tool recovery groups require the same operation name and
+nonempty argument hash, a failed result and a later completed successful result.
+An intervening explicit human correction can join that group. An unrelated
+successful operation and an assistant's proposed rationale cannot supply that
+human dependency. Groups remain all-or-nothing under pool and input limits.
+
+The shared packer now budgets the actual selected group metadata and only the
+events matching selected tool call IDs. Hook and cap-runner use the same request
+shape with no extra 256-byte group reservation; the provider envelope reserve
+inside the conservative bound remains unchanged. Full pool provenance and event
+records remain in staging and verification. Long group IDs remain in checkpoints
+but are omitted from the model prompt; supplied span IDs remain unchanged.
+
+Coverage and A+ prompts include the existing rationale, why_it_worked, reuse_when,
+reason_rejected and avoidance_rule fields. Missing reasons remain gaps. Counts of
+clipped parents, bounded snippets/events, packed/omitted evidence and read
+exclusions are diagnostics, not human quality labels or verified outcomes.
+
+Enqueue fingerprints the executable prompt serialization and strict schema rather
+than trusting a caller's prompt-version label. Coverage execution policy is v2.
+Before an external call, the worker checks all policy hashes against its current
+implementation. An old-policy queued run is rejected without sending or altering
+its reservations/checkpoints; a mismatch cannot prove that a previous pass was
+unsent. Already-settled results remain readable. Never repair a held run by
+rewriting its hashes. Before a future deployment, pause admission and drain or
+retain old runs with their matching worker; deploy compatible API/worker versions
+with all activation gates off before considering new runs.
+
+The production input/output/candidate/call ceilings remain 2,000/800/3/2. Offline
+copies used for 4,000/8,000 input-bound comparisons do not alter those settings.
+See [input budget diagnostics](MEMORY_EXTRACTION_INPUT_BUDGETS.md).
+
 ## Review priority signals
 
 Coverage packets now attach current-turn `coverage-review-signals/v1` diagnostics.
