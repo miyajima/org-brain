@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+
 const DEFAULT_ENDPOINT = "http://127.0.0.1:11434";
 const DEFAULT_MODEL = "qwen3-embedding:0.6b";
 const DEFAULT_DIMENSIONS = 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
+export const EMBEDDINGGEMMA2_MODEL = "embeddinggemma-2:270m-bf16-text";
 
 function isLoopbackEndpoint(endpoint) {
   const url = new URL(endpoint);
@@ -29,22 +32,28 @@ function validateVector(vector, dimensions) {
 
 export class OllamaEmbeddingProvider {
   constructor(options = {}) {
+    this.inputFormat = options.inputFormat ?? "qwen";
     this.endpoint = normalizedEndpoint(options.endpoint);
     this.model = String(options.model || DEFAULT_MODEL);
     this.dimensions = Number(options.dimensions || DEFAULT_DIMENSIONS);
     this.timeoutMs = Number(options.timeoutMs || DEFAULT_TIMEOUT_MS);
-    this.provider = `ollama:${this.model}`;
+    this.provider = `ollama:${this.model}${this.inputFormat === "embeddinggemma2" ? ":retrieval-v1" : ""}`;
     if (!Number.isInteger(this.dimensions) || this.dimensions < 32 || this.dimensions > 4096) {
       throw new Error("local_embedding_invalid_dimensions");
     }
   }
 
   async embedDocuments(texts) {
-    return this.#embed(texts.map((text) => String(text).slice(0, 4_000)));
+    return this.#embed(texts.map((text) => {
+      const content = String(text).slice(0, 4_000);
+      return this.inputFormat === "embeddinggemma2" ? `title: none | text: ${content}` : content;
+    }));
   }
 
   async embedQuery(text) {
-    const instruction = [
+    const instruction = this.inputFormat === "embeddinggemma2"
+      ? `task: search result | query: ${String(text).slice(0, 4_000)}`
+      : [
       "Instruct: Retrieve the durable software-engineering lesson that best helps with the next task.",
       `Query: ${String(text).slice(0, 4_000)}`
     ].join("\n");
@@ -86,14 +95,37 @@ export class OllamaEmbeddingProvider {
   }
 }
 
-export function localDenseEmbeddingProviderFromEnvironment(env = process.env) {
+export function localDenseEmbeddingProviderFromEnvironment(env = process.env, { dbPath = null } = {}) {
+  // Scope persisted settings to one database. Scratch DBs and explicit off/sparse
+  // overrides must never inherit the user's live embedding configuration.
+  if (dbPath && !Object.hasOwn(env, "ORGBRAIN_LOCAL_EMBEDDING_PROVIDER")) {
+    let settings = null;
+    try { settings = JSON.parse(readFileSync(`${dbPath}.embedding.json`, "utf8")); }
+    catch (error) {
+      if (error.code !== "ENOENT") throw new Error("local_embedding_settings_invalid", {cause: error});
+    }
+    if (settings !== null) {
+      if (settings.version !== 1 || typeof settings.provider !== "string") throw new Error("local_embedding_settings_invalid");
+      const defaults = {};
+      for (const [key, name] of Object.entries({
+        provider: "PROVIDER", model: "MODEL", dimensions: "DIMENSIONS", url: "URL", timeout_ms: "TIMEOUT_MS"
+      })) {
+        if (settings[key] !== undefined) defaults[`ORGBRAIN_LOCAL_EMBEDDING_${name}`] = String(settings[key]);
+      }
+      env = {...defaults, ...env};
+    }
+  }
   const provider = String(env.ORGBRAIN_LOCAL_EMBEDDING_PROVIDER || "").trim().toLowerCase();
   if (!provider || provider === "sparse" || provider === "off") return null;
-  if (provider !== "qwen-ollama") throw new Error("local_embedding_unknown_provider");
+  if (!["qwen-ollama", "embeddinggemma2-ollama"].includes(provider)) throw new Error("local_embedding_unknown_provider");
+  const gemma = provider === "embeddinggemma2-ollama";
+  const dimensions = Number(env.ORGBRAIN_LOCAL_EMBEDDING_DIMENSIONS || (gemma ? 768 : DEFAULT_DIMENSIONS));
+  if (gemma && ![128, 256, 512, 768].includes(dimensions)) throw new Error("local_embedding_invalid_dimensions");
   return new OllamaEmbeddingProvider({
     endpoint: env.ORGBRAIN_LOCAL_EMBEDDING_URL,
-    model: env.ORGBRAIN_LOCAL_EMBEDDING_MODEL,
-    dimensions: env.ORGBRAIN_LOCAL_EMBEDDING_DIMENSIONS,
+    model: env.ORGBRAIN_LOCAL_EMBEDDING_MODEL || (gemma ? EMBEDDINGGEMMA2_MODEL : DEFAULT_MODEL),
+    dimensions,
+    inputFormat: gemma ? "embeddinggemma2" : "qwen",
     timeoutMs: env.ORGBRAIN_LOCAL_EMBEDDING_TIMEOUT_MS
   });
 }

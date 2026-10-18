@@ -144,7 +144,7 @@ test("the total candidate set remains bounded and literal single-term queries ar
 
 async function databaseFixture(fn) {
   const directory = await mkdtemp(join(tmpdir(), "context-followups-"));
-  const store = new LocalMemoryStore(join(directory, "memory.sqlite"), { env: {}, denseEmbeddingProvider: null });
+  const store = new LocalMemoryStore(join(directory, "memory.sqlite"), { env: {}, denseEmbeddingProvider: null, relevanceSelector: null });
   try { await store.init(); await fn(store); } finally { await rm(directory, { recursive: true, force: true }); }
 }
 async function seed(store, key, extra = {}) {

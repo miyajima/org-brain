@@ -31,7 +31,7 @@ function string(value, name, max = 128) {
 // Identity syntax is context-specific. Never exempt UUID-looking strings in prose or refs.
 const OPAQUE_ID = /^(?:[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}|memory-confirmation:[a-f0-9]{40})$/iu;
 const SHA256 = /^(?:sha256:)?[a-f0-9]{64}$/u;
-const CONTEXT_ID_PATH = /^(?:meta\.(?:usage_id|usage_item_ids\.\d+|usage_items\.\d+\.(?:usage_item_id|source_id))|results\.\d+\.memory\.(?:id|project_id)|evidence_bundle\.evidence\.\d+\.(?:memory_id|(?:source_reference|additional_sources\.\d+)\.(?:span_id|parent_span_id))|attempt_usage_ids\.\d+|prior_attempts\.\d+\.(?:id|tenant_id|project_id|supersedes_id))$/u;
+const CONTEXT_ID_PATH = /^(?:meta\.(?:usage_id|usage_item_ids\.\d+|usage_items\.\d+\.(?:usage_item_id|source_id))|results\.\d+\.memory\.(?:id|project_id)|candidates\.\d+\.(?:memory_id|detail_ref\.arguments\.(?:tenant_id|memory_id|principal_id|project_id|business_category_id|work_type))|evidence_bundle\.evidence\.\d+\.(?:memory_id|(?:source_reference|additional_sources\.\d+)\.(?:span_id|parent_span_id))|attempt_usage_ids\.\d+|prior_attempts\.\d+\.(?:id|tenant_id|project_id|supersedes_id))$/u;
 const CONTEXT_HASH_PATH = /^(?:evidence_bundle\.evidence\.\d+\.(?:source_reference|additional_sources\.\d+)\.content_hash|prior_attempts\.\d+\.(?:conditions_hash|evidence\.\d+\.content_hash))$/u;
 function identifier(value, name) {
   string(value, name);
@@ -193,30 +193,43 @@ async function retrieve(store, input) {
   if (result.isError) throw new Error('context_enrich_failed');
   const rawContext = JSON.parse(result.content.filter(item => item.type === 'text').map(item => item.text).join('\n'));
   const items = rawContext.meta?.usage_items ?? [];
+  const pending = rawContext.meta?.local_relevance?.status === 'pending_host_selection';
+  const representation = pending ? 'candidate_preview' : 'full_evidence';
+  const candidateVersions = new Map((rawContext.candidates ?? []).map(item => [item.memory_id,item.current_version]));
   const evidenceIds = new Set((rawContext.evidence_bundle?.evidence ?? []).map(item => item.memory_id));
-  if (items.some(item => !evidenceIds.has(item.source_id))) throw new Error('retrieval_receipt_without_evidence');
+  const resultVersions = new Map((rawContext.results ?? []).map(item => [item.memory.id,item.memory.current_version]));
+  if (items.some(item => !Number.isSafeInteger(item.source_version) || item.source_version < 1
+    || (pending ? candidateVersions.get(item.source_id) !== item.source_version
+      : !evidenceIds.has(item.source_id) || resultVersions.get(item.source_id) !== item.source_version))) {
+    throw new Error(pending ? 'retrieval_receipt_without_matching_candidate' : 'retrieval_receipt_without_evidence');
+  }
   const context = redact(rawContext, 'context');
   const retrievedIds = items.map(item => item.source_id);
   return seal({ schema: SCHEMA, id: randomUUID(), phase: 'retrieve', created_at: Date.now(),
     session_kind: input.session_kind, scope: s, usage_id: rawContext.meta.usage_id,
     query: { text: redact(input.query), sha256: hash(input.query), executed_exactly_as_supplied: true },
     retrieval_policy: { tool: 'orgbrain_context_enrich', threshold: 'normal_tool_default', top_k: 'normal_tool_default',
-      token_budget: 'normal_tool_default', provider_calls: 0, query_expansion: false },
+      token_budget: 'normal_tool_default', provider_calls: 0, query_expansion: false, representation,
+      selection_state: pending ? 'pending_selection' : 'not_observed' },
     source_refs: input.source_refs, context,
-    evidence: { raw_mcp_result_sha256: hash(rawContext), emitted_context_sha256: hash(context), redacted: canonical(context) !== canonical(rawContext) },
+    evidence: { basis:'artifact_hashes_only', representation, is_full_evidence:!pending, raw_mcp_result_sha256: hash(rawContext), emitted_context_sha256: hash(context), redacted: canonical(context) !== canonical(rawContext) },
     stages: {
       capture: input.capture,
       saved: { count: saved.filter(item => item.stored).length, basis: 'tool_observed_store_presence', items: saved,
         note: 'Presence is not proof of capture in this session or human confirmation.' },
-      retrieved: { count: items.length, basis: 'tool_observed_context_result', items,
+      retrieved: { count: items.length, basis: 'tool_observed_context_result', representation, items,
         requested_sources_returned: input.source_memory_ids.filter(id => retrievedIds.includes(id)),
         requested_sources_not_returned: input.source_memory_ids.filter(id => !retrievedIds.includes(id)) },
-      delivered: { count: items.length, basis: 'tool_observed_output_artifact', items,
+      delivered: { count: items.length, basis: 'tool_observed_output_artifact', representation, items,
         destination: 'explicit_private_output_file', parent_consumption: 'unknown' },
+      selection: {state:pending ? 'pending_selection' : 'not_observed',count:null,basis:'not_observed'},
+      selected_full_details: {state:'not_observed',count:null,basis:'not_observed'},
       adopted: { count: null, basis: 'not_observed' },
       execution: { state: 'not_observed' }, effect: unknownEffect()
     },
     limitations: ['Artifact export does not establish parent consumption or adoption.',
+      'Expected source IDs measure returned target presence; they do not select candidates.',
+      ...(pending ? ['Candidate previews are not full evidence; selected full detail retrieval was not observed.'] : []),
       'Hashes detect altered evidence; caller references do not authenticate their source.',
       'Pattern redaction is not a guarantee that arbitrary free text contains no personal data.',
       ...(input.session_kind === 'synthetic' ? ['Synthetic fixture only; no actual-session savings claim.'] : [])]
@@ -241,16 +254,21 @@ async function recordUse(store, input, receipt) {
       if (!row || row.source_id !== item.source_id || row.source_version !== item.source_version) throw new Error('delivery_scope_mismatch');
     }
   } finally { db.close(); }
+  const representation = receipt.stages.delivered.representation ?? 'full_evidence';
   const report = seal({ schema: SCHEMA, id: randomUUID(), phase: 'record-use', created_at: Date.now(), session_kind: input.session_kind,
     scope: s, usage_id: receipt.usage_id, retrieval_receipt_sha256: receipt.receipt_sha256,
     stages: { capture: receipt.stages.capture, saved: receipt.stages.saved, retrieved: receipt.stages.retrieved,
-      delivered: receipt.stages.delivered, adopted: { count: input.items.filter(item => item.adopted === true).length,
+      delivered: receipt.stages.delivered,
+      selection: receipt.stages.selection ?? {state:'not_observed',count:null,basis:'not_observed'},
+      selected_full_details: receipt.stages.selected_full_details ?? {state:'not_observed',count:null,basis:'not_observed'},
+      adopted: { representation, count: input.items.filter(item => item.adopted === true).length,
         not_adopted_count: input.items.filter(item => item.adopted === false).length,
         unassessed_count: receipt.stages.delivered.count - input.items.filter(item => item.adopted !== null).length,
-        basis: 'caller_reported', items: input.items },
+        basis: 'caller_reported', items: input.items.map(item=>({...item,representation,selected_full_detail_state:'not_observed'})) },
       execution: { state: 'reported_only', tool_observed_actions: null, verified_outcomes: null }, effect: unknownEffect() },
     state_update: { usage_event_id: receipt.usage_id, updated_count: input.items.length, used_state_source: 'reported' },
     limitations: ['Supplied action and result are reports, not trusted tool observations or verified effects.',
+      ...(representation === 'candidate_preview' ? ['Reported adoption of a preview does not establish full detail retrieval or verified use.'] : []),
       'No contribution rating, proof, verified-use record, savings estimate, or ranking adjustment was created.',
       ...(input.session_kind === 'synthetic' ? ['Synthetic fixture only; no actual-session savings claim.'] : [])]
   });

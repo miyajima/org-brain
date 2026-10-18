@@ -26,7 +26,7 @@ export function measureCompactMemoryContext(response) {
 }
 
 export function buildCompactMemoryContext({ results, query, topK, tokenBudget, at, usageId,
-  verificationSampled = false, judgment = null, protectedIds = [], contextSearch = null }) {
+  verificationSampled = false, judgment = null, protectedIds = [], contextSearch = null, retrieval = null, localRelevance = null }) {
   const multiple = requiresMultipleEvidenceSources(query);
   const taskQuery = localTaskQueryPlan(query);
   const conflicted = results.some(({ memory }) => memory.conflicts?.length)
@@ -35,6 +35,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
   const seen = new Set();
   let budgetLimited = false;
   let duplicates = 0;
+  let relevanceMetadata = localRelevance;
 
   const responseFor = (items, missing = []) => measured({
     results: items.map(({ result: { memory, score } }) => ({
@@ -43,6 +44,8 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
       score: { total: score.total }
     })),
     meta: {
+      ...(relevanceMetadata ? {local_relevance:relevanceMetadata} : {}),
+      ...(retrieval ? { retrieval } : {}),
       ...(contextSearch ? { context_search: contextSearch } : {}),
       usage_id: usageId,
       usage_item_ids: items.map((item) => item.id),
@@ -77,7 +80,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
       abstention_recommended: items.length === 0,
       budget_limited: budgetLimited,
       duplicates_omitted: duplicates,
-      degraded_reasons: ["local_sparse_retrieval", ...(items.some(({ result: { memory } }) =>
+      degraded_reasons: [retrieval?.dense_scored_unit_count > 0 ? "local_dense_retrieval" : "local_sparse_retrieval", ...(items.some(({ result: { memory } }) =>
         Number(memory.confidence_score ?? 0.5) < 0.5) ? ["low_confidence_evidence"] : [])],
       guidance: "Historical evidence only. Verify current sources and reuse conditions before applying; a retrieval is not proof of use or savings."
     }
@@ -99,6 +102,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
     seen.add(key);
   }
   let missing = conflicted ? ["conflicting_evidence"] : [];
+  if (localRelevance?.status === "unavailable") missing.push("local_relevance_unavailable");
   if (!conflicted && selected.length && taskQuery?.clauses.length > 1
     && !coversLocalTaskQuery(selected.map((item) => item.result.memory), taskQuery)) {
     missing.push("incomplete_question_coverage");
@@ -112,6 +116,13 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
   if (!conflicted && selected.length === 0) missing.push(results.length ? "context_budget_exhausted" : "no_relevant_evidence");
   if (missing.length) selected.length = 0;
   let response = responseFor(selected, missing);
+  if (response.evidence_bundle.estimated_tokens > tokenBudget && relevanceMetadata) {
+    // Keep the decision and failure reason at the minimum supported budget;
+    // full model provenance remains available in search/full-context metadata.
+    relevanceMetadata = Object.fromEntries(["status","reason","minimum_score","scored_count","kept_count"]
+      .filter(key=>localRelevance[key]!==undefined).map(key=>[key,localRelevance[key]]));
+    response = responseFor(selected, missing);
+  }
   // Changes to omission counters can alter the encoded length at a boundary.
   while (selected.length && response.evidence_bundle.estimated_tokens > tokenBudget) {
     selected.pop();

@@ -359,7 +359,7 @@ test("local sparse embeddings retrieve a synonym without external services", asy
 test("legacy context retrieval keeps a graph-linked memory without lexical or semantic matches", async () => {
   const ctx = await fixture();
   try {
-    const store = new LocalMemoryStore(ctx.dbPath);
+    const store = new LocalMemoryStore(ctx.dbPath, { relevanceSelector: null });
     const seed = await store.capture(captureInput({
       external_key: "graph:seed",
       content: "Photonic orrery calibration is required.",
@@ -482,7 +482,7 @@ test("hybrid_v3 searches derived units, preserves ACLs, and rebuilds projections
 test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async () => {
   const ctx = await fixture();
   try {
-    const store = new LocalMemoryStore(ctx.dbPath);
+    const store = new LocalMemoryStore(ctx.dbPath, { relevanceSelector: null });
     const first = await store.capture(captureInput({
       external_key: "v4:preference:first",
       content: [
@@ -1048,7 +1048,7 @@ test("doctor provides copy-paste recovery commands for unsafe permissions", asyn
 test("local MCP exposes capture and search over the same MemoryStore", async () => {
   const ctx = await fixture();
   try {
-    const store = new LocalMemoryStore(ctx.dbPath);
+    const store = new LocalMemoryStore(ctx.dbPath, { relevanceSelector: null });
     const tools = await handleLocalMcpRequest(store, { method: "tools/list" });
     assert.ok(tools.tools.some((tool) => tool.name === "orgbrain_memory_capture"));
     const searchTool = tools.tools.find((tool) => tool.name === "orgbrain_memory_search");

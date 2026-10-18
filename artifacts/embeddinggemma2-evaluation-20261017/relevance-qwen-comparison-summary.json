@@ -1,0 +1,259 @@
+{
+  "schema": "local-relevance-comparison-summary/v1",
+  "calibration": {
+    "metrics": {
+      "gemma": {
+        "raw": {
+          "positive_count": 16,
+          "hit_at_1": 0.9375,
+          "hit_at_5": 1,
+          "mrr_at_5": 0.96875,
+          "negative_count": 16,
+          "negative_any_result_rate": 1,
+          "mean_result_count": 4.96875
+        },
+        "selected": {
+          "positive_count": 16,
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "mrr_at_5": 1,
+          "negative_count": 16,
+          "negative_any_result_rate": 0.0625,
+          "mean_result_count": 0.75
+        },
+        "lost_targets": 0
+      },
+      "qwen": {
+        "raw": {
+          "positive_count": 16,
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "mrr_at_5": 1,
+          "negative_count": 16,
+          "negative_any_result_rate": 1,
+          "mean_result_count": 4.9375
+        },
+        "selected": {
+          "positive_count": 16,
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "mrr_at_5": 1,
+          "negative_count": 16,
+          "negative_any_result_rate": 0.0625,
+          "mean_result_count": 0.75
+        },
+        "lost_targets": 0
+      }
+    },
+    "query_hash": "b64696326764bfe517d90682e6a99854fe26ea52f0a0a03e9e7eb23b65c325f0"
+  },
+  "holdout": {
+    "metrics": {
+      "gemma": {
+        "raw": {
+          "positive_count": 16,
+          "hit_at_1": 0.8125,
+          "hit_at_5": 1,
+          "mrr_at_5": 0.90625,
+          "negative_count": 16,
+          "negative_any_result_rate": 0.875,
+          "mean_result_count": 4.59375
+        },
+        "selected": {
+          "positive_count": 16,
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "mrr_at_5": 1,
+          "negative_count": 16,
+          "negative_any_result_rate": 0,
+          "mean_result_count": 1.25
+        },
+        "lost_targets": 0
+      },
+      "qwen": {
+        "raw": {
+          "positive_count": 16,
+          "hit_at_1": 0.75,
+          "hit_at_5": 1,
+          "mrr_at_5": 0.8645833333333333,
+          "negative_count": 16,
+          "negative_any_result_rate": 0.875,
+          "mean_result_count": 4.59375
+        },
+        "selected": {
+          "positive_count": 16,
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "mrr_at_5": 1,
+          "negative_count": 16,
+          "negative_any_result_rate": 0,
+          "mean_result_count": 1.25
+        },
+        "lost_targets": 0
+      }
+    },
+    "query_hash": "b51a513d8be87c8245a2798a30a8e9db198d7a520b701f8302d40bb7e74b1985"
+  },
+  "corpus_hash": "b785987f70017910633f0d6b210522506341b2c41bf7b056b7a236b1f74a4e0f",
+  "candidate_limit": 20,
+  "output_limit": 5,
+  "common_threshold": 0.9,
+  "calibration_and_holdout_at": 1792248429630,
+  "policy_hash": "11fcc1b8e8500f087dc790fa2ac5fed0fff89b8674b83133842f7721c62ee033",
+  "threshold_sha256": "0ccfe54f0be78f6b7dee2aea197859a4da4fd5cfa1da3d896cca8501dceb8128",
+  "models": {
+    "gemma": {
+      "model": "embeddinggemma-2:270m-bf16-text",
+      "provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+      "dimensions": 768,
+      "digest": "afeb999480b2a5e48b590fc0583f8cbc7d206b74156feaead3a7840b81719295",
+      "quantization": "",
+      "format": "safetensors",
+      "runner": "mlx"
+    },
+    "qwen": {
+      "model": "qwen3-embedding:0.6b",
+      "provider": "ollama:qwen3-embedding:0.6b",
+      "dimensions": 1024,
+      "digest": "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+      "quantization": "Q8_0",
+      "format": "gguf",
+      "runner": "ggml"
+    }
+  },
+  "reranker": {
+    "model": "Qwen/Qwen3-Reranker-0.6B",
+    "revision": "e61197ed45024b0ed8a2d74b80b4d909f1255473",
+    "local_weight_sha256": "27cd75a405b9c1b46b59abfd88aaa209e6fed2a1972cde9b70e7659537c5e65b",
+    "weight_bytes": 1191588280,
+    "python": "3.12.13",
+    "packages": {
+      "mlx": "0.32.4",
+      "mlx-lm": "0.32.2",
+      "transformers": "5.20.1",
+      "tokenizers": "0.23.3",
+      "huggingface-hub": "2.2.0"
+    }
+  },
+  "projection_integrity": {
+    "gemma": {
+      "status": "complete",
+      "rows": [
+        {
+          "provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+          "feature_count": 768,
+          "vector_format": "dense-f32",
+          "count": 1329
+        }
+      ]
+    },
+    "qwen": {
+      "status": "complete",
+      "rows": [
+        {
+          "provider": "ollama:qwen3-embedding:0.6b",
+          "feature_count": 1024,
+          "vector_format": "dense-f32",
+          "count": 1329
+        }
+      ]
+    }
+  },
+  "timings": {
+    "note": "Search times exclude reranking. Rerank times score the union once for both arms, not end-to-end serving latency.",
+    "common_union_rerank_p50_ms": 5325.889458499994,
+    "common_union_rerank_max_ms": 33103.17387500001
+  },
+  "mcp_smoke": [
+    {
+      "tool": "orgbrain_memory_search",
+      "kind": "positive",
+      "elapsed_ms": 682.2128749999999,
+      "returned_count": 1,
+      "selector_status": "complete",
+      "scored_count": 1,
+      "retrieval": {
+        "search_mode": "hybrid_v4",
+        "dense_provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+        "dimensions": 768,
+        "query_embedding_completed": true,
+        "dense_scored_unit_count": 2,
+        "dense_candidate_count": 2
+      },
+      "estimated_tokens": null
+    },
+    {
+      "tool": "orgbrain_memory_search",
+      "kind": "negative",
+      "elapsed_ms": 215.87275,
+      "returned_count": 0,
+      "selector_status": "complete",
+      "scored_count": 2,
+      "retrieval": {
+        "search_mode": "hybrid_v4",
+        "dense_provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+        "dimensions": 768,
+        "query_embedding_completed": true,
+        "dense_scored_unit_count": 2,
+        "dense_candidate_count": 2
+      },
+      "estimated_tokens": null
+    },
+    {
+      "tool": "orgbrain_context_enrich",
+      "kind": "positive",
+      "elapsed_ms": 457.19570799999997,
+      "returned_count": 1,
+      "selector_status": "complete",
+      "scored_count": 1,
+      "retrieval": {
+        "search_mode": "hybrid_v4",
+        "dense_provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+        "dimensions": 768,
+        "query_embedding_completed": true,
+        "dense_scored_unit_count": 2,
+        "dense_candidate_count": 2
+      },
+      "estimated_tokens": 1231
+    }
+  ],
+  "cli_smoke": [
+    {
+      "endpoint_unavailable": false,
+      "returned_count": 1,
+      "selector_status": "complete"
+    },
+    {
+      "endpoint_unavailable": true,
+      "returned_count": 0,
+      "selector_status": "unavailable"
+    }
+  ],
+  "activation": {
+    "runtime_target": "relevance-selection-87cdb494-20261017",
+    "settings": {
+      "version": 1,
+      "provider": "qwen3-reranker-mlx",
+      "url": "http://127.0.0.1:11435",
+      "revision": "e61197ed45024b0ed8a2d74b80b4d909f1255473",
+      "minimum_score": 0.9,
+      "candidate_limit": 20,
+      "timeout_ms": 30000
+    },
+    "bundle_sha256": "dec6f9470935f79d7ed9319af4644e9ab694c3939fa247bba4bd7d1270583f14"
+  },
+  "verification": {
+    "node_tests_passed": 90,
+    "node_tests_failed": 0,
+    "python_tests_passed": 3,
+    "independent_read_only_review": "pass"
+  },
+  "limitations": [
+    "Authored questions from stored summaries; not historical user session queries.",
+    "Single known target per positive question; exhaustive relevance precision and actual task success unmeasured.",
+    "Different deployed precisions and embedding dimensions; selected results do not establish general Gemma superiority.",
+    "Union scoring time is not normal serving latency; three scoped smoke calls are not a latency benchmark.",
+    "Incomplete calibration runs preserved and excluded; unchanged policy and questions rerun after independent service startup; holdout run once.",
+    "Already-running MCP processes need reconnection after the runtime change."
+  ]
+}

@@ -1,0 +1,268 @@
+{
+  "schema": "working-llm-selection-comparison/v1",
+  "date": "2026-10-18",
+  "models": {
+    "working_llm": {
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "high",
+      "runtime": "codex-cli0.163.0-alpha.10.2",
+      "execution": "isolated ephemeral Codex CLI, signed-in account; same model/effort as verified current parent turn",
+      "provider_internal_retries": "unknown"
+    },
+    "qwen": {
+      "model": "Qwen/Qwen3-Reranker-0.6B",
+      "revision": "e61197ed45024b0ed8a2d74b80b4d909f1255473",
+      "threshold": 0.9,
+      "runtime": "Python3.15.0/MLX0.32.4, per-request process exit"
+    }
+  },
+  "dataset": {
+    "question_count": 32,
+    "positive_count": 16,
+    "negative_count": 16,
+    "candidate_limit": 20,
+    "empty_candidate_cases": 2,
+    "source": "existing frozen Gemma holdout candidates, authored queries from memory summaries; not historical user sessions",
+    "gold": "single known target perpositive; not exhaustive precision labels",
+    "candidate_text_characters_median": 29967.0,
+    "candidate_text_characters_max": 46422
+  },
+  "arms": {
+    "qwen_only": {
+      "metrics": {
+        "positive_count": 16,
+        "hit_at_1": 1.0,
+        "hit_at_5": 1.0,
+        "mrr_at_5": 1.0,
+        "negative_count": 16,
+        "negative_any_result_rate": 0.0,
+        "mean_result_count": 1.25,
+        "lost_targets_if_expected_in_candidates": 0
+      },
+      "failure_count": 0,
+      "wall_seconds": {
+        "count": 32,
+        "median": 8.631409624998923,
+        "p95": 11.72091205624929,
+        "max": 12.78607033300068,
+        "sum": 260.95507237401034
+      },
+      "actual_model_requests": 30
+    },
+    "working_llm_raw": {
+      "metrics": {
+        "positive_count": 16,
+        "hit_at_1": 0.9375,
+        "hit_at_5": 1.0,
+        "mrr_at_5": 0.96875,
+        "negative_count": 16,
+        "negative_any_result_rate": 0.0,
+        "mean_result_count": 0.78125,
+        "lost_targets_if_expected_in_candidates": 0
+      },
+      "failure_count": 0,
+      "wall_seconds": {
+        "count": 32,
+        "median": 5.455118458499783,
+        "p95": 7.151150414255244,
+        "max": 66.40339320900239,
+        "sum": 240.41350187399803
+      },
+      "usage": {
+        "input_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 781530,
+          "mean": 24422.8125
+        },
+        "cached_input_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 150912,
+          "mean": 4716
+        },
+        "cache_write_input_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 0,
+          "mean": 0
+        },
+        "output_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 1454,
+          "mean": 45.4375
+        },
+        "reasoning_output_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 839,
+          "mean": 26.21875
+        }
+      }
+    },
+    "qwen_then_working_llm": {
+      "metrics": {
+        "positive_count": 16,
+        "hit_at_1": 0.9375,
+        "hit_at_5": 1.0,
+        "mrr_at_5": 0.96875,
+        "negative_count": 16,
+        "negative_any_result_rate": 0.0,
+        "mean_result_count": 0.75,
+        "lost_targets_if_expected_in_candidates": 0
+      },
+      "failure_count": 0,
+      "wall_seconds": {
+        "count": 32,
+        "median": 13.951667208002618,
+        "p95": 16.816285291452004,
+        "max": 17.8962179989976,
+        "sum": 436.1175949160315
+      },
+      "usage": {
+        "input_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 413924,
+          "mean": 12935.125
+        },
+        "cached_input_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 114560,
+          "mean": 3580
+        },
+        "cache_write_input_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 0,
+          "mean": 0
+        },
+        "output_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 1033,
+          "mean": 32.28125
+        },
+        "reasoning_output_tokens": {
+          "known_rows": 32,
+          "missing_rows": 0,
+          "sum": 443,
+          "mean": 13.84375
+        }
+      }
+    }
+  },
+  "paired_selection_handoff": {
+    "raw_faster_cases": 30,
+    "cascade_faster_cases": 2,
+    "median_cascade_minus_raw_seconds": 8.31403172950013,
+    "mean_cascade_minus_raw_seconds": 6.115752907563547
+  },
+  "disagreement_case_count": 9,
+  "manifest": {
+    "protocol_sha256": "b4536c99fa03d466ce4b2848a6803e7a6dd8d69093d1d2d3c083f0bec4c1cef0",
+    "helper_sha256": "07d084bf9f368b13520fb4b44c15b206af605e98c922d33ffd223b84f39792ad",
+    "runner_sha256": "6955876148ccbecc974b208253da65a3763ddfc914b9882525066bbe693b2e2f",
+    "prompt_sha256": "a4d73291842dc7fee46988ce611bffd45026c108000c22fe3662885fbe846609",
+    "case_file_sha256": "8d99f2a0d902da844f1b5af6fd957020206befc9ed86eaf3625a5f896d4b20d4",
+    "question_order": [
+      "Q030",
+      "Q023",
+      "Q012",
+      "Q001",
+      "Q007",
+      "Q019",
+      "Q005",
+      "Q027",
+      "Q010",
+      "Q016",
+      "Q031",
+      "Q029",
+      "Q032",
+      "Q014",
+      "Q024",
+      "Q022",
+      "Q026",
+      "Q006",
+      "Q021",
+      "Q009",
+      "Q020",
+      "Q002",
+      "Q008",
+      "Q004",
+      "Q018",
+      "Q017",
+      "Q015",
+      "Q028",
+      "Q003",
+      "Q025",
+      "Q011",
+      "Q013"
+    ]
+  },
+  "other_model_attempt_usage": [
+    {
+      "name": "smoke",
+      "provider_usage": [
+        {
+          "input_tokens": 13673,
+          "cached_input_tokens": 0,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 33,
+          "reasoning_output_tokens": 13
+        }
+      ],
+      "note": "public China-capital transport/schema probe, excluded from32holdout metrics; included in experiment usage ledger"
+    },
+    {
+      "name": "isolated-smoke",
+      "provider_usage": [
+        {
+          "input_tokens": 11867,
+          "cached_input_tokens": 0,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 32,
+          "reasoning_output_tokens": 12
+        }
+      ],
+      "note": "public China-capital transport/schema probe, excluded from32holdout metrics; included in experiment usage ledger"
+    }
+  ],
+  "preparation_failure": "One initial CLI launch blocked before in-process app-server initialized; no usage available. The task tool output records the error; transport-probe logs were overwritten by its successful explicit retry. No holdout attempt was silently retried or overwritten.",
+  "limits": [
+    "Onepass32questions, no prompt tuning onholdout; not general model superiority.",
+    "Accuracy is known-target retention/ranking and unrelated-query rejection, not exhaustive precision or whole-task success.",
+    "LLM wall time includes isolated CLI startup + one selection inference; not marginal latency measured inside an existing working turn.",
+    "Both LLM arms have one request even on empty candidates, to keep paired callcounts comparable; production may skip pure selection calls when no candidates.",
+    "Qwen cold model load+score+exit included; no ten-minute idle-retention implementation was benchmarked.",
+    "Input token usage includes shared Codex system overhead; cached-input/cache-write are subsets of input, reasoning is a subset of output.",
+    "Actual subscription charges/Codexcredits/provider fees are unavailable; token or time differences are not monetary savings.",
+    "No final context-budget packing or downstream answer/work execution was scored; direct LLM saw all full candidate texts.",
+    "One66-second raw-LLM outlier had no stderr error; queueing, CLI/transport delay and provider-internal retries cannot be separated from recorded wall time."
+  ],
+  "verification": {
+    "helper_tests_passed": 6,
+    "helper_tests_failed": 0,
+    "preflight_independent_review": "pass",
+    "rerun_guard_observed": "existing attempt was refused before new inference",
+    "main_cli_calls": 64,
+    "main_qwen_model_requests": 30,
+    "production_settings_changed": false,
+    "final_independent_review": "pass",
+    "independent_recomputation": "all input hashes, metrics, timing, ID validity,64 event usage records and subset relations matched"
+  },
+  "paired_primary_selector": {
+    "raw_faster_than_qwen_only_cases": 26,
+    "raw_mean_seconds": 7.512921933562438,
+    "qwen_only_mean_seconds": 8.154846011687823
+  },
+  "semantic_review": {
+    "known_target_rank_difference_cases": 1,
+    "qwen_rank": 1,
+    "raw_and_cascade_rank": 2,
+    "finding": "A different directly relevant record was ranked before the known target; the rank metric differs, but this does not establish a substantive selection error.",
+    "extras": "Some complement the known target and others concern adjacent dates or attempts; selection count alone is not exhaustive relevance precision."
+  }
+}

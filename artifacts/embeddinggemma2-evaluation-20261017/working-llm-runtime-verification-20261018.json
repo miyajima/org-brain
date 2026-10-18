@@ -1,0 +1,112 @@
+{
+  "normal_runtime": {
+    "configured_launcher": true,
+    "protocol": "2025-11-25",
+    "runtime_target": "working-llm-default-20261018",
+    "bundle_sha256": "5e6ef323c04a5aea25d66f7e9e554afa4475631d0d68f1a94347306987574a9d",
+    "provider": "working-llm",
+    "status": "pending_host_selection",
+    "search_candidate_count": 6,
+    "context_candidate_count": 4,
+    "context_estimated_tokens": 2314,
+    "context_token_budget": 2500,
+    "pinned_detail_read": true,
+    "negative_search_pending_not_adopted": true,
+    "normal_cli_provider": "working-llm",
+    "qwen_port_closed_during_search": true,
+    "search_seconds_single_smoke": 0.0719377909990726,
+    "existing_mcp_connections_require_reconnect": true,
+    "normal_alias_hook_pending": true,
+    "normal_alias_hook_bytes": 3828,
+    "normal_alias_hook_fixture_only": true
+  },
+  "qwen_service": {
+    "qwen_idle_before_stop": true,
+    "qwen_launchd_disabled": true,
+    "qwen_service_unloaded": true,
+    "qwen_port_closed": true,
+    "models_and_runtime_retained": true,
+    "initial_immediate_port_readback_raced_shutdown": true
+  },
+  "standalone_bundle": {
+    "bundle_sha256": "5e6ef323c04a5aea25d66f7e9e554afa4475631d0d68f1a94347306987574a9d",
+    "protocol": "modern",
+    "provider": "working-llm",
+    "status": "pending_host_selection",
+    "search_candidate_count": 1,
+    "nonempty_context_candidate_count": 1,
+    "context_tokens": 805,
+    "context_budget": 1500,
+    "cli_same_projection": true,
+    "pinned_get_resolves": true,
+    "stale_version_rejected": true,
+    "hook_exact_uuid": true,
+    "hook_pending": true,
+    "hook_bytes": 3818
+  },
+  "package_audit": {
+    "files": 13,
+    "packed_bytes": 4216097,
+    "unpacked_bytes": 10905580,
+    "model_or_python_files": []
+  },
+  "build_provenance": {
+    "base": "87cdb4941f8e997a27a19cb59f546709a2f32b92",
+    "allowlisted_overlay": {
+      "packages/orgbrain-cli/src/lib/local-relevance-selection.mjs": "afe9af985593ac3aae7d9d7a174a3aee521d59cb4820773ec644749aef1308b6",
+      "packages/orgbrain-cli/src/lib/working-llm-candidates.mjs": "713373bbb7cb51225048ec00641b5d1dddc27ec91fcd238af72d582556218f48",
+      "packages/orgbrain-cli/src/lib/local-memory-store.mjs": "2629242933e122c48ee9aacc7f6515dbb6a117cc0c4d23c59dda011ecd0a8728",
+      "packages/orgbrain-cli/src/lib/compact-memory-context.mjs": "029067d559fcf8eb022674193768c1b9fc01550032f3e26822b34887d4295336",
+      "packages/orgbrain-cli/src/lib/local-dense-embedding.mjs": "be9a7716d44d23921c2378c7b92450ba585cf2917d888cb984139b7034924d7d",
+      "packages/orgbrain-cli/src/local-memory.mjs": "4a016441314fada3f5d6428c47606200de5269ca39a46bbc6bdcbd7bc639e1b2",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "625e8322180b9a483931f15ac7691a026123a0aa95ff20e1088f2149a4b867ad",
+      "packages/orgbrain-cli/src/codex-memory-context.mjs": "d27c02ac123e9426ede9e2f7acad99cf1f6fb3d5ce34e112289cd4fe38f46926",
+      "scripts/working-llm-candidates.test.mjs": "ae4b39b9dfe08cb30f3bbfc51ceb193446a42a359a29e969242e2c0162f33cb5",
+      "scripts/local-relevance-selection.test.mjs": "6d2e715bcef472ccfe07238e4855a9aaf15b6066d79a5de5c988f9e105bb2b01"
+    },
+    "excluded_unrelated_dirty": [
+      "packages/shared/*",
+      "packages/orgbrain-cli/src/hook-memory-bridge.mjs"
+    ]
+  },
+  "validation": {
+    "new_focused_tests": {
+      "pass": 42,
+      "fail": 0
+    },
+    "default_hook_suites": {
+      "pass": 32,
+      "skip": 2,
+      "fail": 0
+    },
+    "node_all_canonical_tmp": {
+      "pass": 491,
+      "fail": 9,
+      "skip": 2,
+      "total": 502
+    },
+    "node_failures": "Existing unrelated dirty extraction capture code: memory-lesson-capture.test.mjs. Excluded from activated build. Same 23-case suite passes on the build base and retrieval overlay.",
+    "baseline_capture_suite": {
+      "pass": 23,
+      "fail": 0
+    },
+    "remote_auth_canonical_tmp": {
+      "pass": 18,
+      "fail": 0
+    },
+    "memory_judgment_final": {
+      "pass": 88,
+      "fail": 0
+    },
+    "typecheck": "pass",
+    "lint": "pass",
+    "independent_review": "pass; final missing-turn regression rechecked",
+    "other_root_phases": "all ten other individually resumed phases passed",
+    "full_pnpm_test": "not green; stops at existing extraction failures"
+  },
+  "limitations": [
+    "Fresh launcher and CLI processes verified. Existing MCP connections retain their loaded code and must reconnect.",
+    "Hook smoke used a synthetic scoped database; normal MCP and CLI used the existing standard database.",
+    "Timing here is a single retrieval smoke and excludes working-LLM selection; do not compare it with end-to-end benchmark latency."
+  ]
+}

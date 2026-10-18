@@ -136,16 +136,36 @@ test("MCP defaults to bounded context with correct persisted receipts and retain
     };
     const { payload, text } = await call();
     assert.equal(payload.evidence_bundle.context_format, "compact");
+    assert.deepEqual(payload.results, []);
+    assert.equal(payload.meta.local_relevance.status, "pending_host_selection");
+    assert.equal(payload.candidates.length, 1);
+    const candidate = payload.candidates[0];
+    assert.match(candidate.preview, /Serialize SQLite diagnostics/u);
+    assert.match(candidate.preview, /Only serialize diagnostics sharing one local database/u);
+    assert.equal(candidate.full_body_omitted, true);
+    assert.deepEqual(payload.evidence_bundle.evidence, []);
+    assert.ok(payload.evidence_bundle.missing_evidence.includes("host_selection_and_full_version_verification_pending"));
     assert.ok(countContextTokens(text) <= 1500);
     assert.equal(payload.evidence_bundle.estimated_tokens, countContextTokens(text));
-    assert.equal(payload.evidence_bundle.evidence[0].reuse_rule, lesson.reuse_rule);
+    assert.equal(candidate.detail_ref.tool, "orgbrain_memory_get");
+    assert.equal(candidate.detail_ref.arguments.memory_id, candidate.memory_id);
+    assert.equal(candidate.detail_ref.arguments.expected_version, candidate.current_version);
+    const detailResult = await handleLocalMcpRequest(store, { method: "tools/call", params: {
+      name: candidate.detail_ref.tool, arguments: candidate.detail_ref.arguments
+    } });
+    assert.equal(detailResult.isError, false, detailResult.content[0].text);
+    const detail = JSON.parse(detailResult.content[0].text);
+    assert.equal(detail.memory.id, candidate.memory_id);
+    assert.equal(detail.memory.content, lesson.content);
+    assert.equal(detail.memory.reuse_rule, lesson.reuse_rule);
     const db = store.open({ readOnly: true });
     try {
-      const rows = db.prepare("SELECT id, source_id, used_state FROM memory_usage_items WHERE usage_event_id=?").all(payload.meta.usage_id);
+      const rows = db.prepare("SELECT id, source_id, reference_type, used_state, injected_token_estimate FROM memory_usage_items WHERE usage_event_id=?").all(payload.meta.usage_id);
       assert.deepEqual(rows.map((row) => row.id), payload.meta.usage_item_ids);
-      assert.ok(rows.every((row) => row.used_state === "unknown"));
+      assert.deepEqual(rows.map((row) => [row.source_id, row.reference_type, row.used_state, row.injected_token_estimate]),
+        [[candidate.memory_id, "returned", "unknown", 0]]);
     } finally { db.close(); }
-    assert.equal((await call({ context_format: "full" })).payload.evidence_bundle.context_format, undefined);
+    assert.equal((await call({ context_format: "full" })).payload.evidence_bundle.context_format, "full");
     const readonly = await handleLocalMcpRequest(store, { method: "tools/call", params: { name: "orgbrain_context_enrich",
       arguments: { project_id: "org-brain", work_type: "implementation", query: "SQLite diagnostics", context_format: "compact" } } }, { toolProfile: "answer-ux-readonly" });
     assert.equal(readonly.isError, true);

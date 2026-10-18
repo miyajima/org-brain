@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { memorySearchDelivery } from "./lib/working-llm-candidates.mjs";
 import { createServer } from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
@@ -46,6 +47,7 @@ Usage:
   orgbrain wiki reindex-embeddings
   orgbrain memory capture [--content <text>] [--summary <text>] [--project-id <id>] [--business-category-id <id>] [--work-type implementation|review|debug|proposal|support|research|operations|other] [--tag <tag>]
   orgbrain memory search <query> [--tenant-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>] [--search-mode memories|hybrid_v3|hybrid_v4] [--limit <n>]
+  orgbrain memory get <memory-id> --expected-version <n> [--tenant-id <id>] [--principal-id <id>] [--project-id <id>] [--business-category-id <id>] [--work-type <type>]
   orgbrain memory wiki assess --project-id <id> [--page wiki/topics/page.md] [--vault <path>] [--changed-since <ISO-8601>] [--limit <n>] [--json]
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>
@@ -486,25 +488,44 @@ async function handleMemory(store, action, rest, args) {
     }));
     return;
   }
+  if (action === "get") {
+    emit(await store.getMemoryDetail({
+      tenant_id: tenantId,
+      memory_id: rest[0],
+      expected_version: Number(args.get("--expected-version")),
+      principal_id: args.get("--principal-id", null),
+      project_id: args.get("--project-id", null),
+      business_category_id: args.get("--business-category-id", null),
+      work_type: args.get("--work-type", null)
+    }));
+    return;
+  }
   if (action === "search") {
     const query = rest.join(" ").trim() || args.get("--query", "");
+    const retrieval = {};
+    const defaultLimit = store.relevanceSelector?.provider === "working-llm" ? 20 : 10;
+    const outputLimit = Math.max(1, Math.min(100, Number(args.get("--limit", defaultLimit)) || defaultLimit));
     let results = await store.search({
+      retrieval_metadata: retrieval,
       tenant_id: tenantId,
       project_id: args.get("--project-id", null),
+      principal_id: args.get("--principal-id", null),
       business_category_id: args.get("--business-category-id", null),
       work_type: args.get("--work-type", null),
       task_id: args.get("--task-id", null),
       use_snapshot_id:args.get("--use-snapshot-id",null),
       use_context: {conditions:args.get("--conditions", ""),constraints:args.get("--constraints", "")},
       query,
-      limit: Number(args.get("--limit", 10)),
+      limit: store.relevanceSelector?.provider === "working-llm" ? outputLimit : Math.max(outputLimit, store.relevanceSelector?.candidateLimit ?? 0),
       search_mode: args.get("--search-mode", "hybrid_v4")
     });
     const selection = await store.selectMemorySearchResults(results, { tenant_id: tenantId,
-      project_id: args.get("--project-id", null), query,
+      project_id: args.get("--project-id", null), principal_id: args.get("--principal-id", null), query,
+      business_category_id: args.get("--business-category-id", null), work_type: args.get("--work-type", null),
       use_context: { conditions: args.get("--conditions", ""), constraints: args.get("--constraints", "") },
       usage_purpose: args.get("--usage-purpose", "unclassified") });
-    results = selection.results;
+    const delivery = memorySearchDelivery(selection, outputLimit);
+    results = delivery.results;
     const usage = await store.recordUsage({
       tenant_id: tenantId,
       project_id: args.get("--project-id", null),
@@ -515,17 +536,9 @@ async function handleMemory(store, action, rest, args) {
       request_source: "local",
       requested_business_category_id: args.get("--business-category-id", null),
       requested_work_type: args.get("--work-type", null),
-      items: results.map((result, index) => ({
-        source_type: "memory",
-        source_id: result.memory.id,
-        source_version: result.memory.current_version,
-        rank: index + 1,
-        score: result.score?.total ?? null,
-        reference_type: "returned",
-        used_state: "unknown"
-      }))
+      items: delivery.items
     });
-    emit({ results, meta: { usage_id: usage.usage_id,usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items,use_history:results[0]?.use_history_meta, verification_sampled: usage.verification_sampled,
+    emit({ results, ...(delivery.candidates ? {candidates:delivery.candidates,selection_guidance:delivery.selection_guidance} : {}), meta: { retrieval, ...(delivery.local_relevance ? {local_relevance:delivery.local_relevance} : {}), usage_id: usage.usage_id,usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items,use_history:results[0]?.use_history_meta, verification_sampled: usage.verification_sampled,
       ...(selection.memory_judgment.mode !== "off" ? { memory_judgment: selection.memory_judgment } : {}) } });
     return;
   }

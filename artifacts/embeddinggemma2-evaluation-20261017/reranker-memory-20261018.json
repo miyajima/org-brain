@@ -1,0 +1,55 @@
+{
+  "schema": "local-reranker-memory-measurement/v1",
+  "measurement_date": "2026-10-18",
+  "process_id": 1177,
+  "model": "Qwen/Qwen3-Reranker-0.6B",
+  "conditions": {
+    "existing_process": true,
+    "service_restarted": false,
+    "new_model_loaded": false,
+    "model_forward_inference": false,
+    "forced_parameter_evaluation": false,
+    "cache_cleared": false,
+    "short_debugger_attach": true,
+    "same_process_repeat_matched": true,
+    "service_health_after_detach": "ready"
+  },
+  "bytes": {
+    "model_unique_parameter_buffers": 1191559168,
+    "model_logical_parameters": 1191553024,
+    "other_active_mlx": 8,
+    "active_mlx": 1191559176,
+    "reusable_mlx_cache": 4872645808,
+    "total_mlx_allocator": 6064204984,
+    "os_phys_footprint": 6251185832
+  },
+  "model_arrays": 310,
+  "model_parameter_dtypes": {
+    "mlx.core.bfloat16": {
+      "arrays": 310,
+      "logical_bytes": 1191553024
+    }
+  },
+  "cache_percent_of_mlx_total": 80.35094164620344,
+  "before_bytes": {
+    "active": 1191559176,
+    "cache": 4872645808
+  },
+  "after_bytes": {
+    "active": 1191559176,
+    "cache": 4872645808
+  },
+  "measurement_apis": [
+    "mlx.core.get_active_memory",
+    "mlx.core.get_cache_memory",
+    "mlx.core.get_array_buffer_size(existing_model.parameters())"
+  ],
+  "limits": [
+    "Model means unique allocated parameter buffers; tokenizer, Python objects, graphs and driver bookkeeping are outside this component.",
+    "MLX active excludes cached buffers. Active plus cache is not the same accounting definition as OS physical footprint.",
+    "OS minus MLX is an arithmetic residual; its Python/driver/shared/compressed components were not separately measured.",
+    "LLDB getter and CPython measurement calls execute code in the target and briefly pause it; this is not a passive OS memory read.",
+    "Python object inspection may have small CPU allocation/page-in effects; the MLX active/cache counters were unchanged.",
+    "No future cache-release savings or post-release footprint was measured."
+  ]
+}

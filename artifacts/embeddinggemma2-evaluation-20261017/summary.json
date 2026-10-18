@@ -1,0 +1,111 @@
+{
+  "schema": "local-retrieval-comparison/v1",
+  "at": 1792227848614,
+  "corpus_hash": "b785987f70017910633f0d6b210522506341b2c41bf7b056b7a236b1f74a4e0f",
+  "corpus_count": 114,
+  "query_hash": "2e39512ee9ef6d6f696659706b23920ad4e0808e55e1fcba927935fb506df7c1",
+  "query_origin": "authored from existing summaries before retrieving results; incomplete relevance labels",
+  "search_mode": "hybrid_v4",
+  "project_filter": null,
+  "candidate_limit": 5,
+  "provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+  "model_digest": "afeb999480b2a5e48b590fc0583f8cbc7d206b74156feaead3a7840b81719295",
+  "model_details": {
+    "parent_model": "",
+    "format": "safetensors",
+    "family": "",
+    "families": null,
+    "parameter_size": "",
+    "quantization_level": "",
+    "context_length": 262144,
+    "embedding_length": 768,
+    "runner": "mlx"
+  },
+  "dimensions": 768,
+  "projection": {
+    "provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+    "dimensions": 768,
+    "indexed": 1329,
+    "tenant_id": "default",
+    "project_id": null
+  },
+  "embedding_rows": [
+    {
+      "provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+      "feature_count": 768,
+      "vector_format": "dense-f32",
+      "count": 1329
+    }
+  ],
+  "actual_calls": {
+    "query_calls": 26,
+    "document_batches": 84,
+    "document_count": 1329
+  },
+  "active_memory_count": 109,
+  "sparse": {
+    "positive_count": 22,
+    "hit_at_1": 0.36363636363636365,
+    "hit_at_5": 0.5454545454545454,
+    "mrr_at_5": 0.4295454545454545,
+    "negative_count": 4,
+    "negative_any_result_rate": 0.5,
+    "latency_ms_p50": 18.784208000000035
+  },
+  "dense": {
+    "positive_count": 22,
+    "hit_at_1": 0.6818181818181818,
+    "hit_at_5": 0.9545454545454546,
+    "mrr_at_5": 0.7856060606060605,
+    "negative_count": 4,
+    "negative_any_result_rate": 1,
+    "latency_ms_p50": 50.82775000000038
+  },
+  "notes": [
+    "Handwritten queries based on existing memory summaries, frozen before results.",
+    "Single known target per positive query; no exhaustive precision labeling.",
+    "Four negative queries measure candidate exposure, not completed answer quality.",
+    "One warm timed run; not a production latency benchmark.",
+    "No threshold tuning after observing results."
+  ],
+  "fresh_mcp_smoke": {
+    "protocol": "2025-11-25",
+    "checks": [
+      {
+        "tool": "orgbrain_memory_search",
+        "retrieval": {
+          "search_mode": "hybrid_v4",
+          "dense_provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+          "dimensions": 768,
+          "query_embedding_completed": true,
+          "dense_scored_unit_count": 2,
+          "dense_candidate_count": 2
+        },
+        "result_count": 2,
+        "expected_top1": true
+      },
+      {
+        "tool": "orgbrain_context_enrich",
+        "retrieval": {
+          "search_mode": "hybrid_v4",
+          "dense_provider": "ollama:embeddinggemma-2:270m-bf16-text:retrieval-v1",
+          "dimensions": 768,
+          "query_embedding_completed": true,
+          "dense_scored_unit_count": 2,
+          "dense_candidate_count": 2
+        },
+        "result_count": 2,
+        "expected_top1": true,
+        "degraded_reasons": [
+          "local_dense_retrieval"
+        ],
+        "estimated_tokens": 1728
+      }
+    ]
+  },
+  "contract_tests": {
+    "passed": 77,
+    "failed": 0
+  },
+  "review": "Two P2 findings fixed with failing-then-passing regressions; affected re-review passed."
+}

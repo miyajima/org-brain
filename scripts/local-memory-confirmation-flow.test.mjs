@@ -18,6 +18,31 @@ async function callLocalMcpTool(store,name,input) {
   return payload;
 }
 
+async function selectCandidateDetail(store,response,memoryId) {
+  assert.equal(response.results.length,0,'pending preview is not adopted evidence');
+  assert.equal(response.meta.local_relevance.status,'pending_host_selection');
+  assert.deepEqual(response.evidence_bundle?.evidence ?? [],[]);
+  const candidate=response.candidates.find(item=>item.memory_id===memoryId);
+  assert.ok(candidate,JSON.stringify(response));
+  assert.equal(candidate.detail_ref.tool,'orgbrain_memory_get');
+  assert.equal(candidate.detail_ref.arguments.memory_id,candidate.memory_id);
+  assert.equal(candidate.detail_ref.arguments.expected_version,candidate.current_version);
+  const detail=await callLocalMcpTool(store,candidate.detail_ref.tool,candidate.detail_ref.arguments);
+  assert.equal(detail.memory.id,memoryId);
+  assert.equal(detail.memory.current_version,candidate.current_version);
+  return {candidate,memory:detail.memory};
+}
+
+function assertReturnedUnknown(store,response,memoryId) {
+  const item=response.meta.usage_items.find(entry=>entry.source_id===memoryId);
+  assert.ok(item,JSON.stringify(response.meta));
+  const db=store.open({readOnly:true});
+  try {
+    const row=db.prepare('SELECT reference_type,used_state,injected_token_estimate FROM memory_usage_items WHERE id=?').get(item.usage_item_id);
+    assert.deepEqual({...row},{reference_type:'returned',used_state:'unknown',injected_token_estimate:0});
+  } finally {db.close();}
+}
+
 async function memories(store,tenant) {
   await store.init();const db=store.open({readOnly:true});
   try{return db.prepare('SELECT * FROM memories WHERE tenant_id=?').all(tenant);}finally{db.close();}
@@ -64,7 +89,12 @@ test('eager mode closes a context-enrichment miss with one verified secret-safe 
     assert.match(stored[0].content,/OPENROUTER_API_KEY/u);
     assert.doesNotMatch(JSON.stringify(stored),new RegExp(secret,'u'));
     const found=await callLocalMcpTool(new LocalMemoryStore(dbPath),'orgbrain_memory_search',{tenant_id:'tenant',project_id:'project',query:'TypeSafe AI OpenRouter environment variable',limit:5});
-    assert.ok(found.results.length>0,JSON.stringify(found));
+    const selected=await selectCandidateDetail(new LocalMemoryStore(dbPath),found,stored[0].id);
+    assert.match(selected.candidate.preview,/OPENROUTER_API_KEY/u);
+    assert.doesNotMatch(selected.candidate.preview,new RegExp(secret,'u'));
+    assert.match(selected.memory.content,/OPENROUTER_API_KEY/u);
+    assert.doesNotMatch(selected.memory.content,new RegExp(secret,'u'));
+    assertReturnedUnknown(new LocalMemoryStore(dbPath),found,stored[0].id);
   } finally {await rm(root,{recursive:true,force:true});}
 });
 
@@ -237,12 +267,13 @@ test('local Stop → prompt → question → approval → durable MCP receipt �
     assert.equal(status.status,'completed');assert.equal(status.memory_id,saved.memory_id);
     assert.equal((await memories(store,'tenant')).length,1);
     const result=await invoke('orgbrain_memory_search',{tenant_id:'tenant',project_id:'project',query:'認証APIはOAuthを必ず使う方針',limit:5});
-    assert.ok(result.results.length,JSON.stringify({result,memories:await memories(store,'tenant')}));
-    assert.equal(result.results[0].memory.id,saved.memory_id);
-    assert.match(result.results[0].memory.content,/理由: 未確認/);
-    assert.ok(result.results[0].memory.source_references.length>0);
-    assert.equal(result.results[0].memory.reuse_rule,candidate.reuse_rule);
-    assert.ok(result.results[0].memory.tags.includes('memory-category:decision'));
+    const selected=await selectCandidateDetail(store,result,saved.memory_id);
+    assert.match(selected.candidate.preview,/OAuth/u);
+    assert.match(selected.memory.content,/理由: 未確認/);
+    assert.ok(selected.memory.source_references.length>0);
+    assert.equal(selected.memory.reuse_rule,candidate.reuse_rule);
+    assert.ok(selected.memory.tags.includes('memory-category:decision'));
+    assertReturnedUnknown(store,result,saved.memory_id);
     assert.doesNotMatch(hook('codex-context',prompt).hookSpecificOutput.additionalContext,/OrgBrain memory confirmation/);
     const report=await queue.memoryReviewStatus({tenantId:'tenant',projectId:'project'});
     assert.ok(report.states.some(s=>s.save_state==='saved'));

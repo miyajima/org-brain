@@ -1,5 +1,7 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
+import { localRelevanceSelectorFromSettings } from "./local-relevance-selection.mjs";
+import { workingLlmCandidates, buildWorkingLlmContext } from "./working-llm-candidates.mjs";
 import { createLocalContextSearchJudge, searchContextWithFollowups } from "./context-search-followups.mjs";
 import { localTaskQueryPlan, matchesLocalTaskQuery, coversLocalTaskQuery, matchesLocalTaskQueryLiterals } from "./local-task-query.mjs";
 import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
@@ -2840,7 +2842,8 @@ function searchRetrievalUnitsV4(db, options) {
     principalId,
     at,
     denseQueryVector = null,
-    denseProvider = null
+    denseProvider = null,
+    retrievalMetadata = null
   } = options;
   const intent = analyzeRetrievalIntent(query);
   const ftsQueries = buildFtsQueryVariants(query);
@@ -2996,7 +2999,7 @@ function searchRetrievalUnitsV4(db, options) {
     ? []
     : (() => {
       const rows = db.prepare(
-        `SELECT u.memory_id, e.unit_id, e.feature_count, e.vector_blob
+        `SELECT m.*, u.memory_id, e.unit_id, e.feature_count, e.vector_blob
          FROM memory_retrieval_unit_embeddings_v4 e
          JOIN memory_retrieval_units_v4 u
            ON u.id = e.unit_id
@@ -3006,6 +3009,7 @@ function searchRetrievalUnitsV4(db, options) {
           AND m.tenant_id = u.tenant_id
          WHERE e.tenant_id = ?
            AND e.provider = ?
+           AND e.feature_count = ?
            AND e.vector_format = 'dense-f32'
            AND e.vector_blob IS NOT NULL
            AND u.unit_type = 'segment'
@@ -3016,12 +3020,14 @@ function searchRetrievalUnitsV4(db, options) {
       ).all(
         tenantId,
         denseProvider,
+        denseQueryVector.length,
         projectId,
         projectId,
         includeSuppressed ? 1 : 0,
         at,
         at
-      );
+      ).filter((row) => taskEligible(memoryFromRow(row)));
+      if (retrievalMetadata) retrievalMetadata.dense_scored_unit_count = rows.length;
       const bestByMemory = new Map();
       for (const row of rows) {
         const vector = decodeFloat32Vector(row.vector_blob, Number(row.feature_count));
@@ -3035,6 +3041,7 @@ function searchRetrievalUnitsV4(db, options) {
         .sort((left, right) => right.dense_score - left.dense_score || left.memory_id.localeCompare(right.memory_id))
         .slice(0, 50);
     })();
+  if (retrievalMetadata) retrievalMetadata.dense_candidate_count = denseRows.length;
   const scores = new Map();
   const addRrf = (rows, weight) => {
     rows.forEach((row, index) => {
@@ -3417,8 +3424,11 @@ export class LocalMemoryStore {
     this.contextSearchJudge = options.contextSearchJudge ?? createLocalContextSearchJudge({ dbPath: this.dbPath, env: options.env ?? process.env });
     this.initialization = null;
     this.denseEmbeddingProvider = options.denseEmbeddingProvider === undefined
-      ? localDenseEmbeddingProviderFromEnvironment()
+      ? localDenseEmbeddingProviderFromEnvironment(options.env ?? process.env, {dbPath: this.dbPath})
       : options.denseEmbeddingProvider;
+    this.relevanceSelector = options.relevanceSelector === undefined
+      ? localRelevanceSelectorFromSettings(options.env ?? process.env, this.dbPath)
+      : options.relevanceSelector;
   }
 
   async init() {
@@ -6085,6 +6095,25 @@ export class LocalMemoryStore {
     }
   }
 
+  async getMemoryDetail({tenant_id:tenantId="default", memory_id:memoryId, expected_version:expectedVersion,
+    principal_id:principalId=null, project_id:projectId=null, business_category_id:categoryId=null, work_type:workType=null} = {}) {
+    const unavailable = () => { throw new Error("memory_detail_unavailable"); };
+    if (typeof memoryId !== "string" || !memoryId.trim() || !Number.isInteger(expectedVersion) || expectedVersion < 1
+      || typeof tenantId !== "string" || !tenantId.trim()
+      || [principalId,projectId,categoryId,workType].some(value => value !== null && typeof value !== "string")) return unavailable();
+    const memory = await this.get(tenantId, memoryId);
+    const at = Date.now();
+    if (!memory || memory.current_version !== expectedVersion || memory.lifecycle_state !== "active"
+      || (memory.permissions?.length && !principalId) || !canReadMemory(memory, principalId)
+      || (projectId && memory.project_id != null && memory.project_id !== projectId)
+      || (categoryId && memory.business_category_id !== categoryId)
+      || (workType && memory.work_type !== workType && memory.work_type !== "other")
+      || (memory.valid_from != null && memory.valid_from > at)
+      || (memory.valid_until != null && memory.valid_until <= at)
+      || (memory.expires_at != null && memory.expires_at <= at)) return unavailable();
+    return {memory};
+  }
+
   async getVersionByExternalKey({ tenant_id: tenantId = "default", source, external_key: externalKey, version = null }) {
     await this.init();
     const db = this.open({ readOnly: true });
@@ -6243,6 +6272,7 @@ export class LocalMemoryStore {
     include_suppressed = false,
     principal_id: principalId = null,
     search_mode: searchMode = "hybrid_v4",
+    retrieval_metadata: retrievalMetadata = null,
     at = Date.now()
   }) {
     await this.init();
@@ -6250,6 +6280,14 @@ export class LocalMemoryStore {
       const denseQueryVector = searchMode === "hybrid_v4" && this.denseEmbeddingProvider
         ? await this.denseEmbeddingProvider.embedQuery(query)
         : null;
+      if (retrievalMetadata) Object.assign(retrievalMetadata, {
+        search_mode: searchMode,
+        dense_provider: denseQueryVector ? this.denseEmbeddingProvider.provider : null,
+        dimensions: denseQueryVector?.length ?? null,
+        query_embedding_completed: Boolean(denseQueryVector),
+        dense_scored_unit_count: 0,
+        dense_candidate_count: 0
+      });
       const db = this.open({ readOnly: true });
       try {
         const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
@@ -6275,7 +6313,8 @@ export class LocalMemoryStore {
           principalId,
           at,
           denseQueryVector,
-          denseProvider: this.denseEmbeddingProvider?.provider ?? null
+          denseProvider: this.denseEmbeddingProvider?.provider ?? null,
+          retrievalMetadata
         });
         return results.filter(({ memory }) =>
           (businessCategoryId === null || memory.business_category_id === businessCategoryId) &&
@@ -6494,14 +6533,48 @@ export class LocalMemoryStore {
   }
 
   async selectMemorySearchResults(results, { tenant_id: tenantId, project_id: projectId = null,
+    business_category_id: businessCategoryId = null, work_type: workType = null,
     principal_id: principalId = null, query, use_context: useContext = null, usage_purpose: usagePurpose = "unclassified",
-    at: queryAt = null, apply_selection: applySelection = true } = {}) {
+    at: queryAt = null, apply_selection: applySelection = true, answer_ux_projection: answerUxProjection = false } = {}) {
     const at = queryAt ?? Date.now();
+    const hostPending = this.relevanceSelector?.provider === "working-llm" && !answerUxProjection;
     const eligible = (memory, currentAt) => (!projectId || memory.project_id == null || memory.project_id === projectId)
       && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
+      && (!hostPending || !memory.permissions.length || Boolean(principalId))
+      && (!businessCategoryId || memory.business_category_id === businessCategoryId)
+      && (!workType || memory.work_type === workType || memory.work_type === "other")
       && (memory.valid_from == null || memory.valid_from <= currentAt)
       && (memory.valid_until == null || memory.valid_until > currentAt)
       && (memory.expires_at == null || memory.expires_at > currentAt);
+    let localRelevance = null;
+    if (this.relevanceSelector || answerUxProjection) {
+      const eligibleResults = [];
+      for (const result of results) {
+        const memory = await this.get(tenantId, result.memory.id);
+        if (memory && eligible(memory, queryAt ?? Date.now())) eligibleResults.push({...result,memory});
+      }
+      // Internal answer-friendly profile: keep its existing sanitized evidence
+      // contract without exposing IDs/full bodies or invoking a relevance model.
+      if (answerUxProjection) return {results:eligibleResults,memory_judgment:{mode:"off",applied:false,decisions:[]},
+        local_relevance:{status:"answer_ux_projection",candidate_count:eligibleResults.length,kept_count:eligibleResults.length}};
+      if (this.relevanceSelector.provider === "working-llm") {
+        return {results:[],candidates:workingLlmCandidates(eligibleResults, eligibleResults.length, {principal_id:principalId,project_id:projectId,business_category_id:businessCategoryId,work_type:workType}),
+          memory_judgment:{mode:"off",applied:false}, local_relevance:{provider:"working-llm",status:"pending_host_selection",
+            candidate_count:eligibleResults.length,returned_candidate_count:eligibleResults.length,scored_count:0,kept_count:0}};
+      }
+      const originals = new Map(eligibleResults.map(({memory}) => [memory.id, JSON.stringify(memoryJudgmentCandidate(memory))]));
+      const selected = eligibleResults.length ? await this.relevanceSelector.select(query, eligibleResults)
+        : {results:[],metadata:{status:"complete",candidate_count:0,scored_count:0,kept_count:0}};
+      results = [];
+      let changed = 0;
+      for (const result of selected.results) {
+        const memory = await this.get(tenantId, result.memory.id);
+        if (!memory || !eligible(memory, queryAt ?? Date.now())
+          || JSON.stringify(memoryJudgmentCandidate(memory)) !== originals.get(result.memory.id)) { changed++; continue; }
+        results.push({...result, memory});
+      }
+      localRelevance = {...selected.metadata, kept_count:results.length, source_changed_count:changed};
+    }
     const candidates = results.filter(({ memory }) => eligible(memory, at)).map(({ memory }) => memoryJudgmentCandidate(memory));
     let judgment = await this.memoryJudge({ stage: "use",
       context: { tenant_id: tenantId, project_id: projectId, principal_id: principalId || "local", query, use_context: useContext }, candidates });
@@ -6526,7 +6599,7 @@ export class LocalMemoryStore {
           || byId.get(memory.id)?.action !== "omit";
       });
     }
-    return { results, memory_judgment: judgment };
+    return { results, memory_judgment: judgment, local_relevance: localRelevance };
   }
 
   async retrieveContext({
@@ -6535,7 +6608,7 @@ export class LocalMemoryStore {
     business_category_id: businessCategoryId = null,
     work_type: workType = null,
     query,
-    top_k = 5,
+    top_k = undefined,
     task_id: taskId = null,
     usage_purpose: usagePurpose = 'unclassified',
     use_context: useContext = undefined,
@@ -6545,11 +6618,14 @@ export class LocalMemoryStore {
     context_format = "full",
     principal_id: principalId = null,
     at: queryAt = null,
-    search_mode: searchMode = "hybrid_v4"
+    search_mode: searchMode = "hybrid_v4",
+    context_envelope: contextEnvelope = {},
+    answer_ux_projection: answerUxProjection = false
   }) {
     const at = queryAt ?? Date.now();
     const safeTokenBudget = Math.max(512, Math.min(16_000, Number(token_budget) || 8_000));
-    const safeTopK = Math.max(1, Math.min(50, Number(top_k) || 5));
+    const safeTopK = Math.max(1, Math.min(50, Number(top_k) || (this.relevanceSelector?.provider === "working-llm" && !answerUxProjection ? 20 : 5)));
+    const retrievalMetadata = {};
     const searchInput = {
       tenant_id: tenantId,
       project_id: projectId,
@@ -6558,10 +6634,11 @@ export class LocalMemoryStore {
       query,
       task_id: taskId, use_context: useContext,use_snapshot_id:useSnapshotId,
       minimum_total_score: minimumTotalScore,
-      limit: Math.min(50, safeTopK * 2),
+      limit: Math.min(50, Math.max(safeTopK * 2, this.relevanceSelector?.candidateLimit ?? 0)),
       principal_id: principalId,
       at,
-      search_mode: searchMode
+      search_mode: searchMode,
+      retrieval_metadata: retrievalMetadata
     };
     const relevant = (results) => results.filter((result) => {
       const score = result.score;
@@ -6586,7 +6663,7 @@ export class LocalMemoryStore {
         }
         return { results: fresh, changed };
     };
-    const expanded = await searchContextWithFollowups({ initialResults, searchInput, context: useContext ?? {}, usagePurpose,
+    const expanded = answerUxProjection || this.relevanceSelector?.provider === "working-llm" ? {results:initialResults, report:{mode:"off"}} : await searchContextWithFollowups({ initialResults, searchInput, context: useContext ?? {}, usagePurpose,
       judge: this.contextSearchJudge, search: async (input) => relevant(await this.search(input)), refresh: refreshResults });
     // A failed/timed-out judgment must not bypass ACL, expiry or version checks.
     const fresh = await refreshResults(expanded.results);
@@ -6594,8 +6671,19 @@ export class LocalMemoryStore {
     const contextSearch = expanded.report.mode !== "off" ? { ...expanded.report,
       ...(fresh.changed ? { reason_code: "source_changed", coverage: "uncertain" } : {}) } : null;
     const selection = await this.selectMemorySearchResults(results, { tenant_id: tenantId, project_id: projectId,
+      business_category_id: businessCategoryId, work_type: workType,
       principal_id: principalId, query, use_context: useContext ?? null, usage_purpose: usagePurpose, at: queryAt,
-      apply_selection: false });
+      apply_selection: false, answer_ux_projection:answerUxProjection });
+    if (selection.local_relevance?.status === "pending_host_selection") {
+      const usageId = randomUUID();
+      const packed = buildWorkingLlmContext({candidates:selection.candidates,topK:safeTopK,tokenBudget:safeTokenBudget,
+        at,usageId,localRelevance:selection.local_relevance,envelope:contextEnvelope,contextFormat:context_format});
+      await this.recordUsage({id:usageId,tenant_id:tenantId,project_id:projectId,task_id:taskId,usage_purpose:usagePurpose,
+        actor_principal:principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",capability:"memory_retrieve_context",
+        access_path:"context",request_source:"local",requested_business_category_id:businessCategoryId,
+        requested_work_type:workType,items:packed.items});
+      return packed.response;
+    }
     results = selection.results;
     let judgment = selection.memory_judgment;
     if (context_format === "compact") {
@@ -6609,7 +6697,8 @@ export class LocalMemoryStore {
         || judgment.decisions.find((item) => item.id === memory.id)?.action !== "omit")
         .sort((a, b) => Number(protectedIds.includes(b.memory.id)) - Number(protectedIds.includes(a.memory.id))) : results;
       const packed = buildCompactMemoryContext({ results: candidates, query, topK: safeTopK,
-        tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds, contextSearch });
+        tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds, contextSearch,
+        retrieval: retrievalMetadata, localRelevance: selection.local_relevance });
       await this.recordUsage({ id: usageId, tenant_id: tenantId, project_id: projectId, task_id: taskId,
         usage_purpose: usagePurpose,
         actor_principal: principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
@@ -6807,6 +6896,7 @@ export class LocalMemoryStore {
           score: item.score
         })),
         meta: {
+          ...(selection.local_relevance ? {local_relevance:selection.local_relevance} : {}),
           ...(contextSearch ? { context_search: contextSearch } : {}),
           ...(judgment.mode !== "off" ? { memory_judgment: judgment } : {}),
           usage_id: usage.usage_id,
@@ -6819,7 +6909,8 @@ export class LocalMemoryStore {
             extractor_name: "local-structured-projector",
             extractor_version: "4",
             ranking_profile_id: "rank_default",
-            embedding_profile_id: "local-sparse-v1"
+            embedding_profile_id: retrievalMetadata.dense_scored_unit_count > 0 ? retrievalMetadata.dense_provider : "local-sparse-v1",
+            ...retrievalMetadata
           }
         },
         evidence_bundle: {
