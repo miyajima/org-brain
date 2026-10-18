@@ -9,11 +9,12 @@ import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mj
 import { buildCodexMemoryContext } from "../packages/orgbrain-cli/src/codex-memory-context.mjs";
 import { memories, positiveCases, negativeCases, seedRecallFixture } from "./fixtures/natural-query-recall.mjs";
 
-async function fixture(run, isolated = null) {
+async function fixture(run, isolated = null, storeOptions = {}) {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-task-query-test-"));
   try {
     const store = new LocalMemoryStore(join(directory, "memory.sqlite"), { env: {}, denseEmbeddingProvider: null,
-      memoryJudge: async () => ({ mode: "off", applied: false, status: "disabled", decisions: [] }), contextSearchJudge: null });
+      memoryJudge: async () => ({ mode: "off", applied: false, status: "disabled", decisions: [] }), contextSearchJudge: null,
+      ...storeOptions });
     const ids = await seedRecallFixture(store, isolated);
     await run(store, ids);
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -80,6 +81,7 @@ test("all bounded natural subjects qualify at the unchanged final score floor, w
 });
 
 test("context keeps source-independence, complete conditions, conflict and permission gates", async () => {
+  // This test isolates the evidence gates below candidate selection. Default selection remains covered elsewhere.
   await fixture(async (store) => {
     for (const id of ["workspace-en", "sqlite-en"]) {
       const response = await enrich(store, positiveCases.find((c) => c.id === id).query);
@@ -93,13 +95,13 @@ test("context keeps source-independence, complete conditions, conflict and permi
     assert.equal(evidence.reuse_rule, memories.find((m) => m.key === "cloudflare").reuse_rule);
     assert.equal(evidence.verification_state, "unverified");
     assert.ok(response.evidence_bundle.estimated_tokens <= 1500);
-  });
+  }, null, { relevanceSelector: null });
   for (const isolated of ["conflict", "permissions"]) await fixture(async (store) => {
     const item = negativeCases.find((c) => c.isolated === isolated);
     const response = await enrich(store, item.query);
     assert.equal(response.results.length, 0, isolated);
     assert.equal(response.evidence_bundle.abstention_recommended, true);
-  }, isolated);
+  }, isolated, { relevanceSelector: null });
 });
 
 test("unknown and multiple topics, tenant and project boundaries do not gain relevance", async () => {

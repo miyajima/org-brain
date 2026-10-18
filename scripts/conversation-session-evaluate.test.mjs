@@ -229,10 +229,11 @@ test('standalone CLI runs a labeled synthetic fixture and returns only bounded c
 });
 
 
-test('phone-like UUIDs retain exact identity through real retrieval and reported use without exempting sensitive prose', async () => {
+test('explicit legacy full retrieval keeps phone-like UUID identity without exempting sensitive prose', async () => {
   const memoryId = '12345678-1234-4123-8123-123456789012';
   const contentHash = 'sha256:' + '1'.repeat(64);
   await fixture(async f => {
+    await writeFile(`${f.dbPath}.retrieval.json`,JSON.stringify({version:1,provider:'off'}));
     f.input.scope = { ...SCOPE, task_id: memoryId, principal_id: 'abcdef12-3456-4789-8abc-def123456789' };
     const db = f.store.open();
     try {
@@ -284,4 +285,86 @@ test('phone-like UUIDs retain exact identity through real retrieval and reported
       }
     } finally { crypto.randomUUID = original; syncBuiltinESMExports(); }
   }, { id: memoryId });
+});
+
+test('default preview delivery is pending selection and never full-detail or use evidence', async () => {
+  await fixture(async f => {
+    const fetched=await f.run('retrieve',f.input),r=fetched.report;
+    assert.equal(r.context.meta.local_relevance.status,'pending_host_selection');
+    assert.equal(r.context.candidates[0].memory_id,f.id);assert.deepEqual(r.context.evidence_bundle.evidence,[]);
+    assert.equal(r.context.evidence_bundle.context_format,'compact');
+    assert.equal(r.stages.retrieved.representation,'candidate_preview');assert.equal(r.stages.delivered.representation,'candidate_preview');
+    assert.equal(r.stages.selection.state,'pending_selection');assert.equal(r.stages.selection.count,null);
+    assert.equal(r.stages.selected_full_details.state,'not_observed');assert.equal(r.stages.adopted.count,null);
+    assert.equal(r.evidence.representation,'candidate_preview');assert.equal(r.evidence.is_full_evidence,false);
+    const forged=usage(r);forged.items[0].representation='full_evidence';
+    await assert.rejects(f.run('record-use',forged,fetched.outputPath),/unknown_usage_item_field/);
+    const reported=(await f.run('record-use',usage(r),fetched.outputPath)).report;
+    assert.equal(reported.stages.adopted.basis,'caller_reported');assert.equal(reported.stages.adopted.representation,'candidate_preview');
+    assert.equal(reported.stages.selected_full_details.state,'not_observed');assert.equal(reported.stages.effect.verified,false);
+    assert.equal(reported.stages.adopted.items[0].representation,'candidate_preview');
+    assert.equal(f.count('local_use_proofs'),0);
+  });
+});
+
+test('receipts require the exact delivered version for pending candidates and legacy full metadata', async () => {
+  for(const provider of ['working-llm','off'])await fixture(async f => {
+    await writeFile(`${f.dbPath}.retrieval.json`,JSON.stringify({version:1,provider}));
+    const original=LocalMemoryStore.prototype.retrieveContext;
+    LocalMemoryStore.prototype.retrieveContext=async function(input){
+      const result=await original.call(this,input);
+      if(provider==='working-llm')result.candidates[0].current_version+=1;
+      else result.results[0].memory.current_version+=1;
+      return result;
+    };
+    try {await assert.rejects(f.run('retrieve',f.input),provider==='working-llm'?/retrieval_receipt_without_matching_candidate/:/retrieval_receipt_without_evidence/);}
+    finally {LocalMemoryStore.prototype.retrieveContext=original;}
+  });
+});
+
+test('explicit legacy full evidence remains distinct from pending preview delivery', async () => {
+  await fixture(async f => {
+    await writeFile(`${f.dbPath}.retrieval.json`,JSON.stringify({version:1,provider:'off'}));
+    const fetched=await f.run('retrieve',f.input),r=fetched.report;
+    assert.equal(r.context.candidates,undefined);assert.equal(r.context.evidence_bundle.evidence[0].memory_id,f.id);
+    assert.equal(r.stages.retrieved.representation,'full_evidence');assert.equal(r.evidence.is_full_evidence,true);
+    assert.equal(r.stages.selection.state,'not_observed');assert.equal(r.stages.selected_full_details.state,'not_observed');
+    const reported=(await f.run('record-use',usage(r),fetched.outputPath)).report;
+    assert.equal(reported.stages.adopted.representation,'full_evidence');assert.equal(reported.stages.effect.verified,false);
+  });
+});
+
+
+test('default pending operational UUIDs remain resolvable while preview and provenance secrets are redacted', async () => {
+  const memoryId='12345678-1234-4123-8123-123456789012';
+  await fixture(async f => {
+    f.input.scope={...SCOPE,principal_id:'abcdef12-3456-4789-8abc-def123456789'};
+    const unsafe=`Private ${memoryId}; reader@example.test; token=${SECRET}`;
+    const db=f.store.open();try {
+      db.prepare('UPDATE memories SET summary=?,source_refs_json=? WHERE id=?').run(`${f.input.query}. ${unsafe}`,
+        JSON.stringify([{ref:`https://example.invalid/source?token=${SECRET}&owner=reader@example.test`,source:unsafe,source_id:unsafe}]),memoryId);
+    } finally {db.close();}
+    const fetched=await f.run('retrieve',f.input),r=fetched.report,candidate=r.context.candidates[0];
+    assert.equal(candidate.memory_id,memoryId);assert.equal(candidate.current_version,1);
+    assert.equal(candidate.detail_ref.arguments.memory_id,memoryId);assert.equal(candidate.detail_ref.arguments.expected_version,1);
+    assert.equal(candidate.detail_ref.arguments.principal_id,f.input.scope.principal_id);
+    for(const value of [memoryId,'reader@example.test',SECRET])assert.ok(!candidate.preview.includes(value));
+    for(const value of ['reader@example.test',SECRET])assert.ok(!JSON.stringify(r).includes(value));
+    const {handleLocalMcpRequest}=await import('../packages/orgbrain-cli/src/local-mcp.mjs');
+    const detail=await handleLocalMcpRequest(f.store,{method:'tools/call',params:{name:'orgbrain_memory_get',arguments:candidate.detail_ref.arguments}});
+    assert.equal(detail.isError,false);assert.equal(JSON.parse(detail.content[0].text).memory.id,memoryId);
+    assert.equal(r.stages.selected_full_details.state,'not_observed','a separate explicit test detail read does not change the sealed evaluator artifact');
+  },{id:memoryId});
+});
+
+test('expected target IDs measure presence and do not auto-select the returned candidate', async () => {
+  await fixture(async f => {
+    const gold=await f.seed({summary:'Galactic bakery payroll',content:'Galactic bakery payroll needs a new pastry schedule.'});
+    const {report:r}=await f.run('retrieve',{...f.input,source_memory_ids:[gold]});
+    assert.ok(r.stages.delivered.items.some(item=>item.source_id===f.id));
+    assert.deepEqual(r.stages.retrieved.requested_sources_returned,[]);
+    assert.deepEqual(r.stages.retrieved.requested_sources_not_returned,[gold]);
+    assert.equal(r.stages.selection.state,'pending_selection');assert.equal(r.stages.selection.count,null);
+    assert.equal(r.stages.adopted.count,null);assert.equal(r.stages.selected_full_details.state,'not_observed');
+  });
 });

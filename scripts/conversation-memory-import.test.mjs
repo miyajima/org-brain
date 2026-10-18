@@ -30,6 +30,23 @@ async function call(store, name, input) {
   if (response.isError) throw new Error(value.error);
   return value;
 }
+async function selectCandidateDetail(store, context, memoryId) {
+  assert.equal(context.results.length, 0, "a pending candidate is not usable evidence");
+  assert.deepEqual(context.evidence_bundle.evidence, []);
+  assert.ok(context.evidence_bundle.missing_evidence.includes("host_selection_and_full_version_verification_pending"));
+  assert.equal(context.meta.local_relevance.status, "pending_host_selection");
+  const candidate = context.candidates.find((item) => item.memory_id === memoryId);
+  assert.ok(candidate, JSON.stringify(context));
+  assert.equal(candidate.detail_ref.tool, "orgbrain_memory_get");
+  assert.equal(candidate.detail_ref.arguments.memory_id, candidate.memory_id);
+  assert.equal(candidate.detail_ref.arguments.expected_version, candidate.current_version);
+  const usage = context.meta.usage_items.find((item) => item.source_id === memoryId);
+  assert.equal(usage.source_version, candidate.current_version);
+  const detail = await call(store, candidate.detail_ref.tool, candidate.detail_ref.arguments);
+  assert.equal(detail.memory.id, memoryId);
+  assert.equal(detail.memory.current_version, candidate.current_version);
+  return { candidate, memory: detail.memory };
+}
 const search = store => store.search({ tenant_id: 'fixture', project_id: 'call-test', query: 'staging identity contact', minimum_total_score: 0.065, limit: 3 });
 
 test('legacy local queue rejects typed task limits before any durable queue write', async () => env(async ({ store }) => {
@@ -77,18 +94,19 @@ test('explicit fixture approval saves provenance; real MCP retrieval delivers a 
   assert.equal((await call(store, 'orgbrain_memories_confirm', answer)).memory_id, saved.memory_id);
   const context = await call(store, 'orgbrain_context_enrich', { tenant_id: 'fixture', project_id: 'call-test', task_id: 'new-test-task',
     query: 'staging identity contact', work_type: 'implementation', top_k: 3, token_budget: 1500, usage_purpose: 'test' });
-  assert.equal(context.results.length, 1, JSON.stringify(context));
-  assert.equal(context.results[0].memory.id, saved.memory_id);
+  const selected = await selectCandidateDetail(store, context, saved.memory_id);
   assert.equal(context.meta.usage_items[0].source_version, saved.memory_version);
-  const evidence = context.evidence_bundle.evidence[0];
-  assert.equal(evidence.verification_state, 'unverified');
-  assert.equal(evidence.reuse_rule, fixture().candidates[0].reuse_rule);
-  assert.equal(evidence.source_reference.role, 'user');
-  assert.equal(evidence.additional_sources[0].role, 'supplied_unverified');
-  assert.equal(evidence.additional_sources[0].span_id, 'at:2026/10/03T09:00:00.000Z');
+  assert.match(selected.candidate.preview, /Only in synthetic staging/u);
+  assert.equal(selected.memory.verification_state, 'unverified');
+  assert.equal(selected.memory.reuse_rule, fixture().candidates[0].reuse_rule);
+  assert.ok(selected.memory.source_references.some((reference) => reference.role === 'user'
+    && reference.ref === 'https://example.invalid/docs/2026-10-03-test.md'));
+  assert.ok(selected.memory.source_references.some((source) => source.role === 'supplied_unverified'
+    && source.span_id === 'at:2026/10/03T09:00:00.000Z'));
   assert.ok(context.evidence_bundle.estimated_tokens <= 1500);
   const other = await call(store, 'orgbrain_context_enrich', { tenant_id: 'fixture', project_id: 'other', task_id: 'new-test-task', query: 'staging identity contact', top_k: 3, token_budget: 1500 });
   assert.equal(other.results.length, 0);
+  assert.deepEqual(other.candidates, []);
 }));
 
 test('worker and supplied tool outcomes stay unverified and require actual review; no role promotion', async () => env(async ({ store }) => {
@@ -154,7 +172,8 @@ test('installed CLI supports preview, staged execute and explicit proposal/confi
   const db = store.open({ readOnly: true });
   try { assert.equal(db.prepare('SELECT save_state FROM memory_confirmation_prompts').get().save_state, 'saved'); } finally { db.close(); }
   const context = run(['memory', 'context', 'staging identity contact', '--tenant-id', 'fixture', '--project-id', 'call-test', '--task-id', 'new-task', '--principal-id', 'reader']);
-  assert.equal(context.results[0].memory.id, saved.memory_id);
+  const selected = await selectCandidateDetail(store, context, saved.memory_id);
+  assert.equal(selected.memory.verification_state, 'unverified');
 }));
 
 
@@ -259,9 +278,9 @@ for (const date of ['2026-10-03', '2024-02-29', '2026-10-03T09:30:00.000Z']) {
     assert.equal(status.status, 'completed');
     assert.equal(status.memory_id, saved.memory_id);
     const context = run(contextArgs);
-    assert.equal(context.results[0].memory.id, saved.memory_id);
+    const selected = await selectCandidateDetail(store, context, saved.memory_id);
     assert.equal(context.meta.usage_items[0].source_version, saved.memory_version);
-    assert.equal(context.evidence_bundle.evidence[0].reuse_rule, input.candidates[0].reuse_rule);
+    assert.equal(selected.memory.reuse_rule, input.candidates[0].reuse_rule);
   }));
 }
 
@@ -388,16 +407,15 @@ for (const [format, ref] of [
     const saved = run(['memory', 'confirm'], { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token, approved: true, review_answer: '1' });
     const status = run(['memory', 'confirmation-status'], { tenant_id: 'fixture', confirmation_token: proposal.confirmation_token });
     assert.equal(status.status, 'completed'); assert.equal(status.memory_id, saved.memory_id);
-    const context = run(args), evidence = context.evidence_bundle.evidence[0];
-    assert.equal(context.results[0].memory.id, saved.memory_id);
+    const context = run(args);
+    const selected = await selectCandidateDetail(store, context, saved.memory_id);
     assert.equal(context.meta.usage_items[0].source_version, saved.memory_version);
-    assert.equal(evidence.source_reference.ref, ref);
-    assert.equal(evidence.source_reference.role, 'user');
-    assert.equal(evidence.source_reference.content_hash, plan.candidates[0].source_references[0].content_hash);
-    assert.equal(evidence.verification_state, 'unverified');
-    assert.equal(evidence.reuse_rule, input.candidates[0].reuse_rule);
-    assert.match(evidence.additional_sources[0].ref, /^turn:sha256:[a-f0-9]{64}#conversation-event$/u);
-    assert.equal(evidence.additional_sources[0].role, 'supplied_unverified');
+    assert.ok(selected.memory.source_references.some((source) => source.ref === ref
+      && source.role === 'user' && source.content_hash === plan.candidates[0].source_references[0].content_hash));
+    assert.equal(selected.memory.verification_state, 'unverified');
+    assert.equal(selected.memory.reuse_rule, input.candidates[0].reuse_rule);
+    assert.ok(selected.memory.source_references.some((source) => /^turn:sha256:[a-f0-9]{64}#conversation-event$/u.test(source.ref)
+      && source.role === 'supplied_unverified'));
   }));
 }
 

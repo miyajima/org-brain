@@ -1,0 +1,35 @@
+{
+  "schema": "local-reranker-restart-memory/v1",
+  "measurement_date": "2026-10-18",
+  "operation": "launchctl kickstart -k gui/501/com.orgbrain.local-reranker",
+  "before": {
+    "pid": 1177,
+    "method": "existing-process-mlx-public-counters",
+    "bytes": {
+      "active": 1191559176,
+      "cache": 4872645808,
+      "peak_active": 2083897504,
+      "total_mlx": 6064204984
+    },
+    "os_phys_footprint_bytes": 6252103336
+  },
+  "after": {
+    "pid": 79985,
+    "method": "existing-process-mlx-public-counters",
+    "bytes": {
+      "active": 1191559176,
+      "cache": 3612,
+      "peak_active": 1191559176,
+      "total_mlx": 1191562788
+    },
+    "os_phys_footprint_bytes": 1471858344
+  },
+  "post_restart_condition": "loaded, health ready, no forward inference added for validation",
+  "cache_policy_changed": false,
+  "python": {
+    "version": "3.12.13",
+    "mlx_requires": ">=3.10",
+    "mlx_lm_requires": ">=3.11",
+    "transformers_requires": ">=3.10.0"
+  }
+}

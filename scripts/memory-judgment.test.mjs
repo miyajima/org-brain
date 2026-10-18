@@ -301,7 +301,7 @@ test("transport uses Decisions endpoint and never retries HTTP errors", async ()
 async function withStore(fn, memoryJudge) {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-jev-test-"));
   const dbPath = join(directory, "memory.sqlite");
-  const store = new LocalMemoryStore(dbPath, { memoryJudge, denseEmbeddingProvider: null, env: {} });
+  const store = new LocalMemoryStore(dbPath, { memoryJudge, denseEmbeddingProvider: null, relevanceSelector: null, env: {} });
   try { await store.init(); await fn(store, dbPath); } finally { await rm(directory, { recursive: true, force: true }); }
 }
 async function seed(store, key, content, extra = {}) {

@@ -1,3 +1,4 @@
+import { memorySearchDelivery } from "./lib/working-llm-candidates.mjs";
 import { screenInteractiveMemory, screenInteractiveProse, normalizeMemoryReviewContext as localReviewContext } from '../../shared/src/memory-review-runtime.mjs';
 import { receiveLocalUseObservation } from "./lib/local-use-observations.mjs";
 import { WIKI_TOOLS, enabledWikiTools, callWikiTool } from "./lib/wiki-mcp.mjs";
@@ -87,6 +88,13 @@ const TOOL_DEFINITIONS = [
   {name:"orgbrain_memory_integrity_issues",description:"List confirmed unresolved contradictions for a project.",inputSchema:{type:"object",properties:{tenant_id:{type:"string"},project_id:{type:"string"}}}},
   {name:"orgbrain_memory_aging_plan",description:"Read-only episodic aging candidates from verified use history; performs no changes.",inputSchema:{type:"object",properties:{tenant_id:{type:"string"},project_id:{type:"string"}}}},
   {name:"orgbrain_memories_confirmation_status",description:"Read a local proposal or durable save receipt after an uncertain response. Does not save or ask again.",inputSchema:{type:"object",required:["confirmation_token"],properties:{tenant_id:{type:"string"},confirmation_token:{type:"string",minLength:1,maxLength:64}}}},
+  {
+    name: "orgbrain_memory_get",
+    description: "Read full current details for every selected pending candidate before applying it. Requires the preview's exact expected_version and the same task scope/principal. Rechecks current access, lifecycle, expiry, scope and version; unavailable details must not be used. This read does not mark memory used.",
+    inputSchema: {type:"object",required:["memory_id","expected_version"],properties:{tenant_id:{type:"string"},
+      memory_id:{type:"string",minLength:1},expected_version:{type:"integer",minimum:1},principal_id:{type:["string","null"]},
+      project_id:{type:["string","null"]},business_category_id:{type:["string","null"]},work_type:{type:["string","null"]}}}
+  },
   {
     name: "orgbrain_memory_version_get",
     description: "Read one exact local memory version by tenant, source, and external key. Omit version only when the current version is explicitly wanted.",
@@ -907,6 +915,7 @@ async function callTool(store, name, input, toolProfile = "default") {
   if (name === "orgbrain_memory_integrity_issues") return store.listMemoryIntegrityIssues(tenantId,input.project_id||null);
   if (name === "orgbrain_memory_aging_plan") return store.planEpisodicAging(tenantId,input.project_id||null);
   if (name === "orgbrain_memories_confirmation_status") return store.mcpConfirmationStatus({token:boundedString(input.confirmation_token,64),tenant_id:tenantId});
+  if (name === "orgbrain_memory_get") return store.getMemoryDetail({...input,tenant_id:tenantId});
   if (name === "orgbrain_memory_version_get") {
     const source = boundedString(input.source, 64);
     const externalKey = boundedString(input.external_key, 256);
@@ -933,6 +942,33 @@ async function callTool(store, name, input, toolProfile = "default") {
       conditions: "Current workspace and task scope must match."
     };
     const projectId = await canonicalLocalProjectId(input.project_id);
+    const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
+    let prior_attempts = projectId
+      ? await store.searchAttempts(tenantId, { project_id: projectId, query: input.query, limit: 3 })
+      : [];
+    const hostSelection = toolProfile !== "answer-ux-readonly" && store.relevanceSelector?.provider === "working-llm";
+    const contextBudget = input.token_budget ?? (contextFormat === "full" ? 6000 : 1500);
+    let attemptsOmitted = 0;
+    let recallEnvelope = recall ? {domain_recall:recall.bundle,domain_recall_markdown:recall.inject ? recallBundleMarkdown(recall.bundle) : ""} : {};
+    if (hostSelection) {
+      const {countContextTokens} = await import("./lib/compact-memory-context.mjs");
+      const kept = [];
+      for (const attempt of prior_attempts) {
+        if (countContextTokens({...recallEnvelope,prior_attempts:[...kept,attempt]}) > Math.max(0, contextBudget - 650)) {attemptsOmitted++;continue;}
+        kept.push(attempt);
+      }
+      prior_attempts = kept;
+      if (countContextTokens(recallEnvelope)>Math.max(0,contextBudget-650)) recallEnvelope={domain_recall_omitted:"context_budget_exhausted"};
+    }
+    if (projectId) await store.recordAttemptMetricEvent(tenantId, {
+      project_id: projectId, kind: "context_query", source: "mcp", returned_count: prior_attempts.length
+    });
+    const attempt_usage = await Promise.all(prior_attempts.map((attempt) => store.recordAttemptUse(tenantId, {
+      project_id: projectId, attempt_id: attempt.id, task_id: input.task_id ?? null, stage: "returned"
+    })));
+    const contextEnvelope = hostSelection ? {prior_attempts,attempt_usage_ids:attempt_usage.map(item=>item.id),
+      ...(attemptsOmitted ? {prior_attempts_omitted:attemptsOmitted} : {}),...recallEnvelope,
+      ...(input.include_wiki ? {wiki:{status:"enabled",omitted:"context_budget_exhausted"}} : {})} : {};
     const memory = await store.retrieveContext({
       tenant_id: tenantId,
       project_id: projectId,
@@ -941,24 +977,16 @@ async function callTool(store, name, input, toolProfile = "default") {
       usage_purpose: input.usage_purpose,
       use_context: useContext,
       query: input.query,
-      top_k: input.top_k ?? 5,
+      top_k: input.top_k,
       token_budget: input.token_budget ?? (contextFormat === "full" ? 6_000 : 1_500),
       context_format: contextFormat,
+      context_envelope: contextEnvelope,
+      answer_ux_projection: toolProfile === "answer-ux-readonly",
       minimum_total_score: input.minimum_total_score ?? DEFAULT_CONTEXT_MINIMUM_TOTAL_SCORE,
       principal_id: input.principal_id ?? null,
       search_mode: "hybrid_v4"
     });
-    const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
-    const prior_attempts = projectId
-      ? await store.searchAttempts(tenantId, { project_id: projectId, query: input.query, limit: 3 })
-      : [];
-    if (projectId) await store.recordAttemptMetricEvent(tenantId, {
-      project_id: projectId, kind: "context_query", source: "mcp", returned_count: prior_attempts.length
-    });
-    const attempt_usage = await Promise.all(prior_attempts.map((attempt) => store.recordAttemptUse(tenantId, {
-      project_id: projectId, attempt_id: attempt.id, task_id: input.task_id ?? null, stage: "returned"
-    })));
-    const response = { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(recall ? { domain_recall: recall.bundle, domain_recall_markdown: recall.inject ? recallBundleMarkdown(recall.bundle) : "" } : {}) };
+    const response = { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(hostSelection ? contextEnvelope : recallEnvelope) };
     if (input.include_wiki) {
       let status;
       try { status = wikiStatusSync(); }
@@ -978,7 +1006,11 @@ async function callTool(store, name, input, toolProfile = "default") {
         } else response.wiki = { status: "enabled", omitted: "context_budget_exhausted" };
       }
     }
-    if (contextFormat === "compact") {
+    if (hostSelection && input.include_wiki) {
+      const {countContextTokens}=await import("./lib/compact-memory-context.mjs");
+      if (countContextTokens(response)>contextBudget) response.wiki={status:"enabled",omitted:"context_budget_exhausted"};
+    }
+    if (contextFormat === "compact" || hostSelection) {
       const { measureCompactMemoryContext } = await import("./lib/compact-memory-context.mjs");
       return measureCompactMemoryContext(response);
     }
@@ -1137,22 +1169,27 @@ async function callTool(store, name, input, toolProfile = "default") {
   }
   if (name === "orgbrain_memory_capture") return store.capture(captureDefaults(input));
   if (name === "orgbrain_memory_search") {
+    const retrieval = {};
+    const outputLimit = Math.max(1, Math.min(100, Number(input.limit) || (store.relevanceSelector?.provider === "working-llm" ? 20 : 10)));
     let results = await store.search({
+      retrieval_metadata: retrieval,
       tenant_id: tenantId,
       project_id: input.project_id || undefined,
       business_category_id: input.business_category_id || null,
       work_type: input.work_type || null,
       query: input.query,
       task_id: input.task_id, use_context: input.use_context,use_snapshot_id:input.use_snapshot_id,
-      limit: input.limit || 10,
+      limit: store.relevanceSelector?.provider === "working-llm" ? outputLimit : Math.max(outputLimit, store.relevanceSelector?.candidateLimit ?? 0),
       minimum_total_score: input.minimum_total_score ?? null,
       principal_id: input.principal_id || null,
       search_mode: normalizeSearchMode(input.search_mode || "default")
     });
     const selection = await store.selectMemorySearchResults(results, { tenant_id: tenantId,
       project_id: input.project_id || null, principal_id: input.principal_id || null, query: input.query,
+      business_category_id: input.business_category_id || null, work_type: input.work_type || null,
       use_context: input.use_context, usage_purpose: input.usage_purpose });
-    results = selection.results;
+    const delivery = memorySearchDelivery(selection, outputLimit);
+    results = delivery.results;
     const usage = await store.recordUsage({
       tenant_id: tenantId,
       project_id: input.project_id || undefined,
@@ -1165,17 +1202,9 @@ async function callTool(store, name, input, toolProfile = "default") {
       request_source: "mcp",
       requested_business_category_id: input.business_category_id || null,
       requested_work_type: input.work_type || null,
-      items: results.map((result, index) => ({
-        source_type: "memory",
-        source_id: result.memory.id,
-        source_version: result.memory.current_version,
-        rank: index + 1,
-        score: result.score?.total ?? null,
-        reference_type: "returned",
-        used_state: "unknown"
-      }))
+      items: delivery.items
     });
-    return { results, meta: { usage_id: usage.usage_id, usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items, verification_sampled: usage.verification_sampled, use_history:results[0]?.use_history_meta,
+    return { results, ...(delivery.candidates ? {candidates:delivery.candidates,selection_guidance:delivery.selection_guidance} : {}), meta: { retrieval, ...(delivery.local_relevance ? {local_relevance:delivery.local_relevance} : {}), usage_id: usage.usage_id, usage_item_ids:usage.usage_item_ids,usage_items:usage.usage_items, verification_sampled: usage.verification_sampled, use_history:results[0]?.use_history_meta,
       ...(selection.memory_judgment.mode !== "off" ? { memory_judgment: selection.memory_judgment } : {}) } };
   }
   if (name === "orgbrain_memory_retrieve_context") {
@@ -1186,7 +1215,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       work_type: input.work_type || null,
       query: input.query,
       task_id:input.task_id,use_context:input.use_context,use_snapshot_id:input.use_snapshot_id,usage_purpose:input.usage_purpose,
-      top_k: input.top_k || 5,
+      top_k: input.top_k,
       token_budget: input.token_budget || 8_000,
       principal_id: input.principal_id || null,
       search_mode: normalizeSearchMode(input.search_mode || "structured")

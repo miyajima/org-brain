@@ -1,0 +1,274 @@
+{
+  "schema": "working-llm-candidate-comparison/v1",
+  "fixture": {
+    "cases": 32,
+    "positive": 16,
+    "negative": 16,
+    "previously_seen": true,
+    "exhaustive_relevance_labels": false
+  },
+  "model_settings": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "high",
+    "independent_provider_identity_attestation": false
+  },
+  "baseline": {
+    "call_count": 32,
+    "seconds_total": 237.2030417500282,
+    "seconds_mean": 7.412595054688381,
+    "seconds_median": 7.343902416501805,
+    "payload_json_bytes_total": 2183252,
+    "prompt_bytes_total": 2205012,
+    "usage": {
+      "input_tokens": {
+        "known_sum": 1037604,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cached_input_tokens": {
+        "known_sum": 195712,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cache_write_tokens": {
+        "known_sum": 0,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "output_tokens": {
+        "known_sum": 1694,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "reasoning_output_tokens": {
+        "known_sum": 1074,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      }
+    },
+    "scored_count": 32,
+    "metrics": {
+      "positive_count": 16,
+      "hit_at_1": 0.9375,
+      "hit_at_5": 1.0,
+      "mrr_at_5": 0.96875,
+      "negative_count": 16,
+      "negative_any_result_rate": 0.0,
+      "mean_result_count": 0.78125,
+      "lost_targets_if_expected_in_candidates": 0
+    },
+    "failed_count": 0
+  },
+  "compact_two_stage": {
+    "call_count": 49,
+    "seconds_total": 348.83793970597617,
+    "seconds_mean": 7.119141626652575,
+    "seconds_median": 6.7451246669952525,
+    "payload_json_bytes_total": 891695,
+    "prompt_bytes_total": 927129,
+    "usage": {
+      "input_tokens": {
+        "known_sum": 848184,
+        "observed_calls": 49,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cached_input_tokens": {
+        "known_sum": 304896,
+        "observed_calls": 49,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cache_write_tokens": {
+        "known_sum": 0,
+        "observed_calls": 49,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "output_tokens": {
+        "known_sum": 2551,
+        "observed_calls": 49,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "reasoning_output_tokens": {
+        "known_sum": 1581,
+        "observed_calls": 49,
+        "missing_calls": 0,
+        "complete": true
+      }
+    },
+    "scored_count": 32,
+    "metrics": {
+      "positive_count": 16,
+      "hit_at_1": 0.9375,
+      "hit_at_5": 1.0,
+      "mrr_at_5": 0.96875,
+      "negative_count": 16,
+      "negative_any_result_rate": 0.0,
+      "mean_result_count": 0.6875,
+      "lost_targets_if_expected_in_candidates": 0
+    },
+    "failed_count": 0,
+    "skipped_empty_selection_count": 15
+  },
+  "preview_only": {
+    "call_count": 32,
+    "seconds_total": 230.9194328749727,
+    "seconds_mean": 7.216232277342897,
+    "seconds_median": 6.7762355624981865,
+    "payload_json_bytes_total": 517311,
+    "prompt_bytes_total": 540607,
+    "usage": {
+      "input_tokens": {
+        "known_sum": 534313,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cached_input_tokens": {
+        "known_sum": 143360,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cache_write_tokens": {
+        "known_sum": 0,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "output_tokens": {
+        "known_sum": 1624,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "reasoning_output_tokens": {
+        "known_sum": 1009,
+        "observed_calls": 32,
+        "missing_calls": 0,
+        "complete": true
+      }
+    },
+    "scored_count": 32,
+    "metrics": {
+      "positive_count": 16,
+      "hit_at_1": 1.0,
+      "hit_at_5": 1.0,
+      "mrr_at_5": 1.0,
+      "negative_count": 16,
+      "negative_any_result_rate": 0.0625,
+      "mean_result_count": 0.71875,
+      "lost_targets_if_expected_in_candidates": 0
+    },
+    "failed_count": 0
+  },
+  "detail_validation": {
+    "call_count": 17,
+    "seconds_total": 117.91850683100347,
+    "seconds_mean": 6.93638275476491,
+    "seconds_median": 6.586632291000569,
+    "payload_json_bytes_total": 374384,
+    "prompt_bytes_total": 386522,
+    "usage": {
+      "input_tokens": {
+        "known_sum": 313871,
+        "observed_calls": 17,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cached_input_tokens": {
+        "known_sum": 161536,
+        "observed_calls": 17,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "cache_write_tokens": {
+        "known_sum": 0,
+        "observed_calls": 17,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "output_tokens": {
+        "known_sum": 927,
+        "observed_calls": 17,
+        "missing_calls": 0,
+        "complete": true
+      },
+      "reasoning_output_tokens": {
+        "known_sum": 572,
+        "observed_calls": 17,
+        "missing_calls": 0,
+        "complete": true
+      }
+    },
+    "scored_count": 32,
+    "metrics": {
+      "positive_count": 16,
+      "hit_at_1": 0.9375,
+      "hit_at_5": 1.0,
+      "mrr_at_5": 0.96875,
+      "negative_count": 16,
+      "negative_any_result_rate": 0.0,
+      "mean_result_count": 0.6875,
+      "lost_targets_if_expected_in_candidates": 0
+    },
+    "failed_count": 0
+  },
+  "total_model_calls": 81,
+  "all_calls_successful": true,
+  "provider_input_reduction_fraction": 0.1825551944672534,
+  "baseline_input_per_question": 32425.125,
+  "compact_input_per_question": 26505.75,
+  "historical_raw_text_input_per_question": 24422.8125,
+  "compact_vs_historical_raw_text_input_change_fraction": 0.08528655329929746,
+  "historical_comparison_is_different_payload_not_fresh_pair": true,
+  "case_latency_seconds": {
+    "baseline": {
+      "mean": 7.412595054688381,
+      "median": 7.343902416501805,
+      "max": 11.946420874999603
+    },
+    "compact": {
+      "mean": 10.901185615811755,
+      "median": 12.237129499502771,
+      "max": 20.1890618339894
+    }
+  },
+  "known_target_rank_regressions": [],
+  "preview_false_positives_corrected_by_details": 1,
+  "acceptance": {
+    "hit5_16_of16": true,
+    "negative_zero_of16": true,
+    "hit1_not_lower": true,
+    "mrr_not_lower": true,
+    "no_lost_target": true,
+    "no_failed_call": true,
+    "complete_usage": true,
+    "lower_input_vs_full_records": true,
+    "lower_input_vs_prior_raw_text": false
+  },
+  "provenance": {
+    "protocol_sha256": "bf06fa1e189db51bc9f221867495faab95ef63eb01d22c0a2ac5ce68f79effa7",
+    "prepared_cases_sha256": "66f2ed8a529a3dab935dee2ec613c7b7521b5a951efffde6d6b811b9b49566e4",
+    "raw_results_sha256": "b677bf1d596776eee6191662e55515a9dd1e0bee67a5760b7d2f15ad5b89f7f6",
+    "evaluated_helper_sha256": "dfce8e2cda7b597510ede3ca731b754dc5dbe9dc9fedc8a9231ce79e42ea3b2f",
+    "current_helper_sha256": "713373bbb7cb51225048ec00641b5d1dddc27ec91fcd238af72d582556218f48",
+    "byte_identical_current_descriptors_checked": 533,
+    "post_evaluation_change": "context_format envelope metadata only; evaluated candidate inputs unchanged"
+  },
+  "limitations": [
+    "Fixed previously used authored questions, not unseenholdout or historicalsessionreplay",
+    "Known-target labels do not establish exhaustive precision",
+    "Selection-only CLI calls, not whole taskquality/cost or actual marginal inturnlatency",
+    "Outer MCP receipt framing excluded equally from model prompts; runtime fullbudget checked separately",
+    "Packed context/hook paths have smaller candidate budgets and are not covered by full20candidate quality result",
+    "No monetary/Codexcredit saving claim"
+  ]
+}

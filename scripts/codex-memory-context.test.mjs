@@ -6,12 +6,19 @@ import test from "node:test";
 import { buildCodexMemoryContext } from "../packages/orgbrain-cli/src/codex-memory-context.mjs";
 import { MEMORY_CONTRACT_JUDGE_PROMPT_HASH } from "../packages/shared/src/memory-contract-judge.mjs";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
+import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mjs";
 import { installLocalDomainPack, upsertLocalDomainRecallUnit } from "../packages/orgbrain-cli/src/lib/local-domain-recall.mjs";
 import { TaskCommitmentStore, guardCodexQuestion } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
 import {
   formatMemoryConfirmationContext,
   prepareMemoryConfirmationCandidates
 } from "../packages/orgbrain-cli/src/lib/memory-confirmation-hints.mjs";
+
+function hookCandidate(context) {
+  const encoded = context.split("\n\n").find((part) => part.startsWith("{") && part.includes('"memory_id"'));
+  assert.ok(encoded, "expected a pending memory candidate preview");
+  return JSON.parse(encoded);
+}
 
 async function fixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-codex-context-"));
@@ -49,7 +56,7 @@ async function fixture() {
   };
 }
 
-test("Codex prompt hook injects bounded redacted usable memory for a relevant prompt", async () => {
+test("Codex prompt hook previews a redacted candidate and provides a version-pinned detail reference", async () => {
   const ctx = await fixture();
   try {
     const result = await buildCodexMemoryContext({
@@ -58,14 +65,34 @@ test("Codex prompt hook injects bounded redacted usable memory for a relevant pr
       prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?"
     }, ctx);
     assert.equal(result.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-    assert.match(result.hookSpecificOutput.additionalContext, /short-lived Codex hooks/u);
-    assert.match(result.hookSpecificOutput.additionalContext, /\[REDACTED_EMAIL\]/u);
-    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /user@example\.com/u);
-    assert.match(result.hookSpecificOutput.additionalContext, /Use the Codex notify and prompt hooks/u);
-    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /memory_id=/u);
-    assert.match(result.hookSpecificOutput.additionalContext, /### 回答契約/u);
-    assert.match(result.hookSpecificOutput.additionalContext, /結論を最初の2文以内/u);
-    assert.ok(result.hookSpecificOutput.additionalContext.length < 2_000);
+    const context = result.hookSpecificOutput.additionalContext;
+    const candidate = hookCandidate(context);
+    assert.match(candidate.preview, /short-lived Codex hooks/u);
+    assert.match(candidate.preview, /\[REDACTED_EMAIL\]/u);
+    assert.doesNotMatch(context, /user@example\.com/u);
+    assert.doesNotMatch(context, /Use the Codex notify and prompt hooks/u);
+    assert.equal(candidate.full_body_omitted, true);
+    assert.equal(candidate.preview_basis, "summary_rationale_reuse_rule");
+    assert.equal(candidate.detail_ref.tool, "orgbrain_memory_get");
+    assert.equal(candidate.detail_ref.arguments.memory_id, candidate.memory_id);
+    assert.equal(candidate.detail_ref.arguments.expected_version, candidate.current_version);
+    assert.equal(candidate.detail_ref.arguments.project_id, "org-brain");
+    assert.doesNotMatch(context, /memory_id=/u);
+    assert.match(context, /pending_host_selection/u);
+    assert.match(context, /Before applying EVERY selected candidate, fetch its full pinned version with orgbrain_memory_get/u);
+    assert.doesNotMatch(context, /### 回答契約/u);
+    assert.doesNotMatch(context, /結論を最初の2文以内/u);
+    assert.ok(context.length < 2_000);
+
+    // This fixture explicitly selects its sole matching candidate and follows the advertised detail reference.
+    const detailResult = await handleLocalMcpRequest(ctx.store, { method: "tools/call", params: {
+      name: candidate.detail_ref.tool, arguments: candidate.detail_ref.arguments
+    } });
+    assert.equal(detailResult.isError, false, detailResult.content[0].text);
+    const detail = JSON.parse(detailResult.content[0].text);
+    assert.equal(detail.memory.id, candidate.memory_id);
+    assert.equal(detail.memory.current_version, candidate.current_version);
+    assert.match(detail.memory.content, /Use the Codex notify and prompt hooks/u);
   } finally {
     await ctx.cleanup();
   }

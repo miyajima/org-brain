@@ -8,10 +8,10 @@ import { TaskCommitmentStore } from "../packages/orgbrain-cli/src/lib/task-commi
 import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mjs";
 import { enqueueJudgmentCapture, drainJudgmentCapture } from "../packages/orgbrain-cli/src/lib/local-memory-judge-queue.mjs";
 
-async function fixture(fn) {
+async function fixture(fn, storeOptions = {}) {
   const directory = await mkdtemp(join(tmpdir(), "jev-paths-"));
   const dbPath = join(directory, "memory.sqlite");
-  const store = new LocalMemoryStore(dbPath, { env: {}, denseEmbeddingProvider: null });
+  const store = new LocalMemoryStore(dbPath, { env: {}, denseEmbeddingProvider: null, ...storeOptions });
   try { await store.init(); await fn(store, dbPath); } finally { await rm(directory, { recursive: true, force: true }); }
 }
 async function seed(store, key, kind = "fact") {
@@ -38,7 +38,7 @@ test("search filters before usage recording, preserves protected rules, and keep
     const audit = await call("audit");
     assert.equal(audit.results.length, 3);
     assert.equal(audit.meta.usage_items.length, 3);
-  });
+  }, { relevanceSelector: null });
 });
 
 test("maintenance sends eligible uncertain candidates to one batch evaluator without granting promotion", async () => {
