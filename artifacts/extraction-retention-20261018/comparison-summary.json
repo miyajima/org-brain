@@ -1,0 +1,405 @@
+{
+  "schema": "orgbrain-extraction-retention-replay/v1",
+  "corpus_sha256": "52f084e700ade9bf6de986908d22e5611125b707d01707c725058aec025183c5",
+  "inputs": 100,
+  "projects": {
+    "consentside": {
+      "inputs": 33,
+      "hard_excluded": 0,
+      "source_units": {
+        "reason": 3,
+        "exception_condition": 9,
+        "reported_verification": 30
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 3,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 3,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      }
+    },
+    "org-brain": {
+      "inputs": 8,
+      "hard_excluded": 1,
+      "source_units": {
+        "reason": 2,
+        "exception_condition": 10,
+        "reported_verification": 11
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 2,
+        "retained": {
+          "reason": 2,
+          "exception_condition": 1,
+          "reported_verification": 1
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 2,
+        "retained": {
+          "reason": 2,
+          "exception_condition": 1,
+          "reported_verification": 1
+        }
+      }
+    },
+    "AIma": {
+      "inputs": 0,
+      "hard_excluded": 0,
+      "source_units": {
+        "reason": 0,
+        "exception_condition": 0,
+        "reported_verification": 0
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      }
+    },
+    "socia": {
+      "inputs": 13,
+      "hard_excluded": 0,
+      "source_units": {
+        "reason": 1,
+        "exception_condition": 22,
+        "reported_verification": 30
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 3,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 1,
+          "reported_verification": 1
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 3,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 1,
+          "reported_verification": 1
+        }
+      }
+    },
+    "sfk-shinsa": {
+      "inputs": 11,
+      "hard_excluded": 0,
+      "source_units": {
+        "reason": 2,
+        "exception_condition": 8,
+        "reported_verification": 20
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 5,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 2,
+          "reported_verification": 1
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 5,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 2,
+          "reported_verification": 1
+        }
+      }
+    },
+    "jrg": {
+      "inputs": 23,
+      "hard_excluded": 6,
+      "source_units": {
+        "reason": 1,
+        "exception_condition": 32,
+        "reported_verification": 21
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 8,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 1,
+          "reported_verification": 0
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 8,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 3,
+          "reported_verification": 0
+        }
+      }
+    },
+    "factoreview": {
+      "inputs": 5,
+      "hard_excluded": 2,
+      "source_units": {
+        "reason": 0,
+        "exception_condition": 1,
+        "reported_verification": 2
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      }
+    },
+    "smart-block": {
+      "inputs": 6,
+      "hard_excluded": 0,
+      "source_units": {
+        "reason": 0,
+        "exception_condition": 2,
+        "reported_verification": 5
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      }
+    },
+    "tsugi": {
+      "inputs": 1,
+      "hard_excluded": 0,
+      "source_units": {
+        "reason": 0,
+        "exception_condition": 0,
+        "reported_verification": 1
+      },
+      "before": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      },
+      "after": {
+        "drafts": 0,
+        "review_drafts": 0,
+        "retained": {
+          "reason": 0,
+          "exception_condition": 0,
+          "reported_verification": 0
+        }
+      }
+    }
+  },
+  "verifier_probes": {
+    "consentside": {
+      "multi_quote_checks": 31,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 31,
+      "drop_checks": 31,
+      "before_silent_drop": 31,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 31,
+      "reported_result_checks": 17,
+      "before_unproven_outcome_accepted": 17,
+      "after_unproven_outcome_accepted": 0
+    },
+    "org-brain": {
+      "multi_quote_checks": 7,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 7,
+      "drop_checks": 7,
+      "before_silent_drop": 7,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 7,
+      "reported_result_checks": 6,
+      "before_unproven_outcome_accepted": 6,
+      "after_unproven_outcome_accepted": 0
+    },
+    "AIma": {
+      "multi_quote_checks": 0,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 0,
+      "drop_checks": 0,
+      "before_silent_drop": 0,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 0,
+      "reported_result_checks": 0,
+      "before_unproven_outcome_accepted": 0,
+      "after_unproven_outcome_accepted": 0
+    },
+    "socia": {
+      "multi_quote_checks": 13,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 13,
+      "drop_checks": 13,
+      "before_silent_drop": 13,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 13,
+      "reported_result_checks": 9,
+      "before_unproven_outcome_accepted": 9,
+      "after_unproven_outcome_accepted": 0
+    },
+    "sfk-shinsa": {
+      "multi_quote_checks": 11,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 11,
+      "drop_checks": 11,
+      "before_silent_drop": 11,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 11,
+      "reported_result_checks": 9,
+      "before_unproven_outcome_accepted": 9,
+      "after_unproven_outcome_accepted": 0
+    },
+    "jrg": {
+      "multi_quote_checks": 16,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 16,
+      "drop_checks": 16,
+      "before_silent_drop": 16,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 16,
+      "reported_result_checks": 9,
+      "before_unproven_outcome_accepted": 9,
+      "after_unproven_outcome_accepted": 0
+    },
+    "factoreview": {
+      "multi_quote_checks": 3,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 3,
+      "drop_checks": 3,
+      "before_silent_drop": 3,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 3,
+      "reported_result_checks": 2,
+      "before_unproven_outcome_accepted": 2,
+      "after_unproven_outcome_accepted": 0
+    },
+    "smart-block": {
+      "multi_quote_checks": 6,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 6,
+      "drop_checks": 6,
+      "before_silent_drop": 6,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 6,
+      "reported_result_checks": 3,
+      "before_unproven_outcome_accepted": 3,
+      "after_unproven_outcome_accepted": 0
+    },
+    "tsugi": {
+      "multi_quote_checks": 1,
+      "before_multi_quote_retained": 0,
+      "after_multi_quote_retained": 1,
+      "drop_checks": 1,
+      "before_silent_drop": 1,
+      "after_silent_drop": 0,
+      "after_drop_rejected": 1,
+      "reported_result_checks": 1,
+      "before_unproven_outcome_accepted": 1,
+      "after_unproven_outcome_accepted": 0
+    }
+  },
+  "verifier_probe_design": "controlled exact-quote candidates from real safe inputs; not model-generated candidates or semantic-quality labels",
+  "before_source_sha256": "58cae7233f08e2e30b3bae29e90f49f6e617c7af794091f94c703384e169591a",
+  "after_source_sha256": "4f356513abce2a2d04afb3d8307bd01421b3f192c1df26b82f8b937793e0a972",
+  "evaluation_stage": "actual_deterministic_rule_output_and_review_drafts",
+  "provider_calls": 0,
+  "memory_writes": 0,
+  "verified_execution_results": 0,
+  "labels": "mechanical exact full-line matching, not human gold or semantic recall",
+  "caveats": [
+    "Review drafts are not persisted memories.",
+    "Reported verification is assistant text, not independent execution evidence.",
+    "No model output quality, live enqueue, deployment or production activation is established.",
+    "AIma has no acquired input."
+  ],
+  "source_versions": {
+    "packages/shared/src/memory-capture-v2-runtime.mjs": {
+      "before": "58cae7233f08e2e30b3bae29e90f49f6e617c7af794091f94c703384e169591a",
+      "after": "4f356513abce2a2d04afb3d8307bd01421b3f192c1df26b82f8b937793e0a972"
+    },
+    "packages/shared/src/memory-extraction-provider-contract-runtime.mjs": {
+      "before": "8e77ac258b4673e71cdf7c6840ae73c2e9bded12cf1026bac383e8f19bd8561e",
+      "after": "b0e5c07f20c49aabd41aa23a2efe24a04127ab1a5f12031e8d47ce44b93c82ec"
+    },
+    "packages/shared/src/memory-extraction-coverage-runtime.mjs": {
+      "before": "0c9e030a9ba2c4352ee35e35486091c14f0212fce4ea04e43d04363649edcdf8",
+      "after": "4d3d7b1015bbcf9f18f72c8719430d74bb0823a6ca76ee03497022c2e981779b"
+    },
+    "packages/shared/src/memory-extraction-verifier-runtime.mjs": {
+      "before": "0f1d2330835a82133c85df811d7ca95e6dee93625a38cf0f218015c33916f88c",
+      "after": "9dbd1c31b8fb3aab129df3267d5ddb68da70d6438ebf041fd8a414a33c558fa7"
+    },
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs": {
+      "before": "d723ea38adb8e14457e7bf0ca7bf2f59d9522d2e46cbf921ef9420298797ff18",
+      "after": "b79b93259c7ee7e974304b976d6bf74d4f46a17bc8cf46315b4c3a9836f00bb5"
+    }
+  },
+  "checks": {
+    "vitest_passed": 135,
+    "vitest_failed": 0,
+    "turn_evidence_node_tests_passed": 47,
+    "shared_typecheck": "passed",
+    "syntax_checks": "passed",
+    "diff_whitespace_check": "passed",
+    "review": "parent read-only review; no independent model-reviewed acceptance claimed"
+  }
+}

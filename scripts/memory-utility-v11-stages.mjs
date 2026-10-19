@@ -7,7 +7,7 @@ import {hash} from './memory-extraction-router-v33-core.mjs';
 import {discoverLearningEpisodes,buildLearningExtractionPacket} from '../packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs';
 import {buildMemoryExtractionPrompt,MEMORY_EXTRACTION_OUTPUT_SCHEMA} from '../packages/shared/src/memory-extraction-provider-contract-runtime.mjs';
 import {screenSensitiveMemory} from '../packages/shared/src/memory-capture-v2-runtime.mjs';
-import {frozenV2Candidates} from './memory-utility-v2-adapter.mjs';
+import {currentSharedV2Candidates} from './memory-utility-v2-adapter.mjs';
 import {
   CLI_ACTIVE_CONTRACT,
   CLI_ATTEMPTS_CONTRACT,
@@ -45,7 +45,7 @@ export const C_INSTRUCTION='会話単位ではなく個別情報を全て検討�
 export const C_OUTPUT_SCHEMA={
   $schema:'https://json-schema.org/draft/2020-12/schema',type:'object',additionalProperties:false,required:['items'],properties:{items:{type:'array',items:{type:'object',additionalProperties:false,required:['id','content','condition','reason','support_ids','status','storage','storage_reason','relation','target_ids'],properties:{id:{type:'string',pattern:'^i[1-9][0-9]*$'},content:{type:'string',minLength:1},condition:{type:'string'},reason:{type:'string'},support_ids:{type:'array',minItems:1,uniqueItems:true,items:{type:'string',pattern:'^target:'}},status:{enum:['proposed','adopted','observed','unknown']},storage:{enum:['long','short','none']},storage_reason:{type:'string',minLength:1},relation:{enum:['create','duplicate','update','conflict']},target_ids:{type:'array',uniqueItems:true,items:{type:'string',pattern:'^i[1-9][0-9]*$'}}},allOf:[{if:{properties:{storage:{const:'long'}},required:['storage']},then:{anyOf:[{properties:{condition:{pattern:'\\S'}}},{properties:{reason:{pattern:'\\S'}}}]}}]}}}
 };
-const ARTIFACTS=['scripts/memory-utility-v11.mjs','scripts/memory-utility-v11-stages.mjs','scripts/memory-utility-v11-cli.mjs','scripts/memory-utility-v2-adapter.mjs','apps/cap-runner/src/capabilities/memory-extraction.ts','packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs','packages/orgbrain-cli/src/lib/memory-extraction-router-model-v2.mjs','packages/shared/src/memory-extraction-provider-contract-runtime.mjs','packages/shared/src/memory-contract-v2-runtime.mjs','packages/shared/src/memory-capture-v2-runtime.mjs'];
+const ARTIFACTS=['scripts/memory-utility-v11.mjs','scripts/memory-utility-v11-stages.mjs','scripts/memory-utility-v11-cli.mjs','scripts/memory-utility-v2-adapter.mjs','packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs','packages/orgbrain-cli/src/lib/memory-extraction-router-model-v2.mjs','packages/shared/src/memory-extraction-verifier-runtime.mjs','packages/shared/src/memory-extraction-v3-runtime.mjs','packages/shared/src/memory-extraction-coverage-runtime.mjs','packages/shared/src/memory-extraction-provider-contract-runtime.mjs','packages/shared/src/memory-contract-v2-runtime.mjs','packages/shared/src/memory-capture-v2-runtime.mjs','packages/shared/src/memory-capture-profile-runtime.mjs'];
 const ROOT=path.resolve(path.dirname(new URL(import.meta.url).pathname),'..');
 const bindings=()=>Object.fromEntries(ARTIFACTS.map(p=>[p,hash(fs.readFileSync(path.join(ROOT,p),'utf8'))]));
 function stableFile(root,name,value) {
@@ -201,7 +201,7 @@ async function extract(ctx){
 const validateB=new Ajv({strict:false}).compile(MEMORY_EXTRACTION_OUTPUT_SCHEMA);
 async function bItems(output,packet){
   if(!validateB(output))fail('baseline_schema_invalid');
-  const verified=await frozenV2Candidates({packet,run_id:packet.packet_hash,project_id:packet.project_id},output.candidates);
+  const verified=await currentSharedV2Candidates({packet,run_id:packet.packet_hash,project_id:packet.project_id},output.candidates);
   return {items:verified.candidates.map((c,i)=>({id:'i'+(i+1),content:JSON.stringify(c.observation),condition:c.observation.reuse_when??'',reason:c.observation.rationale??c.observation.root_cause??'',support_ids:c.support_span_ids,status:'unknown',storage:c.persistence==='operational_history'?'short':'long',storage_reason:'frozen_v2_provider_contract',relation:'create',target_ids:[]})),rejections:verified.rejections};
 }
 async function retrieval(ctx){

@@ -19,7 +19,7 @@ describe('complete evidence within the unchanged input ceiling',()=>{
     expect(result.rejections[0].reason_codes).toContain('duplicate_field_name');
   });
   it.each(['rationale','reason_rejected','applicability','reuse_when','constraint'])(
-    'rejects assistant-only %s attributed to a human decision, but accepts explicit human evidence',async(field)=>{
+    'rejects assistant-only %s and requires grounded human content to survive normalization',async(field)=>{
       const snippets=[{span_id:'u',role:'user',text:'PostgreSQLを選ぶ。'},
         {span_id:'a',role:'assistant',text:'保存費用が安いため。'}];
       const candidate={lesson_type:'decision',support_span_ids:['u','a'],gaps:[],fields:[
@@ -27,7 +27,16 @@ describe('complete evidence within the unchanged input ceiling',()=>{
       const run=(rows:typeof snippets)=>verifiedCandidates({packet:{schema:'learning-extraction-proposal/v2',extraction_profile:'coverage/v1',snippets:rows,events:[]},
         extraction_profile:'coverage/v1',project_id:'example',run_id:'attribution'},[candidate]);
       expect((await run(snippets)).candidates).toHaveLength(0);
-      expect((await run([snippets[0],{...snippets[1],role:'user'}])).candidates).toHaveLength(1);
+      const human = await run([snippets[0],{...snippets[1],role:'user'}]);
+      if (['rationale', 'reuse_when'].includes(field)) {
+        expect(human.candidates).toHaveLength(1);
+        expect(human.candidates[0].observation[field]).toBe(snippets[1].text);
+      } else {
+        // Grounding is necessary, but an unsupported field or orphaned
+        // reason_rejected must not be accepted and silently discarded.
+        expect(human.candidates).toHaveLength(0);
+        expect(human.rejections[0].reason_codes).toContain('normalized_field_not_retained');
+      }
     });
   it('packs the selected result and its event without unrelated executions consuming the budget',()=>{
     const snippets=[{span_id:'t',role:'tool',source:'tool_result',call_id:'selected',text:'contract passed',text_hash:hash('contract passed')}];

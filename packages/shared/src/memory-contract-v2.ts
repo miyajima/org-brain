@@ -31,6 +31,7 @@ export type MemoryContractV2Common = {
   applicability: { target_files: string[]; components: string[] };
   evidence_selectors: MemoryContractV2EvidenceSelector[];
   gaps: string[];
+  reported_verification?: { state: "unverified"; text: string };
   kind: "fact" | "decision" | "preference" | "pitfall";
   conclusion: string | null;
   rationale: string | null;

@@ -1,0 +1,51 @@
+{
+  "cursor": {
+    "native_session_completed": true,
+    "native_stop_pending_jobs": 2,
+    "worker_completed_jobs": 2,
+    "persisted_candidates": 1,
+    "all_source_spans_match": true,
+    "reason_exception_verification_in_same_saved_body": true,
+    "reported_verification_dedicated_field": false,
+    "quarantine_only": true,
+    "codex_in_worker_path": false,
+    "model_reported": "anthropic/claude-sonnet-5.5",
+    "effort_requested": "low",
+    "known_cost_usd": 0.004222,
+    "source_spans": 11
+  },
+  "claude": {
+    "state": "native_stop_extraction_storage_verified",
+    "native_stop_pending_jobs": 4,
+    "worker_completed_jobs": 4,
+    "persisted_candidates": 2,
+    "same_body_reason_exception_result_candidates": 2,
+    "all_source_spans_match": true,
+    "source_spans": 15,
+    "reported_verification_dedicated_field": false,
+    "quarantine_only": true,
+    "codex_in_client_and_worker_path": false,
+    "model_reported": "anthropic/claude-sonnet-5.5",
+    "effort_requested": "low",
+    "known_extraction_cost_usd": 0.008766
+  },
+  "source_sha256": {
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "f6e62bcd85cb51e44d922ca8cd1c347d036fb67722b5f789e54e89658d790aba",
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs": "af673e50fdbfefa214a4714eafb2ef98e28e1334421cdf90792e482c8c777d77",
+    "scripts/session-extraction.test.mjs": "9de8b76e56bca1a9ab3fd8c763d7527fcbb71f4123e8afe5d1457b65e6d7af16"
+  },
+  "total_extraction_calls": 6,
+  "known_total_extraction_cost_usd": 0.012988,
+  "natural_router_operational_history_no_enqueue_observed": true,
+  "no_manual_native_stop_replay": true,
+  "scope": "controlled actual OrgBrain operating-policy task; native user input assistance on Cursor; manual ordinary worker",
+  "final_tests": {
+    "session_extraction": 17,
+    "existing_hook": 46,
+    "compiled_selected": 3
+  },
+  "compiled_bundle_sha256": "35be32c2245cea81fb333319f7a67048236838834b393e2fd6a6e17fff3a550d",
+  "read_only_review": "pass for native Cursor workspace mapping and native Claude message-type filter; actual reviewer model identity unattested",
+  "exact_post_verifier_body_equals_persisted_body_candidates": 3,
+  "completion_evidence_review": "pass; safe aggregate and reconciliation metadata only; UI and semantics parent observed"
+}

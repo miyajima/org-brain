@@ -79,14 +79,16 @@ test('held initial results are identified independently from accepted results',(
   fs.writeFileSync(path.join(root,'accepted-extract-b-case-b.json'),'{}');
   assert.deepEqual(heldJobs(root),['extract-c-case-a']);
 });
-import {frozenV2Candidates} from './memory-utility-v2-adapter.mjs';
+import {currentSharedV2Candidates} from './memory-utility-v2-adapter.mjs';
 test('different observed occurrences are retained even when text repeats',()=>{
   assert.equal(rawMessages([row('同じ確認'),row('同じ確認','2026-01-02T00:00:00Z')]).length,2);
 });
-test('baseline uses the frozen verifier including unresolved/ungrounded rejection',async()=>{
+test('v2 verifier rejects unresolved and empty candidates and audits grounded provider skips',async()=>{
   const packet={schema:'learning-extraction-proposal/v2',snippets:[{span_id:'s1.1',role:'user',text:'必ずテストする。'}],events:[]};
-  const r=await frozenV2Candidates({packet,run_id:'test',project_id:null},[{lesson_type:'decision',support_span_ids:['fake'],gaps:[],fields:[]}]);
+  const r=await currentSharedV2Candidates({packet,run_id:'test',project_id:null},[{lesson_type:'decision',support_span_ids:['fake'],gaps:[],fields:[]}]);
   assert.equal(r.candidates.length,0);assert.deepEqual(r.rejections[0].reason_codes,['support_id_unresolved']);
-  const skipped=await frozenV2Candidates({packet,run_id:'test'},[{lesson_type:'decision',support_span_ids:['s1.1'],gaps:[],fields:[{name:'action',values:['skip']}]}]);
+  const empty=await currentSharedV2Candidates({packet,run_id:'test'},[{lesson_type:'decision',support_span_ids:['s1.1'],gaps:[],fields:[{name:'action',values:['skip']}]}]);
+  assert.equal(empty.candidates.length,0);assert.deepEqual(empty.rejections[0].reason_codes,['candidate_content_missing']);
+  const skipped=await currentSharedV2Candidates({packet,run_id:'test'},[{lesson_type:'decision',support_span_ids:['s1.1'],gaps:[],fields:[{name:'decision',values:['必ずテストする。']},{name:'action',values:['skip']}]}]);
   assert.deepEqual(skipped.rejections[0].reason_codes,['provider_skip']);
 });

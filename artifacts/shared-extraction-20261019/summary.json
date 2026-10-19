@@ -1,0 +1,395 @@
+{
+  "schema": "session-extraction-retention-summary/v1",
+  "measured_at": "2026-10-18T19:50:07.309Z",
+  "model": "anthropic/claude-sonnet-5.5",
+  "effort": "low",
+  "provider": "Google (google-vertex/global), ZDR",
+  "same_source_cases": 118,
+  "baseline_mode": "frozen pre-change normal router and v2 packing/verifier",
+  "after_mode": "normal shared session queue; saved real responses reparsed after optional-empty fix; no model resend",
+  "body_metric": "mechanical exact full-sentence containment in semantic body, not provenance; no semantic gold labels",
+  "before_calls": 51,
+  "after_calls": 150,
+  "known_cost_usd": 0.5342040000000001,
+  "after_parse_success": 149,
+  "after_parse_failed": 1,
+  "after_parse_failures": {
+    "session_extraction_incomplete_output": 1
+  },
+  "before_persisted": 0,
+  "initial_after_persisted": 88,
+  "after_persisted": 90,
+  "raw_after_candidates": 93,
+  "nonempty_after_body": 90,
+  "reported_verification_objects": 2,
+  "storage_state": "quarantine, unverified, automatic promotion disabled",
+  "readback_exact_semantic_body_match": true,
+  "storage_redaction_held": 2,
+  "source_sha256": "52f084e700ade9bf6de986908d22e5611125b707d01707c725058aec025183c5",
+  "original_bodies_copied_to_repository": false,
+  "projects": {
+    "consentside": {
+      "cases": 35,
+      "before_candidates": 0,
+      "initial_after_candidates": 10,
+      "after_candidates": 10,
+      "facets": {
+        "reason": {
+          "source_units": 7,
+          "before_presented": 0,
+          "after_presented": 2,
+          "before_retained": 0,
+          "after_retained": 1
+        },
+        "exception": {
+          "source_units": 14,
+          "before_presented": 1,
+          "after_presented": 6,
+          "before_retained": 0,
+          "after_retained": 3
+        },
+        "verification_report": {
+          "source_units": 41,
+          "before_presented": 4,
+          "after_presented": 13,
+          "before_retained": 0,
+          "after_retained": 10
+        }
+      },
+      "input_held_groups": 0,
+      "status": "observed"
+    },
+    "org-brain": {
+      "cases": 10,
+      "before_candidates": 0,
+      "initial_after_candidates": 8,
+      "after_candidates": 8,
+      "facets": {
+        "reason": {
+          "source_units": 2,
+          "before_presented": 1,
+          "after_presented": 2,
+          "before_retained": 0,
+          "after_retained": 1
+        },
+        "exception": {
+          "source_units": 10,
+          "before_presented": 3,
+          "after_presented": 9,
+          "before_retained": 0,
+          "after_retained": 7
+        },
+        "verification_report": {
+          "source_units": 9,
+          "before_presented": 4,
+          "after_presented": 4,
+          "before_retained": 0,
+          "after_retained": 1
+        }
+      },
+      "input_held_groups": 1,
+      "status": "observed"
+    },
+    "AIma": {
+      "cases": 0,
+      "before_candidates": 0,
+      "initial_after_candidates": 0,
+      "after_candidates": 0,
+      "facets": {
+        "reason": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "exception": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "verification_report": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        }
+      },
+      "input_held_groups": 0,
+      "status": "unacquired"
+    },
+    "socia": {
+      "cases": 16,
+      "before_candidates": 0,
+      "initial_after_candidates": 29,
+      "after_candidates": 29,
+      "facets": {
+        "reason": {
+          "source_units": 2,
+          "before_presented": 0,
+          "after_presented": 2,
+          "before_retained": 0,
+          "after_retained": 2
+        },
+        "exception": {
+          "source_units": 39,
+          "before_presented": 1,
+          "after_presented": 33,
+          "before_retained": 0,
+          "after_retained": 27
+        },
+        "verification_report": {
+          "source_units": 50,
+          "before_presented": 3,
+          "after_presented": 33,
+          "before_retained": 0,
+          "after_retained": 20
+        }
+      },
+      "input_held_groups": 1,
+      "status": "observed"
+    },
+    "sfk-shinsa": {
+      "cases": 14,
+      "before_candidates": 0,
+      "initial_after_candidates": 9,
+      "after_candidates": 9,
+      "facets": {
+        "reason": {
+          "source_units": 8,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "exception": {
+          "source_units": 97,
+          "before_presented": 2,
+          "after_presented": 8,
+          "before_retained": 0,
+          "after_retained": 4
+        },
+        "verification_report": {
+          "source_units": 81,
+          "before_presented": 5,
+          "after_presented": 16,
+          "before_retained": 0,
+          "after_retained": 8
+        }
+      },
+      "input_held_groups": 0,
+      "status": "observed"
+    },
+    "jrg": {
+      "cases": 26,
+      "before_candidates": 0,
+      "initial_after_candidates": 25,
+      "after_candidates": 26,
+      "facets": {
+        "reason": {
+          "source_units": 1,
+          "before_presented": 1,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "exception": {
+          "source_units": 41,
+          "before_presented": 3,
+          "after_presented": 23,
+          "before_retained": 0,
+          "after_retained": 18
+        },
+        "verification_report": {
+          "source_units": 26,
+          "before_presented": 6,
+          "after_presented": 14,
+          "before_retained": 0,
+          "after_retained": 7
+        }
+      },
+      "input_held_groups": 4,
+      "status": "observed"
+    },
+    "factoreview": {
+      "cases": 6,
+      "before_candidates": 0,
+      "initial_after_candidates": 1,
+      "after_candidates": 1,
+      "facets": {
+        "reason": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "exception": {
+          "source_units": 3,
+          "before_presented": 1,
+          "after_presented": 3,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "verification_report": {
+          "source_units": 2,
+          "before_presented": 0,
+          "after_presented": 2,
+          "before_retained": 0,
+          "after_retained": 0
+        }
+      },
+      "input_held_groups": 0,
+      "status": "observed"
+    },
+    "smart-block": {
+      "cases": 9,
+      "before_candidates": 0,
+      "initial_after_candidates": 6,
+      "after_candidates": 7,
+      "facets": {
+        "reason": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "exception": {
+          "source_units": 3,
+          "before_presented": 1,
+          "after_presented": 3,
+          "before_retained": 0,
+          "after_retained": 3
+        },
+        "verification_report": {
+          "source_units": 6,
+          "before_presented": 5,
+          "after_presented": 6,
+          "before_retained": 0,
+          "after_retained": 5
+        }
+      },
+      "input_held_groups": 0,
+      "status": "observed"
+    },
+    "tsugi": {
+      "cases": 2,
+      "before_candidates": 0,
+      "initial_after_candidates": 0,
+      "after_candidates": 0,
+      "facets": {
+        "reason": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "exception": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        },
+        "verification_report": {
+          "source_units": 0,
+          "before_presented": 0,
+          "after_presented": 0,
+          "before_retained": 0,
+          "after_retained": 0
+        }
+      },
+      "input_held_groups": 0,
+      "status": "observed"
+    }
+  },
+  "examples": [
+    {
+      "project": "consentside",
+      "lesson_type": "success",
+      "has_reason": true,
+      "has_conditions": true,
+      "report_state": "unverified",
+      "report_text_sha256": "45bb27b2da9f8ae184808280a8721f766ae48655d35b7f1e1ce109e62fd800b6",
+      "private_candidate_id_hash": "482725dd0de4442c1d46690ff50b30de568a0ff4a54adc097cdccf785cff2b6e"
+    },
+    {
+      "project": "jrg",
+      "lesson_type": "success",
+      "has_reason": true,
+      "has_conditions": true,
+      "report_state": "unverified",
+      "report_text_sha256": "97172ef879328427e59ef24049ea5da659bbed18e54baf1f17bc03676b35317f",
+      "private_candidate_id_hash": "229616719fb3567f7393de95c921b0a05fab4d44a2d2968ac179c2374a7f50cf"
+    }
+  ],
+  "limits": {
+    "input_byte_upper_bound": 2000,
+    "output_tokens": 800,
+    "turn_calls": 32,
+    "monthly_tokens": 500000
+  },
+  "production_writes": false,
+  "client_adapters": "Claude/Cursor synthetic hook/CLI regression; real historical sources are approved Codex sources",
+  "independent_tool_verification": "only matching completed successful tool event can support observed/verified outcome; no blanket claim of verified source reports",
+  "source_versions_final": {
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs": "aabef8aea68f7131182dca74fa62d24a9bbb44ffa27783b2daaad757089ad780",
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs": "cb825f2ec5948645de2963549cf2fcd4a5627f12615533e225fc154a913cb72a",
+    "packages/shared/src/memory-extraction-verifier-runtime.mjs": "ddb5d9d35a288e444fb0e4a29f4c960e1bfb6c8806fcf3c256c458388a58cb81",
+    "packages/shared/src/memory-contract-v2-runtime.mjs": "63c13ff50e22531b2efa70e6debef08eb9b4984c8eb88de21cd6566b7a7543c7",
+    "packages/shared/src/memory-extraction-coverage-runtime.mjs": "d9a164772815e64fb61670348b1e5ac7ec46ae39f3b19ed90f31a63f1d0e33e0"
+  },
+  "final_packet_prompts_equal_original_run": 150,
+  "additional_model_calls_after_review": 0,
+  "normal_worker_replay": {
+    "cases": 118,
+    "stored_real_responses_used": 150,
+    "new_model_calls": 0,
+    "persisted": 90,
+    "input_held_groups": 6,
+    "incomplete_response_held": 1,
+    "quarantine_only": true,
+    "exact_semantic_body_matches_final_revalidation": true,
+    "production_writes": false,
+    "measured_at": "2026-10-18T19:52:11.982Z"
+  },
+  "known_probe_cost_usd": 0.001904,
+  "known_total_cost_usd": 0.536108,
+  "initial_candidate_count_correction": {
+    "preliminary_filtered_count": 65,
+    "actual_initial_db_count": 88,
+    "final_body_exact_count": 90
+  },
+  "independent_tool_verified_outcomes": 0,
+  "activation": {
+    "installed": true,
+    "model": "anthropic/claude-sonnet-5.5",
+    "effort": "low",
+    "runner_model": "gpt-6.1-sol",
+    "runner_effort": "low",
+    "source_sha256": "db54be6226d00cdad727a6dc11c04eb4445671032417185436310564cfc3b36f",
+    "targets_changed": 4,
+    "stop_clients": [
+      "claude",
+      "cursor"
+    ],
+    "existing_schedule_changed": false,
+    "existing_backend_and_credentials_preserved": true,
+    "evaluation_session_excluded": true,
+    "client_restart_and_next_real_stop_unverified": true,
+    "model_calls": 0,
+    "measured_at": "2026-10-18T19:51:24.920Z"
+  },
+  "activation_readback": {
+    "installed_bundle_equals_checked_bundle": true,
+    "unrelated_client_configuration_preserved": true,
+    "extraction_hooks_present": true,
+    "model_calls": 0,
+    "real_client_event_unverified": true
+  }
+}

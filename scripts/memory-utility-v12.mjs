@@ -31,7 +31,7 @@ import {
 import {filesUnder} from './memory-learning-corpus.mjs';
 import {contextWindowSourceHash} from './memory-extraction-router-context-compare.mjs';
 import {rawMessages as frozenRawMessages, segments as frozenSegments} from './memory-utility-v11.mjs';
-import {frozenV2Candidates} from './memory-utility-v2-adapter.mjs';
+import {currentSharedV2Candidates} from './memory-utility-v2-adapter.mjs';
 import {buildStore as frozenV11BuildStore, cliResult as frozenCliResult} from './memory-utility-v11-stages.mjs';
 import {
   MEMORY_EXTRACTION_OUTPUT_SCHEMA,
@@ -87,11 +87,14 @@ const CODE_FILES = Object.freeze([
   'scripts/memory-utility-v11-cli.mjs',
   'scripts/memory-utility-v11-stages.mjs',
   'scripts/memory-utility-v2-adapter.mjs',
-  'apps/cap-runner/src/capabilities/memory-extraction.ts',
   'packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs',
+  'packages/shared/src/memory-extraction-verifier-runtime.mjs',
+  'packages/shared/src/memory-extraction-v3-runtime.mjs',
+  'packages/shared/src/memory-extraction-coverage-runtime.mjs',
   'packages/shared/src/memory-extraction-provider-contract-runtime.mjs',
   'packages/shared/src/memory-contract-v2-runtime.mjs',
-  'packages/shared/src/memory-capture-v2-runtime.mjs'
+  'packages/shared/src/memory-capture-v2-runtime.mjs',
+  'packages/shared/src/memory-capture-profile-runtime.mjs'
 ]);
 
 export const POLICY = Object.freeze({
@@ -1905,7 +1908,7 @@ function assertPriorPlaintextChain({job, initial, accepted, root, caseId}) {
 
 async function legacyBItems(output, packet, item, operational) {
   if (!validateBOutput(output)) fail(`prior_b_schema_invalid:${item.id}`);
-  const verified = await frozenV2Candidates({
+  const verified = await currentSharedV2Candidates({
     packet,
     run_id: packet.packet_hash,
     project_id: packet.project_id ?? null

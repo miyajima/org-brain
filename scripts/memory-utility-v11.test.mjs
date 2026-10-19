@@ -6,6 +6,10 @@ import path from 'node:path';
 import {rawMessages,segments,resolveSegments,selectCases,selectCalibrationCases,boundaryPacket,seal,verify,main,POLICY} from './memory-utility-v11.mjs';
 import {hash} from './memory-extraction-router-v33-core.mjs';
 const row=(message,at='2026-01-01T00:00:00Z',type='user_message')=>({timestamp:at,payload:{type,message,phase:'final_answer'}});
+test('v1.1 policy pins the checked CLI model and effort',()=>{
+  assert.equal(POLICY.model,'gpt-6-luna');
+  assert.equal(POLICY.effort,'medium');
+});
 test('raw text, newlines, full long body and distinct proposal/adoption remain intact',()=>{
   const proposal='  提案のみ。採用は未定。\n'+'x'.repeat(9000)+'\n';
   const messages=rawMessages([row(proposal),row(proposal),row('採用した。','2026-01-01T00:01:00Z','agent_message')]);
@@ -139,14 +143,16 @@ test('CLI accounting includes every attempt once and preserves unknown totals',(
   assert.equal(heldReport.token_accounting.attempt_count,2);
   assert.equal(heldReport.token_accounting.input_tokens,8);
 });
-import {frozenV2Candidates} from './memory-utility-v2-adapter.mjs';
+import {currentSharedV2Candidates} from './memory-utility-v2-adapter.mjs';
 test('different observed occurrences are retained even when text repeats',()=>{
   assert.equal(rawMessages([row('同じ確認'),row('同じ確認','2026-01-02T00:00:00Z')]).length,2);
 });
-test('baseline uses the frozen verifier including unresolved/ungrounded rejection',async()=>{
+test('v2 verifier rejects unresolved and empty candidates and audits grounded provider skips',async()=>{
   const packet={schema:'learning-extraction-proposal/v2',snippets:[{span_id:'s1.1',role:'user',text:'必ずテストする。'}],events:[]};
-  const r=await frozenV2Candidates({packet,run_id:'test',project_id:null},[{lesson_type:'decision',support_span_ids:['fake'],gaps:[],fields:[]}]);
+  const r=await currentSharedV2Candidates({packet,run_id:'test',project_id:null},[{lesson_type:'decision',support_span_ids:['fake'],gaps:[],fields:[]}]);
   assert.equal(r.candidates.length,0);assert.deepEqual(r.rejections[0].reason_codes,['support_id_unresolved']);
-  const skipped=await frozenV2Candidates({packet,run_id:'test'},[{lesson_type:'decision',support_span_ids:['s1.1'],gaps:[],fields:[{name:'action',values:['skip']}]}]);
+  const empty=await currentSharedV2Candidates({packet,run_id:'test'},[{lesson_type:'decision',support_span_ids:['s1.1'],gaps:[],fields:[{name:'action',values:['skip']}]}]);
+  assert.equal(empty.candidates.length,0);assert.deepEqual(empty.rejections[0].reason_codes,['candidate_content_missing']);
+  const skipped=await currentSharedV2Candidates({packet,run_id:'test'},[{lesson_type:'decision',support_span_ids:['s1.1'],gaps:[],fields:[{name:'decision',values:['必ずテストする。']},{name:'action',values:['skip']}]}]);
   assert.deepEqual(skipped.rejections[0].reason_codes,['provider_skip']);
 });

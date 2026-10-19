@@ -242,6 +242,15 @@ export async function runAutonomyMaintenance(options = {}) {
   const runId = hash(`${status.policy_hash}:${Date.now()}:${Math.random()}`).slice(7, 31);
   const startedAt = Date.now();
   const inspectOnly = options.dryRun === true;
+  let sessionExtraction = {status: 'off', processed: 0};
+  const extractionEnv = options.env ?? process.env;
+  if (!inspectOnly && options.execute === true && extractionEnv.ORGBRAIN_SESSION_EXTRACTION_MODE === 'on') {
+    const { drainConfiguredSessionExtraction } = await import('./lib/session-extraction.mjs');
+    sessionExtraction = await drainConfiguredSessionExtraction({
+      tenantId: status.tenant_id ?? status.tenantId ?? 'default',
+      dbPath: options.dbPath ?? options.store?.dbPath ?? extractionEnv.ORGBRAIN_LOCAL_DB ?? DEFAULT_LOCAL_DB,
+      queueDir: extractionEnv.ORGBRAIN_SESSION_EXTRACTION_QUEUE, env: extractionEnv});
+  }
   const shadowMode = status.policy.mode === "shadow";
   // Shadow suppresses active/semantic promotion, but it still persists
   // privacy-safe quarantine candidates so the automatic loop can retry them.
@@ -595,6 +604,7 @@ export async function runAutonomyMaintenance(options = {}) {
     finished_at: Date.now(),
     result,
     session_scan: sessionScan,
+    session_extraction: sessionExtraction,
     candidate_maintenance: candidateMaintenance,
     post_apply: runPostApply,
     rollback_required: runPostApply.rollback_required || result.ok !== true,

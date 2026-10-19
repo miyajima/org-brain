@@ -15,6 +15,8 @@ import {
   CLI_ACTIVE_CONTRACT,
   CLI_REQUEST_CONTRACT,
   CLI_ROOT,
+  CLI_MODEL,
+  CLI_EFFORT,
   RUNNER_HASH,
   runCli,
   assertSupportedOutputSchema
@@ -115,8 +117,8 @@ function prepare(root) {
     private: {stage: 'evaluate', case_id: 'synthetic-smoke'},
     prompt,
     input_bytes: Buffer.byteLength(prompt),
-    expected_model: 'gpt-5.6-sol',
-    expected_effort: 'medium',
+    expected_model: CLI_MODEL,
+    expected_effort: CLI_EFFORT,
     schema_hash: EVALUATION_ONLY_SCHEMA_HASH,
     runner_hash: RUNNER_HASH
   });
@@ -131,7 +133,7 @@ function prepare(root) {
   const preparedAt = new Date().toISOString();
   const active = seal({contract: CLI_ACTIVE_CONTRACT, job_id: SMOKE_ID, job_hash: job.content_hash, prompt_hash: hash(prompt), schema_hash: EVALUATION_ONLY_SCHEMA_HASH, runner_hash: RUNNER_HASH, prepared_at: preparedAt});
   writePrivate(activePath, active);
-  const request = seal({contract: CLI_REQUEST_CONTRACT, job_hash: job.content_hash, prompt_hash: hash(prompt), prompt_path: promptPath, schema_path: schemaPath, schema_hash: EVALUATION_ONLY_SCHEMA_HASH, runner_hash: RUNNER_HASH, attempts_path: attemptsPath, active_path: activePath, model: 'gpt-5.6-sol', effort: 'medium', cwd: CLI_ROOT, sandbox: 'read-only', timeout_ms: 5 * 60 * 1000, max_attempts: 2, prepared_at: preparedAt, active_hash: active.content_hash});
+  const request = seal({contract: CLI_REQUEST_CONTRACT, job_hash: job.content_hash, prompt_hash: hash(prompt), prompt_path: promptPath, schema_path: schemaPath, schema_hash: EVALUATION_ONLY_SCHEMA_HASH, runner_hash: RUNNER_HASH, attempts_path: attemptsPath, active_path: activePath, model: CLI_MODEL, effort: CLI_EFFORT, cwd: CLI_ROOT, sandbox: 'read-only', timeout_ms: 5 * 60 * 1000, max_attempts: 2, prepared_at: preparedAt, active_hash: active.content_hash});
   writePrivate(requestPath, request);
   return {job, request, requestPath, schemaPath};
 }

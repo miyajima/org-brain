@@ -2,7 +2,7 @@ import { normalizeMemoryPaths, screenSensitiveMemory } from "./memory-capture-v2
 
 export const MEMORY_CONTRACT_V2_SCHEMA_VERSION = 2;
 export const MEMORY_CONTRACT_V2_PROMPT_ID = "orgbrain-memory-contract-v2";
-export const MEMORY_CONTRACT_V2_VERIFIER_VERSION = "verifier-v4";
+export const MEMORY_CONTRACT_V2_VERIFIER_VERSION = "verifier-v5";
 export const MEMORY_CONTRACT_V2_MAX_EVENTS = 3;
 export const MEMORY_CONTRACT_V2_LESSON_TYPES = ["success", "decision", "failure"];
 export const MEMORY_CONTRACT_V2_INTENTS = ["verify", "review"];
@@ -25,7 +25,7 @@ const MEMORY_CONTRACT_V2_AI_FIELDS = new Set([
   "evidence_selectors", "gaps", "procedure", "why_it_worked", "observed_outcome", "reuse_when",
   "decision_type", "decision_key", "question", "selected_value", "decision", "constraints",
   "rationale", "alternatives", "symptom", "failed_approach", "root_cause", "correction",
-  "verified_outcome", "avoidance_rule"
+  "verified_outcome", "avoidance_rule", "reported_verification"
 ]);
 
 export const MEMORY_CONTRACT_V2_PROMPT = [
@@ -256,6 +256,16 @@ export async function normalizeMemoryContractV2Event(input, options = {}) {
     evidence_selectors: evidenceSelectors,
     gaps
   };
+  if (input.reported_verification !== undefined) {
+    const report = input.reported_verification;
+    if (!report || typeof report !== 'object' || report.state !== 'unverified'
+        || typeof report.text !== 'string' || !report.text.trim()
+        || Object.keys(report).some((key) => !['state', 'text'].includes(key))) {
+      reasons.push('reported_verification_invalid');
+    } else {
+      event.reported_verification = { state: 'unverified', text: clip(report.text, 2_000) };
+    }
+  }
 
   if (lessonType === "success") {
     event.procedure = requiredText(input.procedure, "procedure", reasons, allowMissing);

@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-10-18T03:04:04.887Z",
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "model_pricing": {
+    "prompt": "0.00000009",
+    "completion": "0.00000055"
+  },
+  "selected_provider": [
+    {
+      "provider_name": "DeepInfra",
+      "quantization": "fp8",
+      "pricing": {
+        "prompt": "0.00000009",
+        "completion": "0.00000055",
+        "discount": 0
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "top_p",
+        "stop",
+        "frequency_penalty",
+        "presence_penalty",
+        "repetition_penalty",
+        "top_k",
+        "seed",
+        "min_p",
+        "tools",
+        "tool_choice",
+        "logit_bias",
+        "structured_outputs",
+        "response_format"
+      ]
+    }
+  ],
+  "sources": [
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/api/v1/models/qwen/qwen3-235b-a22b-2507/endpoints"
+  ]
+}

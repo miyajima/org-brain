@@ -12,6 +12,8 @@ import {
   CLI_RUNNER_CONTRACT,
   CLI_TIMEOUT_MS,
   CLI_MAX_ATTEMPTS,
+  CLI_MODEL,
+  CLI_EFFORT,
   RUNNER_HASH,
   assertSupportedOutputSchema,
   buildCodexArgs,
@@ -57,8 +59,8 @@ export {
 };
 
 export const V12_EXECUTION_TRANSPORT = 'codex_exec_stdin_v1';
-export const V12_MODEL = 'gpt-5.6-sol';
-export const V12_EFFORT = 'medium';
+export const V12_MODEL = CLI_MODEL;
+export const V12_EFFORT = CLI_EFFORT;
 export const V12_TIMEOUT_MS = CLI_TIMEOUT_MS;
 export const V12_MAX_ATTEMPTS = CLI_MAX_ATTEMPTS;
 export const V12_RUNNER_HASH = RUNNER_HASH;
