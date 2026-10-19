@@ -1,6 +1,6 @@
 import { normalizeMemoryContractV2Event } from './memory-contract-v2-runtime.mjs';
 import { validateV3Candidate } from './memory-extraction-v3-runtime.mjs';
-import { validateCoverageCandidate } from './memory-extraction-coverage-runtime.mjs';
+import { validateCoverageCandidate, validateNormalizedRetention } from './memory-extraction-coverage-runtime.mjs';
 const MAX_CANDIDATES = 3;
 const DURABLE_MEMORY_KINDS = new Set(['fact', 'decision', 'constraint', 'pitfall', 'preference', 'org_knowledge']);
 const REFINED_CONTROL_FIELDS = new Set(['persistence', 'memory_kind', 'action', 'target_memory_id', 'decision_type']);
@@ -148,9 +148,19 @@ export async function verifiedCandidates(input, candidates) {
         const gaps = Array.isArray(raw.gaps) ? raw.gaps.filter((item) => typeof item === "string").slice(0, 16) : [];
         const groundingRejections = [];
         const fields = providerFields(raw);
+        const semanticNames = raw.lesson_type === 'success' ? ['procedure', 'why_it_worked', 'reuse_when', 'observed_outcome']
+            : raw.lesson_type === 'decision' ? ['decision', 'selected_value', 'rationale', 'constraints', 'reuse_when']
+                : ['symptom', 'failed_approach', 'root_cause', 'correction', 'verified_outcome', 'avoidance_rule'];
+        if (!semanticNames.some((name) => (fields.get(name) ?? []).some((value) => value.trim()))) {
+            reject(index, ['candidate_content_missing']);
+            continue;
+        }
         const one = (name) => fields.get(name)?.[0] ?? null;
         const many = (name) => fields.get(name) ?? [];
         const grounded = (value, field) => exactGrounded(value, evidenceText, groundingRejections, field);
+        // Scalar storage must not silently discard additional exact quotations.
+        const content = (name) => v3 ? grounded(one(name), name)
+            : many(name).map((value) => grounded(value, name)).filter(Boolean).join("\n") || null;
         const persistence = one("persistence") === "operational_history" ? "operational_history" : "durable";
         if (one("persistence") && !["durable", "operational_history"].includes(one("persistence"))) {
             reject(index, ["persistence_invalid"]);
@@ -197,7 +207,7 @@ export async function verifiedCandidates(input, candidates) {
             schema_version: 2,
             lesson_type: raw.lesson_type,
             capture_intent: "review",
-            trigger: grounded(one("trigger"), "trigger"),
+            trigger: content("trigger"),
             applicability: {
                 target_files: many("target_files").flatMap((item) => {
                     const value = grounded(item, "target_files");
@@ -208,12 +218,14 @@ export async function verifiedCandidates(input, candidates) {
             evidence_selectors: input.packet.snippets.filter((item) => supportSpanIds.includes(item.span_id)).filter((item) => item.role === "user").map((item) => ({ type: "user_statement", ref: item.text, supports: [item.span_id] })),
             gaps: [...new Set(gaps)]
         };
+        const reported = content('reported_verification');
+        if (reported) common.reported_verification = { state: 'unverified', text: reported };
         if (raw.lesson_type === "success")
             Object.assign(common, {
-                procedure: grounded(one("procedure"), "procedure"),
-                why_it_worked: grounded(one("why_it_worked"), "why_it_worked"),
-                observed_outcome: grounded(one("observed_outcome"), "observed_outcome"),
-                reuse_when: grounded(one("reuse_when"), "reuse_when")
+                procedure: content("procedure"),
+                why_it_worked: content("why_it_worked"),
+                observed_outcome: content("observed_outcome"),
+                reuse_when: content("reuse_when")
             });
         if (raw.lesson_type === "decision")
             Object.assign(common, {
@@ -221,30 +233,30 @@ export async function verifiedCandidates(input, candidates) {
                 decision_key: `inferred.${(await sha256(input.extraction_profile
                     ? JSON.stringify(stableValue({ lesson_type: raw.lesson_type, support_span_ids: [...supportSpanIds].sort(), fields: raw.fields }))
                     : `${input.run_id}:${index}`)).slice(0, 24)}`,
-                question: grounded(one("question"), "question"),
-                selected_value: grounded(one("selected_value"), "selected_value"),
-                decision: grounded(one("decision"), "decision"),
+                question: content("question"),
+                selected_value: content("selected_value"),
+                decision: content("decision"),
                 constraints: many("constraints").flatMap((item) => {
                     const value = grounded(item, "constraints");
                     return value ? [value] : [];
                 }),
-                rationale: grounded(one("rationale"), "rationale"),
+                rationale: content("rationale"),
                 alternatives: many("alternative").flatMap((item, alternativeIndex) => {
                     const alternative = grounded(item, "alternative");
                     if (!alternative)
                         return [];
                     return [{ alternative, reason_rejected: grounded(many("reason_rejected")[alternativeIndex] ?? null, "reason_rejected") }];
                 }),
-                reuse_when: grounded(one("reuse_when"), "reuse_when")
+                reuse_when: content("reuse_when")
             });
         if (raw.lesson_type === "failure")
             Object.assign(common, {
-                symptom: grounded(one("symptom"), "symptom"),
-                failed_approach: grounded(one("failed_approach"), "failed_approach"),
-                root_cause: grounded(one("root_cause"), "root_cause"),
-                correction: grounded(one("correction"), "correction"),
-                verified_outcome: grounded(one("verified_outcome"), "verified_outcome"),
-                avoidance_rule: grounded(one("avoidance_rule"), "avoidance_rule")
+                symptom: content("symptom"),
+                failed_approach: content("failed_approach"),
+                root_cause: content("root_cause"),
+                correction: content("correction"),
+                verified_outcome: content("verified_outcome"),
+                avoidance_rule: content("avoidance_rule")
             });
         if (groundingRejections.length > 0) {
             reject(index, groundingRejections);
@@ -255,6 +267,13 @@ export async function verifiedCandidates(input, candidates) {
         if (!normalized.accepted || !normalized.event) {
             reject(index, ["normalized_contract_rejected"]);
             continue;
+        }
+        if (!v3) {
+            const retention = validateNormalizedRetention(raw, input.packet, normalized.event);
+            if (!retention.valid) {
+                reject(index, retention.reason_codes);
+                continue;
+            }
         }
         acceptedIndices.push(index);
         output.push({

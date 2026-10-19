@@ -58,6 +58,8 @@ import {
   CLI_ROOT,
   RUNNER_HASH,
   V12_EXECUTION_TRANSPORT,
+  V12_MODEL,
+  V12_EFFORT,
   V12_MAX_ATTEMPTS,
   V12_ENUM_VALUE_LIMIT,
   V12_SCHEMA_ENCODING,
@@ -154,7 +156,7 @@ function writeNativeAcceptanceFixture({root, sessionsRoot, caseId, id, prompt, r
   const inputBytes = v12InputByteAccounting(prompt, schema);
   const job = seal({
     id, payload, private: privateData, prompt,
-    ...inputBytes, expected_model: 'gpt-5.6-sol', expected_effort: 'medium',
+    ...inputBytes, expected_model: V12_MODEL, expected_effort: V12_EFFORT,
     schema_encoding: V12_SCHEMA_ENCODING,
     schema_hash: schemaHash, runner_hash: RUNNER_HASH
   });
@@ -172,7 +174,7 @@ function writeNativeAcceptanceFixture({root, sessionsRoot, caseId, id, prompt, r
   const request = seal({
     contract: CLI_REQUEST_CONTRACT, job_hash: job.content_hash, prompt_hash: hash(prompt),
     prompt_path: promptPath, schema_path: schemaPath, schema_hash: schemaHash, runner_hash: RUNNER_HASH,
-    attempts_path: attemptsPath, active_path: activePath, model: 'gpt-5.6-sol', effort: 'medium', cwd: CLI_ROOT,
+    attempts_path: attemptsPath, active_path: activePath, model: V12_MODEL, effort: V12_EFFORT, cwd: CLI_ROOT,
     sandbox: 'read-only', timeout_ms: V12_TIMEOUT_MS, max_attempts: V12_MAX_ATTEMPTS,
     prepared_at: preparedAt, active_hash: active.content_hash, ...inputBytes
   });
@@ -197,7 +199,7 @@ function writeNativeAcceptanceFixture({root, sessionsRoot, caseId, id, prompt, r
   const nativeLog = [
     {timestamp: startedAt, type: 'session_meta', payload: {id: sessionId, source: 'exec', cwd: CLI_ROOT, timestamp: startedAt}},
     {timestamp: startedAt, type: 'response_item', payload: {type: 'message', role: 'developer', content: [{type: 'input_text', text: 'MEMORY_SUMMARY BEGINS\nsynthetic common host memory'}]}},
-    {timestamp: startedAt, type: 'turn_context', payload: {model: 'gpt-5.6-sol', effort: 'medium', sandbox_policy: {type: 'read-only'}}},
+    {timestamp: startedAt, type: 'turn_context', payload: {model: V12_MODEL, effort: V12_EFFORT, sandbox_policy: {type: 'read-only'}}},
     {timestamp: startedAt, type: 'response_item', payload: {type: 'message', role: 'user', content: [{type: 'input_text', text: prompt}], internal_chat_message_metadata_passthrough: {content_item_kinds: ['user.text']}}},
     {timestamp: finalAt, type: 'response_item', payload: {type: 'message', role: 'assistant', phase: 'final_answer', content: [{type: 'output_text', text: nativeRaw}]}}
   ];
@@ -1135,6 +1137,10 @@ test('generated C jobs expose one ordered span catalog and account for exact sch
   assert.equal(Buffer.byteLength(promptText, 'utf8'), job.prompt_bytes);
   assert.equal(request.schema_bytes + request.prompt_bytes, request.input_bytes);
   assert.equal(request.input_bytes, job.input_bytes);
+  assert.equal(V12_MODEL, 'gpt-6-luna');
+  assert.equal(V12_EFFORT, 'medium');
+  assert.equal(request.model, V12_MODEL);
+  assert.equal(request.effort, V12_EFFORT);
 });
 
 test('generated C jobs accept the largest corpus span catalog within the bounded input budget', () => {
@@ -1220,7 +1226,7 @@ test('input byte accounting accepts the exact limit and holds an over-limit job'
     const inputBytes = v12InputByteAccounting(prompt, schema);
     const job = seal({
       id, payload: {memories: []}, private: privateData, prompt, ...inputBytes,
-      schema_encoding: V12_SCHEMA_ENCODING, expected_model: 'gpt-5.6-sol', expected_effort: 'medium',
+      schema_encoding: V12_SCHEMA_ENCODING, expected_model: V12_MODEL, expected_effort: V12_EFFORT,
       schema_hash: hash(schema), runner_hash: RUNNER_HASH
     });
     writePrivateJson(path.join(root, `job-${id}.json`), job);
@@ -1247,10 +1253,10 @@ test('input byte accounting accepts the exact limit and holds an over-limit job'
   assert.equal(fs.existsSync(path.join(overRoot, 'active-cli.json')), false);
 });
 
-test('the v1.1 CLI runner remains byte-frozen for the v1.2 experiment', () => {
+test('the checked v1.1 CLI runner revision is pinned for the v1.2 experiment', () => {
   const file = path.join(path.dirname(new URL(import.meta.url).pathname), 'memory-utility-v11-cli.mjs');
   const digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-  assert.equal(digest, 'cd9b166a419c935e421591ebb4db84d7a231a29edf2612f85aeb6cc9b7e152cb');
+  assert.equal(digest, '3a784c8af41fc42477509eaa03f27854dbe3b4b19060acba8ec189bc77bb7171');
 });
 
 test('main CLI acceptance path verifies the full native session before accepting', async () => {
@@ -1271,8 +1277,8 @@ test('main CLI acceptance path verifies the full native session before accepting
     prompt,
     ...inputBytes,
     schema_encoding: V12_SCHEMA_ENCODING,
-    expected_model: 'gpt-5.6-sol',
-    expected_effort: 'medium',
+    expected_model: V12_MODEL,
+    expected_effort: V12_EFFORT,
     schema_hash: schemaHash,
     runner_hash: RUNNER_HASH
   });
@@ -1290,7 +1296,7 @@ test('main CLI acceptance path verifies the full native session before accepting
   const request = seal({
     contract: CLI_REQUEST_CONTRACT, job_hash: job.content_hash, prompt_hash: hash(prompt),
     prompt_path: promptPath, schema_path: schemaPath, schema_hash: schemaHash, runner_hash: RUNNER_HASH,
-    attempts_path: attemptsPath, active_path: activePath, model: 'gpt-5.6-sol', effort: 'medium', cwd: CLI_ROOT,
+    attempts_path: attemptsPath, active_path: activePath, model: V12_MODEL, effort: V12_EFFORT, cwd: CLI_ROOT,
     sandbox: 'read-only', timeout_ms: V12_TIMEOUT_MS, max_attempts: V12_MAX_ATTEMPTS,
     prepared_at: preparedAt, active_hash: active.content_hash, ...inputBytes
   });
@@ -1316,7 +1322,7 @@ test('main CLI acceptance path verifies the full native session before accepting
   const nativeLog = [
     {timestamp: startedAt, type: 'session_meta', payload: {id: sessionId, source: 'exec', cwd: CLI_ROOT, timestamp: startedAt}},
     {timestamp: startedAt, type: 'response_item', payload: {type: 'message', role: 'developer', content: [{type: 'input_text', text: 'MEMORY_SUMMARY BEGINS\nsynthetic common host memory'}]}},
-    {timestamp: startedAt, type: 'turn_context', payload: {model: 'gpt-5.6-sol', effort: 'medium', sandbox_policy: {type: 'read-only'}}},
+    {timestamp: startedAt, type: 'turn_context', payload: {model: V12_MODEL, effort: V12_EFFORT, sandbox_policy: {type: 'read-only'}}},
     {timestamp: startedAt, type: 'response_item', payload: {type: 'message', role: 'user', content: [{type: 'input_text', text: prompt}], internal_chat_message_metadata_passthrough: {content_item_kinds: ['user.text']}}},
     {timestamp: finalAt, type: 'response_item', payload: {type: 'message', role: 'assistant', phase: 'final_answer', content: [{type: 'output_text', text: raw}]}}
   ];

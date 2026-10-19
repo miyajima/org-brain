@@ -17,6 +17,8 @@ export const CLI_KILL_GRACE_MS = 5_000;
 export const CLI_NATIVE_LOG_WAIT_MS = 3_000;
 export const CLI_MAX_STDOUT_BYTES = 8 * 1024 * 1024;
 export const CLI_MAX_STDERR_BYTES = 2 * 1024 * 1024;
+export const CLI_MODEL = 'gpt-6-luna';
+export const CLI_EFFORT = 'medium';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SUPPORTED_SCHEMA_KEYS = new Set(['type', 'enum', 'properties', 'required', 'additionalProperties', 'items', 'maxItems']);
@@ -238,8 +240,8 @@ export function schemaHashForJob(job) {
 export function buildCodexArgs({schemaPath, outputPath}) {
   if (!path.isAbsolute(schemaPath) || !path.isAbsolute(outputPath)) fail('cli_paths_must_be_absolute');
   return [
-    'exec', '-C', ROOT, '-s', 'read-only', '-m', 'gpt-5.6-sol',
-    '-c', 'model_reasoning_effort="medium"', '--json', '--output-schema', schemaPath,
+    'exec', '-C', ROOT, '-s', 'read-only', '-m', CLI_MODEL,
+    '-c', `model_reasoning_effort="${CLI_EFFORT}"`, '--json', '--output-schema', schemaPath,
     '-o', outputPath, '-'
   ];
 }
@@ -454,7 +456,7 @@ function readPrompt(request, job) {
 
 function validateRunnerRequest(request, job, schema, schemaPath) {
   if (request.contract !== CLI_REQUEST_CONTRACT || request.job_hash !== job.content_hash || request.prompt_hash !== hash(job.prompt)
-    || request.model !== 'gpt-5.6-sol' || request.effort !== 'medium' || request.cwd !== ROOT || request.sandbox !== 'read-only'
+    || request.model !== CLI_MODEL || request.effort !== CLI_EFFORT || request.cwd !== ROOT || request.sandbox !== 'read-only'
     || request.runner_hash !== RUNNER_HASH || request.schema_hash !== job.schema_hash || request.schema_hash !== hash(schema) || request.schema_path !== schemaPath) fail('cli_request_mismatch');
   assertSupportedOutputSchema(schema);
 }
@@ -506,7 +508,7 @@ export async function runCli({
     const finishedAt = new Date().toISOString();
     const descriptor = {
       contract: CLI_ATTEMPT_CONTRACT, ...base, attempt: attemptNumber, executable, args, argv_hash: argvHash,
-      cwd: ROOT, sandbox: 'read-only', model: 'gpt-5.6-sol', effort: 'medium',
+      cwd: ROOT, sandbox: 'read-only', model: CLI_MODEL, effort: CLI_EFFORT,
       events_path: eventsPath, output_path: outputPath, stderr_path: stderrPath,
       events_sha256: fileSha256(eventsPath), output_sha256: fileSha256(outputPath), stderr_sha256: fileSha256(stderrPath),
       input_bytes: prompt.byteLength, stdout_bytes: processResult.stdout_bytes, stderr_bytes: processResult.stderr_bytes,

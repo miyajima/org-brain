@@ -11,5 +11,6 @@ export function selectCoverageEvidence(groups: any[], options?: Record<string, u
 export function packCoverageGroups(packet: Record<string, unknown>, groups: any[], options?: Record<string, unknown>): any;
 export function decideCoverageSecondPass(input?: Record<string, unknown>): any;
 export function validateCoverageCandidate(candidate: Record<string, unknown>, packet: Record<string, unknown>): { valid: boolean; reason_codes: string[] };
+export function validateNormalizedRetention(candidate: Record<string, unknown>, packet: Record<string, unknown>, observation: Record<string, unknown>): { valid: boolean; reason_codes: string[] };
 export function coverageCandidateFingerprint(candidate: Record<string, unknown>): string;
 export function mergeCoverageCandidates(passCandidates: unknown[][], options?: Record<string, unknown>): any;

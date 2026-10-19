@@ -91,7 +91,11 @@ const EXPLICIT_HOOK_MODE_KEYS = new Set([
   "ORGBRAIN_LOCAL_CONTEXT_ENABLED",
   "ORGBRAIN_LOCAL_HOOK_CAPTURE",
   "ORGBRAIN_MEMORY_CAPTURE_V2_MODE",
-  "ORGBRAIN_MEMORY_COMMITMENTS_MODE"
+  "ORGBRAIN_MEMORY_COMMITMENTS_MODE",
+  "ORGBRAIN_SESSION_EXTRACTION_MODE",
+  "ORGBRAIN_SESSION_EXTRACTION_AUTORUN",
+  "ORGBRAIN_SESSION_EXTRACTION_PROJECTS",
+  "ORGBRAIN_SESSION_EXTRACTION_EXCLUDE_SESSIONS"
 ]);
 const EXPLICIT_HOOK_SAFE_DEFAULTS = {
   ORGBRAIN_ENABLE_CLOUD_MEMORY: "false",
@@ -99,7 +103,11 @@ const EXPLICIT_HOOK_SAFE_DEFAULTS = {
   ORGBRAIN_LOCAL_CONTEXT_ENABLED: "false",
   ORGBRAIN_LOCAL_HOOK_CAPTURE: "false",
   ORGBRAIN_MEMORY_CAPTURE_V2_MODE: "off",
-  ORGBRAIN_MEMORY_COMMITMENTS_MODE: "off"
+  ORGBRAIN_MEMORY_COMMITMENTS_MODE: "off",
+  ORGBRAIN_SESSION_EXTRACTION_MODE: "off",
+  ORGBRAIN_SESSION_EXTRACTION_AUTORUN: "false",
+  ORGBRAIN_SESSION_EXTRACTION_PROJECTS: "",
+  ORGBRAIN_SESSION_EXTRACTION_EXCLUDE_SESSIONS: ""
 };
 const validatedMcpConfigurations = new WeakSet();
 const OUTBOX_CLAIM_STALE_MS = 5 * 60 * 1000;
@@ -749,11 +757,20 @@ function buildClaudeRecord(payloadText, parsed) {
 }
 
 function buildCursorRecord(payloadText, parsed) {
+  // Native Cursor uses workspace_roots rather than cwd. Ambiguous multi-root
+  // sessions need an explicit working directory; never guess project ownership.
+  const roots = [...new Set((Array.isArray(parsed?.workspace_roots) ? parsed.workspace_roots : [])
+    .filter(root => typeof root === 'string' && path.isAbsolute(root)).map(root => path.resolve(root)))];
   return buildCommonRecord("cursor", payloadText, parsed, {
+    cwd: roots.length === 1 ? roots[0] : null,
     eventType: firstString(parsed?.type, parsed?.event?.type, "afterAgentResponse"),
     externalKey: `cursor:${sha256(payloadText).slice(0, 16)}`,
     assistantText: firstString(parsed?.message, parsed?.assistant, parsed?.response, parsed?.content),
-    metadata: {}
+    metadata: {
+      sessionId: firstString(parsed?.conversation_id, parsed?.session_id),
+      turnId: firstString(parsed?.generation_id, parsed?.turn_id),
+      transcriptPath: firstString(parsed?.transcript_path)
+    }
   });
 }
 
@@ -1343,7 +1360,8 @@ export function captureItemPayload(record) {
     ...(record.captureRoute ? { capture_route: record.captureRoute } : {}),
     ...(record.captureBatchId ? { capture_batch_id: record.captureBatchId } : {}),
     ...(record.verification ? { verification: record.verification } : {}),
-    ...(record.qualityDimensions ? { quality_dimensions: record.qualityDimensions } : {})
+    ...(record.qualityDimensions ? { quality_dimensions: record.qualityDimensions } : {}),
+    ...(record.learning?.reported_verification ? { verification_state: "unverified" } : {})
   };
 }
 
@@ -1423,6 +1441,9 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
       kind: draft.kind,
       rationale: draft.rationale,
       reuseRule: draft.reuse_rule,
+      ...(draft.reported_verification ? {
+        learning: { reported_verification: draft.reported_verification }
+      } : {}),
       evidence: draft.evidence.map((item) => ({
         type: ["file", "command", "doc"].includes(item.type) ? item.type : "external",
         ref: item.ref,
@@ -2102,7 +2123,9 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   const sourceName = inputSourceName === "codex-stop" ? "codex" : inputSourceName;
   let activityScope = null;
   let memoryUseReport = null;
+  let sessionExtraction = null;
   const finish = async (result) => {
+    if (sessionExtraction) result.session_extraction = sessionExtraction;
     if (activityScope) {
       const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
       const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
@@ -2140,6 +2163,28 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   });
   tenantId = workspace.tenantId;
   activityScope = { tenantId, projectId: workspace.projectId };
+  const commonExtractionEnabled = process.env.ORGBRAIN_SESSION_EXTRACTION_MODE === 'on'
+    && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false'
+    && workspace.memoryLearningMode !== 'confirm';
+  if (nonInteractiveHook && commonExtractionEnabled) {
+    const { loadClientTurnRows, enqueueSessionExtraction, wakeSessionExtraction, sessionExtractionAutorunEnabled } = await import('./lib/session-extraction.mjs');
+    try {
+      const client = sourceName;
+      const rows = await loadClientTurnRows({client, transcript_path: normalizedRecord.metadata?.transcriptPath,
+        session_id: normalizedRecord.metadata?.sessionId, turn_id: normalizedRecord.metadata?.turnId,
+        workspace: workspace.workspaceRoot, completed: true});
+      sessionExtraction = rows.length ? await enqueueSessionExtraction({rows, client, tenantId,
+        projectId: workspace.projectId, workspace: workspace.workspaceRoot,
+        sessionId: normalizedRecord.metadata?.sessionId, turnId: normalizedRecord.metadata?.turnId})
+        : {queued: 0, status: 'complete_turn_unavailable'};
+      if (sessionExtractionAutorunEnabled() && ['prepared','partial_input_held'].includes(sessionExtraction.status)) {
+        sessionExtraction.worker = await (options.wakeSessionExtraction ?? wakeSessionExtraction)({tenantId,
+          projectId: workspace.projectId, dbPath: process.env.ORGBRAIN_LOCAL_DB});
+      }
+    } catch {
+      sessionExtraction = {queued: 0, status: 'evidence_load_failed'};
+    }
+  }
   if (inputSourceName === "codex-stop") {
     const { LocalMemoryStore, DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
     const useStore = new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
@@ -2210,7 +2255,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     shadowReport = extractionPrepared.report;
     learningReviewCandidates = extractionPrepared.reviewCandidates ?? [];
     if (
-      ["canary", "on"].includes(extractionMode) &&
+      !commonExtractionEnabled && ["canary", "on"].includes(extractionMode) &&
       extractionPrepared.extractionRequest &&
       workspace.projectId &&
       memoryMode.cloudWritesAllowed

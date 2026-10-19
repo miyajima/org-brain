@@ -1,0 +1,74 @@
+{
+  "measured_at": "2026-10-19T07:36:12.003Z",
+  "project_id": "org-brain",
+  "autorun_enabled": true,
+  "model": "anthropic/claude-sonnet-5.5",
+  "effort_requested": "low",
+  "bundle_sha256": "531e1739ced27934ab52c0d6ff4bfe2bf1776f847205c39c3512903f76727855",
+  "new_schedule": false,
+  "manual_worker_invocations_in_actual_test": 0,
+  "claude": {
+    "jobs": 6,
+    "completed": 6,
+    "saved": 5,
+    "failed": 0,
+    "worker_duration_ms": 9906,
+    "native_stop_status": 0,
+    "native_stop_duration_ms": 237,
+    "source_matching_spans": 38,
+    "source_total_spans": 38,
+    "exact_saved_bodies": 5,
+    "candidates_with_reason_exception_report": 1,
+    "extraction_known_cost_usd": 0.015424,
+    "provider_response_models": [
+      "anthropic/claude-sonnet-5.5"
+    ],
+    "provider_response_providers": [
+      "Google"
+    ]
+  },
+  "cursor": {
+    "actual_test": "verified_after_user_input_assistance",
+    "jobs": 3,
+    "completed": 3,
+    "saved": 2,
+    "failed": 0,
+    "worker_duration_ms": 5230,
+    "source_matching_spans": 17,
+    "source_total_spans": 17,
+    "exact_saved_bodies": 2,
+    "candidates_with_reason_exception_report": 2,
+    "extraction_known_cost_usd": 0.006728,
+    "provider_response_models": [
+      "anthropic/claude-sonnet-5.5"
+    ],
+    "provider_response_providers": [
+      "Google"
+    ],
+    "ui_model": "Claude Sonnet 5.5 Low",
+    "ui_environment": "This Mac",
+    "ui_completion_confirmed": true
+  },
+  "previous_candidates_unchanged": true,
+  "previous_jobs_unchanged": true,
+  "storage_state": "quarantine",
+  "automatic_promotion": false,
+  "tests": {
+    "session_extraction": 28,
+    "existing_hook": 46,
+    "compiled_automatic_fixture": 1
+  },
+  "source_review": "pass_after_three_findings_fixed",
+  "live_test_complete": true,
+  "unrelated_client_jobs_excluded": true,
+  "autorun_enabled_readback": true,
+  "installed_runtime_unchanged": true,
+  "totals": {
+    "jobs_completed": 9,
+    "candidates_saved": 7,
+    "exact_saved_bodies": 7,
+    "candidates_with_reason_exception_report": 3,
+    "known_extraction_cost_usd": 0.022152,
+    "additional_model_calls_for_readback": 0
+  }
+}

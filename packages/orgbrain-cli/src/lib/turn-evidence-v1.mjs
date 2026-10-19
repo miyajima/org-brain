@@ -359,7 +359,7 @@ function toolResultFromRow(row) {
   const httpMatch = serialized.match(/\bHTTP\/?\d(?:\.\d)?\s+(\d{3})\b/iu);
   const exitCode = Number.isInteger(payload.exit_code) ? payload.exit_code : Number.isInteger(structured?.exit_code) ? structured.exit_code : exitMatch ? Number(exitMatch[1]) : null;
   const httpStatus = Number.isInteger(payload.http_status) ? payload.http_status : Number.isInteger(structured?.http_status) ? structured.http_status : httpMatch ? Number(httpMatch[1]) : null;
-  const failed = payload.is_error === true || (exitCode !== null && exitCode !== 0) || (httpStatus !== null && httpStatus >= 400) || /\b(?:error|failed|failure|exception)\b|(?:エラー|失敗)/iu.test(serialized.slice(0, 1_000));
+  const failed = ["failed", "error", "cancelled", "incomplete"].includes(payload.status) || ["failed", "error", "cancelled", "incomplete"].includes(structured?.status) || payload.is_error === true || structured?.is_error === true || (exitCode !== null && exitCode !== 0) || (httpStatus !== null && httpStatus >= 400) || /\b(?:error|failed|failure|exception)\b|(?:エラー|失敗)/iu.test(serialized.slice(0, 1_000));
   return {
     call_id: String(payload.call_id ?? payload.id ?? sha256(serialized).slice(0, 24)),
     status: failed ? "failed" : "completed",

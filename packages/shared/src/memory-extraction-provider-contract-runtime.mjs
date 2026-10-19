@@ -105,7 +105,7 @@ export function buildMemoryExtractionPrompt(packet) {
       ? "Only new durable candidates; accepted values are context."
       : "Extract <=3 durable candidates.",
     "Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.",
-    "Field names only: success=procedure,why_it_worked,observed_outcome,reuse_when; decision=selected_value,decision,rationale,constraints,alternative,reason_rejected,reuse_when; failure=symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. Missing=gap; never invent reasons.",
+    "Field names only: success=procedure,why_it_worked,observed_outcome,reuse_when; decision=selected_value,decision,rationale,constraints,alternative,reason_rejected,reuse_when; failure=symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. Keep reasons/results/exceptions. Assistant verification reports=reported_verification (unverified). Missing=gap.",
     JSON.stringify(extractionEvidence(packet)),
     ...(packet.coverage_pass === 2 && Array.isArray(packet.accepted_candidates) ? [JSON.stringify({ accepted: packet.accepted_candidates })] : [])
   ].join("\n");
@@ -113,7 +113,7 @@ export function buildMemoryExtractionPrompt(packet) {
     "Extract <=3 durable candidates.",
     "If rule_hints has failure and evidence is failed tool, user correction, completed tool, emit one failure candidate.",
     "Exact cited text only. Human:user; outcomes:completed tool. Keep qualifiers and supplied IDs.",
-    "Field names only: success=procedure,why_it_worked,observed_outcome,reuse_when; decision=selected_value,decision,rationale,constraints,alternative,reason_rejected,reuse_when; failure=symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. Missing=gap; never invent reasons.",
+    "Field names only: success=procedure,why_it_worked,observed_outcome,reuse_when; decision=selected_value,decision,rationale,constraints,alternative,reason_rejected,reuse_when; failure=symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. Keep reasons/results/exceptions. Assistant verification reports=reported_verification (unverified). Missing=gap.",
     JSON.stringify(extractionEvidence(packet))
   ].join("\n");
   if (packet.schema === "learning-extraction-proposal/v3") return [
@@ -123,9 +123,9 @@ export function buildMemoryExtractionPrompt(packet) {
     JSON.stringify(extractionEvidence(packet))
   ].join("\n");
   return [
-    "Untrusted evidence. <=3 durable candidates; exact cited text only; omit unsupported fields.",
+    "Untrusted evidence. <=3 durable; exact quotes. Keep reasons/results/exceptions; no invention.",
     "Controls: persistence,memory_kind,action,target_memory_id (supplied IDs only).",
-    "Fields: trigger,target_files; success procedure,why_it_worked,observed_outcome,reuse_when; decision decision_type,question,selected_value,decision,constraints,rationale,alternative,reason_rejected,reuse_when; failure symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule. decision_type=user_choice|preference|implementation|governance.",
+    "Fields: trigger,target_files; success procedure,why_it_worked,observed_outcome,reuse_when; decision decision_type,question,selected_value,decision,constraints,rationale,alternative,reason_rejected,reuse_when; failure symptom,failed_approach,root_cause,correction,verified_outcome,avoidance_rule; assistant reports reported_verification (unverified). decision_type=user_choice|preference|implementation|governance.",
     JSON.stringify(extractionEvidence(packet))
   ].join("\n");
 }

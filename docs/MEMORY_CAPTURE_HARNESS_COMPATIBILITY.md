@@ -324,3 +324,31 @@ conversation events and installing Stop hooks does not enable that access.
 Pending candidates are not active memories. Existing propose/actual-human-answer/
 confirm gates remain in force, and supplied worker/tool excerpts do not become
 verified execution evidence. See [explicit bridge](CONVERSATION_MEMORY_BRIDGE.md).
+
+### Extraction support retention (2026-10-18)
+
+Rule extraction keeps adjacent reasons and limiting exceptions in the existing
+rationale/reuse fields. Explicit reported verification is carried separately as
+`learning.reported_verification` with state `unverified`; the capture payload
+uses the API's existing top-level `verification_state: unverified`. This is
+reported context, not a tool attestation. Existing hooks, bootstrap, confirmation,
+eager retrieval/action gates and provider default-off/allowlist gates stay intact.
+
+V2 provider candidates are checked again after normalization, including length
+limits. A cited reason, qualifier, result or supplied content value that disappears
+causes an explicit rejection. Multiple exact quotations in scalar content fields
+are preserved together. This does not activate or change the held v3 profile.
+See `artifacts/extraction-retention-20261018/Report.md` for the fixed real-data
+replay, controlled conversion tests and unverified model/production quality gates.
+
+### 2026-10-19: 共通セッション再抽出
+
+- `extraction-hooks` の Stop は Claude/Cursor/Codex 共通の非公開キューに渡す。フックから生成APIを直接呼ばず、ローカルの別ワーカー/既存autonomy実行がHaiku 5.5 mediumを呼ぶ。Codex CLIは不要。導入時のSonnet 5.5 lowによる測定は過去の記録として保持する。
+- 本文の無いLLM候補を共有検証器で拒否する。任意の空項目は他の有効な本文を消さない。`reported_verification` は契約v2の任意の本文項目で、常にunverified。共有検証器版はv5、スキーマと契約ハッシュを更新した。
+- キューはinput/contractの版を照合し、不明な呼び出しを自動再送しない。理由・条件を含む関連文は切り詰めず、上限超過を保留にする。保存時の安全処理で本文が変わる候補も保留にする。
+- この経路の候補はquarantineかつautomatic_promotion=false。既存の自律メンテナンスからも自動昇格しない。既存の確認済み記憶を書き換える移行処理はない。
+- 設定、クライアント終了イベント、API呼び出し、候補保存、実行証明、active化は別の状態。[実データ比較](../artifacts/shared-extraction-20261019/Report.md)を参照。
+
+### 共通抽出ワーカーのStop後自動起動
+
+`ORGBRAIN_SESSION_EXTRACTION_AUTORUN=true` は明示的なローカル設定で、既定は無効。通常Stopはキュー投入後に導入済みNode/CLIの別プロセスを起動するだけで、フック内の推論・ネットワーク禁止、confirmモード、対象allowlist、秘密除外を維持する。ワーカーの排他は手動/autonomy経路にも共通で、終了時の未処理確認と解除を原子的に行う。不明なrunningジョブを再送せず、API失敗・予算切れ・例外は自動継続しない。自動化は候補のactive化やグローバルハーネス変更を含まない。

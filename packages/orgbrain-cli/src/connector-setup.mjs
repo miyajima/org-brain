@@ -422,6 +422,39 @@ export function codexMinimalHooksPlan(options = {}) {
   };
 }
 
+// Extraction uses the same deterministic Stop command for every client. This
+// installer changes only that handler; MCP, backend flags and credentials stay
+// under their existing installation/configuration boundary.
+export function sessionExtractionHooksPlan(agent, options = {}) {
+  if (!["codex", "claude", "cursor"].includes(agent)) throw new Error("unsupported extraction hook client");
+  const base = codexMinimalHooksPlan(options);
+  const home = path.resolve(options.home || os.homedir());
+  const hooks = agent === "claude" ? path.join(home, ".claude", "settings.json")
+    : agent === "cursor" ? path.join(home, ".cursor", "hooks.json") : base.files.hooks;
+  const action = `${agent}-stop`;
+  const command = hookCommand(options.command ? [options.command]
+    : [process.execPath, "--no-warnings", options.cliPath || LOCAL_CLI_PATH], base.files.env, action, base.files.errors);
+  const event = agent === "cursor" ? "stop" : "Stop";
+  return {...base, agent, mode: "extraction-hooks", files: {...base.files, hooks},
+    handlers: {[event]: agent === "cursor" ? {command, timeout: 5, failClosed: false} : {type: "command", command, timeout: 5}},
+    verify: [agent, "Stop -> pending extraction -> separate worker"],
+    configuration: {required: ["ORGBRAIN_LOCAL_HOOK_CAPTURE=true", "ORGBRAIN_SESSION_EXTRACTION_MODE=on", "ORGBRAIN_SESSION_EXTRACTION_PROJECTS", "OPENROUTER_API_KEY"],
+      model: "anthropic/claude-sonnet-5.5", effort: "low"}};
+}
+
+export async function installSessionExtractionHooks(plan) {
+  const raw = await readOptional(plan.files.hooks);
+  const merge = plan.agent === "claude" ? mergeClaudeHooks : plan.agent === "cursor" ? mergeCursorHooks : mergeCodexHooks;
+  const merged = merge(raw, plan.handlers);
+  const backup = await backupExisting(plan.files.hooks, new Date().toISOString().replaceAll(":", "-"));
+  await mkdir(path.dirname(plan.files.errors), {recursive: true, mode: 0o700});
+  await writeFile(plan.files.errors, "", {encoding: "utf8", mode: 0o600, flag: "a"});
+  await writePrivateFile(plan.files.hooks, merged);
+  return {ok: true, installed: true, agent: plan.agent, mode: plan.mode,
+    hooks_file: plan.files.hooks, backups: backup ? [backup] : [], trust_required: true,
+    next_step: "Restart the client and allow its Stop hook; run the separate extraction worker or configured maintenance."};
+}
+
 export async function installCodexMinimalHooks(plan, options = {}) {
   const suffix = new Date().toISOString().replaceAll(":", "-");
   const envRaw = await readOptional(plan.files.env);
@@ -818,7 +851,7 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
   const agent = rest[0]?.toLowerCase();
   const mode = args.get("--mode", "mcp");
   const requestedCliPath = args.get("--cli-path", null);
-  const validatedCliPath = requestedCliPath && ["mcp", "cloud-hooks", "minimal-hooks"].includes(mode)
+  const validatedCliPath = requestedCliPath && ["mcp", "cloud-hooks", "minimal-hooks", "extraction-hooks"].includes(mode)
     ? await requireReadableCliPath(requestedCliPath)
     : requestedCliPath;
   const runCommand = runtime.runCommand ?? run;
@@ -934,6 +967,18 @@ export async function runConnectorCommand(action, rest, args, runtime = {}) {
         `Revoke this installation in Org Brain, fix the local error, and create a new enrollment. Cause: ${detail}`
       );
     }
+  }
+  if (mode === "extraction-hooks") {
+    if (args.get("--scope", "user") !== "user") throw new Error("extraction-hooks requires user scope");
+    const identity = await configuredWorkspaceIdentity(args);
+    const plan = sessionExtractionHooksPlan(agent, {cliPath: validatedCliPath,
+      workspace: identity.workspace, projectId: identity.projectId, tenantId: identity.tenantId,
+      command: args.get("--command", null)});
+    if (!args.flags.has("--execute")) return {ok: true, dry_run: true, plan};
+    if (agent === "cursor") await assertCursorUserHooksSupported(runtime.cursorVersionOutput);
+    const approval = await requireHookSetupApproval(plan, {...runtime.hookApproval,
+      approved: args.flags.has("--approve-hooks") || runtime.hookApproval?.approved === true});
+    return {...await installSessionExtractionHooks(plan), hook_approval: approval};
   }
   if (mode === "minimal-hooks") {
     if (agent !== "codex") throw new Error("--mode minimal-hooks is currently supported only for codex");

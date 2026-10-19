@@ -9,6 +9,7 @@
     "schema_version": { "const": 2 },
     "lesson_type": { "enum": ["success", "decision", "failure"] },
     "capture_intent": { "enum": ["verify", "review"] },
+    "reported_verification": { "type": "object", "additionalProperties": false, "required": ["state", "text"], "properties": { "state": { "const": "unverified" }, "text": { "type": "string", "minLength": 1, "maxLength": 2000 } } },
     "trigger": { "type": ["string", "null"], "maxLength": 1000 },
     "applicability": {
       "type": "object",

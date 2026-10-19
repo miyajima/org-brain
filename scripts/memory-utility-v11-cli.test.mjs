@@ -9,6 +9,8 @@ import {
   CLI_ATTEMPTS_CONTRACT,
   CLI_REQUEST_CONTRACT,
   CLI_RUNNER_CONTRACT,
+  CLI_MODEL,
+  CLI_EFFORT,
   CLI_ROOT,
   EVALUATION_OUTPUT_SCHEMA,
   REPLAY_OUTPUT_SCHEMA,
@@ -39,7 +41,7 @@ function fixture(sequence = ['final']) {
   const activeBody = {contract: CLI_ACTIVE_CONTRACT, job_id: id, job_hash: job.content_hash, prompt_hash: hash(prompt), schema_hash: job.schema_hash, runner_hash: RUNNER_HASH, prepared_at: '2026-09-06T00:00:00.000Z'};
   const active = {...activeBody, content_hash: hash(activeBody)};
   fs.writeFileSync(activePath, `${JSON.stringify(active)}\n`, {mode: 0o600});
-  const request = {contract: CLI_REQUEST_CONTRACT, job_hash: job.content_hash, prompt_hash: hash(prompt), prompt_path: promptPath, schema_path: schemaPath, schema_hash: job.schema_hash, runner_hash: RUNNER_HASH, attempts_path: attemptsPath, active_path: activePath, model: 'gpt-5.6-sol', effort: 'medium', cwd: CLI_ROOT, sandbox: 'read-only', timeout_ms: 300_000, max_attempts: 2, prepared_at: active.prepared_at, active_hash: active.content_hash};
+  const request = {contract: CLI_REQUEST_CONTRACT, job_hash: job.content_hash, prompt_hash: hash(prompt), prompt_path: promptPath, schema_path: schemaPath, schema_hash: job.schema_hash, runner_hash: RUNNER_HASH, attempts_path: attemptsPath, active_path: activePath, model: CLI_MODEL, effort: CLI_EFFORT, cwd: CLI_ROOT, sandbox: 'read-only', timeout_ms: 300_000, max_attempts: 2, prepared_at: active.prepared_at, active_hash: active.content_hash};
   const modes = [];
   const tracker = {active: 0, maxActive: 0, closeTimes: [], startTimes: []};
   const script = `const fs=require('node:fs');const mode=process.env.SMOKE_MODE;const out=process.env.SMOKE_OUTPUT;const raw=process.env.SMOKE_RAW;const id=process.env.SMOKE_SESSION;const events=[{type:'thread.started',thread_id:id},{type:'turn.started'}];if(mode==='final'||mode==='malformed')events.push({type:'item.completed',item:{type:'agent_message',text:raw}});if(mode!=='timeout')events.push({type:'turn.completed',usage:mode==='communication'?{}:{input_tokens:7,output_tokens:4}});process.stdout.write(events.map(JSON.stringify).join('\\n')+'\\n');if(mode==='final'||mode==='malformed'||mode==='output-only')fs.writeFileSync(out,raw);if(mode==='communication'){process.stderr.write('connection reset by peer\\n');process.exit(1)}if(mode==='config'){process.stderr.write('unknown option --output-schema\\n');process.exit(2)}if(mode==='timeout')setTimeout(()=>{},10000);`;
@@ -89,6 +91,23 @@ test('successful structured CLI run captures exact route, output, stderr, and us
   assert.deepEqual(args.slice(0, 5), ['exec', '-C', CLI_ROOT, '-s', 'read-only']);
   assert.ok(args.includes('--output-schema'));
   for (const file of [result.attempts[0].events_path, result.attempts[0].output_path, result.attempts[0].stderr_path, result.attempts_path]) assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+});
+
+test('runner pins gpt-6-luna/medium in spawned argv and rejects a request for the old model', async () => {
+  const fx = fixture(['final']);
+  const result = await runFixture(fx);
+  assert.equal(result.status, 'final_available', JSON.stringify(result));
+  const args = result.attempts[0].args;
+  assert.equal(args[args.indexOf('-m') + 1], 'gpt-6-luna');
+  assert.ok(args.includes('model_reasoning_effort="medium"'));
+  assert.equal(result.attempts[0].model, CLI_MODEL);
+  assert.equal(result.attempts[0].effort, CLI_EFFORT);
+
+  const stale = fixture(['final']);
+  stale.request.model = 'gpt-6.1-sol';
+  stale.request.effort = CLI_EFFORT;
+  await assert.rejects(() => runFixture(stale), /cli_request_mismatch/);
+  assert.equal(stale.modes.length, 0, 'stale model request must be rejected before spawning');
 });
 
 test('a malformed final is final evidence and is never retried', async () => {

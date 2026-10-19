@@ -105,6 +105,8 @@ function redact(value) {
 const OPAQUE_ID_FIELDS = new Set(["id", "tenant_id", "project_id", "task_id", "principal_id", "session_id", "event_id", "candidate_id", "memory_id", "source_id", "usage_id", "usage_item_id", "span_id", "parent_span_id"]);
 function redactedValue(value, field = null) {
   if (typeof value === "string") {
+    if (field === "external_key" && /^memory-extraction:(?:[a-f0-9]{64}|response-replay:c\d+:\d+):[a-f0-9]{64}$/u.test(value)) return value;
+    if (field === "decision_key" && /^inferred\.[a-f0-9]{24}$/u.test(value)) return value;
     if (OPAQUE_ID_FIELDS.has(field) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) return value;
     return redact(value);
   }
@@ -1206,7 +1208,7 @@ export class TaskCommitmentStore {
     }
   }
 
-  async saveLearningCandidates({ tenantId = "default", projectId = null, taskKey = null, candidates = [], expireAfterDays = null }) {
+  async saveLearningCandidates({ tenantId = "default", projectId = null, taskKey = null, candidates = [], expireAfterDays = null, requireExactBody = false }) {
     await this.init();
     const db = this.open();
     const now = Date.now();
@@ -1219,6 +1221,17 @@ export class TaskCommitmentStore {
       for (const candidate of candidates.slice(0, 3)) {
         const payload = JSON.parse(redactedJson(candidate));
         const externalKey = text(candidate.external_key ?? `candidate:${hash(stableJson(candidate))}`, 256);
+        if (requireExactBody) {
+          const bodyKeys = ["procedure", "why_it_worked", "observed_outcome", "reuse_when", "decision", "selected_value",
+            "rationale", "constraints", "alternatives", "symptom", "failed_approach", "root_cause", "correction",
+            "verified_outcome", "avoidance_rule", "reported_verification"];
+          const body = (value) => Object.fromEntries(bodyKeys.filter((key) => value?.observation?.[key] !== undefined)
+            .map((key) => [key, value.observation[key]]));
+          if (stableJson(body(candidate)) !== stableJson(body(payload))) {
+            results.push({external_key: externalKey, status: "held", reason_code: "storage_redaction_changed_body"});
+            continue;
+          }
+        }
         const id = `learning-candidate:${hash(`${tenantId}\0${externalKey}`).slice(0, 40)}`;
         db.prepare(
           `INSERT INTO memory_learning_candidates(
@@ -1288,7 +1301,7 @@ export class TaskCommitmentStore {
       ).get(tenantId);
       db.exec("COMMIT");
       rows = db.prepare(
-        "SELECT id, project_id, task_key, external_key, payload_json, reason_codes_json, created_at, expires_at FROM memory_learning_candidates WHERE tenant_id = ? AND status = 'quarantine' ORDER BY created_at ASC LIMIT ?"
+        "SELECT id, project_id, task_key, external_key, payload_json, reason_codes_json, created_at, expires_at FROM memory_learning_candidates WHERE tenant_id = ? AND status = 'quarantine' AND CASE WHEN json_valid(payload_json) THEN COALESCE(json_extract(payload_json, '$.automatic_promotion') != 0, 1) ELSE 1 END ORDER BY created_at ASC LIMIT ?"
       ).all(tenantId, Math.max(0, Math.min(1000, Number(limit) || 100)));
       const base = {
         normalized_to_quarantine: Number(normalized.changes ?? 0),
@@ -1305,6 +1318,7 @@ export class TaskCommitmentStore {
       if ((typeof evaluate !== "function" && typeof evaluateBatch !== "function" && typeof judgeBatch !== "function") || rows.length === 0) return base;
       const due = rows.filter((row) => {
         const payload = parseObject(row.payload_json) ?? {};
+        if (payload.automatic_promotion === false) return false;
         const autonomy = parseObject(payload.autonomy) ?? {};
         return (policyHash && autonomy.policy_hash && autonomy.policy_hash !== policyHash) ||
           Number(autonomy.next_evaluation_at ?? row.created_at) <= now;

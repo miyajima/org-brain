@@ -90,7 +90,10 @@ const REUSE_PATTERN = /(?:\b(?:if|when|whenever)\b|(?:再発時|次回|同じ症
 const MARKDOWN_TABLE_ROW_PATTERN = /^\|(?:[^|]*\|){2,}$/u;
 const MARKDOWN_TABLE_DIVIDER_PATTERN = /^\|?(?:\s*:?-{3,}:?\s*\|){2,}\s*$/u;
 const SCHEMA_FRAGMENT_PATTERN = /^(?:`?[A-Za-z_][A-Za-z0-9_.-]{1,63}`?|[A-Z][A-Za-z0-9 _-]{0,31})\s*[:：]\s*[^。.!?]{1,180}$/u;
-const SUPPORT_LABEL_PATTERN = /^(?:reason|rationale|reuse(?: rule)?|applicability|evidence|理由|根拠|再利用条件|適用条件)\s*[:：]\s*/iu;
+const SUPPORT_LABEL_PATTERN = /^(?:reason|rationale|reuse(?: rule)?|applicability|conditions?|exceptions?|evidence|verification|validation|test results?|result|理由|根拠|条件|例外|再利用条件|適用条件|検証結果|テスト結果|確認結果)\s*[:：]\s*/iu;
+const LIMITING_SUPPORT_PATTERN = /^(?:ただし|但し|例外として|except\b|unless\b)/iu;
+const REUSE_LABEL_PATTERN = /^(?:reuse(?: rule)?|applicability|conditions?|exceptions?|再利用条件|適用条件|条件|例外)\s*[:：]/iu;
+const VERIFICATION_LABEL_PATTERN = /^(?:verification|validation|test results?|result|検証結果|テスト結果|確認結果)\s*[:：]/iu;
 const REASON_PREFIX_PATTERN = /^(?:(?:reason|rationale|理由)\s*[:：]\s*|because\s+|なぜなら\s*)/iu;
 const DISCLAIMED_EVIDENCE_PATTERN = /\b(?:do(?:es)?\s+not|cannot|can't|doesn't|don't)\s+(?:support|verify|establish|prove|confirm)\b|\b(?:unsupported|unverified)\s+(?:claim|evidence)\b|(?:裏付け|根拠|証拠).{0,20}(?:ではない|にならない|未確認)|(?:支持|検証|証明|裏付け)(?:しない|できない|されていない)/iu;
 
@@ -306,16 +309,15 @@ function rationaleFromText(block, wholeText, explicitReason) {
     );
     return match?.[1] ? collapseWhitespace(match[1]) : null;
   };
-  const directReason = reasonClause(block);
-  if (directReason) return directReason;
+  const reasons = [reasonClause(block)].filter(Boolean);
   for (const sentence of splitBlocks(wholeText)) {
     if (!REASON_PREFIX_PATTERN.test(sentence) && !CAUSE_PATTERN.test(sentence)) continue;
     const contextualReason = reasonClause(sentence);
     if (contextualReason && normalizeCanonical(contextualReason) !== normalizeCanonical(block)) {
-      return contextualReason;
+      reasons.push(contextualReason);
     }
   }
-  return null;
+  return [...new Set(reasons)].join(" ") || null;
 }
 
 function conclusionFromText(block) {
@@ -334,27 +336,30 @@ function conclusionFromText(block) {
 function reuseRuleFromText(wholeText, explicitReuseRule = null) {
   if (explicitReuseRule) return collapseWhitespace(explicitReuseRule);
   const blocks = splitBlocks(wholeText);
-  const labeled = blocks.find((item) => /^(?:reuse(?: rule)?|applicability|再利用条件|適用条件)\s*[:：]/iu.test(item));
-  const candidate = labeled ? labeled.replace(SUPPORT_LABEL_PATTERN, "") : blocks.find((item) => REUSE_PATTERN.test(item));
-  return candidate || null;
+  const candidates = blocks.filter((item) => REUSE_LABEL_PATTERN.test(item) || LIMITING_SUPPORT_PATTERN.test(item));
+  if (candidates.length) return [...new Set(candidates)].join(" ");
+  return blocks.find((item) => REUSE_PATTERN.test(item)) || null;
 }
 
 function ordinaryCandidateContext(blocks, index, wholeText) {
   const scoped = [blocks[index]];
   const supportIndices = [];
-  for (let cursor = index + 1; cursor < blocks.length && scoped.length < 4; cursor += 1) {
+  for (let cursor = index + 1; cursor < blocks.length && scoped.length < 32; cursor += 1) {
     // Support labels belong to this immediately preceding atomic statement,
     // even when their text contains a classifier such as "must" or "root cause".
     // A new heading or durable statement ends that scope; do not borrow fields
     // from a later lesson or a separate section.
     if (/^#{1,6}\s/u.test(blocks[cursor])) break;
     const explicitSupport = SUPPORT_LABEL_PATTERN.test(blocks[cursor])
+      || LIMITING_SUPPORT_PATTERN.test(blocks[cursor])
       || REASON_PREFIX_PATTERN.test(blocks[cursor]) && !standaloneCausalClaim(blocks[cursor]);
     if (!explicitSupport && classify(blocks[cursor], wholeText)) break;
     scoped.push(blocks[cursor]);
     if (explicitSupport) supportIndices.push(cursor);
   }
-  return { text: scoped.join("\n"), supportIndices };
+  const next = blocks[index + scoped.length];
+  return { text: scoped.join("\n"), supportIndices,
+    truncated: scoped.length === 32 && Boolean(next) && (SUPPORT_LABEL_PATTERN.test(next) || LIMITING_SUPPORT_PATTERN.test(next)) };
 }
 
 function summaryFromConclusion(conclusion, kind) {
@@ -489,7 +494,12 @@ export function extractDurableMemoryDrafts(input, options = {}) {
   const evidenceSection = section(screened.text, ["Evidence", "根拠"]);
   const gapsSection = section(screened.text, ["Gaps", "未解決", "不足"]);
   const reasonSection = section(screened.text, ["Reason", "Rationale", "理由"]);
-  const reuseSection = section(screened.text, ["Reuse", "Reuse Rule", "再利用条件", "適用条件"]);
+  const reuseSection = [
+    section(screened.text, ["Reuse", "Reuse Rule", "再利用条件", "適用条件"]),
+    section(screened.text, ["Conditions", "Condition", "条件"]),
+    section(screened.text, ["Exceptions", "Exception", "例外"])
+  ].filter(Boolean).join("\n");
+  const verificationSection = section(screened.text, ["Result", "Verification", "Validation", "検証結果", "テスト結果"]);
   const candidateSource = conclusionSection || screened.text;
   const structuredInput = Boolean(conclusionSection);
   const seen = new Set();
@@ -535,13 +545,18 @@ export function extractDurableMemoryDrafts(input, options = {}) {
     const evidence = evidenceFromText(candidateContext, occurredAt);
     const rawReuseRule = reuseRuleFromText(candidateContext, structuredInput ? reuseSection : null);
     const rawRationale = rationaleFromText(block, structuredInput ? screened.text : candidateContext, structuredInput ? reasonSection : null);
-    const truncatedSupport = [rawRationale?.length > 1000 ? "rationale" : null, rawReuseRule?.length > 500 ? "reuse_rule" : null].filter(Boolean);
+    // Reported results are retained as unverified context, never synthesized
+    // command evidence. Transcript verification remains a separate route.
+    const reportedVerification = structuredInput && candidateBlocks.length === 1 ? verificationSection
+      : splitBlocks(candidateContext).filter((line) => VERIFICATION_LABEL_PATTERN.test(line)).join(" ");
+    const truncatedSupport = [rawRationale?.length > 1000 ? "rationale" : null, rawReuseRule?.length > 500 ? "reuse_rule" : null,
+      reportedVerification?.length > 1000 ? "reported_verification" : null].filter(Boolean);
     const declaredEvidence = structuredInput ? evidenceSection : splitBlocks(candidateContext)
       .filter((line) => /^(?:evidence|根拠)\s*[:：]/iu.test(line)).join("\n");
     const evidenceDisclaimed = DISCLAIMED_EVIDENCE_PATTERN.test(declaredEvidence);
     // Keep existing storage bounds, but never call a clipped limiting condition
     // complete. The unchanged unresolved-gaps gate sends it to review instead.
-    const candidateGaps = [gapsSection, evidenceDisclaimed
+    const candidateGaps = [gapsSection, ordinaryContext?.truncated ? "support_scope_truncated: review remaining support before reuse." : null, evidenceDisclaimed
       ? "evidence_support_disclaimed: cited references explicitly do not establish this claim; review the source before reuse." : null, truncatedSupport.length
       ? `support_fields_truncated: ${truncatedSupport.join(", ")}; complete source text must be reviewed before reuse.` : null].filter(Boolean).join("\n");
     const reuseRule = rawReuseRule ? clip(rawReuseRule, 500) : null;
@@ -564,6 +579,7 @@ export function extractDurableMemoryDrafts(input, options = {}) {
       rationale,
       reuse_rule: reuseRule,
       evidence,
+      ...(reportedVerification ? { reported_verification: { state: "unverified", text: clip(reportedVerification, 1000) } } : {}),
       source_references: [{ type: "event", ref: input.event_id, captured_at: occurredAt }],
       tags: ["auto-extracted", "capture-v2", classification.kind, `source:${input.source}`],
       valid_from: occurredAt,

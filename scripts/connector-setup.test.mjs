@@ -568,3 +568,19 @@ test("forced local-only setup removes active cloud credentials while keeping a b
   assert.ok(backup);
   assert.match(await readFile(backup, "utf8"), /ORGBRAIN_MCP_CLIENT_SECRET=client-secret/u);
 });
+
+test('shared extraction hooks install Claude and Cursor Stop without MCP or Codex and preserve unrelated hooks',async()=>{
+ const {rm}=await import('node:fs/promises');
+ const {sessionExtractionHooksPlan,installSessionExtractionHooks}=await import('../packages/orgbrain-cli/src/connector-setup.mjs');
+ const home=await mkdtemp(path.join(os.tmpdir(),'orgbrain-session-hooks-'));
+ try{for(const client of ['claude','cursor']){
+  const plan=sessionExtractionHooksPlan(client,{home,workspace:home,cliPath:'/tmp/orgbrain.mjs'});
+  assert.equal(plan.llm_calls,0);assert.equal(Object.keys(plan.handlers).length,1);assert.match(Object.values(plan.handlers)[0].command,new RegExp(`hook ${client}-stop`));assert.doesNotMatch(Object.values(plan.handlers)[0].command,/codex/);
+  await mkdir(path.dirname(plan.files.hooks),{recursive:true});
+  const existing=client==='claude'?{permissions:{allow:['Read']},hooks:{Stop:[{hooks:[{type:'command',command:'echo custom'}]}]}}:{version:1,hooks:{stop:[{command:'echo custom'}]}};
+  await writeFile(plan.files.hooks,JSON.stringify(existing));
+  await installSessionExtractionHooks(plan);await installSessionExtractionHooks(plan);
+  const saved=JSON.parse(await readFile(plan.files.hooks,'utf8'));const list=client==='claude'?saved.hooks.Stop.flatMap(g=>g.hooks):saved.hooks.stop;
+  assert.equal(list.filter(h=>h.command==='echo custom').length,1);assert.equal(list.filter(h=>h.command.includes(`hook ${client}-stop`)).length,1);
+ }}finally{await rm(home,{recursive:true,force:true});}
+});

@@ -56,6 +56,9 @@ Usage:
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
   orgbrain memory reviews [--tenant-id <id>] [--project-id <id>] [--limit <1-200>]
+  orgbrain memory extraction enqueue --client codex|claude|cursor --input <transcript> --workspace <path> --project-id <id> --execute
+  orgbrain memory extraction run|status --project-id <id> [--limit <1-100>] [--queue-dir <path>] [--db <path>] [--execute]
+  orgbrain memory extraction status --project-id <id> --worker
   orgbrain memory feedback report [json-payload]
   orgbrain memory feedback review <feedback-id> --decision confirm|reject
   orgbrain memory relation propose [json-payload]
@@ -967,6 +970,30 @@ async function main() {
   }
 
   let [command, action, ...rest] = args.positional;
+  if (command === 'memory' && action === 'extraction') {
+    const {loadEnvFallbacks} = await import('./hook-memory-bridge.mjs');
+    await loadEnvFallbacks();
+    const {loadClientTurnRows, enqueueSessionExtraction, drainSessionExtraction, drainConfiguredSessionExtraction, inspectSessionExtraction, inspectSessionExtractionWorker, sessionExtractionAutorunEnabled} = await import('./lib/session-extraction.mjs');
+    const projectId = args.get('--project-id');
+    const allProjects = args.flags.has('--all-projects') && rest[0] === 'run';
+    if (!projectId && !allProjects) throw new Error('project_id_required');
+    const common = {projectId, tenantId: args.get('--tenant-id', 'default'), queueDir: args.get('--queue-dir'), dbPath: args.get('--db', process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB)};
+    if (rest[0] === 'status') emit(await (args.flags.has('--worker') ? inspectSessionExtractionWorker : inspectSessionExtraction)(common));
+    else {
+      if (!args.flags.has('--execute')) throw new Error('session_extraction_requires_execute');
+      if (rest[0] === 'auto-run') {
+        if (!sessionExtractionAutorunEnabled()) throw new Error('session_extraction_autorun_disabled');
+        emit(await drainSessionExtraction({...common, limit: 20}));
+      }
+      else if (rest[0] === 'run') emit(await (allProjects ? drainConfiguredSessionExtraction : drainSessionExtraction)({...common, limit: args.get('--limit', 20)}));
+      else if (rest[0] === 'enqueue') {
+        const client=args.get('--client'); const workspace=args.get('--workspace',process.cwd());
+        const rows=await loadClientTurnRows({client,workspace,transcript_path:args.get('--input'),session_id:args.get('--session-id'),turn_id:args.get('--turn-id'),completed:true});
+        emit(rows.length ? await enqueueSessionExtraction({...common,client,workspace,rows}) : {queued:0,status:'complete_turn_unavailable'});
+      } else throw new Error('unknown_session_extraction_command');
+    }
+    return;
+  }
   if (command === 'remote') {
     const { runRemoteCommand } = await import('./remote-cli.mjs');
     emit(await runRemoteCommand(action, rest, args));

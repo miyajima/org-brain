@@ -23,6 +23,7 @@ export type RuntimeMemoryDraft = {
   summary: string;
   rationale: string | null;
   reuse_rule: string | null;
+  reported_verification?: { state: "unverified"; text: string };
   evidence: RuntimeMemoryEvidence[];
   source_references: RuntimeMemorySourceReference[];
   tags: string[];

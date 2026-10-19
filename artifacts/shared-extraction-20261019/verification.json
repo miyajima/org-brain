@@ -1,0 +1,70 @@
+{
+  "node_acceptance": {
+    "tests": 164,
+    "passed": 164
+  },
+  "vitest_acceptance": {
+    "tests": 152,
+    "passed": 152
+  },
+  "prior_turn_evidence_and_autonomy_checks": {
+    "tests": 45,
+    "passed": 45
+  },
+  "shared_typecheck": "passed",
+  "contract_check": "passed",
+  "compiled_client_hook_test": "passed with Codex absent from PATH; synthetic client envelopes",
+  "real_model_calls": 201,
+  "raw_response_reparse_resends": 0,
+  "production_memory_writes": false,
+  "source_sha256": {
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs": "aabef8aea68f7131182dca74fa62d24a9bbb44ffa27783b2daaad757089ad780",
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "57068013be1f4fd63ec33f0418ed0b10f72c1eddbd530962ae868ca60d12c088",
+    "packages/orgbrain-cli/src/local-memory.mjs": "fac253bf73f175524b83ffc8113d222e70a124d0a4137bf852d05cad80199f36",
+    "packages/orgbrain-cli/src/connector-setup.mjs": "a8379c7cc840e0c3f2e196fc3b751a0dbce07d0eb5d1a8ecb5f474df0a05fb32",
+    "packages/orgbrain-cli/src/autonomy.mjs": "35e5581054093d6594af48c1e02cf208a5598b0502ebc4909ba0b8b29d834879",
+    "packages/orgbrain-cli/src/lib/task-commitment-store.mjs": "afae3212d777c771a5bfad16b356f44f5885004048891aa135206e7bb124ba19",
+    "packages/shared/src/memory-extraction-verifier-runtime.mjs": "ddb5d9d35a288e444fb0e4a29f4c960e1bfb6c8806fcf3c256c458388a58cb81",
+    "packages/shared/src/memory-contract-v2-runtime.mjs": "63c13ff50e22531b2efa70e6debef08eb9b4984c8eb88de21cd6566b7a7543c7",
+    "packages/shared/src/memory-contract-v2.ts": "a4544690235b66c138ec0ed4c2074cc59e7a7efe431d64ed317d208745db2ec9",
+    "packages/shared/src/memory-extraction-coverage-runtime.mjs": "d9a164772815e64fb61670348b1e5ac7ec46ae39f3b19ed90f31a63f1d0e33e0",
+    "packages/shared/schemas/memory_contract_v2.schema.json": "f3d626e032ea8ed7141dec4ef99a3e8587c3895a28925cc26a873e9daad6901f",
+    "packages/shared/src/memory-contract-v2-contract.mjs": "2a21fb9ad156e56fe76bdec40cf9751de6ba5437abd0a29c12cc6180509abd77",
+    "scripts/memory-utility-v11-cli.mjs": "6788617c198079c9fd94049755bab42c6abb1d6673972b38abbaa19617f54bc7",
+    "scripts/memory-utility-v12-cli.mjs": "00e0dd319b07b2ed5f69af24b126c45706d9ca6368bbe7d0236fcd925be6bb25",
+    "scripts/session-extraction.test.mjs": "33cac362ffba09dfd06574d12c90c7981f2c5e151033be797942e4259b4ed304",
+    "scripts/connector-setup.test.mjs": "8b9d69ea8f0b7d2b5e29ba16995aa6fa9c60d34352f89c12b4278f3f31ad3d1f",
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs": "cb825f2ec5948645de2963549cf2fcd4a5627f12615533e225fc154a913cb72a",
+    "scripts/activate-session-extraction.mjs": "609690a9076e7dde695fcc8499aec8d838f6e35bbaaa2f8d9e6eaa02e22b95c6",
+    "scripts/replay-session-extraction.mjs": "568b6296733edcaa1c91aa3c54191928315fb3307ddf107005be0c1340320ff5"
+  },
+  "vitest_acceptance_final_affected": {
+    "tests": 114,
+    "passed": 114
+  },
+  "review_regressions": {
+    "before_failed": 4,
+    "after_passed": 15
+  },
+  "independent_review": "pass after four fixes; synthetic local tests only; reviewer model identity unattested",
+  "installed_compiled_hook_test": "passed; Claude/Cursor Stop with Codex absent from PATH, synthetic envelopes",
+  "normal_worker_real_response_replay": {
+    "cases": 118,
+    "stored_real_responses_used": 150,
+    "new_model_calls": 0,
+    "persisted": 90,
+    "input_held_groups": 6,
+    "incomplete_response_held": 1,
+    "quarantine_only": true,
+    "exact_semantic_body_matches_final_revalidation": true,
+    "production_writes": false,
+    "measured_at": "2026-10-18T19:52:11.982Z"
+  },
+  "activation_readback": {
+    "installed_bundle_equals_checked_bundle": true,
+    "unrelated_client_configuration_preserved": true,
+    "extraction_hooks_present": true,
+    "model_calls": 0,
+    "real_client_event_unverified": true
+  }
+}

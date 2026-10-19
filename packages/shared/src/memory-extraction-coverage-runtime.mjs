@@ -17,7 +17,7 @@ const DECISION = /\b(?:decid(?:e|ed)|choose|chose|selected|must|prefer|default|r
 const FAILURE = /\b(?:fail(?:ed|ure)?|error|regression|timed? out|root cause|did not work)\b|(?:失敗|エラー|不具合|回帰|原因|動かな|タイムアウト)/iu;
 const PROCEDURE = /\b(?:run|use|change|fix|implement|configure|deploy)\b|(?:実行|使用|変更|修正|実装|設定|デプロイ)/iu;
 const VERIFIED = /\b(?:pass(?:ed)?|succeed(?:ed)?|verified|resolved|exit[_ ]?code\s*[=:]?\s*0)\b|(?:成功|通った|検証済み|解消|終了コード\s*0)/iu;
-const EXPLICIT_REASON = /^(?:理由|なぜなら|because\b|the reason\b)/iu;
+const EXPLICIT_REASON = /^(?:理由|なぜなら|because\b|the reason\b|(?:reason|rationale)\s*[:：])/iu;
 const QUALIFIER = /\b(?:not|never|only|unless|except|if|when|must|cannot|failed?)\b|(?:ない|禁止|のみ|場合|条件|例外|ただし|必須|失敗|撤回|訂正)/iu;
 const STANDALONE_CORRECTION = /^(?:違います|訂正します|そうではなく|that's wrong)[。.!]?$/iu;
 const HUMAN_DECISION_FIELDS = new Set(["decision", "selected_value", "constraint", "constraints", "preference", "approval"]);
@@ -111,7 +111,8 @@ function shouldAttach(left, right) {
       && (DECISION.test(left.text) || EXPLICIT_REASON.test(left.text) || QUALIFIER.test(left.text))
       && (EXPLICIT_REASON.test(right.text) || /^(?:ただし|例外|unless\b|except\b)/iu.test(right.text));
   }
-  return QUALIFIER.test(left.text) || QUALIFIER.test(right.text)
+  return EXPLICIT_REASON.test(right.text) || EXPLICIT_REASON.test(left.text)
+    || QUALIFIER.test(left.text) || QUALIFIER.test(right.text)
     || FAILURE.test(left.text) && (PROCEDURE.test(right.text) || VERIFIED.test(right.text))
     || PROCEDURE.test(left.text) && VERIFIED.test(right.text);
 }
@@ -321,6 +322,56 @@ export function validateCoverageCandidate(candidate, packet) {
   const contentValues = [...fields].filter(([name]) => !CONTROL_FIELDS.has(name)).flatMap(([, values]) => values);
   if (contentValues.some((value) => TRANSIENT_CONTENT.test(value))) reasons.push("explicitly_transient");
   if (qualified.length > 0 && !qualified.every((snippet) => retainsQualifiedSnippet(snippet.text, contentValues))) reasons.push("qualifier_not_retained");
+  return { valid: reasons.length === 0, reason_codes: [...new Set(reasons)].sort() };
+}
+
+// Inspect persisted content, never evidence selectors or compatibility aliases:
+// retaining a quote in provenance does not retain it in the extracted lesson.
+export function validateNormalizedRetention(candidate, packet, observation) {
+  const fieldsByLesson = {
+    success: ["procedure", "why_it_worked", "observed_outcome", "reuse_when"],
+    decision: ["question", "selected_value", "decision", "constraints", "rationale", "alternatives", "reuse_when"],
+    failure: ["symptom", "failed_approach", "root_cause", "correction", "verified_outcome", "avoidance_rule"]
+  };
+  const strings = (value) => typeof value === "string" ? [value] : Array.isArray(value)
+    ? value.flatMap(strings) : value && typeof value === "object" ? Object.values(value).flatMap(strings) : [];
+  const retained = [...(fieldsByLesson[observation.lesson_type] ?? []).flatMap((name) => strings(observation[name])),
+    ...strings(observation.reported_verification?.text)];
+  const canonical = (value) => String(value).normalize("NFKC").replace(/\s+/gu, " ").trim();
+  const keeps = (text, values = retained) => {
+    const source = canonical(text);
+    const content = values.map(canonical);
+    return content.some((value) => value.includes(source)) || retainsQualifiedSnippet(source, content);
+  };
+  const support = new Set(candidate.support_span_ids ?? []);
+  for (const group of packet?.coverage?.groups ?? []) {
+    if (group.span_ids.some((id) => support.has(id))) for (const id of group.span_ids) support.add(id);
+  }
+  const snippets = (packet.snippets ?? []).filter((snippet) => support.has(snippet.span_id));
+  const reasons = [];
+  for (const name of OUTCOME_FIELDS) for (const value of candidateFields(candidate).get(name) ?? []) {
+    if (!snippets.some((snippet) => snippet.source === "tool_result" && snippet.call_id && String(snippet.text).includes(value)
+      && (packet.events ?? []).some((event) => event.call_id === snippet.call_id && event.status === "completed"
+        && (event.exit_code === 0 || (Number(event.http_status) >= 200 && Number(event.http_status) < 300)))))
+      reasons.push("verified_tool_outcome_missing");
+  }
+  for (const snippet of snippets) {
+    const text = String(snippet.text);
+    if ((QUALIFIER.test(text) || STANDALONE_CORRECTION.test(text.trim())) && !keeps(text))
+      reasons.push("normalized_qualifier_not_retained");
+    if ((EXPLICIT_REASON.test(text.trim()) || /\b(?:because|the reason)\b|(?:理由は|なぜなら)/iu.test(text))
+        && !keeps(text)) reasons.push("normalized_reason_not_retained");
+    if (observation.lesson_type !== "decision" && snippet.source === "tool_result" && snippet.call_id
+        && (packet.events ?? []).some((event) => event.call_id === snippet.call_id && event.status === "completed"
+          && (event.exit_code === 0 || (Number(event.http_status) >= 200 && Number(event.http_status) < 300)))
+        && !keeps(text, strings(observation.lesson_type === "success" ? observation.observed_outcome : observation.verified_outcome)))
+      reasons.push("normalized_outcome_not_retained");
+  }
+  const allContent = [...retained, ...strings(observation.trigger), ...strings(observation.applicability?.target_files)];
+  for (const [name, values] of candidateFields(candidate)) {
+    if (!CONTROL_FIELDS.has(name) && values.some((value) => !keeps(value, allContent)))
+      reasons.push("normalized_field_not_retained");
+  }
   return { valid: reasons.length === 0, reason_codes: [...new Set(reasons)].sort() };
 }
 
