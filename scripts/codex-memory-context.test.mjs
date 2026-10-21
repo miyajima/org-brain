@@ -20,7 +20,7 @@ function hookCandidate(context) {
   return JSON.parse(encoded);
 }
 
-async function fixture() {
+async function fixture({ includeBaseMemory = true } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-codex-context-"));
   await chmod(directory, 0o700);
   const workspace = path.join(directory, "project");
@@ -30,6 +30,7 @@ async function fixture() {
     workspaces: { [workspace]: { tenant_id: null, project_id: "org-brain" } }
   }));
   const store = new LocalMemoryStore(path.join(directory, "memory.sqlite"));
+  if (includeBaseMemory) {
   await store.capture({
     tenant_id: "default",
     project_id: "org-brain",
@@ -43,6 +44,8 @@ async function fixture() {
     confidence_score: 0.9,
     utility_score: 0.8
   });
+  }
+
   return {
     workspace,
     workspacesFile,
@@ -119,19 +122,109 @@ test("Codex prompt hook marks attempt injection only when its evidence is in con
   } finally { await ctx.cleanup(); }
 });
 
-test("Codex prompt hook provides complete use-tracking context when the workspace has no default work type", async () => {
-  const ctx = await fixture();
+test("Codex hook retrieves cross-type previews without a default while keeping other as the usage type", async () => {
+  const ctx = await fixture({ includeBaseMemory: false });
   try {
+    const memories = [
+      {
+        id: "hook-implementation",
+        work_type: "implementation",
+        summary: "Codex OrgBrain integration should use a short-lived Node CLI without resident MCP or extra LLM calls."
+      },
+      {
+        id: "hook-research",
+        work_type: "research",
+        summary: "Research Codex OrgBrain integration with a short-lived Node CLI without resident MCP or extra LLM calls."
+      }
+    ];
+    for (const memory of memories) await ctx.store.capture({
+      ...memory,
+      tenant_id: "default",
+      project_id: "org-brain",
+      kind: "decision",
+      content: memory.summary,
+      tags: ["codex", "orgbrain", "hooks"],
+      source: "test",
+      external_key: memory.id,
+      confidence_score: 0.9,
+      utility_score: 0.8
+    });
     await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+    ctx.store.relevanceSelector = {
+      provider: "working-llm",
+      select: () => { throw new Error("hook must not run another relevance model"); }
+    };
+    const originalSearch = ctx.store.search.bind(ctx.store);
+    const searchCalls = [];
+    ctx.store.search = async (query) => {
+      searchCalls.push(query);
+      return originalSearch(query);
+    };
     const result = await buildCodexMemoryContext({
       hook_event_name: "UserPromptSubmit",
-      session_id: "measured-context-session",
+      session_id: "unknown-work-type-session",
+      principal_id: "alice",
       cwd: ctx.workspace,
       prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?"
     }, ctx);
-    assert.match(result.hookSpecificOutput.additionalContext, /orgbrain_memory_observe/u);
-    assert.match(result.hookSpecificOutput.additionalContext, /task_id=codex:measured-context-session/u);
-    assert.match(result.hookSpecificOutput.additionalContext, /work_type=other/u);
+    const context = result.hookSpecificOutput.additionalContext;
+    const candidates = context.split("\n\n")
+      .filter((part) => part.startsWith("{") && part.includes('"memory_id"'))
+      .map((part) => JSON.parse(part));
+    assert.deepEqual(candidates.map((candidate) => candidate.memory_id).sort(),
+      ["hook-implementation", "hook-research"]);
+    assert.equal(searchCalls.length, 1);
+    assert.equal(searchCalls[0].work_type, null);
+
+    const searchHint = context.split("\n\n")
+      .find((part) => part.includes("For search and context retrieval use"));
+    assert.ok(searchHint);
+    assert.doesNotMatch(searchHint, /work_type=/u);
+    const receipt = context.split("\n\n")
+      .find((part) => part.startsWith("Use tracking: receipt;"));
+    assert.ok(receipt);
+    assert.match(receipt, /work_type=other/u);
+    const receiptUsageId = receipt.match(/usage_id=([^;]+)/u)?.[1];
+    assert.ok(receiptUsageId);
+    assert.match(context, /orgbrain_memory_observe/u);
+
+    for (const candidate of candidates) {
+      assert.equal(candidate.detail_ref.arguments.tenant_id, "default");
+      assert.equal(candidate.detail_ref.arguments.project_id, "org-brain");
+      assert.equal(candidate.detail_ref.arguments.principal_id, "alice");
+      assert.equal(candidate.detail_ref.arguments.expected_version, candidate.current_version);
+      assert.equal(Object.hasOwn(candidate.detail_ref.arguments, "work_type"), false);
+      const detailResult = await handleLocalMcpRequest(ctx.store, {
+        method: "tools/call",
+        params: { name: candidate.detail_ref.tool, arguments: candidate.detail_ref.arguments }
+      });
+      assert.equal(detailResult.isError, false, detailResult.content[0].text);
+      const detail = JSON.parse(detailResult.content[0].text);
+      assert.equal(detail.memory.id, candidate.memory_id);
+      assert.equal(detail.memory.current_version, candidate.current_version);
+    }
+
+    const db = ctx.store.open();
+    try {
+      const usage = db.prepare(
+        "SELECT id, tenant_id, project_id, requested_work_type FROM memory_usage_events WHERE capability = 'hook_context' ORDER BY created_at DESC LIMIT 1"
+      ).get();
+      assert.equal(usage.id, receiptUsageId);
+      assert.equal(usage.tenant_id, "default");
+      assert.equal(usage.project_id, "org-brain");
+      assert.equal(usage.requested_work_type, "other");
+      const items = db.prepare(
+        "SELECT source_id, source_version, reference_type, used_state FROM memory_usage_items WHERE usage_event_id = ? ORDER BY source_id"
+      ).all(usage.id);
+      assert.deepEqual(items.map(({ source_id, reference_type, used_state }) =>
+        [source_id, reference_type, used_state]), [
+        ["hook-implementation", "returned", "unknown"],
+        ["hook-research", "returned", "unknown"]
+      ]);
+      assert.ok(items.every((item) => item.source_version === 1));
+    } finally {
+      db.close();
+    }
   } finally {
     await ctx.cleanup();
   }
