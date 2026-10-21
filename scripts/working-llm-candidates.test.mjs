@@ -215,23 +215,54 @@ test("hook redacts preview PII while preserving numeric UUIDs and resolvable sco
   } finally {await f.cleanup();}
 });
 
-test("pending search omits restricted records without a principal and resolves only authorized scoped candidates", async () => {
+test("pending search without a work type keeps tenant, project, principal, expiry and suppression boundaries", async () => {
   const f=await fixture();
   try {
-    await f.store.capture(captured("restricted",{permissions:[{principal_id:"alice",permissions:["read"]}]}));
-    const query={tenant_id:"default",project_id:"test",work_type:"implementation",query:"database backup"};
+    await f.store.capture(captured("restricted",{permissions:[{principal_id:"alice",permissions:["read"]}],
+      source_references:[{ref:"event:restricted"}]}));
+    await f.store.capture(captured("research",{work_type:"research",source_references:[{ref:"event:research"}]}));
+    await f.store.capture(captured("other",{work_type:"other",source_references:[{ref:"event:other"}]}));
+    await f.store.capture(captured("cross-tenant",{tenant_id:"other",work_type:"research",
+      source_references:[{ref:"event:cross-tenant"}]}));
+    await f.store.capture(captured("cross-project",{project_id:"other",work_type:"research",
+      source_references:[{ref:"event:cross-project"}]}));
+    await f.store.capture(captured("expired",{work_type:"research",expires_at:Date.now()-1000,
+      source_references:[{ref:"event:expired"}]}));
+    await f.store.capture(captured("suppressed",{work_type:"research",source_references:[{ref:"event:suppressed"}]}));
+    await f.store.suppress("default","suppressed","fixture",{actor_type:"principal",actor_id:"alice"});
+    const query={tenant_id:"default",project_id:"test",query:"database backup"};
     const anonymous=await call(f.store,"orgbrain_memory_search",query);
-    assert.deepEqual(anonymous.body.candidates,[]);assert.deepEqual(anonymous.body.meta.usage_items,[]);
+    const anonymousIds=anonymous.body.candidates.map(({memory_id})=>memory_id);
+    assert.ok(anonymousIds.includes("research"));
+    assert.ok(anonymousIds.includes("other"));
+    assert.ok(!anonymousIds.includes("restricted"));
+    assert.ok(!anonymousIds.includes("suppressed"));
+    assert.ok(!anonymousIds.some(id=>["cross-tenant","cross-project","expired"].includes(id)));
+    assert.deepEqual(anonymous.body.meta.usage_items.map(({source_id})=>source_id).sort(),anonymousIds.sort());
+
     const authorized=await call(f.store,"orgbrain_memory_search",{...query,principal_id:"alice"});
-    assert.equal(authorized.body.candidates.length,1);
-    const candidate=authorized.body.candidates[0];assert.equal(candidate.detail_ref.arguments.principal_id,"alice");
+    const authorizedIds=authorized.body.candidates.map(({memory_id})=>memory_id).sort();
+    assert.deepEqual(authorizedIds,["other","research","restricted"]);
+    assert.ok(!authorizedIds.includes("suppressed"));
+    const candidate=authorized.body.candidates.find(({memory_id})=>memory_id==="restricted");
+    assert.equal(candidate.detail_ref.arguments.principal_id,"alice");
+    assert.equal(candidate.detail_ref.arguments.project_id,"test");
+    assert.equal(candidate.detail_ref.arguments.tenant_id,"default");
+    assert.equal(Object.hasOwn(candidate.detail_ref.arguments,"work_type"),false);
     const detail=await call(f.store,"orgbrain_memory_get",candidate.detail_ref.arguments);
     assert.equal(detail.result.isError,false);assert.equal(detail.body.memory.id,"restricted");
     assert.equal(detail.body.memory.current_version,candidate.current_version);
     const denied=await call(f.store,"orgbrain_memory_search",{...query,principal_id:"bob"});
-    assert.deepEqual(denied.body.candidates,[]);
+    assert.ok(!denied.body.candidates.some(({memory_id})=>memory_id==="restricted"));
+    const explicitOther=await call(f.store,"orgbrain_memory_search",{...query,principal_id:"alice",work_type:"other"});
+    assert.deepEqual(explicitOther.body.candidates.map(({memory_id})=>memory_id),["other"]);
+    assert.equal(explicitOther.body.candidates[0].detail_ref.arguments.work_type,"other");
+    const explicitImplementation=await call(f.store,"orgbrain_memory_search",{...query,principal_id:"alice",work_type:"implementation"});
+    assert.deepEqual(explicitImplementation.body.candidates.map(({memory_id})=>memory_id).sort(),["other","restricted"]);
+    assert.ok(explicitImplementation.body.candidates.every(({detail_ref})=>detail_ref.arguments.work_type==="implementation"));
     f.store.relevanceSelector=null;
-    const legacy=await call(f.store,"orgbrain_memory_search",query);assert.equal(legacy.body.results.length,1);
+    const legacy=await call(f.store,"orgbrain_memory_search",{...query,work_type:"implementation"});
+    assert.deepEqual(legacy.body.results.map(({memory})=>memory.id).sort(),["other","restricted"]);
   } finally {await f.cleanup();}
 });
 

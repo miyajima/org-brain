@@ -206,9 +206,10 @@ async function workspaceScope(cwdInput, env) {
     tenantId,
     projectId: mapped?.project_id ?? (path.basename(cwd) || null),
     businessCategoryId: mapped?.business_category_id ?? null,
-    // A missing workspace default must not disable use tracking. Keep the
-    // generic bucket explicit so retrievals can be measured and corrected.
+    // A missing workspace default stays in the generic telemetry bucket but
+    // leaves retrieval unfiltered by work type.
     workType: mapped?.default_work_type ?? "other",
+    retrievalWorkType: mapped?.default_work_type ?? null,
     learningMode: mapped?.memory_learning_mode ?? "off",
     sensitivePolicy: mapped?.sensitive_memory,
     autonomy: autonomyPolicyFromWorkspaceConfig(mapped, config),
@@ -458,7 +459,10 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
   let memoryCandidates = [];
   const useStatus = await store.useHistory("status");
   let systemMessage = null;
-  if (useStatus.flags.collect && taskKey && scope.projectId && scope.workType) contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}, work_type=${scope.workType}.`);
+  if (useStatus.flags.collect && taskKey && scope.projectId) {
+    const retrievalWorkTypeHint = scope.retrievalWorkType ? `, work_type=${scope.retrievalWorkType}` : "";
+    contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}${retrievalWorkTypeHint}.`);
+  }
   if (scope.localMemoryEnabled) {
     const hookPrincipal = payload.principal_id ?? env.ORGBRAIN_USE_PRINCIPAL ?? null;
     const delivered = useStatus.flags.collect ? await deliveredMemoryVersions(store, payload, scope, taskKey, queryHash) : new Set();
@@ -469,7 +473,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
       tenant_id: scope.tenantId,
       project_id: scope.projectId,
       business_category_id: scope.businessCategoryId,
-      work_type: scope.workType,
+      work_type: scope.retrievalWorkType,
       task_id: taskKey,
       query: retrievalQuery,
       principal_id: store.relevanceSelector ? hookPrincipal : null,
@@ -500,7 +504,7 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
       const pending = Boolean(memory && !protectedMemory && store.relevanceSelector);
       const candidate = pending ? workingLlmCandidate(memory, {
         principal_id:hookPrincipal,
-        project_id:scope.projectId,business_category_id:scope.businessCategoryId,work_type:scope.workType
+        project_id:scope.projectId,business_category_id:scope.businessCategoryId,work_type:scope.retrievalWorkType
       }) : null;
       // Display only preview text, canonical enums, dates/counts and operational
       // references. Optional provenance and display scope can contain private
