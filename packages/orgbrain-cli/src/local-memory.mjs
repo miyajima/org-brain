@@ -181,7 +181,7 @@ function parseArgs(argv) {
     }
     const [name, inline] = arg.split("=", 2);
     optionCounts.set(name, (optionCounts.get(name) ?? 0) + 1);
-    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions"].includes(name)) {
+    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions", "--worker", "--all-projects"].includes(name)) {
       flags.add(name);
       if (inline !== undefined) assignedFlags.add(name);
       continue;
@@ -1095,6 +1095,13 @@ async function main() {
     await handleCategory(store, action, rest, args);
   } else if (["profile", "organization", "user", "group"].includes(command)) {
     await handleDirectory(store, command, action, rest, args);
+  } else if (command === "pipeline") {
+    const {handlePipelineCLI}=await import('./lib/memory-pipeline-cli.mjs');
+    emit(await handlePipelineCLI(store,action,await readStructuredPayload(args,rest)));
+  } else if (command === "usage" && ["assess","assessments","collect"].includes(action)) {
+    const handlers=await import('./lib/memory-pipeline-cli.mjs');
+    const payload=await readStructuredPayload(args,rest);
+    emit(await (action==='collect'?handlers.handleUseCollect(store,payload):handlers.handleUseAssessment(store,action,payload)));
   } else if (command === "usage" && action === "sync") {
     const syncOptions={apiBase:process.env.ORGBRAIN_API_URL || process.env.ORGBRAIN_API_BASE,apiKey:process.env.ORGBRAIN_API_KEY,tenantId:args.get("--tenant-id","default"),limit:Number(args.get("--limit",50))};
     const watch=args.flags.has("--watch");
@@ -1440,7 +1447,10 @@ async function main() {
           });
         }
       }
-      process.stdout.write(`${JSON.stringify({ ok: true, ...result, ...(attemptResult ? { attempt: attemptResult } : {}) })}\n`);
+      const { memoryUseActionContext } = await import('./lib/memory-use-action-context.mjs');
+      const useContext = await memoryUseActionContext(store, { payload, tenantId,
+        projectId: mapping.entry?.project_id, taskId: hasTaskIdentity(payload) ? taskKeyFromHookPayload(payload) : null });
+      process.stdout.write(`${JSON.stringify({ ok: true, ...result, ...(attemptResult ? { attempt: attemptResult } : {}), ...useContext })}\n`);
     } else {
       if (!hasTaskIdentity(payload)) {
         process.stdout.write('{"ok":true,"skipped":"task_identity_missing"}\n');

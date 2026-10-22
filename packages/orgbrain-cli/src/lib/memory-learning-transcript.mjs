@@ -177,6 +177,20 @@ function normalizeCommand(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim();
 }
 
+function learningObservationInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  // Keep transport metadata on the raw transcript record; remove only tenant_id
+  // from the body passed to the strict learning-event contract normalizers.
+  const { tenant_id: _transportTenantId, ...learningInput } = input;
+  return learningInput;
+}
+
+function observationTenantScopeIssue(input, expectedTenantId) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || !Object.hasOwn(input, "tenant_id")) return null;
+  if (typeof expectedTenantId !== "string" || !expectedTenantId) return "observe_tenant_scope_unavailable";
+  return input.tenant_id === expectedTenantId ? null : "observe_tenant_scope_mismatch";
+}
+
 function successfulFetches(rows) {
   const results = [];
   for (const row of rows) {
@@ -407,12 +421,18 @@ export async function collectVerifiedLearningEventsFromRows(rowsInput, options =
   const events = [];
   const reviews = [];
   for (const observation of observations.slice(-3)) {
-    const normalized = observation.input?.schema_version === 2
-      ? await normalizeMemoryContractV2Event(observation.input, {
+    const scopeIssue = observationTenantScopeIssue(observation.input, options.tenantId);
+    if (scopeIssue) {
+      reviews.push({ event_hash: observation.output?.event_hash ?? null, reason_codes: [scopeIssue] });
+      continue;
+    }
+    const learningInput = learningObservationInput(observation.input);
+    const normalized = learningInput?.schema_version === 2
+      ? await normalizeMemoryContractV2Event(learningInput, {
         workspaceRoot: options.workspaceRoot,
         sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
       })
-      : await normalizeMemoryLearningEvent(observation.input, {
+      : await normalizeMemoryLearningEvent(learningInput, {
       workspaceRoot: options.workspaceRoot,
       sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
       });
@@ -434,12 +454,18 @@ export async function collectVerifiedLearningEventsFromRows(rowsInput, options =
     events.push({ event_hash: normalized.event_hash, learning: normalized.event, verification });
   }
   for (const observation of incompleteObservations.slice(-3)) {
-    const normalized = observation.input?.schema_version === 2
-      ? await normalizeMemoryContractV2Event(observation.input, {
+    const scopeIssue = observationTenantScopeIssue(observation.input, options.tenantId);
+    if (scopeIssue) {
+      reviews.push({ event_hash: null, reason_codes: ["observe_not_accepted", scopeIssue] });
+      continue;
+    }
+    const learningInput = learningObservationInput(observation.input);
+    const normalized = learningInput?.schema_version === 2
+      ? await normalizeMemoryContractV2Event(learningInput, {
         workspaceRoot: options.workspaceRoot,
         sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
       })
-      : await normalizeMemoryLearningEvent(observation.input, {
+      : await normalizeMemoryLearningEvent(learningInput, {
         workspaceRoot: options.workspaceRoot,
         sensitivePolicy: options.sensitivePolicy ?? { mode: "deny", allowed_principals: [] }
       });
@@ -468,16 +494,55 @@ export async function readMemoryUseTurnEvidence(options) {
   if(index<0) return {rows:[],reason:'turn_marker_missing'};
   const id=payload(rows[index])?.turn_id??rows[index].turn_id;
   if(options.turnId && id!==options.turnId) return {rows:[],reason:'turn_identity_mismatch'};
-  // Carry only actual developer delivery receipts across turns. Past actions,
-  // user assessments and pre-compaction references cannot verify current use.
   const compacted=rows.findLastIndex(row=>row.type==='compacted'||payload(row)?.type==='compacted');
-  const references=rows.slice(compacted+1,index).filter(row=>{
+  const nativeReceipt = row => {
     const p=payload(row);
-    if(p?.type!=='message'||p.role!=='developer') return false;
+    if(p?.type!=='message'||p.role!=='developer') return null;
     const text=typeof p.content==='string'?p.content:(p.content??[]).map(x=>x.text??'').join('\n');
-    return text.includes('Use tracking: receipt;');
-  }).slice(-32);
-  return {rows:[...references,...rows.slice(Math.max(index,compacted+1))],reason:null};
+    const paragraphs=text.split(/\n{2,}/u);
+    for(const [paragraphIndex,paragraph] of paragraphs.entries()) {
+      const match=paragraph.match(/^Use tracking: receipt; task_id=([^;\n]+); project_id=([^;\n]+); work_type=([^;\n]+); usage_id=([^;\n]+); items=(\[[^\n]*\])(?:\s|$)/u);
+      if(!match) continue;
+      let items;
+      try {items=JSON.parse(match[5]);} catch {continue;}
+      if(!Array.isArray(items)||items.length===0||!items.every(item=>item&&typeof item.usage_item_id==='string'
+        &&typeof item.source_id==='string'&&Number.isInteger(item.source_version))) continue;
+      const pendingPreviews=paragraphs.slice(0,paragraphIndex).flatMap(part=>{
+        if(!part.startsWith('{')) return [];
+        try {
+          const candidate=JSON.parse(part),args=candidate?.detail_ref?.arguments;
+          if(candidate?.full_body_omitted!==true||candidate.detail_ref?.tool!=='orgbrain_memory_get'
+            ||typeof candidate.memory_id!=='string'||!Number.isInteger(candidate.current_version)
+            ||args?.memory_id!==candidate.memory_id||args?.expected_version!==candidate.current_version
+            ||args?.project_id!==match[2]) return [];
+          return [{source_id:candidate.memory_id,source_version:candidate.current_version}];
+        } catch {return [];}
+      });
+      return {text,items,pendingPreviews};
+    }
+    return null;
+  };
+  // Preserve the old post-compaction developer-reference path, but accept only
+  // an intact native receipt line. Quoted or paraphrased receipt strings do not
+  // become delivery events.
+  const references=rows.slice(compacted+1,index).filter(row=>nativeReceipt(row));
+  // Compaction can repeat the current turn marker without changing turn_id.
+  // In that case carry only a real developer receipt paired with a pinned pending
+  // preview from that same turn; never restore the intervening actions/messages.
+  let sameTurnStart=-1;
+  for(let rowIndex=0;rowIndex<=index;rowIndex++) {
+    if(!marker(rows[rowIndex])) continue;
+    const markerId=payload(rows[rowIndex])?.turn_id??rows[rowIndex].turn_id;
+    if(markerId!==id) sameTurnStart=-1;
+    else if(sameTurnStart<0) sameTurnStart=rowIndex;
+  }
+  const sameTurnPreCompaction=sameTurnStart>=0&&sameTurnStart<compacted
+    ?rows.slice(sameTurnStart+1,compacted).filter(row=>{
+      const receipt=nativeReceipt(row);
+      return receipt?.pendingPreviews.some(preview=>receipt.items.some(item=>item.source_id===preview.source_id
+        &&item.source_version===preview.source_version));
+    }):[];
+  return {rows:[...sameTurnPreCompaction.slice(-32),...references.slice(-32),...rows.slice(Math.max(index,compacted+1))],reason:null};
 }
 
 export async function readMemoryUseTurnRows(options) {

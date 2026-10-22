@@ -9,6 +9,7 @@ import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-run
 import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
 import { ATTEMPT_SCHEMA_SQL, attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
+import {MEMORY_USE_ASSESSMENT_SCHEMA_SQL} from "./memory-use-assessment.mjs";
 import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
 import { isTransientMemory } from '../../../shared/src/memory-admission-runtime.mjs';
 import {
@@ -2387,6 +2388,7 @@ function migrateSchema(db) {
     db.exec(MEMORY_USE_SCHEMA_SQL);
     db.exec(ATTEMPT_SCHEMA_SQL);
     db.exec(LOCAL_USE_SCHEMA);
+    db.exec(MEMORY_USE_ASSESSMENT_SCHEMA_SQL);
     db.exec(AGENT_ACTIVITY_SCHEMA_SQL);
     addIndexes(db);
     rebuildFts(db);
@@ -3502,6 +3504,7 @@ export class LocalMemoryStore {
         !hasTable(db, "local_use_observation_receipts") ||
         !hasTable(db, "local_use_deliveries") ||
         !hasTable(db, "local_use_collection_runs") ||
+        !hasTable(db, "local_memory_use_assessments") ||
         !hasTable(db, "memory_effect_events") ||
         !hasTable(db, "action_attempts") ||
         !hasTable(db, "action_hook_coverage") ||

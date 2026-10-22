@@ -1666,6 +1666,7 @@ export async function prepareMemoryRecordsV2(record, workspace, tenantId, option
 
 export async function prepareObservedLearningRecords(record, workspace, tenantId, options = {}) {
   const transcriptOptions = {
+    tenantId,
     transcriptPath: record.metadata?.transcriptPath,
     turnId: record.metadata?.turnId,
     workspaceRoot: workspace.workspaceRoot,
@@ -2125,6 +2126,12 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let memoryUseReport = null;
   let sessionExtraction = null;
   const finish = async (result) => {
+    if(inputSourceName==='codex-stop'){
+      try{const {LocalMemoryStore,DEFAULT_LOCAL_DB}=await import('./lib/local-memory-store.mjs');
+        const {wakeMemoryPipeline}=await import('./lib/memory-pipeline.mjs');
+        result.memory_pipeline=await wakeMemoryPipeline(new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB||DEFAULT_LOCAL_DB),{tenantId,projectId:workspace.projectId});
+      }catch{result.memory_pipeline={started:false,reason:'intake_or_wake_unavailable'};}
+    }
     if (sessionExtraction) result.session_extraction = sessionExtraction;
     if (activityScope) {
       const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");

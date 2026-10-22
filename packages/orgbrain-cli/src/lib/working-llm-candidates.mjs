@@ -31,7 +31,7 @@ export function workingLlmCandidate(memory, context = {}) {
     full_body_omitted: present(memory.content) && !unique.includes(memory.content),
     scope: omitNullMetadata({ project_id: memory.project_id ?? null, business_category_id: memory.business_category_id ?? null,
       work_type: memory.work_type ?? null, scope_type: memory.scope_type ?? null, scope_key: short(memory.scope_key) }),
-    verification: omitNullMetadata({ verification_state: memory.verification_state ?? null, confirmation_state: memory.confirmation_state ?? null,
+    verification: omitNullMetadata({ verification_state: memory.verification_state ?? null, verification_scope:memory.learning?.verification_scope??null, historical_execution_verified:memory.learning?.historical_execution_verified??null, confirmation_state: memory.confirmation_state ?? null,
       conflict_count: memory.conflicts?.length ?? 0 }),
     validity: omitNullMetadata({ lifecycle_state: memory.lifecycle_state ?? null, valid_from: memory.valid_from ?? null,
       valid_until: memory.valid_until ?? null, expires_at: memory.expires_at ?? null }),

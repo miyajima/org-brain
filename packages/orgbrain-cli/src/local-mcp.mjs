@@ -1,6 +1,7 @@
 import { memorySearchDelivery } from "./lib/working-llm-candidates.mjs";
 import { screenInteractiveMemory, screenInteractiveProse, normalizeMemoryReviewContext as localReviewContext } from '../../shared/src/memory-review-runtime.mjs';
 import { receiveLocalUseObservation } from "./lib/local-use-observations.mjs";
+import { issueLocalMemoryDetailReceipt } from "./lib/local-memory-detail-receipt.mjs";
 import { WIKI_TOOLS, enabledWikiTools, callWikiTool } from "./lib/wiki-mcp.mjs";
 import { wikiStatusSync, wikiServiceForStore } from "./lib/wiki-service.mjs";
 import { answerGuidanceForDisposition } from "../../shared/src/evidence-disposition.mjs";
@@ -534,6 +535,7 @@ const TOOL_DEFINITIONS = [
       }
     }
   },
+  {name:"orgbrain_memory_use_assess",description:"Assess an exact delivered usage item. A used judgment requires a live verified action_context_id; explicit non-use needs a reason. Unknown stays unknown with a reason. This does not rate usefulness.",inputSchema:{type:"object",required:["payload"],properties:{tenant_id:{type:"string"},payload:{type:"object",required:["usage_id","usage_item_id","source_version","project_id","task_id","state","reason_code"],properties:{id:{type:"string"},usage_id:{type:"string"},usage_item_id:{type:"string"},source_version:{type:["integer","null"]},project_id:{type:"string"},task_id:{type:"string"},state:{type:"string",enum:["used","not_used","unknown"]},reason_code:{type:"string"},action_context_id:{type:"string"},supersedes_id:{type:"string"}},additionalProperties:false}}}},
   { name: "orgbrain_memory_use_context_record", description: "Record existing use. payload: id, usage_item_id, project_id, task_id, work_type, context {task,target,constraints,conditions}, evidence [{role,ref_type,ref_id,span_start,span_end,content_hash}], optional supersedes_id. No new memory is saved.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
   { name: "orgbrain_memory_use_history", description: "Read private use history and evidence. payload: source_id, project_id, limit (1-100), before (next_cursor); all optional.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
   { name: "orgbrain_memory_use_evaluate", description: "Record a use assessment. payload: id, context_id, and proof_id or feedback {contribution: positive|negative|unknown,statement}; supersedes_id for correction. Ranking requires verified action and outcome evidence. Do not infer usefulness from task success.", inputSchema: {type:"object", properties:{tenant_id:{type:"string"},payload:{type:"object"}},required:["payload"]} },
@@ -915,7 +917,12 @@ async function callTool(store, name, input, toolProfile = "default") {
   if (name === "orgbrain_memory_integrity_issues") return store.listMemoryIntegrityIssues(tenantId,input.project_id||null);
   if (name === "orgbrain_memory_aging_plan") return store.planEpisodicAging(tenantId,input.project_id||null);
   if (name === "orgbrain_memories_confirmation_status") return store.mcpConfirmationStatus({token:boundedString(input.confirmation_token,64),tenant_id:tenantId});
-  if (name === "orgbrain_memory_get") return store.getMemoryDetail({...input,tenant_id:tenantId});
+  if (name === "orgbrain_memory_get") {
+    const request = { ...input, tenant_id: tenantId };
+    const result = await store.getMemoryDetail(request);
+    const detailReceipt = await issueLocalMemoryDetailReceipt(store, { tenantId, input: request, result });
+    return detailReceipt ? { ...result, detail_receipt: detailReceipt } : result;
+  }
   if (name === "orgbrain_memory_version_get") {
     const source = boundedString(input.source, 64);
     const externalKey = boundedString(input.external_key, 256);
@@ -1025,7 +1032,10 @@ async function callTool(store, name, input, toolProfile = "default") {
     const observe = input.schema_version === 2
       ? observeMemoryContractV2Event
       : observeMemoryLearningEvent;
-    return observe(input, {
+    // tenant_id is transport scope (already resolved as tenantId above), not
+    // part of the strict learning-event body.
+    const { tenant_id: _transportTenantId, ...learningInput } = input;
+    return observe(learningInput, {
       workspaceRoot: process.cwd(),
       sensitivePolicy: { mode: "deny", allowed_principals: [] }
     });
@@ -1267,6 +1277,7 @@ async function callTool(store, name, input, toolProfile = "default") {
     const { pattern_id: patternId, tenant_id: _tenant, ...update } = input;
     return store.updateFailurePattern(tenantId, patternId, update);
   }
+  if(name==='orgbrain_memory_use_assess') {const {handleUseAssessment}=await import('./lib/memory-pipeline-cli.mjs');return handleUseAssessment(store,'assess',{...input.payload,tenant_id:tenantId,principal_id:process.env.ORGBRAIN_USE_PRINCIPAL||'local'});}
   const useOperations = {orgbrain_memory_use_context_record:"record",orgbrain_memory_use_history:"history",orgbrain_memory_use_evaluate:"evaluate",orgbrain_memory_use_revoke:"revoke"};
   if (useOperations[name]) return store.useHistory(useOperations[name], {...input.payload,tenant_id:tenantId,principal_id:process.env.ORGBRAIN_USE_PRINCIPAL || "local"});
   if (name === "orgbrain_memory_usage_state_update") return store.updateUsageStates(tenantId, input);
