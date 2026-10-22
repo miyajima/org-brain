@@ -70,8 +70,8 @@ describe('real provider / modern MCP / synthetic D1 client lifecycle', () => {
         phases.push(`${new URL(url).pathname}:${response.status}`);
         return response;
       };
-      const { OrgBrainRemoteClient } = await import(clientModule);
-      const { RemotePrivateStore } = await import(storeModule);
+      const { OrgBrainRemoteClient } = await import(new URL(clientModule, import.meta.url).href);
+      const { RemotePrivateStore } = await import(new URL(storeModule, import.meta.url).href);
       const makeClient = (profile: string) => {
         const store = new RemotePrivateStore({ directory, profile });
         let receive: (code: string) => void;
