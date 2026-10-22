@@ -20,7 +20,7 @@ jobs:
           version: 10.16.1
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "26.12.1"
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -39,7 +39,7 @@ jobs:
           version: 10.16.1
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26.12.1"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm surface:check
@@ -99,7 +99,7 @@ jobs:
           version: 10.16.1
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26.12.1"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Competitive memory benchmark

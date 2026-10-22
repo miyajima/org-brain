@@ -251,8 +251,8 @@ describe('opt-in device authorization and strict refresh security', () => {
       const clientModule = '../../../packages/orgbrain-cli/src/remote-oauth-client.mjs';
       const storeModule = '../../../packages/orgbrain-cli/src/lib/remote-private-store.mjs';
       const requestModule = '../../../packages/orgbrain-cli/src/lib/mcp-modern-request.mjs';
-      const { OrgBrainRemoteClient } = await import(clientModule), { RemotePrivateStore } = await import(storeModule);
-      const { modernMcpHeaders, modernMcpRequest } = await import(requestModule);
+      const { OrgBrainRemoteClient } = await import(new URL(clientModule, import.meta.url).href), { RemotePrivateStore } = await import(new URL(storeModule, import.meta.url).href);
+      const { modernMcpHeaders, modernMcpRequest } = await import(new URL(requestModule, import.meta.url).href);
       const makeClient = (profile: string) => {
         const store = new RemotePrivateStore({ directory, profile });
         const client = new OrgBrainRemoteClient({ store, fetchImpl: (url: string, options: RequestInit) => {
@@ -528,7 +528,7 @@ describe('current verified identity and authorization lifecycle',()=>{
  },20000);
  it('uses current native role at the actual target without requiring tenant-wide project permission',async()=>{
   const modulePath='../../../packages/orgbrain-cli/src/lib/mcp-modern-request.mjs';
-  const {modernMcpHeaders,modernMcpRequest}=await import(modulePath);
+  const {modernMcpHeaders,modernMcpRequest}=await import(new URL(modulePath, import.meta.url).href);
   for(const mode of ['project-assignment','policy-default']) {const f=await fixture();try {
    if(mode==='policy-default') prepareChange(f,'default-role');
    const auth=await f.nativeAuthorization(),response=await auth.exchange();expect(response.status).toBe(200);

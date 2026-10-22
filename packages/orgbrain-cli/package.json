@@ -8,7 +8,7 @@
     "orgbrain": "./dist/orgbrain.mjs"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "os": [
     "darwin",
@@ -18,9 +18,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "bin", "assets/wiki", "skills/org-brain-wiki"],
+  "files": [
+    "dist",
+    "bin",
+    "assets/wiki",
+    "skills/org-brain-wiki"
+  ],
   "dependencies": {
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.3.1",
     "js-tiktoken": "1.0.21",
     "zod": "4.3.6"
   },

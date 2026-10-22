@@ -7,22 +7,22 @@
   "scripts": {
     "build": "wrangler deploy --dry-run",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --exclude test/dashboard-performance.test.ts --exclude test/decision-console-performance.test.ts",
-    "test:performance": "vitest run test/dashboard-performance.test.ts test/decision-console-performance.test.ts"
+    "test": "vitest run --config ../../vitest.config.mjs --exclude test/dashboard-performance.test.ts --exclude test/decision-console-performance.test.ts",
+    "test:performance": "vitest run --config ../../vitest.config.mjs test/dashboard-performance.test.ts test/decision-console-performance.test.ts"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.3",
-    "@org-brain/server-core": "workspace:*",
-    "@org-brain/mcp-core": "workspace:*",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.3.1",
     "@org-brain/contracts": "workspace:*",
     "@org-brain/core": "workspace:*",
+    "@org-brain/mcp-core": "workspace:*",
+    "@org-brain/server-core": "workspace:*",
     "@org-brain/shared": "workspace:*",
     "agents": "0.20.1",
-    "hono": "^4.7.2",
-    "zod": "^4.3.6"
+    "hono": "4.12.25",
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "wrangler": "^4.80.0"
+    "wrangler": "^4.151.3"
   }
 }
