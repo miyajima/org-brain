@@ -98,6 +98,16 @@ This repository owns all memory extraction and quality decisions. The shared Ast
   in the existing SQLite database. Known fulfilled tool-result envelopes are
   decoded, but wrapper code is never interpreted. Delivery and use remain
   distinct; no observation is not a negative assessment.
+- Native PostToolUse may return the actual completed call identifier through
+  `hookSpecificOutput.additionalContext` when local use collection is enabled
+  and the same scoped task has an unknown reference. Missing/conflicting IDs
+  produce no hint. This exposes no raw tool input/output, makes no attribution,
+  adds no model call and changes no harness bootstrap or Stop verification gate.
+- `tenant_id` on the observe tool is transport routing, not a learning-body
+  field. The local MCP adapter removes only that routing key before strict
+  validation. Stop receives the authoritative workspace tenant and checks any
+  explicit routing tenant before removal; missing or conflicting scope remains
+  review-only. Other unknown fields and evidence gaps retain their old gates.
 - Automatic capture rejects transient completion reports. Conservative legacy
   cleanup uses native suppression, preserves versions and usage history, and
   never removes explicit decisions, preferences, constraints, or reusable lessons.

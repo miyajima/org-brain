@@ -254,6 +254,13 @@ async function drainSessionExtractionBatch({queueDir,dbPath,tenantId='default',p
    const saved=await store.saveLearningCandidates({tenantId,projectId,taskKey:`session-extraction:${job.id}`,candidates,requireExactBody:true});
    const held=saved.filter(s=>s.status==='held');
    db.prepare("UPDATE jobs SET status='completed',charged=?,error=NULL WHERE id=?").run(generated.usage.input_tokens+generated.usage.output_tokens,job.id);
+   {
+    const {LocalMemoryStore}=await import('./local-memory-store.mjs');
+    const {enqueueMemoryPipelineSource,wakeMemoryPipeline}=await import('./memory-pipeline.mjs');
+    const memoryStore=new LocalMemoryStore(targetDb);
+    await enqueueMemoryPipelineSource(memoryStore,{tenantId,projectId,selector:{source:'session',job_id:job.id}});
+    await wakeMemoryPipeline(memoryStore,{tenantId,projectId,env});
+   }
    report.processed++;report.saved+=saved.filter(s=>s.status==='quarantine').length;report.usage.push(generated.usage);
    report.rejections.push(...result.rejections,...held.map(s=>({reason_codes:[s.reason_code]})));
    if(held.length)report.status='completed_with_held_candidates';else if(report.status==='idle')report.status='completed';

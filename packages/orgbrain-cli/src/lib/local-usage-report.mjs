@@ -31,13 +31,33 @@ function finish(value) {
     task_use_rate: value.tasks.size ? value.tasks_with_use.size / value.tasks.size : null };
 }
 
+function memoryInventory(db, tenantId, projectId) {
+  const now = Date.now(), week = now - 7 * 86400000, month = now - 30 * 86400000;
+  const memories = db.prepare(`SELECT COUNT(*) total,
+    COALESCE(SUM(COALESCE(lifecycle_state,'active')<>'suppressed' AND COALESCE(deleted_at,0)=0),0) active,
+    COALESCE(SUM(lifecycle_state='suppressed'),0) suppressed,
+    COALESCE(SUM(created_at>=? AND created_at<=?),0) created_last_7_days,
+    COALESCE(SUM(created_at>=? AND created_at<=?),0) created_last_30_days,
+    MAX(created_at) latest_created_at FROM memories WHERE tenant_id=? AND (? IS NULL OR project_id=?)`)
+    .get(week, now, month, now, tenantId, projectId, projectId);
+  const hasCandidates = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_learning_candidates'").get();
+  const candidates = hasCandidates ? db.prepare(`SELECT
+    COALESCE(SUM(status='quarantine'),0) quarantine_candidates,
+    COALESCE(SUM(created_at>=? AND created_at<=?),0) candidates_created_last_7_days
+    FROM memory_learning_candidates WHERE tenant_id=? AND (? IS NULL OR project_id=?)`)
+    .get(week, now, tenantId, projectId, projectId) : { quarantine_candidates: null, candidates_created_last_7_days: null };
+  return { as_of: now, ...memories, ...candidates };
+}
+
 // A read-only projection. Unknown labels never become negative training data.
 export async function localUsageReport(db, { tenant_id = 'default', project_id = null,
   principal_id = process.env.ORGBRAIN_USE_PRINCIPAL || 'local' } = {}) {
   const total = bucket(), byPurpose = Object.fromEntries(USAGE_PURPOSES.map(key => [key, bucket()])), byReference = {};
   const byPurposeReference = Object.fromEntries(USAGE_PURPOSES.map(key => [key, {}]));
-  const reasons = {}, contexts = new Map();
+  const reasons = {}, reasonsByPurpose = Object.fromEntries(USAGE_PURPOSES.map(key => [key, {}])), contexts = new Map();
   const service = localUseService(db, tenant_id, principal_id);
+  const assessmentTable=Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='local_memory_use_assessments'").get());
+  const assessments=new Map(assessmentTable?db.prepare(`SELECT a.* FROM local_memory_use_assessments a WHERE tenant_id=? AND principal=? AND NOT EXISTS(SELECT 1 FROM local_memory_use_assessments n WHERE n.tenant_id=a.tenant_id AND n.supersedes_id=a.id)`).all(tenant_id,principal_id).map(a=>[a.usage_item_id,a]):[]);
   const liveContexts = db.prepare(`SELECT c.* FROM memory_use_contexts c WHERE tenant_id=? AND principal=? AND (? IS NULL OR project_id=?)
     AND NOT EXISTS(SELECT 1 FROM memory_use_contexts n WHERE n.tenant_id=c.tenant_id AND n.supersedes_id=c.id)`)
     .all(tenant_id, principal_id, project_id, project_id);
@@ -76,7 +96,9 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
       const cross = (byPurposeReference[event.usage_purpose] ?? byPurposeReference.unclassified)[item.reference_type] ??= bucket();
       if (!eventReferences.has(item.reference_type)) { reference.events++; cross.events++; eventReferences.add(item.reference_type); }
       if (event.task_id) { reference.tasks.add(event.task_id); cross.tasks.add(event.task_id); }
-      const observed = contexts.has(item.id), used = item.used_state === 'used';
+      const assessment=assessments.get(item.id);
+      const observed = contexts.has(item.id), staleAssessedUse=item.used_state_source==='assessed'&&item.used_state==='used'&&(!assessment||contexts.get(item.id)?.id!==assessment.action_context_id);
+      const used = item.used_state === 'used'&&!staleAssessedUse;
       const received = Boolean(db.prepare('SELECT 1 FROM local_use_deliveries WHERE tenant_id=? AND usage_item_id=? AND principal=?').get(tenant_id,item.id,principal_id));
       // Contradictory explicit non-use and action evidence stay unassessed.
       const conflict = observed && item.used_state === 'not_used';
@@ -90,8 +112,10 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
       }
       if (state === 'not_assessed') {
         const receipt = db.prepare(`SELECT rejection_reason FROM local_use_observation_receipts WHERE tenant_id=? AND usage_item_id=? ORDER BY created_at DESC,id DESC LIMIT 1`).get(tenant_id, item.id);
-        const reason = conflict ? 'conflicting_use_evidence' : receipt?.rejection_reason || (receipt ? 'awaiting_transcript_verification' : received ? 'no_use_observation' : 'delivery_not_confirmed');
+        const reason = conflict ? 'conflicting_use_evidence' : staleAssessedUse?'assessed_use_evidence_not_live':assessment?.used_state==='unknown'?assessment.reason_code:receipt?.rejection_reason || (receipt ? 'awaiting_transcript_verification' : received ? 'no_use_observation' : 'delivery_not_confirmed');
         reasons[reason] = (reasons[reason] || 0) + 1;
+        const purposeReasons = reasonsByPurpose[event.usage_purpose] ?? reasonsByPurpose.unclassified;
+        purposeReasons[reason] = (purposeReasons[reason] || 0) + 1;
       }
     }
   }
@@ -101,9 +125,12 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
     by_purpose_reference: Object.fromEntries(Object.entries(byPurposeReference).map(([purpose, references]) =>
       [purpose, Object.fromEntries(Object.entries(references).map(([key, value]) => [key, finish(value)]))])),
     verified_positive_effects: positive, unassessed_reasons: reasons,
+    unassessed_reasons_by_purpose: reasonsByPurpose,
+    memory_inventory: memoryInventory(db, tenant_id, project_id),
     collection_metrics: collectionMetrics(db,tenant_id,principal_id,project_id),
     definitions: { contributed: 'Reported adoption or observed action; not a measured causal benefit.',
       injected: 'Database injection receipt; delivery is not implied.',
       token_estimate: 'Estimated entry tokens, excludes hook framing and other instructions.',
-      task_denominator: 'Distinct identified tasks including zero-result events; legacy purpose remains unclassified.' } };
+      task_denominator: 'Distinct identified tasks including zero-result events; legacy purpose remains unclassified.',
+      memory_inventory: 'Stored memory records and extraction candidates are separate. Quarantine is not active memory; candidate creation is not proof of extraction quality or promotion.' } };
 }

@@ -72,6 +72,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
         source_reference: memory.source_references?.[0] ?? null,
         ...(memory.source_references?.length > 1 ? { additional_sources: memory.source_references.slice(1) } : {}),
         verification_state: memory.verification_state,
+        ...(memory.learning?.verification_scope?{verification_scope:memory.learning.verification_scope,historical_execution_verified:memory.learning.historical_execution_verified===true}:{}),
         valid_until: memory.valid_until,
         expires_at: memory.expires_at
       })),

@@ -85,13 +85,91 @@ export function enabledWikiTools(profile) {
     return [];
   }
 }
-export async function callWikiTool(store, name, input) {
+const SAFE_PIPELINE_WAKE_REASONS = new Set(["disabled", "idle", "reviewer_unavailable"]);
+
+async function wakeQueuedWikiMemoryPipeline(store, tenantId, projectId, dependencies) {
+  try {
+    let env;
+    if (typeof dependencies.loadEnvFallbacks === "function") {
+      env = await dependencies.loadEnvFallbacks();
+      if (!env || typeof env !== "object") env = process.env;
+    } else {
+      env = process.env;
+      if (!env.OPENROUTER_API_KEY) {
+        const { loadEnvFallbacks } = await import("../hook-memory-bridge.mjs");
+        await loadEnvFallbacks();
+        env = process.env;
+      }
+    }
+    const wake = dependencies.wakeMemoryPipeline ??
+      (await import("./memory-pipeline.mjs")).wakeMemoryPipeline;
+    const result = await wake(store, { tenantId, projectId, env });
+    if (result?.started === true) return { started: true };
+    return {
+      started: false,
+      reason: SAFE_PIPELINE_WAKE_REASONS.has(result?.reason) ? result.reason : "worker_unavailable",
+    };
+  } catch {
+    return { started: false, reason: "worker_unavailable" };
+  }
+}
+
+async function enqueueWikiMutationMemoryIntake(store, wiki, input, result, dependencies) {
+  const hash = result.hash ?? result.page?.hash;
+  const pageId = result.page_id ?? result.page?.page_id;
+  if (typeof pageId !== "string" || !pageId || typeof hash !== "string" || !hash)
+    return { queued: false, reason: "wiki_mutation_identity_missing" };
+
+  let storedPage;
+  try {
+    storedPage = await wiki.request({
+      op: "read",
+      wiki_id: "personal",
+      page_id: pageId,
+      max_chars: 128,
+    });
+  } catch {
+    return { queued: false, reason: "wiki_page_readback_unavailable" };
+  }
+
+  if (storedPage?.page_id !== pageId)
+    return { queued: false, reason: "wiki_page_id_mismatch" };
+  if (storedPage.hash !== hash)
+    return { queued: false, reason: "wiki_hash_mismatch" };
+  const projectId = storedPage.project_id;
+  if (typeof projectId !== "string" || !projectId.trim())
+    return { queued: false, reason: "wiki_project_scope_missing" };
+  if (input.project_id !== undefined && input.project_id !== projectId)
+    return { queued: false, reason: "wiki_project_scope_mismatch" };
+
+  try {
+    const tenantId = typeof storedPage.tenant_id === "string" && storedPage.tenant_id.trim()
+      ? storedPage.tenant_id.trim()
+      : "default";
+    const enqueue = dependencies.enqueueSource ??
+      (await import("./memory-pipeline.mjs")).enqueueMemoryPipelineSource;
+    const intake = await enqueue(store, {
+      tenantId,
+      projectId,
+      selector: { source: "wiki", page_id: pageId, expected_hash: hash },
+    });
+    if (intake?.queued !== true) return intake;
+    return {
+      ...intake,
+      worker: await wakeQueuedWikiMemoryPipeline(store, tenantId, projectId, dependencies),
+    };
+  } catch {
+    return { queued: false, reason: "wiki_memory_intake_unavailable" };
+  }
+}
+
+export async function callWikiTool(store, name, input, dependencies = {}) {
   if (input.wiki_id && input.wiki_id !== "personal")
     throw new Error("wiki_binding_mismatch");
   const op = name.slice("orgbrain_wiki_".length);
   if (!WIKI_TOOLS.some((t) => t.name === name))
     throw new Error("unknown_wiki_operation");
-  const wiki = wikiServiceForStore(store);
+  const wiki = dependencies.wiki ?? wikiServiceForStore(store);
   if (op === "search") return wiki.search(input);
   const result = await wiki.request({
     ...input,
@@ -100,6 +178,15 @@ export async function callWikiTool(store, name, input) {
     limit: Math.min(input.limit || 50, 100),
   });
   const budget = Math.max(256, Math.min(input.token_budget || 4000, 16000));
+  if (["put", "patch", "approve", "restore_revision"].includes(op) && result.ok !== false && !result.error) {
+    result.memory_intake = await enqueueWikiMutationMemoryIntake(
+      store,
+      wiki,
+      input,
+      result,
+      dependencies,
+    );
+  }
   let changed = false;
   while (countWikiTokens(result) > budget - 40) {
     const arrays = Object.entries(result).filter(
