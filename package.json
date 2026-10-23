@@ -6,7 +6,7 @@
   "description": "Local-first, auditable memory and decision layer for AI agents",
   "type": "module",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=26.12.1 <27"
   },
   "os": [
     "darwin",
@@ -141,17 +141,18 @@
     "memories:evaluate-conversation-session": "node ./scripts/conversation-session-evaluate.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260405.1",
-    "@modelcontextprotocol/client": "2.0.0",
+    "@cloudflare/workers-types": "4.20260405.1",
+    "@modelcontextprotocol/client": "2.3.1",
     "@modelcontextprotocol/conformance": "0.2.0-alpha.11",
     "@rollup/plugin-commonjs": "29.0.3",
     "@rollup/plugin-node-resolve": "16.0.3",
-    "ajv": "^8.17.1",
-    "eslint": "^9.39.1",
+    "ajv": "^8.20.0",
+    "eslint": "^9.39.5",
     "orgbrain": "workspace:*",
-    "rollup": "^4.60.1",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^8.48.0",
-    "vitest": "^2.1.8"
+    "rollup": "^4.64.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "5.0.5",
+    "vite": "7.3.7"
   }
 }

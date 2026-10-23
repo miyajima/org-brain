@@ -27,7 +27,7 @@ test("root Vitest runs exclude tests inside nested agent worktrees", async () =>
         join(root, "node_modules", "vitest", "vitest.mjs"),
         "run",
         "./scripts/memory-rationale-backfill.test.mjs",
-        "--reporter=basic"
+        "--reporter=default"
       ],
       { cwd: root, env: { ...process.env, CI: "1" } }
     );

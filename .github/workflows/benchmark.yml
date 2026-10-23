@@ -19,7 +19,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26.12.1"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Verify SQLite FTS5 runtime
@@ -37,7 +37,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26.12.1"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Verify SQLite FTS5 runtime
@@ -56,7 +56,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26.12.1"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Verify SQLite FTS5 runtime
