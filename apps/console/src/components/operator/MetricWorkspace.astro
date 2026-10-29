@@ -1,0 +1,110 @@
+---
+import { createServerApi } from "../../lib/server-api";
+const transport = createServerApi(Astro.request);
+const serverApi = async (input:string|URL, init:RequestInit={}):Promise<Response> => {
+ try {return await transport(input,init);}
+ catch {return Response.json({ok:false,error:{code:"unavailable",message:t("通信できませんでした。入力を確認し、接続が戻ってから再度操作してください。", "The service could not be reached. Review your input and try again when connected.", "无法连接服务。请保留输入，连接恢复后重试。")}},{status:503});}
+};
+import { localText } from "../../lib/operator-console";
+interface Props { tenantId:string; projectId:string; lang:"ja"|"en"|"zh"; }
+
+const {tenantId, lang}= Astro.props as Props;
+const t=localText(lang);
+const optionLabel=(value:string)=>({
+ tenant:t("組織", "Organization", "组织"),project:t("プロジェクト", "Project", "项目"),managed_object:t("管理対象", "Managed object", "管理对象"),
+ increase:t("増加", "Increase", "增加"),decrease:t("減少", "Decrease", "减少"),range:t("範囲内", "Within range", "范围内"),maintain:t("維持", "Maintain", "保持"),
+ ratio:t("比率", "Ratio", "比率"),count:t("件数", "Count", "计数"),sum:t("合計", "Sum", "总和"),average:t("平均", "Average", "平均"),percentile:t("パーセンタイル", "Percentile", "百分位数"),duration:t("経過時間", "Duration", "持续时间"),distinct_count:t("重複を除いた件数", "Distinct count", "去重计数")
+} as Record<string,string>)[value] ?? value;
+
+const form = Astro.request.method === "POST" ? await Astro.request.formData() : null;
+const value = (name:string, fallback="") => String(form?.get(name) ?? fallback);
+
+const api = async (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
+
+const redirectAfterPost=(extra:Record<string,string>={})=>{
+ const target=new URL(Astro.url);
+ target.searchParams.set("saved","1");
+ for(const [key,value] of Object.entries(extra)) target.searchParams.set(key,value);
+ (Astro.locals as Record<string,unknown>).operatorPostRedirect=target.pathname+target.search;
+};
+let message = "";
+let error = "";
+if (form) {
+  const csrf = String(form.get("csrf_token") ?? "");
+  const action = String(form.get("action") ?? "metric");
+  let path = "/api/v1/metric-definitions";
+  let body: any;
+  if (action === "dashboard") {
+    const metricKey = String(form.get("metric_key") ?? "").trim();
+    const dashboardKey = String(form.get("dashboard_key") ?? "custom-domain-dashboard").trim();
+    body = {
+      tenant_id: tenantId,
+      key: dashboardKey,
+      title: String(form.get("dashboard_title") ?? "Custom Domain Dashboard"),
+      widgets: [{ key: `${metricKey}-widget`, kind: "metric", title: metricKey, metric_keys: [metricKey], layout: { x: 0, y: 0, w: 6, h: 3 } }]
+    };
+    path = "/api/v1/domain-dashboards";
+  } else {
+    const sourceType = String(form.get("source_type") ?? "manual");
+    const metricKeys = String(form.get("formula_metric_keys") ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+    body = {
+      tenant_id: tenantId,
+      key: String(form.get("key") ?? "").trim(),
+      label: String(form.get("label") ?? "").trim(),
+      description: String(form.get("description") ?? "").trim(),
+      origin_type: "custom",
+      scope_type: String(form.get("scope_type") ?? "tenant"),
+      source_type: sourceType,
+      unit: String(form.get("unit") ?? "count"),
+      aggregation_window: String(form.get("aggregation_window") ?? "P7D"),
+      freshness_seconds: Number(form.get("freshness_seconds") ?? 86400),
+      target_direction: String(form.get("target_direction") ?? "increase"),
+      ...(sourceType === "derived" ? { formula: { operation: String(form.get("operation") ?? "ratio"), metric_keys: metricKeys } } : {}),
+      ...(sourceType === "connector" ? { connector: { adapter_id: String(form.get("adapter_id") ?? ""), query_template: String(form.get("query_template") ?? "") } } : {})
+    };
+  }
+  const response = await api(path, { method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify(body) });
+  const payload: any = await response.json().catch(() => null);
+  if (response.ok) {message = action === "dashboard" ? t("Manifest外の指標をDashboardへ追加しました。", "Metric added to dashboard.", "已将指标添加到仪表盘。") : t("カスタム指標を作成しました。", "Custom metric created.", "已创建自定义指标。");redirectAfterPost();}
+  else error = payload?.error?.message ?? t("保存できませんでした。", "Could not save.", "无法保存。");
+}
+const [metricResponse, dashboardResponse] = await Promise.all([
+  api(`/api/v1/metrics/query?tenant_id=${encodeURIComponent(tenantId)}&limit=500`),
+  api(`/api/v1/domain-dashboards?tenant_id=${encodeURIComponent(tenantId)}`)
+]);
+const metricPayload: any = await metricResponse.json().catch(() => null);
+const dashboardPayload: any = await dashboardResponse.json().catch(() => null);
+const metrics = metricPayload?.data ?? [];
+const dashboards = dashboardPayload?.data ?? [];
+
+if (!metricResponse.ok) error ||= metricPayload?.error?.message ?? t("指標を取得できませんでした。", "Metrics could not be loaded.", "无法加载指标。");
+if (!dashboardResponse.ok) error ||= dashboardPayload?.error?.message ?? t("Dashboardを取得できませんでした。", "Dashboards could not be loaded.", "无法加载仪表盘。");
+---
+
+<div data-extension-workspace="metrics">
+ {message && <p class="op-notice" role="status">{message}</p>}{error && <p class="op-notice" data-tone="error" role="alert">{error}</p>}
+ <section class="op-panel"><div class="op-panel-heading"><div><h3>{t("カスタム指標を作成", "Create custom metric", "创建自定义指标")}</h3><p>{t("業務パックとは独立した指標を登録します。", "Register metrics independently of domain packs.", "登记独立于业务包的指标。")}</p></div></div><form method="post" class="op-form op-panel-body"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="metric"/>
+ <div class="op-form-grid">
+ <label>{t("指標キー", "Metric key", "指标键")}<input name="key" value={value("key")} required/></label><label>{t("表示名", "Display name", "显示名称")}<input name="label" value={value("label")} required/></label>
+ <label>{t("対象範囲", "Scope", "范围")}<select name="scope_type">{["tenant","project","managed_object"].map(v=><option value={v} selected={value("scope_type","tenant")===v}>{optionLabel(v)}</option>)}</select></label>
+ <label>{t("データの取得方法", "Data source", "数据来源")}<select name="source_type">{[["manual",t("手動", "Manual", "手动")],["connector",t("コネクター", "Connector", "连接器")],["derived",t("他の指標から計算", "Derived", "计算")]].map(([v,l])=><option value={v} selected={value("source_type","manual")===v}>{l}</option>)}</select></label>
+ <label>{t("単位", "Unit", "单位")}<input name="unit" value={value("unit","percent")} required/></label><label>{t("集計期間", "Aggregation window", "汇总期间")}<input name="aggregation_window" value={value("aggregation_window","P7D")} required/></label>
+ <label>{t("有効期間（秒）", "Freshness (seconds)", "有效期（秒）")}<input name="freshness_seconds" type="number" min="1" value={value("freshness_seconds","86400")} required/></label>
+ <label>{t("目標の方向", "Target direction", "目标方向")}<select name="target_direction">{["increase","decrease","range","maintain"].map(v=><option value={v} selected={value("target_direction","increase")===v}>{optionLabel(v)}</option>)}</select></label>
+ </div>
+ <details class="op-edit" data-metric-config open={value("source_type")==="derived" || value("source_type")==="connector"}><summary>{t("計算式・コネクターの設定", "Formula and connector settings", "公式与连接器设置")}</summary><div class="op-form-grid">
+ <label>{t("計算方法", "Operation", "计算方式")}<select name="operation">{["ratio","count","sum","average","percentile","duration","distinct_count"].map(v=><option value={v} selected={value("operation","ratio")===v}>{optionLabel(v)}</option>)}</select></label>
+ <label>{t("計算に使う指標キー（カンマ区切り）", "Formula metric keys (comma-separated)", "计算指标键（逗号分隔）")}<input name="formula_metric_keys" value={value("formula_metric_keys")}/></label>
+ <label>{t("アダプターID", "Adapter ID", "适配器ID")}<input name="adapter_id" value={value("adapter_id")}/></label><label>{t("クエリテンプレートID", "Query template ID", "查询模板ID")}<input name="query_template" value={value("query_template")}/></label>
+ </div></details><label>{t("説明", "Description", "说明")}<textarea name="description">{value("description")}</textarea></label><div><button type="submit">{t("カスタム指標を作成", "Create custom metric", "创建自定义指标")}</button></div></form></section>
+ <section class="op-panel"><div class="op-panel-heading"><div><h3>{t("指標と最新の観測値", "Metrics and latest observations", "指标与最新观察值")}</h3><p>{t("期限切れ・不明の観測値は数値を表示しません。", "Expired and unknown observations have no numeric value.", "已过期或未知的观察值不显示数值。")}</p></div></div>{metrics.map((metric:any)=><article class="op-row"><div class="op-row-main"><strong>{metric.definition.label}</strong><p>{metric.metric_key}</p><p>{metric.latest.state === "measured" ? metric.latest.value : "—"} {metric.definition.unit} · {metric.latest.state}</p>{metric.latest.evidence_ref && <p>{t("根拠", "Evidence", "依据")}: {metric.latest.evidence_ref}</p>}</div><span class="op-badge">{metric.origin_type}</span></article>)}{metricResponse.ok && !metrics.length && <p class="op-empty">{t("指標はまだ登録されていません。", "No metrics are registered yet.", "尚未登记指标。")}</p>}</section>
+ <section class="op-panel"><div class="op-panel-heading"><h3>{t("Dashboardへ指標を追加", "Add a metric to a dashboard", "将指标添加到仪表盘")}</h3></div><form method="post" class="op-form op-panel-body"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="dashboard"/><div class="op-form-grid"><label>{t("Dashboardキー", "Dashboard key", "仪表盘键")}<input name="dashboard_key" value={value("dashboard_key","custom-domain-dashboard")} required/></label><label>{t("Dashboard名", "Dashboard title", "仪表盘名称")}<input name="dashboard_title" value={value("dashboard_title","Custom Domain Dashboard")} required/></label><label>{t("追加する指標", "Metric to add", "添加的指标")}<select name="metric_key" required>{metrics.map((metric:any)=><option value={metric.metric_key} selected={value("metric_key")===metric.metric_key}>{metric.definition.label} ({metric.origin_type})</option>)}</select></label></div><div><button type="submit" disabled={!metrics.length}>{t("Dashboardへ追加", "Add to dashboard", "添加到仪表盘")}</button></div>{dashboardResponse.ok && <p class="op-muted">{t("現在のDashboard", "Current dashboards", "当前仪表盘")}: {dashboards.map((item:any)=>item.title).join(" · ") || t("なし", "None", "无")}</p>}</form></section>
+</div>
+
+<script>
+ const source=document.querySelector('[data-extension-workspace="metrics"] [name="source_type"]') as HTMLSelectElement | null;
+ source?.addEventListener("change",()=>{
+  const details=document.querySelector<HTMLDetailsElement>("[data-metric-config]");
+  if(details) details.open=source.value === "derived" || source.value === "connector";
+ });
+</script>

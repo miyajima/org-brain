@@ -3,13 +3,10 @@ const fetchDashboardData = createDashboardFetcher(Astro.request);
 import AccessDrawer from "../components/decision/AccessDrawer.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, createDashboardFetcher } from "../lib/dashboard-page";
-import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { normalizeAgents, normalizeSkillAssets, scopedHref, type AgentSummary, type SkillAssetSummary } from "../lib/decision-console-ui";
 
-const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
-const behavior = decisionConsoleBehavior(mode);
 const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
-if (!behavior.enabled) return Astro.redirect(scopedHref("/tasks", params), 307);
+
 const selectedAgentId = Astro.url.searchParams.get("agent_id")?.trim() ?? "";
 const agents = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/agents", apiParams, { limit: 100 }), Astro.url), normalizeAgents, [] as AgentSummary[]);
 const skills = await fetchDashboardData(new URL(dashboardApiPath("/api/v1/skills", apiParams, { limit: 100, status: "published" }), Astro.url), normalizeSkillAssets, [] as SkillAssetSummary[]);

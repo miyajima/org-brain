@@ -65,6 +65,14 @@ function parseLimit(value: unknown, fallback = 50) {
   return Number.isInteger(parsed) ? Math.min(100, Math.max(1, parsed)) : fallback;
 }
 
+function parseOffset(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER - 100) {
+    throw new HttpError(400, "invalid_offset", "Offset must be a nonnegative safe integer");
+  }
+  return parsed;
+}
+
 function estimateTokens(value: string): number {
   const normalized = value.replace(/\s+/gu, " ").trim();
   return normalized ? Math.max(1, Math.ceil(normalized.length / 4)) : 0;
@@ -234,50 +242,68 @@ export async function createAgent(
 
 export async function listAgents(
   env: Env,
-  args: { tenantId: string; principal: string; projectId?: string | null; limit?: number }
+  args: { tenantId: string; principal: string; projectId?: string | null; q?: string | null; limit?: number; offset?: number }
 ) {
   const limit = parseLimit(args.limit);
-  const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, project_id, agent_key, name, role, status, current_loadout_id,
-            source_decision_id, owner_principal, last_used_at, created_at, updated_at
-     FROM agents WHERE tenant_id = ? AND (? IS NULL OR project_id = ?)
-     ORDER BY updated_at DESC LIMIT ?`
-  ).bind(args.tenantId, args.projectId ?? null, args.projectId ?? null, Math.min(200, limit * 4)).all<AgentRow>();
+  const offset = parseOffset(args.offset);
+  const query = args.q?.trim() ?? "";
+  const batchSize = 100;
+  const groupIds = await loadPrincipalGroupIds(env, args.tenantId, args.principal);
   const visible = [] as Array<AgentRow & { loadout_name: string | null; binding_count: number }>;
-  for (const agent of rows.results) {
-    const policy = await loadAccessPolicy(env, args.tenantId, "agent", agent.id);
-    if (!await canReadResource(env, policy, { tenantId: args.tenantId, principal: args.principal, projectId: args.projectId ?? agent.project_id })) continue;
-    if (agent.current_loadout_id) {
-      const loadoutPolicy = await loadAccessPolicy(env, args.tenantId, "agent_loadout", agent.current_loadout_id);
-      if (!await canReadResource(env, loadoutPolicy, {
-        tenantId: args.tenantId,
-        principal: args.principal,
-        projectId: args.projectId ?? agent.project_id
-      })) continue;
+  let rawOffset = 0;
+  let skipped = 0;
+  let hasMore = false;
+  scan: while (true) {
+    const rows = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, tenant_id, project_id, agent_key, name, role, status, current_loadout_id,
+              source_decision_id, owner_principal, last_used_at, created_at, updated_at
+       FROM agents WHERE tenant_id = ? AND (? IS NULL OR project_id = ?)
+         AND (? = '' OR lower(name || ' ' || agent_key || ' ' || role) LIKE '%' || lower(?) || '%')
+       ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?`
+    ).bind(args.tenantId, args.projectId ?? null, args.projectId ?? null, query, query, batchSize, rawOffset).all<AgentRow>();
+    const [agentPolicies, loadoutPolicies] = await Promise.all([
+      loadAccessPolicies(env, args.tenantId, "agent", rows.results.map((agent) => agent.id)),
+      loadAccessPolicies(env, args.tenantId, "agent_loadout", rows.results.flatMap((agent) => agent.current_loadout_id ? [agent.current_loadout_id] : []))
+    ]);
+    for (const agent of rows.results) {
+      const access = { tenantId: args.tenantId, principal: args.principal, projectId: args.projectId ?? agent.project_id };
+      if (!await canReadResourceWithGroups(env, agentPolicies.get(agent.id) ?? null, access, groupIds)) continue;
+      if (agent.current_loadout_id && !await canReadResourceWithGroups(
+        env, loadoutPolicies.get(agent.current_loadout_id) ?? null, access, groupIds
+      )) continue;
+      if (skipped < offset) {
+        skipped++;
+        continue;
+      }
+      if (visible.length === limit) {
+        hasMore = true;
+        break scan;
+      }
+      const summary = agent.current_loadout_id ? await env.OPEN_BRAIN_DB.prepare(
+        `SELECT name FROM agent_loadouts WHERE tenant_id = ? AND id = ?`
+      ).bind(args.tenantId, agent.current_loadout_id).first<{ name: string }>() : null;
+      const bindingCount = agent.current_loadout_id
+        ? (await readableBindings(
+          env,
+          args.tenantId,
+          await loadBindings(env, args.tenantId, agent.current_loadout_id),
+          { principal: args.principal, projectId: args.projectId }
+        )).length
+        : 0;
+      visible.push({
+        ...agent,
+        source_decision_id: await readableSourceDecisionId(env, agent, {
+          principal: args.principal,
+          projectId: args.projectId
+        }),
+        loadout_name: summary?.name ?? null,
+        binding_count: bindingCount
+      });
     }
-    const summary = agent.current_loadout_id ? await env.OPEN_BRAIN_DB.prepare(
-      `SELECT name FROM agent_loadouts WHERE tenant_id = ? AND id = ?`
-    ).bind(args.tenantId, agent.current_loadout_id).first<{ name: string }>() : null;
-    const bindingCount = agent.current_loadout_id
-      ? (await readableBindings(
-        env,
-        args.tenantId,
-        await loadBindings(env, args.tenantId, agent.current_loadout_id),
-        { principal: args.principal, projectId: args.projectId }
-      )).length
-      : 0;
-    visible.push({
-      ...agent,
-      source_decision_id: await readableSourceDecisionId(env, agent, {
-        principal: args.principal,
-        projectId: args.projectId
-      }),
-      loadout_name: summary?.name ?? null,
-      binding_count: bindingCount
-    });
-    if (visible.length >= limit) break;
+    if (rows.results.length < batchSize) break;
+    rawOffset += rows.results.length;
   }
-  return { contract_version: AGENT_LOADOUT_CONTRACT_VERSION, items: visible };
+  return { contract_version: AGENT_LOADOUT_CONTRACT_VERSION, items: visible, has_more: hasMore, next_offset: hasMore ? offset + visible.length : null };
 }
 
 export async function getAgent(
@@ -302,6 +328,9 @@ export async function getAgent(
       projectId: args.projectId ?? agent.project_id
     });
   }
+  const bindingSummary = loadout ? await env.OPEN_BRAIN_DB.prepare(
+    `SELECT COUNT(*) AS binding_count FROM agent_loadout_bindings WHERE tenant_id = ? AND loadout_id = ?`
+  ).bind(args.tenantId, loadout.id).first<{ binding_count: number }>() : null;
   const bindings = loadout
     ? await readableBindings(
       env,
@@ -320,7 +349,8 @@ export async function getAgent(
       })
     },
     loadout,
-    bindings
+    bindings,
+    can_replace_bindings: loadout !== null && bindingSummary?.binding_count === bindings.length
   };
 }
 
@@ -415,7 +445,12 @@ export async function updateAgentLoadout(
       projectId: agent.project_id
     });
     if (binding.version_policy === "pinned" && binding.pinned_version_id !== skill.published_version_id) {
-      throw new HttpError(409, "version_not_published", "Pinned version must be the published Skill version");
+      const existingPin = await env.OPEN_BRAIN_DB.prepare(
+        `SELECT 1 AS retained FROM agent_loadout_bindings
+         WHERE tenant_id = ? AND loadout_id = ? AND skill_asset_id = ?
+           AND version_policy = 'pinned' AND pinned_version_id = ?`
+      ).bind(tenantId, loadoutId, binding.skill_asset_id, binding.pinned_version_id).first<{ retained: number }>();
+      if (!existingPin) throw new HttpError(409, "version_not_published", "Pinned version must be the published Skill version or the existing binding's pinned version");
     }
     statements.push(env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO agent_loadout_bindings(

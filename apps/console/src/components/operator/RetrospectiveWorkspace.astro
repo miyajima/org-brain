@@ -1,0 +1,121 @@
+---
+import { createServerApi } from "../../lib/server-api";
+import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus, knowledgeLoopSourceType } from "../../lib/knowledge-loop-locale";
+import { localText } from "../../lib/operator-console";
+interface Props { tenantId:string; projectId:string; lang:"ja"|"en"|"zh"; }
+const {tenantId,projectId,lang}=Astro.props;
+const t=knowledgeLoopCopy(lang),text=localText(lang);
+const transport = createServerApi(Astro.request);
+const api = async (input:string|URL, init:RequestInit={}):Promise<Response> => {
+ try {return await transport(input,init);}
+ catch {return Response.json({ok:false,error:{code:"unavailable",message:text("通信できませんでした。入力を確認し、接続が戻ってから再度操作してください。", "The service could not be reached. Review your input and try again when connected.", "无法连接服务。请保留输入，连接恢复后重试。")}},{status:503});}
+};
+const form=Astro.request.method === "POST" ? await Astro.request.formData() : null;
+const value=(name:string,fallback="")=>String(form?.get(name) ?? fallback);
+let selectedId=value("session_id",Astro.url.searchParams.get("id") ?? "");
+
+const redirectAfterPost=(extra:Record<string,string>={})=>{
+ const target=new URL(Astro.url);
+ target.searchParams.set("saved","1");
+ for(const [key,value] of Object.entries(extra)) target.searchParams.set(key,value);
+ (Astro.locals as Record<string,unknown>).operatorPostRedirect=target.pathname+target.search;
+};
+let message="",error="";
+const capabilityResponse=await api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`);
+const capability:any=await capabilityResponse.json().catch(()=>null);
+const writable=capabilityResponse.ok && capability?.data?.retrospective?.writable === true;
+const manage=capabilityResponse.ok && capability?.data?.retrospective?.allowed_actions?.includes("manage") === true;
+const actionWritable=capabilityResponse.ok && capability?.data?.improvement_actions?.allowed_actions?.includes("manage") === true;
+if (!capabilityResponse.ok) error=text("操作権限を取得できませんでした。", "Permissions could not be loaded.", "无法加载操作权限。");
+const scopeError=text("選択中のプロジェクトの対象ではありません。", "This record is outside the selected project.", "此记录不属于所选项目。");
+const inProject=(entry:any)=>!projectId || entry?.project_id===projectId;
+let session:any=null;
+if (selectedId) {
+ const response=await api(`/api/v1/retrospectives/${encodeURIComponent(selectedId)}?tenant_id=${encodeURIComponent(tenantId)}`);
+ const payload:any=await response.json().catch(()=>null);
+ if (response.ok && inProject(payload?.data)) session=payload?.data;
+ else error ||= response.ok ? scopeError : payload?.error?.message ?? text("振り返りを取得できませんでした。", "The retrospective could not be loaded.", "无法加载复盘。");
+}
+const targetInProject=!projectId || !!session;
+if (form) {
+ const action=value("action");
+ const headers:Record<string,string>={"content-type":"application/json","x-csrf-token":value("csrf_token")};
+ let path="",method="POST",body:any;
+ if ((action === "start" || action === "schedule") && manage) {
+  const participant_group_id=value("participant_group_id").trim() || null;
+  path=action === "schedule" ? "/api/v1/retrospective-schedules" : "/api/v1/retrospectives";
+  body=action === "schedule" ? {tenant_id:tenantId,project_id:projectId,participant_group_id,cadence_days:Number(form.get("cadence_days")),next_run_at:Date.now()} : {tenant_id:tenantId,project_id:projectId,participant_group_id,title:value("title",t.retroTitle),participant_principals:[]};
+ } else if (action === "response" && writable && selectedId && targetInProject) {
+  path=`/api/v1/retrospectives/${encodeURIComponent(selectedId)}/items/${encodeURIComponent(value("item_id"))}/response`;
+  method="PUT";body={tenant_id:tenantId,decision:value("decision"),note:value("note").trim() || null};
+ } else if (action === "close" && manage && selectedId && targetInProject) {
+  path=`/api/v1/retrospectives/${encodeURIComponent(selectedId)}/close`;
+  headers["x-idempotency-key"]=value("idempotency_key");
+  body={tenant_id:tenantId,items:[...form.entries()].filter(([key])=>key.startsWith("result:")).map(([key,val])=>({item_id:key.slice(7),decision:String(val)})).filter(entry=>entry.item_id && entry.decision),acknowledge_unanswered:form.get("acknowledge_unanswered") === "on"};
+ }
+ if (!path) error ||= targetInProject ? t.readOnly : scopeError;
+ else {
+  const response=await api(path,{method,headers,body:JSON.stringify(body)});
+  const payload:any=await response.json().catch(()=>null);
+  if (!response.ok) error=knowledgeLoopError(lang,payload?.error?.code,payload?.error?.message ?? text("保存できませんでした。", "Could not save.", "无法保存。"));
+  else {
+   if (action === "start") selectedId=payload?.data?.id ?? "";
+   message=action === "close" ? text("結果を確定しました。", "Results finalized.", "结果已确认。") : text("保存しました。", "Saved.", "已保存。");
+   redirectAfterPost(selectedId ? {id:selectedId,...(action === "response" ? {item:value("next_index","0")} : {})} : {});
+  }
+ }
+}
+const [sessionResponse,scheduleResponse,groupsResponse]=await Promise.all([api(`/api/v1/retrospectives?tenant_id=${encodeURIComponent(tenantId)}`),api(`/api/v1/retrospective-schedules?tenant_id=${encodeURIComponent(tenantId)}`),api(`/api/v1/groups?tenant_id=${encodeURIComponent(tenantId)}`)]);
+const sessionPayload:any=await sessionResponse.json().catch(()=>null),schedulePayload:any=await scheduleResponse.json().catch(()=>null),groupsPayload:any=await groupsResponse.json().catch(()=>null);
+const sessions=Array.isArray(sessionPayload?.data)?sessionPayload.data.filter(inProject):[],schedules=Array.isArray(schedulePayload?.data)?schedulePayload.data.filter(inProject):[],groups=Array.isArray(groupsPayload?.data?.groups)?groupsPayload.data.groups:[];
+for (const [response,payload] of [[sessionResponse,sessionPayload],[scheduleResponse,schedulePayload],[groupsResponse,groupsPayload]] as const) if(!response.ok) error ||= payload?.error?.message ?? text("振り返りの情報を取得できませんでした。", "Retrospective data could not be loaded.", "无法加载复盘信息。");
+
+const failedResponseIndex=error && value("action")==="response" ? session?.items?.findIndex((entry:any)=>entry.id===value("item_id")) : -1;
+const requested=failedResponseIndex >= 0 ? failedResponseIndex : Number.parseInt(value("next_index",Astro.url.searchParams.get("item") ?? ""),10);
+const firstUnanswered=session?.items?.findIndex((item:any)=>!item.response) ?? 0;
+const index=Number.isInteger(requested) && requested>=0 && requested<(session?.items?.length ?? 0)?requested:Math.max(0,firstUnanswered);
+const item=session?.items?.[index];
+const hasPrevious=index > 0, hasNext=index < (session?.items?.length ?? 0) - 1;
+const query=new URLSearchParams({tenant_id:tenantId,project_id:projectId,lang,section:"retrospectives"});
+const href=(id="",itemIndex?:number)=>{const q=new URLSearchParams(query);if(id)q.set("id",id);if(itemIndex!==undefined)q.set("item",String(itemIndex));return `/settings?${q}`;};
+const evidence=(value:unknown)=>{const raw=typeof value === "string"?value:value && typeof value === "object" && typeof (value as any).url === "string"?(value as any).url:String(value ?? "");try{const url=new URL(raw);return {label:raw,href:["http:","https:"].includes(url.protocol)?raw:null};}catch{return {label:raw,href:null};}};
+const canClose=manage && session?.status === "open" && session?.viewer?.can_close;
+---
+<div data-extension-workspace="retrospectives">
+ {message && <p class="op-notice" role="status">{message}</p>}{error && <p class="op-notice" data-tone="error" role="alert">{error}</p>}{!writable && <p class="op-notice">{t.readOnly}</p>}
+ {session ? <>
+ <section class="op-panel"><div class="op-panel-heading"><div><a href={href()}>← {t.history}</a><h3>{session.title}</h3><p>{t.answered} {session.progress?.received_responses ?? "—"} / {session.progress?.eligible_responses ?? "—"}</p></div><span class="op-badge" data-state={session.status}>{knowledgeLoopStatus(lang,session.status)}</span></div>
+ {item ? <div class="op-panel-body op-retro-detail"><p class="op-small">{index+1} / {session.items.length}</p><h3>{item.title}</h3><p>{item.statement}</p><div><h4>{t.reason}</h4><p>{item.rationale || "—"}</p></div>
+ {item.parent_decision_id && <a href={`/knowledge?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&lang=${lang}&kind=decision&id=${encodeURIComponent(item.parent_decision_id)}`}>{text("元の判断を開く", "Open source decision", "查看原始决策")} ↗</a>}
+ {item.evidence?.length>0 && <ul>{item.evidence.map((entry:unknown)=>{const resolved=evidence(entry);return <li>{resolved.href?<a href={resolved.href} target="_blank" rel="noreferrer">{resolved.label} ↗</a>:resolved.label}</li>;})}</ul>}
+ {session.status === "open" && writable && <form method="post" class="op-form"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="response"/><input type="hidden" name="session_id" value={selectedId}/><input type="hidden" name="item_id" value={item.id}/><input type="hidden" name="next_index" value={Math.min(index+1,session.items.length-1)}/><fieldset><legend>{t.retroTitle}</legend><div class="op-actions">{[["adopt",t.adopt],["do_not_adopt",t.reject],["defer",t.defer]].map(([v,label])=><label><input type="radio" name="decision" value={v} checked={(error && value("item_id")===item.id?value("decision"):item.response?.decision)===v} required/>{label}</label>)}</div></fieldset><label>{text("メモ", "Note", "备注")}<textarea name="note">{error && value("item_id")===item.id?value("note"):item.response?.note ?? ""}</textarea></label><div><button type="submit">{t.saveDecision}</button></div></form>}
+ <nav class="op-actions" aria-label={text("振り返りの項目", "Retrospective items", "复盘项目")}>{hasPrevious && <a class="op-button op-secondary" href={href(selectedId,index-1)}>{t.back}</a>}{hasNext && <a class="op-button op-secondary" href={href(selectedId,index+1)}>{t.next}</a>}</nav>
+ </div>:<p class="op-empty">{text("確認する項目はありません。", "No items to review.", "没有待查看项目。")}</p>}</section>
+ {(session.viewer?.can_close || manage) && <section class="op-panel"><div class="op-panel-heading"><div><h3>{t.adminReview}</h3><p>{t.unanswered}: {session.progress?.unanswered_responses ?? "—"}</p></div></div><div class="op-panel-body">
+ {manage && !session.viewer?.can_close && session.status === "open" && <p class="op-notice">{t.finalizerOnly}</p>}
+ <form method={canClose ? "post" : "get"} class="op-form" data-op-native-confirm={canClose ? `${session.title}: ${t.close}` : undefined} data-retro-close={canClose || undefined}>
+ {canClose && <><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="close"/><input type="hidden" name="session_id" value={selectedId}/><input type="hidden" name="idempotency_key"/></>}
+ {(session.items ?? []).map((entry:any)=>{const summary=entry.response_summary ?? {};const actionQuery=new URLSearchParams(query);actionQuery.set("section","improvements");actionQuery.set("retrospective_session_id",selectedId);actionQuery.set("retrospective_item_id",entry.id);actionQuery.set("source_title",entry.title);return <article class="op-retro-result"><p class="op-small">{knowledgeLoopSourceType(lang,entry.source_type)}</p><h4>{entry.title}</h4><p>{entry.statement}</p><dl>{[[t.participants,summary.eligible],[t.answered,summary.received],[t.adopt,summary.adopt],[t.reject,summary.do_not_adopt],[t.defer,summary.defer]].map(([label,count])=><div><dt>{label}</dt><dd>{count ?? "—"}</dd></div>)}</dl>{actionWritable && <a href={`/settings?${actionQuery}`}>{t.addAction}</a>}{canClose && <label>{t.chooseResult}<select name={`result:${entry.id}`} required><option value="">—</option>{[["adopted",t.adopt],["not_adopted",t.reject],["deferred",t.defer]].map(([v,label])=><option value={v} selected={value(`result:${entry.id}`)===v}>{label}</option>)}</select></label>}</article>;})}
+ {canClose && <>{(session.progress?.unanswered_responses ?? 0)>0 && <label><input type="checkbox" name="acknowledge_unanswered" checked={form?.get("acknowledge_unanswered")==="on"} required/>{t.acknowledge}</label>}<div><button type="submit">{t.close}</button></div></>}
+ </form></div></section>}
+ </>:<>
+ {manage && <section class="op-panel"><div class="op-panel-heading"><h3>{t.startNow}</h3></div><form method="post" class="op-form op-panel-body"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="start"/><label>{t.title}<input name="title" value={value("title",t.retroTitle)} required/></label><label>{t.group}<select name="participant_group_id"><option value="">{t.solo}</option>{groups.map((group:any)=><option value={group.id} selected={value("participant_group_id")===group.id}>{group.name}</option>)}</select></label><div><button type="submit">{t.start}</button></div></form></section>}
+ <section class="op-panel"><div class="op-panel-heading"><h3>{t.enableSchedule}</h3></div><div class="op-panel-body">{manage && <form method="post" class="op-form"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="schedule"/><div class="op-form-grid"><label>{t.group}<select name="participant_group_id"><option value="">{t.solo}</option>{groups.map((group:any)=><option value={group.id} selected={value("participant_group_id")===group.id}>{group.name}</option>)}</select></label><label>{t.cadence}<select name="cadence_days"><option value="7" selected={value("cadence_days","7")==="7"}>{t.weekly}</option><option value="14" selected={value("cadence_days")==="14"}>{t.biweekly}</option></select></label></div><div><button type="submit">{t.enableSchedule}</button></div></form>}{schedules.map((schedule:any)=><p class="op-muted">{schedule.cadence_days} · {knowledgeLoopStatus(lang,schedule.status)} · {new Date(schedule.next_run_at).toLocaleString(lang)}</p>)}{scheduleResponse.ok && !schedules.length && <p class="op-muted">{text("定期実施の設定はありません。", "No schedules are configured.", "尚未设置定期复盘。")}</p>}</div></section>
+ <section class="op-panel"><div class="op-panel-heading"><h3>{t.history}</h3></div>{sessions.map((entry:any)=><a class="op-row" href={href(entry.id)}><div class="op-row-main"><strong>{entry.title}</strong><p>{new Date(entry.opened_at).toLocaleString(lang)} · {t.participants}: {entry.participant_count ?? "—"} · {t.answered}: {entry.received_response_count ?? "—"} / {entry.eligible_response_count ?? "—"}</p></div><span class="op-badge" data-state={entry.status}>{knowledgeLoopStatus(lang,entry.status)}</span></a>)}{sessionResponse.ok && !sessions.length && <p class="op-empty">{text("振り返りの履歴はありません。", "No retrospective history yet.", "暂无复盘历史。")}</p>}</section>
+ </>}
+</div>
+<script>
+ document.querySelectorAll<HTMLFormElement>("[data-retro-close]").forEach(form=>{
+  form.addEventListener("submit",()=>{
+   const input=form.querySelector<HTMLInputElement>('[name="idempotency_key"]')!;
+   const fields=[...new FormData(form).entries()].filter(([name])=>!["csrf_token","idempotency_key"].includes(name));
+   const payload=JSON.stringify(fields.sort(([a],[b])=>a.localeCompare(b)));
+   const storageKey=`orgbrain:retrospective-close:${location.pathname}:${new URLSearchParams(location.search).get("tenant_id")}:${form.querySelector<HTMLInputElement>('[name="session_id"]')?.value}`;
+   let previous:{payload:string;key:string}|null=null;
+   try {previous=JSON.parse(sessionStorage.getItem(storageKey) ?? "null");}catch {/* Start a new operation after invalid local state. */}
+   const key=previous?.payload===payload?previous.key:crypto.randomUUID();
+   input.value=key;sessionStorage.setItem(storageKey,JSON.stringify({payload,key}));
+  });
+ });
+</script>
+<style>.op-retro-detail{display:grid;gap:18px;overflow-wrap:anywhere}.op-retro-detail h4,.op-retro-result h4{font-size:14px;margin:0 0 8px}.op-retro-detail fieldset{border:1px solid var(--op-line);padding:16px}.op-retro-detail input[type=radio]{width:18px;min-height:18px}.op-retro-detail label:has(input[type=radio]){display:flex;align-items:center}.op-retro-result{border-top:1px solid var(--op-line);padding:18px 0;display:grid;gap:10px}.op-retro-result dl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.op-retro-result dt{font-size:12px;color:var(--op-muted)}.op-retro-result dd{margin:3px 0 0}.op-retro-detail ul{margin:0;padding-left:20px;overflow-wrap:anywhere}@media(max-width:760px){.op-retro-result dl{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>

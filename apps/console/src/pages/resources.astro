@@ -62,7 +62,7 @@ const copy = {
   zh: { eyebrow: "决策资料", title: "资料与成果", subtitle: "从资料收集决策与理由，或从决策探索实现、输出和验证成果。", search: "搜索资料", empty: "请输入资料、URI、结论或理由中的关键词。", decisions: "相关决策与理由", artifacts: "决策成果", noResults: "没有可读取的已确认结果。", open: "打开资料", role: "角色", version: "固定版本", back: "返回决策路径", admin: "管理员操作", localReference: "本地引用", browseManage: "搜索和管理其他资料", errorTitle: "部分资料信息不可用", tenant: "租户", project: "项目" }
 }[locale];
 const decisionSourceId = decisionRef.includes(":") ? decisionRef.slice(decisionRef.indexOf(":") + 1) : decisionRef;
-const backToTraceHref = `/memories/constellation?tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&scope=org&selected=${encodeURIComponent(decisionSourceId)}&trace_step=artifact&lang=${locale}`;
+const backToTraceHref = `/memories/constellation?advanced=1&tenant_id=${encodeURIComponent(tenantId)}&project_id=${encodeURIComponent(projectId)}&scope=org&selected=${encodeURIComponent(decisionSourceId)}&trace_step=artifact&lang=${locale}`;
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
   const response = await serverApi(new URL(path, url), init);

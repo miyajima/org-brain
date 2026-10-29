@@ -176,9 +176,9 @@ test("completes the installation with keyboard input only", async ({ page }, tes
   await page.goto(`/knowledge-packs/onboarding?tenant_id=${tenantId}&lang=ja`);
 
   await page.keyboard.press("Tab");
-  await expect(page.locator(".console-skip-link")).toBeFocused();
+  await expect(page.locator(".op-skip")).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.locator("#console-main")).toBeFocused();
+  await expect(page.locator("#main")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "セットアップを開始" })).toBeFocused();
   await page.keyboard.press("Enter");

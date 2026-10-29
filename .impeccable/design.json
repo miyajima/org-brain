@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T04:31:55.541801+00:00",
+  "title": "Design System: OrgBrain Console",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "青",
+        "canonical": "#0071e3",
+        "tonalRamp": [
+          "oklch(15% 0.0527 256.16)",
+          "oklch(25% 0.0879 256.16)",
+          "oklch(35% 0.1230 256.16)",
+          "oklch(45% 0.1582 256.16)",
+          "oklch(55% 0.1933 256.16)",
+          "oklch(65% 0.1933 256.16)",
+          "oklch(80% 0.1105 256.16)",
+          "oklch(95% 0.0276 256.16)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "濃い青",
+        "canonical": "#0066cc",
+        "tonalRamp": [
+          "oklch(15% 0.0483 255.83)",
+          "oklch(25% 0.0805 255.83)",
+          "oklch(35% 0.1127 255.83)",
+          "oklch(45% 0.1449 255.83)",
+          "oklch(55% 0.1771 255.83)",
+          "oklch(65% 0.1771 255.83)",
+          "oklch(80% 0.1012 255.83)",
+          "oklch(95% 0.0253 255.83)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "濃い本文色",
+        "canonical": "#1d1d1f",
+        "tonalRamp": [
+          "oklch(15% 0.0010 286.10)",
+          "oklch(25% 0.0017 286.10)",
+          "oklch(35% 0.0024 286.10)",
+          "oklch(45% 0.0031 286.10)",
+          "oklch(55% 0.0038 286.10)",
+          "oklch(65% 0.0038 286.10)",
+          "oklch(80% 0.0022 286.10)",
+          "oklch(95% 0.0005 286.10)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "補助文字の灰色",
+        "canonical": "#62626a",
+        "tonalRamp": [
+          "oklch(15% 0.0034 285.93)",
+          "oklch(25% 0.0057 285.93)",
+          "oklch(35% 0.0080 285.93)",
+          "oklch(45% 0.0103 285.93)",
+          "oklch(55% 0.0126 285.93)",
+          "oklch(65% 0.0126 285.93)",
+          "oklch(80% 0.0072 285.93)",
+          "oklch(95% 0.0018 285.93)"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "薄い背景色",
+        "canonical": "#f5f5f7",
+        "tonalRamp": [
+          "oklch(15% 0.0007 286.35)",
+          "oklch(25% 0.0012 286.35)",
+          "oklch(35% 0.0017 286.35)",
+          "oklch(45% 0.0022 286.35)",
+          "oklch(55% 0.0027 286.35)",
+          "oklch(65% 0.0027 286.35)",
+          "oklch(80% 0.0015 286.35)",
+          "oklch(95% 0.0004 286.35)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "白い面",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(25% 0.0000 89.88)",
+          "oklch(35% 0.0000 89.88)",
+          "oklch(45% 0.0000 89.88)",
+          "oklch(55% 0.0000 89.88)",
+          "oklch(65% 0.0000 89.88)",
+          "oklch(80% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "境界の灰色",
+        "canonical": "#dcdce1",
+        "tonalRamp": [
+          "oklch(15% 0.0018 286.26)",
+          "oklch(25% 0.0031 286.26)",
+          "oklch(35% 0.0043 286.26)",
+          "oklch(45% 0.0055 286.26)",
+          "oklch(55% 0.0068 286.26)",
+          "oklch(65% 0.0068 286.26)",
+          "oklch(80% 0.0039 286.26)",
+          "oklch(95% 0.0010 286.26)"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "レールの灰色",
+        "canonical": "#eeeef1",
+        "tonalRamp": [
+          "oklch(15% 0.0011 286.32)",
+          "oklch(25% 0.0018 286.32)",
+          "oklch(35% 0.0025 286.32)",
+          "oklch(45% 0.0033 286.32)",
+          "oklch(55% 0.0040 286.32)",
+          "oklch(65% 0.0040 286.32)",
+          "oklch(80% 0.0023 286.32)",
+          "oklch(95% 0.0006 286.32)"
+        ]
+      },
+      "selected": {
+        "role": "primary",
+        "displayName": "選択面の薄い青",
+        "canonical": "#e8f2ff",
+        "tonalRamp": [
+          "oklch(15% 0.0056 254.91)",
+          "oklch(25% 0.0093 254.91)",
+          "oklch(35% 0.0131 254.91)",
+          "oklch(45% 0.0168 254.91)",
+          "oklch(55% 0.0205 254.91)",
+          "oklch(65% 0.0205 254.91)",
+          "oklch(80% 0.0117 254.91)",
+          "oklch(95% 0.0029 254.91)"
+        ]
+      },
+      "secondary-text": {
+        "role": "neutral",
+        "displayName": "補助操作の文字色",
+        "canonical": "#333336",
+        "tonalRamp": [
+          "oklch(15% 0.0014 286.10)",
+          "oklch(25% 0.0024 286.10)",
+          "oklch(35% 0.0033 286.10)",
+          "oklch(45% 0.0043 286.10)",
+          "oklch(55% 0.0053 286.10)",
+          "oklch(65% 0.0053 286.10)",
+          "oklch(80% 0.0030 286.10)",
+          "oklch(95% 0.0008 286.10)"
+        ]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "危険操作の赤",
+        "canonical": "#a82432",
+        "tonalRamp": [
+          "oklch(15% 0.0456 21.00)",
+          "oklch(25% 0.0759 21.00)",
+          "oklch(35% 0.1063 21.00)",
+          "oklch(45% 0.1367 21.00)",
+          "oklch(55% 0.1670 21.00)",
+          "oklch(65% 0.1670 21.00)",
+          "oklch(80% 0.0954 21.00)",
+          "oklch(95% 0.0239 21.00)"
+        ]
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "リンクの青",
+        "canonical": "#0066cc",
+        "tonalRamp": [
+          "oklch(15% 0.0483 255.83)",
+          "oklch(25% 0.0805 255.83)",
+          "oklch(35% 0.1127 255.83)",
+          "oklch(45% 0.1449 255.83)",
+          "oklch(55% 0.1771 255.83)",
+          "oklch(65% 0.1771 255.83)",
+          "oklch(80% 0.1012 255.83)",
+          "oklch(95% 0.0253 255.83)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "主見出し",
+        "purpose": "ページの主見出し。"
+      },
+      "title": {
+        "displayName": "パネル見出し",
+        "purpose": "情報のまとまりを識別する見出し。"
+      },
+      "body": {
+        "displayName": "本文",
+        "purpose": "日本語を含む基本文字。"
+      },
+      "button": {
+        "displayName": "操作文字",
+        "purpose": "ボタンの操作を識別する文字。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "confirm-dialog",
+        "value": "0 15px 50px #1d1d1f29",
+        "purpose": "確認ダイアログの外側の影。"
+      },
+      {
+        "name": "selected-row",
+        "value": "inset 0 0 0 1px #87b4e5",
+        "purpose": "選択した知識行の内側線。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "background .16s ease-out",
+        "purpose": "ボタンのホバーによる背景変化。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "prefers-reduced-motionではtransitionを無効にする。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-min",
+        "value": "1600px"
+      },
+      {
+        "name": "compact-max",
+        "value": "1100px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主要な保存・実行操作。",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\">変更を保存</button>",
+      "css": ".ds-btn-primary{font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;font-size:16px;line-height:1.4;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:9px 17px;border:1px solid transparent;border-radius:7px;cursor:pointer;transition:background .16s ease-out;text-decoration:none;background:var(--op-accent,#0071e3);color:#fff;}.ds-btn-primary:hover{background:#0066cc;}.ds-btn-primary:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}.ds-btn-primary:disabled{opacity:.55;cursor:wait;}@media(prefers-reduced-motion:reduce){.ds-btn-primary{transition:none;}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "補助操作とキャンセル。",
+      "html": "<button type=\"button\" class=\"ds-btn-secondary\">キャンセル</button>",
+      "css": ".ds-btn-secondary{font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;font-size:16px;line-height:1.4;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:9px 17px;border:1px solid transparent;border-radius:7px;cursor:pointer;transition:background .16s ease-out;text-decoration:none;background:#fff;color:#333336;border-color:#bfbfc5;}.ds-btn-secondary:hover{background:#f5f5f7;}.ds-btn-secondary:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}.ds-btn-secondary:disabled{opacity:.55;cursor:wait;}@media(prefers-reduced-motion:reduce){.ds-btn-secondary{transition:none;}}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "表示範囲の切替など軽い操作。",
+      "html": "<button type=\"button\" class=\"ds-btn-quiet\">切替</button>",
+      "css": ".ds-btn-quiet{font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;font-size:16px;line-height:1.4;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:9px 17px;border:1px solid transparent;border-radius:7px;cursor:pointer;transition:background .16s ease-out;text-decoration:none;background:transparent;color:#515154;min-width:44px;padding:8px 10px;}.ds-btn-quiet:hover{background:#eeeef1;color:#003e7e;}.ds-btn-quiet:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}.ds-btn-quiet:disabled{opacity:.55;cursor:wait;}@media(prefers-reduced-motion:reduce){.ds-btn-quiet{transition:none;}}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "利用停止など影響を確認する操作。",
+      "html": "<button type=\"button\" class=\"ds-btn-danger\">利用を停止</button>",
+      "css": ".ds-btn-danger{font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;font-size:16px;line-height:1.4;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:9px 17px;border:1px solid transparent;border-radius:7px;cursor:pointer;transition:background .16s ease-out;text-decoration:none;background:#fff;color:var(--op-danger,#a82432);border-color:#dfb7bd;}.ds-btn-danger:hover{background:#fff0f1;}.ds-btn-danger:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}.ds-btn-danger:disabled{opacity:.55;cursor:wait;}@media(prefers-reduced-motion:reduce){.ds-btn-danger{transition:none;}}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "ラベル付きの検索入力欄。",
+      "html": "<label class=\"ds-field\">知識を検索<input class=\"ds-input\" type=\"search\" placeholder=\"名前や内容に含まれる言葉\" /></label>",
+      "css": ".ds-field{display:grid;gap:7px;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;font-size:13px;color:var(--op-muted,#62626a);}.ds-input{font:inherit;font-size:16px;min-height:44px;min-width:0;max-width:100%;border:1px solid #b8b8c0;border-radius:6px;background:#fff;color:#1d1d1f;padding:10px 12px;caret-color:var(--op-accent,#0071e3);}.ds-input::placeholder{color:#686870;opacity:1;}.ds-input:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}"
+    },
+    {
+      "name": "Primary Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "PCでは常設レール、モバイルでは上部の3項目ナビゲーション。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"メインナビゲーション\"><a class=\"ds-nav-link\" href=\"/\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z\"/></svg>ホーム</a><a class=\"ds-nav-link\" href=\"/knowledge\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 3h12v18H4zM8 7h4M8 11h4M20 5v16\"/></svg>知識</a><a class=\"ds-nav-link\" href=\"/settings\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6\"/></svg>管理</a></nav>",
+      "css": ".ds-nav{font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;display:grid;gap:6px;width:214px;background:#eeeef1;padding:30px 18px 20px;border-right:1px solid var(--op-line,#dcdce1);}.ds-nav-link{display:flex;gap:13px;align-items:center;min-height:46px;padding:11px 14px;text-decoration:none;font-size:15px;font-weight:550;color:#515154;border-radius:7px;}.ds-nav-link:hover{background:#e5e5ea;}.ds-nav-link[aria-current=page]{background:#e8f2ff;color:#0066cc;font-weight:700;}.ds-nav-link:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}@media(max-width:760px){.ds-nav{display:flex;width:auto;gap:2px;padding:9px 16px;border-right:0;border-bottom:1px solid #dcdce1;}.ds-nav-link{font-size:12px;gap:7px;padding:10px;min-height:44px;}.ds-nav-link svg{width:17px;height:17px;}}@media(forced-colors:active){.ds-nav-link[aria-current=page]{outline:2px solid Highlight;}}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "文字と色で確認・警告・失敗を区別する状態表示。",
+      "html": "<div class=\"ds-badges\"><span class=\"ds-badge\">記録あり</span><span class=\"ds-badge\" data-state=\"confirmed\">確認済み</span><span class=\"ds-badge\" data-state=\"unverified\">未確認</span><span class=\"ds-badge\" data-state=\"failed\">失敗</span></div>",
+      "css": ".ds-badges{display:flex;flex-wrap:wrap;gap:8px;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;}.ds-badge{font-size:11px;font-weight:600;line-height:1.5;padding:3px 7px;border-radius:4px;background:#eeeef1;color:#515154;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}.ds-badge[data-state=confirmed]{background:#e5f3ee;color:#176044;}.ds-badge[data-state=unverified]{background:#fff2d9;color:#825307;}.ds-badge[data-state=failed]{background:#fae9eb;color:#982733;}@media(forced-colors:active){.ds-badge{border:1px solid CanvasText;}}"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "白い面と細い境界線で情報をまとめるパネル。",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-panel-head\"><h2>根拠</h2></div><div class=\"ds-panel-body\"><p>登録された根拠と、その確認状態を表示します。</p></div></section>",
+      "css": ".ds-panel{font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;background:#fff;border:1px solid var(--op-line,#dcdce1);border-radius:10px;overflow:hidden;color:#1d1d1f;}.ds-panel-head{padding:22px 24px 18px;}.ds-panel-head h2{margin:0;font-size:18px;font-weight:650;line-height:1.45;}.ds-panel-body{padding:0 24px 24px;font-size:14px;line-height:1.6;}.ds-panel-body p{margin:0;}"
+    },
+    {
+      "name": "Selected Knowledge Row",
+      "kind": "custom",
+      "description": "選択中の知識を、背景と内側線で識別する一覧行。",
+      "html": "<a class=\"ds-knowledge-row\" href=\"/knowledge\" aria-current=\"true\"><strong>確認する知識のタイトル</strong><p>知識の要約を表示します。</p><div class=\"ds-row-meta\">確認状態 · プロジェクト · 更新日時</div></a>",
+      "css": ".ds-knowledge-row{display:block;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;padding:18px;border-bottom:1px solid #e5e5ea;text-decoration:none;color:#1d1d1f;border-radius:9px;}.ds-knowledge-row:hover{background:#f8f8fa;}.ds-knowledge-row[aria-current=true]{background:#f0f6ff;box-shadow:inset 0 0 0 1px #87b4e5;}.ds-knowledge-row strong{font-size:14px;font-weight:650;line-height:1.6;display:block;overflow-wrap:anywhere;}.ds-knowledge-row p{font-size:12px;color:#62626a;margin:7px 0 0;line-height:1.6;}.ds-row-meta{margin-top:12px;font-size:11px;color:#62626a;}.ds-knowledge-row:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}@media(forced-colors:active){.ds-knowledge-row[aria-current=true]{outline:2px solid Highlight;}}"
+    },
+    {
+      "name": "Detail Tabs",
+      "kind": "nav",
+      "description": "選択した知識の内容・根拠・活用履歴・共有を切り替える。",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"知識の詳細表示\"><a href=\"#content\" aria-current=\"page\">内容</a><a href=\"#evidence\">根拠</a><a href=\"#usage\">活用履歴</a><a href=\"#sharing\">共有</a></nav>",
+      "css": ".ds-tabs{display:flex;gap:24px;border-bottom:1px solid #dcdce1;overflow-x:auto;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Noto Sans JP\",\"Yu Gothic\",sans-serif;}.ds-tabs a{font-size:14px;padding:12px 0;min-height:46px;white-space:nowrap;display:inline-flex;align-items:center;text-decoration:none;border-bottom:2px solid transparent;color:#62626a;}.ds-tabs a[aria-current=page]{border-color:#0071e3;color:#0066cc;font-weight:650;}.ds-tabs a:focus-visible{outline:3px solid var(--op-focus,#0071e3);outline-offset:3px;}@media(forced-colors:active){.ds-tabs a[aria-current=page]{outline:2px solid Highlight;}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "蓄積された知識と実際の利用を確認できる",
+    "overview": "運用担当者が内容を読み、状態を見分け、必要な箇所を整えるための視覚体系。白と薄い灰色の面、濃い文字、抑えた青のアクセントを使う。面は平坦に保ち、罫線、余白、文字の強弱でまとまりを示す。\n\nこの文書は現在の `apps/console/src/styles/operator.css` とOperatorLayoutを記録する。旧画面の黒い背景、ガラス状のレール、浮き上がるカードは、新しい主要画面の視覚基準にしない。業務パック・指標・振り返り・改善は新しい管理画面内に統合する。旧専用導入画面、graph、labなどの補助画面にも共通シェルとスタイルを適用するが、内部構成まで統一済みとは扱わない。",
+    "keyCharacteristics": [
+      "白・灰色の平坦な面と濃い文字。",
+      "青による主要操作と選択状態の識別。",
+      "日本語の読みやすさと、見える操作状態。",
+      "PCの常設ナビゲーションと、モバイルの上部ナビゲーション。"
+    ],
+    "rules": [],
+    "dos": [
+      "Do 白・灰色の面、濃い文字、青の主要操作を共通して使う。",
+      "Do 選択、警告、失敗を文字と視覚状態の両方で示す。",
+      "Do 通常のボタンと入力欄に44px以上の最小高さを確保する。",
+      "Do 長文を折り返し、本文の行幅と行間を維持する。"
+    ],
+    "donts": [
+      "Don't 旧画面の黒い背景やガラス状のレールを新しい主要画面へ戻す。",
+      "Don't 通常のパネルに装飾的な影やグラデーションを追加する。",
+      "Don't 色だけで状態や操作の意味を伝える。",
+      "Don't 共通スタイルの適用を、専門フォームの構成まで統一済みと表現する。"
+    ]
+  }
+}

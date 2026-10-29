@@ -1,0 +1,21 @@
+---
+import ApiForm from "./ApiForm.astro";
+import { apiScope, readConsoleData, localText, asRows, operatorHref, operatorRequestUrl, type OperatorLocale } from "../../lib/operator-console";
+interface Props { decisionId:string; tenantId:string; projectId:string; lang:OperatorLocale; }
+const {decisionId,tenantId,projectId,lang}=Astro.props;
+const t=localText(lang), url=operatorRequestUrl(Astro.request);
+const scope=apiScope(url);
+const [trace,providers]=await Promise.all([
+ readConsoleData(Astro.request,`/api/v1/decisions/${encodeURIComponent(decisionId)}/trace?${scope}&node_limit=150&edge_limit=300&include_inferred=false`),
+ readConsoleData(Astro.request,`/api/v1/skill-providers?${scope}`)
+]);
+const decision=trace.data?.decision;
+const available=asRows(providers.data,"providers").filter(item=>item.available===true).map(item=>[String(item.provider),String(item.provider)] as [string,string]);
+---
+<section class="op-panel"><div class="op-panel-heading"><h3>{t("選択した判断からスキルを作る", "Create a skill from the selected decision", "从所选决策创建技能")}</h3></div><div class="op-panel-body">{trace.error||providers.error?<p class="op-notice" data-tone="error">{trace.error||providers.error}</p>:!decision?.version_hash||!available.length?<p class="op-muted">{t("元にする版または生成サービスを確認できません。判断の詳細と接続設定を確認してください。", "The source version or generation service is unavailable. Check the decision and connection settings.", "无法确认源版本或生成服务，请检查决策详情与连接设置。")}</p>:<><p class="op-prose">{decision.title}</p><p class="op-muted" style="margin:12px 0 22px">{t("この判断の現在の版と、選択した根拠だけを使います。生成は明示的な操作で開始し、最初は非公開の下書きになります。", "Generation uses this decision’s current version and selected evidence. It starts only when requested and produces a private draft.", "仅使用此决策的当前版本及所选依据。明确操作后才开始生成，并先创建私有草稿。")}</p><ApiForm endpoint="/api/v1/skills/generate" hidden={{tenant_id:tenantId,project_id:projectId||null,source_decision_id:decisionId,sources:[{source_type:"decision_memory",source_id:decisionId,version_hash:decision.version_hash}]}} submit={t("非公開の下書きを生成", "Generate private draft", "生成私有草稿")} formKind="skill-generation" responseMode="generation" fields={[
+ {name:"name",label:t("スキルの名前", "Skill name", "技能名称"),value:decision.title,required:true},
+ {name:"description",label:t("用途", "Purpose", "用途"),value:decision.rationale,required:true},
+ {name:"instructions",label:t("作業手順に含める内容", "Instructions for the procedure", "流程生成要求"),type:"textarea",required:true},
+ {name:"provider",label:t("生成サービス", "Provider", "生成服务"),type:"select",value:available[0][0],options:available},
+ {name:"model",label:t("利用するモデル", "Model", "模型"),required:true}
+ ]}><div data-generation-result hidden aria-live="polite"><p class="op-muted">{t("生成処理を受け付けました。完了と公開状態は、処理結果とスキルの詳細で確認できます。", "Generation was accepted. Check processing results and the skill details for completion and publication status.", "已受理生成请求。请在处理结果及技能详情中确认完成与发布状态。")}</p><div class="op-actions"><a data-generation-asset href={operatorHref(url,"/settings",{section:"skills"})}>{t("スキルの状態を確認", "Check skill status", "查看技能状态")}</a><a data-generation-task href={operatorHref(url,"/settings",{section:"operations"})}>{t("処理結果を確認", "Check processing", "查看处理结果")}</a></div></div></ApiForm></>}</div></section>
