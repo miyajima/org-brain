@@ -1099,6 +1099,32 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  // Operator-console fixtures use the same public contracts as the API.
+  if (url.searchParams.get("tenant_id") === "inventory-e2e" && ["/v1/agents","/v1/skills"].includes(path) && request.method === "GET") {
+    const agents=path.endsWith("agents"), offset=Number(url.searchParams.get("offset")||0),limit=Number(url.searchParams.get("limit")||25),q=(url.searchParams.get("q")||"").toLowerCase();
+    const entries=Array.from({length:31},(_,index)=>agents?{...consoleAgent,id:`agent-${index+1}`,name:`Agent ${index+1}`}:{...consoleSkill,id:`skill-${index+1}`,name:`Skill ${index+1}`}).filter(item=>!q||item.name.toLowerCase().includes(q));
+    const items=entries.slice(offset,offset+limit),more=offset+limit<entries.length;
+    json(response,200,ok({items,has_more:more,next_offset:more?offset+items.length:null,truncated:more}));return;
+  }
+  const inventoryDetail=path.match(/^\/v1\/(agents|skills)\/(agent|skill)-(\d+)$/);
+  if(url.searchParams.get("tenant_id")==="inventory-e2e"&&inventoryDetail&&request.method==="GET") {
+    const number=Number(inventoryDetail[3]);
+    json(response,200,ok(inventoryDetail[1]==="agents"?{agent:{...consoleAgent,id:`agent-${number}`,name:`Agent ${number}`},loadout:null,bindings:[],can_replace_bindings:true}:{asset:{...consoleSkill,id:`skill-${number}`,name:`Skill ${number}`},versions:[]}));return;
+  }
+  if (path === "/v1/resources/search" && request.method === "POST") {
+    const body = await readJson(request);
+    json(response, 200, ok({items:[{id:"resource-e2e", project_id:body.project_id||null, resource_kind:"document",canonical_uri:"https://example.com/acl",title:"ACL design note",source_system:"e2e",media_type:"text/plain",current_version_id:"v1",lifecycle_state:"active",updated_at:now}],coverage:{truncated:false}}));
+    return;
+  }
+  if (path === "/v1/resources/resource-e2e/decisions" && request.method === "GET") {
+    json(response,200,ok({resource:{id:"resource-e2e",title:"ACL design note",canonical_uri:"https://example.com/acl",project_id:"org-brain",lifecycle_state:"active",updated_at:now},decisions:[]})); return;
+  }
+  if (path === "/v1/memory-use-contexts" && request.method === "GET") {
+    json(response,200,ok({items:[{id:"use-e2e",task_id:"task-e2e",created_at:now,verification_state:"partial",live:true,stages:{retrieved:true,adopted:true,executed:false,outcome_confirmed:false},context:{task:"Review access controls",target:"memory",constraints:"ACL first",conditions:"local fixture"},evidence:[],evaluations:[]}],next_cursor:null}));return;
+  }
+  if (path === "/v1/mcp-client-installations" && request.method === "GET") {
+    json(response,200,ok({installations:[]}));return;
+  }
   if (path === "/v1/capabilities" && request.method === "GET") {
     json(response, 200, ok({ domain_packs: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "install" }, domain_metrics: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on" }, domain_workspaces: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on" }, knowledge_pack_onboarding: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, organization_dashboard: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, metric_import: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, retrospective: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, improvement_actions: { enabled: url.searchParams.get("tenant_id") !== "features-off", mode: "on", writable: url.searchParams.get("tenant_id") !== "preview-readonly", allowed_actions: url.searchParams.get("tenant_id") !== "preview-readonly" ? ["create", "update", "manage"] : [] }, pack_builder: { enabled: false, href: null, edition: "enterprise" } }));
     return;
@@ -1132,7 +1158,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/retrospectives" && request.method === "GET") {
-    json(response, 200, ok([{ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, item_count: 1, participant_count: 2, eligible_response_count: 2, received_response_count: 1 }]));
+    json(response, 200, ok([{ id: "retro-e2e", project_id: "org-brain", title: "CI decision review", status: "open", opened_at: now, item_count: 1, participant_count: 2, eligible_response_count: 2, received_response_count: 1 }, ...(url.searchParams.get("tenant_id") === "operator-scope" ? [{id:"retro-other",project_id:"other-project",title:"Other project review",status:"open",opened_at:now,item_count:1}] : [])]));
     return;
   }
   if (path === "/v1/retrospectives" && request.method === "POST") {
@@ -1140,22 +1166,22 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/retrospective-schedules" && request.method === "GET") {
-    json(response, 200, ok([{ id: "retro-schedule-e2e", cadence_days: 14, status: "active", next_run_at: now + 1209600000 }]));
+    json(response, 200, ok([{ id: "retro-schedule-e2e", project_id:"org-brain", cadence_days: 14, status: "active", next_run_at: now + 1209600000 }, ...(url.searchParams.get("tenant_id") === "operator-scope" ? [{id:"schedule-other",project_id:"other-project",cadence_days:7,status:"active",next_run_at:now+604800000}] : [])]));
     return;
   }
   if (path === "/v1/retrospective-schedules" && request.method === "POST") {
     json(response, 201, ok({ id: "retro-schedule-new", ...(await readJson(request)), status: "active" }));
     return;
   }
-  if (path === "/v1/retrospectives/retro-e2e" && request.method === "GET") {
-    json(response, 200, ok({ id: "retro-e2e", title: "CI decision review", status: "open", opened_at: now, viewer: { role: "admin", can_close: true }, progress: { participants: 2, completed_participants: 1, pending_participants: 1, eligible_responses: 2, received_responses: 1, unanswered_responses: 1 }, close_summary: null, items: [{ id: "retro-item-e2e", ordinal: 0, source_type: "decision_memory", source_id: "decision-e2e", parent_decision_id: "decision-e2e", source_version: String(now), source_digest: "a".repeat(64), title: "CI retry rule", statement: "Retry only infrastructure failures", rationale: "Product failures must remain visible", evidence: ["https://example.com/evidence", "internal:evidence"], response: null, response_summary: { eligible: 2, received: 1, unanswered: 1, adopt: 1, do_not_adopt: 0, defer: 0, adoption_rate: 1 } }] }));
+  if (["/v1/retrospectives/retro-e2e", "/v1/retrospectives/retro-other"].includes(path) && request.method === "GET") {
+    json(response, 200, ok({ id: path.endsWith("retro-other") ? "retro-other" : "retro-e2e", project_id:path.endsWith("retro-other")?"other-project":"org-brain", title: path.endsWith("retro-other") ? "Other project review" : "CI decision review", status: "open", opened_at: now, viewer: { role: "admin", can_close: true }, progress: { participants: 2, completed_participants: 1, pending_participants: 1, eligible_responses: 2, received_responses: 1, unanswered_responses: 1 }, close_summary: null, items: [{ id: "retro-item-e2e", ordinal: 0, source_type: "decision_memory", source_id: "decision-e2e", parent_decision_id: "decision-e2e", source_version: String(now), source_digest: "a".repeat(64), title: "CI retry rule", statement: "Retry only infrastructure failures", rationale: "Product failures must remain visible", evidence: ["https://example.com/evidence", "internal:evidence"], response: null, response_summary: { eligible: 2, received: 1, unanswered: 1, adopt: 1, do_not_adopt: 0, defer: 0, adoption_rate: 1 } }] }));
     return;
   }
-  if (/^\/v1\/retrospectives\/retro-e2e\/items\/[^/]+\/response$/u.test(path) && request.method === "PUT") {
+  if (/^\/v1\/retrospectives\/(?:retro-e2e|retro-other)\/items\/[^/]+\/response$/u.test(path) && request.method === "PUT") {
     json(response, 200, ok({ saved: true }));
     return;
   }
-  if (path === "/v1/retrospectives/retro-e2e/close" && request.method === "POST") {
+  if (["/v1/retrospectives/retro-e2e/close", "/v1/retrospectives/retro-other/close"].includes(path) && request.method === "POST") {
     if (!request.headers["x-idempotency-key"]) { json(response, 400, { error: { code: "idempotency_key_required" } }); return; }
     const body = await readJson(request);
     if (!body.items?.length || body.items.some((item) => !["adopted", "not_adopted", "deferred"].includes(item.decision))) {
@@ -1166,7 +1192,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (path === "/v1/improvement-actions" && request.method === "GET") {
-    json(response, 200, ok([{ id: "action-e2e", allowed_actions: ["awaiting_verification", "cancelled"], tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now, measurement: { pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent", target: { direction: "increase", value: 98, min: null, max: null }, baseline: { snapshot_id: "snapshot-e2e", value: 89, observed_at: now - 86400000 }, current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 }, verification_state: "waiting_for_measurement" } }]));
+    json(response, 200, ok([{ id: "action-e2e", allowed_actions: ["awaiting_verification", "cancelled"], tenant_id: "default", project_id: "org-brain", retrospective_session_id: null, retrospective_item_id: null, goal_link_id: "goal-link-e2e", title: "Stabilize CI", description: "Separate flaky infrastructure failures", owner_principal: "user:e2e-login-sub", due_at: now + 86400000, status: "in_progress", external_issue_url: "https://github.com/example/repo/issues/1", implementation_completed_at: null, baseline_snapshot_id: "snapshot-e2e", verification_snapshot_id: null, comparator_version: null, verification_outcome: null, created_by: "user:e2e-login-sub", created_at: now, updated_at: now, measurement: { pack_title: "Build reliability", metric_label: "Build成功率", unit: "percent", target: { direction: "increase", value: 98, min: null, max: null }, baseline: { snapshot_id: "snapshot-e2e", value: 89, observed_at: now - 86400000 }, current: { snapshot_id: "snapshot-e2e", value: 91, state: "measured", observed_at: now, expires_at: now + 86400000 }, verification_state: "waiting_for_measurement" } }, ...(url.searchParams.get("tenant_id") === "operator-scope" ? [{id:"action-other",project_id:"other-project",title:"Other project action",status:"in_progress",allowed_actions:["awaiting_verification","verify"]}] : [])]));
     return;
   }
   if (path === "/v1/improvement-actions" && request.method === "POST") {
@@ -1504,13 +1530,14 @@ const server = http.createServer(async (request, response) => {
     json(response, 200, ok({
       contract_version: "agent-loadouts/v1",
       agent: consoleAgent,
+      can_replace_bindings: url.searchParams.get("tenant_id") !== "partial-bindings-e2e",
       loadout: { id: "loadout-e2e", tenant_id: "default", agent_id: "agent-e2e", name: "Release checks", description: "Release verification", status: "active", owner_principal: "user:e2e-login-sub", created_at: now, updated_at: now },
       bindings: [{
         id: "binding-e2e", skill_asset_id: "skill-e2e", usage_mode: "always", priority: 90,
         version_policy: "latest_published", pinned_version_id: null, valid_until: null,
         asset_name: consoleSkill.name, asset_description: consoleSkill.description,
-        asset_status: "published", published_version_id: "skill-e2e-v1"
-      }]
+        asset_status: "published", published_version_id: "skill-e2e-v1", valid_until: null
+      }, ...(url.searchParams.get("tenant_id") === "loadout-preservation-e2e" ? [{id:"bound-outside-catalog",skill_asset_id:"skill-outside-catalog",usage_mode:"on_demand",priority:17,version_policy:"pinned",pinned_version_id:"older-pinned-version",valid_until:7000000000000,asset_name:"Preserved outside catalog",asset_status:"published",published_version_id:"newer-published-version"}]:[])]
     }));
     return;
   }
@@ -1802,10 +1829,10 @@ const server = http.createServer(async (request, response) => {
       groups: [],
       console_context: {
         mode: personal ? "personal" : "team",
-        effective_permissions: ["read", "write", "share", "admin", "delete", "export", "memory:attest"],
-        can_manage_users: true,
-        can_manage_groups: true,
-        can_manage_clients: true,
+        effective_permissions: tenantId === "reader-e2e" ? ["read"] : ["read", "write", "share", "admin", "delete", "export", "memory:attest"],
+        can_manage_users: tenantId !== "reader-e2e",
+        can_manage_groups: tenantId !== "reader-e2e",
+        can_manage_clients: tenantId !== "reader-e2e",
         tenant: { id: tenantId },
         project: url.searchParams.get("project_id") ? { id: url.searchParams.get("project_id") } : null,
         counts: personal
@@ -1908,6 +1935,10 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/dashboard/memory-analytics" && request.method === "GET") {
+    if (url.searchParams.get("project_id") === "e2e-analytics-error") {
+      json(response, 503, { ok: false, error: { code: "analytics_unavailable" } });
+      return;
+    }
     json(response, 200, ok({
       scope: url.searchParams.get("scope") === "org" ? "org" : "mine",
       perspective: url.searchParams.get("perspective") === "spread" ? "spread" : "work",
@@ -2045,6 +2076,7 @@ const server = http.createServer(async (request, response) => {
     json(response, 200, ok({
       tenant_id: url.searchParams.get("tenant_id") || "default",
       memory_id: memory.id,
+      memory,
       versions: [{
         version: 3,
         operation: "upsert",

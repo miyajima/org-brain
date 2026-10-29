@@ -309,6 +309,10 @@ export type MemoryDetail = {
     capture_route: string;
     capture_batch_id: string | null;
     verification_state: string;
+    answer_eligibility: MemoryAnswerEligibility;
+    attention_severity: MemoryAttentionSeverity;
+    attention_reasons: string[];
+    evaluated_at: number;
     verified_at: number | null;
     learning: Record<string, unknown> | null;
     quality_dimensions: Record<string, number> | null;
@@ -1013,7 +1017,7 @@ export async function getMemoryDetails(
             (SELECT COALESCE(SUM(ea.gross_saved_tokens - ea.net_saved_tokens), 0) FROM memory_effect_attributions ea
              JOIN memory_usage_items ui ON ui.tenant_id = ea.tenant_id AND ui.id = ea.usage_item_id
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
-            reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json
+            reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json, valid_until, conflicts_json
      FROM memories
      WHERE tenant_id = ? AND id = ? AND ${memoryReadAccessSql("memories", options.actorPrincipal ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll } : undefined)}`
   )
@@ -1155,6 +1159,7 @@ export async function getMemoryDetails(
           capture_route: memory.capture_route ?? "legacy",
           capture_batch_id: memory.capture_batch_id ?? null,
           verification_state: memory.verification_state ?? "unverified",
+          ...classifyMemoryAttention(memory, Date.now()),
           verified_at: memory.verified_at ?? null,
           learning: parseJsonObject(memory.learning_json),
           quality_dimensions: parseJsonObject(memory.quality_dimensions_json) as Record<string, number> | null

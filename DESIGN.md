@@ -1,193 +1,223 @@
-# Org Brain Design System
+---
+name: OrgBrain Console
+description: 組織の知識と利用状況を確認する運用画面
+colors:
+  primary: "#0071e3"
+  primary-hover: "#0066cc"
+  link: "#0066cc"
+  text: "#1d1d1f"
+  muted: "#62626a"
+  background: "#f5f5f7"
+  surface: "#ffffff"
+  line: "#dcdce1"
+  rail: "#eeeef1"
+  selected: "#e8f2ff"
+  secondary-text: "#333336"
+  danger: "#a82432"
+typography:
+  headline:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif'
+    fontSize: "1.875rem"
+    fontWeight: 700
+    lineHeight: 1.35
+    letterSpacing: "-0.025em"
+  title:
+    fontSize: "1.125rem"
+    fontWeight: 650
+    lineHeight: 1.45
+  body:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif'
+    fontSize: "16px"
+    lineHeight: 1.6
+  button:
+    fontWeight: 600
+    lineHeight: 1.4
+rounded:
+  small: "4px"
+  field: "6px"
+  control: "7px"
+  detail: "9px"
+  panel: "10px"
+  dialog: "12px"
+spacing:
+  "8": "8px"
+  "10": "10px"
+  "16": "16px"
+  "18": "18px"
+  "24": "24px"
+  "36": "36px"
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    padding: "9px 17px"
+  button-primary-hover:
+    backgroundColor: "{colors.primary-hover}"
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.secondary-text}"
+    rounded: "{rounded.control}"
+    padding: "9px 17px"
+  button-quiet:
+    backgroundColor: "transparent"
+    textColor: "#515154"
+    rounded: "{rounded.control}"
+    padding: "8px 10px"
+  button-danger:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.danger}"
+    rounded: "{rounded.control}"
+    padding: "9px 17px"
+  input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.field}"
+    padding: "10px 12px"
+  navigation:
+    backgroundColor: "{colors.rail}"
+    padding: "30px 18px 20px"
+    width: "214px"
+  navigation-active:
+    backgroundColor: "{colors.selected}"
+    textColor: "#0066cc"
+    rounded: "{rounded.control}"
+    padding: "11px 14px"
+  badge:
+    backgroundColor: "#eeeef1"
+    textColor: "#515154"
+    rounded: "{rounded.small}"
+    padding: "3px 7px"
+  panel:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.panel}"
+---
 
-This is the canonical UI design system for the repository.
-It adapts the public Apple design language to an operator console for tasks, workflows, and memory inspection.
+# Design System: OrgBrain Console
 
-## 1. Visual Intent
+## Overview
 
-- Calm authority over spectacle.
-- Strong hierarchy with very few competing accents.
-- Dark hero moments, light informational surfaces, and one chromatic accent.
-- The interface should feel like a premium product console, not a generic admin dashboard.
+**Creative North Star: "蓄積された知識と実際の利用を確認できる"**
 
-## 2. Core Palette
+運用担当者が内容を読み、状態を見分け、必要な箇所を整えるための視覚体系。白と薄い灰色の面、濃い文字、抑えた青のアクセントを使う。面は平坦に保ち、罫線、余白、文字の強弱でまとまりを示す。
 
-- `--sk-black`: `#000000`
-- `--sk-graphite`: `#1d1d1f`
-- `--sk-gray`: `#f5f5f7`
-- `--sk-white`: `#ffffff`
-- `--sk-text`: `#1d1d1f`
-- `--sk-text-muted`: `rgba(0, 0, 0, 0.72)`
-- `--sk-link`: `#0066cc`
-- `--sk-blue`: `#0071e3`
-- `--sk-blue-bright`: `#2997ff`
-- `--sk-divider`: `rgba(0, 0, 0, 0.08)`
-- `--sk-divider-strong`: `rgba(0, 0, 0, 0.14)`
-- `--sk-shadow`: `rgba(0, 0, 0, 0.22) 0 12px 30px`
-- `--sk-focus`: `#0071e3`
+この文書は現在の `apps/console/src/styles/operator.css` とOperatorLayoutを記録する。旧画面の黒い背景、ガラス状のレール、浮き上がるカードは、新しい主要画面の視覚基準にしない。業務パック・指標・振り返り・改善は新しい管理画面内に統合する。旧専用導入画面、graph、labなどの補助画面にも共通シェルとスタイルを適用するが、内部構成まで統一済みとは扱わない。
 
-Rules:
+**Key Characteristics:**
 
-- Use black, near-black, white, gray, and one blue accent.
-- Do not introduce decorative gradients, noise, textures, or extra brand colors.
-- Use warning surfaces sparingly and keep them neutral.
+- 白・灰色の平坦な面と濃い文字。
+- 青による主要操作と選択状態の識別。
+- 日本語の読みやすさと、見える操作状態。
+- PCの常設ナビゲーションと、モバイルの上部ナビゲーション。
 
-## 3. Typography
+## Colors
 
-- Use an Apple-like system stack: `-apple-system`, `BlinkMacSystemFont`, `"SF Pro Display"`, `"Helvetica Neue"`, `Helvetica`, `Arial`, `sans-serif`.
-- Use the same family for display and body text; shift tone through size, weight, and letter-spacing.
-- Keep text tight and deliberate. Negative tracking should appear at most sizes.
+変更前からの黒・白・グレーと青の指定を継承する。主アクセントは青、本文と補助情報は色味を抑えたニュートラルグレーで分ける。値の正本はfrontmatterであり、CSSを変更した際は両方を照合する。sidecarの色見本には表示用に補間した明度差を含むが、追加の実装色は定義しない。
 
-Suggested scale:
+### Primary
 
-- Hero: `56px`, `600`, `line-height: 1.07`
-- Section heading: `40px`, `600`, `line-height: 1.1`
-- Card title: `21px`, `600` or `700`, `line-height: 1.19`
-- Body: `17px`, `400`, `line-height: 1.47`
-- Caption: `14px`, `400`, `line-height: 1.29`
-- Micro: `12px`, `400`, `line-height: 1.33`
+- **青** (`primary`): 主要ボタン、フォーカス、選択タブの下線に使う。ホバー時は `primary-hover` を使う。リンクと選択中の文字には、薄い背景でも読みやすい `link` を使う。
+- **選択面の薄い青** (`selected`): 主ナビゲーションの現在位置に使う。
 
-## 4. Shell and Navigation
+### Neutral
 
-- Navigation should be a compact translucent glass rail.
-- Prefer a dark floating nav with blur and a visible active state.
-- Keep the shell centered and restrained, with generous side padding.
-- The global content width should stay around `1180px` for console work.
+- **濃い本文色** (`text`): 見出し、本文、入力内容。
+- **補助文字の灰色** (`muted`): 説明、更新日時、補助情報。
+- **薄い背景色** (`background`): ワークスペース全体。
+- **白い面** (`surface`): パネル、入力欄、上部バー。
+- **境界の灰色** (`line`): 面と行の区切り。
+- **レールの灰色** (`rail`): 常設ナビゲーションの背景。
 
-Navigation rules:
+### Status
 
-- Height should stay compact, around `48px`.
-- Links should be understated and readable.
-- Active state must remain visible on every routed page.
-- Hover should brighten subtly, not animate aggressively.
+危険操作には `danger` を使う。確認済みは淡い緑、警告・未確認・期限切れは淡い黄、失敗・停止は淡い赤のバッジで示す。色に加えて状態名を表示する。具体的なバッジ配色はCSSとsidecarの例を参照する。
 
-## 5. Surface and Depth
+## Typography
 
-- Cards should use soft lift, not hard borders.
-- Border radius should cluster around `8px`, `11px`, and `18px`.
-- Elevated surfaces should use a single diffused shadow.
-- Flat sections should rely on contrast and spacing, not decoration.
-- Sticky detail panels are allowed when they support single-screen comprehension.
+**Display Font:** 見出し専用フォントは設けず、本文と共通のシステムフォントを使う。
+**Body Font:** frontmatterの日本語対応システムサンセリフ。
+**Label/Mono Font:** ラベルも本文と共通。登録コードなど内容が固定幅表示を必要とする箇所はmonospace。
 
-## 6. Buttons and Controls
+見出しは短く、本文は読み続けられる行間を確保する。数値と日時は必要な箇所で等幅数字を使う。
 
-Primary button:
+### Hierarchy
 
-- Background: `--sk-blue`
-- Text: `--sk-white`
-- Radius: `8px`
-- Padding: `8px 15px`
-- Focus ring: `2px solid --sk-focus`
+- **Headline** (`headline`): ページの主見出し。モバイルでは1.5remへ縮小する。
+- **Title** (`title`): パネルの見出し。詳細対象のタイトルは20pxを使う。
+- **Body** (`body`): 基本文字。詳細本文は15px・行間1.9・最大75ch、ページ説明は最大65ch。
+- **Label**: フォームラベルは主に13px、補助情報は12–14px。バッジは11px。
+- **Button** (`button`): 文字を太くして操作を識別する。
 
-Secondary button:
+## Layout
 
-- Background: `--sk-graphite`
-- Text: `--sk-white`
-- Radius: `8px`
+PCでは左に常設レール、右に上部バーと作業領域を置く。通常のレール幅はfrontmatterの `navigation.width`。作業領域は最大1600px、通常の外側余白は36px。1600px以上では外側余白を44px・52pxへ広げる。
 
-Pill link:
+1100px以下ではレールを176pxへ縮め、主領域の余白を28px・24pxにする。760px以下ではレールを上部の3項目ナビゲーションへ変え、主領域の余白を26px・18pxにする。知識画面の一覧と詳細はPCでは並置し、モバイルでは選択状態に応じて一方を表示する。
 
-- Background: transparent or near-transparent
-- Text: `--sk-link` on light backgrounds, `--sk-blue-bright` on dark backgrounds
-- Radius: `980px`
+パネル間の間隔は主に24px、内部余白は主に18–26px。詳細タブと管理項目は幅に収まらない場合に横スクロールできる。ページ固有の情報構成は [Console operator UX](docs/CONSOLE_OPERATOR_UX.md) を参照する。
 
-Filter and search controls:
+## Elevation & Depth
 
-- Height: at least `48px`
-- Radius: `11px`
-- Border: subtle and mostly neutral
-- Inputs should feel immediate, not buried in chrome
-- Inputs should never look browser-default; treat text fields as first-class surfaces.
-- Use Tailwind CSS v4 in the console so the shared field treatment is consistent across pages.
+通常のパネルは影を付けず、白い面と細い境界線で区切る。選択された知識行には内側の細い強調線を使う。確認ダイアログだけに外側の影と背景の暗転がある。影や透過素材を通常の情報階層に使わない。
 
-## 7. Layout
+### Shadow Vocabulary
 
-- Use a clear first viewport: hero, command bar, metrics strip, workspace.
-- Desktop workspace should be two-column when it improves scan speed.
-- Mobile should collapse to a single column with content first, detail second.
-- White space should separate scenes; do not overpack panels.
+- **確認ダイアログ** (`0 15px 50px #1d1d1f29`): 対象と変更内容を確認するモーダル。
+- **選択行の内側線** (`inset 0 0 0 1px #87b4e5`): 一覧内で選択された対象の識別。
 
-`/memories` guidance:
+## Shapes
 
-- Hero: concise title, one-line framing, and compact status chips.
-- Command bar: dominant query input, visible tenant and project filters, secondary view switches.
-- Search should surface recent memory context before the user types anything.
-- Search should offer suggestion chips or autocomplete derived from actual memory/tag data.
-- Metrics strip: visible rows, canonical rows, digest rows, compacted rows, durable count, recent count.
-- Impact metrics must label `reported`, `estimated`, `verified`, `unverifiable`,
-  and `unreported` separately. Never render a missing estimate as zero.
-- Business-category and work-type filters are independent AND filters. Show
-  legacy `NULL` rows as `未分類` and exclude them from category KPI denominators.
-- A `both` search renders governance and evidence as separate titled sections;
-  it must not imply one cross-channel rank.
-- Search results: rank, source, type, title, preview, created date, score.
-- Profile: durable lane and recent lane should feel parallel but distinct.
-- Maintenance: highlight structural change with counts and project footprint.
-- Detail drawer: title, id, source, project, created date, score, external key, tags, preview, raw content.
+角は控えめに丸める。入力欄は `field`、ボタンと主ナビゲーションは `control`、知識の一覧・詳細は `detail`、一般パネルは `panel`、確認ダイアログは `dialog` を使う。境界線は通常1px。アバターには円形を使う。
 
-## 8. Interaction and Motion
+## Components
 
-- Every interactive element needs visible hover and focus treatment.
-- Use short transitions only: roughly `150-220ms`.
-- Respect `prefers-reduced-motion`.
-- Selected states must use at least two cues, such as background plus accent line.
-- Touch targets should stay comfortably above `44x44`.
+### Buttons
 
-## 9. Accessibility
+主要操作は塗りつぶし、補助操作は白地の枠線、軽い操作は透明背景で区別する。
 
-- Maintain AA contrast in light mode.
-- Labels must be explicit.
-- Keyboard order must follow visual order.
-- The page must remain usable without hover.
-- Long text should wrap into readable line lengths instead of spanning the viewport.
+- **Shape:** `control` の角丸。通常の最小高さは44px。
+- **Primary:** `button-primary`。ホバーは `button-primary-hover`。
+- **Secondary / Quiet:** frontmatterの該当variant。補助ボタンの枠線は `#bfbfc5`、ホバーは `#f5f5f7`。
+- **Danger:** 白地と危険色の文字、`#dfb7bd` の枠線。ホバーは `#fff0f1`。
+- **Focus:** 3pxの青のoutlineと3pxのoffset。無効時は不透明度を下げ、処理中のcursorを表示する。
 
-## 10. Do and Don't
+### Chips
 
-Do:
+状態バッジは `badge` の小さな矩形を使う。中立、確認済み、警告、失敗を文字と配色で区別する。操作用チップと状態表示を混同しない。
 
-- Use Apple Blue only for interactive emphasis.
-- Keep card chrome light and sparse.
-- Alternate dark hero surfaces with light content surfaces when a section needs drama.
-- Use simple, sharp hierarchy for data-heavy views.
+### Cards / Containers
 
-Don't:
+一般パネルは `panel`。白地、1pxの境界線、通常時は影なし。ヘッダーと本文の余白で区切り、不要な入れ子で面を増やさない。
 
-- Don't add extra accent colors.
-- Don't use heavy borders, glossy effects, or noisy textures.
-- Don't rely on custom web fonts that fight the Apple language.
-- Don't over-round rectangular surfaces beyond the pill system.
-- Don't hide key filters or state behind drawers on desktop.
+### Inputs / Fields
 
-## 11. Canonical Usage
+白い面と `#b8b8c0` の枠線を使う。ラベルを置き、placeholderだけに説明を任せない。通常の最小高さは44px。textareaは最小140pxで縦方向に拡大できる。エラーや保存結果はフォームの状態欄で文字として伝える。
 
-- `apps/console/src/layouts/BaseLayout.astro` should carry the shell tokens and global component defaults.
-- Page-level views should layer on top of the same shell rather than inventing new visual languages.
-- The `memories` surface is the strongest expression of this system and should be used as the reference implementation.
+### Navigation
 
-## 12. Administration UX Quality Contract
+主ナビゲーションは「ホーム・知識・管理」。通常は15px、モバイルは12pxの文字とアイコンを使う。現在位置は背景と文字の強弱、`aria-current` で示す。知識詳細のタブは下線、管理項目は背景で選択状態を示す。
 
-Administration pages use the shared components in
-`apps/console/src/components/admin` for page headers, sections, state panels,
-action lists, and live notices. New administration surfaces must expose the
-operator's next action before analytical detail and must distinguish healthy,
-attention, empty, partial, error, loading, and success states.
+### Knowledge List and Detail
 
-- Static administration copy is locale-keyed for `en`, `ja`, and `zh`.
-- Scope-bearing links preserve `tenant_id`, `project_id`, and `lang`.
-- User-facing labels replace raw roles and lifecycle codes; IDs, API paths, and
-  raw codes belong in a collapsed technical-details disclosure.
-- Body text is at least `14px`; compact metadata is at least `12px`. Body copy
-  uses a line height of at least `1.45` and normal text targets WCAG AA contrast.
-- Controls and actionable links expose a `44px` minimum target, visible focus,
-  an accessible name, and a useful keyboard order.
-- Status changes use `aria-live`; visual order must match heading and keyboard
-  order. Motion respects `prefers-reduced-motion`, and forced-colors mode keeps
-  focus and state boundaries visible.
-- Dense tables become stacked cards when columns cannot reflow. Page-level
-  horizontal scrolling is not an acceptable mobile fallback.
+一覧では短いタイトル、要約、状態、プロジェクト、日時をまとめる。選択された行には背景と内側線を付ける。詳細本文は折り返し、読みやすい幅に収める。モバイルでは一覧へ戻る操作を表示する。
 
-The route contract is defined in `apps/console/e2e/route-audit-cases.ts`. It is
-the source for locale, reflow, Axe, keyboard-flow, typography, and screenshot
-coverage. The 3D knowledge map remains the standard view, while the search,
-selection, and decision-trace workflow must remain equivalent when WebGL is
-unavailable.
+### Motion and Accessibility
+
+ボタンの背景変化は0.16秒のease-out。`prefers-reduced-motion` ではtransitionを無効にする。forced colorsでは選択項目にoutline、状態バッジに枠線を付ける。本文へのスキップリンクを用意する。これらの実装は、操作試験やアクセシビリティ適合の認定とは区別する。
+
+## Do's and Don'ts
+
+### Do:
+
+- **Do** 白・灰色の面、濃い文字、青の主要操作を共通して使う。
+- **Do** 選択、警告、失敗を文字と視覚状態の両方で示す。
+- **Do** 通常のボタンと入力欄に44px以上の最小高さを確保する。
+- **Do** 長文を折り返し、本文の行幅と行間を維持する。
+
+### Don't:
+
+- **Don't** 旧画面の黒い背景やガラス状のレールを新しい主要画面へ戻す。
+- **Don't** 通常のパネルに装飾的な影やグラデーションを追加する。
+- **Don't** 色だけで状態や操作の意味を伝える。
+- **Don't** 共通スタイルの適用を、専門フォームの構成まで統一済みと表現する。

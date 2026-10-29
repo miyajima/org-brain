@@ -1,0 +1,60 @@
+---
+import OperatorLayout from "../../layouts/OperatorLayout.astro";
+import GoalWorkspace from "./GoalWorkspace.astro";
+import { operatorRequestUrl, operatorScope, apiScope, operatorHref, viewHref, readConsoleData, localText, asRows, displayNumber, displayDate, stateLabel, type ConsoleRecord } from "../../lib/operator-console";
+const navigationUrl = operatorRequestUrl(Astro.request);
+const { projectId, lang, period } = operatorScope(Astro.url, Astro.request.headers.get("cookie"));
+const t = localText(lang);
+const to = Date.now(), from = to - (period === "30d" ? 30 : 7) * 86400000;
+const scope = apiScope(Astro.url, Astro.request.headers.get("cookie"));
+const timed = apiScope(Astro.url, Astro.request.headers.get("cookie"), { from: String(from), to: String(to) });
+const [activity, analytics, memories, briefing] = await Promise.all([
+ readConsoleData(Astro.request, `/api/v1/dashboard/activity?${timed}`),
+ readConsoleData(Astro.request, `/api/v1/dashboard/memory-analytics?${timed}&scope=org&perspective=work`),
+ readConsoleData(Astro.request, `/api/v1/memories?${scope}&scope=org&lifecycle=all&attention=all&sort=attention&limit=6&paginated=1`),
+ readConsoleData(Astro.request, `/api/v1/decision-briefing?${scope}&limit=20`)
+]);
+const summary = analytics.data?.summary;
+const projects = asRows(analytics.data?.rankings, "projects");
+const memoryIssues = asRows(memories.data, "items").filter(item => ["critical", "warning", "blocked"].includes(item.attention_severity)).map(item => ({
+ id: item.id, title: item.summary || String(item.content || "").slice(0, 110), state: item.attention_severity,
+ reason: item.attention_reasons?.includes("conflicted") ? t("矛盾する記録があります。内容と根拠を確認してください。", "Conflicting records need review.", "存在冲突记录，请检查内容与依据。") : t("内容の確認が必要です。", "The content needs review.", "内容需要确认。"),
+ href: operatorHref(navigationUrl, "/knowledge", { kind: "memory", id: item.id }),
+}));
+const decisionIssues = asRows(briefing.data, "items").filter(item => (item.flags || []).some((flag: string) => ["expired", "unconfirmed", "artifact_unlinked", "artifact_missing", "sharing_pending", "share_pending"].includes(flag))).map(item => ({
+ id: item.id, title: item.title || item.decision, state: "warning", reason: item.reason_summary || t("判断の現在性と根拠を確認してください。", "Review this decision and its evidence.", "请确认此决策及其依据。"), href: operatorHref(navigationUrl, "/knowledge", { kind: "decision", id: item.id })
+}));
+const activityIssues = asRows(activity.data, "attention").filter(item => ![...memoryIssues, ...decisionIssues].some(known => known.id === item.subject_id)).map(item => ({
+ id: item.id, title: item.reason, state: item.severity, reason: t("対象の状態を確認し、必要な対応を行ってください。", "Inspect the target and take the required action.", "请检查对象并进行必要处理。"),
+ href: item.subject_type === "memory" ? operatorHref(navigationUrl, "/knowledge", { kind: "memory", id: item.subject_id }) : operatorHref(navigationUrl, "/settings", { section: "operations", id: item.subject_id })
+}));
+const issues = [...memoryIssues, ...decisionIssues, ...activityIssues].sort((a,b) => Number(b.state === "critical") - Number(a.state === "critical"));
+const events = [...asRows(activity.data, "events")].sort((a,b)=>Number(b.occurred_at)-Number(a.occurred_at));
+const itemHref = (item: ConsoleRecord) => item.subject?.type === "memory" ? operatorHref(navigationUrl, "/knowledge", { kind: "memory", id: item.subject.id }) : item.subject?.type === "decision" ? operatorHref(navigationUrl, "/knowledge", { kind: "decision", id: item.subject.id }) : operatorHref(navigationUrl, "/settings", { section: "operations", id: item.task_id || item.subject?.id });
+---
+<OperatorLayout title={t("ホーム", "Home", "首页")} active="home">
+ {projects.map(item => <option slot="projects" value={item.id}>{item.label || item.id}</option>)}
+ <div class="op-page-heading"><div><h1>{t("知識の状態を、ひと目で。", "Know where your knowledge stands.", "知识状态，一目了然。")}</h1><p>{t("蓄積された知識とその活用を確かめ、必要なところだけ整えましょう。", "Review what is retained, how it is used, and what needs your attention.", "了解知识积累与应用情况，专注处理需要关注的事项。")}</p></div><nav class="op-periods" aria-label={t("集計期間", "Reporting period", "统计期间")}><a href={viewHref(navigationUrl, { period: "7d" })} aria-current={period === "7d" ? "true" : undefined}>{t("直近7日", "Last 7 days", "最近7天")}</a><a href={viewHref(navigationUrl, { period: "30d" })} aria-current={period === "30d" ? "true" : undefined}>{t("直近30日", "Last 30 days", "最近30天")}</a></nav></div>
+ <section class="op-panel" aria-label={t("蓄積と活用", "Retention and use", "积累与应用")}>
+  <div class="op-metrics"><dl class="op-metric"><dt>{t("保存された記憶", "Retained memories", "已保存的记忆")}</dt><dd>{displayNumber(memories.data?.meta?.total, lang)}<small>{t("全期間", "All time", "所有期间")}</small></dd></dl><dl class="op-metric"><dt>{t("検索で取得された回数", "Retrievals", "检索次数")}</dt><dd>{displayNumber(summary?.reference_count, lang)}<small>{period === "7d" ? t("直近7日", "Last 7 days", "最近7天") : t("直近30日", "Last 30 days", "最近30天")}</small></dd></dl><dl class="op-metric"><dt>{t("採用が報告された回数", "Reported uses", "报告采用次数")}</dt><dd>{displayNumber(summary?.used_count, lang, summary?.measurement_state || "unknown")}<small>{t("利用報告に基づく", "Based on reports", "基于使用报告")}</small></dd></dl></div>
+  <div class="op-metrics-note" data-usage-metrics>{analytics.error ? <span role="alert">{analytics.error} <a href={Astro.url.pathname + Astro.url.search}>{t("再試行", "Retry", "重试")}</a></span> : <span>{t("取得・採用・実行・結果確認は、それぞれ異なる状態です。詳しくは知識の活用履歴で確認できます。", "Retrieval, adoption, execution and confirmed outcomes are separate stages. Inspect a record’s use history for details.", "检索、采用、执行和结果确认是不同阶段。详情请查看知识的应用历史。")}</span>}<span>{t("更新", "Updated", "更新")} {displayDate(activity.data?.generated_at, lang)} <a href={Astro.url.pathname+Astro.url.search}>{t("更新", "Refresh", "刷新")}</a></span></div>
+  {memories.error && <div class="op-notice" data-tone="error" role="alert">{t("記憶の件数を取得できません。", "Memory counts are unavailable.", "无法获取记忆数量。")} <a href={Astro.url.pathname + Astro.url.search}>{t("再試行", "Retry", "重试")}</a></div>}
+ </section>
+ <div class="op-columns">
+  <div>
+   <section class="op-panel"><div class="op-panel-heading"><div><h2>{t("確認が必要なこと", "Needs your attention", "需要关注的事项")}</h2><p>{t("優先度の高いものから、その場で確認できます。", "Start with the most important items.", "从优先级最高的事项开始确认。")}</p></div><a href={operatorHref(navigationUrl, "/knowledge", { attention: "all" })}>{t("知識を確認", "Review knowledge", "检查知识")}</a></div>
+    {(memories.error || briefing.error || activity.error) && <div class="op-panel-body"><p class="op-small" role="status">{t("一部の確認事項を取得できません。表示中の項目から対応できます。", "Some review sources are unavailable. The items shown can still be reviewed.", "部分待确认事项无法获取，仍可处理已显示的项目。")}</p></div>}
+    {issues.length ? issues.slice(0, 6).map(item => <a class="op-row" href={item.href}><div class="op-row-main"><span class="op-badge" data-state={item.state}>{stateLabel(item.state, lang)}</span><strong style="margin-top:8px">{item.title}</strong><p>{item.reason}</p></div><span class="op-row-end">{t("確認する", "Review", "确认")}</span></a>) : <div class="op-empty"><strong>{memories.error || briefing.error || activity.error ? t("確認事項を取得できません", "Review items unavailable", "无法获取待确认事项") : t("今、対応が必要な項目はありません", "Nothing needs attention right now", "目前没有需要处理的事项")}</strong>{t("必要な知識は、いつでも検索して確認できます。", "You can always search and inspect your knowledge.", "您可以随时搜索和检查知识。")}</div>}
+   </section>
+   <section class="op-panel"><div class="op-panel-heading"><div><h2>{t("最近の動き", "Recent activity", "最近动态")}</h2><p>{t("記録された操作と更新を、時系列で確認します。", "Recorded actions and updates, in order.", "按时间查看已记录的操作和更新。")}</p></div></div>
+    {activity.error ? <div class="op-empty" role="alert">{activity.error} <a href={Astro.url.pathname + Astro.url.search}>{t("再試行", "Retry", "重试")}</a></div> : events.length ? events.slice(0, 8).map(item => <a class="op-row" href={itemHref(item)}><div class="op-row-main"><strong>{item.summary}</strong><p>{item.actor?.label} {item.project_id && ` · ${item.project_id}`}</p></div><time class="op-row-end">{displayDate(item.occurred_at, lang)}</time></a>) : <div class="op-empty">{t("この期間の操作はまだ記録されていません。接続後の記録はここに表示されます。", "No recorded activity in this period. Connected activity will appear here.", "此期间尚无已记录的操作。连接后的记录将显示在这里。")}</div>}
+    {activity.data?.has_more && <div class="op-panel-body"><a class="op-muted" href={operatorHref(navigationUrl, "/settings", { section: "operations" })}>{t("処理履歴を確認", "Inspect processing history", "查看处理历史")}</a></div>}
+   </section>
+  </div>
+  <div>
+   <section class="op-panel"><div class="op-panel-heading"><div><h2>{t("プロジェクト別の活用", "Use by project", "各项目的应用情况")}</h2><p>{t("利用が記録されたプロジェクト", "Projects with recorded use", "已记录应用情况的项目")}</p></div></div>{analytics.error ? <div class="op-empty">{t("プロジェクトの活用状況を取得できません。", "Project use is unavailable.", "无法获取项目应用情况。")}</div> : projects.length ? projects.map(item => <a class="op-row" href={operatorHref(navigationUrl, "/", { project_id: item.id })}><div class="op-row-main"><strong>{item.label || item.id}</strong><p>{t("検索で取得", "Retrievals", "检索次数")} {displayNumber(item.reference_count, lang)}</p></div><span class="op-row-end">{t("表示", "View", "查看")}</span></a>) : <div class="op-empty">{t("まだ利用の記録はありません。AIへの接続と利用報告を確認してください。", "No reported use yet. Check your AI connection and reporting.", "尚无应用记录。请检查AI连接和使用报告。")}<div style="margin-top:14px"><a href={operatorHref(navigationUrl, "/settings", { section: "connections" })}>{t("AIの接続を確認", "Check AI connections", "检查AI连接")}</a></div></div>}</section>
+   <section class="op-panel"><div class="op-panel-heading"><h2>{t("次の仕事に活かす", "Put knowledge to work", "将知识用于下一项工作")}</h2></div><a class="op-row" href={operatorHref(navigationUrl, "/knowledge")}><div class="op-row-main"><strong>{t("必要な知識を探す", "Find the knowledge you need", "查找所需知识")}</strong><p>{t("内容・根拠・活用履歴を一緒に確認", "Inspect content, evidence and use together", "一同查看内容、依据和应用历史")}</p></div></a><a class="op-row" href={operatorHref(navigationUrl, "/settings", { section: "agents" })}><div class="op-row-main"><strong>{t("AIに渡す知識を整える", "Manage knowledge for AI", "管理提供给AI的知识")}</strong><p>{t("接続先と配布内容を確認", "Review connections and assigned knowledge", "确认连接与分配的知识")}</p></div></a></section>
+  </div>
+ </div>
+ {(projectId || Astro.url.searchParams.get("view") === "goals") && <GoalWorkspace lang={lang}/>}
+</OperatorLayout>

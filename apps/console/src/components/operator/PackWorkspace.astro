@@ -1,0 +1,73 @@
+---
+import { createServerApi } from "../../lib/server-api";
+import { domainPacksCopy } from "../../lib/console-locale";
+import { localText } from "../../lib/operator-console";
+interface Props { tenantId:string; projectId:string; lang:"ja"|"en"|"zh"; }
+const {tenantId, lang} = Astro.props;
+const copy = domainPacksCopy(lang), t = localText(lang);
+const transport = createServerApi(Astro.request);
+const api = async (input:string|URL, init:RequestInit={}):Promise<Response> => {
+ try {return await transport(input,init);}
+ catch {return Response.json({ok:false,error:{code:"unavailable",message:t("通信できませんでした。入力を確認し、接続が戻ってから再度操作してください。", "The service could not be reached. Review your input and try again when connected.", "无法连接服务。请保留输入，连接恢复后重试。")}},{status:503});}
+};
+const [catalogResponse, capabilityResponse] = await Promise.all([api(`/api/v1/domain-packs?tenant_id=${encodeURIComponent(tenantId)}`),api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`)]);
+const catalog:any = await catalogResponse.json().catch(()=>null), capability:any = await capabilityResponse.json().catch(()=>null);
+const packs:any[] = Array.isArray(catalog?.data) ? catalog.data : [];
+const enabled = capabilityResponse.ok && capability?.data?.domain_packs?.enabled === true;
+const writable = enabled && capability?.data?.domain_packs?.mode === "install";
+
+const redirectAfterPost=(extra:Record<string,string>={})=>{
+ const target=new URL(Astro.url);
+ target.searchParams.set("saved","1");
+ for(const [key,value] of Object.entries(extra)) target.searchParams.set(key,value);
+ (Astro.locals as Record<string,unknown>).operatorPostRedirect=target.pathname+target.search;
+};
+let message = "", error = !catalogResponse.ok ? catalog?.error?.message ?? copy.previewError : !capabilityResponse.ok ? t("操作権限を取得できませんでした。", "Permissions could not be loaded.", "无法加载操作权限。") : "";
+let plan:any = null;
+let selected:string[] = packs.map(entry=>entry.manifest.pack_id);
+const form = Astro.request.method === "POST" ? await Astro.request.formData() : null;
+if (form) {
+ selected = form.getAll("pack_ids").map(String).filter(Boolean);
+ const action = String(form.get("action") ?? "preview");
+ const csrf = String(form.get("csrf_token") ?? "");
+ if (!enabled || (action === "install" && !writable)) error = t("この操作は利用できません。", "This operation is unavailable.", "此操作不可用。");
+ else if (!selected.length) error = copy.selectError;
+ else {
+  const response = await api("/api/v1/domain-packs/installations/plan", {method:"POST",headers:{"content-type":"application/json","x-csrf-token":csrf},body:JSON.stringify({tenant_id:tenantId,pack_ids:selected})});
+  const payload:any = await response.json().catch(()=>null);
+  if (!response.ok) error = payload?.error?.message ?? copy.previewError;
+  else {
+   plan = payload?.data;
+   if (action === "install") {
+    if (!form.get("plan_digest") || form.get("plan_digest") !== plan?.plan_digest) error = t("導入差分が変わりました。内容を確認して再度適用してください。", "The installation plan changed. Review the updated plan before applying.", "安装差异已变化，请检查后重新应用。");
+    else {
+     const installed = await api("/api/v1/domain-packs/installations", {method:"POST",headers:{"content-type":"application/json","x-csrf-token":csrf},body:JSON.stringify({tenant_id:tenantId,pack_ids:selected,plan_digest:plan.plan_digest})});
+     const result:any = await installed.json().catch(()=>null);
+     if (installed.ok) {message = `${result?.data?.installations?.length ?? selected.length}${copy.installed}`;redirectAfterPost();}
+     else error = result?.error?.message ?? copy.installError;
+    }
+   }
+  }
+ }
+}
+let builderHref:string|null = null;
+if (capability?.data?.pack_builder?.enabled && typeof capability.data.pack_builder.href === "string") {
+ const url = new URL(capability.data.pack_builder.href,Astro.url);
+ if (url.origin === Astro.url.origin) builderHref = url.pathname+url.search;
+}
+---
+<div data-extension-workspace="packs">
+ {message && <p class="op-notice" role="status">{message}</p>}
+ {error && <p class="op-notice" data-tone="error" role="alert">{error}</p>}
+ {!enabled ? <p class="op-empty">{t("業務パックは利用できません。", "Domain packs are unavailable.", "业务包不可用。")}</p> : <>
+ <section class="op-panel"><div class="op-panel-heading"><div><h3>{copy.heading}</h3><p>{copy.body}</p></div>{builderHref && <a href={builderHref}>Enterprise Pack Builder</a>}</div>
+ <form method="post" class="op-form op-panel-body">
+  <input type="hidden" name="csrf_token" data-op-csrf/>
+  {packs.map(entry=><div class="op-extension-pack"><label><input type="checkbox" name="pack_ids" value={entry.manifest.pack_id} checked={selected.includes(entry.manifest.pack_id)}/><strong>{entry.manifest.title}</strong><span class="op-badge">v{entry.manifest.version} · {entry.installation ? copy.installedState : copy.available}</span></label><p class="op-muted">{entry.manifest.description}</p><details class="op-edit"><summary>{copy.details}</summary><dl class="op-extension-details">{[[copy.objects,entry.manifest.object_types.map((item:any)=>item.label).join(" · ")],[copy.metrics,entry.manifest.metrics.map((item:any)=>item.label).join(" · ")],[copy.assets,entry.manifest.assets.map((item:any)=>item.asset_key).join(" · ")],[copy.connector,entry.manifest.connectors.length],[t("出典のハッシュ", "Provenance digest", "来源摘要"),entry.digest]].map(([label,value])=><div><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl></details></div>)}
+  {catalogResponse.ok && !packs.length && <p class="op-empty">{t("利用できる業務パックはありません。", "No domain packs are available.", "没有可用业务包。")}</p>}
+  {packs.length > 0 && <div class="op-actions"><button type="submit" name="action" value="preview" class="op-secondary">{copy.preview}</button><p class="op-small">{t("業務データは導入されません。", "Business records are not imported.", "不会导入业务数据。")}</p></div>}
+ </form></section>
+ {plan && <section class="op-panel" data-pack-plan><div class="op-panel-heading"><h3>{copy.preview}</h3></div><div class="op-panel-body"><p class="op-small">{t("導入計画", "Installation plan", "安装计划")}: {plan.plan_digest}</p>{(plan.packs ?? []).map((pack:any)=><article class="op-extension-pack"><h4>{pack.pack_id} <span class="op-badge">{pack.action}</span></h4><p class="op-muted">{copy.objects}: {pack.creates.managed_object_types} · {copy.metrics}: {pack.creates.metric_definitions} · Dashboard: {pack.creates.dashboards} · {copy.assets}: {pack.creates.asset_references}</p>{Object.values(pack.preserved_custom_conflicts ?? {}).flat().length > 0 && <p class="op-muted">{copy.customPreserved}</p>}</article>)}{writable && <form method="post" class="op-form"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="install"/><input type="hidden" name="plan_digest" value={plan.plan_digest}/>{selected.map(id=><input type="hidden" name="pack_ids" value={id}/>)}<div><button type="submit">{copy.apply}</button></div></form>}</div></section>}
+ </>}
+</div>
+<style>.op-extension-pack{padding:18px 0;border-top:1px solid var(--op-line)}.op-extension-pack:first-child{border-top:0}.op-extension-pack>p{margin-top:10px}.op-extension-pack label{flex-wrap:wrap}.op-extension-details{display:grid;gap:12px}.op-extension-details dt{font-size:12px;color:var(--op-muted)}.op-extension-details dd{margin:3px 0 0;overflow-wrap:anywhere}.op-small{overflow-wrap:anywhere}h4{margin:0 0 10px}</style>

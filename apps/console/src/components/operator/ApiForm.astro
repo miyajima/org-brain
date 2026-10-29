@@ -1,0 +1,12 @@
+---
+type Field = { name:string; label:string; value?:unknown; type?:"text"|"email"|"number"|"checkbox"|"textarea"|"select"; dataType?:string; step?:string|number; required?:boolean; disabled?:boolean; options?:Array<[string,string]> };
+interface Props { endpoint:string; method?:string; fields?:Field[]; hidden?:Record<string, unknown>; submit:string; confirm?:string; responseMode?:string; impactEndpoint?:string; formKind?:string; confirmFields?:string; recovery?:string; }
+const { endpoint, method="POST", fields=[], hidden={}, submit, confirm, responseMode, impactEndpoint, formKind, confirmFields, recovery } = Astro.props;
+const idFor = (name:string) => `field-${endpoint}-${name}`.replace(/[^a-zA-Z0-9_-]/gu,"-");
+---
+<form class="op-form" data-op-api-form data-endpoint={endpoint} data-method={method} data-confirm={confirm} data-confirm-fields={confirmFields} data-confirm-recovery={recovery} data-response-mode={responseMode} data-impact-endpoint={impactEndpoint} data-form-kind={formKind}>
+ {Object.entries(hidden).map(([name,value]) => <input type="hidden" name={name} value={value !== null && typeof value === "object" ? JSON.stringify(value) : String(value ?? "")} data-value-type={value === null ? "nullable" : typeof value === "object" ? "json" : typeof value === "number" ? "number" : typeof value === "boolean" ? "boolean" : undefined}/>)}
+ {fields.map(field => <div class="op-field"><label for={idFor(field.name)}>{field.label}</label>{field.type === "textarea" ? <textarea id={idFor(field.name)} name={field.name} required={field.required} disabled={field.disabled} data-value-type={field.dataType} rows="4">{String(field.value ?? "")}</textarea> : field.type === "select" ? <select id={idFor(field.name)} name={field.name} required={field.required} disabled={field.disabled} data-value-type={field.dataType}>{field.options?.map(([value,label]) => <option value={value} selected={value === String(field.value ?? "")}>{label}</option>)}</select> : <input id={idFor(field.name)} name={field.name} type={field.type || "text"} step={field.step} value={field.type === "checkbox" ? "true" : String(field.value ?? "")} checked={field.type === "checkbox" && field.value === true} required={field.required} disabled={field.disabled} data-value-type={field.dataType}/>}</div>)}
+ <slot/>
+ <div class="op-actions"><button type="submit">{submit}</button></div><p data-form-status role="status" aria-live="polite"></p>
+</form>

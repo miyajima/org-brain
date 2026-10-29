@@ -1,0 +1,110 @@
+---
+import { createServerApi } from "../../lib/server-api";
+const transport = createServerApi(Astro.request);
+const serverApi = async (input:string|URL, init:RequestInit={}):Promise<Response> => {
+ try {return await transport(input,init);}
+ catch {return Response.json({ok:false,error:{code:"unavailable",message:text("通信できませんでした。入力を確認し、接続が戻ってから再度操作してください。", "The service could not be reached. Review your input and try again when connected.", "无法连接服务。请保留输入，连接恢复后重试。")}},{status:503});}
+};
+import { localText } from "../../lib/operator-console";
+interface Props { tenantId:string; projectId:string; lang:"ja"|"en"|"zh"; }
+
+import { knowledgeLoopCopy, knowledgeLoopError, knowledgeLoopStatus, knowledgeLoopUnit } from "../../lib/knowledge-loop-locale";
+
+const { tenantId, projectId, lang }= Astro.props as Props;
+const text=localText(lang);
+const form = Astro.request.method === "POST" ? await Astro.request.formData() : null;
+const value=(name:string,fallback="")=>String(form?.get(name) ?? fallback);
+const t = knowledgeLoopCopy(lang);
+
+const api = (path: string, init: RequestInit = {}) => serverApi(new URL(path, Astro.url), { ...init, headers: init.headers });
+const sourceSessionId = Astro.url.searchParams.get("retrospective_session_id")?.trim() || null;
+const sourceItemId = Astro.url.searchParams.get("retrospective_item_id")?.trim() || null;
+const sourceTitle = Astro.url.searchParams.get("source_title")?.trim().slice(0, 240) || "";
+
+const redirectAfterPost=(extra:Record<string,string>={})=>{
+ const target=new URL(Astro.url);
+ target.searchParams.set("saved","1");
+ for(const [key,value] of Object.entries(extra)) target.searchParams.set(key,value);
+ (Astro.locals as Record<string,unknown>).operatorPostRedirect=target.pathname+target.search;
+};
+let message = "";
+let error = "";
+
+const scopeError=text("選択中のプロジェクトの対象ではありません。", "This record is outside the selected project.", "此记录不属于所选项目。");
+const inProject=(entry:any)=>!projectId || entry?.project_id===projectId;
+const scope = `tenant_id=${encodeURIComponent(tenantId)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`;
+const [actionsResponse, dashboardResponse, capabilityResponse] = await Promise.all([
+  api(`/api/v1/improvement-actions?tenant_id=${encodeURIComponent(tenantId)}`),
+  api(`/api/v1/dashboard/organization?${scope}`),
+  api(`/api/v1/capabilities?tenant_id=${encodeURIComponent(tenantId)}`)
+]);
+const actionsPayload: any = await actionsResponse.json().catch(() => null);
+const dashboardPayload: any = await dashboardResponse.json().catch(() => null);
+const capabilityPayload: any = await capabilityResponse.json().catch(() => null);
+const actions = Array.isArray(actionsPayload?.data) ? actionsPayload.data.filter(inProject) : [];
+const goals = dashboardPayload?.data?.goals ?? [];
+const writable = capabilityResponse.ok && capabilityPayload?.data?.improvement_actions?.writable === true;
+const selectedId=Astro.url.searchParams.get("id")?.trim() || "";
+if (projectId && selectedId && actionsResponse.ok && !actions.some((entry:any)=>entry.id===selectedId)) error=scopeError;
+const referencedSessionId=String(form?.get("retrospective_session_id") ?? sourceSessionId ?? "").trim();
+let sourceInProject=true;
+if (projectId && referencedSessionId) {
+ const sourceResponse=await api(`/api/v1/retrospectives/${encodeURIComponent(referencedSessionId)}?tenant_id=${encodeURIComponent(tenantId)}`);
+ const sourcePayload:any=await sourceResponse.json().catch(()=>null);
+ sourceInProject=sourceResponse.ok && inProject(sourcePayload?.data);
+ if (!sourceInProject) error=sourceResponse.ok ? scopeError : sourcePayload?.error?.message ?? t.actionUpdateFailed;
+}
+if (form) {
+  const csrf = String(form.get("csrf_token") ?? "");
+  const action = String(form.get("action") ?? "create");
+  const id = String(form.get("id") ?? "");
+  const path = action === "create" ? "/api/v1/improvement-actions" : action === "verify" ? `/api/v1/improvement-actions/${encodeURIComponent(id)}/verify` : `/api/v1/improvement-actions/${encodeURIComponent(id)}`;
+  const method = action === "create" || action === "verify" ? "POST" : "PATCH";
+  const body = action === "create" ? {
+    tenant_id: tenantId, project_id: projectId,
+    retrospective_session_id: String(form.get("retrospective_session_id") ?? "").trim() || null,
+    retrospective_item_id: String(form.get("retrospective_item_id") ?? "").trim() || null,
+    title: String(form.get("title")), description: String(form.get("description") ?? ""),
+    owner_principal: String(form.get("owner_principal") ?? "").trim() || null,
+    due_at: form.get("due_at") ? Date.parse(`${String(form.get("due_at"))}T23:59:59+09:00`) : null,
+    external_issue_url: String(form.get("external_issue_url") ?? "").trim() || null,
+    goal_link_id: String(form.get("goal_link_id") ?? "").trim() || null
+  } : action === "verify" ? { tenant_id: tenantId } : { tenant_id: tenantId, status: String(form.get("status")) };
+  const targetInProject=action === "create" ? sourceInProject : !projectId || (actionsResponse.ok && actions.some((entry:any)=>entry.id===id));
+  if (!targetInProject) error ||= action !== "create" && !actionsResponse.ok ? actionsPayload?.error?.message ?? t.actionUpdateFailed : scopeError;
+  else {
+  const response = await api(path, { method, headers: { "content-type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify(body) });
+  const payload: any = await response.json().catch(() => null);
+  if (response.ok) {message = action === "verify" ? `${t.verification}: ${knowledgeLoopStatus(lang, payload.data.verification_outcome)}` : t.actionUpdated;redirectAfterPost();}
+  else error = knowledgeLoopError(lang, payload?.error?.code, payload?.error?.message ?? t.actionUpdateFailed);
+  }
+}
+
+
+if (!actionsResponse.ok && !error) error = actionsPayload?.error?.message ?? t.actionUpdateFailed;
+const format = (value: unknown) => typeof value === "number" ? new Intl.NumberFormat(lang).format(value) : "—";
+const target = (measurement: any) => measurement?.target?.direction === "range" ? `${format(measurement.target.min)}–${format(measurement.target.max)}` : format(measurement?.target?.value);
+const dashboardHref = (goalId: string) => `/dashboard/knowledge?${scope}&lang=${lang}#goal-${encodeURIComponent(goalId)}`;
+const nextStatuses = (item: any): Array<[string, string]> => {
+  const labels: Record<string, string> = { in_progress: t.inProgress, awaiting_verification: t.implementationDone, completed: t.complete, cancelled: t.cancel };
+  return (item.allowed_actions ?? []).filter((status: string) => labels[status]).map((status: string) => [status, labels[status]]);
+};
+
+if (!dashboardResponse.ok) error ||= dashboardPayload?.error?.message ?? text("目標を取得できませんでした。", "Goals could not be loaded.", "无法加载目标。");
+if (!capabilityResponse.ok) error ||= text("操作権限を取得できませんでした。", "Permissions could not be loaded.", "无法加载操作权限。");
+const externalHref=(value:string)=>{try {const url=new URL(value);return ["https:","http:"].includes(url.protocol)?value:null;} catch {return null;}};
+---
+
+<div data-extension-workspace="improvements">
+ {message && <p class="op-notice" role="status">{message}</p>}{error && <p class="op-notice" data-tone="error" role="alert">{error}</p>}{!writable && <p class="op-notice">{t.readOnly}</p>}
+ {sourceInProject && capabilityResponse.ok && capabilityPayload?.data?.improvement_actions?.allowed_actions?.includes("create") && <section class="op-panel"><div class="op-panel-heading"><h3>{t.addAction}</h3></div><form method="post" class="op-form op-panel-body"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="create"/><input type="hidden" name="retrospective_session_id" value={sourceSessionId ?? ""}/><input type="hidden" name="retrospective_item_id" value={sourceItemId ?? ""}/>
+ {sourceSessionId && sourceItemId && <p class="op-muted">{t.createdFromRetro}: {sourceSessionId} / {sourceItemId}</p>}
+ <div class="op-form-grid"><label>{t.improvement}<input name="title" value={value("title",sourceTitle)} required/></label><label>{t.owner}<input name="owner_principal" value={value("owner_principal")} placeholder="user:alice"/></label><label>{t.due}<input name="due_at" type="date" value={value("due_at")}/></label><label>{t.externalIssue}<input name="external_issue_url" type="url" value={value("external_issue_url")} placeholder="https://github.com/…"/></label></div>
+ <label>{t.description}<textarea name="description">{value("description")}</textarea></label><label>{t.linkedGoal}<select name="goal_link_id"><option value="">{t.noNumericVerification}</option>{goals.map((goal:any)=><option value={goal.link.id} selected={value("goal_link_id")===goal.link.id}>{goal.pack_title} · {goal.metric_label}</option>)}</select></label><div><button type="submit">{t.addAction}</button></div></form></section>}
+ <section class="op-panel"><div class="op-panel-heading"><h3>{text("改善の進み具合", "Improvement progress", "改进进展")}</h3></div>{actions.map((item:any)=><article class="op-improvement"><div class="op-actions"><h3>{item.title}</h3><span class="op-badge" data-state={item.status}>{knowledgeLoopStatus(lang,item.status)}</span></div><p class="op-muted">{item.owner_principal ?? t.unassigned} · {item.due_at ? new Date(item.due_at).toLocaleDateString(lang) : t.noDue}</p>{item.description && <p>{item.description}</p>}{item.external_issue_url && (externalHref(item.external_issue_url) ? <a href={externalHref(item.external_issue_url)!} target="_blank" rel="noreferrer">{t.externalIssueOpen} ↗</a> : <p class="op-muted">{item.external_issue_url}</p>)}
+ {item.measurement && <section class="op-improvement-measure"><h4>{item.measurement.pack_title} · {item.measurement.metric_label}</h4><p class="op-small">{knowledgeLoopStatus(lang,item.measurement.verification_state)}</p><dl>{[[t.baseline,format(item.measurement.baseline.value)],[t.current,item.measurement.current.state === "measured" ? format(item.measurement.current.value) : "—"],[t.target,target(item.measurement)]].map(([label,value])=><div><dt>{label}</dt><dd>{value} {knowledgeLoopUnit(lang,item.measurement.unit)}</dd></div>)}</dl></section>}
+ {item.verification_outcome && <p class="op-notice">{t.verification}: {knowledgeLoopStatus(lang,item.verification_outcome)}</p>}
+ {writable && <div class="op-actions">{nextStatuses(item).map(([status,label])=><form method="post" data-op-native-confirm={status === "cancelled" ? `${item.title}: ${label}` : undefined}><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="status"/><input type="hidden" name="id" value={item.id}/><input type="hidden" name="status" value={status}/><button class="op-secondary" type="submit">{label}</button></form>)}{item.status === "awaiting_verification" && item.goal_link_id && <a href={dashboardHref(item.goal_link_id)}>{t.measureAgain}</a>}{item.allowed_actions?.includes("verify") && <form method="post"><input type="hidden" name="csrf_token" data-op-csrf/><input type="hidden" name="action" value="verify"/><input type="hidden" name="id" value={item.id}/><button type="submit">{t.verifyNow}</button></form>}</div>}
+ </article>)}{actionsResponse.ok && actions.length===0 && <p class="op-empty">{t.noActions}</p>}</section>
+</div>
+<style>.op-improvement{padding:22px 24px;border-top:1px solid var(--op-line);display:grid;gap:14px}.op-improvement>p{overflow-wrap:anywhere}.op-improvement-measure{border:1px solid var(--op-line);border-radius:7px;padding:16px}.op-improvement-measure h4{font-size:14px;margin:0 0 5px}.op-improvement-measure dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.op-improvement-measure dt{font-size:12px;color:var(--op-muted)}.op-improvement-measure dd{margin:4px 0 0;font-variant-numeric:tabular-nums}</style>

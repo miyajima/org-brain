@@ -5,52 +5,46 @@ test.describe("keyboard-only administration flows", () => {
   test("skip link reaches the main content", async ({ page }) => {
     await page.goto(auditUrl("/overview"));
     await page.keyboard.press("Tab");
-    await expect(page.locator(".console-skip-link")).toBeFocused();
+    await expect(page.locator(".op-skip")).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#console-main")).toBeFocused();
+    await expect(page.locator("#main")).toBeFocused();
   });
 
   test("a user invitation can be completed on one screen", async ({ page }) => {
     await page.goto(auditUrl("/users", "en"));
-    const form = page.locator("#invite-user-title").locator("xpath=following::form[1]");
-    await form.locator('input[name="email"]').fill("new.member@example.com");
-    await form.locator('input[name="display_name"]').fill("New member");
-    await form.locator('select[name="role"]').selectOption("reader");
-    await form.locator('button[type="submit"]').focus();
+    const summary=page.getByText("Invite user",{exact:true});
+    await summary.focus();await page.keyboard.press("Enter");
+    const form=page.locator('[data-op-api-form][data-endpoint="/api/v1/users"]');
+    await form.getByLabel("Email",{exact:true}).fill("new.member@example.com");
+    await form.getByLabel("Display name").fill("New member");
+    await form.getByLabel("Role",{exact:true}).selectOption("reader");
+    await form.getByRole("button",{name:"Create invitation"}).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("dialog", { name: "Confirm this change" })).toBeVisible();
-    await page.getByRole("button", { name: "Apply change" }).focus();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button",{name:"Apply change"}).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByText("Invitation created.")).toBeVisible();
+    await expect(page.getByRole("status").filter({hasText:"Changes saved"})).toBeVisible();
   });
 
-  test("a failed task exposes cause, replay, and operations without a dead end", async ({ page }) => {
+  test("a failed task exposes cause and replay in the same workspace", async ({ page }) => {
     await page.goto(auditUrl("/tasks/task-failed", "en"));
-    await expect(page.locator("#replay-task")).toBeVisible();
-    await expect(page.getByRole("link", { name: /operations/i })).toBeVisible();
-    await page.locator("#replay-task").focus();
+    await expect(page.getByRole("heading",{name:"Selected task"})).toBeVisible();
+    const replay=page.getByRole("button",{name:"Replay task"});
+    await expect(replay).toBeVisible();
+    await replay.focus();await page.keyboard.press("Enter");
+    await page.getByRole("dialog").getByRole("button",{name:"Apply change"}).focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#replay-result")).toContainText(/replayed|task/i);
+    await expect(page.getByRole("status").filter({hasText:"Changes saved"})).toBeVisible();
   });
 
-  test("secondary operations stay compact and remain keyboard reachable", async ({ page }) => {
-    await page.goto(auditUrl("/operations", "en"));
-    const details = page.locator("[data-operations-secondary]");
-    const summary = details.locator(":scope > summary");
-    await expect(details).not.toHaveAttribute("open", "");
-    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(1900);
-    await summary.focus();
-    await page.keyboard.press("Enter");
-    await expect(details).toHaveAttribute("open", "");
-    await expect(page.getByRole("heading", { name: "Scheduled jobs", exact: true })).toBeVisible();
-    await summary.focus();
-    await page.keyboard.press("Enter");
-    const staleAction = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Scheduled jobs delayed" }) }).getByRole("link", { name: "Review details" });
-    await staleAction.focus();
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/#scheduled-jobs$/);
-    await expect(details).toHaveAttribute("open", "");
-    await expect(page.getByRole("heading", { name: "Scheduled jobs", exact: true })).toBeVisible();
+  test("operations and scheduled processing remain keyboard reachable", async ({ page }) => {
+    await page.goto(auditUrl("/settings", "en"));
+    const operations=page.getByRole("navigation",{name:"Management sections"}).getByRole("link",{name:"Processing",exact:true});
+    await operations.focus();await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/section=operations/u);
+    expect(await page.evaluate(()=>document.documentElement.scrollHeight)).toBeLessThan(1900);
+    await expect(page.getByRole("heading",{name:"Scheduled processing",exact:true})).toBeVisible();
+    await expect(page.getByText("Update overdue",{exact:true}).first()).toBeVisible();
   });
 
   test("history exposes current content, evidence, and comparison before analysis", async ({ page }) => {

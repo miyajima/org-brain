@@ -1,0 +1,29 @@
+---
+import ApiForm from "./ApiForm.astro";
+import { loadConsoleCapabilities } from "../../lib/capabilities";
+import { readConsoleData, operatorRequestUrl, operatorScope, operatorHref, apiScope, asRows, localText, displayNumber, displayDate, type OperatorLocale } from "../../lib/operator-console";
+import { knowledgeLoopStatus, knowledgeLoopUnit } from "../../lib/knowledge-loop-locale";
+interface Props {lang:OperatorLocale;}
+const {lang}=Astro.props,t=localText(lang),url=operatorRequestUrl(Astro.request),{tenantId,projectId}=operatorScope(url),scope=apiScope(url);
+const capabilities=await loadConsoleCapabilities(Astro.request);
+const enabled=capabilities?.organization_dashboard?.enabled===true;
+const [dashboard,improvements]=enabled?await Promise.all([readConsoleData(Astro.request,`/api/v1/dashboard/organization?${scope}`),capabilities?.improvement_actions?.enabled?readConsoleData(Astro.request,`/api/v1/improvement-actions?${scope}`):{data:null,error:null}]):[{data:null,error:null},{data:null,error:null}];
+const goals=asRows(dashboard.data,"goals");
+const actions=asRows(improvements.data).filter(item=>!projectId||item.project_id===projectId);
+const writable=capabilities?.organization_dashboard?.allowed_actions?.includes("manage")===true;
+const canImport=capabilities?.metric_import?.allowed_actions?.includes("manage")===true;
+const target=(goal:Record<string,any>)=>goal.target?.direction==="range"?`${displayNumber(goal.target.min,lang)}–${displayNumber(goal.target.max,lang)}`:displayNumber(goal.target?.value,lang);
+---
+<section class="op-section" aria-label={t("プロジェクトの指標と改善", "Project metrics and improvements", "项目指标与改进")}>
+ <p class="op-muted">{t("業務指標は期間の集計ではなく、最新の観測値を表示します。", "Business metrics show the latest observations rather than period totals.", "业务指标显示最新观察值，而非期间汇总。")}</p>
+ <div class="op-panel-heading" style="padding-inline:0"><h2>{t("プロジェクトの指標と改善", "Project metrics and improvements", "项目指标与改进")}</h2><a href={operatorHref(url,"/settings",{section:"metrics"})}>{t("指標を管理", "Manage metrics", "管理指标")}</a></div>
+ {!enabled?<p class="op-muted">{t("この範囲では業務指標を利用できません。", "Business metrics are unavailable in this scope.", "此范围内业务指标不可用。")}</p>:dashboard.error?<p class="op-notice" data-tone="error" role="alert">{dashboard.error}</p>:<>
+  {goals.length===0&&<div class="op-panel"><p class="op-empty">{t("目標はまだ登録されていません。管理画面から業務パックと指標を設定できます。", "No goals recorded yet. Configure domain packs and metrics in Manage.", "尚未登记目标，可在管理中配置业务包和指标。")}</p></div>}
+  {goals.map(goal=><section class="op-panel" id={`goal-${goal.link.id}`}><div class="op-panel-heading"><div><h3>{goal.metric_label}</h3><p>{goal.pack_title}</p></div><span class="op-badge">{knowledgeLoopStatus(lang,goal.current?.state||"unknown")}</span></div><div class="op-panel-body"><dl class="op-definition"><dt>{t("現在値", "Current", "当前值")}</dt><dd>{displayNumber(goal.current?.value,lang,goal.current?.state||"unknown")} {knowledgeLoopUnit(lang,goal.unit)}</dd><dt>{t("目標", "Target", "目标")}</dt><dd>{target(goal)} {knowledgeLoopUnit(lang,goal.unit)}</dd><dt>{t("前回値", "Previous", "上次值")}</dt><dd>{displayNumber(goal.comparison?.previous_value,lang)}</dd><dt>{t("観測日時", "Observed", "观察时间")}</dt><dd>{displayDate(goal.current?.observed_at,lang)}</dd></dl>{goal.source?.latest_run&&<p class="op-muted">{t("取得処理", "Import processing", "获取处理")}: {knowledgeLoopStatus(lang,goal.source.latest_run.status)}</p>}
+  {goal.source?.binding_id&&canImport?<ApiForm endpoint={`/api/v1/metric-source-bindings/${encodeURIComponent(goal.source.binding_id)}/import`} hidden={{tenant_id:tenantId}} submit={t("最新の値を取得", "Import latest value", "获取最新值")} formKind="idempotent" responseMode="queued"/>:!goal.source?.binding_id&&writable?<details class="op-edit"><summary>{t("新しい観測値を記録", "Record an observation", "记录新的观察值")}</summary><ApiForm endpoint={`/api/v1/dashboard/organization/knowledge-packs/${encodeURIComponent(goal.link.knowledge_pack_installation_id)}/goals/${encodeURIComponent(goal.link.id)}/snapshots`} hidden={{tenant_id:tenantId,observed_at:Date.now()}} submit={t("観測値を保存", "Save observation", "保存观察值")} formKind="idempotent" fields={[{name:"value",label:t("観測した値", "Observed value", "观察值"),type:"number",dataType:"number",step:"any",required:true},{name:"evidence_ref",label:t("根拠の参照先（任意）", "Evidence reference (optional)", "依据引用（可选）"),dataType:"nullable"}]}/></details>:null}
+  </div></section>)}
+ </>}
+ {actions.length>0&&<section class="op-panel"><div class="op-panel-heading"><h3>{t("改善の基準値と確認結果", "Improvement baselines and results", "改进基准与确认结果")}</h3></div>{actions.map(item=><a class="op-row" href={operatorHref(url,"/settings",{section:"improvements",id:item.id})}><div class="op-row-main"><strong>{item.title}</strong><p>{t("基準値", "Baseline", "基准值")}: {displayNumber(item.measurement?.baseline?.value,lang)} · {t("現在値", "Current", "当前值")}: {displayNumber(item.measurement?.current?.value,lang,item.measurement?.current?.state||"unknown")}</p><p>{t("検証結果", "Verification result", "验证结果")}: {item.verification_outcome?knowledgeLoopStatus(lang,item.verification_outcome):t("未確認", "Unconfirmed", "未确认")}</p></div><span class="op-row-end">{t("確認", "Review", "确认")}</span></a>)}</section>}
+ {improvements.error&&<p class="op-notice" data-tone="error">{improvements.error}</p>}
+ <div class="op-actions"><a href={operatorHref(url,"/settings",{section:"retrospectives"})}>{t("振り返りを開く", "Open retrospectives", "打开复盘")}</a><a href={operatorHref(url,"/settings",{section:"improvements"})}>{t("改善アクションを確認", "Review improvement actions", "查看改进行动")}</a></div>
+</section>

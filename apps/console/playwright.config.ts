@@ -36,6 +36,7 @@ export default defineConfig({
       timeout: 30_000,
       env: {
         ORGBRAIN_CONSOLE_RUNTIME: "node",
+        CONSOLE_E2E_DISABLE_TOOLBAR: "true",
         API_BASE_URL: `http://127.0.0.1:${mockApiPort}`,
         INTERNAL_API_KEY: "dev-org-brain-api-key",
         ACCESS_JWT_REQUIRED: "false",
