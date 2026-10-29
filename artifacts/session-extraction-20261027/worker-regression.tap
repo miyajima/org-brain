@@ -1,0 +1,184 @@
+TAP version 13
+# Subtest: automatic wake is explicit, scoped, detached and contains no credential arguments
+ok 1 - automatic wake is explicit, scoped, detached and contains no credential arguments
+  ---
+  duration_ms: 35.390459
+  type: 'test'
+  ...
+# Subtest: competing manual and automatic drains serialize model calls in one project
+ok 2 - competing manual and automatic drains serialize model calls in one project
+  ---
+  duration_ms: 161.193792
+  type: 'test'
+  ...
+# Subtest: batch release hands off late queued work without resending completed calls
+ok 3 - batch release hands off late queued work without resending completed calls
+  ---
+  duration_ms: 115.236
+  type: 'test'
+  ...
+# Subtest: unknown running calls stay untouched; failed calls do not cause an automatic retry loop
+ok 4 - unknown running calls stay untouched; failed calls do not cause an automatic retry loop
+  ---
+  duration_ms: 97.886166
+  type: 'test'
+  ...
+# Subtest: native Stop wakes after insertion and duplicate delivery, but explicit config cannot inherit autorun
+ok 5 - native Stop wakes after insertion and duplicate delivery, but explicit config cannot inherit autorun
+  ---
+  duration_ms: 29.515917
+  type: 'test'
+  ...
+# Subtest: real CLI Stop detaches the worker and saves through the ordinary path without manual run
+ok 6 - real CLI Stop detaches the worker and saves through the ordinary path without manual run
+  ---
+  duration_ms: 554.39625
+  type: 'test'
+  ...
+# Subtest: dead worker ownership can recover, while budget exhaustion never starts a continuation
+ok 7 - dead worker ownership can recover, while budget exhaustion never starts a continuation
+  ---
+  duration_ms: 93.264917
+  type: 'test'
+  ...
+# Subtest: an old lease cannot mistake a reused live PID for its original owner
+ok 8 - an old lease cannot mistake a reused live PID for its original owner
+  ---
+  duration_ms: 86.99475
+  type: 'test'
+  ...
+# Subtest: missing provider cost remains unknown in worker status
+ok 9 - missing provider cost remains unknown in worker status
+  ---
+  duration_ms: 56.24575
+  type: 'test'
+  ...
+# Subtest: a provider failure stops the automatic batch and leaves later pending work unsent
+ok 10 - a provider failure stops the automatic batch and leaves later pending work unsent
+  ---
+  duration_ms: 36.438041
+  type: 'test'
+  ...
+# Subtest: busy first project cannot bypass the configured all-project batch limit
+ok 11 - busy first project cannot bypass the configured all-project batch limit
+  ---
+  duration_ms: 127.762625
+  type: 'test'
+  ...
+# Subtest: ordinary extraction rejects empty success and decision, even with support
+ok 12 - ordinary extraction rejects empty success and decision, even with support
+  ---
+  duration_ms: 0.847833
+  type: 'test'
+  ...
+# Subtest: reported verification survives normalized body while remaining unverified
+ok 13 - reported verification survives normalized body while remaining unverified
+  ---
+  duration_ms: 5.327583
+  type: 'test'
+  ...
+# Subtest: common client adapters preserve user, final and report; exclude thinking and other sessions
+ok 14 - common client adapters preserve user, final and report; exclude thinking and other sessions
+  ---
+  duration_ms: 15.781083
+  type: 'test'
+  ...
+# Subtest: common worker has no CLI dependency, pins Haiku/medium and reads persisted body back
+ok 15 - common worker has no CLI dependency, pins Haiku/medium and reads persisted body back
+  ---
+  duration_ms: 142.919625
+  type: 'test'
+  ...
+# Subtest: atomic reason/exception/result input is retained whole or held, never prefix clipped
+ok 16 - atomic reason/exception/result input is retained whole or held, never prefix clipped
+  ---
+  duration_ms: 3.238125
+  type: 'test'
+  ...
+# Subtest: failed provider attempt stays held and is never resent; review bodies cannot be automatically promoted
+ok 17 - failed provider attempt stays held and is never resent; review bodies cannot be automatically promoted
+  ---
+  duration_ms: 85.865
+  type: 'test'
+  ...
+# Subtest: Claude tool result retains same call identity and excludes subagent output
+ok 18 - Claude tool result retains same call identity and excludes subagent output
+  ---
+  duration_ms: 1.333625
+  type: 'test'
+  ...
+# Subtest: Claude and Cursor Stop enqueue in the normal CLI with no Codex executable
+ok 19 - Claude and Cursor Stop enqueue in the normal CLI with no Codex executable
+  ---
+  duration_ms: 252.359416
+  type: 'test'
+  ...
+# Subtest: empty optional field does not discard another substantive candidate; all-empty still rejected
+ok 20 - empty optional field does not discard another substantive candidate; all-empty still rejected
+  ---
+  duration_ms: 0.426875
+  type: 'test'
+  ...
+# Subtest: storage never silently changes the extraction body; opaque generated keys stay stable
+ok 21 - storage never silently changes the extraction body; opaque generated keys stay stable
+  ---
+  duration_ms: 7.262916
+  type: 'test'
+  ...
+# Subtest: provider usage cannot lower the monthly budget with negative accounting
+ok 22 - provider usage cannot lower the monthly budget with negative accounting
+  ---
+  duration_ms: 0.272292
+  type: 'test'
+  ...
+# Subtest: Haiku worker rejects an old Sonnet response rather than accepting a fallback
+ok 23 - Haiku worker rejects an old Sonnet response rather than accepting a fallback
+  ---
+  duration_ms: 0.213417
+  type: 'test'
+  ...
+# Subtest: explicit failed Claude results cannot become successful verification evidence
+ok 24 - explicit failed Claude results cannot become successful verification evidence
+  ---
+  duration_ms: 2.994
+  type: 'test'
+  ...
+# Subtest: same-speaker explicit reason and decision are indivisible across input limits
+ok 25 - same-speaker explicit reason and decision are indivisible across input limits
+  ---
+  duration_ms: 2.292125
+  type: 'test'
+  ...
+# Subtest: promotion-disabled rows do not consume the maintenance selection limit
+ok 26 - promotion-disabled rows do not consume the maintenance selection limit
+  ---
+  duration_ms: 7.383792
+  type: 'test'
+  ...
+# Subtest: input holds survive enqueue and status without retaining original text
+ok 27 - input holds survive enqueue and status without retaining original text
+  ---
+  duration_ms: 4.26425
+  type: 'test'
+  ...
+# Subtest: native Cursor Stop resolves workspace_roots without invented cwd
+ok 28 - native Cursor Stop resolves workspace_roots without invented cwd
+  ---
+  duration_ms: 4.824417
+  type: 'test'
+  ...
+# Subtest: Claude API request blobs are not user messages; real sensitive user input stays denied
+ok 29 - Claude API request blobs are not user messages; real sensitive user input stays denied
+  ---
+  duration_ms: 3.374833
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1450.020875

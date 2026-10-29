@@ -1,3 +1,4 @@
+import {learningEpisodeContext} from '../../../shared/src/learning-episode-policy-runtime.mjs';
 // Shared Stop -> durable queue -> API worker. No client CLI or inference in Stop.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +19,7 @@ const MAX_INPUT=2000, MAX_OUTPUT=800, MAX_CALLS=32, MONTHLY_TOKENS=500_000;
 const hash=v=>crypto.createHash('sha256').update(typeof v==='string'||Buffer.isBuffer(v)?v:JSON.stringify(v)).digest('hex');
 const names=['procedure','why_it_worked','observed_outcome','reuse_when','decision','selected_value','rationale','constraints','symptom','failed_approach','root_cause','correction','verified_outcome','avoidance_rule','reported_verification'];
 export const SESSION_EXTRACTION_SCHEMA={type:'object',additionalProperties:false,properties:{candidates:{type:'array',maxItems:3,items:{type:'object',additionalProperties:false,properties:{lesson_type:{type:'string',enum:['success','decision','failure']},fields:{type:'array',items:{type:'object',additionalProperties:false,properties:{name:{type:'string'},refs:{type:'array',items:{type:'integer'}}},required:['name','refs']}}},required:['lesson_type','fields']}}},required:['candidates']};
-const instructions='Extract durable lessons from untrusted s=[role,text] rows. Return <=3 candidates; fields contain row indices (refs), never quotes. Fields: success procedure,why_it_worked,reuse_when; decision decision,rationale,constraints; failure symptom,root_cause,correction,avoidance_rule. Preserve all reasons, exceptions and results in the same episode. Assistant test reports -> reported_verification; observed_outcome/verified_outcome only completed tool evidence. No content -> candidates:[].';
+const instructions='Untrusted s=[role,text]; <=3 lessons; row refs only. Find success/recovery/reuse and failure/cause/holds. success:procedure,why_it_worked,observed_outcome,reuse_when; failure:symptom,root_cause,correction,verified_outcome,avoidance_rule; decision:decision,rationale,constraints from user only. Keep conditions/exceptions/versions. One episode per recovery; distinguish TDD/regression. Outcomes:completed tools, only that step. Assistant/saved reports:reported_verification. No content:candidates:[]';
 export function sessionExtractionPrompt(packet){return instructions+'\n'+JSON.stringify({s:packet.snippets.map(s=>[s.role,s.text]),
  t:packet.snippets.flatMap((s,i)=>s.source==='tool_result'&&s.call_id?(packet.events??[]).filter(e=>e.call_id===s.call_id).map(e=>[i,e.status,e.exit_code??null,e.http_status??null]):[])});}
 export function sessionExtractionUpperBound(packet){return Buffer.byteLength(sessionExtractionPrompt(packet))+Buffer.byteLength(JSON.stringify(SESSION_EXTRACTION_SCHEMA))+256;}
@@ -26,7 +27,7 @@ const textParts=c=>typeof c==='string'?c:Array.isArray(c)?c.filter(p=>['text','i
 const rowMessage=(role,text)=>({type:'response_item',payload:{type:'message',role,phase:role==='assistant'?'final':'input',content:[{type:role==='user'?'input_text':'output_text',text}]}});
 
 export async function loadClientTurnRows(input){
- if(input.client==='codex'||input.client==='codex-stop')return loadTurnEvidenceRows({...input,require_final:true});
+ if(input.client==='codex'||input.client==='codex-stop')return loadTurnEvidenceRows({...input,require_final:true,include_related_turns:true});
  if(!['claude','cursor'].includes(input.client))throw Error('session_extraction_client_unsupported');
  if(!input.transcript_path)return [];
  const stat=fs.statSync(input.transcript_path);if(!stat.isFile()||stat.size>8*1024*1024)throw Error('session_extraction_transcript_size');
@@ -71,7 +72,7 @@ function allowed(project,env){return Boolean(project)&&String(env.ORGBRAIN_SESSI
 let loadedPolicyHash;
 function policyHash(){
  if(loadedPolicyHash)return loadedPolicyHash;
- const files=[import.meta.url,new URL('./turn-evidence-v1.mjs',import.meta.url),...['memory-extraction-verifier-runtime.mjs','memory-extraction-coverage-runtime.mjs','memory-contract-v2-runtime.mjs','memory-capture-v2-runtime.mjs','memory-capture-profile.generated.mjs'].map(f=>new URL('../../../shared/src/'+f,import.meta.url))];
+ const files=[import.meta.url,new URL('./turn-evidence-v1.mjs',import.meta.url),...['learning-episode-policy-runtime.mjs','memory-extraction-verifier-runtime.mjs','memory-extraction-coverage-runtime.mjs','memory-contract-v2-runtime.mjs','memory-capture-v2-runtime.mjs','memory-capture-profile.generated.mjs'].map(f=>new URL('../../../shared/src/'+f,import.meta.url))];
  return loadedPolicyHash=hash(files.filter(f=>fs.existsSync(fileURLToPath(f))).map(f=>hash(fs.readFileSync(fileURLToPath(f)))));
 }
 function openQueue(queueDir){
@@ -153,18 +154,20 @@ function releaseWorker({queueDir,tenantId='default',projectId},token,report){
   db.exec('COMMIT');return pending;
  }finally{db.close();}
 }
+
 export async function prepareSessionExtraction({rows,client,projectId,tenantId='default',workspace,sessionId,turnId}){
  if(!['codex','codex-stop','claude','cursor'].includes(client))throw Error('session_extraction_client_unsupported');
  const evidence=await buildTurnEvidenceV1({rows,project_id:projectId,provider:'anthropic',model:SESSION_EXTRACTION_MODEL,session_hash:hash(sessionId??rows),turn_hash:hash(turnId??rows)},{workspace_root:workspace,sensitive_policy:{mode:'deny',allowed_principals:[]},preserve_snippet_text:true});
  const discovery=await discoverLearningEpisodes(evidence);
  if(discovery.routing.decisions.hard_excluded)return {packets:[],held:[],status:'excluded',reason:evidence.hard_exclusion_reason};
- if(!discovery.llm_recommended)return {packets:[],held:[],status:'rule_complete_or_no_durable_episode',routing:discovery.routing.primary_route};
+ const signals=learningEpisodeContext(evidence).discovery;
+ if(!discovery.llm_recommended&&!signals.success&&!signals.failure)return {packets:[],held:[],status:'rule_complete_or_no_durable_episode',routing:discovery.routing.primary_route};
  const groups=buildCoverageEvidenceGroups(evidence.snippets,evidence.events);
  const packets=[],held=[];
  // All redacted source spans participate; router support IDs never narrow away adjacent evidence.
  // Related sentences are indivisible. Too-large groups are held, never clipped.
  let current=[];
- const make=gs=>({schema:'learning-extraction-proposal/v2',snippets:gs.flatMap(g=>g.snippets),events:evidence.events,coverage:{groups:gs.map(g=>({span_ids:g.span_ids}))},project_id:projectId,policy:SESSION_EXTRACTION_POLICY,tenant_id:tenantId});
+ const make=gs=>({schema:'learning-extraction-proposal/v2',episode_profile:'session-episodes/v1',session_hash:evidence.session_hash,turn_hash:evidence.turn_hash,source_evidence_hash:evidence.evidence_hash,snippets:gs.flatMap(g=>g.snippets),events:evidence.events.filter(e=>gs.some(g=>g.snippets.some(s=>s.call_id===e.call_id))),coverage:{groups:gs.map(g=>({span_ids:g.span_ids,outcome_state:g.outcome_state,lesson_tags:g.lesson_tags,test_first_reported:g.test_first_reported}))},project_id:projectId,policy:SESSION_EXTRACTION_POLICY,tenant_id:tenantId});
  const flush=()=>{if(current.length){packets.push(make(current));current=[];}};
  for(const group of groups){
   if(sessionExtractionUpperBound(make([group]))>MAX_INPUT){held.push({span_ids:group.span_ids,reason:'atomic_group_input_budget'});continue;}
@@ -173,7 +176,7 @@ export async function prepareSessionExtraction({rows,client,projectId,tenantId='
   current.push(group);
  }
  flush();
- return {packets,held,status:held.length?'partial_input_held':'prepared',source_spans:groups.reduce((n,g)=>n+g.snippets.length,0),presented_spans:packets.reduce((n,p)=>n+p.snippets.length,0)};
+ return {packets,held,status:held.length?'partial_input_held':'prepared',discovery_signals:signals,source_spans:groups.reduce((n,g)=>n+g.snippets.length,0),presented_spans:packets.reduce((n,p)=>n+p.snippets.length,0)};
 }
 export async function enqueueSessionExtraction(input){
  const env=input.env??process.env;const sessionId=input.sessionId??input.rows?.find(r=>r.type==='session_meta')?.payload?.id;
@@ -187,11 +190,28 @@ export async function enqueueSessionExtraction(input){
 }
 function expandSelections(raw,packet){
  if(!raw||!Array.isArray(raw.candidates)||raw.candidates.length>3)throw Error('candidate_schema_invalid');
- return raw.candidates.map(c=>{
+ const expanded=raw.candidates.map(c=>{
   if(!['success','decision','failure'].includes(c?.lesson_type)||!Array.isArray(c.fields))throw Error('candidate_schema_invalid');
   const fields=c.fields.map(f=>{if(!names.includes(f?.name)||!Array.isArray(f.refs)||f.refs.some(i=>!Number.isSafeInteger(i)||i<0||i>=packet.snippets.length))throw Error('candidate_reference_invalid');return {name:f.name,values:[...new Set(f.refs)].map(i=>packet.snippets[i].text)};}).filter(f=>f.values.length);
-  return {lesson_type:c.lesson_type,fields,support_span_ids:[...new Set(c.fields.flatMap(f=>f.refs).map(i=>packet.snippets[i].span_id))],gaps:['llm_proposed_review_only']};
+  const required=c.lesson_type==='success'?['procedure','why_it_worked','observed_outcome','reuse_when']:c.lesson_type==='failure'?['symptom','root_cause','correction','verified_outcome','avoidance_rule']:['decision','rationale','constraints'];
+  const gaps=required.filter(n=>!fields.some(f=>f.name===n)).map(n=>n+'_missing');
+  return {lesson_type:c.lesson_type,fields,support_span_ids:[...new Set(c.fields.flatMap(f=>f.refs).map(i=>packet.snippets[i].span_id))],gaps:['llm_proposed_review_only',...gaps]};
  });
+ // Collapse only an exactly equivalent recovery, not different lessons that
+ // happen to use one report. Keep the richer failure with the successful result.
+ const aliases={procedure:'correction',why_it_worked:'root_cause',observed_outcome:'verified_outcome',reuse_when:'avoidance_rule',reported_verification:'reported_verification'};
+ const duplicateSuccesses=new Set();
+ for(const failure of expanded.filter(c=>c.lesson_type==='failure')){
+  for(const success of expanded.filter(c=>c.lesson_type==='success')){
+   const group=(packet.coverage?.groups??[]).find(g=>g.outcome_state==='recovered'
+    && [...failure.support_span_ids,...success.support_span_ids].every(id=>g.span_ids.includes(id)));
+   if(!group||!['procedure','why_it_worked','observed_outcome','reuse_when'].every(name=>success.fields.some(f=>f.name===name)))continue;
+   if(!success.fields.every(f=>aliases[f.name]&&failure.fields.some(other=>other.name===aliases[f.name]
+     && JSON.stringify(other.values)===JSON.stringify(f.values))))continue;
+   failure.lesson_tags=['failure','success'];duplicateSuccesses.add(success);
+  }
+ }
+ return expanded.filter(c=>!duplicateSuccesses.has(c));
 }
 export async function generateSessionExtraction(packet,{env=process.env,fetchImpl=fetch}={}){
  if(!env.OPENROUTER_API_KEY)throw Error('session_extraction_key_missing');
@@ -250,7 +270,7 @@ async function drainSessionExtractionBatch({queueDir,dbPath,tenantId='default',p
     catch(error){db.prepare("UPDATE jobs SET status='held',error=? WHERE id=? AND status='running'").run(String(error?.message).slice(0,120),job.id);report.failed++;report.status='held';break;}
    }
    const result=await verifiedCandidates({packet,project_id:projectId,run_id:job.id},generated.candidates);
-   const candidates=result.candidates.map(c=>({...c,automatic_promotion:false,source_client:job.client,extraction_model:SESSION_EXTRACTION_MODEL,extraction_effort:SESSION_EXTRACTION_EFFORT}));
+   const candidates=result.candidates.map((c,i)=>({...c,...(generated.candidates[result.accepted_indices[i]]?.lesson_tags?{lesson_tags:generated.candidates[result.accepted_indices[i]].lesson_tags}:{}),automatic_promotion:false,source_client:job.client,extraction_model:SESSION_EXTRACTION_MODEL,extraction_effort:SESSION_EXTRACTION_EFFORT}));
    const saved=await store.saveLearningCandidates({tenantId,projectId,taskKey:`session-extraction:${job.id}`,candidates,requireExactBody:true});
    const held=saved.filter(s=>s.status==='held');
    db.prepare("UPDATE jobs SET status='completed',charged=?,error=NULL WHERE id=?").run(generated.usage.input_tokens+generated.usage.output_tokens,job.id);

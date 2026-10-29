@@ -1,3 +1,4 @@
+import {learningEpisodeContext,LEARNING_SUCCESS_SIGNAL,LEARNING_PROCEDURE_SIGNAL} from '../../../shared/src/learning-episode-policy-runtime.mjs';
 import { collectCoverageReviewSignals, annotateCoverageReviewSignals } from "./coverage-review-signals.mjs";
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -106,8 +107,47 @@ function toolInvocationName(payload) {
 
 function coordinationCall(payload) {
   const name = toolInvocationName(payload);
+  // A wrapper returning another chat/child report is not first-hand evidence.
+  if (/^(?:functions\.)?exec$/u.test(name)
+    && /(?:tools\.|collaboration\.)(?:\w*__)?(?:read_thread|wait_threads|send_message_to_thread|spawn_agent|followup_task|wait_agent|list_agents)\s*\(/u.test(String(payload.arguments ?? payload.input ?? ""))) return true;
   return ["function_call", "custom_tool_call", "mcp_tool_call", "mcp_tool_call_begin", "mcp_tool_call_end"].includes(payload?.type)
-    && (name.startsWith("collaboration.") || /(?:^|[._])(?:spawn_agent|followup_task|interrupt_agent|list_agents|send_message_to_thread|read_thread|wait_threads|wait_agent)$/u.test(name));
+    && (name.startsWith("collaboration.") || /(?:^|[._])(?:spawn_agent|followup_task|interrupt_agent|list_agents|send_message|send_message_to_thread|read_thread|wait_threads|wait_agent)$/u.test(name));
+}
+
+function unquotedMessageText(text) {
+  return text.replace(/```[^\n]*\n[\s\S]*?```/gu, (block) =>
+    /^\s*(?:user|assistant|system|developer)\s*[:：]/imu.test(block.split("\n").slice(1).join("\n")) ? "" : block)
+    .split("\n").filter((line) => !/^\s*>/u.test(line)).join("\n");
+}
+
+function operationResults(rows) {
+  const byCall = new Map();
+  for (const row of rows) {
+    const call = toolCallFromRow(row);
+    const result = toolResultFromRow(row);
+    if (call) byCall.set(call.call_id, { ...byCall.get(call.call_id), ...call });
+    if (result) byCall.set(result.call_id, { ...byCall.get(result.call_id), ...result });
+  }
+  return [...byCall.values()].filter((event) => event.name && event.argument_hash && event.result_hash);
+}
+
+function relatedHistory(history, rows, cwd, currentBytes) {
+  let selectedBytes = currentBytes;
+  let operations = operationResults(rows);
+  const selected = [];
+  // Only contiguous, same-workspace completed turns with the same operation
+  // and a failed result can connect. Different arguments remain unlinked.
+  for (const previous of [...history].reverse()) {
+    if (previous.cwd !== cwd) break;
+    if (selectedBytes + previous.bytes > MAX_TURN_BYTES) break;
+    const prior = operationResults(previous.rows);
+    if (!prior.some((left) => operations.some((right) => left.name === right.name
+      && left.argument_hash === right.argument_hash && (left.status === "failed" || right.status === "failed")))) break;
+    selected.unshift(...previous.rows);
+    selectedBytes += previous.bytes;
+    operations = prior;
+  }
+  return selected;
 }
 
 export async function loadTurnEvidenceRows(input = {}) {
@@ -119,30 +159,54 @@ export async function loadTurnEvidenceRows(input = {}) {
   let matched = null;
   let currentTurnId = "";
   let currentCwd = "";
+  let currentTime = null;
+  let history = [];
   let excludedCalls = new Set();
   let skipped = {};
   let matchedDiagnostics = null;
   const requestedTurn = typeof input.turn_id === "string" ? input.turn_id.trim() : "";
+  const timeBound = (value) => {
+    if (value == null) return null;
+    const parsed = Date.parse(value);
+    if (!Number.isFinite(parsed)) throw new Error("turn_evidence_time_window_invalid");
+    return parsed;
+  };
+  const since = timeBound(input.since), until = timeBound(input.until);
+  if (since !== null && until !== null && since > until) throw new Error("turn_evidence_time_window_invalid");
   const stream = createReadStream(input.transcript_path, { encoding: "utf8" });
   const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   const flush = () => {
-    if (current.length > 0 && (!requestedTurn || requestedTurn === currentTurnId)) {
+    if (current.length > 0) {
       const hasFinal = current.some((row) => ["final", "final_answer"].includes(rowPayload(row)?.phase));
       const completed = hasFinal && current.some((row) => {
         const payload = rowPayload(row);
         return ["task_complete", "task_completed"].includes(payload?.type)
           && (!payload.turn_id || payload.turn_id === currentTurnId);
       });
-      matched = input.require_completed === true && !completed || input.require_final === true && !hasFinal
-        ? [] : [...(sessionMeta ? [sessionMeta] : []), ...current];
-      matchedDiagnostics = { schema: "turn-evidence-read/v1", retained_rows: matched.length, completed,
-        turn_context_count: current.filter((row) => row.type === "turn_context" || rowPayload(row)?.type === "turn_context").length,
-        skipped: { ...skipped } };
+      const inWindow = since === null && until === null || currentTime !== null
+        && (since === null || currentTime >= since) && (until === null || currentTime <= until);
+      if ((!requestedTurn || requestedTurn === currentTurnId) && inWindow) {
+        if (input.workspace && currentCwd && path.resolve(input.workspace) !== path.resolve(currentCwd)) throw new Error("turn_evidence_scope_mismatch");
+        const eligible = !(input.require_completed === true && !completed || input.require_final === true && !hasFinal);
+        const prior = eligible && input.include_related_turns === true ? relatedHistory(history, current, currentCwd, currentBytes) : [];
+        if (eligible || requestedTurn || since === null && until === null) {
+          matched = eligible ? [...(sessionMeta ? [sessionMeta] : []), ...prior, ...current] : [];
+          matchedDiagnostics = { schema: "turn-evidence-read/v1", retained_rows: matched.length, completed,
+            related_turn_count: prior.filter((row) => row.type === "turn_context").length,
+            turn_context_count: current.filter((row) => row.type === "turn_context" || rowPayload(row)?.type === "turn_context").length,
+            skipped: { ...skipped } };
+        }
+      }
+      if (input.include_related_turns === true && hasFinal && inWindow) {
+        history.push({ rows: current, cwd: currentCwd, bytes: currentBytes });
+        while (history.length > 3 || history.reduce((n, turn) => n + turn.bytes, 0) > MAX_TURN_BYTES) history.shift();
+      }
     }
     current = [];
     currentBytes = 0;
     currentTurnId = "";
     currentCwd = "";
+    currentTime = null;
     excludedCalls = new Set();
     skipped = {};
   };
@@ -158,6 +222,8 @@ export async function loadTurnEvidenceRows(input = {}) {
     if (row?.type === "session_meta") {
       flush();
       if (row.payload?.source && typeof row.payload.source === "object") throw new Error("turn_evidence_subagent_session");
+      if (input.session_id && row.payload?.id && row.payload.id !== input.session_id) throw new Error("turn_evidence_session_mismatch");
+      history = [];
       sessionMeta = { ...row, payload: Object.fromEntries(["id", "cwd", "source", "model_provider", "timestamp"]
         .filter((key) => row.payload?.[key] !== undefined).map((key) => [key, row.payload[key]])) };
       continue;
@@ -171,15 +237,22 @@ export async function loadTurnEvidenceRows(input = {}) {
       else if (cwd && currentCwd && cwd !== currentCwd) throw new Error("turn_evidence_scope_mismatch");
       currentTurnId = turnId;
       currentCwd ||= cwd;
+      currentTime ??= Number.isFinite(Date.parse(row.timestamp ?? payload.timestamp)) ? Date.parse(row.timestamp ?? payload.timestamp) : null;
     }
-    if (requestedTurn && currentTurnId !== requestedTurn) continue;
+    if (requestedTurn && currentTurnId !== requestedTurn && input.include_related_turns !== true) continue;
     if (["reasoning", "agent_reasoning"].includes(payload?.type)
       || payload?.role === "assistant" && ["analysis", "reasoning"].includes(payload?.phase)) {
       skipped.reasoning = (skipped.reasoning ?? 0) + 1;
       continue;
     }
+    if (currentTurnId && currentTime === null && Number.isFinite(Date.parse(row.timestamp))) currentTime = Date.parse(row.timestamp);
     currentBytes += Buffer.byteLength(line);
-    if (currentBytes > MAX_TURN_BYTES) throw new Error("turn_evidence_turn_too_large");
+    if (currentBytes > MAX_TURN_BYTES) {
+      if (input.include_related_turns === true && requestedTurn && currentTurnId !== requestedTurn) {
+        current = []; history = []; skipped.oversized_history = 1; continue;
+      }
+      throw new Error("turn_evidence_turn_too_large");
+    }
     const message = messageFromRow(row);
     if (["system", "developer"].includes(payload?.role) || message?.role === "user" && isInjectedUserContextText(message.text)) {
       skipped.instructions = (skipped.instructions ?? 0) + 1;
@@ -320,6 +393,14 @@ function toolCallFromRow(row, workspaceRoot) {
         .filter((path) => path && !path.startsWith("/") && !path.split("/").includes(".."))
         .slice(0, 32)
     : [];
+  let parsedArguments = effectiveArguments;
+  if (typeof parsedArguments === "string") {
+    try { parsedArguments = JSON.parse(parsedArguments); } catch { parsedArguments = null; }
+  }
+  const command = String(parsedArguments?.cmd ?? parsedArguments?.command ?? "").trim();
+  const recordRead = /(?:^|[._])(?:read_file|read|wiki_read|wiki_source_read|read_page|read_page_reference)$/u.test(name)
+    || /^(?:exec_command|Bash|functions\.exec_command)$/u.test(name)
+      && /^(?:cat|sed|head|tail|rg|less|more)\s/u.test(command);
   return {
     call_id: String(payload.call_id ?? payload.id ?? sha256(stableJson(payload)).slice(0, 24)),
     type: name === "request_user_input"
@@ -333,6 +414,7 @@ function toolCallFromRow(row, workspaceRoot) {
           : "tool_execution",
     name,
     status: payload.status === "failed" || payload.error ? "failed" : type === "mcp_tool_call_end" ? "completed" : "started",
+    evidence_kind: recordRead ? "record_read" : "tool_result",
     argument_hash: `sha256:${sha256(stableJson(effectiveArguments))}`,
     result_hash: effectiveResult === undefined ? null : `sha256:${sha256(stableJson(effectiveResult))}`,
     exit_code: Number.isInteger(payload.exit_code) ? payload.exit_code : null,
@@ -359,7 +441,12 @@ function toolResultFromRow(row) {
   const httpMatch = serialized.match(/\bHTTP\/?\d(?:\.\d)?\s+(\d{3})\b/iu);
   const exitCode = Number.isInteger(payload.exit_code) ? payload.exit_code : Number.isInteger(structured?.exit_code) ? structured.exit_code : exitMatch ? Number(exitMatch[1]) : null;
   const httpStatus = Number.isInteger(payload.http_status) ? payload.http_status : Number.isInteger(structured?.http_status) ? structured.http_status : httpMatch ? Number(httpMatch[1]) : null;
-  const failed = ["failed", "error", "cancelled", "incomplete"].includes(payload.status) || ["failed", "error", "cancelled", "incomplete"].includes(structured?.status) || payload.is_error === true || structured?.is_error === true || (exitCode !== null && exitCode !== 0) || (httpStatus !== null && httpStatus >= 400) || /\b(?:error|failed|failure|exception)\b|(?:エラー|失敗)/iu.test(serialized.slice(0, 1_000));
+  const explicitFailure = ["failed", "error", "cancelled", "incomplete"].includes(payload.status)
+    || ["failed", "error", "cancelled", "incomplete"].includes(structured?.status)
+    || payload.is_error === true || structured?.is_error === true || payload.isError === true || structured?.isError === true
+    || (exitCode !== null && exitCode !== 0) || (httpStatus !== null && httpStatus >= 400);
+  const successfulCode = exitCode === 0 || httpStatus !== null && httpStatus >= 200 && httpStatus < 300;
+  const failed = explicitFailure || !successfulCode && /\b(?:error|failed|failure|exception)\b|(?:エラー|失敗)/iu.test(serialized.slice(0, 1_000));
   return {
     call_id: String(payload.call_id ?? payload.id ?? sha256(serialized).slice(0, 24)),
     status: failed ? "failed" : "completed",
@@ -822,9 +909,16 @@ export async function buildTurnEvidenceV1(input, options = {}) {
   let model = clip(input?.model, 128) || null;
   let hardExclusion = null;
   let parentTextClipped = 0;
+  let turnId = null;
+  let turnTimestamp = null;
 
   for (const [sourceOrder, row] of rows.entries()) {
     const payload = rowPayload(row);
+    if (row.type === "turn_context" || payload?.type === "turn_context") {
+      turnId = payload.turn_id ?? null;
+      turnTimestamp = row.timestamp ?? payload.timestamp ?? null;
+    }
+    const provenance = { turn_id: turnId, timestamp: row.timestamp ?? turnTimestamp };
     const callId = String(payload?.call_id ?? payload?.id ?? "");
     if (coordinationCall(payload)) {
       if (callId) excludedCallIds.add(callId);
@@ -841,8 +935,9 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     if (payload?.type === "turn_context") model ||= clip(payload.model, 128) || null;
     if (row?.type === "session_meta") provider ||= clip(row.payload?.model_provider, 64) || null;
 
+    if (message?.role === "assistant" && !["final", "final_answer"].includes(message.phase)) continue;
     if (message?.text) {
-      const normalized = normalizeMemoryPaths(message.text, options.workspace_root ?? null);
+      const normalized = normalizeMemoryPaths(unquotedMessageText(message.text), options.workspace_root ?? null);
       if (UNSAFE_SIGNAL.test(normalized)) {
         hardExclusion = "unsafe_instruction";
         break;
@@ -860,7 +955,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
         if (options.preserve_snippet_text !== true && clip(stripped, Number.MAX_SAFE_INTEGER).length > 4_000) parentTextClipped += 1;
         const text = options.preserve_snippet_text === true ? stripped.trim() : clip(stripped, 4_000);
         if (!text) continue;
-        const messageKey = `${message.role}\0${text}`;
+        const messageKey = `${turnId ?? ""}\0${message.role}\0${text}`;
         const existingSpanId = messageSpanByKey.get(messageKey);
         if (existingSpanId) {
           snippetAliases[spanId] = existingSpanId;
@@ -870,6 +965,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
         snippets.push({
           span_id: spanId,
           source_order: sourceOrder,
+          ...provenance,
           role: message.role,
           kind: message.role === "assistant" ? "assistant_final" : "user_message",
           text,
@@ -879,7 +975,7 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     }
 
     const call = toolCallFromRow(row, options.workspace_root);
-    if (call) eventsByCall.set(call.call_id, { ...eventsByCall.get(call.call_id), ...call });
+    if (call) eventsByCall.set(call.call_id, { ...eventsByCall.get(call.call_id), ...call, ...provenance });
     const result = toolResultFromRow(row);
     if (options.preserve_snippet_text === true && (result || payload?.type === "mcp_tool_call_end")) {
       const toolCallId = result?.call_id ?? call?.call_id;
@@ -890,25 +986,29 @@ export async function buildTurnEvidenceV1(input, options = {}) {
       if (toolCallId && screened.text.trim() && !snippets.some((snippet) => snippet.call_id === toolCallId)) {
         toolSpanIndex += 1;
         const text = screened.text.trim();
-        snippets.push({ span_id: `t${toolSpanIndex}`, source_order: sourceOrder, role: "tool", source: "tool_result", call_id: toolCallId,
+        snippets.push({ span_id: `t${toolSpanIndex}`, source_order: sourceOrder, ...provenance, role: "tool", source: "tool_result", call_id: toolCallId,
           kind: "tool_result", text, text_hash: `sha256:${sha256(text)}` });
       }
     }
-    if (result) eventsByCall.set(result.call_id, { ...eventsByCall.get(result.call_id), ...result });
+    if (result) eventsByCall.set(result.call_id, { ...eventsByCall.get(result.call_id), ...result, ...provenance });
   }
 
   const events = [...eventsByCall.values()].map((event, index) => ({
     event_id: `e${index + 1}`,
     call_id: event.call_id,
+    turn_id: event.turn_id ?? null,
+    timestamp: event.timestamp ?? null,
     type: event.type ?? "tool_execution",
     name: event.name ?? "tool",
     status: event.status ?? "unknown",
     argument_hash: event.argument_hash ?? null,
     result_hash: event.result_hash ?? null,
+    evidence_kind: event.evidence_kind ?? "unknown",
     exit_code: event.exit_code ?? null,
     http_status: event.http_status ?? null,
     changed_paths: event.changed_paths ?? []
   }));
+  const retainedEventLimit = options.preserve_snippet_text === true ? events.length : 24;
   const retainedSnippetLimit = options.preserve_snippet_text === true ? snippets.length : 8;
   const retainedSnippets = hardExclusion ? [] : snippets.slice(0, retainedSnippetLimit);
   const retainedSpanIds = new Set(retainedSnippets.map((snippet) => snippet.span_id));
@@ -927,11 +1027,11 @@ export async function buildTurnEvidenceV1(input, options = {}) {
     snippets: annotateCoverageReviewSignals(retainedSnippets, reviewDiagnostics),
     ...(!hardExclusion ? { review_diagnostics: reviewDiagnostics } : {}),
     snippet_aliases: hardExclusion ? {} : retainedAliases,
-    events: hardExclusion ? [] : events.slice(0, 24),
+    events: hardExclusion ? [] : events.slice(0, retainedEventLimit),
     hard_exclusion_reason: hardExclusion,
     collection_diagnostics: { schema: "memory-extraction-collection/v1", input_rows: rows.length,
       parent_text_clipped: parentTextClipped, snippets_omitted: hardExclusion ? snippets.length : Math.max(0, snippets.length - retainedSnippetLimit),
-      events_omitted: hardExclusion ? events.length : Math.max(0, events.length - 24),
+      events_omitted: hardExclusion ? events.length : Math.max(0, events.length - retainedEventLimit),
       partial_due_to_safety_stop: Boolean(hardExclusion) },
     raw_transcript_persisted: false,
     reasoning_included: false,
@@ -941,7 +1041,13 @@ export async function buildTurnEvidenceV1(input, options = {}) {
 }
 
 export async function discoverLearningEpisodes(turnEvidence, options = {}) {
-  const routing = routeTurnEvidence(turnEvidence, { model: options.router_model, version: options.router_version });
+  const originalRouting = routeTurnEvidence(turnEvidence, { model: options.router_model, version: options.router_version });
+  const episodeContext = learningEpisodeContext(turnEvidence);
+  const discovered = episodeContext.discovery.success || episodeContext.discovery.failure;
+  const routing = !originalRouting.decisions.hard_excluded && !originalRouting.llm_recommended && discovered ? {...originalRouting,
+    disposition:"llm_candidate", llm_recommended:true,
+    decisions:{...originalRouting.decisions,durable_candidate:true},
+    reason_codes:[...originalRouting.reason_codes,"shared_episode_discovery"]} : originalRouting;
   if (routing.decisions.hard_excluded) {
     return {
       drafts: [],
@@ -971,7 +1077,8 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
       failed_approach: null,
       root_cause: clause(spans, REASON_SIGNAL),
       correction: correction?.text ?? null,
-      verified_outcome: textualSuccess?.text ?? (successfulEvent ? `${successfulEvent.name} completed successfully after the failed attempt.` : null),
+      verified_outcome: successfulEvent ? `${successfulEvent.name} completed successfully after the failed attempt.` : null,
+      ...(textualSuccess ? {reported_verification:{state:"unverified",text:textualSuccess.text}} : {}),
       avoidance_rule: clause(spans, REUSE_SIGNAL)
     };
     const gaps = missingGaps(fields);
@@ -996,10 +1103,10 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
 
   const searchedDecision = explicitUserDecisionSpans(spans)[0] ?? null;
   const decision = searchedDecision
-    ?? spans.find((span) => DECISION_SIGNAL.test(span.text) && !TRANSIENT_CHOICE.test(span.text) && DURABLE_SCOPE.test(span.text));
+    ?? spans.find((span) => span.role === "user" && DECISION_SIGNAL.test(span.text) && !TRANSIENT_CHOICE.test(span.text) && DURABLE_SCOPE.test(span.text));
   if (decision && proposals.length < MEMORY_EXTRACTION_MAX_CANDIDATES) {
     const decisionType = inferDecisionType(decision.text);
-    const rationale = clause(spans, REASON_SIGNAL);
+    const rationale = clause(spans.filter(span=>span.role==="user"), REASON_SIGNAL);
     const fields = {
       decision_type: decisionType,
       decision_key: `inferred.${sha256(decision.text).slice(0, 24)}`,
@@ -1037,18 +1144,19 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
     if (proposal) proposals.push(proposal);
   }
 
-  const success = textualSuccess ?? firstMatch(spans, SUCCESS_SIGNAL);
+  const success = textualSuccess ?? firstMatch(spans, LEARNING_SUCCESS_SIGNAL);
   const procedure = success
-    ? (CORRECTION_SIGNAL.test(success.text)
+    ? (LEARNING_PROCEDURE_SIGNAL.test(success.text)
         ? success
-        : spans.slice(0, findIndex(spans, success)).reverse().find((span) => CORRECTION_SIGNAL.test(span.text)))
+        : spans.slice(0, findIndex(spans, success)).reverse().find((span) => LEARNING_PROCEDURE_SIGNAL.test(span.text)))
     : null;
-  const verifiedTool = events.find((event) => event.status === "completed" && (event.exit_code === 0 || event.http_status >= 200 && event.http_status < 300));
-  if ((success || verifiedTool) && procedure && proposals.length < MEMORY_EXTRACTION_MAX_CANDIDATES) {
+  const verifiedTool = events.find((event) => event.evidence_kind !== "record_read" && event.status === "completed" && (event.exit_code === 0 || event.http_status >= 200 && event.http_status < 300));
+  if ((success || verifiedTool) && procedure && !(failedEvent && successfulEvent && proposals.some(p=>p.observation.lesson_type==="failure")) && proposals.length < MEMORY_EXTRACTION_MAX_CANDIDATES) {
     const fields = {
       procedure: procedure.text,
       why_it_worked: clause(spans, REASON_SIGNAL),
-      observed_outcome: success?.text ?? null,
+      observed_outcome: turnEvidence.snippets.find(s=>s.source==="tool_result"&&s.call_id===verifiedTool?.call_id)?.text ?? null,
+      ...(success ? {reported_verification:{state:"unverified",text:success.text}} : {}),
       reuse_when: clause(spans, REUSE_SIGNAL)
     };
     const observation = {
@@ -1081,6 +1189,7 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
     : "";
   return {
     drafts: [],
+    episode_context: episodeContext,
     review_drafts: routing.decisions.durable_candidate ? reviewDrafts : [],
     excluded: routing.disposition === "discard"
       ? routing.reason_codes.map((reason) => ({ reason, disposition: "filtered" }))
