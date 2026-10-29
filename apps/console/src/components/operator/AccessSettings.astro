@@ -1,0 +1,15 @@
+---
+import ApiForm from "./ApiForm.astro";
+import { readConsoleData, apiScope, operatorRequestUrl, localText, stateLabel, type OperatorLocale } from "../../lib/operator-console";
+interface Props { resourceType:string; resourceId:string; lang:OperatorLocale; canShare:boolean; title:string; }
+const {resourceType,resourceId,lang,canShare,title}=Astro.props;
+const t=localText(lang),scope=apiScope(operatorRequestUrl(Astro.request));
+const result=await readConsoleData(Astro.request,`/api/v1/access-policies/${resourceType}/${encodeURIComponent(resourceId)}?${scope}`);
+const policy=result.data?.policy;
+---
+<details class="op-edit"><summary>{title}</summary>{result.error?<p class="op-notice" data-tone="error">{result.error}</p>:policy?<><dl class="op-definition"><dt>{t("共有範囲", "Access scope", "共享范围")}</dt><dd>{stateLabel(policy.scope,lang)}</dd><dt>{t("保存先", "Storage", "存储位置")}</dt><dd>{policy.storage_location||"—"}</dd><dt>{t("所有者", "Owner", "所有者")}</dt><dd>{policy.owner_principal||"—"}</dd></dl>{canShare&&<ApiForm endpoint={`/api/v1/access-policies/${resourceType}/${encodeURIComponent(resourceId)}?${scope}`} method="PUT" hidden={{tenant_id:scope.get("tenant_id"),owner_principal:policy.owner_principal,expected_policy_version:policy.policy_version}} submit={t("共有設定を保存", "Save access", "保存共享设置")} confirm={t("閲覧できる対象を変更します。共有範囲を確認してください。", "Change who can access this item. Review the scope.", "更改可访问此项目的对象，请确认共享范围。")} fields={[
+ {name:"scope",label:t("共有範囲", "Access scope", "共享范围"),type:"select",value:policy.scope,options:["private","project","group","tenant","restricted"].map(value=>[value,stateLabel(value,lang)])},
+ {name:"project_id",label:t("プロジェクト", "Project", "项目"),value:policy.project_id||"",dataType:"nullable"},
+ {name:"group_ids",label:t("グループID（カンマ区切り）", "Group IDs (comma-separated)", "群组ID（逗号分隔）"),value:(policy.group_ids||[]).join(", "),dataType:"array"},
+ {name:"restricted_subjects",label:t("限定対象（1行に principal:ID または group:ID）", "Restricted subjects (principal:ID or group:ID per line)", "限定对象（每行 principal:ID 或 group:ID）"),type:"textarea",dataType:"subjects",value:(policy.restricted_subjects||[]).map((item:{subject_type:string;subject_id:string})=>`${item.subject_type}:${item.subject_id}`).join("\n")}
+ ]}/>}</>:<p class="op-muted">{t("共有設定を確認できません。", "Access settings unavailable.", "无法确认共享设置。")}</p>}</details>

@@ -1,126 +1,146 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("authenticated console flows", () => {
-  test("shows login identity and saves display-only profile fields", async ({ page }) => {
-    await page.goto("/profile");
-
-    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-    await expect(page.getByText("user:e2e-login-sub · access-jwt")).toBeVisible();
-    await expect(page.getByLabel("Display name")).toHaveValue("E2E Login User");
-    await expect(page.getByLabel("Full name")).toHaveValue("E2E Full Name");
-    await expect(page.getByLabel("Company name")).toHaveValue("Example Holdings");
-
-    await page.getByLabel("Full name").fill("Updated E2E Full Name");
-    await page.getByLabel("Company name").fill("Cross Company Alliance");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-
-    await expect(page.getByText("Saved")).toBeVisible();
+  test("shows login identity and saves only display profile fields", async ({ page }) => {
+    await page.goto("/profile?tenant_id=default&project_id=org-brain&lang=en");
+    await expect(page).toHaveURL(/\/settings\?.*section=profile/);
+    await expect(page.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
+    const technical = page.locator("details").filter({ has: page.locator("summary", { hasText: "Technical details" }) });
+    await technical.locator(":scope > summary").click();
+    await expect(technical).toContainText("user:e2e-login-sub");
+    await expect(technical).toContainText("access-jwt");
+    const form = page.locator('[data-op-api-form][data-endpoint="/api/v1/auth/me/profile"]');
+    await expect(form.getByLabel("Display name", { exact: true })).toHaveValue("E2E Login User");
+    await expect(form.getByLabel("Full name", { exact: true })).toHaveValue("E2E Full Name");
+    await expect(form.getByLabel("Company name", { exact: true })).toHaveValue("Example Holdings");
+    await form.getByLabel("Full name", { exact: true }).fill("Updated E2E Full Name");
+    await form.getByLabel("Company name", { exact: true }).fill("Cross Company Alliance");
+    const response = page.waitForResponse(response => response.url().includes("/api/v1/auth/me/profile") && response.request().method() === "PUT");
+    await form.getByRole("button", { name: "Save changes", exact: true }).click();
+    const saved = await response;
+    expect(saved.status()).toBe(200);
+    const payload = saved.request().postDataJSON();
+    expect(payload).toMatchObject({ tenant_id: "default", full_name: "Updated E2E Full Name", company_name: "Cross Company Alliance", display_name: "E2E Login User" });
+    expect(Object.keys(payload).sort()).toEqual(["company_name", "display_name", "full_name", "organization_name", "tenant_id"]);
+    await expect(page.getByRole("status").filter({ hasText: "Changes saved." })).toBeVisible();
+    await expect(page).toHaveURL(/project_id=org-brain/);
   });
 
-  test("searches, opens, and refreshes a managed memory", async ({ page }) => {
+  test("searches, opens and refreshes a memory while preserving context", async ({ page }) => {
     await page.setViewportSize({ width: 1159, height: 863 });
-    await page.goto("/memories");
-
-    await expect(page.getByRole("heading", { name: "Memory Explorer" })).toBeVisible();
-    await expect(page.getByRole("navigation").getByRole("link", { name: "Knowledge connections" })).toBeVisible();
-    await expect(page.locator('.memory-map-link[href^="/memories/constellation"]')).toBeVisible();
-    await expect(page.getByText("記憶を探す前から最近の流れが見えるようにして")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "最近のメモリ" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Login principal group ACL design" }).first()).toBeVisible();
-    await expect(page.getByText("Answer blocked pending review").first()).toBeVisible();
-    await expect(page.getByText("Conflicting evidence").first()).toBeVisible();
-    await expect(page.locator("[data-memory-metrics]")).toBeVisible();
-    await expect(page.locator("[data-memory-metrics]")).toContainText("1");
-    const searchPanel = page.locator("[data-memory-search-panel]");
-    await expect(searchPanel).not.toHaveAttribute("open", "");
-    await expect(page.getByLabel("Search memories")).toBeHidden();
-    expect(await page.locator(".memory-list-row").evaluateAll((rows) => rows.every((row) => row.scrollWidth <= row.clientWidth))).toBe(true);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-
-    await searchPanel.locator(":scope > summary").click();
-    await expect(page.getByLabel("Search memories")).toBeVisible();
-    await page.locator(".memory-advanced-panel > summary").click();
-    await expect(page.getByLabel("History context")).toBeVisible();
-    expect(await page.getByLabel("Rewrite query").evaluate((select) => ({ background: getComputedStyle(select).backgroundImage, paddingRight: getComputedStyle(select).paddingRight }))).toEqual(expect.objectContaining({ paddingRight: "36px" }));
-    await expect(page.getByText("最近参照した内容を検索候補に含める設定です")).toBeVisible();
-
-    await page.getByLabel("Search memories").fill("group ACL login principal");
-    await page.getByRole("button", { name: "Search memory" }).click();
-
+    await page.goto("/memories?tenant_id=default&project_id=org-brain&lang=en");
+    await expect(page).toHaveURL(/\/knowledge\?/);
+    await expect(page.getByRole("heading", { name: "Knowledge", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Login principal group ACL design/u }).first()).toBeVisible();
+    expect(await page.locator("[data-knowledge-row]").evaluateAll(rows => rows.every(row => row.scrollWidth <= row.clientWidth))).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByLabel("Search knowledge", { exact: true }).fill("group ACL login principal");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page).toHaveURL(/q=group\+ACL\+login\+principal/);
-    await expect(page.getByText("Ranked matches")).toBeVisible();
-    await expect(page.getByText("mock-hybrid")).toBeVisible();
-    await expect(page.getByText("Login principals and group ACLs decide who can read shared organization memory.").first()).toBeVisible();
-
+    const selectedResult = page.getByRole("link", { name: /Login principal group ACL design/u }).first();
+    await expect(selectedResult).toContainText("Login principals and group ACLs decide who can read shared organization memory.");
     await page.setViewportSize({ width: 1159, height: 420 });
-    const selectedResult = page.getByRole("link", { name: /Login principal group ACL design/ }).first();
     await selectedResult.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollBy(0, 120));
-    const scrollBeforeSelection = await page.evaluate(() => window.scrollY);
-    expect(scrollBeforeSelection).toBeGreaterThan(0);
-    await page.evaluate(() => {
-      document.addEventListener("click", () => {
-        window.sessionStorage.setItem("e2e:memory-click-scroll-y", String(window.scrollY));
-      }, { capture: true, once: true });
-    });
+    await page.evaluate(() => document.addEventListener("click", () => {
+      sessionStorage.setItem("e2e:memory-click-scroll-y", String(scrollY));
+    }, { capture: true, once: true }));
     await selectedResult.click();
-
-    await expect(page).toHaveURL(/selected=mem_auth_group_acl/);
-    const scrollAtClick = await page.evaluate(() => Number(window.sessionStorage.getItem("e2e:memory-click-scroll-y")));
-    expect(scrollAtClick).toBeGreaterThan(0);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollAtClick);
-    const selectedPanel = page.locator(".memory-detail-panel");
-    await expect(selectedPanel.getByRole("heading", { name: "Login principal group ACL design" })).toBeVisible();
-    await expect(selectedPanel.locator(".memory-detail-primary")).not.toContainText("org-brain");
-    await expect(selectedPanel.locator(".memory-detail-primary")).not.toContainText("user:e2e-login-sub");
-    await expect(selectedPanel.locator(".memory-detail-primary")).not.toContainText("active");
-    await expect(selectedPanel.getByText("Answer blocked pending review", { exact: true })).toBeVisible();
-    await expect(selectedPanel.getByText("Conflicting evidence", { exact: true })).toBeVisible();
-    const technicalInformation = selectedPanel.locator(".memory-detail-more").first();
-    await expect(technicalInformation).not.toHaveAttribute("open", "");
-    await technicalInformation.locator(":scope > summary").click();
-    await expect(technicalInformation.getByText("user:e2e-login-sub").first()).toBeVisible();
-    expect(await selectedPanel.evaluate((panel) => panel.scrollWidth <= panel.clientWidth)).toBe(true);
-    await expect(page.getByText("Lifecycle actions")).toBeVisible();
-
-    const refreshResponse = page.waitForResponse((response) =>
-      response.url().includes("/api/v1/memories/refresh") && response.status() === 200
-    );
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await refreshResponse;
-
-    await expect(page.getByRole("heading", { name: "Memory Explorer" })).toBeVisible();
+    await expect(page).toHaveURL(/id=mem_auth_group_acl/);
+    const scope = new URL(page.url()).searchParams;
+    expect(Object.fromEntries(["q", "tenant_id", "project_id", "lang"].map(key => [key, scope.get(key)]))).toEqual({ q: "group ACL login principal", tenant_id: "default", project_id: "org-brain", lang: "en" });
+    const clickedScroll = await page.evaluate(() => Number(sessionStorage.getItem("e2e:memory-click-scroll-y")));
+    expect(clickedScroll).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(clickedScroll);
+    const detail = page.locator("[data-knowledge-detail]");
+    await expect(detail.getByRole("heading", { name: "Login principal group ACL design", exact: true })).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Content", exact: true })).toBeVisible();
+    await expect(detail).toContainText("Login principals and group ACLs decide who can read shared organization memory.");
+    await expect(detail).toContainText("Answer blocked pending review");
+    await expect(detail).toContainText("Conflicting evidence");
+    const provenance = detail.locator("details").filter({ has: page.locator("summary", { hasText: "Technical details" }) });
+    await expect(provenance).not.toHaveAttribute("open", "");
+    await provenance.locator(":scope > summary").click();
+    await expect(provenance.getByText("user:e2e-login-sub", { exact: true }).first()).toBeVisible();
+    expect(await detail.evaluate(panel => panel.scrollWidth <= panel.clientWidth)).toBe(true);
+    const response = page.waitForResponse(response => response.url().includes("/api/v1/memories/refresh") && response.request().method() === "POST");
+    await detail.getByRole("button", { name: "Refresh", exact: true }).click();
+    const refreshed = await response;
+    expect(refreshed.status()).toBe(200);
+    expect(refreshed.request().postDataJSON()).toMatchObject({ tenant_id: "default", memory_id: "mem_auth_group_acl" });
+    await expect(page.getByRole("status").filter({ hasText: "Changes saved." })).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Login principal group ACL design", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/q=group\+ACL\+login\+principal/);
   });
 
-  test("preserves a memory conflict from Operations through review", async ({ page }) => {
-    await page.goto("/operations");
-    const conflict = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Memory conflicts" }) });
-    await expect(conflict).toContainText("1 memories conflict");
-    await conflict.getByRole("link", { name: "Review details" }).click();
-
-    await expect(page).toHaveURL(/attention=critical/);
-    await expect(page.getByText("Needs attention", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Answer blocked pending review").first()).toBeVisible();
-    await expect(page.getByText("Conflicting evidence").first()).toBeVisible();
+  test("shows memory versions and reviews a lifecycle change before applying it", async ({ page }) => {
+    await page.goto("/knowledge?tenant_id=default&project_id=org-brain&lang=en&kind=memory&id=mem_auth_group_acl");
+    const detail = page.locator("[data-knowledge-detail]");
+    await detail.getByRole("link", { name: "Use history", exact: true }).click();
+    const versions = detail.locator("details").filter({ has: page.locator("summary", { hasText: "Version history" }) });
+    await versions.locator(":scope > summary").click();
+    await expect(versions).toContainText("v3");
+    await expect(versions).toContainText("Login principal group ACL design");
+    await detail.getByRole("link", { name: "Content", exact: true }).click();
+    await detail.getByText("Change use status", { exact: true }).click();
+    const form = page.locator('[data-op-api-form][data-endpoint="/api/v1/memories/suppress"]');
+    await form.getByLabel("Reason for excluding", { exact: true }).fill("Conflicting ACL guidance needs review");
+    let writes = 0;
+    page.on("request", request => { if (request.url().includes("/api/v1/memories/suppress") && request.method() === "POST") writes++; });
+    await form.getByRole("button", { name: "Exclude this memory", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("The original is retained.");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(writes).toBe(0);
+    await expect(form.getByLabel("Reason for excluding", { exact: true })).toHaveValue("Conflicting ACL guidance needs review");
+    await form.getByRole("button", { name: "Exclude this memory", exact: true }).click();
+    const response = page.waitForResponse(response => response.url().includes("/api/v1/memories/suppress") && response.request().method() === "POST");
+    await dialog.getByRole("button", { name: "Apply change", exact: true }).click();
+    const saved = await response;
+    expect(saved.status()).toBe(200);
+    expect(saved.request().postDataJSON()).toMatchObject({ tenant_id: "default", memory_id: "mem_auth_group_acl", reason: "Conflicting ACL guidance needs review" });
+    expect(writes).toBe(1);
+    await expect(page).toHaveURL(/id=mem_auth_group_acl/);
+    await expect(page.getByRole("status").filter({ hasText: "Changes saved." })).toBeVisible();
   });
 
-  test("opens and revises an existing decision without dashboard regressions", async ({ page }) => {
-    await page.goto("/decisions?tenant_id=default&project_id=org-brain&lang=ja");
+  test("opens a conflicting memory from Home and preserves the review target", async ({ page }) => {
+    await page.goto("/?tenant_id=default&project_id=org-brain&lang=en");
+    const attention = page.locator("section").filter({ has: page.getByRole("heading", { name: "Needs your attention", exact: true }) });
+    const conflict = attention.getByRole("link", { name: /Login principal group ACL design/u });
+    await expect(conflict).toContainText("Conflicting records need review.");
+    await conflict.click();
+    const params = new URL(page.url()).searchParams;
+    expect(Object.fromEntries(["id", "kind", "tenant_id", "project_id", "lang"].map(key => [key, params.get(key)]))).toEqual({ id: "mem_auth_group_acl", kind: "memory", tenant_id: "default", project_id: "org-brain", lang: "en" });
+    const detail = page.locator("[data-knowledge-detail]");
+    await expect(detail).toContainText("Answer blocked pending review");
+    await expect(detail).toContainText("Conflicting evidence");
+    await detail.getByRole("link", { name: "Evidence", exact: true }).click();
+    await expect(detail).toContainText("Use login principal for shared memory access.");
+    await expect(page).toHaveURL(/id=mem_auth_group_acl/);
+  });
 
-    await expect(page.getByRole("heading", { name: "判断知識エディタ" })).toBeVisible();
-    await expect(page.locator("#editor h2")).toHaveText("Use authenticated principals for shared memory");
-    await expect(page.getByText("前版からの変更項目").first()).toBeVisible();
-    await expect(page.getByText("未確認の推定 → 人が確認済み")).toBeVisible();
-    await expect(page.getByText("要確認 → 有効")).toBeVisible();
-    await page.getByLabel("改訂メモ").fill("Dashboard regression check");
-
-    const reviseResponse = page.waitForResponse((response) =>
-      response.url().includes("/api/v1/decision-memories/decision-e2e/revise") && response.status() === 200
-    );
-    await page.getByRole("button", { name: "改訂を保存" }).click();
-    await reviseResponse;
-
-    await expect(page.getByRole("heading", { name: "判断知識エディタ" })).toBeVisible();
-    await expect(page.locator("#editor h2")).toHaveText("Use authenticated principals for shared memory");
+  test("reviews previous decision changes and saves a revision in the same context", async ({ page }) => {
+    await page.goto("/knowledge?tenant_id=default&project_id=org-brain&lang=ja&kind=decision&id=decision-e2e");
+    const detail = page.locator("[data-knowledge-detail]");
+    await expect(detail.getByRole("heading", { name: "Use authenticated principals for shared memory", exact: true })).toBeVisible();
+    await detail.getByText("変更履歴", { exact: true }).click();
+    await expect(detail.getByText("未確認の推定 → 人が確認済み", { exact: true })).toBeVisible();
+    await expect(detail.getByText("要確認 → 有効", { exact: true })).toBeVisible();
+    await detail.getByText("判断を修正・確認", { exact: true }).click();
+    const form = detail.locator('[data-op-api-form][data-endpoint^="/api/v1/decision-memories/decision-e2e/revise"]');
+    await expect(form.getByLabel("判断", { exact: true })).toHaveValue("Only authenticated principals may read restricted organization memory.");
+    await form.getByLabel("改訂メモ", { exact: true }).fill("Dashboard regression check");
+    const response = page.waitForResponse(response => response.url().includes("/api/v1/decision-memories/decision-e2e/revise") && response.request().method() === "POST");
+    await form.getByRole("button", { name: "変更を保存", exact: true }).click();
+    const revised = await response;
+    expect(revised.status()).toBe(200);
+    expect(revised.request().postDataJSON()).toMatchObject({ title: "Use authenticated principals for shared memory", note: "Dashboard regression check" });
+    expect(revised.request().postDataJSON()).not.toHaveProperty("confirmationState");
+    const params = new URL(page.url()).searchParams;
+    expect(Object.fromEntries(["id", "kind", "tenant_id", "project_id", "lang"].map(key => [key, params.get(key)]))).toEqual({ id: "decision-e2e", kind: "decision", tenant_id: "default", project_id: "org-brain", lang: "ja" });
+    await expect(page.getByRole("status").filter({ hasText: "変更を保存しました。" })).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Use authenticated principals for shared memory", exact: true })).toBeVisible();
   });
 });

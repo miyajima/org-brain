@@ -60,12 +60,12 @@ test("captures the full desktop and mobile administration route matrix", async (
   }
 
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto(`/overview?${scope}`);
-  await page.locator(".console-nav-menu summary").click();
+  await page.goto(`/settings?${scope}`);
+  await expect(page.getByRole("navigation",{name:"管理項目"})).toBeVisible();
   await page.screenshot({ path: resolve(outputDirectory, "desktop-management-menu.png"), fullPage: false });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/overview?${scope}`);
-  await page.locator(".console-mobile-nav summary").click();
+  await page.goto(`/settings?${scope}`);
+  await expect(page.getByRole("navigation",{name:"管理項目"})).toBeVisible();
   await page.screenshot({ path: resolve(outputDirectory, "mobile-management-menu.png"), fullPage: false });
 });
