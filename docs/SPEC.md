@@ -12,8 +12,10 @@ last_updated: 2026-08-20
 Cloudflare上で、Memory/Artifactsに加えて組織Functionとして動くタスク/イベント駆動の通信バスを提供する。
 加えて、task / event / artifact / memory を正本のまま維持しつつ、人間とエージェント向けの知識インターフェースとして interlinked markdown docs layer を提供する。
 
-Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Skill
-とNamed Agent Loadoutは、確認済みの知識を実務へ配布する層として扱う。
+Consoleの主要画面は `ホーム / 知識 / 管理` とし、組織の運用担当者が
+蓄積された知識と実際の利用を確認し、必要な内容を修正する導線を中心とする。
+`Decision -> Reason -> Evidence -> Artifact` は知識の根拠を確認する機能として維持し、
+SkillとNamed Agent Loadoutは、確認済みの知識を実務へ配布する層として扱う。
 
 ## Requirements
 
@@ -51,9 +53,14 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - R-RECALL-006: portable import MUST verify canonical record and archive digests,
   reject same-ID/different-digest conflicts, and plan before apply. Cloud
   promotion MUST leave Local in read-cache plus proposal-outbox mode.
-- R-DEC-001: Console MUST use `Decisions / Map / Skills / Agents / Reviews` as
-  its primary navigation. Users, groups, storage, tasks, resources, memory, and
-  operations MUST remain available under supporting or Manage navigation.
+- R-DEC-001: Console MUST use `Home / Knowledge / Manage` (`/`, `/knowledge`,
+  `/settings`) as its primary navigation. Home MUST distinguish retained knowledge,
+  reported use, latest business observations/targets, and unavailable data.
+  Knowledge MUST support same-page list/detail
+  inspection of content, evidence, use history, and access. Decision, Map, Skill,
+  Agent, Review, and specialized management functions MUST remain reachable through
+  Knowledge, Manage, or supporting routes. This supersedes the former five-item
+  primary navigation requirement; server authentication and ACLs remain authoritative.
 - R-DEC-002: Decision Briefing MUST identify new, changed, expired,
   unconfirmed, artifact-unlinked, and sharing-pending decisions, include a
   reason summary and next action, and let a user reach the full decision chain
@@ -416,7 +423,14 @@ Consoleの主導線は `Decision -> Reason -> Evidence -> Artifact` とし、Ski
 - Task events table kind: `created`, `queued`, `started`, `completed`, `failed`, `memory.search`
 
 ## Console Pages
-- `/`: Decision Briefing
+- `/`: operator Home — retained knowledge, reported use, review items, recent activity,
+  and latest business observations/targets with authorized snapshot/import actions
+- `/knowledge`: memory, decision, and source search with same-page detail views
+- `/settings`: organization/access, AI connections/delivery, and operations/extensions,
+  including integrated pack, metric, retrospective, and improvement workspaces
+- Primary navigation is Home / Knowledge / Manage; see `CONSOLE_OPERATOR_UX.md`.
+- The routes below are supporting or specialized surfaces. Retained forms may use
+  the shared operator shell without having their full workflow rebuilt.
 - `/decisions`: decision search and index
 - `/decisions/new`: decision creation
 - `/decisions/:id`: Decision Trace and same-screen preview

@@ -43,8 +43,9 @@ describe("server-rendered API authentication", () => {
     expect((await api("/api/v1/memories/search", { method: "POST" })).status).toBe(200);
     expect((await api("/api/v1/memories/profile", { method: "POST" })).status).toBe(200);
     expect((await api("/api/v1/decision-memories/search", { method: "POST" })).status).toBe(200);
+    expect((await api("/api/v1/resources/search", { method: "POST" })).status).toBe(200);
     expect((await api("/api/v1/memories", { method: "POST" })).status).toBe(403);
     expect((await api("/api/v1/decision-memories/search", { method: "PUT" })).status).toBe(403);
-    expect(transport).toHaveBeenCalledTimes(3);
+    expect(transport).toHaveBeenCalledTimes(4);
   });
 });

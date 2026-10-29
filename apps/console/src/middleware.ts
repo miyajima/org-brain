@@ -1,7 +1,29 @@
 import { defineMiddleware } from "astro:middleware";
 import { capabilityPaths, loadConsoleCapabilities } from "./lib/capabilities";
+import { legacyConsoleDestination } from "./lib/operator-console";
 
-export const onRequest = defineMiddleware(async ({ request, url }, next) => {
+export const onRequest = defineMiddleware(async ({ request, url, locals }, next) => {
+  if (request.method === "GET" && url.searchParams.get("advanced") !== "1") {
+    const destination = legacyConsoleDestination(url);
+    if (destination) return new Response(null, { status: 302, headers: { location: destination, "cache-control": "no-store" } });
+  }
+  if (request.method === "POST" && url.pathname === "/settings") {
+    // Render the selected controller before reading its success receipt. Buffering
+    // this form response avoids depending on streaming component header timing.
+    const response = await next();
+    const html = await response.text();
+    const destination = (locals as Record<string, unknown>).operatorPostRedirect;
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    headers.delete("content-encoding");
+    if (response.status < 400 && typeof destination === "string" && (destination === "/settings" || destination.startsWith("/settings?"))) {
+      headers.set("location", destination);
+      headers.set("cache-control", "private, no-store");
+      headers.delete("content-type");
+      return new Response(null, { status: 303, headers });
+    }
+    return new Response(html, { status: response.status, headers });
+  }
   const entry = Object.entries(capabilityPaths).find(([path]) => url.pathname === path || url.pathname.startsWith(`${path}/`));
   if (!entry) return next();
   const capabilities = await loadConsoleCapabilities(request);

@@ -1,0 +1,126 @@
+/* Scoped bridge: override the retained component color rules without changing
+   the operator theme, typography floor, controls, or workspace behavior. */
+.op-legacy .workspace-shell,
+.op-legacy [data-testid="domain-workspaces-index"] {
+  min-width: 0;
+  color: #1d1d1f;
+}
+
+.op-legacy .workspace-shell *,
+.op-legacy [data-testid="domain-workspaces-index"] * {
+  min-width: 0;
+}
+
+body .op-legacy .workspace-shell :is(h1,h2,h3,h4,p,span,strong,small,dt,dd,li,a,summary,code),
+body .op-legacy [data-testid="domain-workspaces-index"] :is(h1,h2,p,span,strong,dt,dd,a) {
+  color: #1d1d1f !important;
+  overflow-wrap: anywhere;
+}
+
+.op-legacy .workspace-shell :is(.workspace-error,.workspace-empty,.decision-lead,.workspace-section,.workspace-detail-disclosure,.workspace-activity,.workspace-filters,.metric-card,.success-panel,.custom-warning,.recall-history-card,.utility-popover),
+.op-legacy .workspace-shell :is(.evidence-grid,.source-grid,.success-grid) > article,
+.op-legacy .workspace-shell :is(.workspace-detail-disclosure,.workspace-activity,.utility-menu) > summary,
+.op-legacy .workspace-shell .metric-trend ol,
+.op-legacy [data-testid="domain-workspaces-index"] :is(.workspace-index-hero,.workspace-card,.workspace-empty) {
+  border-color: #dcdce1;
+  background: #fff !important;
+  box-shadow: none;
+}
+
+.op-legacy .workspace-shell :is(.utility-menu > summary:hover,.utility-menu[open] > summary,.recall-candidates li,.metric-card-custom),
+.op-legacy [data-testid="domain-workspaces-index"] .workspace-card:hover {
+  background: #eeeef1 !important;
+}
+
+.op-legacy .workspace-shell :is(.button-secondary,.share-popover a,.share-popover button),
+.op-legacy [data-testid="domain-workspaces-index"] .button-secondary {
+  border-color: #bfbfc5;
+  background: #fff !important;
+  color: #333336 !important;
+}
+
+.op-legacy .workspace-shell :is(.button-secondary:hover,.share-popover a:hover,.share-popover button:hover) {
+  background: #f5f5f7 !important;
+}
+
+.op-legacy .workspace-shell button :is(strong,small,p,span) {
+  color: inherit !important;
+}
+
+.op-legacy .workspace-shell :is(.evidence-state.is-verified,.decision-state,.success-state,.outcome-verified span,.copy-status) {
+  color: #176044 !important;
+}
+
+.op-legacy .workspace-shell :is(.metric-status,.recall-mode) {
+  background: #e5f3ee !important;
+  color: #176044 !important;
+}
+
+.op-legacy .workspace-shell :is(.metric-status-missed .metric-status,.metric-status-stale .metric-status,.recall-mode.is-shadow) {
+  background: #fff2d9 !important;
+  color: #825307 !important;
+}
+
+.op-legacy .workspace-shell :is(.evidence-grid article > div,.metric-current,.metric-source,.bullet-labels) {
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.op-legacy .workspace-shell .pack-switcher-mobile select,
+.op-legacy .workspace-shell .workspace-filters :is(input,select) {
+  max-width: 100%;
+  border-color: #b8b8c0;
+  background: #fff !important;
+  color: #1d1d1f;
+}
+
+.op-legacy .workspace-shell :is(.decision-trace-disclosure li p,.evidence-grid code) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .op-legacy .workspace-shell .workspace-navigation {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+
+  .op-legacy .workspace-shell :is(.decision-body,.success-panel) {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  .op-legacy .workspace-shell :is(.metric-grid,.evidence-grid,.source-grid,.success-grid) {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  .op-legacy .workspace-shell .utility-popover {
+    max-width: calc(100vw - 2.5rem);
+  }
+}
+
+.op-legacy .workspace-shell .metric-status-achieved .metric-status {
+  background: #e5f3ee !important;
+  color: #176044 !important;
+}
+
+.op-legacy .workspace-shell :is(.metric-missing,.success-grid b) {
+  color: #825307 !important;
+}
+
+.op-legacy .workspace-shell .source-error {
+  color: #982733 !important;
+}
+
+.op-legacy .workspace-shell .pack-switcher-mobile :is(select,option) {
+  background: #fff !important;
+  color: #1d1d1f !important;
+}
+
+.op-legacy .workspace-shell .workspace-navigation {
+  border-color: #dcdce1;
+}
+
+.op-legacy .workspace-shell .workspace-breadcrumb a,
+.op-legacy .workspace-shell .pack-switcher-desktop a[aria-current="page"] {
+  color: #0066cc !important;
+  border-color: #0071e3;
+}
